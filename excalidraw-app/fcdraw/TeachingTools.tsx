@@ -208,6 +208,8 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       });
     }
     api.setActiveTool({ type: "selection" });
+    selectedRef.current = widget;
+    setSelected(widget);
     setOpen(false);
   };
   useEffect(() => {

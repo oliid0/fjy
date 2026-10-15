@@ -16,6 +16,8 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { Classroom } from "./Classroom";
 import * as ai from "./ai";
+import { classroomCommands } from "./commands";
+import { BoardRecorder } from "./recording";
 
 vi.mock("@excalidraw/excalidraw", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@excalidraw/excalidraw")>()),
@@ -76,6 +78,23 @@ describe("selection-driven classroom controls", () => {
     } as unknown as ExcalidrawImperativeAPI;
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it("handles consecutive recording commands without waiting for a new render", async () => {
+    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({
+      blob: new Blob(["voice"], { type: "audio/webm" }),
+      duration: 1,
+    });
+    render(<Classroom api={api} />);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "record.start",
+        args: { mode: "audio" },
+      });
+      await classroomCommands.execute({ name: "record.stop" });
+    });
+    expect(BoardRecorder.prototype.stop).toHaveBeenCalledTimes(1);
+  });
 
   it("keeps ordinary selections on the canvas without additional AI controls", async () => {
     selectText("课堂笔记");

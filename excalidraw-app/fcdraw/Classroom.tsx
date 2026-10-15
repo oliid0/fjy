@@ -1215,6 +1215,9 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     ]);
 
   const startRecording = async (selectedMode: RecordingMode = mode) => {
+    if (recorder.current) {
+      throw new Error("当前录制正在进行或保存中");
+    }
     narrator.current?.stop();
     if (
       listening &&
@@ -1228,14 +1231,20 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     setElapsed(0);
     const instance = new BoardRecorder();
     recorder.current = instance;
-    await instance.start(selectedMode, () => {
-      setRecording(false);
-      if (recorder.current === instance && !stoppingRecording.current) {
-        void stopRecording().catch((failure) =>
-          setError(errorMessage(failure)),
-        );
-      }
-    });
+    try {
+      await instance.start(selectedMode, () => {
+        setRecording(false);
+        if (recorder.current === instance && !stoppingRecording.current) {
+          void stopRecording().catch((failure) =>
+            setError(errorMessage(failure)),
+          );
+        }
+      });
+    } catch (failure) {
+      instance.dispose();
+      recorder.current = null;
+      throw failure;
+    }
     recordMode.current = selectedMode;
     setMode(selectedMode);
     recordStarted.current = Date.now();
@@ -1420,7 +1429,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         "record.start",
         "开始录制，args.mode=audio|camera|screen|combined；录制时仍可使用白板",
         async (args) => {
-          if (recording) {
+          if (recorder.current) {
             throw new Error("当前已在录制");
           }
           const selectedMode =
@@ -1435,7 +1444,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         "record.stop",
         "停止并保存录制与文稿",
         async () => {
-          if (!recording) {
+          if (!recorder.current) {
             throw new Error("当前未录制");
           }
           await stopRecording();

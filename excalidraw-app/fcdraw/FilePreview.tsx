@@ -297,8 +297,6 @@ export const FilePreview = ({
         }
         classroomCommands.touch();
         const generation = ++navigationId.current;
-        pageRef.current = index;
-        setPage(index);
         setScroll(0);
         setLasso([]);
         selectedInkRef.current = [];
@@ -306,6 +304,8 @@ export const FilePreview = ({
         setDraft(null);
         if (viewer.current) {
           viewer.current.goTo(index);
+          pageRef.current = index;
+          setPage(index);
         } else if (office.current) {
           setLoading(true);
           try {
@@ -314,6 +314,8 @@ export const FilePreview = ({
               return;
             }
             currentTextRef.current = htmlText(value);
+            pageRef.current = index;
+            setPage(index);
             setCurrentText(currentTextRef.current);
             setHtml(value);
             void rememberPage(
@@ -911,7 +913,7 @@ export const FilePreview = ({
             aria-label="课件透明板书"
             data-ink-enabled={inkOn}
             style={{
-              pointerEvents: inkOn ? "auto" : "none",
+              pointerEvents: inkOn && !loading && !error ? "auto" : "none",
               cursor: erase ? "cell" : "crosshair",
             }}
             viewBox={`0 ${scroll} 1000 ${

@@ -218,7 +218,8 @@ export default defineConfig(({ mode }) => {
               },
             },
           ],
-          maximumFileSizeToCacheInBytes: 2.3 * 1024 ** 2, // 2.3MB
+          // Include the pinned 5.15 MB Office WASM engine for offline document previews.
+          maximumFileSizeToCacheInBytes: 6 * 1024 ** 2,
         },
         manifest: {
           short_name: "Fcdraw",

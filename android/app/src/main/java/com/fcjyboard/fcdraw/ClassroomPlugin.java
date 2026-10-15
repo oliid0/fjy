@@ -1,0 +1,151 @@
+package com.fcjyboard.fcdraw;
+
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+import fi.iki.elonen.NanoHTTPD;
+import java.io.File;
+import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/** Paired, opt-in LAN uploads. Reading received files stays inside Capacitor's bridge. */
+@CapacitorPlugin(name = "FcdrawClassroom")
+public class ClassroomPlugin extends Plugin {
+    private Receiver receiver;
+    private File directory() {
+        File dir = new File(getContext().getFilesDir(), "fcdraw-uploads");
+        if (!dir.exists()) { dir.mkdirs(); }
+        return dir;
+    }
+
+    @PluginMethod
+    public synchronized void startReceiver(PluginCall call) {
+        try {
+            List<String> addresses = new ArrayList<>();
+            for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!network.isUp() || network.isLoopback()) { continue; }
+                for (InetAddress address : Collections.list(network.getInetAddresses())) {
+                    if (address instanceof Inet4Address && address.isSiteLocalAddress()) { addresses.add(address.getHostAddress()); }
+                }
+            }
+            if (addresses.isEmpty()) { call.reject("未连接局域网，请先连接 Wi-Fi 或有线网络"); return; }
+            if (receiver == null) {
+                receiver = new Receiver(directory());
+                receiver.start(15000, true);
+            }
+            JSArray urls = new JSArray();
+            for (String address : addresses) { urls.put("http://" + address + ":" + receiver.getListeningPort() + "/" + receiver.token + "/"); }
+            JSObject result = new JSObject(); result.put("urls", urls); call.resolve(result);
+        } catch (Exception error) {
+            if (receiver != null) { receiver.stop(); receiver = null; }
+            call.reject("无法开启局域网接收：" + error.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public synchronized void stopReceiver(PluginCall call) {
+        if (receiver != null) { receiver.stop(); receiver = null; }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void listUploads(PluginCall call) {
+        JSArray files = new JSArray();
+        File[] items = directory().listFiles();
+        if (items != null) {
+            java.util.Arrays.sort(items, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+            for (File item : items) {
+                if (!item.isFile() || !item.getName().matches("[a-f0-9-]{36}_.+")) { continue; }
+                JSObject file = new JSObject();
+                file.put("id", item.getName().substring(0, 36)); file.put("name", item.getName().substring(37));
+                file.put("path", item.getAbsolutePath()); file.put("size", item.length()); files.put(file);
+            }
+        }
+        JSObject result = new JSObject(); result.put("files", files); call.resolve(result);
+    }
+
+    @PluginMethod
+    public void deleteUpload(PluginCall call) {
+        String id = call.getString("id", "");
+        if (!id.matches("[a-f0-9-]{36}")) { call.reject("文件 ID 无效"); return; }
+        File[] files = directory().listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.getName().startsWith(id + "_") && !file.delete()) { call.reject("文件删除失败"); return; }
+            }
+        }
+        call.resolve();
+    }
+
+    @Override
+    protected synchronized void handleOnDestroy() {
+        if (receiver != null) { receiver.stop(); receiver = null; }
+    }
+
+    static final class Receiver extends NanoHTTPD {
+        final String token = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        private final File directory;
+        private final AtomicInteger receiving = new AtomicInteger();
+        Receiver(File directory) { super("0.0.0.0", 0); this.directory = directory; }
+
+        private Response reply(Response.Status status, String mime, String body) {
+            Response response = newFixedLengthResponse(status, mime, body);
+            response.addHeader("Cache-Control", "no-store");
+            response.addHeader("X-Content-Type-Options", "nosniff");
+            response.addHeader("Referrer-Policy", "no-referrer");
+            return response;
+        }
+
+        @Override
+        public Response serve(IHTTPSession session) {
+            String base = "/" + token + "/";
+            if (!session.getUri().equals(base) && !session.getUri().equals(base + "upload")) { return reply(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "接收地址无效或已关闭"); }
+            if (session.getMethod() == Method.GET && session.getUri().equals(base)) {
+                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcdraw · 方成教育</h1><h2>局域网课件快传</h2><p>选择 PPTX、PDF 或图片发送到白板。单个文件上限 100 MB。</p><input id='files' type='file' multiple accept='.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>发送到白板</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');button.onclick=async()=>{const files=document.getElementById('files').files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='发送成功，请在白板的课件列表中打开';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;}};</script></html>");
+            }
+            if (session.getMethod() != Method.POST || !session.getUri().equals(base + "upload")) { return reply(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "不支持此操作"); }
+            String name = session.getParms().get("name");
+            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(pptx|pdf|png|jpg|jpeg|webp|gif)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件名或格式不支持"); }
+            long length;
+            try { length = Long.parseLong(session.getHeaders().getOrDefault("content-length", "0")); } catch (NumberFormatException error) { length = 0; }
+            if (length <= 0 || length > 104857600) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件为空或超过 100 MB"); }
+            if (directory.getUsableSpace() < length + 52428800) { return reply(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "白板存储空间不足"); }
+            if (!receiving.compareAndSet(0, 1)) { return reply(Response.Status.SERVICE_UNAVAILABLE, MIME_PLAINTEXT, "白板正在接收文件，请稍后重试"); }
+            File target = new File(directory, UUID.randomUUID().toString() + "_" + name);
+            try {
+                File pending = new File(directory, ".pending-" + UUID.randomUUID());
+                try (FileOutputStream output = new FileOutputStream(pending)) {
+                    InputStream input = session.getInputStream();
+                    byte[] buffer = new byte[65536];
+                    long remaining = length;
+                    while (remaining > 0) {
+                        int read = input.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                        if (read < 0) { throw new IOException("文件传输不完整"); }
+                        output.write(buffer, 0, read);
+                        remaining -= read;
+                    }
+                } catch (IOException error) {
+                    pending.delete();
+                    throw error;
+                }
+                if (!pending.renameTo(target)) { pending.delete(); throw new IOException("无法保存文件"); }
+                return reply(Response.Status.OK, MIME_PLAINTEXT, "上传成功");
+            } catch (IOException error) {
+                target.delete();
+                return reply(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "上传失败，请重试");
+            } finally { receiving.set(0); }
+        }
+    }
+}

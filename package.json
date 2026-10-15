@@ -41,7 +41,12 @@
     "vite-plugin-pwa": "0.21.1",
     "vite-plugin-svgr": "4.2.0",
     "vitest": "3.0.6",
-    "vitest-canvas-mock": "0.3.3"
+    "vitest-canvas-mock": "0.3.3",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.2.0",
+    "fake-indexeddb": "3.1.7",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -63,10 +68,10 @@
     "start": "npm run start --prefix ./excalidraw-app",
     "start:production": "npm run start:production --prefix ./excalidraw-app",
     "start:example": "npm run build:packages && npm run start --prefix ./examples/with-script-in-browser",
-    "test:all": "pnpm check && pnpm lint && pnpm test",
+    "test:all": "pnpm check && pnpm lint && pnpm test:other && pnpm test",
     "test:app": "vitest",
     "test:code": "eslint --max-warnings=0 --ext .js,.ts,.tsx .",
-    "test:other": "npm run prettier --list-different",
+    "test:other": "prettier \"**/*.{css,scss,json,md,html,yml,yaml}\" --ignore-path=.eslintignore --check",
     "test:typecheck": "tsc",
     "test:update": "npm run test:app -- --update --watch=false",
     "test": "vitest run",
@@ -96,11 +101,14 @@
   "dependencies": {
     "@capacitor/android": "8.2.0",
     "@capacitor/cli": "8.2.0",
-    "@capacitor/core": "8.2.0"
+    "@capacitor/core": "8.2.0",
+    "@capacitor-community/speech-recognition": "7.0.1"
   },
   "pnpm": {
     "overrides": {
-      "strip-ansi": "6.0.1"
+      "strip-ansi": "6.0.1",
+      "@types/react": "19.0.10",
+      "@types/react-dom": "19.0.4"
     }
   }
 }

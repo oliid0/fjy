@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Panah siku",
     "fontSize": "Ukuran font",
     "fontFamily": "Jenis font",
-    "addWatermark": "Tambahkan \"Dibuat dengan Excalidraw\"",
+    "addWatermark": "Tambahkan \"Dibuat dengan Fcdraw\"",
     "handDrawn": "Tulisan tangan",
     "normal": "Normal",
     "code": "Kode",
@@ -91,7 +91,7 @@
     "untitled": "Tanpa judul",
     "name": "Nama",
     "yourName": "Nama Anda",
-    "madeWithExcalidraw": "Dibuat dengan Excalidraw",
+    "madeWithExcalidraw": "Dibuat dengan Fcdraw",
     "group": "Kelompokan pilihan",
     "ungroup": "Pisahkan pilihan",
     "collaborators": "Kolaborator",
@@ -121,7 +121,7 @@
     "toggleTheme": "Toggle tema terang/gelap",
     "theme": "Tema",
     "personalLib": "Pustaka Pribadi",
-    "excalidrawLib": "Pustaka Excalidraw",
+    "excalidrawLib": "Pustaka Fcdraw",
     "decreaseFontSize": "Kecilkan ukuran font",
     "increaseFontSize": "Besarkan ukuran font",
     "unbindText": "Lepas teks",
@@ -159,11 +159,11 @@
     "textToDiagram": "Teks menjadi diagram",
     "prompt": "Prompt",
     "followUs": "Ikuti kami",
-    "discordChat": "Obrolan Discord",
+    "discordChat": "Obrolan Fcdraw",
     "zoomToFitViewport": "Perbesar agar sesuai dengan viewport",
     "zoomToFitSelection": "Memperbesar agar sesuai dengan pilihan",
     "zoomToFit": "Memperbesar agar unsur pas semua",
-    "installPWA": "Install Excalidraw secara lokal (PWA)",
+    "installPWA": "Install Fcdraw secara lokal (PWA)",
     "autoResize": "Mengaktifkan pengubahan ukuran teks secara otomatis",
     "imageCropping": "Pemangkasan gambar",
     "unCroppedDimension": "Dimensi yang tidak dipotong",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Tidak bisa mengekspor kanvas kosong",
     "couldNotCopyToClipboard": "Tidak bisa menyalin ke papan klip.",
     "decryptFailed": "Tidak dapat mengdekripsi data.",
-    "uploadedSecurly": "Pengunggahan ini telah diamankan menggunakan enkripsi end-to-end, artinya server Excalidraw dan pihak ketiga tidak data membaca nya",
+    "uploadedSecurly": "Pengunggahan ini telah diamankan menggunakan enkripsi end-to-end, artinya server Fcdraw dan pihak ketiga tidak data membaca nya",
     "loadSceneOverridePrompt": "Memuat gambar external akan mengganti konten Anda yang ada. Apakah Anda ingin melanjutkan?",
     "collabStopOverridePrompt": "Menghentikan sesi akan menimpa gambar Anda yang tersimpan secara lokal. Anda yakin?\n\n(Jika Anda ingin menyimpan gambar lokal Anda, gantinya cukup tutup tab browser.)",
     "errorAddingToLibrary": "Tidak dapat menambahkan item ke pustaka",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Ini akan menambahkan {{numShapes}} bentuk ke pustaka Anda. Anda yakin?",
     "imageDoesNotContainScene": "Gambar ini tampaknya tidak ada data pemandangan. Apakah penyematan pemandangan sudah diaktifkan saat ekspor?",
     "cannotRestoreFromImage": "Pemandangan tidak dapat dipulihkan dari file gambar ini",
-    "invalidSceneUrl": "Tidak dapat impor pemandangan dari URL. Kemungkinan URL itu rusak atau tidak berisi data JSON Excalidraw yang valid.",
+    "invalidSceneUrl": "Tidak dapat impor pemandangan dari URL. Kemungkinan URL itu rusak atau tidak berisi data JSON Fcdraw yang valid.",
     "resetLibrary": "Ini akan menghapus pustaka Anda. Anda yakin?",
     "removeItemsFromsLibrary": "Hapus {{count}} item dari pustaka?",
     "invalidEncryptionKey": "Sandi enkripsi harus 22 karakter. Kolaborasi langsung dinonaktifkan.",
@@ -279,7 +279,7 @@
       "line1": "Sepertinya Anda menggunkan peramban Brave dengan pengaturan <bold>Blokir Fingerprinting yang Agresif</bold> diaktifkan.",
       "line2": "Ini dapat merusak <bold>Unsur Teks</bold> pada gambarmu.",
       "line3": "Kami sangat menyarankan mematikan pengaturan ini. Anda dapat mengikuti <link>langkah-langkah ini</link> untuk melakukannya.",
-      "line4": "Jika mematikan pengaturan ini tidak memperbaiki unsur teks, silakan buka <issueLink>issue</issueLink> di GitHub kami, atau hubungi kami di <discordLink>Discord</discordLink>"
+      "line4": "Jika mematikan pengaturan ini tidak memperbaiki unsur teks, silakan buka <issueLink>issue</issueLink> di Fcdraw kami, atau hubungi kami di <discordLink>Fcdraw</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Unsur bisa semat tidak dapat ditambah ke pustaka.",
@@ -312,7 +312,7 @@
     "laser": "Penunjuk laser",
     "hand": "Tangan (alat panning)",
     "extraTools": "Alat-alat lain",
-    "mermaidToExcalidraw": "Mermaid menjadi Excalidraw",
+    "mermaidToExcalidraw": "Mermaid menjadi Fcdraw",
     "convertElementType": ""
   },
   "element": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Sesi kolaborasi sedang berlangsung sekarang.",
     "desc_shareLink": "Bagikan tautan ini dengan siapa pun yang Anda inginkan untuk kolaborasi bersama:",
     "desc_exitSession": "Menghentikan sesi akan memutuskan hubungan Anda dari ruangan, tetapi Anda dapat melanjutkan bekerja dengan pemandangan Anda secara lokal. Perhatikan bahwa ini tidak memengaruhi orang lain, dan mereka masih dapat berkolaborasi pada versi mereka.",
-    "shareTitle": "Gabung sesi kolaborasi langsung di Excalidraw"
+    "shareTitle": "Gabung sesi kolaborasi langsung di Fcdraw"
   },
   "errorDialog": {
     "title": "Kesalahan"
@@ -402,9 +402,9 @@
     "link_title": "Tautan",
     "link_details": "Ekspor sebagai tautan yang hanya dibaca.",
     "link_button": "Ekspor ke tautan",
-    "excalidrawplus_description": "Simpan pemandangan ke ruang kerja Excalidraw+ Anda.",
+    "excalidrawplus_description": "Simpan pemandangan ke ruang kerja Fcdraw Anda.",
     "excalidrawplus_button": "Ekspor",
-    "excalidrawplus_exportError": "Tidak dapat ekspor ke Excalidraw+ saat ini..."
+    "excalidrawplus_exportError": "Tidak dapat ekspor ke Fcdraw saat ini..."
   },
   "helpDialog": {
     "blog": "Baca blog kami",
@@ -455,7 +455,7 @@
       "authorName": "Nama atau nama pengguna Anda",
       "libraryName": "Nama dari pustaka Anda",
       "libraryDesc": "Deskripsi pustaka Anda untuk membantu orang mengerti penggunaannya",
-      "githubHandle": "Akun GitHub (opsional), jadi Anda dapat mengubah pustaka ketika diserahkan untuk review",
+      "githubHandle": "Akun Fcdraw (opsional), jadi Anda dapat mengubah pustaka ketika diserahkan untuk review",
       "twitterHandle": "Nama pengguna Twitter (opsional), jadi kami tahu siapa dipuji ketika mempromosikannya melalui Twitter",
       "website": "Hubungkan ke situs personal Anda atau lainnya (opsional)"
     },
@@ -464,7 +464,7 @@
       "website": "Masukkan URL valid"
     },
     "noteDescription": "Kirimkan pustaka Anda untuk disertakan di <link>repositori pustaka publik</link>untuk orang lain menggunakannya dalam gambar mereka.",
-    "noteGuidelines": "Pustaka butuh disetujui secara manual terlebih dahulu. Baca <link>pedoman</link> sebelum mengirim. Anda butuh akun GitHub untuk berkomunikasi dan membuat perubahan jika dibutuhkan, tetapi tidak wajib dibutukan.",
+    "noteGuidelines": "Pustaka butuh disetujui secara manual terlebih dahulu. Baca <link>pedoman</link> sebelum mengirim. Anda butuh akun Fcdraw untuk berkomunikasi dan membuat perubahan jika dibutuhkan, tetapi tidak wajib dibutukan.",
     "noteLicense": "Dengan mengkirimkannya, Anda setuju pustaka akan diterbitkan dibawah <link>Lisensi MIT, </link>yang artinya siapa pun dapat menggunakannya tanpa batasan.",
     "noteItems": "Setiap item pustaka harus memiliki nama, sehingga bisa disortir. Item pustaka di bawah ini akan dimasukan:",
     "atleastOneLibItem": "Pilih setidaknya satu item pustaka untuk mulai",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Gambar anda terenkripsi end-to-end sehingga server Excalidraw tidak akan pernah dapat melihatnya.",
-    "link": "Pos blog tentang enkripsi ujung ke ujung di Excalidraw"
+    "tooltip": "Gambar anda terenkripsi end-to-end sehingga server Fcdraw tidak akan pernah dapat melihatnya.",
+    "link": "Pos blog tentang enkripsi ujung ke ujung di Fcdraw"
   },
   "stats": {
     "angle": "Sudut",
@@ -534,7 +534,7 @@
     "canvas": "kanvas",
     "selection": "pilihan",
     "pasteAsSingleElement": "Gunakan {{shortcut}} untuk menempel unsur tunggal,\natau tempel ke penyunting teks",
-    "unableToEmbed": "Menyemat URL ini saat ini tidak boleh. Ajukan \"Issue\" di GitHub untuk meminta URL masuk daftar putih",
+    "unableToEmbed": "Menyemat URL ini saat ini tidak boleh. Ajukan \"Issue\" di Fcdraw untuk meminta URL masuk daftar putih",
     "unrecognizedLinkFormat": "Tautan yang disematkan tidak sesuai dengan syarat format. Coba tempel untaian 'embed' (semat) yang disediakan situs sumber",
     "elementLinkCopied": "Tautan disalin ke papan klip"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Apa Anda ingin berpindah ke Excalidraw+?",
+      "center_heading_plus": "Apa Anda ingin berpindah ke Fcdraw?",
       "menuHint": "Ekspor, preferensi, bahasa, ..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Ekspor data pemandangan ke file yang dapat Anda dapat impor nanti."
       },
       "excalidrawPlus": {
-        "title": "Excalidraw+",
-        "button": "Ekspor ke Excalidraw+",
-        "description": "Simpan pemandangan ke ruang kerja Excalidraw+ Anda."
+        "title": "Fcdraw",
+        "button": "Ekspor ke Fcdraw",
+        "description": "Simpan pemandangan ke ruang kerja Fcdraw Anda."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid menjadi Excalidraw",
+    "title": "Mermaid menjadi Fcdraw",
     "button": "Sisipkan",
-    "description": "Saat ini hanya <flowchartLink>Flowchart</flowchartLink>, <sequenceLink>Sekuen, </sequenceLink>, dan <classLink>Kelas</classLink>Diagram yang didukung. Jenis lainnya akan dirender sebagai gambar di Excalidraw.",
+    "description": "Saat ini hanya <flowchartLink>Flowchart</flowchartLink>, <sequenceLink>Sekuen, </sequenceLink>, dan <classLink>Kelas</classLink>Diagram yang didukung. Jenis lainnya akan dirender sebagai gambar di Fcdraw.",
     "syntax": "Syntax Mermaid",
     "preview": "Pratinjau",
     "label": "",

@@ -1,9 +1,9 @@
-# Fcdraw / ????
+# Fcdraw / 方成教育
 
 - Objective: brand the Android whiteboard; add bottom teaching controls, configurable AI/speech, mathematics/plots, recording/transcripts/summaries, LAN upload/PPTX preview, and Actions APK packaging.
-- Evidence: React 19 + Vite 5 + Capacitor 8; existing element conversion/export and AI plugin interfaces. Initial source was staged by user; no commits or remote exist yet.
-- Completed: inspected staged source, app/native configuration, existing tests, upstream speech/PPTX documentation; switched workspace configuration to requested pnpm.
-- Remaining: implement features; run pnpm test/check/lint; push to specified repository and confirm Actions.
+- Evidence: React 19 + Vite 5 + Capacitor 8; existing element conversion/export and AI plugin interfaces. User initialized and published oliid0/fjy during implementation.
+- Completed: pnpm workspace; visible branding and promotion removal; configurable visual AI/code/diagram adapters; system/custom speech; symbolic mathematics, automatic handwritten calculation and editable 2D/3D plots; four recording modes, local playback/transcripts/summaries; paired Android LAN upload and PPTX preview; Actions verification/APK workflow.
+- Remaining: push and confirm GitHub Actions Web/APK packaging and native receiver tests.
 - Decisions: keep internal package/file-format identifiers for compatibility; replace visible branding and external promotion. Use existing canvas element API, Android speech service, local math engines, and native LAN receiver. No local build/dev/Cargo commands.
-- Files: package.json, excalidraw-app/package.json, pnpm-workspace.yaml.
-- Verification: pending dependency install and implementation.
+- Files: excalidraw-app/fcdraw/\*, app UI/AI entry points, visible brand components/locales, Android plugin/identity/permissions, pnpm configuration, .github/workflows/fcdraw.yml, README.md. Existing formatting violations were corrected to meet lint.
+- Verification: pnpm test: 106 files, 1322 passed, 46 existing skips, 1 existing todo. pnpm check, pnpm lint, pnpm test:other and git diff --check passed. Twenty added tests cover math, editable canvas insertion, recording lifecycle/storage, AI configuration and Android speech. Restored the missing desktop library trigger, repaired LocalData import resolution and reviewed snapshot updates. Native HTTP tests and APK packaging await Actions. No local build/dev/Cargo commands executed.

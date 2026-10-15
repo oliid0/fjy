@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Łamana strzałka",
     "fontSize": "Rozmiar tekstu",
     "fontFamily": "Krój pisma",
-    "addWatermark": "Dodaj \"Zrobione w Excalidraw\"",
+    "addWatermark": "Dodaj \"Zrobione w Fcdraw\"",
     "handDrawn": "Odręczny",
     "normal": "Normalny",
     "code": "Kod",
@@ -91,7 +91,7 @@
     "untitled": "Bez tytułu",
     "name": "Nazwa",
     "yourName": "Twoje imię",
-    "madeWithExcalidraw": "Zrobione w Excalidraw",
+    "madeWithExcalidraw": "Zrobione w Fcdraw",
     "group": "Zgrupuj wybrane",
     "ungroup": "Rozgrupuj wybrane",
     "collaborators": "Współtwórcy",
@@ -121,7 +121,7 @@
     "toggleTheme": "Przełącz motyw jasny / ciemny",
     "theme": "Motyw",
     "personalLib": "Biblioteka prywatna",
-    "excalidrawLib": "Biblioteka Excalidraw",
+    "excalidrawLib": "Biblioteka Fcdraw",
     "decreaseFontSize": "Zmniejsz rozmiar czcionki",
     "increaseFontSize": "Zwiększ rozmiar czcionki",
     "unbindText": "Odłącz tekst od kontenera",
@@ -159,11 +159,11 @@
     "textToDiagram": "Generuj diagram z opisu",
     "prompt": "Opis",
     "followUs": "Obserwuj nas",
-    "discordChat": "Czat Discorda",
+    "discordChat": "Czat Fcdrawa",
     "zoomToFitViewport": "Dopasuj widok do ekranu",
     "zoomToFitSelection": "Dopasuj widok do zaznaczenia",
     "zoomToFit": "Dopasuj widok do całej zawartości",
-    "installPWA": "Zainstaluj Excalidraw lokalnie (PWA)",
+    "installPWA": "Zainstaluj Fcdraw lokalnie (PWA)",
     "autoResize": "Włącz automatyczne zmiany rozmiaru tekstu",
     "imageCropping": "Przycinanie obrazu",
     "unCroppedDimension": "Nieprzycięty wymiar",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "To doda {{numShapes}} kształtów do twojej biblioteki. Jesteś pewien?",
     "imageDoesNotContainScene": "Ten obraz nie zawiera żadnych informacji o scenie. Czy włączyłeś osadzanie sceny podczas eksportu?",
     "cannotRestoreFromImage": "Scena nie mogła zostać przywrócona z pliku obrazu",
-    "invalidSceneUrl": "Nie udało się zaimportować sceny z podanego adresu URL. Jest ona wadliwa lub nie zawiera poprawnych danych Excalidraw w formacie JSON.",
+    "invalidSceneUrl": "Nie udało się zaimportować sceny z podanego adresu URL. Jest ona wadliwa lub nie zawiera poprawnych danych Fcdraw w formacie JSON.",
     "resetLibrary": "To wyczyści twoją bibliotekę. Jesteś pewien?",
     "removeItemsFromsLibrary": "Usunąć {{count}} element(ów) z biblioteki?",
     "invalidEncryptionKey": "Klucz szyfrowania musi składać się z 22 znaków. Współpraca na żywo jest wyłączona.",
@@ -279,7 +279,7 @@
       "line1": "Wygląda na to, że używasz przeglądarki Brave z włączonym ustawieniem <bold>Agressively Block Fingerprinting</bold>.",
       "line2": "Może to doprowadzić do złamania <bold>elementów tekstu</bold> na rysunkach.",
       "line3": "Zdecydowanie zalecamy wyłączenie tego ustawienia. Możesz wykonać <link>te kroki</link>, aby to zrobić.",
-      "line4": "Jeśli wyłączenie tego ustawienia nie naprawia wyświetlania elementów tekstowych, zgłoś <issueLink>problem</issueLink> na naszym GitHubie lub napisz do nas na <discordLink>Discordzie</discordLink>"
+      "line4": "Jeśli wyłączenie tego ustawienia nie naprawia wyświetlania elementów tekstowych, zgłoś <issueLink>problem</issueLink> na naszym Fcdrawie lub napisz do nas na <discordLink>Fcdrawzie</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Elementy osadzone nie mogą zostać dodane do biblioteki.",
@@ -312,7 +312,7 @@
     "laser": "Wskaźnik laserowy",
     "hand": "Ręka (narzędzie do przesuwania)",
     "extraTools": "Więcej narzędzi",
-    "mermaidToExcalidraw": "Konwertuj diagram Mermaid do Excalidraw",
+    "mermaidToExcalidraw": "Konwertuj diagram Mermaid do Fcdraw",
     "convertElementType": "Przełącz typ kształtu"
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Jeśli odświeżenie strony nie zadziałało, spróbuj <button>usunąć wszystko z dokumentu.</button>",
     "clearCanvasCaveat": " Pamiętaj tylko, że spowoduje to utratę całej twojej pracy ",
     "trackedToSentry": "Błąd o identyfikatorze {{eventId}} został zaraportowany w naszym systemie.",
-    "openIssueMessage": "Szanujemy twoją prywatność i raport nie zawierał żadnych danych dotyczących tego nad czym pracowałeś, natomiast jeżeli jesteś w stanie podzielić się tym nad czym pracowałeś, prosimy o dodatkowy raport poprzez <button>nasze narzędzie do raportowania błędów.</button> Prosimy o dołączenie poniższej informacji poprzez skopiowanie jej i umieszczenie jej w zgłoszeniu na portalu GitHub.",
+    "openIssueMessage": "Szanujemy twoją prywatność i raport nie zawierał żadnych danych dotyczących tego nad czym pracowałeś, natomiast jeżeli jesteś w stanie podzielić się tym nad czym pracowałeś, prosimy o dodatkowy raport poprzez <button>nasze narzędzie do raportowania błędów.</button> Prosimy o dołączenie poniższej informacji poprzez skopiowanie jej i umieszczenie jej w zgłoszeniu na portalu Fcdraw.",
     "sceneContent": "Zawartość dokumentu:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Sesja współpracy na żywo właśnie się rozpoczęła.",
     "desc_shareLink": "Udostępnij ten link osobom, z którymi chcesz współpracować:",
     "desc_exitSession": "Zakończenie sesji spowoduje odłączenie ciebie od pokoju, ale nadal będziesz mógł lokalnie kontynuować pracę. Zauważ, że osoby z którymi współpracowałeś nadal będą mogły współpracować.",
-    "shareTitle": "Dołącz do sesji współpracy na żywo w Excalidraw"
+    "shareTitle": "Dołącz do sesji współpracy na żywo w Fcdraw"
   },
   "errorDialog": {
     "title": "Wystąpił błąd"
@@ -402,9 +402,9 @@
     "link_title": "Link do udostępnienia",
     "link_details": "Eksportuj jako link tylko do odczytu.",
     "link_button": "Wygeneruj link",
-    "excalidrawplus_description": "Zapisz scenę do swojego obszaru roboczego Excalidraw+.",
+    "excalidrawplus_description": "Zapisz scenę do swojego obszaru roboczego Fcdraw.",
     "excalidrawplus_button": "Eksportuj",
-    "excalidrawplus_exportError": "W tej chwili nie można wyeksportować do Excalidraw+..."
+    "excalidrawplus_exportError": "W tej chwili nie można wyeksportować do Fcdraw..."
   },
   "helpDialog": {
     "blog": "Przeczytaj na naszym blogu",
@@ -446,7 +446,7 @@
     "title": "Opublikuj bibliotekę",
     "itemName": "Nazwa elementu",
     "authorName": "Nazwa autora",
-    "githubUsername": "Nazwa użytkownika na GitHubie",
+    "githubUsername": "Nazwa użytkownika na Fcdrawie",
     "twitterUsername": "Nazwa użytkownika Twitter",
     "libraryName": "Nazwa biblioteki",
     "libraryDesc": "Opis biblioteki",
@@ -455,7 +455,7 @@
       "authorName": "Twoje imię lub nazwa użytkownika",
       "libraryName": "Nazwa twojej biblioteki",
       "libraryDesc": "Opis twojej biblioteki, aby pomóc innym zrozumieć jej działanie",
-      "githubHandle": "Uchwyt GitHub (opcjonalny), dzięki czemu możesz edytować bibliotekę po przesłaniu do sprawdzenia",
+      "githubHandle": "Uchwyt Fcdraw (opcjonalny), dzięki czemu możesz edytować bibliotekę po przesłaniu do sprawdzenia",
       "twitterHandle": "Nazwa użytkownika w serwisie Twitter (opcjonalna), aby wiedzieć kogo oznaczyć przy promowaniu na Twitterze",
       "website": "Link do Twojej osobistej strony internetowej lub gdzie indziej (opcjonalnie)"
     },
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Twoje rysunki są zabezpieczone szyfrowaniem end-to-end, tak więc nawet w Excalidraw nie jesteśmy w stanie zobaczyć tego co tworzysz.",
-    "link": "Wpis na blogu dotyczący szyfrowania end-to-end w Excalidraw"
+    "tooltip": "Twoje rysunki są zabezpieczone szyfrowaniem end-to-end, tak więc nawet w Fcdraw nie jesteśmy w stanie zobaczyć tego co tworzysz.",
+    "link": "Wpis na blogu dotyczący szyfrowania end-to-end w Fcdraw"
   },
   "stats": {
     "angle": "Kąt",
@@ -534,7 +534,7 @@
     "canvas": "płótno",
     "selection": "zaznaczenie",
     "pasteAsSingleElement": "Użyj {{shortcut}}, aby wkleić jako pojedynczy element,\nlub wklej do istniejącego edytora tekstu",
-    "unableToEmbed": "Osadzenie tego linku jest obecnie niedozwolone. Zgłoś propozycję na portalu GitHub, aby dodać go do listy dozwolonych wyjątków",
+    "unableToEmbed": "Osadzenie tego linku jest obecnie niedozwolone. Zgłoś propozycję na portalu Fcdraw, aby dodać go do listy dozwolonych wyjątków",
     "unrecognizedLinkFormat": "Osadzony link ma niewłaściwy format. Spróbuj wkleić całą zawartość pola \"embed\" z oryginalnej strony.",
     "elementLinkCopied": "Łącze skopiowane do schowka"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Czy zamiast tego chcesz przejść do Excalidraw+?",
+      "center_heading_plus": "Czy zamiast tego chcesz przejść do Fcdraw?",
       "menuHint": "Eksportuj, preferencje, języki..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Eksportuj zawartość sceny jako plik z możliwością importowania."
       },
       "excalidrawPlus": {
-        "title": "Excalidraw+",
-        "button": "Eksportuj do Excalidraw+",
-        "description": "Zapisz scenę do swojego obszaru roboczego Excalidraw+."
+        "title": "Fcdraw",
+        "button": "Eksportuj do Fcdraw",
+        "description": "Zapisz scenę do swojego obszaru roboczego Fcdraw."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Konwertuj diagram Mermaid do Excalidraw",
+    "title": "Konwertuj diagram Mermaid do Fcdraw",
     "button": "Wstaw",
-    "description": "Obecnie wspierane są jedynie <flowchartLink>proste grafy</flowchartLink>, <sequenceLink>sekwencje</sequenceLink> i <classLink>diagramy klas</classLink>. Pozostałe typy będą wyświetlane jako obrazy w Excalidraw.",
+    "description": "Obecnie wspierane są jedynie <flowchartLink>proste grafy</flowchartLink>, <sequenceLink>sekwencje</sequenceLink> i <classLink>diagramy klas</classLink>. Pozostałe typy będą wyświetlane jako obrazy w Fcdraw.",
     "syntax": "Składnia diagramów Mermaid",
     "preview": "Podgląd",
     "label": "",

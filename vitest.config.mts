@@ -56,6 +56,8 @@ export default defineConfig({
     },
     setupFiles: ["./setupTests.ts"],
     globals: true,
+    minWorkers: 1,
+    maxWorkers: 2,
     environment: "jsdom",
     coverage: {
       reporter: ["text", "json-summary", "json", "html", "lcovonly"],

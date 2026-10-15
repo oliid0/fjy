@@ -619,9 +619,16 @@ export const palette = createIcon(
 );
 
 export const CircleIcon = createIcon(
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="9"></circle>
-  </svg>
+  </svg>,
 );
 
 export const bucketFillIcon = createIcon(

@@ -1,0 +1,9 @@
+import { registerPlugin } from "@capacitor/core";
+
+export type Upload = { id: string; name: string; path: string; size: number };
+export const Classroom = registerPlugin<{
+  startReceiver(): Promise<{ urls: string[] }>;
+  stopReceiver(): Promise<void>;
+  listUploads(): Promise<{ files: Upload[] }>;
+  deleteUpload(options: { id: string }): Promise<void>;
+}>("FcdrawClassroom");

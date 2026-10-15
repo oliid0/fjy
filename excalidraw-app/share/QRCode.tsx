@@ -49,7 +49,7 @@ export const QRCode = ({ value }: QRCodeProps) => {
     <div
       className="ShareDialog__active__qrcode"
       role="img"
-      aria-label="QR code for collaboration link"
+      aria-label="扫码打开链接"
       dangerouslySetInnerHTML={{ __html: svgData }}
     />
   );

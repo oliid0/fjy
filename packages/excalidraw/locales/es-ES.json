@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Flecha de codo",
     "fontSize": "Tamaño de la fuente",
     "fontFamily": "Tipo de fuente",
-    "addWatermark": "Agregar \"Hecho con Excalidraw\"",
+    "addWatermark": "Agregar \"Hecho con Fcdraw\"",
     "handDrawn": "Dibujado a mano",
     "normal": "Normal",
     "code": "Código",
@@ -91,7 +91,7 @@
     "untitled": "Sin título",
     "name": "Nombre",
     "yourName": "Tu nombre",
-    "madeWithExcalidraw": "Hecho con Excalidraw",
+    "madeWithExcalidraw": "Hecho con Fcdraw",
     "group": "Agrupar selección",
     "ungroup": "Desagrupar selección",
     "collaborators": "Colaboradores",
@@ -121,7 +121,7 @@
     "toggleTheme": "Cambiar tema claro/oscuro",
     "theme": "Tema",
     "personalLib": "Biblioteca personal",
-    "excalidrawLib": "Biblioteca Excalidraw",
+    "excalidrawLib": "Biblioteca Fcdraw",
     "decreaseFontSize": "Disminuir tamaño de letra",
     "increaseFontSize": "Aumentar el tamaño de letra",
     "unbindText": "Desvincular texto",
@@ -159,11 +159,11 @@
     "textToDiagram": "Texto a diagrama",
     "prompt": "Prompt",
     "followUs": "Síguenos",
-    "discordChat": "Chat de Discord",
+    "discordChat": "Chat de Fcdraw",
     "zoomToFitViewport": "Zoom para encajar en la ventana",
     "zoomToFitSelection": "Zoom para ajustar la selección",
     "zoomToFit": "Zoom para mostrar todos los elementos",
-    "installPWA": "Instalar Excalidraw localmente (PWA)",
+    "installPWA": "Instalar Fcdraw localmente (PWA)",
     "autoResize": "Activar redimensionado automático de texto",
     "imageCropping": "Recortar imagen",
     "unCroppedDimension": "Dimensión no recortada",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "No se puede exportar un lienzo vació",
     "couldNotCopyToClipboard": "No se pudo copiar al portapapeles.",
     "decryptFailed": "No se pudieron descifrar los datos.",
-    "uploadedSecurly": "La carga ha sido asegurada con cifrado de principio a fin, lo que significa que el servidor de Excalidraw y terceros no pueden leer el contenido.",
+    "uploadedSecurly": "La carga ha sido asegurada con cifrado de principio a fin, lo que significa que el servidor de Fcdraw y terceros no pueden leer el contenido.",
     "loadSceneOverridePrompt": "Si carga este dibujo externo, reemplazará el que tiene. ¿Desea continuar?",
     "collabStopOverridePrompt": "Detener la sesión sobrescribirá su dibujo anterior almacenado localmente. ¿Está seguro?\n\n(Si desea mantener su dibujo local, simplemente cierre la pestaña del navegador.)",
     "errorAddingToLibrary": "No se pudo agregar el elemento a la biblioteca",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Esto añadirá {{numShapes}} forma(s) a tu biblioteca. ¿Estás seguro?",
     "imageDoesNotContainScene": "Esta imagen no parece contener datos de escena. ¿Ha habilitado la inserción de la escena durante la exportación?",
     "cannotRestoreFromImage": "No se pudo restaurar la escena desde este archivo de imagen",
-    "invalidSceneUrl": "No se ha podido importar la escena desde la URL proporcionada. Está mal formada, o no contiene datos de Excalidraw JSON válidos.",
+    "invalidSceneUrl": "No se ha podido importar la escena desde la URL proporcionada. Está mal formada, o no contiene datos de Fcdraw JSON válidos.",
     "resetLibrary": "Esto borrará tu biblioteca. ¿Estás seguro?",
     "removeItemsFromsLibrary": "¿Eliminar {{count}} elemento(s) de la biblioteca?",
     "invalidEncryptionKey": "La clave de cifrado debe tener 22 caracteres. La colaboración en vivo está deshabilitada.",
@@ -279,7 +279,7 @@
       "line1": "Parece que estás usando el navegador Brave con el ajuste <bold>Forzar el bloqueo de huellas digitales</bold> habilitado.",
       "line2": "Esto podría resultar en errores en los <bold>Elementos de Texto</bold> en tus dibujos.",
       "line3": "Recomendamos fuertemente deshabilitar esta configuración. Puedes seguir <link>estos pasos</link> sobre cómo hacerlo.",
-      "line4": "Si deshabilitar esta opción no arregla la visualización de elementos conformados por texto, por favor abre un <issueLink>problema</issueLink> en nuestro GitHub o escríbanos en <discordLink>Discord</discordLink>"
+      "line4": "Si deshabilitar esta opción no arregla la visualización de elementos conformados por texto, por favor abre un <issueLink>problema</issueLink> en nuestro Fcdraw o escríbanos en <discordLink>Fcdraw</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Los elementos incrustables no pueden ser añadidos a la biblioteca.",
@@ -312,7 +312,7 @@
     "laser": "Puntero láser",
     "hand": "Mano (herramienta de panoramización)",
     "extraTools": "Más herramientas",
-    "mermaidToExcalidraw": "Mermaid a Excalidraw",
+    "mermaidToExcalidraw": "Mermaid a Fcdraw",
     "convertElementType": ""
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Si la recarga no funciona, intente <button>limpiando el lienzo.</button>",
     "clearCanvasCaveat": " Esto provocará la pérdida de su trabajo ",
     "trackedToSentry": "El error con el identificador {{eventId}} fue rastreado en nuestro sistema.",
-    "openIssueMessage": "Fuimos muy cautelosos de no incluir la información de tu escena en el error. Si tu escena no es privada, por favor considera seguir nuestro <button>rastreador de errores.</button> Por favor, incluya la siguiente información copiándola y pegándola en el issue de GitHub.",
+    "openIssueMessage": "Fuimos muy cautelosos de no incluir la información de tu escena en el error. Si tu escena no es privada, por favor considera seguir nuestro <button>rastreador de errores.</button> Por favor, incluya la siguiente información copiándola y pegándola en el issue de Fcdraw.",
     "sceneContent": "Contenido de la escena:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "La sesión de colaboración en vivo está ahora en progreso.",
     "desc_shareLink": "Comparte este enlace con cualquier persona con quien quieras colaborar:",
     "desc_exitSession": "Detener la sesión te desconectará de la sala, pero podrás seguir trabajando con la escena en su computadora, esto es de modo local. Ten en cuenta que esto no afectará a otras personas, y que las mismas seguirán siendo capaces de colaborar en tu escena.",
-    "shareTitle": "Únase a una sesión colaborativa en vivo en Excalidraw"
+    "shareTitle": "Únase a una sesión colaborativa en vivo en Fcdraw"
   },
   "errorDialog": {
     "title": "Error"
@@ -402,9 +402,9 @@
     "link_title": "Enlace para compartir",
     "link_details": "Exportar como enlace de sólo lectura.",
     "link_button": "Exportar a Link",
-    "excalidrawplus_description": "Guarde la escena en su espacio de trabajo de Excalidraw+.",
+    "excalidrawplus_description": "Guarde la escena en su espacio de trabajo de Fcdraw.",
     "excalidrawplus_button": "Exportar",
-    "excalidrawplus_exportError": "No se pudo exportar a Excalidraw+ en este momento..."
+    "excalidrawplus_exportError": "No se pudo exportar a Fcdraw en este momento..."
   },
   "helpDialog": {
     "blog": "Lea nuestro blog",
@@ -446,7 +446,7 @@
     "title": "Publicar biblioteca",
     "itemName": "Nombre del artículo",
     "authorName": "Nombre del autor",
-    "githubUsername": "Nombre de usuario de GitHub",
+    "githubUsername": "Nombre de usuario de Fcdraw",
     "twitterUsername": "Nombre de usuario de Twitter",
     "libraryName": "Nombre de la biblioteca",
     "libraryDesc": "Descripción de la biblioteca",
@@ -455,7 +455,7 @@
       "authorName": "Nombre o nombre de usuario",
       "libraryName": "Nombre de tu biblioteca",
       "libraryDesc": "Descripción de su biblioteca para ayudar a la gente a entender su uso",
-      "githubHandle": "Nombre de usuario de GitHub (opcional), así podrá editar la biblioteca una vez enviada para su revisión",
+      "githubHandle": "Nombre de usuario de Fcdraw (opcional), así podrá editar la biblioteca una vez enviada para su revisión",
       "twitterHandle": "Nombre de usuario de Twitter (opcional), así sabemos a quién acreditar cuando se promociona en Twitter",
       "website": "Enlace a su sitio web personal o en cualquier otro lugar (opcional)"
     },
@@ -464,7 +464,7 @@
       "website": "Introduce una URL válida"
     },
     "noteDescription": "Envía tu biblioteca para ser incluida en el <link>repositorio de librería pública</link>para que otras personas utilicen en sus dibujos.",
-    "noteGuidelines": "La biblioteca debe ser aprobada manualmente primero. Por favor, lea la <link>pautas</link> antes de enviar. Necesitará una cuenta de GitHub para comunicarse y hacer cambios si se solicita, pero no es estrictamente necesario.",
+    "noteGuidelines": "La biblioteca debe ser aprobada manualmente primero. Por favor, lea la <link>pautas</link> antes de enviar. Necesitará una cuenta de Fcdraw para comunicarse y hacer cambios si se solicita, pero no es estrictamente necesario.",
     "noteLicense": "Al enviar, usted acepta que la biblioteca se publicará bajo el <link>Licencia MIT </link>que en breve significa que cualquiera puede utilizarlos sin restricciones.",
     "noteItems": "Cada elemento de la biblioteca debe tener su propio nombre para que sea filtrable. Los siguientes elementos de la biblioteca serán incluidos:",
     "atleastOneLibItem": "Por favor, seleccione al menos un elemento de la biblioteca para empezar",
@@ -503,7 +503,7 @@
     }
   },
   "encrypted": {
-    "tooltip": "Tus dibujos están cifrados de punto a punto, por lo que los servidores de Excalidraw nunca los verán.",
+    "tooltip": "Tus dibujos están cifrados de punto a punto, por lo que los servidores de Fcdraw nunca los verán.",
     "link": "Entrada en el blog sobre cifrado de extremo a extremo"
   },
   "stats": {
@@ -534,7 +534,7 @@
     "canvas": "lienzo",
     "selection": "selección",
     "pasteAsSingleElement": "Usa {{shortcut}} para pegar como un solo elemento,\no pegar en un editor de texto existente",
-    "unableToEmbed": "Incorporar esta url no está permitido actualmente. Señale esta incidencia en nuestro GitHub para solicitar que esta url esté entre las permitidas",
+    "unableToEmbed": "Incorporar esta url no está permitido actualmente. Señale esta incidencia en nuestro Fcdraw para solicitar que esta url esté entre las permitidas",
     "unrecognizedLinkFormat": "El enlace que incrustó no coincide con el formato esperado. Por favor intente pegar la cadena 'embed' proporcionada por el sitio de origen",
     "elementLinkCopied": "Enlace copiado al portapapeles"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "¿Quieres ir a Excalidraw+?",
+      "center_heading_plus": "¿Quieres ir a Fcdraw?",
       "menuHint": "Exportar, preferencias, idiomas, ..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Exporta los datos de la escena a un archivo desde el cual podrás importar más tarde."
       },
       "excalidrawPlus": {
-        "title": "Excalidraw+",
-        "button": "Exportar a Excalidraw+",
-        "description": "Guarda la escena en su espacio de trabajo de Excalidraw+."
+        "title": "Fcdraw",
+        "button": "Exportar a Fcdraw",
+        "description": "Guarda la escena en su espacio de trabajo de Fcdraw."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid a Excalidraw",
+    "title": "Mermaid a Fcdraw",
     "button": "Insertar",
-    "description": "Actualmente sólo estos tipos de <flowchartLink>diagrama de flujo</flowchartLink>,<sequenceLink> Secuencia, </sequenceLink> y <classLink>Clase </classLink> son soportados. Los otros tipos de diagramas se renderizarán como imagen en Excalidraw.",
+    "description": "Actualmente sólo estos tipos de <flowchartLink>diagrama de flujo</flowchartLink>,<sequenceLink> Secuencia, </sequenceLink> y <classLink>Clase </classLink> son soportados. Los otros tipos de diagramas se renderizarán como imagen en Fcdraw.",
     "syntax": "Sintaxis Mermaid",
     "preview": "Vista previa",
     "label": "",

@@ -1,4 +1,5 @@
 import path from "path";
+
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import svgrPlugin from "vite-plugin-svgr";
@@ -7,6 +8,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
+
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
   // To load .env variables
@@ -95,6 +97,12 @@ export default defineConfig(({ mode }) => {
           // or fallback hence not clubbing with locales so first load followed by offline mode works fine. This is how CRA used to work too.
           manualChunks(id) {
             if (
+              id.includes("/node_modules/mathjs/") ||
+              id.includes("/node_modules/nerdamer/")
+            ) {
+              return "fcdraw-math";
+            }
+            if (
               id.includes("packages/excalidraw/locales") &&
               id.match(/en.json|percentages.json/) === null
             ) {
@@ -119,7 +127,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       Sitemap({
-        hostname: "https://excalidraw.com",
+        hostname: "http://www.fcjyboard.com",
         outDir: "build",
         changefreq: "monthly",
         // its static in public folder
@@ -212,34 +220,19 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 2.3 * 1024 ** 2, // 2.3MB
         },
         manifest: {
-          short_name: "Excalidraw",
-          name: "Excalidraw",
-          description:
-            "Excalidraw is a whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them.",
+          short_name: "Fcdraw",
+          name: "方成教育 Fcdraw",
+          description: "方成教育教学与会议智能白板。",
           icons: [
             {
-              src: "android-chrome-192x192.png",
-              sizes: "192x192",
-              type: "image/png",
-            },
-            {
-              src: "apple-touch-icon.png",
-              type: "image/png",
-              sizes: "180x180",
-            },
-            {
-              src: "favicon-32x32.png",
-              sizes: "32x32",
-              type: "image/png",
-            },
-            {
-              src: "favicon-16x16.png",
-              sizes: "16x16",
-              type: "image/png",
+              src: "fcdraw.svg",
+              sizes: "any",
+              type: "image/svg+xml",
+              purpose: "any",
             },
           ],
           start_url: "/",
-          id: "excalidraw",
+          id: "fcdraw",
           display: "standalone",
           theme_color: "#121212",
           background_color: "#ffffff",
@@ -268,38 +261,6 @@ export default defineConfig(({ mode }) => {
               ],
             },
           },
-          screenshots: [
-            {
-              src: "/screenshots/virtual-whiteboard.png",
-              type: "image/png",
-              sizes: "462x945",
-            },
-            {
-              src: "/screenshots/wireframe.png",
-              type: "image/png",
-              sizes: "462x945",
-            },
-            {
-              src: "/screenshots/illustration.png",
-              type: "image/png",
-              sizes: "462x945",
-            },
-            {
-              src: "/screenshots/shapes.png",
-              type: "image/png",
-              sizes: "462x945",
-            },
-            {
-              src: "/screenshots/collaboration.png",
-              type: "image/png",
-              sizes: "462x945",
-            },
-            {
-              src: "/screenshots/export.png",
-              type: "image/png",
-              sizes: "462x945",
-            },
-          ],
         },
       }),
       createHtmlPlugin({

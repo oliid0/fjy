@@ -1,0 +1,6 @@
+packages:
+  - excalidraw-app
+  - packages/*
+  - examples/*
+
+linkWorkspacePackages: true

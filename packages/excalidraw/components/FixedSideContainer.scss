@@ -1,0 +1,52 @@
+@use "../css/variables.module" as *;
+
+.excalidraw {
+  .FixedSideContainer {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .FixedSideContainer>* {
+    pointer-events: var(--ui-pointerEvents);
+  }
+
+  .FixedSideContainer_side_top {
+    left: var(--editor-container-padding);
+    top: var(--editor-container-padding);
+    right: var(--editor-container-padding);
+    bottom: auto;
+  }
+
+  .FixedSideContainer_side_top .hint-viewer-container {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .FixedSideContainer_side_top.zen-mode {
+    right: 42px;
+  }
+}
+
+.FixedSideContainer_side_left {
+  left: var(--editor-container-padding);
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+
+.FixedSideContainer_side_right {
+  right: var(--editor-container-padding);
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  z-index: 3;
+}

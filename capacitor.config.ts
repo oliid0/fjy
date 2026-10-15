@@ -1,9 +1,9 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'com.edsonmatematico.benehimedraw',
-  appName: 'BenehimeDraw',
-  webDir: 'excalidraw-app/build'
+  appId: "com.fcjyboard.fcdraw",
+  appName: "方成教育 Fcdraw",
+  webDir: "excalidraw-app/build",
 };
 
 export default config;

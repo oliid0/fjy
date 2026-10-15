@@ -1,0 +1,76 @@
+name: Fcdraw verification and Android APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: [history.md, README.md]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fcdraw-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm check
+      - run: pnpm lint
+      - run: pnpm test:other
+      - run: pnpm test
+
+  android:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Package web application
+        run: pnpm --dir excalidraw-app exec vite build
+        env:
+          VITE_APP_ENABLE_TRACKING: "false"
+          VITE_APP_DISABLE_SENTRY: "true"
+      - run: pnpm exec cap sync android
+      - name: Package and verify Android
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug testDebugUnitTest lintDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcdraw-Android-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcdraw-Web
+          path: excalidraw-app/build
+          if-no-files-found: error

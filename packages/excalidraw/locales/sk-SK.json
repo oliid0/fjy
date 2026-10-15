@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Zalomená šípka",
     "fontSize": "Veľkosť písma",
     "fontFamily": "Písmo",
-    "addWatermark": "Pridať \"Vytvorené s Excalidraw\"",
+    "addWatermark": "Pridať \"Vytvorené s Fcdraw\"",
     "handDrawn": "Ručne písané",
     "normal": "Normálne",
     "code": "Kód",
@@ -91,7 +91,7 @@
     "untitled": "Bez názvu",
     "name": "Meno",
     "yourName": "Vaše meno",
-    "madeWithExcalidraw": "Vytvorené s Excalidraw",
+    "madeWithExcalidraw": "Vytvorené s Fcdraw",
     "group": "Zoskupiť",
     "ungroup": "Zrušiť zoskupenie",
     "collaborators": "Spolupracovníci",
@@ -121,7 +121,7 @@
     "toggleTheme": "Prepnúť svetlú/tmavú tému",
     "theme": "Téma",
     "personalLib": "Moja knižnica",
-    "excalidrawLib": "Excalidraw knižnica",
+    "excalidrawLib": "Fcdraw knižnica",
     "decreaseFontSize": "Zmenšiť veľkosť písma",
     "increaseFontSize": "Zväčšiť veľkosť písma",
     "unbindText": "Zrušiť previazanie textu",
@@ -159,11 +159,11 @@
     "textToDiagram": "Text na diagram",
     "prompt": "Inštrukcia",
     "followUs": "Sledujte nás",
-    "discordChat": "Discord chat",
+    "discordChat": "Fcdraw chat",
     "zoomToFitViewport": "Priblížiť na veľkosť zobrazenia",
     "zoomToFitSelection": "Priblížiť na výber",
     "zoomToFit": "Priblížiť aby boli zahrnuté všetky prvky",
-    "installPWA": "Inštalovať Excalidraw lokálne (PWA)",
+    "installPWA": "Inštalovať Fcdraw lokálne (PWA)",
     "autoResize": "Zapnúť automatickú zmenu veľkosti textu",
     "imageCropping": "Orezanie obrázka",
     "unCroppedDimension": "Pôvodné rozmery",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Nie je možné exportovať prázdne plátno.",
     "couldNotCopyToClipboard": "Kopírovanie do schránky sa nepodarilo.",
     "decryptFailed": "Nepodarilo sa rozšifrovať údaje.",
-    "uploadedSecurly": "Nahratie je zabezpečené end-to-end šifrovaním, takže Excalidraw server a tretie strany nedokážu prečítať jeho obsah.",
+    "uploadedSecurly": "Nahratie je zabezpečené end-to-end šifrovaním, takže Fcdraw server a tretie strany nedokážu prečítať jeho obsah.",
     "loadSceneOverridePrompt": "Nahratie externej kresby nahradí existujúci obsah. Prajete si pokračovať?",
     "collabStopOverridePrompt": "Ukončenie schôdze nahradí vašu predchádzajúcu lokálne uloženú scénu. Ste si istý?\n\n(Ak si chcete ponechať lokálnu scénu, jednoducho iba zavrite kartu prehliadača.)",
     "errorAddingToLibrary": "Nepodarilo sa pridať položku do knižnice",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Týmto sa pridá {{numShapes}} tvar(ov) do vašej knižnice. Ste si istí?",
     "imageDoesNotContainScene": "Tento obrázok neobsahuje žiadne údaje scény. Zvolili ste možnosť zahrnúť scénu počas exportu?",
     "cannotRestoreFromImage": "Nepodarilo sa obnoviť scénu z tohto obrázkového súboru",
-    "invalidSceneUrl": "Nepodarilo sa načítať scénu z poskytnutej URL. Je nevalidná alebo neobsahuje žiadne validné Excalidraw JSON dáta.",
+    "invalidSceneUrl": "Nepodarilo sa načítať scénu z poskytnutej URL. Je nevalidná alebo neobsahuje žiadne validné Fcdraw JSON dáta.",
     "resetLibrary": "Týmto vyprázdnite vašu knižnicu. Ste si istý?",
     "removeItemsFromsLibrary": "Odstrániť {{count}} položiek z knižnice?",
     "invalidEncryptionKey": "Šifrovací kľúč musí mať 22 znakov. Živá spolupráca je vypnutá.",
@@ -279,7 +279,7 @@
       "line1": "Vyzerá to, že používate prehliadač Brave so zapnutým nastavením pre <bold>agresívne blokovanie</bold>.",
       "line2": "To môže spôsobiť nesprávne zobrazenie <bold>textových prvkov</bold> vo vašej kresbe.",
       "line3": "Dôrazne odporúčame vypnutie toho nastavenia. Môžete tak spraviť vykonaním <link>týchto krokov</link>.",
-      "line4": "Ak vypnutie toho nastavenia nevyrieši problém so zobrazením textových prvkov, prosím ohláste <issueLink>problém</issueLink> na našom GitHub-e alebo nám napíšte na náš <discordLink>Discord</discordLink>"
+      "line4": "Ak vypnutie toho nastavenia nevyrieši problém so zobrazením textových prvkov, prosím ohláste <issueLink>problém</issueLink> na našom Fcdraw-e alebo nám napíšte na náš <discordLink>Fcdraw</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Zapustené prvky nie je možné pridať do knižnice.",
@@ -312,7 +312,7 @@
     "laser": "Laserový ukazovateľ",
     "hand": "Ruka (nástroj pre pohyb plátna)",
     "extraTools": "Ďalšie nástroje",
-    "mermaidToExcalidraw": "Mermaid do Excalidraw",
+    "mermaidToExcalidraw": "Mermaid do Fcdraw",
     "convertElementType": "Prepnúť typ tvaru"
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Ak obnovenie stránky nepomáha, vyskúšajte <button>vyčistiť plátno.</button>",
     "clearCanvasCaveat": " To bude mať za následok stratu práce ",
     "trackedToSentry": "Chyba s identifikátorom {{eventId}} bola zaznamenaná v našom systéme.",
-    "openIssueMessage": "Boli sme veľmi opatrní, aby informácie vašej scény neboli v chybe zaznamenané. Ak vaša scéna nie je súkromná, prosím zvážte pokračovanie na naše <button>hlásenie chýb.</button> Prosím zahrňte informácie nižšie pomocou kopírovania a prilepenia do GitHub issue.",
+    "openIssueMessage": "Boli sme veľmi opatrní, aby informácie vašej scény neboli v chybe zaznamenané. Ak vaša scéna nie je súkromná, prosím zvážte pokračovanie na naše <button>hlásenie chýb.</button> Prosím zahrňte informácie nižšie pomocou kopírovania a prilepenia do Fcdraw issue.",
     "sceneContent": "Obsah scény:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Práve prebieha živá schôdza.",
     "desc_shareLink": "Zdieľajte tento odkaz s osobou, s ktorou chcete spolupracovať:",
     "desc_exitSession": "Ukončenie schôdze vás odpojí z miestnosti, avšak naďalej budete môcť pokračovať v práci na scéne lokálne. Toto neovplyvní ostatných spolupracovníkov a stále budú môcť spolupracovať na ich verzii.",
-    "shareTitle": "Pripojiť sa k živej schôdzi na Excalidraw"
+    "shareTitle": "Pripojiť sa k živej schôdzi na Fcdraw"
   },
   "errorDialog": {
     "title": "Chyba"
@@ -402,9 +402,9 @@
     "link_title": "Odkaz na zdieľanie",
     "link_details": "Exportovať ako odkaz iba na čítanie.",
     "link_button": "Exportovať ako odkaz",
-    "excalidrawplus_description": "Uložiť scénu do vášho Excalidraw+ pracovného priestoru.",
+    "excalidrawplus_description": "Uložiť scénu do vášho Fcdraw pracovného priestoru.",
     "excalidrawplus_button": "Exportovať",
-    "excalidrawplus_exportError": "Nepodarilo sa vykonať export do Excalidraw+..."
+    "excalidrawplus_exportError": "Nepodarilo sa vykonať export do Fcdraw..."
   },
   "helpDialog": {
     "blog": "Prečítajte si náš blog",
@@ -455,7 +455,7 @@
       "authorName": "Vaše meno alebo užívateľské meno",
       "libraryName": "Názov vašej knižnice",
       "libraryDesc": "Popis vašej knižnice, ktorý ostatným pomôže porozumieť jej vhodnému použitiu",
-      "githubHandle": "GitHub užívateľské meno (nepovinné), aby ste mohli robiť úpravy po tom, čo bude knižnica uverejnená na schválenie",
+      "githubHandle": "Fcdraw užívateľské meno (nepovinné), aby ste mohli robiť úpravy po tom, čo bude knižnica uverejnená na schválenie",
       "twitterHandle": "Twitter užívateľské meno (nepovinné), aby sme vedeli komu pripísať zásluhu pri propagovaní cez Twitter",
       "website": "Odkaz na vašu osobnú webovú stránku alebo niekam inam (nepovinné)"
     },
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Vaše kresby používajú end-to-end šifrovanie, takže ich Excalidraw server nedokáže prečítať.",
-    "link": "Blog o end-to-end šifrovaní v Excalidraw"
+    "tooltip": "Vaše kresby používajú end-to-end šifrovanie, takže ich Fcdraw server nedokáže prečítať.",
+    "link": "Blog o end-to-end šifrovaní v Fcdraw"
   },
   "stats": {
     "angle": "Uhol",
@@ -534,7 +534,7 @@
     "canvas": "plátna",
     "selection": "výberu",
     "pasteAsSingleElement": "Použitím {{shortcut}} vložte ako samostatný prvok alebo vložte do existujúceho editovaného textu",
-    "unableToEmbed": "Zapustenie tejto URL nie je povolené. Vytvorte issue na GitHub-e a požiadajte povolenie tejto URL",
+    "unableToEmbed": "Zapustenie tejto URL nie je povolené. Vytvorte issue na Fcdraw-e a požiadajte povolenie tejto URL",
     "unrecognizedLinkFormat": "Odkaz, ktorý sa snažíte zapustiť nie je v očakávanom formáte. Prosím skúste vložiť 'odkaz na zdieľanie' poskytnutý zdrojovou webovou stránkou",
     "elementLinkCopied": "Odkaz bol skopírovaný do schránky"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Chceli ste namiesto toho prejsť do Excalidraw+?",
+      "center_heading_plus": "Chceli ste namiesto toho prejsť do Fcdraw?",
       "menuHint": "Exportovanie, nastavenia, jazyky, ..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Exportovať údaje scény do súboru, z ktorého môžu byť neskôr importované."
       },
       "excalidrawPlus": {
-        "title": "Excalidraw+",
-        "button": "Exportovať ako Excalidraw+",
-        "description": "Uložiť scénu do vášho Excalidraw+ pracovného priestoru."
+        "title": "Fcdraw",
+        "button": "Exportovať ako Fcdraw",
+        "description": "Uložiť scénu do vášho Fcdraw pracovného priestoru."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid do Excalidraw",
+    "title": "Mermaid do Fcdraw",
     "button": "Vložiť",
-    "description": "Aktuálne sú podporované iba <flowchartLink>vývojové diagramy</flowchartLink>, <sequenceLink>sekvenčné diagramy</sequenceLink> a <classLink>diagramy tried</classLink>. Ostatné typy budú v Excalidraw vykreslené ako obrázky.",
+    "description": "Aktuálne sú podporované iba <flowchartLink>vývojové diagramy</flowchartLink>, <sequenceLink>sekvenčné diagramy</sequenceLink> a <classLink>diagramy tried</classLink>. Ostatné typy budú v Fcdraw vykreslené ako obrázky.",
     "syntax": "Mermaid syntax",
     "preview": "Ukážka",
     "label": "",

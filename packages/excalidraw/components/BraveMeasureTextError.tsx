@@ -1,43 +1,15 @@
-import Trans from "./Trans";
-
-const BraveMeasureTextError = () => {
-  return (
-    <div data-testid="brave-measure-text-error">
-      <p>
-        <Trans
-          i18nKey="errors.brave_measure_text_error.line1"
-          bold={(el) => <span style={{ fontWeight: 600 }}>{el}</span>}
-        />
-      </p>
-      <p>
-        <Trans
-          i18nKey="errors.brave_measure_text_error.line2"
-          bold={(el) => <span style={{ fontWeight: 600 }}>{el}</span>}
-        />
-      </p>
-      <p>
-        <Trans
-          i18nKey="errors.brave_measure_text_error.line3"
-          link={(el) => (
-            <a href="http://docs.excalidraw.com/docs/@excalidraw/excalidraw/faq#turning-off-aggresive-block-fingerprinting-in-brave-browser">
-              {el}
-            </a>
-          )}
-        />
-      </p>
-      <p>
-        <Trans
-          i18nKey="errors.brave_measure_text_error.line4"
-          issueLink={(el) => (
-            <a href="https://github.com/excalidraw/excalidraw/issues/new">
-              {el}
-            </a>
-          )}
-          discordLink={(el) => <a href="https://discord.gg/UexuTaE">{el}.</a>}
-        />
-      </p>
-    </div>
-  );
-};
-
+const BraveMeasureTextError = () => (
+  <div data-testid="brave-measure-text-error">
+    <p>
+      浏览器阻止了文字测量，请在浏览器隐私设置中允许当前应用使用画布后重试。
+    </p>
+    <a
+      href="http://www.fcjyboard.com/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      方成教育官网
+    </a>
+  </div>
+);
 export default BraveMeasureTextError;

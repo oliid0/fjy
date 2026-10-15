@@ -235,17 +235,9 @@ const MermaidToExcalidraw = ({
       <div className="ttd-dialog-desc">
         <Trans
           i18nKey="mermaid.description"
-          flowchartLink={(el) => (
-            <a href="https://mermaid.js.org/syntax/flowchart.html">{el}</a>
-          )}
-          sequenceLink={(el) => (
-            <a href="https://mermaid.js.org/syntax/sequenceDiagram.html">
-              {el}
-            </a>
-          )}
-          classLink={(el) => (
-            <a href="https://mermaid.js.org/syntax/classDiagram.html">{el}</a>
-          )}
+          flowchartLink={(el) => <a href="http://www.fcjyboard.com/">{el}</a>}
+          sequenceLink={(el) => <a href="http://www.fcjyboard.com/">{el}</a>}
+          classLink={(el) => <a href="http://www.fcjyboard.com/">{el}</a>}
         />
       </div>
       <TTDDialogPanels>

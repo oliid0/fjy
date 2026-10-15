@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "",
     "fontSize": "Betűméret",
     "fontFamily": "Betűkészlet család",
-    "addWatermark": "Add hozzá, hogy \"Excalidraw-val készült\"",
+    "addWatermark": "Add hozzá, hogy \"Fcdraw-val készült\"",
     "handDrawn": "Kézzel rajzolt",
     "normal": "Normál",
     "code": "Kód",
@@ -91,7 +91,7 @@
     "untitled": "Névtelen",
     "name": "Név",
     "yourName": "Neved",
-    "madeWithExcalidraw": "Excalidraw-val készült",
+    "madeWithExcalidraw": "Fcdraw-val készült",
     "group": "Csoportosítás",
     "ungroup": "Csoportbontás",
     "collaborators": "Közreműködők",
@@ -121,7 +121,7 @@
     "toggleTheme": "Világos/sötét háttér kapcsoló",
     "theme": "Téma",
     "personalLib": "Személyes könyvtár",
-    "excalidrawLib": "Excalidraw könyvtár",
+    "excalidrawLib": "Fcdraw könyvtár",
     "decreaseFontSize": "Betűméret csökkentése",
     "increaseFontSize": "Betűméret növelése",
     "unbindText": "Szövegkötés feloldása",
@@ -159,7 +159,7 @@
     "textToDiagram": "Szövegből diagram",
     "prompt": "Egyéb",
     "followUs": "Kövess minket",
-    "discordChat": "Discord chat",
+    "discordChat": "Fcdraw chat",
     "zoomToFitViewport": "",
     "zoomToFitSelection": "Nagyítás a kijelölés méretére",
     "zoomToFit": "Az összes elem látótérbe hozása",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Üres vászont nem lehet exportálni.",
     "couldNotCopyToClipboard": "Nem lehet a vágólapra másolni.",
     "decryptFailed": "Nem sikerült visszafejteni a titkosított adatot.",
-    "uploadedSecurly": "A feltöltést végpontok közötti titkosítással biztosítottuk, ami azt jelenti, hogy egy harmadik fél nem tudja megnézni a tartalmát, beleértve az Excalidraw szervereit is.",
+    "uploadedSecurly": "A feltöltést végpontok közötti titkosítással biztosítottuk, ami azt jelenti, hogy egy harmadik fél nem tudja megnézni a tartalmát, beleértve az Fcdraw szervereit is.",
     "loadSceneOverridePrompt": "A betöltött külső rajz felül fogja írnia meglévőt. Szeretnéd folytatni?",
     "collabStopOverridePrompt": "A munkamenet leállítása felül fogja írni az előzőleg helyben tárolt rajzot. Biztosan ezt akarod?\n(Ha meg akarod tartani a helyben tárolt rajzot, egyszerűen csak zárd be a böngésző fület)",
     "errorAddingToLibrary": "A tétel nem addható hozzá a könyvtárhoz",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Ez a művelet {{numShapes}} formát fog hozzáadni a könyvtáradhoz. Biztos vagy benne?",
     "imageDoesNotContainScene": "Úgy tűnik, hogy ez a kép nem tartalmaz jelenetadatokat. Engedélyezted a jelenetbeágyazást az exportálás során?",
     "cannotRestoreFromImage": "A jelenet visszaállítása nem sikerült ebből a kép fájlból",
-    "invalidSceneUrl": "Nem sikerült importálni a jelenetet a megadott URL-ről. Rossz formátumú, vagy nem tartalmaz érvényes Excalidraw JSON-adatokat.",
+    "invalidSceneUrl": "Nem sikerült importálni a jelenetet a megadott URL-ről. Rossz formátumú, vagy nem tartalmaz érvényes Fcdraw JSON-adatokat.",
     "resetLibrary": "Ezzel törlöd a könyvtárát. biztos vagy ebben?",
     "removeItemsFromsLibrary": "{{count}} elemet törölsz a könyvtárból?",
     "invalidEncryptionKey": "A titkosítási kulcsnak 22 karakterből kell állnia. Az élő együttműködés le van tiltva.",
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Ha az újratöltés nem működik, próbáld <button>letörölni a vászont.</button>",
     "clearCanvasCaveat": " Ezzel az eddigi munka elveszik ",
     "trackedToSentry": "A hibakód azonosítóval {{eventId}} nyomon van követve a rendszerünkben.",
-    "openIssueMessage": "Vigyáztunk arra, hogy a jelenthez tartozó információ ne jelenjen meg a hibaüzenetben. Ha a jeleneted nem bizalmas, kérjük add hozzá a <button>hibakövető rendszerünkhöz.</button> Kérjük, másolja be az alábbi információkat a GitHub problémába.",
+    "openIssueMessage": "Vigyáztunk arra, hogy a jelenthez tartozó információ ne jelenjen meg a hibaüzenetben. Ha a jeleneted nem bizalmas, kérjük add hozzá a <button>hibakövető rendszerünkhöz.</button> Kérjük, másolja be az alábbi információkat a Fcdraw problémába.",
     "sceneContent": "Jelenet tartalma:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Az élő együttműködési munkamenet folyamatban van.",
     "desc_shareLink": "Ossza meg ezt a linket bárkivel, akivel együtt szeretne működni:",
     "desc_exitSession": "Az munkamenet leállítása kilépteti önt a szobából, de folytathatja a munkát a saját gépén. Vegye figyelembe, hogy ez nem érinti más emberek munkáját és ők továbbra is együttműködhetnek a saját változatukon.",
-    "shareTitle": "Csatlakozás egy élő együttműködési munkamenethez az Excalidraw-ban"
+    "shareTitle": "Csatlakozás egy élő együttműködési munkamenethez az Fcdraw-ban"
   },
   "errorDialog": {
     "title": "Hiba"
@@ -402,9 +402,9 @@
     "link_title": "Megosztható hivatkozás",
     "link_details": "Exportálás csak olvasható hivatkozásként.",
     "link_button": "Exportálás hivatkozásba",
-    "excalidrawplus_description": "Mentse el a jelenetet az Excalidraw+ munkaterületére.",
+    "excalidrawplus_description": "Mentse el a jelenetet az Fcdraw munkaterületére.",
     "excalidrawplus_button": "Exportálás",
-    "excalidrawplus_exportError": "Jelenleg nem lehet exportálni az Excalidraw+-ba..."
+    "excalidrawplus_exportError": "Jelenleg nem lehet exportálni az Fcdraw-ba..."
   },
   "helpDialog": {
     "blog": "Olvasd a blogunkat",
@@ -446,7 +446,7 @@
     "title": "Könyvtár közzététele",
     "itemName": "Tétel neve",
     "authorName": "Szerző neve",
-    "githubUsername": "GitHub felhasználónév",
+    "githubUsername": "Fcdraw felhasználónév",
     "twitterUsername": "Twitter felhasználónév",
     "libraryName": "Könyvtár neve",
     "libraryDesc": "Könyvtár leírása",
@@ -455,7 +455,7 @@
       "authorName": "Neved vagy felhasználóneved",
       "libraryName": "A könyvtárad neve",
       "libraryDesc": "A könyvtárad használatát segítő leírás",
-      "githubHandle": "GitHub-handle(opcionális), így szerkesztheted a könyvtárat, miután elküldted ellenőrzésre",
+      "githubHandle": "Fcdraw-handle(opcionális), így szerkesztheted a könyvtárat, miután elküldted ellenőrzésre",
       "twitterHandle": "Twitter-felhasználónév (opcionális), így tudjuk, kinek kell jóváírni a Twitteren keresztüli reklámozást",
       "website": "Hivatkozás személyes webhelyedre vagy máshová (nem kötelező)"
     },
@@ -464,7 +464,7 @@
       "website": "Adj meg egy érvényes URL-t"
     },
     "noteDescription": "Küld be könyvtáradat, hogy bekerüljön a <link>nyilvános könyvtár tárolóba</link>hogy mások is felhasználhassák a rajzaikban.",
-    "noteGuidelines": "A könyvtárat először manuálisan kell jóváhagyni. Kérjük, olvassa el a <link>segédletet</link> benyújtása előtt. Szüksége lesz egy GitHub-fiókra a kommunikációhoz és a módosításokhoz, ha kérik, de ez nem feltétlenül szükséges.",
+    "noteGuidelines": "A könyvtárat először manuálisan kell jóváhagyni. Kérjük, olvassa el a <link>segédletet</link> benyújtása előtt. Szüksége lesz egy Fcdraw-fiókra a kommunikációhoz és a módosításokhoz, ha kérik, de ez nem feltétlenül szükséges.",
     "noteLicense": "A beküldéssel elfogadja, hogy a könyvtár a következő alatt kerül közzétételre <link>MIT Licensz </link>ami röviden azt jelenti, hogy bárki korlátozás nélkül használhatja őket.",
     "noteItems": "Minden könyvtárelemnek saját nevével kell rendelkeznie, hogy szűrhető legyen. A következő könyvtári tételek kerülnek bele:",
     "atleastOneLibItem": "A kezdéshez válassz ki legalább egy könyvtári elemet",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "A rajzaidat végpontok közötti titkosítással tároljuk, tehát az Excalidraw szervereiről se tud más belenézni.",
-    "link": "Blogbejegyzés a végpontok közötti titkosításról az Excalidraw-ban"
+    "tooltip": "A rajzaidat végpontok közötti titkosítással tároljuk, tehát az Fcdraw szervereiről se tud más belenézni.",
+    "link": "Blogbejegyzés a végpontok közötti titkosításról az Fcdraw-ban"
   },
   "stats": {
     "angle": "Szög",

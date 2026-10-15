@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "",
     "fontSize": "Letra-tamaina",
     "fontFamily": "Letra-tipoa",
-    "addWatermark": "Gehitu \"Excalidraw bidez egina\"",
+    "addWatermark": "Gehitu \"Fcdraw bidez egina\"",
     "handDrawn": "Eskuz marraztua",
     "normal": "Normala",
     "code": "Kodea",
@@ -91,7 +91,7 @@
     "untitled": "Izengabea",
     "name": "Izena",
     "yourName": "Zure izena",
-    "madeWithExcalidraw": "Excalidraw bidez egina",
+    "madeWithExcalidraw": "Fcdraw bidez egina",
     "group": "Hautapena taldea bihurtu",
     "ungroup": "Desegin hautapenaren taldea",
     "collaborators": "Kolaboratzaileak",
@@ -121,7 +121,7 @@
     "toggleTheme": "Gaia argia/iluna aktibatu",
     "theme": "Itxura",
     "personalLib": "Liburutegi pertsonala",
-    "excalidrawLib": "Excalidraw liburutegia",
+    "excalidrawLib": "Fcdraw liburutegia",
     "decreaseFontSize": "Txikitu letra tamaina",
     "increaseFontSize": "Handitu letra tamaina",
     "unbindText": "Askatu testua",
@@ -159,11 +159,11 @@
     "textToDiagram": "Testutik diagramara",
     "prompt": "Galdetu",
     "followUs": "Jarraitu gaitzazu",
-    "discordChat": "Discord txata",
+    "discordChat": "Fcdraw txata",
     "zoomToFitViewport": "Zoom ikuspegira",
     "zoomToFitSelection": "Zoom hautapenera",
     "zoomToFit": "Egin zoom elementu guztiak ikusteko",
-    "installPWA": "Instalatu Excalidraw lokalean (PWA)",
+    "installPWA": "Instalatu Fcdraw lokalean (PWA)",
     "autoResize": "Textu zabalera automatikoa aktibatu",
     "imageCropping": "",
     "unCroppedDimension": "",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Ezin izan da oihal hutsa esportatu.",
     "couldNotCopyToClipboard": "Ezin izan da arbelean kopiatu.",
     "decryptFailed": "Ezin izan da deszifratu.",
-    "uploadedSecurly": "Kargatzea muturretik muturrerako zifratze bidez ziurtatu da, hau da, Excalidraw zerbitzariak eta hirugarrenek ezin dutela edukia irakurri.",
+    "uploadedSecurly": "Kargatzea muturretik muturrerako zifratze bidez ziurtatu da, hau da, Fcdraw zerbitzariak eta hirugarrenek ezin dutela edukia irakurri.",
     "loadSceneOverridePrompt": "Kanpoko marrazkia kargatzeak lehendik duzun edukia ordezkatuko du. Jarraitu nahi duzu?",
     "collabStopOverridePrompt": "Saioa gelditzeak lokalean gordetako zure aurreko marrazkia gainidatziko du. Ziur zaude?\n\n(Zure marrazki lokala mantendu nahi baduzu, itxi arakatzailearen fitxa.)",
     "errorAddingToLibrary": "Ezin izan da elementua liburutegian gehitu",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Honek {{numShapes}} forma gehituko ditu zure liburutegian. Ziur zaude?",
     "imageDoesNotContainScene": "Irudi honek ez dirudi eszena daturik duenik. Eszena kapsulatzea gaitu al duzu esportazioan?",
     "cannotRestoreFromImage": "Ezin izan da eszena leheneratu irudi fitxategi honetatik",
-    "invalidSceneUrl": "Ezin izan da eszena inportatu emandako URLtik. Gaizki eratuta dago edo ez du baliozko Excalidraw JSON daturik.",
+    "invalidSceneUrl": "Ezin izan da eszena inportatu emandako URLtik. Gaizki eratuta dago edo ez du baliozko Fcdraw JSON daturik.",
     "resetLibrary": "Honek zure liburutegia garbituko du. Ziur zaude?",
     "removeItemsFromsLibrary": "Liburutegitik {{count}} elementu ezabatu?",
     "invalidEncryptionKey": "Enkriptazio-gakoak 22 karaktere izan behar ditu. Zuzeneko lankidetza desgaituta dago.",
@@ -279,7 +279,7 @@
       "line1": "Brave arakatzailea erabiltzen ari zarela dirudi <bold>Blokeatu hatz-markak erasokorki</bold> ezarpena gaituta.",
       "line2": "Honek zure marrazkietako <bold>Testu-elementuak</bold> hautsi ditzake.",
       "line3": "Ezarpen hau desgaitzea gomendatzen dugu. <link>urrats hauek</link> jarrai ditzakezu hori nola egin jakiteko.",
-      "line4": "Ezarpen hau desgaituz gero, testu-elementuen bistaratzea konpontzen ez bada, ireki <issueLink>arazo</issueLink> gure GitHub-en edo idatzi iezaguzu <discordLink>Discord</discordLink> helbidera"
+      "line4": "Ezarpen hau desgaituz gero, testu-elementuen bistaratzea konpontzen ez bada, ireki <issueLink>arazo</issueLink> gure Fcdraw-en edo idatzi iezaguzu <discordLink>Fcdraw</discordLink> helbidera"
     },
     "libraryElementTypeError": {
       "embeddable": "Kapsulatutako elementuak ezin dira liburutegira gehitu.",
@@ -312,7 +312,7 @@
     "laser": "Laser punteroa",
     "hand": "Eskua (panoratze tresna)",
     "extraTools": "Tresna gehiago",
-    "mermaidToExcalidraw": "Mermaid-etik Excalidraw-ra",
+    "mermaidToExcalidraw": "Mermaid-etik Fcdraw-ra",
     "convertElementType": ""
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Birkargatzea ez bada burutzen, saiatu <button>oihala garbitzen.</button>",
     "clearCanvasCaveat": " Honen ondorioz lana galduko da ",
     "trackedToSentry": "Identifikatzailearen errorea {{eventId}} gure sistemak behatu du.",
-    "openIssueMessage": "Oso kontuz ibili gara zure eszenaren informazioa errorean ez sartzeko. Zure eszena pribatua ez bada, kontuan hartu gure <button>erroreen jarraipena egitea.</button> Sartu beheko informazioa kopiatu eta itsatsi bidez GitHub issue-n.",
+    "openIssueMessage": "Oso kontuz ibili gara zure eszenaren informazioa errorean ez sartzeko. Zure eszena pribatua ez bada, kontuan hartu gure <button>erroreen jarraipena egitea.</button> Sartu beheko informazioa kopiatu eta itsatsi bidez Fcdraw issue-n.",
     "sceneContent": "Eszenaren edukia:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Zuzeneko lankidetza saioa abian da.",
     "desc_shareLink": "Partekatu esteka hau elkarlanean aritu nahi duzun edonorekin:",
     "desc_exitSession": "Saioa ixteak aretotik deskonektatuko zaitu, baina eszenarekin lanean jarraitu ahal izango duzu lokalean. Kontuan izan honek ez diela beste pertsonei eragingo, eta euren bertsioan elkarlanean aritu ahal izango dira.",
-    "shareTitle": "Sartu Excalidraw-en zuzeneko lankidetza-saio batean"
+    "shareTitle": "Sartu Fcdraw-en zuzeneko lankidetza-saio batean"
   },
   "errorDialog": {
     "title": "Errorea"
@@ -402,9 +402,9 @@
     "link_title": "Partekatzeko esteka",
     "link_details": "Esportatu irakurtzeko soilik moduko esteka.",
     "link_button": "Esportatu esteka",
-    "excalidrawplus_description": "Gorde eszena zure Excalidraw+ laneko areara.",
+    "excalidrawplus_description": "Gorde eszena zure Fcdraw laneko areara.",
     "excalidrawplus_button": "Esportatu",
-    "excalidrawplus_exportError": "Une honetan ezin izan da esportatu Excalidraw+era..."
+    "excalidrawplus_exportError": "Une honetan ezin izan da esportatu Fcdrawera..."
   },
   "helpDialog": {
     "blog": "Irakurri gure bloga",
@@ -446,7 +446,7 @@
     "title": "Argitaratu liburutegia",
     "itemName": "Elementuaren izena",
     "authorName": "Egilearen izena",
-    "githubUsername": "GitHub-eko erabiltzaile-izena",
+    "githubUsername": "Fcdraw-eko erabiltzaile-izena",
     "twitterUsername": "Twitter-eko erabiltzaile-izena",
     "libraryName": "Liburutegiaren izena",
     "libraryDesc": "Liburutegiaren deskripzioa",
@@ -455,7 +455,7 @@
       "authorName": "Zure izena edo erabiltzaile-izena",
       "libraryName": "Zure liburutegiaren izena",
       "libraryDesc": "Zure liburutegiaren deskripzioa laguntzeko jendeari ulertzen haren erabilpena",
-      "githubHandle": "GitHub heldulekua (aukerakoa), liburutegia editatu ahal izateko berrikustera bidalitakoan",
+      "githubHandle": "Fcdraw heldulekua (aukerakoa), liburutegia editatu ahal izateko berrikustera bidalitakoan",
       "twitterHandle": "Twitter-eko erabiltzaile-izena (aukerakoa), badakigu nori kreditatu behar dugun Twitter bidez sustatzeko",
       "website": "Estekatu zure webgunera edo nahi duzun tokira (aukerakoa)"
     },
@@ -464,7 +464,7 @@
       "website": "Sartu baliozko URL bat"
     },
     "noteDescription": "Bidali zure liburutegira sartu ahal izateko <link>zure liburutegiko biltegian</link>beste jendeak bere marrazkietan erabili ahal izateko.",
-    "noteGuidelines": "Liburutegia eskuz onartu behar da. Irakurri <link>gidalerroak</link> bidali aurretik. GitHub kontu bat edukitzea komeni da komunikatzeko eta aldaketak egin ahal izateko, baina ez da guztiz beharrezkoa.",
+    "noteGuidelines": "Liburutegia eskuz onartu behar da. Irakurri <link>gidalerroak</link> bidali aurretik. Fcdraw kontu bat edukitzea komeni da komunikatzeko eta aldaketak egin ahal izateko, baina ez da guztiz beharrezkoa.",
     "noteLicense": "Bidaltzen baduzu, onartzen duzu liburutegia <link>MIT lizentziarekin argitaratuko dela, </link>zeinak, laburbilduz, esan nahi du edozeinek erabiltzen ahal duela murrizketarik gabe.",
     "noteItems": "Liburutegiko elementu bakoitzak bere izena eduki behar du iragazi ahal izateko. Liburutegiko hurrengo elementuak barne daude:",
     "atleastOneLibItem": "Hautatu gutxienez liburutegiko elementu bat gutxienez hasi ahal izateko",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Zure marrazkiak muturretik muturrera enkriptatu dira, beraz Excalidraw-ren zerbitzariek ezingo dituzte ikusi.",
-    "link": "Excalidraw-ren muturretik muturrerako enkriptatzearen gaineko mezua blogean"
+    "tooltip": "Zure marrazkiak muturretik muturrera enkriptatu dira, beraz Fcdraw-ren zerbitzariek ezingo dituzte ikusi.",
+    "link": "Fcdraw-ren muturretik muturrerako enkriptatzearen gaineko mezua blogean"
   },
   "stats": {
     "angle": "Angelua",
@@ -534,7 +534,7 @@
     "canvas": "oihala",
     "selection": "hautapena",
     "pasteAsSingleElement": "Erabili {{shortcut}} elementu bakar gisa itsasteko,\nedo itsatsi lehendik dagoen testu-editore batean",
-    "unableToEmbed": "Url hau txertatzea ez da une honetan onartzen. Sortu issue bat GitHub-en Urla zerrenda zurian sartzea eskatzeko",
+    "unableToEmbed": "Url hau txertatzea ez da une honetan onartzen. Sortu issue bat Fcdraw-en Urla zerrenda zurian sartzea eskatzeko",
     "unrecognizedLinkFormat": "Kapsulatu duzun esteka ez dator bat espero den formatuarekin. Mesedez, saiatu iturburu-guneak emandako 'kapsulatu' katea itsasten",
     "elementLinkCopied": ""
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Horren ordez Excalidraw+-era joan nahi al zenuen?",
+      "center_heading_plus": "Horren ordez Fcdraw-era joan nahi al zenuen?",
       "menuHint": "Esportatu, hobespenak, hizkuntzak..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Esportatu eszenaren datuak geroago inportatu ahal izango duzun fitxategi batan."
       },
       "excalidrawPlus": {
-        "title": "Excalidraw+",
-        "button": "Esportatu Excalidraw+ra",
-        "description": "Gorde eszena zure Excalidraw+ laneko areara."
+        "title": "Fcdraw",
+        "button": "Esportatu Fcdrawra",
+        "description": "Gorde eszena zure Fcdraw laneko areara."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid-etik Excalidraw-ra",
+    "title": "Mermaid-etik Fcdraw-ra",
     "button": "Txertatu",
-    "description": "Momentu honetan <flowchartLink>Flowchart</flowchartLink>, <sequenceLink> Sequence, </sequenceLink> eta <classLink>Class </classLink>Diagramak onartzen dira. Beste motak irudi gisa errendatuko dira Excalidrawn.",
+    "description": "Momentu honetan <flowchartLink>Flowchart</flowchartLink>, <sequenceLink> Sequence, </sequenceLink> eta <classLink>Class </classLink>Diagramak onartzen dira. Beste motak irudi gisa errendatuko dira Fcdrawn.",
     "syntax": "Mermaid sintaxia",
     "preview": "Aurrebista",
     "label": "",

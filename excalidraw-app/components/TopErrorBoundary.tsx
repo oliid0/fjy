@@ -26,6 +26,9 @@ export class TopErrorBoundary extends React.Component<
   componentDidCatch(error: Error, errorInfo: any) {
     const _localStorage: any = {};
     for (const [key, value] of Object.entries({ ...localStorage })) {
+      if (key === "fcdraw-settings") {
+        continue;
+      }
       try {
         _localStorage[key] = JSON.parse(value);
       } catch (error: any) {
@@ -52,24 +55,8 @@ export class TopErrorBoundary extends React.Component<
     }
   }
 
-  private async createGithubIssue() {
-    let body = "";
-    try {
-      const templateStrFn = (
-        await import(
-          /* webpackChunkName: "bug-issue-template" */ "../bug-issue-template"
-        )
-      ).default;
-      body = encodeURIComponent(templateStrFn(this.state.sentryEventId));
-    } catch (error: any) {
-      console.error(error);
-    }
-
-    window.open(
-      `https://github.com/excalidraw/excalidraw/issues/new?body=${body}`,
-      "_blank",
-      "noopener noreferrer",
-    );
+  private async openBrandWebsite() {
+    window.open("http://www.fcjyboard.com/", "_blank", "noopener noreferrer");
   }
 
   private errorSplash() {
@@ -123,7 +110,7 @@ export class TopErrorBoundary extends React.Component<
               <Trans
                 i18nKey="errorSplash.openIssueMessage"
                 button={(el) => (
-                  <button onClick={() => this.createGithubIssue()}>{el}</button>
+                  <button onClick={() => this.openBrandWebsite()}>{el}</button>
                 )}
               />
             </div>

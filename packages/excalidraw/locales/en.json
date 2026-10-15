@@ -60,7 +60,7 @@
     "arrowtype_elbowed": "Elbow arrow",
     "fontSize": "Font size",
     "fontFamily": "Font family",
-    "addWatermark": "Add \"Made with Excalidraw\"",
+    "addWatermark": "Add \"Made with Fcdraw\"",
     "handDrawn": "Hand-drawn",
     "normal": "Normal",
     "code": "Code",
@@ -95,7 +95,7 @@
     "untitled": "Untitled",
     "name": "Name",
     "yourName": "Your name",
-    "madeWithExcalidraw": "Made with Excalidraw",
+    "madeWithExcalidraw": "Made with Fcdraw",
     "group": "Group selection",
     "ungroup": "Ungroup selection",
     "collaborators": "Collaborators",
@@ -125,7 +125,7 @@
     "toggleTheme": "Toggle light/dark theme",
     "theme": "Theme",
     "personalLib": "Personal Library",
-    "excalidrawLib": "Excalidraw Library",
+    "excalidrawLib": "Fcdraw Library",
     "decreaseFontSize": "Decrease font size",
     "increaseFontSize": "Increase font size",
     "unbindText": "Unbind text",
@@ -163,11 +163,11 @@
     "textToDiagram": "Text to diagram",
     "prompt": "Prompt",
     "followUs": "Follow us",
-    "discordChat": "Discord chat",
+    "discordChat": "Fcdraw chat",
     "zoomToFitViewport": "Zoom to fit in viewport",
     "zoomToFitSelection": "Zoom to fit selection",
     "zoomToFit": "Zoom to fit all elements",
-    "installPWA": "Install Excalidraw locally (PWA)",
+    "installPWA": "Install Fcdraw locally (PWA)",
     "autoResize": "Enable text auto-resizing",
     "imageCropping": "Image cropping",
     "unCroppedDimension": "Uncropped dimension",
@@ -256,7 +256,7 @@
     "cannotExportEmptyCanvas": "Cannot export empty canvas.",
     "couldNotCopyToClipboard": "Couldn't copy to clipboard.",
     "decryptFailed": "Couldn't decrypt data.",
-    "uploadedSecurly": "The upload has been secured with end-to-end encryption, which means that Excalidraw server and third parties can't read the content.",
+    "uploadedSecurly": "The upload has been secured with end-to-end encryption, which means that Fcdraw server and third parties can't read the content.",
     "loadSceneOverridePrompt": "Loading external drawing will replace your existing content. Do you wish to continue?",
     "collabStopOverridePrompt": "Stopping the session will overwrite your previous, locally stored drawing. Are you sure?\n\n(If you want to keep your local drawing, simply close the browser tab instead.)",
     "errorAddingToLibrary": "Couldn't add item to the library",
@@ -264,7 +264,7 @@
     "confirmAddLibrary": "This will add {{numShapes}} shape(s) to your library. Are you sure?",
     "imageDoesNotContainScene": "This image does not seem to contain any scene data. Have you enabled scene embedding during export?",
     "cannotRestoreFromImage": "Scene couldn't be restored from this image file",
-    "invalidSceneUrl": "Couldn't import scene from the supplied URL. It's either malformed, or doesn't contain valid Excalidraw JSON data.",
+    "invalidSceneUrl": "Couldn't import scene from the supplied URL. It's either malformed, or doesn't contain valid Fcdraw JSON data.",
     "resetLibrary": "This will clear your library. Are you sure?",
     "removeItemsFromsLibrary": "Delete {{count}} item(s) from library?",
     "invalidEncryptionKey": "Encryption key must be of 22 characters. Live collaboration is disabled.",
@@ -287,7 +287,7 @@
       "line1": "Looks like you are using Brave browser with the <bold>Aggressively Block Fingerprinting</bold> setting enabled.",
       "line2": "This could result in breaking the <bold>Text Elements</bold> in your drawings.",
       "line3": "We strongly recommend disabling this setting. You can follow <link>these steps</link> on how to do so.",
-      "line4": "If disabling this setting doesn't fix the display of text elements, please open an <issueLink>issue</issueLink> on our GitHub, or write us on <discordLink>Discord</discordLink>"
+      "line4": "If disabling this setting doesn't fix the display of text elements, please open an <issueLink>issue</issueLink> on our Fcdraw, or write us on <discordLink>Fcdraw</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Embeddable elements cannot be added to the library.",
@@ -320,7 +320,7 @@
     "laser": "Laser pointer",
     "hand": "Hand (panning tool)",
     "extraTools": "More tools",
-    "mermaidToExcalidraw": "Mermaid to Excalidraw",
+    "mermaidToExcalidraw": "Mermaid to Fcdraw",
     "convertElementType": "Toggle shape type"
   },
   "element": {
@@ -383,8 +383,8 @@
     "headingMain": "Encountered an error. Try <button>reloading the page</button>.",
     "clearCanvasMessage": "If reloading doesn't work, try <button>clearing the canvas</button>.",
     "clearCanvasCaveat": " This will result in loss of work ",
-    "trackedToSentry": "The error with identifier {{eventId}} was tracked on our system.",
-    "openIssueMessage": "We were very cautious not to include your scene information on the error. If your scene is not private, please consider following up on our <button>bug tracker</button>. Please include information below by copying and pasting into the GitHub issue.",
+    "trackedToSentry": "Diagnostics remain on this device.",
+    "openIssueMessage": "For assistance, visit the <button>Fangcheng Education website</button>. You can copy the diagnostics below when contacting support.",
     "sceneContent": "Scene content:"
   },
   "shareDialog": {
@@ -398,7 +398,7 @@
     "desc_inProgressIntro": "Live-collaboration session is now in progress.",
     "desc_shareLink": "Share this link with anyone you want to collaborate with:",
     "desc_exitSession": "Stopping the session will disconnect you from the room, but you'll be able to continue working with the scene, locally. Note that this won't affect other people, and they'll still be able to collaborate on their version.",
-    "shareTitle": "Join a live collaboration session on Excalidraw"
+    "shareTitle": "Join a live collaboration session on Fcdraw"
   },
   "errorDialog": {
     "title": "Error"
@@ -414,9 +414,9 @@
     "link_title": "Shareable link",
     "link_details": "Export as a read-only link.",
     "link_button": "Export to Link",
-    "excalidrawplus_description": "Save the scene to your Excalidraw+ workspace.",
+    "excalidrawplus_description": "Save the scene to your Fcdraw workspace.",
     "excalidrawplus_button": "Export",
-    "excalidrawplus_exportError": "Couldn't export to Excalidraw+ at this moment..."
+    "excalidrawplus_exportError": "Couldn't export to Fcdraw at this moment..."
   },
   "helpDialog": {
     "blog": "Read our blog",
@@ -458,7 +458,7 @@
     "title": "Publish library",
     "itemName": "Item name",
     "authorName": "Author name",
-    "githubUsername": "GitHub username",
+    "githubUsername": "Fcdraw username",
     "twitterUsername": "Twitter username",
     "libraryName": "Library name",
     "libraryDesc": "Library description",
@@ -467,7 +467,7 @@
       "authorName": "Your name or username",
       "libraryName": "Name of your library",
       "libraryDesc": "Description of your library to help people understand its usage",
-      "githubHandle": "GitHub handle (optional), so you can edit the library once submitted for review",
+      "githubHandle": "Fcdraw handle (optional), so you can edit the library once submitted for review",
       "twitterHandle": "Twitter username (optional), so we know who to credit when promoting over Twitter",
       "website": "Link to your personal website or elsewhere (optional)"
     },
@@ -476,7 +476,7 @@
       "website": "Enter a valid URL"
     },
     "noteDescription": "Submit your library to be included in the <link>public library repository</link> for other people to use in their drawings.",
-    "noteGuidelines": "The library needs to be manually approved first. Please read the <link>guidelines</link> before submitting. You will need a GitHub account to communicate and make changes if requested, but it is not strictly required.",
+    "noteGuidelines": "The library needs to be manually approved first. Please read the <link>guidelines</link> before submitting. You will need a Fcdraw account to communicate and make changes if requested, but it is not strictly required.",
     "noteLicense": "By submitting, you agree the library will be published under the <link>MIT License</link>, which in short means anyone can use them without restrictions.",
     "noteItems": "Each library item must have its own name so it's filterable. The following library items will be included:",
     "atleastOneLibItem": "Please select at least one library item to get started",
@@ -515,8 +515,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Your drawings are end-to-end encrypted so Excalidraw's servers will never see them.",
-    "link": "Blog post on end-to-end encryption in Excalidraw"
+    "tooltip": "Your drawings are end-to-end encrypted so Fcdraw's servers will never see them.",
+    "link": "Blog post on end-to-end encryption in Fcdraw"
   },
   "stats": {
     "angle": "Angle",
@@ -546,7 +546,7 @@
     "canvas": "canvas",
     "selection": "selection",
     "pasteAsSingleElement": "Use {{shortcut}} to paste as a single element,\nor paste into an existing text editor",
-    "unableToEmbed": "Embedding this url is currently not allowed. Raise an issue on GitHub to request the url whitelisted",
+    "unableToEmbed": "Embedding this url is currently not allowed. Raise an issue on Fcdraw to request the url whitelisted",
     "unrecognizedLinkFormat": "The link you embedded does not match the expected format. Please try to paste the 'embed' string provided by the source site",
     "elementLinkCopied": "Link copied to clipboard"
   },
@@ -572,7 +572,7 @@
       "center_heading": "Your drawings are saved in your browser's storage.",
       "center_heading_line2": "Browser storage can be cleared unexpectedly.",
       "center_heading_line3": "Save your work to a file regularly to avoid losing it.",
-      "center_heading_plus": "Did you want to go to the Excalidraw+ instead?",
+      "center_heading_plus": "Did you want to go to the Fcdraw instead?",
       "menuHint": "Export, preferences, languages, ..."
     },
     "defaults": {
@@ -603,9 +603,9 @@
         "description": "Export the scene data to a file from which you can import later."
       },
       "excalidrawPlus": {
-        "title": "Excalidraw+",
-        "button": "Export to Excalidraw+",
-        "description": "Save the scene to your Excalidraw+ workspace."
+        "title": "Fcdraw",
+        "button": "Export to Fcdraw",
+        "description": "Save the scene to your Fcdraw workspace."
       }
     },
     "modal": {
@@ -622,9 +622,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid to Excalidraw",
+    "title": "Mermaid to Fcdraw",
     "button": "Insert",
-    "description": "Currently only <flowchartLink>Flowchart</flowchartLink>,<sequenceLink> Sequence, </sequenceLink> and <classLink>Class </classLink>Diagrams are supported. The other types will be rendered as image in Excalidraw.",
+    "description": "Currently only <flowchartLink>Flowchart</flowchartLink>,<sequenceLink> Sequence, </sequenceLink> and <classLink>Class </classLink>Diagrams are supported. The other types will be rendered as image in Fcdraw.",
     "syntax": "Mermaid Syntax",
     "preview": "Preview",
     "label": "Mermaid",
@@ -671,7 +671,7 @@
       "mermaidParseError": "Mermaid syntax error"
     },
     "rateLimit": {
-      "messageLimit": "You've hit your AI limit on the free plan. Try out Excalidraw+ for more or come back tomorrow.",
+      "messageLimit": "You've hit your AI limit on the free plan. Try out Fcdraw for more or come back tomorrow.",
       "generalRateLimit": "Hold your horses, you're too fast for us! Please wait a moment before trying again.",
       "messageLimitInputPlaceholder": "You've reached your message limit"
     },

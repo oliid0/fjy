@@ -89,9 +89,19 @@ export const MobileMenu = ({
               <ToolButton
                 type="button"
                 icon={CircleIcon}
-                title={appState.showToolSettings ? "Hide tool settings" : "Show tool settings"}
-                aria-label={appState.showToolSettings ? "Hide tool settings" : "Show tool settings"}
-                onClick={() => setAppState({ showToolSettings: !appState.showToolSettings })}
+                title={
+                  appState.showToolSettings
+                    ? "Hide tool settings"
+                    : "Show tool settings"
+                }
+                aria-label={
+                  appState.showToolSettings
+                    ? "Hide tool settings"
+                    : "Show tool settings"
+                }
+                onClick={() =>
+                  setAppState({ showToolSettings: !appState.showToolSettings })
+                }
                 selected={appState.showToolSettings}
               />
               <DefaultSidebarTriggerTunnel.Out />

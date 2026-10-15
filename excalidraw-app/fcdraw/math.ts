@@ -128,6 +128,11 @@ export const defaultPlot: Plot = {
 export const plotExpression = (input: string) =>
   normalizeExpression(input).replace(/^\s*(?:[yz]|f\(x(?:,y)?\))\s*=\s*/i, "");
 
+export const project3D = (x: number, y: number, z: number) => [
+  (x - y) * 0.7,
+  (x + y) * 0.3 - z,
+];
+
 export const samplePlot = (plot: Plot): number[][][] => {
   const compiled = compileExpression(plotExpression(plot.expression));
   const lines: number[][][] = [];
@@ -144,10 +149,6 @@ export const samplePlot = (plot: Plot): number[][][] => {
   if (!Number.isFinite(plot.range) || plot.range <= 0 || plot.range > 1000) {
     throw new Error("坐标范围必须在 0 到 1000 之间");
   }
-  const project = (x: number, y: number, z: number) => [
-    (x - y) * 0.7,
-    (x + y) * 0.3 - z,
-  ];
   for (let grid = 0; grid < (plot.surface ? 22 : 1); grid++) {
     let line: number[][] = [];
     const flush = () => {
@@ -164,17 +165,17 @@ export const samplePlot = (plot: Plot): number[][][] => {
       const result = value(x, y) + plot.z;
       if (
         !Number.isFinite(result) ||
-        Math.abs(result) > plot.range * 4 ||
+        Math.abs(result) > plot.range ||
         (line.length &&
           Math.abs(
-            (plot.surface ? project(x, y, result)[1] : -result) -
+            (plot.surface ? project3D(x, y, result)[1] : -result) -
               line[line.length - 1][1],
           ) > plot.range)
       ) {
         flush();
         continue;
       }
-      line.push(plot.surface ? project(x, y, result) : [x, -result]);
+      line.push(plot.surface ? project3D(x, y, result) : [x, -result]);
     }
     flush();
   }

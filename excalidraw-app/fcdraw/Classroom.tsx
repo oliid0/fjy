@@ -24,7 +24,7 @@ import {
   validateShapes,
 } from "./board";
 import { FilePreview } from "./FilePreview";
-import { localMathIntent } from "./intent";
+import { localMathIntent, selectionMathIntent } from "./intent";
 import { calculate, defaultPlot, plotExpression } from "./math";
 import { Classroom as NativeClassroom } from "./native";
 import { createNarrator } from "./narration";
@@ -36,6 +36,7 @@ import {
   timestamp,
 } from "./recording";
 import { currentSettings, saveSettings, validateEndpoint } from "./settings";
+import { observeMathSelection, selectionSignature } from "./selection";
 import { startSystemSpeech, transcribe } from "./speech";
 
 import "./classroom.scss";
@@ -122,8 +123,8 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [busy, setBusy] = useState(false);
   const [wholeBoard, setWholeBoard] = useState(false);
   const [autoMath, setAutoMath] = useState(() => currentSettings().autoMath);
-  const [hasSelection, setHasSelection] = useState(false);
-  const [hasSelectedPlot, setHasSelectedPlot] = useState(false);
+  const [selectionBusy, setSelectionBusy] = useState(false);
+  const [plotPlacement, setPlotPlacement] = useState({ left: 16, top: 16 });
   const [capture, setCapture] = useState<string>();
   const capturedContext = useRef<Awaited<
     ReturnType<typeof boardContext>
@@ -167,21 +168,42 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, []);
 
   useEffect(() => {
+    let previousGraph = "";
     const refresh = () => {
       const state = api.getAppState();
-      const selected = api
-        .getSceneElements()
-        .filter((el) => state.selectedElementIds[el.id]);
-      setHasSelection(selected.length > 0);
       const graph = selectedPlot(api);
-      setHasSelectedPlot(!!graph);
       if (graph) {
+        const graphId = graph.ids.join(",");
+        if (graphId !== previousGraph) {
+          setPanel((value) => (!value || value === "plot" ? "plot" : value));
+        }
+        previousGraph = graphId;
         plotRef.current = graph;
+        const left = Math.max(
+          16,
+          Math.min(
+            state.width - Math.min(480, state.width - 32) - 16,
+            (graph.position.x + 260 + state.scrollX) * state.zoom.value,
+          ),
+        );
+        const top = Math.max(
+          12,
+          Math.min(
+            state.height - 300,
+            (graph.position.y - 245 + state.scrollY) * state.zoom.value,
+          ),
+        );
+        setPlotPlacement((value) =>
+          value.left === left && value.top === top ? value : { left, top },
+        );
         setPlot((value) =>
           JSON.stringify(value) === JSON.stringify(graph.plot)
             ? value
             : graph.plot,
         );
+      } else {
+        previousGraph = "";
+        setPanel((value) => (value === "plot" ? null : value));
       }
     };
     refresh();
@@ -341,6 +363,18 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         ? selected
         : elements.filter((el) => !el.customData?.fcGenerated);
       const expression = input || (await recognize("math"));
+      if (
+        automatic &&
+        (Object.values(api.getAppState().selectedElementIds).some(Boolean) ||
+          selectionSignature(source) !==
+            selectionSignature(
+              api
+                .getSceneElements()
+                .filter((el) => !el.customData?.fcGenerated),
+            ))
+      ) {
+        return;
+      }
       if (expression === "NONE") {
         if (!automatic) {
           throw new Error("未发现待计算算式");
@@ -380,7 +414,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   );
 
   const createPlot = useCallback(
-    (next: Plot, replace = false) => {
+    (next: Plot, replace = false, sourceSignature?: string) => {
       const existing = plotRef.current;
       if (
         replace &&
@@ -402,6 +436,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         next,
         position,
         replace ? existing?.ids : undefined,
+        sourceSignature ||
+          (replace && existing
+            ? api.getSceneElements().find((el) => existing.ids.includes(el.id))
+                ?.customData?.fcSelectionSource
+            : undefined),
       );
       plotRef.current = { ids, position };
       api.updateScene({
@@ -415,15 +454,94 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     [api],
   );
 
-  const plotSelection = async () => {
-    const expression = await recognize("plot");
-    createPlot({
-      ...plot,
-      expression: plotExpression(expression),
-      surface: /^z\s*=/.test(expression),
-    });
-    setPanel("plot");
-  };
+  useEffect(
+    () =>
+      observeMathSelection(
+        api,
+        async (source, signature, signal) => {
+          const text = source
+            .filter((el) => el.type === "text")
+            .map((el) => (el.type === "text" ? el.text : ""))
+            .join("\n")
+            .trim();
+          let intent = selectionMathIntent(text);
+          if (
+            source.some((el) => el.type === "freedraw" || el.type === "image")
+          ) {
+            const context = await boardContext(api, false, source);
+            if (signal.aborted) {
+              return;
+            }
+            const response = parseJSON(
+              await chat(
+                [
+                  visualMessage(
+                    '识别所选白板区域，仅返回 JSON。若是函数表达式（y=f(x)、f(x)=... 或 z=f(x,y)），返回 {"action":"plot","expression":"x+1","surface":false}；三维函数 surface=true。若是待计算算式，返回 {"action":"calculate","expression":"1+1"}。积分用 integrate(expr,x) 或 defint(expr,a,b,x)，求导 diff(expr,x)，极限 limit(expr,x,a)，方程 solve(expr,x)，复数用 i。只识别，不计算答案。若内容非数学、已给出答案或无法确定，返回 {"action":"none"}。不要猜测，不要输出解释。',
+                    context.image,
+                  ),
+                ],
+                signal,
+              ),
+            );
+            if (response && typeof response === "object") {
+              const value = response as {
+                action?: string;
+                expression?: string;
+                surface?: boolean;
+              };
+              intent =
+                value.action === "plot" && typeof value.expression === "string"
+                  ? {
+                      action: "plot",
+                      expression: plotExpression(value.expression),
+                      surface: !!value.surface,
+                    }
+                  : value.action === "calculate" &&
+                    typeof value.expression === "string"
+                  ? { action: "calculate", expression: value.expression }
+                  : null;
+            } else {
+              throw new Error("选区识别返回格式无效，请重新圈选");
+            }
+          }
+          if (!intent || signal.aborted) {
+            return;
+          }
+          if (intent.action === "plot") {
+            createPlot(
+              {
+                ...defaultPlot,
+                expression: intent.expression,
+                surface: intent.surface,
+              },
+              false,
+              signature,
+            );
+          } else {
+            const answer = calculate(intent.expression);
+            const [, top, right, bottom] = getCommonBounds(source);
+            const last = source[source.length - 1];
+            insertText(
+              api,
+              answer,
+              {
+                x: right + 16,
+                y: source.length === 1 ? top : Math.max(top, bottom - 32),
+              },
+              {
+                fcSelectionSource: signature,
+                fcAnswerSource: last.id,
+                fcAnswerVersion: last.version,
+              },
+            );
+            setStatus("计算结果已写入白板，可撤销或擦除");
+          }
+        },
+        setSelectionBusy,
+        (failure) => setError(errorMessage(failure)),
+      ),
+    [api, createPlot],
+  );
 
   const summarize = useCallback(
     async (whole = false) => {
@@ -546,8 +664,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         state.editingTextElement ||
         state.cursorButton === "down" ||
         state.isResizing ||
+        Object.values(state.selectedElementIds).some(Boolean) ||
         actionBusy.current
       ) {
+        clearTimeout(timer);
+        previous = "";
         return;
       }
       const source = elements.filter(
@@ -583,7 +704,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       timer = setTimeout(() => {
-        if (signature === processed || actionBusy.current) {
+        if (
+          signature === processed ||
+          actionBusy.current ||
+          Object.values(api.getAppState().selectedElementIds).some(Boolean)
+        ) {
           return;
         }
         processed = signature;
@@ -903,58 +1028,6 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     <div className="fc-classroom">
       <ToolbarExtras>
         <div className="fc-toolbar-extras" role="group" aria-label="课堂工具">
-          {hasSelection && (
-            <div
-              className="fc-toolbar-context"
-              role="group"
-              aria-label="选区操作"
-            >
-              <button
-                disabled={busy}
-                onClick={() => {
-                  void run(() => solveMath());
-                }}
-              >
-                计算选区
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  void run(plotSelection);
-                }}
-              >
-                绘制函数
-              </button>
-              {hasSelectedPlot && (
-                <button
-                  aria-expanded={panel === "plot"}
-                  onClick={() => open("plot")}
-                >
-                  调节函数
-                </button>
-              )}
-              <button
-                disabled={busy}
-                onClick={() => {
-                  void run(() => summarize(false));
-                }}
-              >
-                总结选区
-              </button>
-              <button
-                disabled={busy}
-                aria-expanded={panel === "ai"}
-                onClick={() => {
-                  capturedContext.current = null;
-                  setCapture(undefined);
-                  setWholeBoard(false);
-                  open("ai");
-                }}
-              >
-                选区 AI
-              </button>
-            </div>
-          )}
           <button
             disabled={busy}
             aria-expanded={panel === "ai" && wholeBoard}
@@ -1015,12 +1088,12 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           )}
         </div>
       </ToolbarExtras>
-      {(error || status || busy) && (
+      {(error || status || busy || selectionBusy) && (
         <div
           className={`fc-notice ${error ? "fc-error" : ""}`}
           role={error ? "alert" : "status"}
         >
-          <span>{error || (busy ? "正在处理…" : status)}</span>
+          <span>{error || (busy || selectionBusy ? "正在处理…" : status)}</span>
           <button
             aria-label="关闭提示"
             onClick={() => {
@@ -1037,6 +1110,16 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           id="fc-panel"
           ref={panelRef}
           className="fc-panel"
+          style={
+            panel === "plot"
+              ? {
+                  ...plotPlacement,
+                  right: "auto",
+                  bottom: "auto",
+                  maxHeight: `calc(100% - ${plotPlacement.top + 84}px)`,
+                }
+              : undefined
+          }
           role="dialog"
           aria-modal="false"
           aria-label={titles[panel]}
@@ -1180,8 +1263,8 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     </p>
                   </>
                 )}
-                <details>
-                  <summary>语音播报（可选）</summary>
+                <section aria-label="语音播报（可选）">
+                  <h3>语音播报（可选）</h3>
                   <label>
                     IndexTTS / 自定义播报接口
                     <input
@@ -1211,7 +1294,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     IndexTTS
                     运行在局域网电脑上。留空时不启用播报；不影响内置语音识别。
                   </p>
-                </details>
+                </section>
                 <label className="fc-check">
                   <input
                     type="checkbox"
@@ -1299,30 +1382,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   <button
                     disabled={busy}
                     onClick={() => {
-                      insertCube(api);
-                      setStatus("立方体已插入白板");
-                    }}
-                  >
-                    插入立方体
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => {
                       void run(() => summarize(wholeBoard));
                     }}
                   >
                     总结选区 / 白板
-                  </button>
-                  <button
-                    onClick={() =>
-                      api.updateScene({
-                        appState: {
-                          openDialog: { name: "ttd", tab: "text-to-diagram" },
-                        },
-                      })
-                    }
-                  >
-                    AI 生成图表
                   </button>
                 </div>
                 {output && (
@@ -1362,86 +1425,65 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     {plot.surface ? "z" : "y"} = {plot.expression}
                   </strong>
                 </p>
-                <details>
-                  <summary>表达式与坐标范围</summary>
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void run(async () => createPlot(plot, !!plotRef.current));
+                <label>
+                  坐标范围 ±
+                  <input
+                    type="number"
+                    min="0.1"
+                    max="1000"
+                    step="0.1"
+                    value={plot.range}
+                    onChange={(event) => {
+                      const range = Number(event.target.value);
+                      if (range > 0 && range <= 1000) {
+                        try {
+                          createPlot({ ...plot, range }, true);
+                        } catch (failure) {
+                          setError(errorMessage(failure));
+                        }
+                      }
                     }}
-                  >
-                    <label>
-                      函数表达式
-                      <input
-                        value={plot.expression}
-                        onChange={(event) =>
-                          setPlot({ ...plot, expression: event.target.value })
-                        }
-                        placeholder="x+1 或 sin(x*y)"
-                      />
-                    </label>
-                    <label className="fc-check">
-                      <input
-                        type="checkbox"
-                        checked={plot.surface}
-                        onChange={(event) =>
-                          setPlot({ ...plot, surface: event.target.checked })
-                        }
-                      />
-                      三维曲面 z=f(x,y)
-                    </label>
-                    <label>
-                      坐标范围 ±
-                      <input
-                        type="number"
-                        min="0.1"
-                        max="1000"
-                        step="0.1"
-                        value={plot.range}
-                        onChange={(event) =>
-                          setPlot({
-                            ...plot,
-                            range: Number(event.target.value),
-                          })
-                        }
-                      />
-                    </label>
-                    <button className="fc-primary" disabled={busy}>
-                      更新函数图像
-                    </button>
-                  </form>
-                </details>
+                  />
+                </label>
                 <p>
                   x、y 控制采样区间的平移，z 控制输出偏移；a、b、c
                   可用于表达式。拖动后更新当前图像。
                 </p>
-                {(["x", "y", "z", "a", "b", "c"] as const).map((key) => (
-                  <label className="fc-slider" key={key}>
-                    {key} = {plot[key].toFixed(1)}
-                    <input
-                      aria-label={`调节 ${key}`}
-                      type="range"
-                      min="-10"
-                      max="10"
-                      step="0.1"
-                      value={plot[key]}
-                      onChange={(event) => {
-                        const next = {
-                          ...plot,
-                          [key]: Number(event.target.value),
-                        };
-                        setPlot(next);
-                        if (plotRef.current) {
-                          try {
-                            createPlot(next, true);
-                          } catch (failure) {
-                            setError(errorMessage(failure));
+                {(["x", "y", "z", "a", "b", "c"] as const)
+                  .filter(
+                    (key) =>
+                      key === "x" ||
+                      key === "z" ||
+                      (key === "y" && plot.surface) ||
+                      new RegExp(`\\b${key}\\b`).test(plot.expression),
+                  )
+                  .map((key) => (
+                    <label className="fc-slider" key={key}>
+                      {key} = {plot[key].toFixed(1)}
+                      <input
+                        aria-label={`调节 ${key}`}
+                        type="range"
+                        min="-10"
+                        max="10"
+                        step="0.1"
+                        value={plot[key]}
+                        onChange={(event) => {
+                          const next = {
+                            ...plot,
+                            [key]: Number(event.target.value),
+                          };
+                          setPlot(next);
+                          if (plotRef.current) {
+                            try {
+                              createPlot(next, true);
+                            } catch (failure) {
+                              setError(errorMessage(failure));
+                            }
                           }
-                        }
-                      }}
-                    />
-                  </label>
-                ))}
+                        }}
+                      />
+                    </label>
+                  ))}
               </>
             )}
             {panel === "record" && (

@@ -45,8 +45,11 @@ describe("classroom mathematics", () => {
       a: 2,
       b: 3,
     });
-    expect(first[0][120]).toEqual([0, -1]);
-    expect(second[0][120]).toEqual([0, -3]);
+    expect(first.flat()).toContainEqual([0, -1]);
+    expect(second.flat()).toContainEqual([0, -3]);
+    expect(
+      second.flat().every(([, value]) => Math.abs(value) <= defaultPlot.range),
+    ).toBe(true);
   });
   it("does not draw across asymptotes or nonreal ranges", () => {
     expect(

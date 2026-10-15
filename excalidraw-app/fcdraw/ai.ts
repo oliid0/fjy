@@ -4,6 +4,7 @@ import { getDataURL } from "@excalidraw/excalidraw/data/blob";
 import { getSelectedElements } from "@excalidraw/element";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { currentSettings, validateEndpoint } from "./settings";
 
@@ -92,10 +93,12 @@ export const selectedBoardElements = (api: ExcalidrawImperativeAPI) =>
 export const boardContext = async (
   api: ExcalidrawImperativeAPI,
   wholeBoard = false,
+  snapshot?: readonly ExcalidrawElement[],
 ) => {
   const all = api.getSceneElements();
   const selected = selectedBoardElements(api);
-  const elements = !wholeBoard && selected.length ? selected : all;
+  const elements =
+    snapshot || (!wholeBoard && selected.length ? selected : all);
   const text = elements
     .filter((el) => el.type === "text")
     .map((el) => (el.type === "text" ? el.text : ""))

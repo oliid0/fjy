@@ -9,7 +9,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
-import { samplePlot } from "./math";
+import { project3D, samplePlot } from "./math";
 
 import type { Plot } from "./math";
 
@@ -121,6 +121,7 @@ export const drawPlot = (
   plot: Plot,
   position: { x: number; y: number },
   replaceIds: string[] = [],
+  sourceSignature?: string,
 ) => {
   const lines = samplePlot(plot);
   const scale = 200 / plot.range;
@@ -129,8 +130,7 @@ export const drawPlot = (
       type: "arrow",
       x: position.x - 220,
       y: position.y,
-      width: 450,
-      height: 0,
+      points: [pointFrom(0, 0), pointFrom(450, 0)],
       roughness: 0,
       endArrowhead: "arrow",
     },
@@ -138,8 +138,7 @@ export const drawPlot = (
       type: "arrow",
       x: position.x,
       y: position.y + 220,
-      width: 0,
-      height: -450,
+      points: [pointFrom(0, 0), pointFrom(0, -450)],
       roughness: 0,
       endArrowhead: "arrow",
     },
@@ -167,19 +166,40 @@ export const drawPlot = (
     },
   ];
   if (plot.surface) {
+    const start = project3D(-220, 0, 0);
+    const delta = project3D(450, 0, 0);
+    skeletons[0] = {
+      type: "arrow",
+      x: position.x + start[0],
+      y: position.y + start[1],
+      points: [pointFrom(0, 0), pointFrom(delta[0], delta[1])],
+      roughness: 0,
+      endArrowhead: "arrow",
+    };
+    const xLabel = project3D(245, 0, 0);
+    skeletons[2] = {
+      type: "text",
+      x: position.x + xLabel[0],
+      y: position.y + xLabel[1],
+      text: "x",
+      fontFamily: 2,
+    };
+    const yStart = project3D(0, -220, 0);
+    const yDelta = project3D(0, 450, 0);
+    const yLabel = project3D(0, 245, 0);
     skeletons.push(
       {
         type: "arrow",
-        x: position.x,
-        y: position.y,
-        points: [pointFrom(0, 0), pointFrom(-180, 90)],
+        x: position.x + yStart[0],
+        y: position.y + yStart[1],
+        points: [pointFrom(0, 0), pointFrom(yDelta[0], yDelta[1])],
         roughness: 0,
         endArrowhead: "arrow",
       },
       {
         type: "text",
-        x: position.x - 200,
-        y: position.y + 90,
+        x: position.x + yLabel[0],
+        y: position.y + yLabel[1],
         text: "y",
         fontFamily: 2,
       },
@@ -230,6 +250,7 @@ export const drawPlot = (
       ...shape,
       groupIds: [plotId],
       customData: {
+        fcSelectionSource: sourceSignature,
         fcPlot: {
           id: plotId,
           plot,

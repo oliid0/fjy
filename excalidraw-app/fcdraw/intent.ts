@@ -58,3 +58,30 @@ export const localMathIntent = (
   }
   return null;
 };
+
+/** Selection is an implicit math request; ordinary prose and lone labels stay untouched. */
+export const selectionMathIntent = (text: string) => {
+  const normalized = normalizeExpression(text).trim();
+  const intent = localMathIntent(normalized);
+  if (intent) {
+    return intent;
+  }
+  const fn = normalized.match(/^f\(x(,\s*y)?\)\s*=\s*(.+)$/i);
+  if (fn) {
+    try {
+      compileExpression(fn[2]);
+      return { action: "plot" as const, expression: fn[2], surface: !!fn[1] };
+    } catch {
+      return null;
+    }
+  }
+  if (!/[+*/^=()-]/.test(normalized) || /[\u3400-\u9fff]/.test(normalized)) {
+    return null;
+  }
+  try {
+    calculate(normalized);
+    return { action: "calculate" as const, expression: normalized };
+  } catch {
+    return null;
+  }
+};

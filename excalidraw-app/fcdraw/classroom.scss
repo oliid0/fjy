@@ -191,14 +191,6 @@
     align-items: center;
     gap: 4px;
   }
-  .fc-toolbar-context {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    order: 2;
-    border-inline-start: 1px solid var(--fc-border);
-    padding-inline-start: 8px;
-  }
   .fc-toolbar-group + .fc-toolbar-group,
   .fc-toolbar-extras {
     border-inline-start: 1px solid var(--fc-border);

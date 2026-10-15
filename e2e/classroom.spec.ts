@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import type { Page } from "@playwright/test";
 
-const enterText = async (page: Page, text: string) => {
+const enterText = async (page: Page, text: string, select = true) => {
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
   const editor = page.locator("textarea.excalidraw-wysiwyg");
@@ -10,7 +10,9 @@ const enterText = async (page: Page, text: string) => {
   await editor.fill(text);
   await editor.press("Escape");
   await page.keyboard.press("v");
-  await page.keyboard.press("Control+a");
+  if (select) {
+    await page.keyboard.press("Control+a");
+  }
 };
 
 for (const viewport of [
@@ -71,7 +73,6 @@ test("selecting a formula draws an editable graph and changing its parameter upd
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "y=a*x+1");
-  await page.getByRole("button", { name: "绘制函数", exact: true }).click();
   const slider = page.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
   await slider.focus();
@@ -80,7 +81,9 @@ test("selecting a formula draws an editable graph and changing its parameter upd
   }
   await expect(slider).toHaveValue("2");
   await page.getByRole("button", { name: "关闭工具浮层" }).click();
-  await page.getByRole("button", { name: "调节函数", exact: true }).click();
+  await page.mouse.click(80, 400);
+  await page.keyboard.press("v");
+  await page.keyboard.press("Control+a");
   await expect(slider).toHaveValue("2");
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });
 });
@@ -90,7 +93,7 @@ test("typed equations complete directly on the board without opening an AI panel
 }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
-  await enterText(page, "1+1=");
+  await enterText(page, "1+1=", false);
   await expect
     .poll(
       () =>
@@ -110,7 +113,73 @@ test("typed equations complete directly on the board without opening an AI panel
   await page.screenshot({ path: testInfo.outputPath("automatic-answer.png") });
 });
 
-test("selection summary sends a real board image and returns to an editable canvas", async ({
+test("selecting handwriting automatically recognizes its PNG and writes the result once", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "fcdraw-settings",
+      JSON.stringify({
+        model: "visual-test",
+        apiKey: "test-only",
+        autoMath: false,
+      }),
+    );
+  });
+  let requests = 0;
+  await page.route(
+    "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+    async (route) => {
+      const content = route.request().postDataJSON().messages[0].content;
+      expect(
+        content.some(
+          (part: { type: string; image_url?: { url: string } }) =>
+            part.type === "image_url" &&
+            part.image_url?.url.startsWith("data:image/png;base64,"),
+        ),
+      ).toBe(true);
+      requests++;
+      await route.fulfill({
+        json: {
+          choices: [
+            {
+              message: { content: '{"action":"calculate","expression":"8*8"}' },
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("/");
+  await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
+  await page.keyboard.press("p");
+  await page.mouse.move(200, 200);
+  await page.mouse.down();
+  await page.mouse.move(260, 260, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.press("v");
+  await page.keyboard.press("Control+a");
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+              (el: { type: string; text?: string; isDeleted?: boolean }) =>
+                !el.isDeleted && el.type === "text" && el.text === "64",
+            ).length,
+        ),
+      { timeout: 12000 },
+    )
+    .toBe(1);
+  expect(requests).toBe(1);
+  await expect(page.locator(".fc-panel")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "计算选区", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("screenshot summary sends a real board image and returns to an editable canvas", async ({
   page,
 }, testInfo) => {
   await page.addInitScript(() => {
@@ -152,8 +221,11 @@ test("selection summary sends a real board image and returns to an editable canv
   );
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
-  await enterText(page, "y=x+1");
-  await page.getByRole("button", { name: "总结选区", exact: true }).click();
+  await enterText(page, "一次函数：斜率和截距");
+  await page.getByRole("button", { name: "截屏", exact: true }).click();
+  await page
+    .getByRole("button", { name: "总结选区 / 白板", exact: true })
+    .click();
   await expect(page.locator(".fc-output")).toContainText("斜率决定变化趋势");
   expect(imageSent).toBe(true);
   await page.getByRole("button", { name: "关闭工具浮层" }).click();

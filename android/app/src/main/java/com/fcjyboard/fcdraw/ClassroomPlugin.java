@@ -19,11 +19,53 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import android.graphics.Bitmap;
+import android.graphics.Rect;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.PixelCopy;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
 
 /** Paired, opt-in LAN uploads. Reading received files stays inside Capacitor's bridge. */
 @CapacitorPlugin(name = "FcdrawClassroom")
 public class ClassroomPlugin extends Plugin {
     private Receiver receiver;
+    private final java.util.concurrent.ExecutorService imageEncoder = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    /** Capture only this app's visible WebView, including Office frames and transparent ink. */
+    @PluginMethod
+    public void captureFrame(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                android.webkit.WebView view = getBridge().getWebView();
+                int[] location = new int[2]; view.getLocationInWindow(location);
+                JSObject region = call.getObject("region");
+                double x = region == null ? 0 : region.optDouble("x", 0);
+                double y = region == null ? 0 : region.optDouble("y", 0);
+                double w = region == null ? 1 : region.optDouble("width", 1);
+                double h = region == null ? 1 : region.optDouble("height", 1);
+                if (!Double.isFinite(x + y + w + h) || x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > 1.001 || y + h > 1.001 || view.getWidth() == 0 || view.getHeight() == 0) {
+                    call.reject("截图范围无效"); return;
+                }
+                Rect area = new Rect(location[0] + (int)(x * view.getWidth()), location[1] + (int)(y * view.getHeight()), location[0] + (int)((x + w) * view.getWidth()), location[1] + (int)((y + h) * view.getHeight()));
+                double scale = Math.min(1, 1280.0 / area.width());
+                Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int)(area.width() * scale)), Math.max(1, (int)(area.height() * scale)), Bitmap.Config.ARGB_8888);
+                PixelCopy.request(getActivity().getWindow(), area, bitmap, status -> {
+                    if (status != PixelCopy.SUCCESS) { bitmap.recycle(); call.reject("当前画面尚未准备好，请稍后重试"); return; }
+                    imageEncoder.execute(() -> {
+                        try {
+                            ByteArrayOutputStream output = new ByteArrayOutputStream();
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output);
+                            JSObject result = new JSObject(); result.put("image", "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
+                            call.resolve(result);
+                        } catch (Exception error) { call.reject("画面捕获失败", error); }
+                        finally { bitmap.recycle(); }
+                    });
+                }, new Handler(Looper.getMainLooper()));
+            } catch (Exception error) { call.reject("画面捕获失败", error); }
+        });
+    }
     private File directory() {
         File dir = new File(getContext().getFilesDir(), "fcdraw-uploads");
         if (!dir.exists()) { dir.mkdirs(); }
@@ -42,7 +84,13 @@ public class ClassroomPlugin extends Plugin {
             }
             if (addresses.isEmpty()) { call.reject("未连接局域网，请先连接 Wi-Fi 或有线网络"); return; }
             if (receiver == null) {
-                receiver = new Receiver(directory());
+                receiver = new Receiver(directory(), (item) -> {
+                    JSObject file = new JSObject();
+                    file.put("id", item.getName().substring(0, 36));
+                    file.put("name", item.getName().substring(37));
+                    file.put("path", item.getAbsolutePath()); file.put("size", item.length());
+                    notifyListeners("fileReceived", file, true);
+                });
                 receiver.start(15000, true);
             }
             JSArray urls = new JSArray();
@@ -91,6 +139,7 @@ public class ClassroomPlugin extends Plugin {
 
     @Override
     protected synchronized void handleOnDestroy() {
+        imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }
     }
 
@@ -98,7 +147,11 @@ public class ClassroomPlugin extends Plugin {
         final String token = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         private final File directory;
         private final AtomicInteger receiving = new AtomicInteger();
-        Receiver(File directory) { super("0.0.0.0", 0); this.directory = directory; }
+        private final java.util.function.Consumer<File> onReceived;
+        Receiver(File directory) { this(directory, null); }
+        Receiver(File directory, java.util.function.Consumer<File> onReceived) {
+            super("0.0.0.0", 0); this.directory = directory; this.onReceived = onReceived;
+        }
 
         private Response reply(Response.Status status, String mime, String body) {
             Response response = newFixedLengthResponse(status, mime, body);
@@ -113,11 +166,11 @@ public class ClassroomPlugin extends Plugin {
             String base = "/" + token + "/";
             if (!session.getUri().equals(base) && !session.getUri().equals(base + "upload")) { return reply(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "接收地址无效或已关闭"); }
             if (session.getMethod() == Method.GET && session.getUri().equals(base)) {
-                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcdraw · 方成教育</h1><h2>局域网课件快传</h2><p>选择 PPTX、PDF 或图片发送到白板。单个文件上限 100 MB。</p><input id='files' type='file' multiple accept='.pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>发送到白板</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');button.onclick=async()=>{const files=document.getElementById('files').files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='发送成功，请在白板的课件列表中打开';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;}};</script></html>");
+                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcdraw · 方成教育</h1><h2>局域网课件快传</h2><p>手机与白板连同一网络，选好课件立即上屏。支持 PowerPoint、Word、Excel、PDF 和图片，单个文件上限 100 MB。</p><input id='files' type='file' hidden multiple accept='.ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>选择文件上屏</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');const picker=document.getElementById('files');button.onclick=()=>picker.click();picker.onchange=async()=>{const files=picker.files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='已发送到白板，课件将自动上屏';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;picker.value='';}};</script></html>");
             }
             if (session.getMethod() != Method.POST || !session.getUri().equals(base + "upload")) { return reply(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "不支持此操作"); }
             String name = session.getParms().get("name");
-            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(pptx|pdf|png|jpg|jpeg|webp|gif)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件名或格式不支持"); }
+            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(ppt|pptx|pps|ppsx|doc|docx|xls|xlsx|csv|odt|ods|odp|rtf|txt|pdf|png|jpg|jpeg|webp|gif)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件名或格式不支持"); }
             long length;
             try { length = Long.parseLong(session.getHeaders().getOrDefault("content-length", "0")); } catch (NumberFormatException error) { length = 0; }
             if (length <= 0 || length > 104857600) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件为空或超过 100 MB"); }
@@ -141,6 +194,7 @@ public class ClassroomPlugin extends Plugin {
                     throw error;
                 }
                 if (!pending.renameTo(target)) { pending.delete(); throw new IOException("无法保存文件"); }
+                if (onReceived != null) { onReceived.accept(target); }
                 return reply(Response.Status.OK, MIME_PLAINTEXT, "上传成功");
             } catch (IOException error) {
                 target.delete();

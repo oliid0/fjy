@@ -131,7 +131,6 @@ import { AIComponents } from "./components/AI";
 import "./index.scss";
 
 import { Classroom } from "./fcdraw/Classroom";
-import { AppSidebar } from "./components/AppSidebar";
 
 import type { CollabAPI } from "./collab/Collab";
 
@@ -863,6 +862,7 @@ const ExcalidrawWrapper = () => {
         onPointerUpdate={collabAPI?.onPointerUpdate}
         UIOptions={{
           unifiedToolbar: true,
+          library: false,
           canvasActions: {
             toggleTheme: true,
             export: {
@@ -959,8 +959,6 @@ const ExcalidrawWrapper = () => {
             }
           }}
         />
-
-        <AppSidebar />
 
         {errorMessage && (
           <ErrorDialog onClose={() => setErrorMessage("")}>

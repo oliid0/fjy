@@ -1,0 +1,16 @@
+﻿Fcdraw classroom document and formula engines
+
+@web-ppt/core 0.4.5 and @web-ppt/viewer-core 0.4.5: MIT, Copyright (c) 2026 unStone.
+See web-ppt.txt. Source: https://github.com/unStone/web-ppt
+
+@opendocument/odr-core 7.5.2: Mozilla Public License 2.0, unmodified upstream library.
+See opendocument.txt. Corresponding source is available without charge at:
+https://github.com/opendocument-app/OpenDocument.core/tree/v7.5.2
+The MPL applies to that library; it does not grant Fcdraw branding rights.
+
+mathjax-full 3.2.2: Apache License 2.0. See mathjax.txt.
+Source: https://github.com/mathjax/MathJax-src/tree/3.2.2
+
+Office compatibility test files are fetched only for CI, not included in the application.
+Apache POI test-data: Apache License 2.0, source commit and hashes in scripts/courseware-fixtures.json.
+PDF.js helloworld.pdf: Apache License 2.0, source commit and hash in the same manifest.

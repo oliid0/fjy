@@ -23,6 +23,7 @@ vi.mock("@excalidraw/excalidraw", async (importOriginal) => ({
     <>{children}</>
   ),
 }));
+vi.mock("./BoardSwitcher", () => ({ BoardSwitcher: () => null }));
 
 describe("selection-driven classroom controls", () => {
   let scene: readonly ExcalidrawElement[];
@@ -55,6 +56,7 @@ describe("selection-driven classroom controls", () => {
         cursorButton,
       }),
       getFiles: () => ({}),
+      onPointerDown: () => () => {},
       updateScene: vi.fn((update) => {
         if (update.elements) {
           scene = update.elements;

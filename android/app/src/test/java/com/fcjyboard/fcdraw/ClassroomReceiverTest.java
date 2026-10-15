@@ -68,4 +68,20 @@ public class ClassroomReceiverTest {
         assertEquals(400, upload("../escape.pptx", data));
         assertEquals(0, directory.listFiles().length);
     }
+
+    @Test public void acceptsOfficeDocumentsAndNotifiesOnlyAfterTheFileIsComplete() throws Exception {
+        receiver.stop();
+        java.util.concurrent.atomic.AtomicReference<File> received = new java.util.concurrent.atomic.AtomicReference<>();
+        receiver = new ClassroomPlugin.Receiver(directory, received::set);
+        receiver.start(5000, true);
+        base = "http://127.0.0.1:" + receiver.getListeningPort() + "/" + receiver.token + "/";
+        byte[] bytes = new byte[] {0, 1, 2, -1, 80, 75, 13, 10};
+        for (String name : new String[] {"课件.ppt", "课件.pptx", "教案.doc", "教案.docx", "成绩.xls", "成绩.xlsx", "讲义.pdf"}) {
+            received.set(null);
+            assertEquals(200, upload(name, bytes));
+            assertNotNull(received.get());
+            assertTrue(received.get().getName().endsWith("_" + name));
+            assertArrayEquals(bytes, Files.readAllBytes(received.get().toPath()));
+        }
+    }
 }

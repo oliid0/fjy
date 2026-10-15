@@ -10,6 +10,9 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
 import { project3D, samplePlot } from "./math";
+import { classroomCommands } from "./commands";
+
+import type { InkStroke } from "./documents";
 
 import type { Plot } from "./math";
 
@@ -244,27 +247,59 @@ export const drawPlot = (
     });
   }
   const plotId = crypto.randomUUID();
-  const ids = insertElements(
-    api,
-    skeletons.map((shape) => ({
-      ...shape,
-      groupIds: [plotId],
-      customData: {
-        fcSelectionSource: sourceSignature,
-        fcPlot: {
-          id: plotId,
-          plot,
-          position,
-          origin: { x: shape.x || 0, y: shape.y || 0 },
-        },
+  const shapes = skeletons.map((shape) => ({
+    ...shape,
+    id: crypto.randomUUID(),
+    groupIds: [plotId],
+    customData: {
+      fcSelectionSource: sourceSignature,
+      fcPlot: {
+        id: plotId,
+        plot,
+        position,
+        origin: { x: shape.x || 0, y: shape.y || 0 },
       },
-    })),
-    replaceIds,
-  );
+    },
+  }));
+  if (classroomCommands.has("document.plot")) {
+    void classroomCommands.execute({
+      name: "document.plot",
+      args: { shapes, replaceIds },
+    });
+    return shapes.map((shape) => shape.id);
+  }
+  const ids = insertElements(api, shapes, replaceIds);
   return ids;
 };
 
 export const selectedPlot = (api: ExcalidrawImperativeAPI) => {
+  const document = classroomCommands.read("document") as
+    | { ink: InkStroke[]; selection: string[] }
+    | undefined;
+  if (document) {
+    const stroke = document.ink.find(
+      (stroke) => document.selection.includes(stroke.id) && stroke.plot,
+    );
+    if (!stroke?.plot) {
+      return null;
+    }
+    return {
+      plot: stroke.plot.plot,
+      ids: document.ink
+        .filter((item) => item.plot?.id === stroke.plot!.id)
+        .map((item) => item.id),
+      position: {
+        x:
+          stroke.plot.position.x +
+          (stroke.anchor?.x ?? stroke.points[0][0]) -
+          stroke.plot.origin.x,
+        y:
+          stroke.plot.position.y +
+          (stroke.anchor?.y ?? stroke.points[0][1]) -
+          stroke.plot.origin.y,
+      },
+    };
+  }
   const elements = api.getSceneElements();
   const selected = elements.find(
     (el) =>

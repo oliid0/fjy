@@ -26,3 +26,23 @@
 ## 验证策略
 
 本地仅安装依赖并运行 test、check、lint、格式检查和 Python 适配器测试。Web 打包、浏览器生产页面检查和安卓打包全部放在 GitHub Actions。浏览器检查覆盖 1920、1280、800、390 宽度，验证单一底栏、上弹菜单、选区函数参数和自动等号补全，并保存截图及失败追踪。
+
+## 本轮完整教学流程的实现映射
+
+继续沿各项目 README 追踪了实现，而非按介绍添加并列按钮：
+
+| 参考项目与代码 | 落地行为与当前实现 |
+| --- | --- |
+| ai-math-tutor：`canvas-protocol.ts`、`apply-tutor-actions.ts`、workspace 的选区 / 图像上下文 | `Teacher.tsx` 读取当前选区、图像、文字和教学步骤；`lesson.ts` 在共享画板逐步写推导，AI 擦除只作用于本课内容，保留学生笔迹。 |
+| ai-tutor：`lessonMachine.ts`、`useTeacherQuiz.ts`、`useConfusionRadar.ts`、`useVoiceDirector.ts` | `teaching.ts` 的课程 / 暂停 / 追问 / 测验状态；`narration.ts` 单一播报所有者；答错和明确反复追问影响速度与提示词。提供字幕、图形语音描述、易读和短步骤设置，不推断残障或虚构学习诊断。 |
+| ai-whiteboard：`commandTypes.ts`、`ScriptRunner.ts` | `lesson.ts` 严格验证命令后逐字写文本、生成 MathJax 公式、按距离展开线条与路径、画箭头和批注，支持局部擦除 / 清批注 / 等待；动画可暂停、取消并尊重减少动态效果设置，用户修改后不补回该笔画。 |
+| InkTeach：`FullUi.cs`、`Selection.cs`、`ScreenCapture.cs` | `FilePreview.tsx` 课件上覆盖透明板书层，关闭开关后直接操作课件；按页保存、圈选、橡皮、撤销 / 重做。`TeachingTools.tsx` 提供量角器、直尺和立体几何。使用安卓 PixelCopy 捕获本应用窗口，未移植 Windows GDI。 |
+| teach-learn-whiteboard：`main.ts` 白板管理、`ai/tools.ts`、docRAG | `boards.ts` / `BoardSwitcher.tsx` 保存图片、视图与各板内容，切换前持久化，失败保留原板；`commands.ts` / `canvasCommands.ts` 将语音、文字与手动组件操作接到同一条命令路由；`materials.ts` 本机分页原文检索与真实页码引用。 |
+| whiteboard-teacher-ai：`Whiteboard.tsx` 的 GraphWidget / 动态组件 | 函数二维 / 三维图形和参数保存为可编辑对象；`widgets.ts` 的旋转几何、计时器、单摆与抛体计算使用实际参数和时间，主白板和课件透明层共用。 |
+| whiteboard-teacher：`docs/SCRIPT_API.md`、`public/app.js`、`board.js` | 每个教学步骤的讲述与板书完成后才进入下一步；触碰 / 语音暂停，追问独立回答后显式续课，课程末尾测验。使用现有模型接口，不复制参考项目的服务端部署或额外账号体系。 |
+
+课堂入口仍在唯一底栏，常见数学操作仍为圈选直接完成；教学和工具属性仅按上下文出现，没有叠加第二条常驻工具栏。课件打开后命令写入当前可见透明层，避免操作背后的白板。低级绘制命令不向模型暴露任意脚本执行权限。
+
+新文档依赖核对了 GitHub 官方代码、Web-PPT 文档和**实际安装的 0.4.5 类型**，以及 OpenDocument WASM README / **7.5.2 类型**；未套用最新主分支的不同 API。文档解析在线程执行，输出放在无同源权限的 sandbox iframe；不引入云端 Office 预览。AI 只引用确实提取的原文，不把未做 OCR 的扫描页当作可检索文字。浏览器 Office 的视觉上下文为文本加独立板书，安卓使用真实窗口截图。Office 排版和媒体兼容性仍由解析引擎决定，不能等同桌面 Office 全兼容。
+
+本轮增加课程状态机、语音所有权、白板持久化失败、文档可见层命令路由、工具物理参数、逐步渲染和公式测试；浏览器 CI 下载固定提交与 SHA256 校验的 Apache POI / PDF.js 样本，实际打开 PPT、PPTX、DOC、DOCX、XLS、XLSX、PDF。Android CI 使用真实 PixelCopy 桥接截图和内置 Moonshine 模型。模拟识别文本仅验证指令路由，不被当作目标大屏麦克风或中文识别准确率验收。

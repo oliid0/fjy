@@ -734,6 +734,8 @@ export type CanvasActions = Partial<{
 export type UIOptions = Partial<{
   /** Place drawing, navigation and host controls in one bottom toolbar. */
   unifiedToolbar: boolean;
+  /** Host applications can replace the asset library with their own teaching tools. */
+  library: boolean;
   dockedSidebarBreakpoint: number;
   canvasActions: CanvasActions;
   tools: {
@@ -913,6 +915,10 @@ export type ExcalidrawImperativeAPIEventMap = {
 };
 
 export interface ExcalidrawImperativeAPI {
+  executeAction: (
+    name: import("./actions/types").ActionName,
+    value?: unknown,
+  ) => void;
   updateScene: InstanceType<typeof App>["updateScene"];
   applyDeltas: InstanceType<typeof App>["applyDeltas"];
   mutateElement: InstanceType<typeof App>["mutateElement"];

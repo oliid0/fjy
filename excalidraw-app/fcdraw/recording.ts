@@ -1,5 +1,8 @@
 import { createStore, get, set } from "idb-keyval";
 import { blobToArrayBuffer } from "@excalidraw/excalidraw/data/blob";
+import { Capacitor } from "@capacitor/core";
+
+import { Classroom as NativeClassroom } from "./native";
 
 import type { TranscriptLine } from "./speech";
 
@@ -56,6 +59,7 @@ export class BoardRecorder {
   private started = 0;
   private chunks: Blob[] = [];
   private stopPromise?: Promise<Blob>;
+  private captureGeneration = 0;
 
   get audioStream() {
     return this.streams[0];
@@ -93,6 +97,32 @@ export class BoardRecorder {
           throw new Error("当前设备不支持白板画面录制");
         }
         let camera: HTMLVideoElement | undefined;
+        let screen: HTMLVideoElement | undefined;
+        if (
+          !Capacitor.isNativePlatform() &&
+          navigator.mediaDevices.getDisplayMedia
+        ) {
+          const display = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: false,
+          });
+          this.streams.push(display);
+          screen = document.createElement("video");
+          screen.muted = true;
+          screen.playsInline = true;
+          screen.srcObject = display;
+          this.videos.push(screen);
+          await screen.play();
+          display.getVideoTracks()[0].onended = () => {
+            if (this.recorder?.state === "recording") {
+              this.recorder.stop();
+            }
+          };
+        }
+        let appFrame: HTMLImageElement | undefined;
+        let capturing = false;
+        let capturedAt = 0;
+        const generation = ++this.captureGeneration;
         if (mode === "combined") {
           camera = document.createElement("video");
           camera.muted = true;
@@ -108,14 +138,51 @@ export class BoardRecorder {
           const canvases = document.querySelectorAll<HTMLCanvasElement>(
             ".excalidraw .excalidraw__canvas",
           );
-          canvases.forEach((source) => {
-            if (source.width && source.height) {
+          const documentOpen = !!document.querySelector(".fc-presentation");
+          if (
+            Capacitor.isNativePlatform() &&
+            documentOpen &&
+            !capturing &&
+            Date.now() - capturedAt > 150
+          ) {
+            capturing = true;
+            capturedAt = Date.now();
+            void NativeClassroom.captureFrame()
+              .then(async ({ image }) => {
+                const next = new Image();
+                next.src = image;
+                await next.decode();
+                if (generation === this.captureGeneration) {
+                  appFrame = next;
+                }
+              })
+              .catch(() => {})
+              .finally(() => {
+                capturing = false;
+              });
+          }
+          const sources =
+            screen && screen.readyState >= 2
+              ? [screen]
+              : documentOpen && appFrame
+              ? [appFrame]
+              : Array.from(canvases);
+          sources.forEach((source) => {
+            const sourceWidth =
+              source instanceof HTMLVideoElement
+                ? source.videoWidth
+                : source.width;
+            const sourceHeight =
+              source instanceof HTMLVideoElement
+                ? source.videoHeight
+                : source.height;
+            if (sourceWidth && sourceHeight) {
               const ratio = Math.min(
-                canvas.width / source.width,
-                canvas.height / source.height,
+                canvas.width / sourceWidth,
+                canvas.height / sourceHeight,
               );
-              const width = source.width * ratio;
-              const height = source.height * ratio;
+              const width = sourceWidth * ratio;
+              const height = sourceHeight * ratio;
               context.drawImage(
                 source,
                 (canvas.width - width) / 2,
@@ -197,6 +264,7 @@ export class BoardRecorder {
     this.release();
   }
   private release() {
+    this.captureGeneration++;
     clearInterval(this.timer);
     this.streams.forEach((stream) =>
       stream.getTracks().forEach((track) => track.stop()),

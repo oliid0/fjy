@@ -476,6 +476,9 @@ const LayerUI = ({
   };
 
   const renderSidebars = () => {
+    if (UIOptions.library === false) {
+      return null;
+    }
     return (
       <DefaultSidebar
         __fallback
@@ -520,7 +523,9 @@ const LayerUI = ({
         <div className="fc-toolbar-group" role="group" aria-label="文件与素材">
           {renderTopLeftUI?.(editorInterface.formFactor === "phone", appState)}
           <tunnels.MainMenuTunnel.Out />
-          <tunnels.DefaultSidebarTriggerTunnel.Out />
+          {UIOptions.library !== false && (
+            <tunnels.DefaultSidebarTriggerTunnel.Out />
+          )}
         </div>
         {!appState.viewModeEnabled ? (
           <div
@@ -583,23 +588,25 @@ const LayerUI = ({
           tunneled away. We only render tunneled components that actually
         have defaults when host do not render anything. */}
       <DefaultMainMenu UIOptions={UIOptions} />
-      <DefaultSidebar.Trigger
-        __fallback
-        icon={sidebarRightIcon}
-        title={capitalizeString(t("toolBar.library"))}
-        onToggle={(open) => {
-          if (open) {
-            trackEvent(
-              "sidebar",
-              `${DEFAULT_SIDEBAR.name} (open)`,
-              `button (${
-                editorInterface.formFactor === "phone" ? "mobile" : "desktop"
-              })`,
-            );
-          }
-        }}
-        tab={DEFAULT_SIDEBAR.defaultTab}
-      />
+      {UIOptions.library !== false && (
+        <DefaultSidebar.Trigger
+          __fallback
+          icon={sidebarRightIcon}
+          title={capitalizeString(t("toolBar.library"))}
+          onToggle={(open) => {
+            if (open) {
+              trackEvent(
+                "sidebar",
+                `${DEFAULT_SIDEBAR.name} (open)`,
+                `button (${
+                  editorInterface.formFactor === "phone" ? "mobile" : "desktop"
+                })`,
+              );
+            }
+          }}
+          tab={DEFAULT_SIDEBAR.defaultTab}
+        />
+      )}
       <DefaultOverwriteConfirmDialog />
       {appState.openDialog?.name === "ttd" && <TTDDialog __fallback />}
       {/* ------------------------------------------------------------------ */}

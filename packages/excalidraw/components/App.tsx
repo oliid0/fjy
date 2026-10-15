@@ -792,6 +792,12 @@ class App extends React.Component<AppProps, AppState> {
     this.actionManager.registerAction(createRedoAction(this.history));
 
     this.api = {
+      executeAction: (name, value) => {
+        const action = this.actionManager.actions[name];
+        if (action) {
+          this.actionManager.executeAction(action, "api", value);
+        }
+      },
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,

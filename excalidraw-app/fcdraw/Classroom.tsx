@@ -14,16 +14,14 @@ import {
   selectedBoardElements,
   visualMessage,
 } from "./ai";
-import {
-  drawPlot,
-  insertCube,
-  insertElements,
-  insertionPoint,
-  insertText,
-  selectedPlot,
-  validateShapes,
-} from "./board";
+import { drawPlot, insertionPoint, insertText, selectedPlot } from "./board";
 import { FilePreview } from "./FilePreview";
+import { BoardSwitcher } from "./BoardSwitcher";
+import { classroomCommands, directCommand } from "./commands";
+import { DOCUMENT_ACCEPT } from "./documents";
+import { Teacher, LearningSettings } from "./Teacher";
+import { TeachingTools } from "./TeachingTools";
+import { registerCanvasCommands } from "./canvasCommands";
 import { localMathIntent, selectionMathIntent } from "./intent";
 import { calculate, defaultPlot, plotExpression } from "./math";
 import { Classroom as NativeClassroom } from "./native";
@@ -47,6 +45,7 @@ import type { Recording, RecordingMode } from "./recording";
 import type { TranscriptLine } from "./speech";
 import type { LocalSpeechHandle } from "./localSpeech";
 import type { Settings } from "./settings";
+import type { InkStroke } from "./documents";
 
 type Panel = "ai" | "plot" | "record" | "files" | "settings";
 const titles: Record<Panel, string> = {
@@ -149,6 +148,8 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const recorder = useRef<BoardRecorder | null>(null);
+  const recordMode = useRef<RecordingMode>("audio");
+  const stoppingRecording = useRef(false);
   const transcript = useRef<TranscriptLine[]>([]);
   const recordStarted = useRef(0);
   const [records, setRecords] = useState<Recording[]>([]);
@@ -158,11 +159,53 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [urls, setUrls] = useState<string[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [preview, setPreview] = useState<File | null>(null);
+  const previewRef = useRef<File | null>(null);
+  const recentFiles = useRef(new Map<string, File>());
+  previewRef.current = preview;
+  const receivedIds = useRef(new Set<string>());
+  const incoming = useRef<Upload[]>([]);
+  const openingUpload = useRef(false);
+  const previewReady = useRef<{
+    resolve: () => void;
+    reject: (error: Error) => void;
+  } | null>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
   const actionBusy = useRef(false);
   const returnFocus = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const active = records.find((item) => item.id === activeId);
+  useEffect(() => registerCanvasCommands(api), [api]);
+  const showPreview = useCallback((file: File) => {
+    recentFiles.current.set(file.name, file);
+    if (recentFiles.current.size > 5) {
+      recentFiles.current.delete(recentFiles.current.keys().next().value!);
+    }
+    previewReady.current?.reject(new DOMException("已切换课件", "AbortError"));
+    classroomCommands.invalidate();
+    previewRef.current = file;
+    setPreview(file);
+    setPanel(null);
+    return new Promise<void>((resolve, reject) => {
+      previewReady.current = { resolve, reject };
+    });
+  }, []);
+  const openUpload = useCallback(
+    async (file: Upload) => {
+      openingUpload.current = true;
+      try {
+        const response = await fetch(Capacitor.convertFileSrc(file.path));
+        if (!response.ok) {
+          throw new Error("无法读取接收的课件");
+        }
+        const blob = await response.blob();
+        const next = new File([blob], file.name, { type: blob.type });
+        await showPreview(next);
+      } finally {
+        openingUpload.current = false;
+      }
+    },
+    [showPreview],
+  );
   const invalidateVoice = useCallback(() => {
     voiceGeneration.current++;
   }, []);
@@ -207,7 +250,12 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       }
     };
     refresh();
-    return api.onChange(refresh);
+    const stop = api.onChange(refresh);
+    const documentChanged = classroomCommands.watch("document", refresh);
+    return () => {
+      stop();
+      documentChanged();
+    };
   }, [api]);
 
   const persistRecords = useCallback(async (next: Recording[]) => {
@@ -230,7 +278,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       .catch(() => setError("无法读取本地录制资料"));
     if (Capacitor.isNativePlatform()) {
       void NativeClassroom.listUploads()
-        .then(({ files }) => setUploads(files))
+        .then(({ files }) => {
+          setUploads(files);
+          files.forEach((file) => receivedIds.current.add(file.id));
+        })
         .catch((failure) => setError(errorMessage(failure)));
     }
     return () => {
@@ -247,6 +298,35 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       }
     };
   }, [invalidateVoice]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    let disposed = false;
+    const listener = NativeClassroom.addListener("fileReceived", (file) => {
+      if (disposed || receivedIds.current.has(file.id)) {
+        return;
+      }
+      receivedIds.current.add(file.id);
+      setUploads((files) => [
+        file,
+        ...files.filter((item) => item.id !== file.id),
+      ]);
+      if (previewRef.current || openingUpload.current) {
+        incoming.current.push(file);
+        setStatus(`${file.name} 已接收，关闭当前课件后自动上屏`);
+      } else {
+        void openUpload(file).catch((failure) =>
+          setError(errorMessage(failure)),
+        );
+      }
+    });
+    return () => {
+      disposed = true;
+      void listener.then((handle) => handle.remove());
+    };
+  }, [openUpload]);
 
   useEffect(() => {
     if (!recording) {
@@ -273,13 +353,30 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     }
     const refresh = () => {
       void NativeClassroom.listUploads()
-        .then(({ files }) => setUploads(files))
+        .then(({ files }) => {
+          setUploads(files);
+          const fresh = files.filter(
+            (file) => !receivedIds.current.has(file.id),
+          );
+          fresh.forEach((file) => receivedIds.current.add(file.id));
+          if (fresh.length) {
+            incoming.current.push(...fresh.reverse());
+            if (!previewRef.current && !openingUpload.current) {
+              const first = incoming.current.shift();
+              if (first) {
+                void openUpload(first).catch((failure) =>
+                  setError(errorMessage(failure)),
+                );
+              }
+            }
+          }
+        })
         .catch((failure) => setError(errorMessage(failure)));
     };
     refresh();
     const timer = setInterval(refresh, 2000);
     return () => clearInterval(timer);
-  }, [urls]);
+  }, [urls, openUpload]);
 
   useEffect(() => {
     if (panel) {
@@ -357,12 +454,46 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   const solveMath = useCallback(
     async (input?: string, automatic = false) => {
+      const revision = classroomCommands.revision;
+      if (classroomCommands.has("document.snapshot")) {
+        if (automatic) {
+          return;
+        }
+        const snapshot = (await classroomCommands.execute({
+          name: "document.snapshot",
+        })) as { text: string; image: string };
+        const expression =
+          input ||
+          (
+            await chat([
+              visualMessage(
+                `仅识别待计算算式，输出 mathjs/nerdamer 表达式；无算式返回 NONE。课件文字：${snapshot.text}`,
+                snapshot.image,
+              ),
+            ])
+          ).trim();
+        if (revision !== classroomCommands.revision) {
+          return;
+        }
+        if (expression === "NONE") {
+          throw new Error("未发现待计算算式");
+        }
+        const answer = calculate(expression);
+        await classroomCommands.execute({
+          name: "canvas.text",
+          args: { text: `${expression} = ${answer}` },
+        });
+        return;
+      }
       const elements = api.getSceneElements();
       const selected = automatic ? [] : selectedBoardElements(api);
       const source = selected.length
         ? selected
         : elements.filter((el) => !el.customData?.fcGenerated);
       const expression = input || (await recognize("math"));
+      if (revision !== classroomCommands.revision) {
+        return;
+      }
       if (
         automatic &&
         (Object.values(api.getAppState().selectedElementIds).some(Boolean) ||
@@ -419,6 +550,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       if (
         replace &&
         existing &&
+        !classroomCommands.has("document.plot") &&
         !existing.ids.every((id) =>
           api.getSceneElements().some((el) => el.id === id),
         )
@@ -430,6 +562,8 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       const position =
         replace && existing
           ? existing.position
+          : classroomCommands.has("document.plot")
+          ? { x: 300, y: 260 }
           : { x: origin.x + 220, y: origin.y + 245 };
       const ids = drawPlot(
         api,
@@ -443,11 +577,13 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             : undefined),
       );
       plotRef.current = { ids, position };
-      api.updateScene({
-        appState: {
-          selectedElementIds: Object.fromEntries(ids.map((id) => [id, true])),
-        },
-      });
+      if (!classroomCommands.has("document.plot")) {
+        api.updateScene({
+          appState: {
+            selectedElementIds: Object.fromEntries(ids.map((id) => [id, true])),
+          },
+        });
+      }
       setPlot(next);
       setStatus("函数图像已插入；调节参数可观察变化");
     },
@@ -545,38 +681,163 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   const summarize = useCallback(
     async (whole = false) => {
+      const revision = classroomCommands.revision;
+      const document = classroomCommands.has("document.snapshot")
+        ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
+            text: string;
+            image: string;
+          })
+        : undefined;
       const context =
         whole && capturedContext.current
           ? capturedContext.current
           : await boardContext(api, whole);
-      if (!context.elements.length) {
+      if (!document && !context.elements.length) {
         throw new Error("白板还没有内容");
       }
       const result = await chat([
         visualMessage(
-          `你是方成教育助教。根据白板内容总结本节知识、推导过程、结论与待解决问题。看不清的内容明确说明，不编造。\n识别到的文字：${context.text}`,
-          context.image,
+          `你是方成教育助教。根据当前课件或白板内容总结本节知识、推导过程、结论与待解决问题。看不清的内容明确说明，不编造。\n识别到的文字：${
+            document?.text || context.text
+          }`,
+          document?.image || context.image,
         ),
       ]);
+      if (revision !== classroomCommands.revision) {
+        return;
+      }
       setOutput(result);
       setPanel("ai");
     },
     [api],
   );
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    let previous = "";
+    let disposed = false;
+    const refresh = () => {
+      const document = classroomCommands.read("document") as
+        | { name: string; page: number; ink: InkStroke[]; selection: string[] }
+        | undefined;
+      const source =
+        document?.ink.filter(
+          (stroke) =>
+            document.selection.includes(stroke.id) &&
+            !stroke.lesson &&
+            !stroke.widget &&
+            !stroke.plot,
+        ) || [];
+      const signature = source.length
+        ? JSON.stringify([document?.name, document?.page, source])
+        : "";
+      if (signature === previous) {
+        return;
+      }
+      previous = signature;
+      clearTimeout(timer);
+      if (!signature) {
+        return;
+      }
+      timer = setTimeout(() => {
+        const revision = classroomCommands.revision;
+        void (async () => {
+          let intent = selectionMathIntent(
+            source.map((stroke) => stroke.text || "").join(" "),
+          );
+          if (!intent) {
+            if (!currentSettings().apiKey) {
+              return;
+            }
+            const snapshot = (await classroomCommands.execute({
+              name: "document.snapshot",
+            })) as { image: string; text: string };
+            intent = selectionMathIntent(
+              (
+                await chat([
+                  visualMessage(
+                    `识别圈选的板书（位置 ${JSON.stringify(
+                      source.map((stroke) => stroke.points),
+                    )}）。仅输出待求值算式或函数表达式；普通笔记、图形、已完成等式返回 NONE。课件文字：${
+                      snapshot.text
+                    }`,
+                    snapshot.image,
+                  ),
+                ])
+              ).trim(),
+            );
+          }
+          if (
+            disposed ||
+            revision !== classroomCommands.revision ||
+            signature !== previous ||
+            !intent
+          ) {
+            return;
+          }
+          if (intent.action === "plot") {
+            createPlot({
+              ...defaultPlot,
+              expression: intent.expression,
+              surface: intent.surface,
+            });
+          } else {
+            await classroomCommands.execute({
+              name: "canvas.text",
+              args: { text: calculate(intent.expression) },
+            });
+          }
+        })().catch((failure) => {
+          if (!disposed && signature === previous) {
+            setError(errorMessage(failure));
+          }
+        });
+      }, 450);
+    };
+    const stop = classroomCommands.watch("document", refresh);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      stop();
+    };
+  }, [createPlot]);
+
   const execute = useCallback(
     async (text: string, whole = false) => {
       setPrompt(text);
-      if (/立方体|正方体/.test(text)) {
-        insertCube(api);
+      const direct = directCommand(text);
+      if (direct) {
+        await classroomCommands.execute(direct);
+        return;
+      }
+      if (
+        /^(?:请|帮我|麻烦)?(?:讲解|解释|引导|教我|辅导|为什么|怎么理解|没听懂|不理解|换.*例子|演示.*动画)/.test(
+          text,
+        )
+      ) {
+        await classroomCommands.execute({
+          name: "lesson.ask",
+          args: { prompt: text },
+        });
+        return;
+      }
+      const revision = classroomCommands.revision;
+      if (/立方体|正方体/.test(text) && /画|插入|生成|创建/.test(text)) {
+        await classroomCommands.execute({
+          name: "tools.insert",
+          args: { kind: "cube" },
+        });
         setStatus("标准线条立方体已插入，可编辑或擦除");
         return;
       }
-      if (/总结|小结|概括/.test(text)) {
+      if (/^(?:请|帮我|麻烦)?(?:总结|小结|概括)/.test(text)) {
         await summarize(whole || /整|全部|这一板/.test(text));
         return;
       }
-      const localIntent = localMathIntent(text);
+      const localIntent =
+        /改|调|删|擦|移|设|关闭|暂停|放大|缩小|清空|保存|丢弃|切换/.test(text)
+          ? null
+          : localMathIntent(text);
       if (localIntent?.action === "plot") {
         createPlot({
           ...plot,
@@ -602,12 +863,19 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         await chat([
           {
             role: "system",
-            content:
-              '你是方成教育白板助教。将用户要求转成 JSON，不要 markdown。根据意图返回 {"action":"plot","expression":"x+1","surface":false}（三维 z=f(x,y) 时 surface=true）；或 {"action":"calculate","expression":"1+1"}（积分 integrate(expr,x)、defint(expr,a,b,x)、求导 diff(expr,x)、复数 i）；或 {"action":"shapes","shapes":[{"type":"rectangle","x":0,"y":0,"width":140,"height":80},{"type":"text","x":5,"y":15,"text":"标题"}]}（type 仅 rectangle,ellipse,diamond,line,arrow,text，所有图形必须提供 x,y,width,height，text 提供 text，坐标范围 0..1200）；或 {"action":"text","text":"回答"}。生成图像/图形用可编辑的线条与形状组合。不要生成代码或外链，不编造白板内容。',
+            content: `你是方成教育白板助教。将用户要求转成 JSON，不要 markdown。操作组件优先返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}]}，可组合最多20项。现有命令：\n${classroomCommands.describe()}\n只用已注册命令；不猜测对象或文件id，依据上下文。删除、丢弃、清空仅在用户明确要求时执行。要讲解或引导，使用 lesson.ask；问答也可结合课件、圈选与当前教学步骤。数学可返回 {"action":"plot","expression":"x+1","surface":false} 或 {"action":"calculate","expression":"1+1"}；图形可返回 {"action":"shapes","shapes":[{"type":"rectangle","x":0,"y":0,"width":140,"height":80}]}，type 仅 rectangle,ellipse,diamond,line,arrow,text；文本返回 {"action":"text","text":"回答"}。需要逐步动画使用 canvas.animate。不要任意代码、外链或假成功。`,
           },
-          visualMessage(`${text}\n白板文字：${context.text}`, context.image),
+          visualMessage(
+            `${text}\n白板文字：${context.text}\n组件状态：${JSON.stringify(
+              classroomCommands.snapshot(),
+            )}`,
+            context.image,
+          ),
         ]),
       );
+      if (revision !== classroomCommands.revision) {
+        return;
+      }
       if (!response || typeof response !== "object") {
         throw new Error("AI 指令格式无效，请重试");
       }
@@ -617,8 +885,30 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         surface?: boolean;
         shapes?: unknown;
         text?: string;
+        commands?: { name: string; args?: Record<string, unknown> }[];
       };
-      if (action.action === "plot" && typeof action.expression === "string") {
+      if (action.action === "commands") {
+        if (
+          !Array.isArray(action.commands) ||
+          action.commands.length > 20 ||
+          !action.commands.every(
+            (command) =>
+              command &&
+              typeof command.name === "string" &&
+              (!command.args ||
+                (typeof command.args === "object" &&
+                  !Array.isArray(command.args))),
+          )
+        ) {
+          throw new Error("AI 组件命令格式无效");
+        }
+        for (const command of action.commands) {
+          await classroomCommands.execute(command);
+        }
+      } else if (
+        action.action === "plot" &&
+        typeof action.expression === "string"
+      ) {
         const next = {
           ...plot,
           expression: plotExpression(action.expression),
@@ -632,15 +922,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       ) {
         await solveMath(action.expression);
       } else if (action.action === "shapes") {
-        const origin = insertionPoint(api);
-        insertElements(
-          api,
-          validateShapes(action.shapes).map((shape) => ({
-            ...shape,
-            x: (shape.x || 0) + origin.x,
-            y: (shape.y || 0) + origin.y,
-          })),
-        );
+        await classroomCommands.execute({
+          name: "canvas.shapes",
+          args: { shapes: action.shapes },
+        });
         setStatus("图形已写入白板，可编辑、撤销或擦除");
       } else if (action.action === "text" && typeof action.text === "string") {
         setOutput(action.text);
@@ -651,6 +936,15 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     },
     [api, plot, summarize, solveMath, createPlot],
   );
+
+  const executeVoice = (text: string) => {
+    setStatus("正在理解指令…");
+    void execute(text)
+      .then(() =>
+        setStatus((previous) => (previous === "正在理解指令…" ? "" : previous)),
+      )
+      .catch((failure) => setError(errorMessage(failure)));
+  };
 
   useEffect(() => {
     if (!autoMath) {
@@ -733,6 +1027,9 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, [api, autoMath, run, solveMath]);
 
   const toggleVoice = async () => {
+    if (classroomCommands.has("lesson.pause")) {
+      await classroomCommands.execute({ name: "lesson.pause" });
+    }
     narrator.current?.stop();
     if (recording && currentSettings().speech === "local") {
       recordingVoiceCommand.current = !recordingVoiceCommand.current;
@@ -791,7 +1088,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             if (!text) {
               throw new Error("未识别到语音，请重试");
             }
-            void run(() => execute(text));
+            executeVoice(text);
           } catch (failure) {
             setListening(false);
             setError(errorMessage(failure));
@@ -881,7 +1178,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             setListening(false);
             stopSpeech.current?.();
             stopSpeech.current = null;
-            void run(() => execute(text));
+            executeVoice(text);
           },
           (message) => {
             setListening(false);
@@ -917,16 +1214,30 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       },
     ]);
 
-  const startRecording = async () => {
+  const startRecording = async (selectedMode: RecordingMode = mode) => {
     narrator.current?.stop();
-    if (listening) {
+    if (
+      listening &&
+      (localSpeech.current ||
+        stopSpeech.current ||
+        voiceRecorder.current?.state === "recording")
+    ) {
       throw new Error("请先结束语音指令再开始录制");
     }
     transcript.current = [];
     setElapsed(0);
     const instance = new BoardRecorder();
     recorder.current = instance;
-    await instance.start(mode, () => setRecording(false));
+    await instance.start(selectedMode, () => {
+      setRecording(false);
+      if (recorder.current === instance && !stoppingRecording.current) {
+        void stopRecording().catch((failure) =>
+          setError(errorMessage(failure)),
+        );
+      }
+    });
+    recordMode.current = selectedMode;
+    setMode(selectedMode);
     recordStarted.current = Date.now();
     setRecording(true);
     setStatus("录制中，可关闭浮层继续书写；屏幕模式录制当前白板画面");
@@ -939,7 +1250,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             if (recordingVoiceCommand.current) {
               recordingVoiceCommand.current = false;
               setListening(false);
-              void run(() => execute(line.text));
+              executeVoice(line.text);
             }
           },
           (message) => setError(`录制继续，离线文稿暂不可用：${message}`),
@@ -974,58 +1285,252 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   };
 
   const stopRecording = async () => {
-    recordingVoiceCommand.current = false;
-    setListening(false);
+    if (stoppingRecording.current || !recorder.current) {
+      return;
+    }
+    stoppingRecording.current = true;
     try {
-      await localSpeech.current?.stop();
-    } catch (failure) {
-      setError(`录制继续保存；文稿收尾失败：${errorMessage(failure)}`);
-    }
-    localSpeech.current = null;
-    stopSpeech.current?.();
-    stopSpeech.current = null;
-    const result = await recorder.current!.stop();
-    setRecording(false);
-    let item: Recording = {
-      ...result,
-      id: crypto.randomUUID(),
-      created: Date.now(),
-      mode,
-      transcript: [...transcript.current],
-      summary: "",
-    };
-    await persistRecords([item, ...recordsRef.current]);
-    setActiveId(item.id);
-    setPanel("record");
-    setStatus("录制已保存到本机");
-    if (currentSettings().speech === "custom") {
+      recordingVoiceCommand.current = false;
+      setListening(false);
       try {
-        item = { ...item, transcript: await transcribe(item.blob) };
-        await persistRecords(
-          recordsRef.current.map((value) =>
-            value.id === item.id ? item : value,
-          ),
-        );
+        await localSpeech.current?.stop();
       } catch (failure) {
-        setError(`录制已保存；${errorMessage(failure)}`);
+        setError(`录制继续保存；文稿收尾失败：${errorMessage(failure)}`);
       }
-    }
-    if (currentSettings().autoSummary && item.transcript.length) {
-      try {
-        const summary = await summaryFor(item);
-        await persistRecords(
-          recordsRef.current.map((value) =>
-            value.id === item.id ? { ...value, summary } : value,
-          ),
-        );
-      } catch (failure) {
-        setError(`录制与文稿已保存；${errorMessage(failure)}`);
+      localSpeech.current = null;
+      stopSpeech.current?.();
+      stopSpeech.current = null;
+      const result = await recorder.current!.stop();
+      recorder.current = null;
+      setRecording(false);
+      let item: Recording = {
+        ...result,
+        id: crypto.randomUUID(),
+        created: Date.now(),
+        mode: recordMode.current,
+        transcript: [...transcript.current],
+        summary: "",
+      };
+      await persistRecords([item, ...recordsRef.current]);
+      setActiveId(item.id);
+      setPanel("record");
+      setStatus("录制已保存到本机");
+      if (currentSettings().speech === "custom") {
+        try {
+          item = { ...item, transcript: await transcribe(item.blob) };
+          await persistRecords(
+            recordsRef.current.map((value) =>
+              value.id === item.id ? item : value,
+            ),
+          );
+        } catch (failure) {
+          setError(`录制已保存；${errorMessage(failure)}`);
+        }
       }
+      if (currentSettings().autoSummary && item.transcript.length) {
+        try {
+          const summary = await summaryFor(item);
+          await persistRecords(
+            recordsRef.current.map((value) =>
+              value.id === item.id ? { ...value, summary } : value,
+            ),
+          );
+        } catch (failure) {
+          setError(`录制与文稿已保存；${errorMessage(failure)}`);
+        }
+      }
+    } finally {
+      stoppingRecording.current = false;
     }
   };
 
+  useEffect(() => {
+    const registrations = [
+      classroomCommands.register(
+        "math.calculate",
+        "计算算式，args.expression 可省略以识别圈选；结果写在板上",
+        async (args) =>
+          solveMath(
+            typeof args.expression === "string" ? args.expression : undefined,
+          ),
+      ),
+      classroomCommands.register(
+        "math.plot",
+        "插入函数图，args.expression，args.surface 选三维；可带x,y,z,a,b,c数值",
+        (args) => {
+          if (typeof args.expression !== "string") {
+            throw new Error("缺少函数表达式");
+          }
+          const next = {
+            ...defaultPlot,
+            expression: plotExpression(args.expression),
+            surface: !!args.surface,
+          };
+          for (const key of ["x", "y", "z", "a", "b", "c"] as const) {
+            if (args[key] !== undefined) {
+              if (
+                typeof args[key] !== "number" ||
+                !Number.isFinite(args[key])
+              ) {
+                throw new Error("函数参数无效");
+              }
+              next[key] = args[key] as number;
+            }
+          }
+          createPlot(next);
+          setPanel("plot");
+        },
+      ),
+      classroomCommands.register(
+        "math.parameters",
+        "修改选中函数图的参数，args.x/y/z/a/b/c/range 为数值",
+        (args) => {
+          const existing = selectedPlot(api);
+          if (!existing) {
+            throw new Error("请先选择函数图像");
+          }
+          const next = { ...existing.plot };
+          for (const key of ["x", "y", "z", "a", "b", "c", "range"] as const) {
+            if (args[key] !== undefined) {
+              if (
+                typeof args[key] !== "number" ||
+                !Number.isFinite(args[key])
+              ) {
+                throw new Error("函数参数无效");
+              }
+              next[key] = args[key] as number;
+            }
+          }
+          plotRef.current = existing;
+          createPlot(next, true);
+        },
+      ),
+      classroomCommands.register("canvas.cube", "插入标准线条立方体", () =>
+        classroomCommands.execute({
+          name: "tools.insert",
+          args: { kind: "cube" },
+        }),
+      ),
+      classroomCommands.register(
+        "canvas.summary",
+        "总结圈选或白板；args.whole=true 总结整板",
+        async (args) => summarize(!!args.whole),
+      ),
+      classroomCommands.register(
+        "record.start",
+        "开始录制，args.mode=audio|camera|screen|combined；录制时仍可使用白板",
+        async (args) => {
+          if (recording) {
+            throw new Error("当前已在录制");
+          }
+          const selectedMode =
+            typeof args.mode === "string" &&
+            ["audio", "camera", "screen", "combined"].includes(args.mode)
+              ? (args.mode as RecordingMode)
+              : mode;
+          await startRecording(selectedMode);
+        },
+      ),
+      classroomCommands.register(
+        "record.stop",
+        "停止并保存录制与文稿",
+        async () => {
+          if (!recording) {
+            throw new Error("当前未录制");
+          }
+          await stopRecording();
+        },
+      ),
+      classroomCommands.register(
+        "record.open",
+        "查看录音、视频、文稿和总结，args.id 可选",
+        (args) => {
+          if (typeof args.id === "string") {
+            setActiveId(args.id);
+          }
+          setPanel("record");
+        },
+      ),
+      classroomCommands.register(
+        "files.receive",
+        "开启或关闭本机局域网上屏，args.enabled=false关闭",
+        async (args) => {
+          if (!Capacitor.isNativePlatform()) {
+            throw new Error("局域网接收服务需要安卓安装版");
+          }
+          if (args.enabled === false) {
+            await NativeClassroom.stopReceiver();
+            setUrls([]);
+          } else {
+            const result = await NativeClassroom.startReceiver();
+            setUrls(result.urls);
+            setPanel("files");
+          }
+        },
+      ),
+      classroomCommands.register(
+        "files.open",
+        "打开已接收的课件，args.id 或 args.name；不指定则显示课件列表",
+        async (args) => {
+          if (!args.id && !args.name) {
+            setPanel("files");
+            return;
+          }
+          const local =
+            typeof args.name === "string"
+              ? recentFiles.current.get(args.name)
+              : undefined;
+          if (local) {
+            await showPreview(local);
+            return;
+          }
+          const file = uploads.find(
+            (item) => item.id === args.id || item.name === args.name,
+          );
+          if (!file) {
+            throw new Error("未找到课件，请先在本机课件中重新打开原文件");
+          }
+          await openUpload(file);
+        },
+      ),
+      classroomCommands.register(
+        "panel.open",
+        "显示浮层，args.panel=settings|record|files|ai",
+        (args) => {
+          if (
+            !["settings", "record", "files", "ai"].includes(String(args.panel))
+          ) {
+            throw new Error("此浮层不存在");
+          }
+          setPanel(args.panel as Panel);
+        },
+      ),
+      classroomCommands.register("panel.close", "关闭当前工具浮层", () =>
+        close(),
+      ),
+      classroomCommands.context("classroom", () => ({
+        recording,
+        recordingMode: mode,
+        panel,
+        files: [
+          ...uploads.map(({ id, name }) => ({ id, name })),
+          ...Array.from(recentFiles.current.keys(), (name) => ({ name })),
+        ],
+        recordings: records.map(({ id, created, duration }) => ({
+          id,
+          created,
+          duration,
+        })),
+      })),
+    ];
+    return () => registrations.forEach((stop) => stop());
+  });
+
   return (
     <div className="fc-classroom">
+      <BoardSwitcher api={api} />
+      <Teacher api={api} onCommand={execute} />
+      <TeachingTools api={api} />
       <ToolbarExtras>
         <div className="fc-toolbar-extras" role="group" aria-label="课堂工具">
           <button
@@ -1063,10 +1568,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           ))}
           <button
             aria-pressed={listening}
-            disabled={
-              (busy && !listening) ||
-              (recording && currentSettings().speech !== "local")
-            }
+            disabled={recording && currentSettings().speech !== "local"}
             onClick={() => {
               void toggleVoice().catch((failure) =>
                 setError(errorMessage(failure)),
@@ -1160,6 +1662,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   }
                 }}
               >
+                <LearningSettings />
                 <label>
                   AI 接口地址
                   <input
@@ -1662,11 +2165,13 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   hidden
                   ref={uploadInput}
                   type="file"
-                  accept=".pptx,.pdf,.png,.jpg,.jpeg,.webp,.gif"
+                  accept={DOCUMENT_ACCEPT}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (file) {
-                      setPreview(file);
+                      void showPreview(file).catch((failure) =>
+                        setError(errorMessage(failure)),
+                      );
                     }
                     event.target.value = "";
                   }}
@@ -1733,18 +2238,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       <button
                         disabled={busy}
                         onClick={() => {
-                          void run(async () => {
-                            const response = await fetch(
-                              Capacitor.convertFileSrc(file.path),
-                            );
-                            if (!response.ok) {
-                              throw new Error("无法读取文件");
-                            }
-                            const blob = await response.blob();
-                            setPreview(
-                              new File([blob], file.name, { type: blob.type }),
-                            );
-                          });
+                          void run(() => openUpload(file));
                         }}
                       >
                         打开预览
@@ -1765,8 +2259,8 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   ))
                 ) : (
                   <p>
-                    还没有收到文件。支持 PPTX 翻页播放、图片预览与
-                    PDF（取决于设备 PDF 支持）。
+                    还没有收到文件。手机选中文件即上传上屏，支持 PPT /
+                    PPTX、PDF、Word、Excel 和图片。
                   </p>
                 )}
               </>
@@ -1778,7 +2272,39 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         <FilePreview
           key={`${preview.name}-${preview.lastModified}`}
           file={preview}
-          onClose={() => setPreview(null)}
+          onClose={(advance = true) => {
+            previewReady.current?.reject(
+              new DOMException("课件已关闭", "AbortError"),
+            );
+            previewReady.current = null;
+            classroomCommands.invalidate();
+            previewRef.current = null;
+            setPreview(null);
+            const next = advance ? incoming.current.shift() : undefined;
+            if (next) {
+              void openUpload(next).catch((failure) =>
+                setError(errorMessage(failure)),
+              );
+            }
+          }}
+          listening={listening}
+          onReady={(failure) => {
+            const waiting = previewReady.current;
+            previewReady.current = null;
+            if (failure) {
+              waiting?.reject(new Error(failure));
+            } else {
+              waiting?.resolve();
+            }
+          }}
+          onVoice={() => {
+            void toggleVoice().catch((failure) =>
+              setError(errorMessage(failure)),
+            );
+          }}
+          onTools={() => {
+            void classroomCommands.execute({ name: "tools.open" });
+          }}
         />
       )}
     </div>

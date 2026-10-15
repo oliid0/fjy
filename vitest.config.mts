@@ -49,6 +49,10 @@ export default defineConfig({
   },
   //@ts-ignore
   test: {
+    include: [
+      "packages/**/*.{test,spec}.{ts,tsx}",
+      "excalidraw-app/**/*.{test,spec}.{ts,tsx}",
+    ],
     // Since hooks are running in stack in v2, which means all hooks run serially whereas
     // we need to run them in parallel
     sequence: {

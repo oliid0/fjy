@@ -1,0 +1,15 @@
+{
+  "source": "https://github.com/moonshine-ai/moonshine/blob/234f60faa0eb388b01cdf7e60aca232af37aefda/core/moonshine-model-file-metadata.generated.cpp",
+  "baseUrl": "https://download.moonshine.ai/model/tiny-streaming-zh/quantized_26_08_24/",
+  "license": "MIT",
+  "files": [
+    { "name": "adapter.ort", "size": 1318472, "crc32c": "hr7j6g==" },
+    { "name": "cross_kv.ort", "size": 1288120, "crc32c": "fiGyHw==" },
+    { "name": "decoder_kv.ort", "size": 19717336, "crc32c": "rr9O2A==" },
+    { "name": "encoder.ort", "size": 7772792, "crc32c": "BHPY3w==" },
+    { "name": "frontend.model.ort", "size": 27608, "crc32c": "4gF+xg==" },
+    { "name": "frontend.weights.ort", "size": 2090728, "crc32c": "Kv1kYQ==" },
+    { "name": "streaming_config.json", "size": 509, "crc32c": "wH/VeA==" },
+    { "name": "tokenizer.bin", "size": 74587, "crc32c": "nQJxPQ==" }
+  ]
+}

@@ -862,6 +862,7 @@ const ExcalidrawWrapper = () => {
         isCollaborating={isCollaborating}
         onPointerUpdate={collabAPI?.onPointerUpdate}
         UIOptions={{
+          unifiedToolbar: true,
           canvasActions: {
             toggleTheme: true,
             export: {
@@ -917,6 +918,7 @@ const ExcalidrawWrapper = () => {
           <OverwriteConfirmDialog.Actions.SaveToDisk />
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
+        {excalidrawAPI && <Classroom api={excalidrawAPI} />}
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
         <TTDDialogTrigger />
@@ -1062,7 +1064,6 @@ const ExcalidrawWrapper = () => {
           />
         )}
       </Excalidraw>
-      {excalidrawAPI && <Classroom api={excalidrawAPI} />}
     </div>
   );
 };

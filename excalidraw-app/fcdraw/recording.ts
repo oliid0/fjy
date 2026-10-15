@@ -57,6 +57,10 @@ export class BoardRecorder {
   private chunks: Blob[] = [];
   private stopPromise?: Promise<Blob>;
 
+  get audioStream() {
+    return this.streams[0];
+  }
+
   async start(mode: RecordingMode, onStopped: () => void) {
     if (
       !navigator.mediaDevices?.getUserMedia ||

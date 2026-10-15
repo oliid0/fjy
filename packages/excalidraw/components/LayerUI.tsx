@@ -31,6 +31,9 @@ import {
   SelectedShapeActions,
   ShapesSwitcher,
   CompactShapeActions,
+  ZoomActions,
+  UndoRedoActions,
+  ExitViewModeButton,
 } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
 import { LockButton } from "./LockButton";
@@ -163,6 +166,8 @@ const LayerUI = ({
   const editorInterface = useEditorInterface();
   const stylesPanelMode = useStylesPanelMode();
   const isCompactStylesPanel = stylesPanelMode === "compact";
+  const unifiedToolbar = UIOptions.unifiedToolbar;
+  const [showProperties, setShowProperties] = React.useState(false);
   const tunnels = useInitializeTunnels();
 
   const spacing = isCompactStylesPanel
@@ -489,6 +494,85 @@ const LayerUI = ({
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
 
+  const renderUnifiedToolbar = () => (
+    <>
+      {showProperties && !appState.viewModeEnabled && (
+        <div
+          className="fc-editor-properties"
+          role="dialog"
+          aria-label="画笔与对象属性"
+        >
+          <ToolButton
+            type="button"
+            icon={CloseIcon}
+            aria-label="关闭属性"
+            title="关闭属性"
+            onClick={() => setShowProperties(false)}
+          />
+          {renderSelectedShapeActions()}
+        </div>
+      )}
+      <div
+        className="fc-unified-toolbar"
+        role="toolbar"
+        aria-label="白板工具栏"
+      >
+        <div className="fc-toolbar-group" role="group" aria-label="文件与素材">
+          {renderTopLeftUI?.(editorInterface.formFactor === "phone", appState)}
+          <tunnels.MainMenuTunnel.Out />
+          <tunnels.DefaultSidebarTriggerTunnel.Out />
+        </div>
+        {!appState.viewModeEnabled ? (
+          <div
+            className="fc-toolbar-group"
+            role="group"
+            aria-label="书写与绘图"
+          >
+            <PenModeButton
+              checked={appState.penMode}
+              onChange={() => onPenModeToggle(null)}
+              title={t("toolBar.penMode")}
+              penDetected={appState.penDetected}
+            />
+            <LockButton
+              checked={appState.activeTool.locked}
+              onChange={onLockToggle}
+              title={t("toolBar.lock")}
+            />
+            <ShapesSwitcher
+              setAppState={setAppState}
+              activeTool={appState.activeTool}
+              UIOptions={UIOptions}
+              app={app}
+            />
+            <ToolButton
+              type="button"
+              icon={CircleIcon}
+              aria-label="画笔与对象属性"
+              title="画笔与对象属性"
+              selected={showProperties}
+              onClick={() => setShowProperties((value) => !value)}
+            />
+          </div>
+        ) : (
+          <ExitViewModeButton actionManager={actionManager} />
+        )}
+        <div className="fc-toolbar-group" role="group" aria-label="撤销与视图">
+          {!appState.viewModeEnabled && (
+            <UndoRedoActions renderAction={actionManager.renderAction} />
+          )}
+          <ZoomActions
+            renderAction={actionManager.renderAction}
+            zoom={appState.zoom}
+          />
+        </div>
+        <tunnels.ToolbarExtrasTunnel.Out />
+        <tunnels.FooterCenterTunnel.Out />
+        {renderTopRightUI?.(editorInterface.formFactor === "phone", appState)}
+      </div>
+    </>
+  );
+
   const layerUIJSX = (
     <>
       {/* ------------------------- tunneled UI ---------------------------- */}
@@ -605,7 +689,22 @@ const LayerUI = ({
           }
         />
       )}
-      {editorInterface.formFactor === "phone" && (
+      {unifiedToolbar && (
+        <>
+          {renderUnifiedToolbar()}
+          {renderSidebars()}
+          {appState.stats.open && !appState.viewModeEnabled && (
+            <div className="fc-editor-stats">
+              <Stats
+                app={app}
+                onClose={() => actionManager.executeAction(actionToggleStats)}
+                renderCustomStats={renderCustomStats}
+              />
+            </div>
+          )}
+        </>
+      )}
+      {!unifiedToolbar && editorInterface.formFactor === "phone" && (
         <MobileMenu
           app={app}
           appState={appState}
@@ -623,7 +722,7 @@ const LayerUI = ({
           UIOptions={UIOptions}
         />
       )}
-      {editorInterface.formFactor !== "phone" && (
+      {!unifiedToolbar && editorInterface.formFactor !== "phone" && (
         <>
           <div
             className="layer-ui__wrapper"

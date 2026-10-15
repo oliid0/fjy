@@ -129,6 +129,10 @@ export const startSystemSpeech = async (
 
 export const transcribe = async (blob: Blob): Promise<TranscriptLine[]> => {
   const settings = currentSettings();
+  if (settings.speech === "local") {
+    const { transcribeLocalRecording } = await import("./localSpeech");
+    return transcribeLocalRecording(blob);
+  }
   if (!settings.speechEndpoint) {
     throw new Error("请配置兼容音频转写的自定义接口");
   }

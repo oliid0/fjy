@@ -27,3 +27,7 @@ dev-dist
 html
 meta*.json
 .claude
+android/app/src/main/assets/speech/
+test-results/
+playwright-report/
+__pycache__/

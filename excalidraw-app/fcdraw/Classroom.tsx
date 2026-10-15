@@ -1,35 +1,41 @@
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCommonBounds } from "@excalidraw/element";
+import { ToolbarExtras } from "@excalidraw/excalidraw";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { QRCode } from "../share/QRCode";
 
-import { boardContext, chat, parseJSON, visualMessage } from "./ai";
+import {
+  boardContext,
+  chat,
+  parseJSON,
+  selectedBoardElements,
+  visualMessage,
+} from "./ai";
 import {
   drawPlot,
   insertCube,
   insertElements,
   insertionPoint,
   insertText,
+  selectedPlot,
   validateShapes,
 } from "./board";
 import { FilePreview } from "./FilePreview";
+import { localMathIntent } from "./intent";
 import { calculate, defaultPlot, plotExpression } from "./math";
 import { Classroom as NativeClassroom } from "./native";
+import { createNarrator } from "./narration";
+import { startLocalSpeech } from "./localSpeech";
 import {
   BoardRecorder,
   loadRecordings,
   saveRecordings,
   timestamp,
 } from "./recording";
-import {
-  BRAND,
-  currentSettings,
-  saveSettings,
-  validateEndpoint,
-} from "./settings";
+import { currentSettings, saveSettings, validateEndpoint } from "./settings";
 import { startSystemSpeech, transcribe } from "./speech";
 
 import "./classroom.scss";
@@ -38,12 +44,13 @@ import type { Plot } from "./math";
 import type { Upload } from "./native";
 import type { Recording, RecordingMode } from "./recording";
 import type { TranscriptLine } from "./speech";
+import type { LocalSpeechHandle } from "./localSpeech";
+import type { Settings } from "./settings";
 
-type Panel = "ai" | "math" | "plot" | "record" | "files" | "settings";
+type Panel = "ai" | "plot" | "record" | "files" | "settings";
 const titles: Record<Panel, string> = {
   ai: "AI 助教",
-  math: "数学计算",
-  plot: "函数实验室",
+  plot: "函数参数",
   record: "课堂录制",
   files: "课件 / 局域网快传",
   settings: "AI 与语音设置",
@@ -114,8 +121,13 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [wholeBoard, setWholeBoard] = useState(false);
-  const [mathInput, setMathInput] = useState("");
-  const [autoMath, setAutoMath] = useState(false);
+  const [autoMath, setAutoMath] = useState(() => currentSettings().autoMath);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [hasSelectedPlot, setHasSelectedPlot] = useState(false);
+  const [capture, setCapture] = useState<string>();
+  const capturedContext = useRef<Awaited<
+    ReturnType<typeof boardContext>
+  > | null>(null);
   const [plot, setPlot] = useState<Plot>(defaultPlot);
   const plotRef = useRef<{
     ids: string[];
@@ -123,6 +135,14 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   } | null>(null);
   const [listening, setListening] = useState(false);
   const stopSpeech = useRef<(() => void) | null>(null);
+  const localSpeech = useRef<LocalSpeechHandle | null>(null);
+  const finishVoice = useRef<(() => Promise<void>) | null>(null);
+  const voiceGeneration = useRef(0);
+  const recordingVoiceCommand = useRef(false);
+  const narrator = useRef<ReturnType<typeof createNarrator> | null>(null);
+  if (!narrator.current) {
+    narrator.current = createNarrator();
+  }
   const voiceRecorder = useRef<MediaRecorder | null>(null);
   const [mode, setMode] = useState<RecordingMode>("screen");
   const [recording, setRecording] = useState(false);
@@ -142,6 +162,31 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const returnFocus = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const active = records.find((item) => item.id === activeId);
+  const invalidateVoice = useCallback(() => {
+    voiceGeneration.current++;
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      const state = api.getAppState();
+      const selected = api
+        .getSceneElements()
+        .filter((el) => state.selectedElementIds[el.id]);
+      setHasSelection(selected.length > 0);
+      const graph = selectedPlot(api);
+      setHasSelectedPlot(!!graph);
+      if (graph) {
+        plotRef.current = graph;
+        setPlot((value) =>
+          JSON.stringify(value) === JSON.stringify(graph.plot)
+            ? value
+            : graph.plot,
+        );
+      }
+    };
+    refresh();
+    return api.onChange(refresh);
+  }, [api]);
 
   const persistRecords = useCallback(async (next: Recording[]) => {
     recordsRef.current = next;
@@ -167,7 +212,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         .catch((failure) => setError(errorMessage(failure)));
     }
     return () => {
+      invalidateVoice();
+      narrator.current?.stop();
       stopSpeech.current?.();
+      void localSpeech.current?.cancel().catch(() => {});
       recorder.current?.dispose();
       if (voiceRecorder.current?.state === "recording") {
         voiceRecorder.current.stop();
@@ -176,7 +224,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         void NativeClassroom.stopReceiver();
       }
     };
-  }, []);
+  }, [invalidateVoice]);
 
   useEffect(() => {
     if (!recording) {
@@ -218,6 +266,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, [panel]);
 
   const close = () => {
+    narrator.current?.stop();
+    capturedContext.current = null;
+    setCapture(undefined);
+    setWholeBoard(false);
     setPanel(null);
     returnFocus.current?.focus();
   };
@@ -247,16 +299,26 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   const recognize = useCallback(
     async (kind: "math" | "plot") => {
-      const context = await boardContext(api, wholeBoard);
-      if (!context.elements.length) {
+      const all = api.getSceneElements();
+      const selected = selectedBoardElements(api);
+      const source = selected.length
+        ? selected
+        : all.filter((el) => !el.customData?.fcGenerated);
+      if (!source.length) {
         throw new Error("请先书写内容，或框选需要识别的区域");
       }
+      const text = source
+        .filter((el) => el.type === "text")
+        .map((el) => (el.type === "text" ? el.text : ""))
+        .join("\n")
+        .trim();
       if (
-        context.text.trim() &&
-        !context.elements.some((el) => el.type === "freedraw")
+        text &&
+        !source.some((el) => el.type === "freedraw" || el.type === "image")
       ) {
-        return context.text.trim();
+        return text;
       }
+      const context = await boardContext(api);
       return (
         await chat([
           visualMessage(
@@ -268,11 +330,16 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         ])
       ).trim();
     },
-    [api, wholeBoard],
+    [api],
   );
 
   const solveMath = useCallback(
     async (input?: string, automatic = false) => {
+      const elements = api.getSceneElements();
+      const selected = automatic ? [] : selectedBoardElements(api);
+      const source = selected.length
+        ? selected
+        : elements.filter((el) => !el.customData?.fcGenerated);
       const expression = input || (await recognize("math"));
       if (expression === "NONE") {
         if (!automatic) {
@@ -281,13 +348,6 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       const answer = calculate(expression);
-      const elements = api.getSceneElements();
-      const selected = elements.filter(
-        (el) => api.getAppState().selectedElementIds[el.id],
-      );
-      const source = selected.length
-        ? selected
-        : elements.filter((el) => !el.customData?.fcGenerated);
       const position = source.length
         ? (() => {
             const lastInput = [...source]
@@ -301,8 +361,18 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             };
           })()
         : insertionPoint(api);
-      insertText(api, answer, position);
-      setMathInput(expression);
+      const lastSource = source[source.length - 1];
+      insertText(
+        api,
+        answer,
+        position,
+        lastSource
+          ? {
+              fcAnswerSource: lastSource.id,
+              fcAnswerVersion: lastSource.version,
+            }
+          : undefined,
+      );
       setOutput(`${expression} = ${answer}`);
       setStatus("计算结果已写入白板，可撤销或擦除");
     },
@@ -322,8 +392,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         plotRef.current = null;
         throw new Error("图像已被移动到历史或擦除，请重新插入函数图像");
       }
+      const origin = insertionPoint(api);
       const position =
-        replace && existing ? existing.position : insertionPoint(api);
+        replace && existing
+          ? existing.position
+          : { x: origin.x + 220, y: origin.y + 245 };
       const ids = drawPlot(
         api,
         next,
@@ -331,15 +404,33 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         replace ? existing?.ids : undefined,
       );
       plotRef.current = { ids, position };
+      api.updateScene({
+        appState: {
+          selectedElementIds: Object.fromEntries(ids.map((id) => [id, true])),
+        },
+      });
       setPlot(next);
       setStatus("函数图像已插入；调节参数可观察变化");
     },
     [api],
   );
 
+  const plotSelection = async () => {
+    const expression = await recognize("plot");
+    createPlot({
+      ...plot,
+      expression: plotExpression(expression),
+      surface: /^z\s*=/.test(expression),
+    });
+    setPanel("plot");
+  };
+
   const summarize = useCallback(
-    async (whole = wholeBoard) => {
-      const context = await boardContext(api, whole);
+    async (whole = false) => {
+      const context =
+        whole && capturedContext.current
+          ? capturedContext.current
+          : await boardContext(api, whole);
       if (!context.elements.length) {
         throw new Error("白板还没有内容");
       }
@@ -352,11 +443,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       setOutput(result);
       setPanel("ai");
     },
-    [api, wholeBoard],
+    [api],
   );
 
   const execute = useCallback(
-    async (text: string) => {
+    async (text: string, whole = false) => {
       setPrompt(text);
       if (/立方体|正方体/.test(text)) {
         insertCube(api);
@@ -364,15 +455,31 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       if (/总结|小结|概括/.test(text)) {
-        await summarize(/整|全部|这一板/.test(text));
+        await summarize(whole || /整|全部|这一板/.test(text));
+        return;
+      }
+      const localIntent = localMathIntent(text);
+      if (localIntent?.action === "plot") {
+        createPlot({
+          ...plot,
+          expression: localIntent.expression,
+          surface: localIntent.surface,
+        });
+        setPanel("plot");
+        return;
+      }
+      if (localIntent?.action === "calculate") {
+        await solveMath(localIntent.expression);
         return;
       }
       if (/^(?:帮我)?(?:计算|求值)(?:一下)?[，。!！\s]*$/.test(text)) {
         await solveMath();
-        setPanel("math");
         return;
       }
-      const context = await boardContext(api, wholeBoard);
+      const context =
+        whole && capturedContext.current
+          ? capturedContext.current
+          : await boardContext(api, whole);
       const response = parseJSON(
         await chat([
           {
@@ -424,7 +531,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         throw new Error("AI 返回了无法执行的操作，请重新描述");
       }
     },
-    [api, plot, wholeBoard, summarize, solveMath, createPlot],
+    [api, plot, summarize, solveMath, createPlot],
   );
 
   useEffect(() => {
@@ -459,6 +566,22 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       if (!last || (last.type === "text" && !/[=＝]\s*$/.test(last.text))) {
         return;
       }
+      if (
+        last.type === "freedraw" &&
+        (!currentSettings().apiKey || !currentSettings().model)
+      ) {
+        return;
+      }
+      if (
+        elements.some(
+          (el) =>
+            !el.isDeleted &&
+            el.customData?.fcAnswerSource === last.id &&
+            el.customData?.fcAnswerVersion === last.version,
+        )
+      ) {
+        return;
+      }
       timer = setTimeout(() => {
         if (signature === processed || actionBusy.current) {
           return;
@@ -485,7 +608,25 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, [api, autoMath, run, solveMath]);
 
   const toggleVoice = async () => {
+    narrator.current?.stop();
+    if (recording && currentSettings().speech === "local") {
+      recordingVoiceCommand.current = !recordingVoiceCommand.current;
+      setListening(recordingVoiceCommand.current);
+      setStatus(
+        recordingVoiceCommand.current
+          ? "录制继续，请说出下一条白板指令"
+          : "已结束指令监听，录制与文稿继续",
+      );
+      return;
+    }
     if (listening) {
+      if (finishVoice.current) {
+        await finishVoice.current();
+        return;
+      }
+      if (voiceRecorder.current?.state !== "recording") {
+        voiceGeneration.current++;
+      }
       stopSpeech.current?.();
       stopSpeech.current = null;
       if (voiceRecorder.current?.state === "recording") {
@@ -497,8 +638,79 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     if (recording) {
       throw new Error("录制中请使用文字指令，避免与录音争用麦克风");
     }
-    if (currentSettings().speech === "custom") {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (currentSettings().speech === "local") {
+      const generation = ++voiceGeneration.current;
+      const lines: TranscriptLine[] = [];
+      let finishing = false;
+      setListening(true);
+      setStatus("正在准备内置中文语音…");
+      try {
+        const finish = async () => {
+          if (finishing || generation !== voiceGeneration.current) {
+            return;
+          }
+          finishing = true;
+          const handle = localSpeech.current;
+          try {
+            await handle?.stop();
+            setListening(false);
+            localSpeech.current = null;
+            finishVoice.current = null;
+            if (generation !== voiceGeneration.current) {
+              return;
+            }
+            const text = lines
+              .map((line) => line.text)
+              .join("")
+              .trim();
+            if (!text) {
+              throw new Error("未识别到语音，请重试");
+            }
+            void run(() => execute(text));
+          } catch (failure) {
+            setListening(false);
+            setError(errorMessage(failure));
+          }
+        };
+        const handle = await startLocalSpeech(
+          (line) => {
+            lines.push(line);
+            if (finishVoice.current) {
+              void finish().catch(() => {});
+            }
+          },
+          (message) => {
+            if (generation === voiceGeneration.current) {
+              setListening(false);
+              setError(message);
+            }
+          },
+        );
+        if (generation !== voiceGeneration.current) {
+          await handle.cancel();
+          return;
+        }
+        localSpeech.current = handle;
+        finishVoice.current = finish;
+        setStatus("正在听，停顿后执行指令；也可再次点击结束语音");
+      } catch (failure) {
+        setListening(false);
+        throw failure;
+      }
+    } else if (currentSettings().speech === "custom") {
+      const generation = ++voiceGeneration.current;
+      setListening(true);
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (failure) {
+        setListening(false);
+        throw failure;
+      }
+      if (generation !== voiceGeneration.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const chunks: Blob[] = [];
       const recordingVoice = new MediaRecorder(stream);
       recordingVoice.ondataavailable = ({ data }) => {
@@ -508,11 +720,17 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       };
       recordingVoice.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
+        if (generation !== voiceGeneration.current) {
+          return;
+        }
         setListening(false);
         void run(async () => {
           const lines = await transcribe(
             new Blob(chunks, { type: recordingVoice.mimeType }),
           );
+          if (generation !== voiceGeneration.current) {
+            return;
+          }
           await execute(lines.map((line) => line.text).join(""));
         });
       };
@@ -526,11 +744,15 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       setListening(true);
       setStatus("正在听，请说出指令后再次点击语音按钮");
     } else {
+      const generation = ++voiceGeneration.current;
       setListening(true);
       setStatus("正在听，请说出指令…");
       try {
-        stopSpeech.current = await startSystemSpeech(
+        const stop = await startSystemSpeech(
           (text) => {
+            if (generation !== voiceGeneration.current) {
+              return;
+            }
             setListening(false);
             stopSpeech.current?.();
             stopSpeech.current = null;
@@ -543,6 +765,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             setError(message);
           },
         );
+        if (generation !== voiceGeneration.current) {
+          stop();
+        } else {
+          stopSpeech.current = stop;
+        }
       } catch (failure) {
         setListening(false);
         throw failure;
@@ -566,6 +793,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     ]);
 
   const startRecording = async () => {
+    narrator.current?.stop();
     if (listening) {
       throw new Error("请先结束语音指令再开始录制");
     }
@@ -577,7 +805,26 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     recordStarted.current = Date.now();
     setRecording(true);
     setStatus("录制中，可关闭浮层继续书写；屏幕模式录制当前白板画面");
-    if (currentSettings().speech === "system") {
+    if (currentSettings().speech === "local") {
+      try {
+        let offset = 0;
+        localSpeech.current = await startLocalSpeech(
+          (line) => {
+            transcript.current.push({ ...line, time: line.time + offset });
+            if (recordingVoiceCommand.current) {
+              recordingVoiceCommand.current = false;
+              setListening(false);
+              void run(() => execute(line.text));
+            }
+          },
+          (message) => setError(`录制继续，离线文稿暂不可用：${message}`),
+          instance.audioStream,
+        );
+        offset = (Date.now() - recordStarted.current) / 1000;
+      } catch (failure) {
+        setError(`录制继续，离线文稿暂不可用：${errorMessage(failure)}`);
+      }
+    } else if (currentSettings().speech === "system") {
       try {
         stopSpeech.current = await startSystemSpeech(
           (text) =>
@@ -602,6 +849,14 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   };
 
   const stopRecording = async () => {
+    recordingVoiceCommand.current = false;
+    setListening(false);
+    try {
+      await localSpeech.current?.stop();
+    } catch (failure) {
+      setError(`录制继续保存；文稿收尾失败：${errorMessage(failure)}`);
+    }
+    localSpeech.current = null;
     stopSpeech.current?.();
     stopSpeech.current = null;
     const result = await recorder.current!.stop();
@@ -646,59 +901,120 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   return (
     <div className="fc-classroom">
-      <nav className="fc-dock" aria-label="教学与会议工具">
-        <a
-          href={BRAND.website}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fc-brand"
-        >
-          <b>Fc</b>
-          <span>方成教育</span>
-        </a>
-        {(Object.keys(titles) as Panel[]).map((value) => (
+      <ToolbarExtras>
+        <div className="fc-toolbar-extras" role="group" aria-label="课堂工具">
+          {hasSelection && (
+            <div
+              className="fc-toolbar-context"
+              role="group"
+              aria-label="选区操作"
+            >
+              <button
+                disabled={busy}
+                onClick={() => {
+                  void run(() => solveMath());
+                }}
+              >
+                计算选区
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  void run(plotSelection);
+                }}
+              >
+                绘制函数
+              </button>
+              {hasSelectedPlot && (
+                <button
+                  aria-expanded={panel === "plot"}
+                  onClick={() => open("plot")}
+                >
+                  调节函数
+                </button>
+              )}
+              <button
+                disabled={busy}
+                onClick={() => {
+                  void run(() => summarize(false));
+                }}
+              >
+                总结选区
+              </button>
+              <button
+                disabled={busy}
+                aria-expanded={panel === "ai"}
+                onClick={() => {
+                  capturedContext.current = null;
+                  setCapture(undefined);
+                  setWholeBoard(false);
+                  open("ai");
+                }}
+              >
+                选区 AI
+              </button>
+            </div>
+          )}
           <button
-            key={value}
-            aria-expanded={panel === value}
-            aria-controls="fc-panel"
-            onClick={() => open(value)}
-          >
-            {value === "record" && recording
-              ? `● ${timestamp(elapsed)}`
-              : titles[value]}
-          </button>
-        ))}
-        <button
-          aria-pressed={listening}
-          disabled={busy || recording}
-          onClick={() => {
-            void toggleVoice().catch((failure) =>
-              setError(errorMessage(failure)),
-            );
-          }}
-        >
-          {listening ? "■ 结束语音" : "语音指令"}
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => {
-            void run(() => summarize());
-          }}
-        >
-          总结白板
-        </button>
-        {recording && (
-          <button
-            className="fc-stop"
             disabled={busy}
+            aria-expanded={panel === "ai" && wholeBoard}
             onClick={() => {
-              void run(stopRecording);
+              void run(async () => {
+                const context = await boardContext(api, true);
+                if (!context.elements.length) {
+                  throw new Error("请先在白板书写内容");
+                }
+                setCapture(context.image);
+                capturedContext.current = context;
+                setWholeBoard(true);
+                setPanel("ai");
+              });
             }}
           >
-            停止录制
+            截屏
           </button>
-        )}
-      </nav>
+          {(["record", "files", "settings"] as const).map((value) => (
+            <button
+              key={value}
+              aria-expanded={panel === value}
+              aria-label={titles[value]}
+              aria-controls="fc-panel"
+              onClick={() => open(value)}
+            >
+              {value === "record" && recording
+                ? `● ${timestamp(elapsed)}`
+                : { record: "录制", files: "课件快传", settings: "设置" }[
+                    value
+                  ]}
+            </button>
+          ))}
+          <button
+            aria-pressed={listening}
+            disabled={
+              (busy && !listening) ||
+              (recording && currentSettings().speech !== "local")
+            }
+            onClick={() => {
+              void toggleVoice().catch((failure) =>
+                setError(errorMessage(failure)),
+              );
+            }}
+          >
+            {listening ? "■ 结束语音" : "语音指令"}
+          </button>
+          {recording && (
+            <button
+              className="fc-stop"
+              disabled={busy}
+              onClick={() => {
+                void run(stopRecording);
+              }}
+            >
+              停止录制
+            </button>
+          )}
+        </div>
+      </ToolbarExtras>
       {(error || status || busy) && (
         <div
           className={`fc-notice ${error ? "fc-error" : ""}`}
@@ -750,6 +1066,9 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     if (settings.speechEndpoint) {
                       validateEndpoint(settings.speechEndpoint);
                     }
+                    if (settings.ttsEndpoint) {
+                      validateEndpoint(settings.ttsEndpoint);
+                    }
                     saveSettings(settings, remember);
                     setStatus("设置已保存");
                     setError("");
@@ -798,14 +1117,20 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     onChange={(event) =>
                       setSettings({
                         ...settings,
-                        speech: event.target.value as "system" | "custom",
+                        speech: event.target.value as Settings["speech"],
                       })
                     }
                   >
+                    <option value="local">内置离线中文语音（安卓版）</option>
                     <option value="system">安卓 / 浏览器系统语音识别</option>
                     <option value="custom">自定义语音转写接口</option>
                   </select>
                 </label>
+                {settings.speech === "local" && (
+                  <p>
+                    中文模型随安卓版安装，识别在本机完成，不依赖系统语音服务。录制文稿与录音共用同一麦克风。
+                  </p>
+                )}
                 {settings.speech === "custom" && (
                   <>
                     <label>
@@ -855,6 +1180,38 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     </p>
                   </>
                 )}
+                <details>
+                  <summary>语音播报（可选）</summary>
+                  <label>
+                    IndexTTS / 自定义播报接口
+                    <input
+                      type="url"
+                      value={settings.ttsEndpoint}
+                      placeholder="http://192.168.1.10:8766/v1/audio/speech"
+                      onChange={(event) =>
+                        setSettings({
+                          ...settings,
+                          ttsEndpoint: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    播报服务密钥
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={settings.ttsKey}
+                      onChange={(event) =>
+                        setSettings({ ...settings, ttsKey: event.target.value })
+                      }
+                    />
+                  </label>
+                  <p>
+                    IndexTTS
+                    运行在局域网电脑上。留空时不启用播报；不影响内置语音识别。
+                  </p>
+                </details>
                 <label className="fc-check">
                   <input
                     type="checkbox"
@@ -876,6 +1233,20 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   />
                   录制文稿完成后自动生成 AI 总结
                 </label>
+                <label className="fc-check">
+                  <input
+                    type="checkbox"
+                    checked={autoMath}
+                    onChange={(event) => {
+                      setAutoMath(event.target.checked);
+                      setSettings({
+                        ...settings,
+                        autoMath: event.target.checked,
+                      });
+                    }}
+                  />
+                  停笔后自动补全算式结果
+                </label>
                 <p>
                   AI
                   截图、语音或录制转写会发送至你配置的服务。系统语音是否联网取决于设备语音服务。
@@ -887,18 +1258,25 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             )}
             {panel === "ai" && (
               <>
+                {capture && (
+                  <img className="fc-capture" src={capture} alt="白板截图" />
+                )}
                 <label className="fc-check">
                   <input
                     type="checkbox"
                     checked={wholeBoard}
-                    onChange={(event) => setWholeBoard(event.target.checked)}
+                    onChange={(event) => {
+                      capturedContext.current = null;
+                      setCapture(undefined);
+                      setWholeBoard(event.target.checked);
+                    }}
                   />
                   分析整个白板（关闭时优先使用框选区域）
                 </label>
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void run(() => execute(prompt));
+                    void run(() => execute(prompt, wholeBoard));
                   }}
                 >
                   <label>
@@ -930,7 +1308,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   <button
                     disabled={busy}
                     onClick={() => {
-                      void run(() => summarize());
+                      void run(() => summarize(wholeBoard));
                     }}
                   >
                     总结选区 / 白板
@@ -950,6 +1328,21 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 {output && (
                   <>
                     <div className="fc-output">{output}</div>
+                    {currentSettings().ttsEndpoint && (
+                      <div className="fc-actions">
+                        <button
+                          disabled={busy || listening || recording}
+                          onClick={() => {
+                            void run(() => narrator.current!.speak(output));
+                          }}
+                        >
+                          朗读回答
+                        </button>
+                        <button onClick={() => narrator.current?.stop()}>
+                          停止朗读
+                        </button>
+                      </div>
+                    )}
                     <button
                       onClick={() => {
                         insertText(api, output);
@@ -962,109 +1355,62 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 )}
               </>
             )}
-            {panel === "math" && (
-              <>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void run(() => solveMath(mathInput));
-                  }}
-                >
-                  <label>
-                    数学表达式
-                    <textarea
-                      value={mathInput}
-                      onChange={(event) => setMathInput(event.target.value)}
-                      placeholder="1+1= / sqrt(-1) / diff(x^3,x) / integrate(sin(x),x)"
-                    />
-                  </label>
-                  <button className="fc-primary" disabled={busy}>
-                    计算并写入白板
-                  </button>
-                </form>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    void run(() => solveMath());
-                  }}
-                >
-                  识别框选 / 手写算式并计算
-                </button>
-                <label className="fc-check">
-                  <input
-                    type="checkbox"
-                    checked={autoMath}
-                    onChange={(event) => setAutoMath(event.target.checked)}
-                  />
-                  停笔后自动补全算式结果
-                </label>
-                <p>
-                  自动模式识别以等号结束的文字或手写算式。手写需要视觉模型；复杂计算示例：defint(x^2,0,1,x)、limit(sin(x)/x,x,0)、solve(x^2-1,x)。
-                </p>
-                {output && <div className="fc-output">{output}</div>}
-              </>
-            )}
             {panel === "plot" && (
               <>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void run(async () => createPlot(plot));
-                  }}
-                >
-                  <label>
-                    函数表达式
-                    <input
-                      value={plot.expression}
-                      onChange={(event) =>
-                        setPlot({ ...plot, expression: event.target.value })
-                      }
-                      placeholder="x+1 或 sin(x*y)"
-                    />
-                  </label>
-                  <label className="fc-check">
-                    <input
-                      type="checkbox"
-                      checked={plot.surface}
-                      onChange={(event) =>
-                        setPlot({ ...plot, surface: event.target.checked })
-                      }
-                    />
-                    三维曲面 z=f(x,y)
-                  </label>
-                  <label>
-                    坐标范围 ±
-                    <input
-                      type="number"
-                      min="0.1"
-                      max="1000"
-                      step="0.1"
-                      value={plot.range}
-                      onChange={(event) =>
-                        setPlot({ ...plot, range: Number(event.target.value) })
-                      }
-                    />
-                  </label>
-                  <button className="fc-primary" disabled={busy}>
-                    插入函数图像
-                  </button>
-                </form>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    void run(async () => {
-                      const expression = await recognize("plot");
-                      const next = {
-                        ...plot,
-                        expression: plotExpression(expression),
-                        surface: /^z\s*=/.test(expression),
-                      };
-                      createPlot(next);
-                    });
-                  }}
-                >
-                  识别框选函数并绘图
-                </button>
+                <p>
+                  <strong>
+                    {plot.surface ? "z" : "y"} = {plot.expression}
+                  </strong>
+                </p>
+                <details>
+                  <summary>表达式与坐标范围</summary>
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void run(async () => createPlot(plot, !!plotRef.current));
+                    }}
+                  >
+                    <label>
+                      函数表达式
+                      <input
+                        value={plot.expression}
+                        onChange={(event) =>
+                          setPlot({ ...plot, expression: event.target.value })
+                        }
+                        placeholder="x+1 或 sin(x*y)"
+                      />
+                    </label>
+                    <label className="fc-check">
+                      <input
+                        type="checkbox"
+                        checked={plot.surface}
+                        onChange={(event) =>
+                          setPlot({ ...plot, surface: event.target.checked })
+                        }
+                      />
+                      三维曲面 z=f(x,y)
+                    </label>
+                    <label>
+                      坐标范围 ±
+                      <input
+                        type="number"
+                        min="0.1"
+                        max="1000"
+                        step="0.1"
+                        value={plot.range}
+                        onChange={(event) =>
+                          setPlot({
+                            ...plot,
+                            range: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <button className="fc-primary" disabled={busy}>
+                      更新函数图像
+                    </button>
+                  </form>
+                </details>
                 <p>
                   x、y 控制采样区间的平移，z 控制输出偏移；a、b、c
                   可用于表达式。拖动后更新当前图像。
@@ -1147,19 +1493,49 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 {active ? (
                   <>
                     <RecordingPlayer recording={active} />
+                    {active.summary && currentSettings().ttsEndpoint && (
+                      <div className="fc-actions">
+                        <button
+                          disabled={busy || listening || recording}
+                          onClick={() => {
+                            void run(() =>
+                              narrator.current!.speak(active.summary),
+                            );
+                          }}
+                        >
+                          朗读总结
+                        </button>
+                        <button onClick={() => narrator.current?.stop()}>
+                          停止朗读
+                        </button>
+                      </div>
+                    )}
                     <div className="fc-actions">
                       <button
                         disabled={busy}
                         onClick={() => {
                           void run(async () => {
                             const lines = await transcribe(active.blob);
+                            const updated = {
+                              ...active,
+                              transcript: lines,
+                              summary: "",
+                            };
                             await persistRecords(
                               recordsRef.current.map((item) =>
-                                item.id === active.id
-                                  ? { ...item, transcript: lines, summary: "" }
-                                  : item,
+                                item.id === active.id ? updated : item,
                               ),
                             );
+                            if (currentSettings().autoSummary && lines.length) {
+                              const summary = await summaryFor(updated);
+                              await persistRecords(
+                                recordsRef.current.map((item) =>
+                                  item.id === active.id
+                                    ? { ...item, summary }
+                                    : item,
+                                ),
+                              );
+                            }
                           });
                         }}
                       >

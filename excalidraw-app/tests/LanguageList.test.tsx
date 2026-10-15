@@ -13,8 +13,9 @@ describe("Test LanguageList", () => {
   it("rerenders UI on language change", async () => {
     await render(<ExcalidrawApp />);
 
-    // select rectangle tool to show properties menu
+    // Properties are explicitly opened from the shared bottom toolbar.
     UI.clickTool("rectangle");
+    fireEvent.click(screen.getByRole("button", { name: "画笔与对象属性" }));
     // english lang should display `thin` label
     expect(screen.queryByTitle(/thin/i)).not.toBeNull();
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);

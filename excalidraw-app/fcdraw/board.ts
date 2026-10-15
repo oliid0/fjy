@@ -53,9 +53,17 @@ export const insertText = (
   api: ExcalidrawImperativeAPI,
   text: string,
   position = insertionPoint(api),
+  customData?: Record<string, unknown>,
 ) =>
   insertElements(api, [
-    { type: "text", ...position, text, fontSize: 24, fontFamily: 2 },
+    {
+      type: "text",
+      ...position,
+      text,
+      fontSize: 24,
+      fontFamily: 2,
+      customData,
+    },
   ]);
 
 export const insertCube = (api: ExcalidrawImperativeAPI) => {
@@ -215,8 +223,61 @@ export const drawPlot = (
       strokeWidth: 2,
     });
   }
-  const ids = insertElements(api, skeletons, replaceIds);
+  const plotId = crypto.randomUUID();
+  const ids = insertElements(
+    api,
+    skeletons.map((shape) => ({
+      ...shape,
+      groupIds: [plotId],
+      customData: {
+        fcPlot: {
+          id: plotId,
+          plot,
+          position,
+          origin: { x: shape.x || 0, y: shape.y || 0 },
+        },
+      },
+    })),
+    replaceIds,
+  );
   return ids;
+};
+
+export const selectedPlot = (api: ExcalidrawImperativeAPI) => {
+  const elements = api.getSceneElements();
+  const selected = elements.find(
+    (el) =>
+      api.getAppState().selectedElementIds[el.id] && el.customData?.fcPlot,
+  );
+  const metadata = selected?.customData?.fcPlot;
+  if (
+    !selected ||
+    !metadata ||
+    typeof metadata.id !== "string" ||
+    typeof metadata.plot?.expression !== "string" ||
+    typeof metadata.plot.surface !== "boolean" ||
+    !["x", "y", "z", "a", "b", "c", "range"].every((key) =>
+      Number.isFinite(metadata.plot[key]),
+    ) ||
+    ![
+      metadata.position?.x,
+      metadata.position?.y,
+      metadata.origin?.x,
+      metadata.origin?.y,
+    ].every(Number.isFinite)
+  ) {
+    return null;
+  }
+  return {
+    plot: metadata.plot as Plot,
+    ids: elements
+      .filter((el) => el.customData?.fcPlot?.id === metadata.id)
+      .map((el) => el.id),
+    position: {
+      x: metadata.position.x + selected.x - metadata.origin.x,
+      y: metadata.position.y + selected.y - metadata.origin.y,
+    },
+  };
 };
 
 export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {

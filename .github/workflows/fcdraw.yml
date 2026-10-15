@@ -32,6 +32,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm test:other
       - run: pnpm test
+      - name: Verify optional IndexTTS adapter
+        run: python -m unittest discover -s services/index-tts -p 'test_*.py'
 
   android:
     runs-on: ubuntu-latest
@@ -61,11 +63,48 @@ jobs:
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
       - run: pnpm exec cap sync android
+      - name: Install browser for layout and interaction checks
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify production whiteboard interactions
+        run: pnpm exec playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fcdraw-UI-verification
+          path: test-results
+          if-no-files-found: warn
+      - uses: actions/cache@v4
+        with:
+          path: android/app/src/main/assets/speech
+          key: fcdraw-speech-${{ hashFiles('scripts/speech-models.json') }}
+      - name: Bundle offline Chinese speech model
+        run: node scripts/fetch-speech-models.mjs
       - name: Package and verify Android
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug testDebugUnitTest lintDebug --no-daemon
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify bundled offline speech on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: cd android && ./gradlew connectedDebugAndroidTest --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fcdraw-Android-verification
+          path: |
+            android/app/build/reports
+            android/app/build/outputs/androidTest-results
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: Fcdraw-Android-APK

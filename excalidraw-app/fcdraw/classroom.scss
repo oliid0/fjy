@@ -12,68 +12,6 @@
     --fc-blue: #8eafff;
   }
 
-  .excalidraw .FixedSideContainer_side_left.shapes-section-container {
-    top: auto;
-    bottom: calc(88px + env(safe-area-inset-bottom));
-    left: 12px;
-    right: 12px;
-    margin-inline: auto;
-    transform: none;
-    width: max-content;
-    max-width: calc(100% - 24px);
-    max-height: 72px;
-
-    .Stack_vertical {
-      grid-auto-flow: column;
-      grid-template-columns: none;
-      grid-template-rows: auto;
-      grid-auto-columns: min-content;
-      align-items: center;
-    }
-    .App-toolbar {
-      max-width: calc(100vw - 24px);
-      overflow-x: auto;
-    }
-    .App-toolbar__divider {
-      width: 1px !important;
-      height: 24px !important;
-    }
-    .ToolIcon {
-      flex-shrink: 0;
-    }
-  }
-
-  .excalidraw .FixedSideContainer_side_top {
-    top: auto;
-    bottom: calc(158px + env(safe-area-inset-bottom));
-
-    .App-menu_top {
-      align-items: end;
-    }
-    .App-menu_top__left {
-      display: flex;
-      flex-direction: column-reverse;
-    }
-    .dropdown-menu-container {
-      max-height: calc(100dvh - 220px);
-      overflow: auto;
-    }
-    .selected-shape-actions-container {
-      max-height: calc(100dvh - 240px);
-      overflow: auto;
-    }
-  }
-
-  .excalidraw .layer-ui__wrapper__footer {
-    bottom: calc(155px + env(safe-area-inset-bottom));
-    pointer-events: none;
-  }
-
-  .excalidraw .App-bottom-bar {
-    bottom: calc(88px + env(safe-area-inset-bottom));
-    max-height: calc(100dvh - 190px);
-  }
-
   .excalidraw .help-icon,
   .excalidraw .encrypted-icon,
   .excalidraw .HintViewer {
@@ -187,62 +125,160 @@
   }
 }
 
-.fc-dock {
-  position: absolute;
-  z-index: 8;
-  bottom: calc(10px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100% - 24px);
-  width: max-content;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--fc-border);
-  border-radius: 18px;
-  background: var(--fc-surface);
-  box-shadow: 0 8px 32px #17243c20;
-  overflow-x: auto;
+.excalidraw-app .excalidraw {
+  .fc-unified-toolbar {
+    --default-button-size: 48px;
+    --lg-button-size: 48px;
+    --mobile-action-button-size: 48px;
+    position: absolute;
+    z-index: 10;
+    inset: auto 8px calc(8px + env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 64px;
+    max-width: calc(100% - 16px);
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid var(--fc-border);
+    border-radius: 14px;
+    background: var(--fc-surface);
+    box-shadow: 0 4px 20px #17243c18;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    pointer-events: auto;
 
-  button {
-    flex-shrink: 0;
+    > *,
+    .ToolIcon,
+    .ToolIcon__icon,
+    button {
+      flex-shrink: 0;
+    }
+    .ToolIcon,
+    .ToolIcon__icon,
+    .main-menu-trigger,
+    .default-sidebar-trigger,
+    .undo-redo-buttons button,
+    .zoom-actions button {
+      min-width: 48px;
+      min-height: 48px;
+    }
+    .ToolIcon__keybinding {
+      display: none;
+    }
+    .fc-toolbar-group > .Stack_vertical {
+      grid-auto-flow: column;
+      grid-template-columns: none;
+      grid-template-rows: auto;
+      grid-auto-columns: min-content;
+      align-items: center;
+    }
+    .zoom-actions,
+    .undo-redo-buttons {
+      box-shadow: none;
+    }
+    .footer-center:empty {
+      display: none;
+    }
+    .excalidraw-ui-top-right {
+      margin: 0;
+    }
+  }
+  .fc-toolbar-group,
+  .fc-toolbar-extras {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .fc-toolbar-context {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    order: 2;
+    border-inline-start: 1px solid var(--fc-border);
+    padding-inline-start: 8px;
+  }
+  .fc-toolbar-group + .fc-toolbar-group,
+  .fc-toolbar-extras {
+    border-inline-start: 1px solid var(--fc-border);
+    padding-inline-start: 8px;
+  }
+  .fc-toolbar-extras button {
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fc-ink);
+    font: 500 14px system-ui, "Microsoft YaHei", sans-serif;
     white-space: nowrap;
-    border-color: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+    &:hover {
+      background: var(--button-hover-bg);
+    }
+    &[aria-expanded="true"],
+    &[aria-pressed="true"] {
+      background: #245bd6;
+      color: white;
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    &:focus-visible {
+      outline: 3px solid var(--fc-blue);
+      outline-offset: -3px;
+    }
   }
-  button[aria-expanded="true"],
-  button[aria-pressed="true"] {
-    background: #245bd6;
-    color: white;
+  .fc-editor-properties {
+    position: absolute;
+    z-index: 12;
+    left: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    max-height: calc(100% - 104px);
+    max-width: calc(100% - 24px);
+    overflow: auto;
+    border-radius: 12px;
+    background: var(--fc-surface);
+    box-shadow: 0 4px 24px #17243c22;
+    pointer-events: auto;
+    > .ToolIcon {
+      margin-left: auto;
+      display: block;
+    }
+    .selected-shape-actions {
+      position: static;
+    }
+  }
+  .fc-editor-stats {
+    position: absolute;
+    z-index: 12;
+    right: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    max-height: calc(100% - 104px);
+    overflow: auto;
+    .exc-stats {
+      position: static;
+    }
+  }
+  .sidebar {
+    top: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    right: 12px;
+    max-width: calc(100% - 24px);
+    border-radius: 12px;
   }
 }
 
-.fc-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  text-decoration: none;
-  white-space: nowrap;
-  font-size: 14px;
-}
-.fc-brand b {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  background: #245bd6;
-  color: white;
-  border-radius: 12px;
-  font-size: 22px;
-}
 .fc-panel {
   position: absolute;
   z-index: 9;
   right: 16px;
-  bottom: calc(172px + env(safe-area-inset-bottom));
+  bottom: calc(84px + env(safe-area-inset-bottom));
   width: min(480px, calc(100% - 32px));
-  max-height: calc(100dvh - 205px);
+  max-height: calc(100dvh - 104px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--fc-border);
@@ -271,7 +307,7 @@
   z-index: 10;
   left: 50%;
   transform: translateX(-50%);
-  top: 16px;
+  bottom: calc(86px + env(safe-area-inset-bottom));
   max-width: min(720px, calc(100% - 24px));
   background: var(--fc-surface);
   border: 1px solid var(--fc-border);
@@ -298,6 +334,23 @@
   line-height: 1.8;
   margin: 18px 0;
   user-select: text;
+}
+.fc-capture {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  margin: 16px auto;
+  border: 1px solid var(--fc-border);
+  border-radius: 8px;
+}
+.fc-classroom .fc-slider {
+  margin: 8px 0;
+  gap: 4px;
+  font-size: 14px;
+  input {
+    min-height: 32px;
+  }
 }
 .fc-actions {
   display: flex;
@@ -348,7 +401,7 @@
 .fc-preview {
   position: absolute;
   z-index: 11;
-  inset: 24px 24px 180px;
+  inset: 24px 24px 90px;
   display: flex;
   flex-direction: column;
   background: var(--fc-surface);
@@ -396,16 +449,8 @@
     right: 8px;
     width: calc(100% - 16px);
   }
-  .fc-brand span {
-    display: none;
-  }
-  .fc-dock {
-    left: 8px;
-    transform: none;
-    max-width: calc(100% - 16px);
-  }
   .fc-preview {
-    inset: 8px 8px 174px;
+    inset: 8px 8px 90px;
   }
   .fc-preview.fc-preview--fullscreen {
     inset: 0;

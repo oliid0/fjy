@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 export const BRAND = {
   name: "Fcdraw",
   company: "方成教育",
@@ -8,22 +10,28 @@ export type Settings = {
   endpoint: string;
   model: string;
   apiKey: string;
-  speech: "system" | "custom";
+  speech: "local" | "system" | "custom";
   speechEndpoint: string;
   speechKey: string;
   speechModel: string;
+  ttsEndpoint: string;
+  ttsKey: string;
   autoSummary: boolean;
+  autoMath: boolean;
 };
 
 export const defaults: Settings = {
   endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
   model: "",
   apiKey: "",
-  speech: "system",
+  speech: Capacitor.isNativePlatform() ? "local" : "system",
   speechEndpoint: "",
   speechKey: "",
   speechModel: "whisper-1",
+  ttsEndpoint: "",
+  ttsKey: "",
   autoSummary: true,
+  autoMath: true,
 };
 
 export const loadSettings = (): Settings => {
@@ -40,7 +48,11 @@ export const loadSettings = (): Settings => {
 export const saveSettings = (settings: Settings, rememberKey: boolean) => {
   sessionStorage.setItem(
     "fcdraw-keys",
-    JSON.stringify({ apiKey: settings.apiKey, speechKey: settings.speechKey }),
+    JSON.stringify({
+      apiKey: settings.apiKey,
+      speechKey: settings.speechKey,
+      ttsKey: settings.ttsKey,
+    }),
   );
   localStorage.setItem(
     "fcdraw-settings",
@@ -48,6 +60,7 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
       ...settings,
       apiKey: rememberKey ? settings.apiKey : "",
       speechKey: rememberKey ? settings.speechKey : "",
+      ttsKey: rememberKey ? settings.ttsKey : "",
     }),
   );
 };

@@ -1,6 +1,7 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { exportToBlob } from "@excalidraw/excalidraw";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
+import { getSelectedElements } from "@excalidraw/element";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -82,14 +83,18 @@ export const chat = async (
   return content;
 };
 
+export const selectedBoardElements = (api: ExcalidrawImperativeAPI) =>
+  getSelectedElements(api.getSceneElements(), api.getAppState(), {
+    includeBoundTextElement: true,
+    includeElementsInFrames: true,
+  });
+
 export const boardContext = async (
   api: ExcalidrawImperativeAPI,
   wholeBoard = false,
 ) => {
   const all = api.getSceneElements();
-  const selected = all.filter(
-    (el) => api.getAppState().selectedElementIds[el.id],
-  );
+  const selected = selectedBoardElements(api);
   const elements = !wholeBoard && selected.length ? selected : all;
   const text = elements
     .filter((el) => el.type === "text")

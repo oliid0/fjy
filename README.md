@@ -12,6 +12,6 @@
 
 使用 pnpm 10.28.2 安装依赖。验证命令：`pnpm check`、`pnpm lint`、`pnpm test`。不包含 Cargo。应用内部保留上游包名和文件格式标识，以兼容已有白板文档；第三方版权归其所有者，品牌不代表第三方代码原创。
 
-推送 main 后，GitHub Actions 先执行检查、lint 与测试，再打包 Web 和安卓调试 APK 并执行 Android 单元测试与 lint。成功后从工作流的 Artifacts 下载 `Fcdraw-Android-APK`。调试 APK 可直接安装测试；商店发布签名需另行配置自己的密钥。
+推送 main 后，GitHub Actions 并行执行检查、lint、测试与 Web / 安卓调试 APK 打包，并执行 Android 单元测试与 lint。工作流全部成功后从 Artifacts 下载 `Fcdraw-Android-APK`。调试 APK 可直接安装测试；商店发布签名需另行配置自己的密钥。
 
 浏览器自定义接口需允许 CORS，录音需要 HTTPS 或 localhost。API 密钥默认仅存当前会话，勾选记住后才保存在本机。白板截图和音频只在相关 AI/转写操作时发送至配置的服务。

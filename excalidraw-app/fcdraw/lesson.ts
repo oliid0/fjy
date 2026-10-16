@@ -9,6 +9,7 @@ import { getDataURL } from "@excalidraw/excalidraw/data/blob";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 import type { FileId } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { insertionPoint } from "./board";
 import { classroomCommands } from "./commands";
@@ -360,7 +361,23 @@ export class LessonCanvas {
       [0, 0],
       [command.width, command.height],
     ];
-    let renderedVersion = 0;
+    const fingerprint = (element: ExcalidrawElement) =>
+      JSON.stringify({
+        type: element.type,
+        x: element.x,
+        y: element.y,
+        angle: element.angle,
+        color: element.strokeColor,
+        strokeWidth: element.strokeWidth,
+        opacity: element.opacity,
+        text: element.type === "text" ? element.text : undefined,
+        fontSize: element.type === "text" ? element.fontSize : undefined,
+        fontFamily: element.type === "text" ? element.fontFamily : undefined,
+        points: "points" in element ? element.points : undefined,
+        width: element.type === "text" ? undefined : element.width,
+        height: element.type === "text" ? undefined : element.height,
+      });
+    let renderedFingerprint: string | undefined;
     let renderedInk: unknown;
     let userEdited = false;
     const render = async (progress: number) => {
@@ -390,8 +407,8 @@ export class LessonCanvas {
         .find((element) => element.id === id);
       if (
         !this.document &&
-        renderedVersion &&
-        (!existing || existing.version !== renderedVersion)
+        renderedFingerprint &&
+        (!existing || fingerprint(existing) !== renderedFingerprint)
       ) {
         userEdited = true;
         return;
@@ -507,7 +524,6 @@ export class LessonCanvas {
       const converted = convertToExcalidrawElements([skeleton], {
         regenerateIds: false,
       });
-      renderedVersion = converted[0].version;
       this.api.updateScene({
         elements: [
           ...this.api.getSceneElements().filter((element) => element.id !== id),
@@ -518,6 +534,10 @@ export class LessonCanvas {
             ? CaptureUpdateAction.IMMEDIATELY
             : CaptureUpdateAction.NEVER,
       });
+      renderedFingerprint = fingerprint(
+        this.api.getSceneElements().find((element) => element.id === id) ||
+          converted[0],
+      );
       if (progress === 1) {
         const state = this.api.getAppState();
         const [left, top, right, bottom] = getCommonBounds(converted);

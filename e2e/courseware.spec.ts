@@ -103,6 +103,9 @@ test("new boards preserve previous work and replace the old material library wit
   page,
 }, info) => {
   await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
   const editor = page.locator("textarea.excalidraw-wysiwyg");
@@ -198,6 +201,9 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
     },
   );
   await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(180, 160);
   const editor = page.locator("textarea.excalidraw-wysiwyg");
@@ -218,6 +224,26 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   await expect(
     page.getByRole("button", { name: "重播讲解", exact: true }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+          (element: { type: string; text?: string }) =>
+            element.type === "text" && element.text === "两边同时减去1",
+        ),
+      ),
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+          (element: { type: string; opacity?: number }) =>
+            element.type === "image" && element.opacity === 100,
+        ),
+      ),
+    )
+    .toBe(true);
   expect(imageSent).toBe(true);
   await page.screenshot({ path: info.outputPath("live-teacher-quiz.png") });
 });

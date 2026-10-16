@@ -117,6 +117,81 @@ describe("progressive lesson writing", () => {
       }),
     ).toThrow();
   });
+  it("continues writing after font measurement updates an element version", async () => {
+    vi.useFakeTimers();
+    const api = sceneAPI();
+    const update = api.updateScene;
+    api.updateScene = (next) =>
+      update({
+        ...next,
+        elements: next.elements?.map((element) =>
+          element.type === "text"
+            ? {
+                ...element,
+                version: element.version + 1,
+                width: element.width + 1,
+              }
+            : element,
+        ),
+      });
+    const renderer = new LessonCanvas(api);
+    const command = script([
+      {
+        type: "write_text",
+        id: "explanation",
+        text: "两边同时减去1",
+        duration: 1,
+      },
+    ]).steps[0].commands[0];
+    const writing = renderer.command(command);
+    await vi.advanceTimersByTimeAsync(1500);
+    await writing;
+    expect(
+      api
+        .getSceneElements()
+        .some(
+          (element) =>
+            element.type === "text" && element.text === "两边同时减去1",
+        ),
+    ).toBe(true);
+  });
+  it("preserves a human text edit made during progressive writing", async () => {
+    vi.useFakeTimers();
+    const api = sceneAPI();
+    const renderer = new LessonCanvas(api);
+    const command = script([
+      {
+        type: "write_text",
+        id: "explanation",
+        text: "自动讲解的内容",
+        duration: 1,
+      },
+    ]).steps[0].commands[0];
+    const writing = renderer.command(command);
+    await vi.advanceTimersByTimeAsync(150);
+    api.updateScene({
+      elements: api.getSceneElements().map((element) =>
+        element.customData?.fcTutorId === "explanation" &&
+        element.type === "text"
+          ? {
+              ...element,
+              text: "我来写",
+              originalText: "我来写",
+              version: element.version + 1,
+            }
+          : element,
+      ),
+    });
+    await vi.advanceTimersByTimeAsync(1500);
+    await writing;
+    expect(
+      api
+        .getSceneElements()
+        .some(
+          (element) => element.type === "text" && element.text === "我来写",
+        ),
+    ).toBe(true);
+  });
   it("renders integral and fraction formulas as self-contained SVG glyphs", () => {
     const result = formulaSvg("\\int_0^1 x^2\\,dx=\\frac{1}{3}");
     expect(result.svg).toContain("<path");

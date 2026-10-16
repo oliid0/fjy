@@ -11,6 +11,7 @@ import {
   SelectionIcon,
   RedoIcon,
   MagicIcon,
+  gridIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { polygonIncludesPointNonZero } from "@excalidraw/math";
 import { Capacitor } from "@capacitor/core";
@@ -1283,7 +1284,7 @@ export const FilePreview = ({
         </button>
         {onTools && (
           <button aria-label="课件教学工具" title="教学工具" onClick={onTools}>
-            {SelectionIcon}
+            {gridIcon}
           </button>
         )}
       </footer>

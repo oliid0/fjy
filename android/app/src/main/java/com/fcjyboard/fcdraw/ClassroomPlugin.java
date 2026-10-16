@@ -52,6 +52,7 @@ public class ClassroomPlugin extends Plugin {
                 double scale = Math.min(1, 1280.0 / area.width());
                 Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int)(area.width() * scale)), Math.max(1, (int)(area.height() * scale)), Bitmap.Config.ARGB_8888);
                 PixelCopy.request(getActivity().getWindow(), area, bitmap, status -> {
+                    if (imageEncoder.isShutdown()) { bitmap.recycle(); return; }
                     if (status != PixelCopy.SUCCESS) { bitmap.recycle(); call.reject("当前画面尚未准备好，请稍后重试"); return; }
                     imageEncoder.execute(() -> {
                         try {

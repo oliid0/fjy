@@ -795,7 +795,9 @@ class App extends React.Component<AppProps, AppState> {
       executeAction: (name, value) => {
         const action = this.actionManager.actions[name];
         if (action) {
-          this.actionManager.executeAction(action, "api", value);
+          flushSync(() =>
+            this.actionManager.executeAction(action, "api", value),
+          );
         }
       },
       updateScene: this.updateScene,

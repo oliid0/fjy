@@ -170,7 +170,11 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     if (!open) {
       return;
     }
-    panel.current?.querySelector<HTMLInputElement>("input")?.focus();
+    panel.current
+      ?.querySelector<HTMLButtonElement>(
+        ".fc-board-select[aria-pressed='true']",
+      )
+      ?.focus({ preventScroll: true });
     const dismiss = (event: PointerEvent) => {
       if (
         !panel.current?.contains(event.target as Node) &&

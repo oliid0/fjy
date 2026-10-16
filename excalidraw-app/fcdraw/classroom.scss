@@ -538,6 +538,8 @@
   border: 2px solid var(--fc-blue);
 }
 .fc-board-select {
+  position: relative;
+  flex-direction: column;
   grid-column: 1 / -1;
   min-height: 112px !important;
   width: 100%;
@@ -545,6 +547,12 @@
   align-items: flex-start !important;
   text-align: start;
   font-size: 14px !important;
+}
+.fc-board-thumbnail {
+  width: 100%;
+  height: 108px;
+  object-fit: contain;
+  background: #fff;
 }
 .fc-board-select small {
   opacity: 0.55;
@@ -575,14 +583,15 @@
 }
 .fc-preview-content {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   flex: 1;
   min-height: 0;
   padding: 12px;
-  overflow: hidden;
+  overflow: auto;
 }
 .fc-document-stage {
+  margin: auto;
   position: relative;
   flex: none;
   min-width: 0;
@@ -590,9 +599,15 @@
   background: #fff;
   box-shadow: 0 2px 12px #17243c12;
 }
-.fc-document-stage > iframe,
-.fc-document-stage > img,
-.fc-document-stage > .fc-slides {
+.fc-document-surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+.fc-document-surface > iframe,
+.fc-document-surface > img,
+.fc-document-surface > .fc-slides {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -602,7 +617,7 @@
   margin: 0;
   overflow: hidden;
 }
-.fc-document-stage > .fc-slides > svg {
+.fc-document-surface > .fc-slides > svg {
   display: block;
   width: 100%;
   height: 100%;

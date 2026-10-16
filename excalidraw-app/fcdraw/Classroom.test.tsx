@@ -55,6 +55,7 @@ describe("selection-driven classroom controls", () => {
         height: 900,
         zoom: { value: 1 },
         selectedElementIds: selected,
+        activeTool: { type: "selection" },
         cursorButton,
       }),
       getFiles: () => ({}),
@@ -78,6 +79,37 @@ describe("selection-driven classroom controls", () => {
     } as unknown as ExcalidrawImperativeAPI;
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it("does not apply an older AI component response after a newer command", async () => {
+    let finish!: (value: string) => void;
+    vi.spyOn(ai, "chat").mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: "AI 教师" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "向 AI 教师提问" }), {
+      target: { value: "插入一个矩形" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
+    await waitFor(() => expect(ai.chat).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "AI 教师" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "向 AI 教师提问" }), {
+      target: { value: "清空当前白板" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
+    await act(async () => {
+      finish(
+        JSON.stringify({
+          action: "shapes",
+          shapes: [{ type: "rectangle", x: 0, y: 0, width: 50, height: 50 }],
+        }),
+      );
+    });
+    expect(scene).toHaveLength(0);
+  });
 
   it("handles consecutive recording commands without waiting for a new render", async () => {
     vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);

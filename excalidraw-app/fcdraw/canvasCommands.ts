@@ -48,6 +48,17 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
       `执行原白板动作，args.action 仅限 ${Array.from(actions).join(",")}`,
       (args) => {
         if (classroomCommands.has("document.draw")) {
+          if (
+            [
+              "zoomIn",
+              "zoomOut",
+              "resetZoom",
+              "zoomToFit",
+              "zoomToFitSelection",
+            ].includes(String(args.action))
+          ) {
+            return classroomCommands.execute({ name: "document.zoom", args });
+          }
           if (args.action === "undo" || args.action === "redo") {
             return classroomCommands.execute({
               name: `document.${args.action}`,

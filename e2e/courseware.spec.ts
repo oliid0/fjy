@@ -47,6 +47,19 @@ for (const name of [
         .poll(async () => (await body.innerText()).trim().length)
         .toBeGreaterThan(5);
     }
+    const originalWidth = (await page
+      .locator(".fc-document-stage")
+      .boundingBox())!.width;
+    await page.getByRole("button", { name: "放大课件", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "重置课件缩放", exact: true }),
+    ).toHaveText("125%");
+    expect(
+      (await page.locator(".fc-document-stage").boundingBox())!.width,
+    ).toBeGreaterThan(originalWidth);
+    await page
+      .getByRole("button", { name: "重置课件缩放", exact: true })
+      .click();
     const visibleBar = page.getByRole("toolbar", { name: "课件工具栏" });
     await expect(visibleBar).toBeVisible();
     await expect(

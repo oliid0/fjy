@@ -2,6 +2,8 @@ import { createIsolation } from "jotai-scope";
 import React from "react";
 import tunnel from "tunnel-rat";
 
+import { stableToolbarTunnel } from "../components/stableToolbarTunnel";
+
 export type Tunnel = ReturnType<typeof tunnel>;
 
 type TunnelsContextValue = {
@@ -36,7 +38,7 @@ export const useInitializeTunnels = () => {
       WelcomeScreenHelpHintTunnel: tunnel(),
       WelcomeScreenCenterTunnel: tunnel(),
       FooterCenterTunnel: tunnel(),
-      ToolbarExtrasTunnel: tunnel(),
+      ToolbarExtrasTunnel: stableToolbarTunnel(),
       DefaultSidebarTriggerTunnel: tunnel(),
       DefaultSidebarTabTriggersTunnel: tunnel(),
       OverwriteConfirmDialogTunnel: tunnel(),

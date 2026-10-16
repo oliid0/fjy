@@ -171,6 +171,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   } | null>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
   const actionBusy = useRef(false);
+  const assistantGeneration = useRef(0);
   const returnFocus = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const active = records.find((item) => item.id === activeId);
@@ -222,18 +223,29 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         }
         previousGraph = graphId;
         plotRef.current = graph;
+        const documentRect = classroomCommands.has("document.plot")
+          ? document
+              .querySelector(".fc-document-stage")
+              ?.getBoundingClientRect()
+          : undefined;
         const left = Math.max(
           16,
           Math.min(
             state.width - Math.min(480, state.width - 32) - 16,
-            (graph.position.x + 260 + state.scrollX) * state.zoom.value,
+            documentRect
+              ? documentRect.left +
+                  ((graph.position.x + 260) / 1000) * documentRect.width
+              : (graph.position.x + 260 + state.scrollX) * state.zoom.value,
           ),
         );
         const top = Math.max(
           12,
           Math.min(
             state.height - 300,
-            (graph.position.y - 245 + state.scrollY) * state.zoom.value,
+            documentRect
+              ? documentRect.top +
+                  ((graph.position.y - 245) / 1000) * documentRect.width
+              : (graph.position.y - 245 + state.scrollY) * state.zoom.value,
           ),
         );
         setPlotPlacement((value) =>
@@ -384,7 +396,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     }
   }, [panel]);
 
-  const close = () => {
+  const close = (cancel = true) => {
+    if (cancel) {
+      assistantGeneration.current++;
+      setStatus("");
+    }
     narrator.current?.stop();
     capturedContext.current = null;
     setCapture(undefined);
@@ -455,6 +471,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const solveMath = useCallback(
     async (input?: string, automatic = false) => {
       const revision = classroomCommands.revision;
+      const generation = assistantGeneration.current;
       if (classroomCommands.has("document.snapshot")) {
         if (automatic) {
           return;
@@ -472,7 +489,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               ),
             ])
           ).trim();
-        if (revision !== classroomCommands.revision) {
+        if (
+          revision !== classroomCommands.revision ||
+          generation !== assistantGeneration.current
+        ) {
           return;
         }
         if (expression === "NONE") {
@@ -491,7 +511,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         ? selected
         : elements.filter((el) => !el.customData?.fcGenerated);
       const expression = input || (await recognize("math"));
-      if (revision !== classroomCommands.revision) {
+      if (
+        revision !== classroomCommands.revision ||
+        generation !== assistantGeneration.current
+      ) {
         return;
       }
       if (
@@ -682,6 +705,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const summarize = useCallback(
     async (whole = false) => {
       const revision = classroomCommands.revision;
+      const generation = assistantGeneration.current;
       const document = classroomCommands.has("document.snapshot")
         ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
             text: string;
@@ -703,7 +727,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           document?.image || context.image,
         ),
       ]);
-      if (revision !== classroomCommands.revision) {
+      if (
+        revision !== classroomCommands.revision ||
+        generation !== assistantGeneration.current
+      ) {
         return;
       }
       setOutput(result);
@@ -804,6 +831,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   const execute = useCallback(
     async (text: string, whole = false) => {
+      const generation = ++assistantGeneration.current;
       setPrompt(text);
       const direct = directCommand(text);
       if (direct) {
@@ -873,7 +901,10 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           ),
         ]),
       );
-      if (revision !== classroomCommands.revision) {
+      if (
+        revision !== classroomCommands.revision ||
+        generation !== assistantGeneration.current
+      ) {
         return;
       }
       if (!response || typeof response !== "object") {
@@ -939,11 +970,20 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   const executeVoice = (text: string) => {
     setStatus("正在理解指令…");
-    void execute(text)
-      .then(() =>
-        setStatus((previous) => (previous === "正在理解指令…" ? "" : previous)),
-      )
-      .catch((failure) => setError(errorMessage(failure)));
+    const result = execute(text);
+    const generation = assistantGeneration.current;
+    void result
+      .then(() => {
+        if (generation !== assistantGeneration.current) {
+          return;
+        }
+        setStatus((previous) => (previous === "正在理解指令…" ? "" : previous));
+      })
+      .catch((failure) => {
+        if (generation === assistantGeneration.current) {
+          setError(errorMessage(failure));
+        }
+      });
   };
 
   useEffect(() => {
@@ -1515,7 +1555,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         },
       ),
       classroomCommands.register("panel.close", "关闭当前工具浮层", () =>
-        close(),
+        close(false),
       ),
       classroomCommands.context("classroom", () => ({
         recording,
@@ -1646,7 +1686,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               <small>Fcdraw · 方成教育</small>
               <h2>{titles[panel]}</h2>
             </div>
-            <button onClick={close} aria-label="关闭工具浮层">
+            <button onClick={() => close()} aria-label="关闭工具浮层">
               ×
             </button>
           </header>

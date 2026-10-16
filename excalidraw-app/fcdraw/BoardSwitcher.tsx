@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ToolbarExtras } from "@excalidraw/excalidraw";
+import { ToolbarExtras, exportToBlob } from "@excalidraw/excalidraw";
 import {
   PlusIcon,
   TrashIcon,
@@ -11,7 +11,53 @@ import {
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { BoardBook } from "./boards";
+
 import { classroomCommands } from "./commands";
+
+import type { Board } from "./boards";
+
+const BoardThumbnail = ({ board }: { board: Board }) => {
+  const [source, setSource] = useState("");
+  useEffect(() => {
+    let active = true;
+    let url = "";
+    if (board.elements.length) {
+      void exportToBlob({
+        elements: board.elements,
+        files: board.files,
+        appState: {
+          ...board.view,
+          exportBackground: true,
+          exportWithDarkMode: false,
+        },
+        mimeType: "image/png",
+        maxWidthOrHeight: 280,
+      })
+        .then((blob) => {
+          url = URL.createObjectURL(blob);
+          if (active) {
+            setSource(url);
+          } else {
+            URL.revokeObjectURL(url);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [board.elements, board.files, board.view, board.updated]);
+  return source ? (
+    <img
+      className="fc-board-thumbnail"
+      src={source}
+      alt={`${board.name}预览`}
+    />
+  ) : null;
+};
 
 export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const leavePresentation = async () => {
@@ -261,6 +307,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   }}
                 >
                   <small>{index + 1}</small>
+                  <BoardThumbnail board={board} />
                   <span>
                     {board.elements
                       .filter((el) => el.type === "text")

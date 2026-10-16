@@ -79,6 +79,10 @@ export const FilePreview = ({
   const [, refreshHistory] = useState(0);
   const [color, setColor] = useState("#dc2626");
   const [penWidth, setPenWidth] = useState(3);
+  const [fontSize, setFontSize] = useState(26);
+  const [opacity, setOpacity] = useState(100);
+  const pen = useRef({ color, penWidth, fontSize, opacity });
+  pen.current = { color, penWidth, fontSize, opacity };
   const [key, setKey] = useState("");
   const [url, setUrl] = useState("");
   const [html, setHtml] = useState("");
@@ -522,8 +526,30 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.style",
-        "更改板书或圈选板书的颜色，args.color 为十六进制色值",
+        "更改板书或圈选板书：args.color 十六进制颜色，width=1..30,fontSize=8..200,opacity=0..100",
         (args) => {
+          if (
+            !Object.keys(args).length ||
+            Object.keys(args).some(
+              (key) => !["color", "width", "fontSize", "opacity"].includes(key),
+            )
+          ) {
+            throw new Error("课件板书可调整颜色、笔宽、字号与透明度");
+          }
+          for (const [key, min, max] of [
+            ["fontSize", 8, 200],
+            ["opacity", 0, 100],
+          ] as const) {
+            if (
+              args[key] !== undefined &&
+              (typeof args[key] !== "number" ||
+                !Number.isFinite(args[key]) ||
+                (args[key] as number) < min ||
+                (args[key] as number) > max)
+            ) {
+              throw new Error("板书样式超出范围");
+            }
+          }
           if (
             args.width !== undefined &&
             (typeof args.width !== "number" ||
@@ -546,6 +572,28 @@ export const FilePreview = ({
           if (typeof args.width === "number") {
             setPenWidth(args.width);
           }
+          if (typeof args.fontSize === "number") {
+            setFontSize(args.fontSize);
+          }
+          if (typeof args.opacity === "number") {
+            setOpacity(args.opacity);
+          }
+          pen.current = {
+            color:
+              typeof args.color === "string" ? args.color : pen.current.color,
+            penWidth:
+              typeof args.width === "number"
+                ? args.width
+                : pen.current.penWidth,
+            fontSize:
+              typeof args.fontSize === "number"
+                ? args.fontSize
+                : pen.current.fontSize,
+            opacity:
+              typeof args.opacity === "number"
+                ? args.opacity
+                : pen.current.opacity,
+          };
           const ids = new Set(selectedInkRef.current);
           if (ids.size) {
             commitInk({
@@ -563,6 +611,14 @@ export const FilePreview = ({
                           typeof args.width === "number"
                             ? args.width
                             : stroke.width,
+                        fontSize:
+                          typeof args.fontSize === "number"
+                            ? args.fontSize
+                            : stroke.fontSize,
+                        opacity:
+                          typeof args.opacity === "number"
+                            ? args.opacity
+                            : stroke.opacity,
                       }
                     : stroke,
               ),
@@ -605,9 +661,10 @@ export const FilePreview = ({
               id: crypto.randomUUID(),
               text: args.text,
               points: [[x, y]],
-              color,
-              width: penWidth,
-              fontSize: 26,
+              color: pen.current.color,
+              width: pen.current.penWidth,
+              fontSize: pen.current.fontSize,
+              opacity: pen.current.opacity,
             };
         commitInk({
           ...inkRef.current,
@@ -669,6 +726,7 @@ export const FilePreview = ({
         page: pageRef.current + 1,
         pages: pages.length,
         zoom: zoomRef.current,
+        pen: pen.current,
         text: currentTextRef.current,
         ink: inkRef.current[pageRef.current] || [],
         selection: selectedInkRef.current,
@@ -837,6 +895,8 @@ export const FilePreview = ({
     color,
     penWidth,
     zoom,
+    fontSize,
+    opacity,
   ]);
   useEffect(() => {
     if (announced.current || loading) {
@@ -973,6 +1033,7 @@ export const FilePreview = ({
                   id: crypto.randomUUID(),
                   color,
                   width: penWidth,
+                  opacity,
                   points: [point(event)],
                 };
                 draftRef.current = stroke;
@@ -1065,6 +1126,7 @@ export const FilePreview = ({
                   width={stroke.imageWidth}
                   height={stroke.imageHeight}
                   href={stroke.image}
+                  opacity={(stroke.opacity ?? 100) / 100}
                 />
               ) : stroke.text ? (
                 <text
@@ -1073,6 +1135,7 @@ export const FilePreview = ({
                   y={stroke.points[0][1]}
                   fill={stroke.color}
                   fontSize={stroke.fontSize || 26}
+                  opacity={(stroke.opacity ?? 100) / 100}
                   dominantBaseline="hanging"
                 >
                   {stroke.text.split("\n").map((line, index) => (
@@ -1094,6 +1157,7 @@ export const FilePreview = ({
                   strokeWidth={stroke.width}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  opacity={(stroke.opacity ?? 100) / 100}
                 />
               ),
             )}

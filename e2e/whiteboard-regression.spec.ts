@@ -148,3 +148,80 @@ test("original PNG and SVG export still produce usable images", async ({
     }
   }
 });
+
+test("AI style commands update selected text and the next insertion through original editor actions", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "fcdraw-settings",
+      JSON.stringify({ apiKey: "test-only", model: "test", autoMath: false }),
+    ),
+  );
+  await page.route(
+    "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+    (route) =>
+      route.fulfill({
+        json: {
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  action: "commands",
+                  commands: [
+                    {
+                      name: "canvas.style",
+                      args: {
+                        fontSize: 40,
+                        color: "#dc2626",
+                        textAlign: "center",
+                      },
+                    },
+                    { name: "canvas.text", args: { text: "已统一样式" } },
+                  ],
+                }),
+              },
+            },
+          ],
+        },
+      }),
+  );
+  await page.keyboard.press("t");
+  await page.mouse.click(200, 180);
+  const editor = page.locator("textarea.excalidraw-wysiwyg");
+  await editor.fill("课程笔记");
+  await editor.press("Escape");
+  await page.keyboard.press("v");
+  await page.keyboard.press("Control+a");
+  await page.getByRole("button", { name: "AI 教师", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "向 AI 教师提问" })
+    .fill("把选中的字设为40号红色居中，再写已统一样式");
+  await page.getByRole("button", { name: "发送问题" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const text = JSON.parse(
+          localStorage.getItem("excalidraw") || "[]",
+        ).filter(
+          (element: { type: string; isDeleted?: boolean }) =>
+            element.type === "text" && !element.isDeleted,
+        );
+        return (
+          text.length === 2 &&
+          text.every(
+            (element: {
+              fontSize: number;
+              strokeColor: string;
+              textAlign: string;
+            }) =>
+              element.fontSize === 40 &&
+              element.strokeColor === "#dc2626" &&
+              element.textAlign === "center",
+          )
+        );
+      }),
+    )
+    .toBe(true);
+});

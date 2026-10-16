@@ -3,6 +3,7 @@ import {
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
 import { getCommonBounds } from "@excalidraw/element";
+import { FONT_FAMILY } from "@excalidraw/common";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ActionName } from "@excalidraw/excalidraw/actions/types";
@@ -39,6 +40,38 @@ const actions = new Set<ActionName>([
   "zenMode",
   "flipHorizontal",
   "flipVertical",
+  "alignTop",
+  "alignBottom",
+  "alignLeft",
+  "alignRight",
+  "alignVerticallyCentered",
+  "alignHorizontallyCentered",
+  "distributeHorizontally",
+  "distributeVertically",
+  "copy",
+  "cut",
+  "copyAsPng",
+  "copyAsSvg",
+  "copyText",
+  "copyStyles",
+  "pasteStyles",
+  "bindText",
+  "unbindText",
+  "increaseFontSize",
+  "decreaseFontSize",
+  "toggleElementLock",
+  "unlockAllElements",
+  "setFrameAsActiveTool",
+  "wrapSelectionInFrame",
+  "selectAllElementsInFrame",
+  "removeAllElementsFromFrame",
+  "toggleLassoTool",
+  "toggleHandTool",
+  "toggleEraserTool",
+  "cropEditor",
+  "autoResize",
+  "searchMenu",
+  "stats",
 ]);
 export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
   const animations = new Set<LessonCanvas>();
@@ -76,7 +109,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
     ),
     classroomCommands.register(
       "canvas.tool",
-      "切换原工具，args.tool=selection|freedraw|eraser|text|rectangle|ellipse|diamond|line|arrow|hand|image",
+      "切换原工具，args.tool=selection|freedraw|eraser|text|rectangle|ellipse|diamond|line|arrow|hand|image|frame|laser",
       (args) => {
         if (classroomCommands.has("document.tool")) {
           return classroomCommands.execute({ name: "document.tool", args });
@@ -93,6 +126,8 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           "arrow",
           "hand",
           "image",
+          "frame",
+          "laser",
         ] as const;
         const tool = tools.find((value) => value === args.tool);
         if (!tool) {
@@ -103,19 +138,75 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
     ),
     classroomCommands.register(
       "canvas.style",
-      "修改画笔或选区样式，args.color / background 为十六进制颜色，args.width=1..30",
+      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted",
       (args) => {
         if (classroomCommands.has("document.style")) {
           return classroomCommands.execute({ name: "document.style", args });
+        }
+        const supported = [
+          "color",
+          "background",
+          "width",
+          "fontSize",
+          "fontFamily",
+          "opacity",
+          "roughness",
+          "textAlign",
+          "fillStyle",
+          "strokeStyle",
+        ];
+        if (
+          !Object.keys(args).length ||
+          Object.keys(args).some((key) => !supported.includes(key))
+        ) {
+          throw new Error("样式参数无效");
         }
         for (const key of ["color", "background"] as const) {
           if (
             args[key] !== undefined &&
             (typeof args[key] !== "string" ||
-              !/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(args[key] as string))
+              (!/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(args[key] as string) &&
+                !(key === "background" && args[key] === "transparent")))
           ) {
             throw new Error("颜色无效");
           }
+        }
+        const numeric: Record<string, [number, number, ActionName]> = {
+          fontSize: [8, 200, "changeFontSize"],
+          opacity: [0, 100, "changeOpacity"],
+          roughness: [0, 2, "changeSloppiness"],
+        };
+        for (const [key, [min, max]] of Object.entries(numeric)) {
+          if (
+            args[key] !== undefined &&
+            (typeof args[key] !== "number" ||
+              !Number.isFinite(args[key]) ||
+              (args[key] as number) < min ||
+              (args[key] as number) > max)
+          ) {
+            throw new Error(`样式 ${key} 超出范围`);
+          }
+        }
+        const choices: Record<string, [string[], ActionName]> = {
+          textAlign: [["left", "center", "right"], "changeTextAlign"],
+          fillStyle: [
+            ["hachure", "cross-hatch", "solid", "zigzag"],
+            "changeFillStyle",
+          ],
+          strokeStyle: [["solid", "dashed", "dotted"], "changeStrokeStyle"],
+        };
+        for (const [key, [values]] of Object.entries(choices)) {
+          if (args[key] !== undefined && !values.includes(String(args[key]))) {
+            throw new Error(`样式 ${key} 无效`);
+          }
+        }
+        if (
+          args.fontFamily !== undefined &&
+          !Object.values(FONT_FAMILY).includes(
+            args.fontFamily as typeof FONT_FAMILY.Helvetica,
+          )
+        ) {
+          throw new Error("字体不存在");
         }
         if (
           args.width !== undefined &&
@@ -138,6 +229,21 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
         }
         if (args.width) {
           api.executeAction("changeStrokeWidth", args.width);
+        }
+        for (const [key, [, , action]] of Object.entries(numeric)) {
+          if (args[key] !== undefined) {
+            api.executeAction(action, args[key]);
+          }
+        }
+        for (const [key, [, action]] of Object.entries(choices)) {
+          if (args[key] !== undefined) {
+            api.executeAction(action, args[key]);
+          }
+        }
+        if (args.fontFamily !== undefined) {
+          api.executeAction("changeFontFamily", {
+            currentItemFontFamily: args.fontFamily,
+          });
         }
       },
     ),
@@ -352,6 +458,16 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
     ),
     classroomCommands.context("canvas", () => ({
       tool: api.getAppState().activeTool.type,
+      styles: {
+        color: api.getAppState().currentItemStrokeColor,
+        background: api.getAppState().currentItemBackgroundColor,
+        width: api.getAppState().currentItemStrokeWidth,
+        fontSize: api.getAppState().currentItemFontSize,
+        fontFamily: api.getAppState().currentItemFontFamily,
+        opacity: api.getAppState().currentItemOpacity,
+        textAlign: api.getAppState().currentItemTextAlign,
+      },
+      fonts: FONT_FAMILY,
       selection: selectedBoardElements(api).map((el) => el.id),
       elements: api
         .getSceneElements()
@@ -361,6 +477,10 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           type: el.type,
           bounds: getCommonBounds([el]),
           text: el.type === "text" ? el.text : undefined,
+          color: el.strokeColor,
+          fontSize: el.type === "text" ? el.fontSize : undefined,
+          fontFamily: el.type === "text" ? el.fontFamily : undefined,
+          opacity: el.opacity,
           tutorId: el.customData?.fcTutorId,
         })),
     })),

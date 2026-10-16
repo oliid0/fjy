@@ -12,6 +12,7 @@ export type InkStroke = {
   id: string;
   color: string;
   width: number;
+  opacity?: number;
   points: [number, number][];
   anchor?: { x: number; y: number };
   text?: string;
@@ -211,6 +212,7 @@ export const shapeInk = (
     anchor: { x, y },
     points,
     width: shape.strokeWidth || 2,
+    opacity: shape.opacity,
     color: shape.strokeColor || "#245bd6",
     lesson,
     commandId: shape.customData?.fcTutorId,
@@ -265,6 +267,7 @@ export const inkSnapshot = async (
   }
   context.translate(0, -scroll);
   for (const stroke of strokes) {
+    context.globalAlpha = (stroke.opacity ?? 100) / 100;
     context.strokeStyle = stroke.color;
     context.fillStyle = stroke.color;
     context.lineWidth = stroke.width;

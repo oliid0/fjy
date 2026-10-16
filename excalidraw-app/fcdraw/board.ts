@@ -63,8 +63,11 @@ export const insertText = (
       type: "text",
       ...position,
       text,
-      fontSize: 24,
-      fontFamily: 2,
+      fontSize: api.getAppState().currentItemFontSize || 24,
+      fontFamily: api.getAppState().currentItemFontFamily || 2,
+      strokeColor: api.getAppState().currentItemStrokeColor,
+      opacity: api.getAppState().currentItemOpacity ?? 100,
+      textAlign: api.getAppState().currentItemTextAlign || "left",
       customData,
     },
   ]);

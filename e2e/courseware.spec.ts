@@ -120,7 +120,7 @@ test("new boards preserve previous work and replace the old material library wit
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
   await page.getByRole("button", { name: "教学工具", exact: true }).click();
-  await page.getByRole("button", { name: "单摆", exact: true }).click();
+  await page.getByRole("button", { name: "插入单摆", exact: true }).click();
   const length = page.getByRole("slider", { name: "摆长 L（m）", exact: true });
   await expect(length).toBeVisible();
   await length.focus();
@@ -335,6 +335,12 @@ test("voice draws into the visible PPT and function controls update its transpar
   await slider.focus();
   await slider.press("ArrowRight");
   await expect(slider).toHaveValue("1.1");
+  const panelBounds = (await page.locator(".fc-panel").boundingBox())!;
+  const curveBounds = (await page
+    .locator(".fc-document-ink polyline")
+    .last()
+    .boundingBox())!;
+  expect(panelBounds.x).toBeGreaterThan(curveBounds.x + curveBounds.width);
   await expect(
     page.locator(".fc-document-ink text").filter({ hasText: "x+1" }),
   ).toHaveCount(1);

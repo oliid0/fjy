@@ -223,7 +223,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         }
         previousGraph = graphId;
         plotRef.current = graph;
-        const documentRect = classroomCommands.has("document.plot")
+        const documentRect = classroomCommands.read("document")
           ? document
               .querySelector(".fc-document-stage")
               ?.getBoundingClientRect()
@@ -850,7 +850,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       const revision = classroomCommands.revision;
-      if (/立方体|正方体/.test(text) && /画|插入|生成|创建/.test(text)) {
+      if (
+        /^(?:请|帮我)?(?:画|插入|生成|创建)(?:一个|个|一|标准|线条|的|\s)*(?:立方体|正方体)[吧。！!\s]*$/.test(
+          text,
+        )
+      ) {
         await classroomCommands.execute({
           name: "tools.insert",
           args: { kind: "cube" },

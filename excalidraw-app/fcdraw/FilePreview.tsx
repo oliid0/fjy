@@ -91,6 +91,8 @@ export const FilePreview = ({
   const [ratio, setRatio] = useState(16 / 9);
   const [size, setSize] = useState({ width: 1000, height: 600 });
   const [scroll, setScroll] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
   const [currentText, setCurrentText] = useState("");
   const currentTextRef = useRef("");
   const navigation = useRef(Promise.resolve());
@@ -426,6 +428,25 @@ export const FilePreview = ({
         },
       ),
       classroomCommands.register(
+        "document.zoom",
+        "缩放课件，args.value=0.5..3，或args.action=zoomIn|zoomOut|resetZoom|zoomToFit",
+        (args) => {
+          const value =
+            typeof args.value === "number"
+              ? args.value
+              : args.action === "zoomIn"
+              ? zoomRef.current + 0.25
+              : args.action === "zoomOut"
+              ? zoomRef.current - 0.25
+              : 1;
+          if (!Number.isFinite(value) || value < 0.5 || value > 3) {
+            throw new Error("课件缩放范围为50%到300%");
+          }
+          zoomRef.current = value;
+          setZoom(value);
+        },
+      ),
+      classroomCommands.register(
         "document.ink",
         "打开或关闭透明板书，args.enabled 为布尔值",
         (args) => setInkOn(args.enabled !== false),
@@ -646,6 +667,7 @@ export const FilePreview = ({
         name: file.name,
         page: pageRef.current + 1,
         pages: pages.length,
+        zoom: zoomRef.current,
         text: currentTextRef.current,
         ink: inkRef.current[pageRef.current] || [],
         selection: selectedInkRef.current,
@@ -657,10 +679,14 @@ export const FilePreview = ({
           const rect = stage.current.getBoundingClientRect();
           const capture = await NativeClassroom.captureFrame({
             region: {
-              x: rect.left / innerWidth,
-              y: rect.top / innerHeight,
-              width: rect.width / innerWidth,
-              height: rect.height / innerHeight,
+              x: Math.max(0, rect.left) / innerWidth,
+              y: Math.max(0, rect.top) / innerHeight,
+              width:
+                (Math.min(innerWidth, rect.right) - Math.max(0, rect.left)) /
+                innerWidth,
+              height:
+                (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top)) /
+                innerHeight,
             },
           });
           return {
@@ -809,6 +835,7 @@ export const FilePreview = ({
     undoInk,
     color,
     penWidth,
+    zoom,
   ]);
   useEffect(() => {
     if (announced.current || loading) {
@@ -882,32 +909,41 @@ export const FilePreview = ({
         <div
           ref={stage}
           className="fc-document-stage"
-          style={{ width: size.width, height: size.height }}
+          style={{ width: size.width * zoom, height: size.height * zoom }}
         >
-          {isSlides && <div className="fc-slides" ref={host} />}
-          {isImage && (
-            <img
-              src={url}
-              alt={file.name}
-              onLoad={(event) =>
-                setRatio(
-                  event.currentTarget.naturalWidth /
-                    event.currentTarget.naturalHeight,
-                )
-              }
-            />
-          )}
-          {!isSlides && !isImage && html && (
-            <iframe
-              ref={frame}
-              title={file.name}
-              sandbox="allow-scripts"
-              srcDoc={html.replace(
-                "</body>",
-                "<script>addEventListener('scroll',function(e){var t=e.target;parent.postMessage({fcDocumentScroll:(t.scrollTop||scrollY)/innerWidth*1000},'*')},true)</script></body>",
-              )}
-            />
-          )}
+          <div
+            className="fc-document-surface"
+            style={{
+              width: size.width,
+              height: size.height,
+              transform: `scale(${zoom})`,
+            }}
+          >
+            {isSlides && <div className="fc-slides" ref={host} />}
+            {isImage && (
+              <img
+                src={url}
+                alt={file.name}
+                onLoad={(event) =>
+                  setRatio(
+                    event.currentTarget.naturalWidth /
+                      event.currentTarget.naturalHeight,
+                  )
+                }
+              />
+            )}
+            {!isSlides && !isImage && html && (
+              <iframe
+                ref={frame}
+                title={file.name}
+                sandbox="allow-scripts"
+                srcDoc={html.replace(
+                  "</body>",
+                  "<script>addEventListener('scroll',function(e){var t=e.target;parent.postMessage({fcDocumentScroll:(t.scrollTop||scrollY)/innerWidth*1000},'*')},true)</script></body>",
+                )}
+              />
+            )}
+          </div>
           <svg
             className="fc-document-ink"
             aria-label="课件透明板书"
@@ -1130,6 +1166,41 @@ export const FilePreview = ({
           onClick={() => setInkOn(!inkOn)}
         >
           {pencilIcon}
+        </button>
+        <button
+          aria-label="缩小课件"
+          disabled={zoom <= 0.5}
+          onClick={() => {
+            void classroomCommands.execute({
+              name: "document.zoom",
+              args: { action: "zoomOut" },
+            });
+          }}
+        >
+          −
+        </button>
+        <button
+          aria-label="重置课件缩放"
+          onClick={() => {
+            void classroomCommands.execute({
+              name: "document.zoom",
+              args: { action: "resetZoom" },
+            });
+          }}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          aria-label="放大课件"
+          disabled={zoom >= 3}
+          onClick={() => {
+            void classroomCommands.execute({
+              name: "document.zoom",
+              args: { action: "zoomIn" },
+            });
+          }}
+        >
+          +
         </button>
         {inkOn && (
           <>

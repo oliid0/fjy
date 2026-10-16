@@ -296,7 +296,11 @@ export class TeachingEngine {
       caption: question.question,
       feedback: "",
     });
-    void this.say(question.question, this.voice);
+    void this.say(question.question, this.voice).catch((error) => {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        this.update({ audioError: String(error) });
+      }
+    });
     await new Promise<void>((resolve) => {
       this.answerWaiter = resolve;
     });

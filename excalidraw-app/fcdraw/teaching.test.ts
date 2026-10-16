@@ -111,4 +111,31 @@ describe("shared teaching flow", () => {
     expect(engine.state.lesson).toBeUndefined();
     expect(JSON.stringify(api.getSceneElements())).toBe(frozen);
   });
+  it("can end a question during a quiz without leaving an unhandled caption task", async () => {
+    const { engine } = setup();
+    const result = engine
+      .start(
+        validateLesson({
+          steps: [{ say: "", commands: [] }],
+          quiz: [
+            {
+              question: "下一步应该怎样计算？",
+              choices: ["加1", "减1"],
+              answer: 1,
+            },
+          ],
+        }),
+      )
+      .catch((error) => error);
+    await vi.advanceTimersByTimeAsync(1);
+    const answer = engine
+      .branch(validateLesson({ steps: [step("提示")], quiz: [] }))
+      .catch((error) => error);
+    await vi.advanceTimersByTimeAsync(200);
+    engine.cancel();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect((await result).name).toBe("AbortError");
+    await answer;
+    expect(engine.state.mode).toBe("idle");
+  });
 });

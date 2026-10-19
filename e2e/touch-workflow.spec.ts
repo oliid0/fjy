@@ -72,6 +72,35 @@ test("two touchscreen contacts write separate strokes and undo together in multi
   await expect.poll(async () => (await strokes()).length).toBe(0);
   await page.getByTestId("button-redo").click();
   await expect.poll(async () => (await strokes()).length).toBe(2);
+  const geometry = JSON.stringify(await strokes());
+  const zoom = () =>
+    page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
+          .value as number,
+    );
+  const beforeZoom = await zoom();
+  await page.keyboard.press("v");
+  await input.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      { id: 1, x: 400, y: 400 },
+      { id: 2, x: 600, y: 400 },
+    ],
+  });
+  await input.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [
+      { id: 1, x: 300, y: 400 },
+      { id: 2, x: 700, y: 400 },
+    ],
+  });
+  await input.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await expect.poll(zoom).toBeGreaterThan(beforeZoom * 1.5);
+  expect(JSON.stringify(await strokes())).toBe(geometry);
   await input.detach();
 });
 

@@ -99,7 +99,7 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: python3 scripts/prepare-android-test-adb.py && cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../node_modules/.fcboard-research && adb pull /sdcard/Android/data/com.fcjy.fcboard/files/scrcpy-stream.bin ../node_modules/.fcboard-research/scrcpy-stream.bin
+          script: python3 scripts/prepare-android-test-adb.py && cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && cd .. && python3 scripts/collect-android-test-stream.py
       - name: Verify actual Scrcpy stream in the browser
         run: pnpm exec playwright test --config playwright.scrcpy.config.ts
       - uses: actions/upload-artifact@v4
@@ -115,6 +115,7 @@ jobs:
           path: |
             android/app/build/reports
             android/app/build/outputs/androidTest-results
+            android/app/build/outputs/connected_android_test_additional_output
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:

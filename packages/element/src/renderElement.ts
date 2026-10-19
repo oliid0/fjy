@@ -67,6 +67,7 @@ import { getContainingFrame } from "./frame";
 import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
+import { factoryInkDashes, isFactoryStroke } from "./factoryInk";
 
 import type {
   ExcalidrawElement,
@@ -426,7 +427,26 @@ const drawElementOnCanvas = (
             renderConfig.theme === THEME.DARK
               ? applyDarkModeFilter(element.strokeColor)
               : element.strokeColor;
-          context.fill(new Path2D(shape));
+          let cached = inkPathCache.get(element);
+          if (!cached || cached.svg !== shape) {
+            cached = { svg: shape, path: new Path2D(shape) };
+            inkPathCache.set(element, cached);
+          }
+          if (isFactoryStroke(element)) {
+            context.strokeStyle = context.fillStyle;
+            context.lineWidth = element.strokeWidth;
+            context.lineCap = "round";
+            context.lineJoin = "round";
+            if (element.strokeStyle !== "solid") {
+              context.setLineDash(factoryInkDashes(element));
+              context.lineDashOffset = -(
+                element.customData?.fcInk?.dashOffset || 0
+              );
+            }
+            context.stroke(cached.path);
+          } else {
+            context.fill(cached.path);
+          }
         } else {
           rc.draw(shape);
         }
@@ -603,6 +623,10 @@ const drawElementOnCanvas = (
 export const elementWithCanvasCache = new WeakMap<
   ExcalidrawElement,
   ExcalidrawElementWithCanvas
+>();
+const inkPathCache = new WeakMap<
+  ExcalidrawFreeDrawElement,
+  { svg: string; path: Path2D }
 >();
 
 const generateElementWithCanvas = (
@@ -844,7 +868,9 @@ export const renderElement = (
       break;
     }
     case "freedraw": {
-      if (renderConfig.isExporting) {
+      // Board ink stays vector during writing and pinch zoom: no large bitmap
+      // allocation per sample, no stretched raster while the zoom cache settles.
+      if (renderConfig.isExporting || element.customData?.fcInk) {
         const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
         const cx = (x1 + x2) / 2 + appState.scrollX;
         const cy = (y1 + y2) / 2 + appState.scrollY;

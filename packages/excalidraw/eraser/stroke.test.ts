@@ -21,6 +21,22 @@ const stroke = () => ({
 });
 
 describe("local stroke erasure", () => {
+  it("retains the original dashed pen phase on each surviving fragment", () => {
+    const input = {
+      ...stroke(),
+      strokeStyle: "dashed" as const,
+      customData: { fcInk: { pen: "dashed", unit: 1, dashOffset: 18 } },
+    };
+    const parts = eraseStroke(
+      input,
+      { x: 50, y: -20 },
+      { x: 50, y: 20 },
+      20,
+      24,
+    )!;
+    expect(parts[0].customData?.fcInk.dashOffset).toBeCloseTo(18);
+    expect(parts[1].customData?.fcInk.dashOffset).toBeCloseTo(80);
+  });
   it("cuts a sparsely sampled stroke at exact swept boundaries and interpolates pressure", () => {
     const input = stroke();
     const parts = eraseStroke(

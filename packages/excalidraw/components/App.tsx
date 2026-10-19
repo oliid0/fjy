@@ -29,6 +29,7 @@ import {
   APP_NAME,
   CURSOR_TYPE,
   DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT,
+  DEFAULT_ELEMENT_PROPS,
   DEFAULT_VERTICAL_ALIGN,
   DRAGGING_THRESHOLD,
   ELEMENT_SHIFT_TRANSLATE_AMOUNT,
@@ -8927,15 +8928,22 @@ class App extends React.Component<AppProps, AppState> {
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
       strokeWidth: boardInk
-        ? (this.state.currentItemStrokeWidth *
+        ? ((this.state.currentItemStrokeWidth /
+            DEFAULT_ELEMENT_PROPS.strokeWidth) *
             (this.state.currentItemPenMode === "brush"
               ? this.props.UIOptions.inkProfile?.brushPenWidth ?? 15
               : this.props.UIOptions.inkProfile?.hardPenWidth ?? 4)) /
           this.state.zoom.value
         : this.state.currentItemStrokeWidth,
-      strokeStyle: this.state.currentItemStrokeStyle,
+      strokeStyle:
+        boardInk && this.state.currentItemPenMode === "dashed"
+          ? "dashed"
+          : this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
-      opacity: this.state.currentItemOpacity,
+      opacity:
+        boardInk && this.state.currentItemPenMode === "highlighter"
+          ? Math.round((this.state.currentItemOpacity * 110) / 255)
+          : this.state.currentItemOpacity,
       roundness: null,
       simulatePressure,
       locked: false,
@@ -8944,7 +8952,14 @@ class App extends React.Component<AppProps, AppState> {
       pressures: simulatePressure ? [] : [event.pressure],
       customData: boardInk
         ? {
-            fcInk: { version: 1, pen: this.state.currentItemPenMode || "hard" },
+            fcInk: {
+              version: 2,
+              pen: this.state.currentItemPenMode || "hard",
+              unit:
+                (this.props.UIOptions.inkProfile?.hardPenWidth ?? 4) /
+                4 /
+                this.state.zoom.value,
+            },
           }
         : undefined,
     });

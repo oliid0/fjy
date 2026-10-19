@@ -1,6 +1,8 @@
 import React from "react";
 import { Popover } from "radix-ui";
 
+import { CaptureUpdateAction } from "@excalidraw/element";
+
 import { useUIAppState } from "../context/ui-appState";
 
 import { ShapesSwitcher } from "./Actions";
@@ -26,8 +28,22 @@ export const WhiteboardTools = ({
 }) => {
   const [open, setOpen] = React.useState(false);
   const [eraserOpen, setEraserOpen] = React.useState(false);
+  const [clearProgress, setClearProgress] = React.useState(0);
   const state = useUIAppState();
   const { container } = useExcalidrawContainer();
+  const finishClear = (value: number) => {
+    setClearProgress(0);
+    if (value < 98) {
+      return;
+    }
+    app.api.updateScene({
+      elements: [],
+      appState: { selectedElementIds: {} },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    app.setActiveTool({ type: "freedraw" });
+    setEraserOpen(false);
+  };
   React.useEffect(
     () =>
       app.onPointerDownEmitter.on(() => {
@@ -84,6 +100,58 @@ export const WhiteboardTools = ({
             collisionPadding={12}
             aria-label="橡皮设置"
           >
+            <label>
+              滑动清屏
+              <input
+                type="range"
+                aria-label="滑动清空当前白板"
+                min="0"
+                max="100"
+                value={clearProgress}
+                onChange={(event) =>
+                  setClearProgress(Number(event.target.value))
+                }
+                onPointerUp={(event) =>
+                  finishClear(Number(event.currentTarget.value))
+                }
+                onKeyUp={(event) => {
+                  if (["ArrowRight", "End", "Enter"].includes(event.key)) {
+                    finishClear(Number(event.currentTarget.value));
+                  }
+                }}
+                onPointerCancel={() => setClearProgress(0)}
+              />
+            </label>
+            <div
+              className="fc-pen-types"
+              role="group"
+              aria-label="橡皮大小预设"
+            >
+              {(
+                [
+                  [100, "小"],
+                  [150, "中"],
+                  [200, "大"],
+                ] as const
+              ).map(([pixels, label]) => (
+                <button
+                  key={pixels}
+                  type="button"
+                  aria-label={`${label}橡皮`}
+                  onClick={() => {
+                    props.setAppState({
+                      eraserMode: "stroke",
+                      eraserSize:
+                        (pixels / 150) *
+                        (app.props.UIOptions.inkProfile?.eraserSize ?? 60),
+                    });
+                    setEraserOpen(false);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <label>
               擦除方式
               <select

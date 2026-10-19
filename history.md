@@ -1,14 +1,10 @@
 # fcboard / 方成教育
 
-- 目标：以 HWhiteBoard 5.42 为基线达到 90% 同机体验对齐，AI 融入原操作；用户已授权推送 GitHub 并验证 CI 构建。还原度尚未通过验收。
-- 已完成：APK 反编译依据与缺口见 [apk-alignment.md](docs/apk-alignment.md)。紧凑底栏、上下文属性、局部笔迹擦除、整手势撤销 / 取消、手背 / 笔侧键擦除、合并采样、硬笔 / 压感笔轮廓；主白板与课件共用擦除逻辑。圈选问答 / 指令走原命令链，结果写入真实可编辑对象，修复过期回答、网络取消 / 超时和配置测试。
-- 已完成：保留用户恢复的 Fcboard 改名、安卓与网络改动；修正目录引用，并兼容同源旧配置 / 密钥 / IndexedDB。修复 CI 的 Scrcpy 测试阶段与缺失配置。
-- 新增：书写模式默认多触点独立落笔；显式单点仅接受一个触点，不再将第二只手解释为捏合，选择 / 移动画布状态保留双指缩放。Cutover 按原 APK exchangeMorePosition 做左右换位（不是返回桌面）。隐藏按钮样式和小屏盒模型按失败产物修正。分享从现有菜单选择页面，支持 PNG 导出及 Android 局域网只读二维码、十分钟失效 / 关闭终止，新增真实 HTTP 与导出检查。
-- 新增：原版单点 / 多点切换，多触点各自书写，重叠手势统一撤销 / 重做，取消只丢弃对应触点；复用已有笔迹构造与帧节流。修复手写双击误插入文本、页码重叠及小屏分组挤压。
-- 真机证据：adb 192.168.0.7:40317，RK3576 / Android 16 / 3840×2160 / density480 / 60Hz，原版 5.42；厂商 touch_threshold120 → 原 APK80 物理像素。新增原生读取并按实际 DPR 换算笔宽 / 橡皮 / 手背阈值，课件同样校准。原版已有笔迹保留。底栏依据同机截图改为分组，撤销 / 重做回中央，支持隐藏 / 恢复。
-- 修改位置：白板 LayerUI / WhiteboardTools / App / 轮廓 / 擦除 / 设置恢复、fcdraw 实际目录与菜单、设备校准桥、对应测试 / e2e / CI、依赖锁与对照文档。
-- CI 推进：4caae50 已通过 Android 编译 / JVM 测试 / lint，模拟器在 adb tcpip 重启传输返回 closed 时过早退出；新增端口实测就绪等待，保留完整仪器测试，并在编译 / lint 后即保存调试 APK 产物。
-- CI 修复（下一项）：资源链接已通过，Android Java 编译与 JVM 测试通过；lint 提示 MainActivity / NetworkSessionService 无法解析。Java 声明已改为 com.fcjy.fcboard 但目录仍为 com/fcjyboard/fcdraw，统一 main / test / androidTest 目录与声明，不关闭 MissingClass 检查。
-- CI 修复：4a789d4 的静态 / 单元与生产页面检查均通过，Android 在 processDebugResources 因改名后 fcboard_icon 资源缺失失败；将既有 fcdraw_icon.xml 同步改名为 fcboard_icon.xml，未重新绘制图标。
-- 验证：前轮 check / lint / test:other / 124 文件 1383 项测试通过。新增设备校准后 check、lint、test:other 及 Python 适配器 3 项已通过，完整测试正在复核；28 项浏览器用例与 1 项后置 Scrcpy 用例可枚举。本地未运行 build / dev / Cargo / Gradle。
-- 剩余：推送与 CI / APK 安装、同机触控与 UI 对照；多点同时书写、原版全部笔型 / 教具 / 插入对象、非笔迹透明局部擦除、厂商原生加速、真实 AI 模型效果与笔迹克隆均未全部完成。不能据现有自动化检查声称 90%。
+- 目标：对齐 HWhiteBoard 5.42 的大屏书写与原操作，深度集成 AI，推送 GitHub 并完成 CI。90% 体验还原仍未经过真机验收；用户当前要求优先继续 Java 拆解与代码，设备暂不可用。
+- Java 对照：已将完整 jadx / apktool 结果整理到被忽略的 `ss/HWhiteBoard-reference`：7728 个 Java 文件，白板业务包 183 个；错误 / 未还原标记在 34 个依赖文件中，业务包未检出。README / audit.json 记录入口、哈希与边界。原生 13 个 JNI 导出可对应，不能将.so 算成已恢复的 Java 实现。细节与功能缺口见 [apk-alignment.md](docs/apk-alignment.md)。
+- 完成：恢复分组底栏与上下文属性、Cutover 左右换位、Hide 隐藏 / 恢复、页面切换、局部笔迹擦除和整手势撤销 / 取消、手背 / 笔键擦除、合并采样。默认多点独立书写，显式单点忽略第二触点；选择 / 移动状态保留捏合，避免两人写字误缩放。
+- 完成：新 version2 硬笔按 APK 半像素量化和中点二次曲线绘制；保留最后真实触点，矢量 Canvas / SVG 共用路径并缓存 Path2D，避免逐帧大位图与缩放栅格拉伸。修正默认粗细归一化；钢笔沿现有压感轮廓，新增荧光 110/255 透明度、原虚线间隔及相位、连续粗细；橡皮 100 / 150 / 200 档位及达到 98 才清屏，保留背景与一次撤销。
+- 完成：圈选问答 / 指令进入原命令链并写入实际对象；修复取消 / 超时 / 旧选区与配置测试。菜单可选择页面导出 PNG，Android 可真实局域网扫码分享（十分钟有效、关闭终止）。保留用户 Fcboard 改名与网络代码，兼容同源旧存储。硬件证据：RK3576 / Android16 / 3840×2160 / density480 / 60Hz，厂商阈值 120→80 物理像素，按实际 DPR 换算。
+- CI：已推送至 a126631。先后修复改名遗漏的图标资源、Java 目录与声明不一致、模拟器 ADB 重启等待。Android 编译 / JVM 测试 / lint、4 项真模拟器测试均已通过，调试 APK 已产出；最后失败是 Gradle 卸载目标 APP 后再 adb pull 录像，现改用 AGP additionalTestOutputDir 自动复制，再交浏览器验证真实 Scrcpy 流，尚待本次 CI 确认。
+- 验证：本地 pnpm10.28.2 check / lint / test:other 与完整 127 文件 1396 测试通过、46 跳过、1 待办；Python 适配器 3 项通过。30 项前置生产页面与 1 项后置 Scrcpy 测试可枚举，新笔迹 / 导出 / 清屏相关检查通过。本地没有运行 build / dev / Cargo / Gradle；主机 Node26 测试禁用实验性 WebStorage。
+- 剩余：本次推送 / CI 最终成功与实际产物确认；物理跟手延迟、手背与缩放的真机验收；原版钢笔全部算法、双笔尖 / 彩虹 / 魔术 / 图形与文字笔、非笔迹透明局部擦除、全部插入对象 / 教具 / 设置、厂商原生加速仍有缺口。火山引擎真实模型 ID / 密钥与效果未验收，不能声称 90%或所有功能完成。

@@ -929,7 +929,11 @@ export const restoreAppState = (
   }
 
   const inkPreferences = { ...localAppState, ...appState };
-  if (["hard", "brush"].includes(String(inkPreferences.currentItemPenMode))) {
+  if (
+    ["hard", "brush", "highlighter", "dashed"].includes(
+      String(inkPreferences.currentItemPenMode),
+    )
+  ) {
     nextAppState.currentItemPenMode = inkPreferences.currentItemPenMode;
   }
   if (["stroke", "object"].includes(String(inkPreferences.eraserMode))) {

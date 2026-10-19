@@ -35,7 +35,11 @@ public class ScrcpyStreamTest {
             }
             assertTrue("ADB connection must finish", connected.await(20, TimeUnit.SECONDS));
             assertNull(connectError.get());
-            File target = new File(context.getExternalFilesDir(null), "scrcpy-stream.bin");
+            String additionalOutput = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir");
+            File directory = additionalOutput == null ? context.getExternalFilesDir(null) : new File(additionalOutput);
+            assertNotNull(directory);
+            assertTrue(directory.isDirectory() || directory.mkdirs());
+            File target = new File(directory, "scrcpy-stream.bin");
             CountDownLatch frames = new CountDownLatch(12);
             CountDownLatch ready = new CountDownLatch(1);
             AtomicReference<String> error = new AtomicReference<>();

@@ -43,6 +43,8 @@ import type {
 } from "@excalidraw/excalidraw/scene/types";
 
 import { elementWithCanvasCache } from "./renderElement";
+import { dashedInk } from "./dashedInk";
+import { factoryInkPath, isFactoryStroke } from "./factoryInk";
 
 import {
   canBecomePolygon,
@@ -1045,6 +1047,25 @@ export const toggleLinePolygonState = (
 
 // NOTE not cached (-> for SVG export)
 const getFreeDrawSvgPath = (element: ExcalidrawFreeDrawElement) => {
+  if (isFactoryStroke(element)) {
+    return factoryInkPath(element) as SVGPathString;
+  }
+  if (element.customData?.fcInk && element.strokeStyle === "dashed") {
+    const calibration = element.customData.fcInk.unit;
+    const unit =
+      Number.isFinite(calibration) && calibration > 0 ? calibration : 1;
+    return dashedInk(
+      element.points,
+      element.pressures,
+      Math.max(1.6 * element.strokeWidth, 8 * unit),
+      Math.max(1.8 * element.strokeWidth, 10 * unit),
+      element.customData.fcInk.dashOffset || 0,
+    )
+      .map((part) =>
+        getSvgPathFromStroke(getFreedrawOutlinePoints({ ...element, ...part })),
+      )
+      .join(" ") as SVGPathString;
+  }
   return getSvgPathFromStroke(
     getFreedrawOutlinePoints(element),
   ) as SVGPathString;
@@ -1063,7 +1084,10 @@ export const getFreedrawOutlinePoints = (
   return getStroke(inputPoints as number[][], {
     simulatePressure: element.simulatePressure,
     size: element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25),
-    thinning: element.customData?.fcInk?.pen === "hard" ? 0 : 0.6,
+    thinning:
+      element.customData?.fcInk && element.customData.fcInk.pen !== "brush"
+        ? 0
+        : 0.6,
     smoothing: 0.5,
     streamline: element.customData?.fcInk ? 0.15 : 0.5,
     easing: (t) => Math.sin((t * Math.PI) / 2), // https://easings.net/#easeOutSine

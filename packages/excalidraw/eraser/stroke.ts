@@ -10,7 +10,7 @@ import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
 type Point = { x: number; y: number };
-type Sample = Point & { pressure: number };
+type Sample = Point & { pressure: number; distance: number };
 const cross = (a: Point, b: Point, c: Point) =>
   (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 
@@ -97,13 +97,21 @@ export const eraseStroke = (
   const [, , , , cx, cy] = getElementAbsoluteCoords(element, new Map());
   const cos = Math.cos(element.angle);
   const sin = Math.sin(element.angle);
+  let travelled = element.customData?.fcInk?.dashOffset || 0;
   const samples = element.points.map(([x, y], i): Sample => {
+    if (i) {
+      travelled += Math.hypot(
+        x - element.points[i - 1][0],
+        y - element.points[i - 1][1],
+      );
+    }
     const dx = element.x + x - cx;
     const dy = element.y + y - cy;
     return {
       x: cx + dx * cos - dy * sin,
       y: cy + dx * sin + dy * cos,
       pressure: element.pressures[i] ?? 0.5,
+      distance: travelled,
     };
   });
   // Include the stroke cap so a cut doesn't leave half a round cap in the erased area.
@@ -121,6 +129,7 @@ export const eraseStroke = (
     x: a.x + (b.x - a.x) * t,
     y: a.y + (b.y - a.y) * t,
     pressure: a.pressure + (b.pressure - a.pressure) * t,
+    distance: a.distance + (b.distance - a.distance) * t,
   });
   if (samples.length === 1) {
     return insideInterval(samples[0], samples[0], area) ? [] : null;
@@ -169,6 +178,17 @@ export const eraseStroke = (
       x: first.x,
       y: first.y,
       angle: 0 as Radians,
+      ...(element.customData?.fcInk && element.strokeStyle === "dashed"
+        ? {
+            customData: {
+              ...element.customData,
+              fcInk: {
+                ...element.customData.fcInk,
+                dashOffset: first.distance,
+              },
+            },
+          }
+        : {}),
       points,
       pressures: element.simulatePressure
         ? []

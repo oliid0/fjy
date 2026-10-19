@@ -33,6 +33,10 @@ import { getContainingFrame } from "@excalidraw/element";
 import { getCornerRadius, isPathALoop } from "@excalidraw/element";
 
 import { ShapeCache } from "@excalidraw/element";
+import {
+  factoryInkDashes,
+  isFactoryStroke,
+} from "@excalidraw/element/factoryInk";
 
 import { getElementAbsoluteCoords } from "@excalidraw/element";
 
@@ -391,6 +395,23 @@ const renderElementToSvg = (
               : element.strokeColor,
           );
           path.setAttribute("d", shape);
+          if (isFactoryStroke(element)) {
+            path.setAttribute("stroke", path.getAttribute("fill")!);
+            path.setAttribute("fill", "none");
+            path.setAttribute("stroke-width", String(element.strokeWidth));
+            path.setAttribute("stroke-linecap", "round");
+            path.setAttribute("stroke-linejoin", "round");
+            if (element.strokeStyle !== "solid") {
+              path.setAttribute(
+                "stroke-dasharray",
+                factoryInkDashes(element).join(" "),
+              );
+              path.setAttribute(
+                "stroke-dashoffset",
+                String(-(element.customData?.fcInk?.dashOffset || 0)),
+              );
+            }
+          }
           wrapper.appendChild(path);
         } else {
           // background (Drawable)

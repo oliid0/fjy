@@ -4,6 +4,7 @@ import React from "react";
 import {
   CLASSES,
   DEFAULT_SIDEBAR,
+  DEFAULT_ELEMENT_PROPS,
   TOOL_TYPE,
   arrayToMap,
   capitalizeString,
@@ -544,6 +545,10 @@ const LayerUI = ({
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
   const [toolbarHidden, setToolbarHidden] = React.useState(false);
+  const penBase = appState.currentItemPenMode === "brush" ? 15 : 4;
+  const inkThickness =
+    (appState.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) *
+    penBase;
 
   const renderUnifiedToolbar = () => (
     <>
@@ -567,21 +572,48 @@ const LayerUI = ({
             onClick={() => setShowProperties(false)}
           />
           {appState.activeTool.type === "freedraw" && (
-            <label className="fc-pen-mode">
-              笔型
-              <select
-                aria-label="笔型"
-                value={appState.currentItemPenMode || "hard"}
-                onChange={(event) =>
-                  setAppState({
-                    currentItemPenMode: event.target.value as "hard" | "brush",
-                  })
-                }
-              >
-                <option value="hard">硬笔（固定宽度）</option>
-                <option value="brush">毛笔（压感 / 速度）</option>
-              </select>
-            </label>
+            <>
+              <div role="group" aria-label="笔型" className="fc-pen-types">
+                {(
+                  [
+                    ["hard", "画笔"],
+                    ["brush", "钢笔"],
+                    ["highlighter", "荧光笔"],
+                    ["dashed", "虚线笔"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={
+                      (appState.currentItemPenMode || "hard") === mode
+                    }
+                    onClick={() => setAppState({ currentItemPenMode: mode })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="fc-pen-mode">
+                粗细
+                <input
+                  aria-label="书写粗细"
+                  type="range"
+                  min="1"
+                  max="40"
+                  step="0.5"
+                  value={inkThickness}
+                  onChange={(event) =>
+                    setAppState({
+                      currentItemStrokeWidth:
+                        (Number(event.target.value) / penBase) *
+                        DEFAULT_ELEMENT_PROPS.strokeWidth,
+                    })
+                  }
+                />
+                <output>{Math.round(inkThickness * 100) / 100}</output>
+              </label>
+            </>
           )}
           {renderSelectedShapeActions()}
         </div>

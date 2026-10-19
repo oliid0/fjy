@@ -1,3 +1,5 @@
+import { DEFAULT_ELEMENT_PROPS } from "@excalidraw/common";
+
 import { Excalidraw } from "../index";
 import { getNormalizedZoom } from "../scene";
 
@@ -38,6 +40,93 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  it("clears only after the eraser slider reaches its end, preserves the board, and restores content with one undo", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    API.setAppState({
+      viewBackgroundColor: "#123d32",
+      currentItemPenMode: "brush",
+    });
+    draw(canvas);
+    const eraser = screen.getByRole("button", { name: "橡皮" });
+    fireEvent.click(eraser);
+    fireEvent.click(eraser);
+    const slider = screen.getByRole("slider", { name: "滑动清空当前白板" });
+    fireEvent.change(slider, { target: { value: "80" } });
+    fireEvent.pointerUp(slider);
+    expect(live()).toHaveLength(1);
+    fireEvent.change(slider, { target: { value: "100" } });
+    fireEvent.pointerUp(slider);
+    expect(live()).toHaveLength(0);
+    expect(h.state.viewBackgroundColor).toBe("#123d32");
+    expect(h.state.currentItemPenMode).toBe("brush");
+    fireEvent.click(screen.getByTestId("button-undo"));
+    expect(live()).toHaveLength(1);
+  });
+  it("offers working fountain, highlighter and dashed pens without replacing the canvas", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    fireEvent.click(screen.getByRole("button", { name: "荧光笔" }));
+    fireEvent.change(screen.getByRole("slider", { name: "书写粗细" }), {
+      target: { value: "10" },
+    });
+    draw(canvas);
+    expect(live()[0].opacity).toBe(43);
+    expect(live()[0].strokeWidth).toBe(10);
+    expect(live()[0].customData?.fcInk.pen).toBe("highlighter");
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    fireEvent.click(screen.getByRole("button", { name: "虚线笔" }));
+    draw(canvas);
+    expect(live().at(-1)!.strokeStyle).toBe("dashed");
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    fireEvent.click(screen.getByRole("button", { name: "钢笔" }));
+    draw(canvas);
+    expect(live().at(-1)!.customData?.fcInk.pen).toBe("brush");
+    expect(live().at(-1)!.opacity).toBe(100);
+  });
+
+  it("ignores a second writing contact in explicit single mode without starting a pinch", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    API.setAppState({ multiStroke: false });
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    const zoom = h.state.zoom.value;
+    pointer(canvas, "pointerdown", 100, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointerdown", 100, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+    });
+    pointer(canvas, "pointermove", 400, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointermove", 600, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+    });
+    pointer(canvas, "pointerup", 600, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+    });
+    pointer(canvas, "pointerup", 400, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    expect(live()).toHaveLength(1);
+    expect(live()[0].width).toBe(300);
+    expect(h.state.zoom.value).toBe(zoom);
+  });
   it("writes independent simultaneous contacts in multi-point mode and undoes the overlapping gesture once", async () => {
     const { container } = await render(
       <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
@@ -139,7 +228,9 @@ describe("APK-style whiteboard ink", () => {
     const canvas = container.querySelector("canvas.interactive")!;
     draw(canvas);
     expect(live()[0].strokeWidth).toBeCloseTo(
-      (h.state.currentItemStrokeWidth * 4) / 3,
+      ((h.state.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) *
+        4) /
+        3,
     );
     pointer(canvas, "pointerdown", 250, 200, {
       pointerType: "touch",
@@ -234,7 +325,8 @@ describe("APK-style whiteboard ink", () => {
       }
       expect(ink.points.length).toBeGreaterThanOrEqual(4);
       expect(ink.strokeWidth * zoom).toBeCloseTo(
-        h.state.currentItemStrokeWidth * 4,
+        (h.state.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) *
+          4,
       );
       expect(ink.customData?.fcInk.pen).toBe("hard");
     }

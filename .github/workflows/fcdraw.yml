@@ -82,6 +82,11 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug testDebugUnitTest lintDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Android-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -94,7 +99,7 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: cd android && adb tcpip 5555 && adb wait-for-device && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../node_modules/.fcboard-research && adb pull /sdcard/Android/data/com.fcjy.fcboard/files/scrcpy-stream.bin ../node_modules/.fcboard-research/scrcpy-stream.bin
+          script: python3 scripts/prepare-android-test-adb.py && cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../node_modules/.fcboard-research && adb pull /sdcard/Android/data/com.fcjy.fcboard/files/scrcpy-stream.bin ../node_modules/.fcboard-research/scrcpy-stream.bin
       - name: Verify actual Scrcpy stream in the browser
         run: pnpm exec playwright test --config playwright.scrcpy.config.ts
       - uses: actions/upload-artifact@v4
@@ -111,11 +116,6 @@ jobs:
             android/app/build/reports
             android/app/build/outputs/androidTest-results
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Android-APK
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: Fcboard-Web

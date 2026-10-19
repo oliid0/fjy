@@ -7,6 +7,7 @@
 - 新增：原版单点 / 多点切换，多触点各自书写，重叠手势统一撤销 / 重做，取消只丢弃对应触点；复用已有笔迹构造与帧节流。修复手写双击误插入文本、页码重叠及小屏分组挤压。
 - 真机证据：adb 192.168.0.7:40317，RK3576 / Android 16 / 3840×2160 / density480 / 60Hz，原版 5.42；厂商 touch_threshold120 → 原 APK80 物理像素。新增原生读取并按实际 DPR 换算笔宽 / 橡皮 / 手背阈值，课件同样校准。原版已有笔迹保留。底栏依据同机截图改为分组，撤销 / 重做回中央，支持隐藏 / 恢复。
 - 修改位置：白板 LayerUI / WhiteboardTools / App / 轮廓 / 擦除 / 设置恢复、fcdraw 实际目录与菜单、设备校准桥、对应测试 / e2e / CI、依赖锁与对照文档。
+- CI 推进：4caae50 已通过 Android 编译 / JVM 测试 / lint，模拟器在 adb tcpip 重启传输返回 closed 时过早退出；新增端口实测就绪等待，保留完整仪器测试，并在编译 / lint 后即保存调试 APK 产物。
 - CI 修复（下一项）：资源链接已通过，Android Java 编译与 JVM 测试通过；lint 提示 MainActivity / NetworkSessionService 无法解析。Java 声明已改为 com.fcjy.fcboard 但目录仍为 com/fcjyboard/fcdraw，统一 main / test / androidTest 目录与声明，不关闭 MissingClass 检查。
 - CI 修复：4a789d4 的静态 / 单元与生产页面检查均通过，Android 在 processDebugResources 因改名后 fcboard_icon 资源缺失失败；将既有 fcdraw_icon.xml 同步改名为 fcboard_icon.xml，未重新绘制图标。
 - 验证：前轮 check / lint / test:other / 124 文件 1383 项测试通过。新增设备校准后 check、lint、test:other 及 Python 适配器 3 项已通过，完整测试正在复核；28 项浏览器用例与 1 项后置 Scrcpy 用例可枚举。本地未运行 build / dev / Cargo / Gradle。

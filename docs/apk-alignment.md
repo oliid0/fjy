@@ -26,7 +26,7 @@
 | `HCanvas.onTouchEvent:495` | 是否书写 / 选择 / 多点先决定手势分支，不能简单以触点数大于一进入缩放。当前默认多点落笔；显式单点忽略第二处笔迹，选择 / 移动状态保留捏合。 |
 | `HTool.accelerateDown:144` | 按 pointerId 保存对象；任一接触轴大于厂商阈值或笔擦键进入橡皮。当前笔迹同样按触点独立持有与取消。 |
 | `HObject.round:63`、`HCurveObject.continueStroke:85` | 0.3 / 0.7 阈值半像素量化，上一采样点作为二次曲线控制点，中点作为终点。新增 version2 固定宽笔迹共用此类曲线路径，Canvas / SVG 使用圆笔帽与圆连接；末端补到最后真实采样点，不预测未来位置。旧笔迹保留原轮廓。 |
-| `HBezierObject.calcNewWidth:205` | 历次移动距离加权、宽度变化和压感修正，最终串接变宽椭圆。当前压感笔仍用现有 perfect-freehand，未声称完全移植这一算法。 |
+| `HBezierObject.calcNewWidth:205` | 历次移动距离加权、宽度变化和压感修正，最终串接变宽椭圆。新 version3 钢笔采用 Java 的 0.6 / 0.4 距离加权、45/50 默认变化量、平方根压力修正与最小宽度，按 Bezier 中点采样，再以 2:1 扁椭圆形成填充路径。局部擦除保存采样曲线、宽度和椭圆旋转方向，防止剩余笔迹重新计算变形。保留最后真实触点，不照搬原生末端截断及画布边缘钳制；系统自定义变化参数和原生尾锋仍待真机核对。 |
 | `HDashedCurveObject.createDashEffect` | 虚线段 max(1.6× 笔宽,8)、间隔 max(1.8× 笔宽,10)。按设备单位换算并共用于 Canvas / SVG；局部擦除后的片段保留虚线相位。 |
 | `ZWhiteBoardActivity.doHighlighter:2810` | 荧光笔 alpha110/255；当前荧光笔保留同样透明度比例，独立于用户透明度设置。 |
 | `HEraserSettingWindow.onStopTrackingTouch:59` | 清屏滑块低于 98 回零，达到 98 清空并回到画笔；小中大 100 / 150 / 200 物理像素。当前增加相同阈值与尺寸换算，清屏保留背景 / 画笔偏好且可一次撤销。 |
@@ -40,10 +40,10 @@
 | --- | --- |
 | `res/layout/layout_bottom_bar.xml`：中心为画笔、橡皮、选择、插入、工具、撤销、恢复、单点；侧边为菜单、前后页、页码、新建 | `WhiteboardTools` 与 `LayerUI` 收起平铺的图形，恢复紧凑操作结构。白板页码及前后切换沿用真实 BoardBook；录制、截图、语音、设置、协作、问答回到菜单。小屏保留菜单和历史按钮，中间工具可横向滚动；页列表也可从菜单进入。独立课件工具栏尚未完全按 APK 重排。 |
 | `ZWhiteBoardActivity.onClick`：再次点击已选画笔 / 橡皮打开属性 | 常用工具首次点击切换，再次点击打开属性；插入弹层保留原图形、文本、图片等工具。没有另设常驻 AI tab。 |
-| `HCurveObject.onMove`：二次曲线平滑，普通笔为固定宽度；`HBezierObject`：压力 / 速度计算宽度；`BaseApplication` 默认硬笔宽 4、毛笔宽 15，可被系统属性覆盖 | 新笔迹记录 `fcInk`，version2 普通笔用原 APK 的中点二次曲线、固定宽度、圆笔帽 / 连接；毛笔保留压力 / 速度效果。基准宽度对应 4 / 15，按当前缩放转换到场景单位。采样在渲染节流前收集，支持 `getCoalescedEvents`，每帧批量写入；Canvas 和 SVG 导出共用同一轮廓算法。旧文件保持原渲染参数。仍使用项目已安装的 perfect-freehand，未声称逐点复刻 APK 毛笔公式。 |
+| `HCurveObject.onMove`：二次曲线平滑，普通笔为固定宽度；`HBezierObject`：压力 / 速度计算宽度；`BaseApplication` 默认硬笔宽 4、毛笔宽 15，可被系统属性覆盖 | 新笔迹记录 `fcInk`，version2 普通笔用原 APK 的中点二次曲线、固定宽度、圆笔帽 / 连接；钢笔采用原版距离 / 压力宽度递推和扁椭圆笔触。基准宽度对应 4 / 15，按当前缩放转换到场景单位。采样在渲染节流前收集，支持 `getCoalescedEvents`，每帧批量写入；Canvas 和 SVG 导出共用同一轮廓算法。旧文件保持原渲染参数。新钢笔 Canvas / SVG 共用扁椭圆填充路径；旧笔迹保留 perfect-freehand，避免打开旧文件改变外观。 |
 | `HEraserObject`：宽高比 5:6 的矩形，移动时形成连续扫过区域，Canvas 使用 CLEAR / DST_OUT | `eraser/stroke.ts` 按扫过的凸多边形裁剪笔迹线段，保留两侧可编辑笔迹和插值压力。稀疏点、快速横扫、旋转笔迹均有测试；一次手势一次历史记录，取消恢复。课件批注使用相同几何裁剪。当前是向量笔迹裁剪，边缘按笔帽留量处理，并非逐像素透明蒙版；文字、图片、填充图形的任意局部擦除仍未对齐，可用选择删除或原对象橡皮。 |
 | `HTool.accelerateDown` / `accelerateMove`：根据 `getTouchMajor`、`getTouchMinor` 和智能笔按钮识别橡皮；`getSize` 从厂商数据库读取 `touch_threshold` 并乘 2/3 | 主白板依据 PointerEvent 接触宽高临时擦除，保留原选中工具，笔正在书写时忽略另一大面积触点。提供开关、大小及 16..120 CSS 像素阈值校准；默认阈值 36 是待实测的初始值，不能等同厂商阈值。触控面积被设备固定报告为 1 时不能可靠识别手背。Android 原始长短轴与 WebView 接触面积的对应仍需 adb 验证。 |
-| `HCanvas.onTouchEvent`、`doPoint`：单点 / 多点书写与双指 / 多指缩放分支 | 保留现有双指缩放和拖动行为；增加手掌擦除的独立输入生命周期与取消清理。新增单点 / 多点切换，多点时每个触点独立保留合并采样、取消和笔迹，重叠手势统一撤销；单点保留双指变换。自动化覆盖两触点交错书写及单独取消，仍待真机多人验收；厂商粗细笔尖识别待实现。 |
+| `HCanvas.onTouchEvent`、`doPoint`：单点 / 多点书写与双指 / 多指缩放分支 | 保留现有双指缩放和拖动行为；增加手掌擦除的独立输入生命周期与取消清理。新增单点 / 多点切换，多点时每个触点独立保留合并采样、取消和笔迹，重叠手势统一撤销；显式单点忽略第二个书写触点；选择 / 移动工具保留捏合。自动化覆盖两触点交错书写及单独取消，仍待真机多人验收；厂商粗细笔尖识别待实现。 |
 | `NativeWhiteboard` 与 `libWhiteboard-sdk.so`：原生画布、局部区域刷新、原生擦除 JNI；Manifest 使用系统 UID | 当前仍是 Capacitor WebView 绘制。没有复制厂商库冒充完成原生加速；JNI / 固件兼容性、输入到显示延迟、长时间连续书写的掉帧都需目标设备测量。 |
 
 PointerEvent 的接触面积单位为 CSS 像素，不能再乘 devicePixelRatio；画布像素密度仍交给现有渲染层处理。采样方式核对了 [MDN 接触宽度](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/width)、[合并事件](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/getCoalescedEvents)、[Android MotionEvent](https://developer.android.com/reference/android/view/MotionEvent) 和 [tldraw 的 Canvas 采样实现](https://github.com/tldraw/tldraw/blob/8a7b1a65ab4c7365319614ffef68590dee23f305/packages/editor/src/lib/hooks/useCanvasEvents.ts)。
@@ -52,7 +52,7 @@ PointerEvent 的接触面积单位为 CSS 像素，不能再乘 devicePixelRatio
 
 已通过 adb 连接 `192.168.0.7:40317`。设备为 Rockchip RK3576 / BDV3576B（Android 报告 SSI 16 on ARM64），Android 16，3840×2160、density 480、60 Hz。原厂系统应用 `com.paike.zjc` 为 5.42 / 38，位于 `/system/app/HWhiteBoard`。触控设备报告 InfraredMultiTouch-61 Touch Device,86-60P，支持接触长短轴。
 
-读取厂商 `tbl_Settings.touch_threshold=120`，按原 APK `getSize()` 得到 80 个物理像素。新增原生 `getInkProfile` 读取这一参数，按 WebView 实际 DPR 转换一次到 CSS 像素；硬笔 4、毛笔 15、橡皮 150 的物理像素基准同样换算。无法访问厂商数据库时保留手动阈值；用户保存的偏好优先。设备参数不存入白板文件，避免换屏后继续沿用错误校准。课件笔迹采用相同换算。
+读取厂商 `tbl_Settings.touch_threshold=120`，按原 APK `getSize()` 得到 80 个物理像素。新增原生 `getInkProfile` 读取这一参数，按 WebView 实际 DPR 转换一次到 CSS 像素；硬笔 4、毛笔 15、橡皮 150 的物理像素基准同样换算。无法访问厂商数据库时保留手动阈值；用户保存的偏好优先。密度变化通过重新注册 resolution 媒体查询及 resize 检测，更新之后落笔的换算；对应 [MDN 的 DPR 变化监听示例](https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio#monitoring_screen_resolution_or_zoom_level_changes)。设备参数不存入白板文件，避免换屏后继续沿用错误校准。课件笔迹采用相同换算。
 
 原版启动后已有绿板笔迹，已保留，不清除应用数据。截图与 UI hierarchy 确认三组独立底栏、中央撤销 / 重做和隐藏按钮；布局继续据此修正。原版截图、输入与显示诊断暂存 `/tmp/fcboard-*`，不把设备数据提交仓库。当前尚待安装本轮 CI APK 对照，物理手背触摸和端到端笔迹延迟尚未量化。
 

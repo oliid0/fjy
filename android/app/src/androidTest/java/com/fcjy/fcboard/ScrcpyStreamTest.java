@@ -52,8 +52,10 @@ public class ScrcpyStreamTest {
                         ready.countDown();
                     }
                     if (frames.getCount() > 0) { output.write(data); frames.countDown(); }
-                }, value -> { error.set(value); while (frames.getCount() > 0) frames.countDown(); });
+                }, value -> { error.set(value); ready.countDown(); while (frames.getCount() > 0) frames.countDown(); });
                 assertTrue("Scrcpy video metadata must arrive", ready.await(20, TimeUnit.SECONDS));
+                assertNull(error.get());
+                assertNotNull(size.get());
                 // The same 14-byte message used by the official client, Down + Up Home.
                 for (int action : new int[]{0, 1}) bridge.control(ByteBuffer.allocate(14).put((byte)0).put((byte)action).putInt(3).putInt(0).putInt(0).array());
                 Thread.sleep(500);

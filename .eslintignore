@@ -12,3 +12,4 @@ coverage
 
 pnpm-lock.yaml
 ss/
+android/vendor/libadb/src/

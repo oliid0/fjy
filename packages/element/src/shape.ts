@@ -45,6 +45,7 @@ import type {
 import { elementWithCanvasCache } from "./renderElement";
 import { dashedInk } from "./dashedInk";
 import { factoryInkPath, isFactoryStroke } from "./factoryInk";
+import { factoryBrushPath, isFactoryBrush } from "./factoryBrush";
 
 import {
   canBecomePolygon,
@@ -1047,6 +1048,9 @@ export const toggleLinePolygonState = (
 
 // NOTE not cached (-> for SVG export)
 const getFreeDrawSvgPath = (element: ExcalidrawFreeDrawElement) => {
+  if (isFactoryBrush(element)) {
+    return factoryBrushPath(element) as SVGPathString;
+  }
   if (isFactoryStroke(element)) {
     return factoryInkPath(element) as SVGPathString;
   }

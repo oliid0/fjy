@@ -32,24 +32,41 @@ export const useDeviceInkProfile = () => {
       return;
     }
     let disposed = false;
+    let native: Awaited<ReturnType<typeof Classroom.getInkProfile>>;
+    let dpr = window.devicePixelRatio;
+    let media = window.matchMedia(`(resolution: ${dpr}dppx)`);
+    const updateDensity = () => {
+      const next = window.devicePixelRatio;
+      if (next === dpr) {
+        return;
+      }
+      media.removeEventListener("change", updateDensity);
+      dpr = next;
+      media = window.matchMedia(`(resolution: ${dpr}dppx)`);
+      media.addEventListener("change", updateDensity);
+      if (native) {
+        setProfile(cssInkProfile(native, dpr));
+      }
+    };
+    media.addEventListener("change", updateDensity);
+    window.addEventListener("resize", updateDensity);
     Classroom.getInkProfile()
-      .then((native) => {
+      .then((value) => {
         if (!disposed) {
+          native = value;
           setProfile(cssInkProfile(native, window.devicePixelRatio));
         }
       })
       .catch(() => {
         if (!disposed) {
-          setProfile(
-            cssInkProfile(
-              { hardPenWidth: 4, brushPenWidth: 15, eraserSize: 150 },
-              window.devicePixelRatio,
-            ),
-          );
+          native = { hardPenWidth: 4, brushPenWidth: 15, eraserSize: 150 };
+          setProfile(cssInkProfile(native, window.devicePixelRatio));
         }
       });
     return () => {
       disposed = true;
+      media.removeEventListener("change", updateDensity);
+      window.removeEventListener("resize", updateDensity);
     };
   }, []);
   return profile;

@@ -1,6 +1,7 @@
 import { pointFrom } from "@excalidraw/math";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
+import { factoryBrushSamples } from "@excalidraw/element/factoryBrush";
 
 import { API } from "../tests/helpers/api";
 
@@ -21,6 +22,56 @@ const stroke = () => ({
 });
 
 describe("local stroke erasure", () => {
+  it("keeps the brush curve and width on both sides of a cut, including repeated cuts", () => {
+    const input = {
+      ...stroke(),
+      simulatePressure: true,
+      strokeWidth: 15,
+      points: [0, 50, 100, 150, 200].map((x) => pointFrom<LocalPoint>(x, 0)),
+      customData: { fcInk: { version: 3, pen: "brush", unit: 1 } },
+    };
+    const original = factoryBrushSamples(input);
+    const parts = eraseStroke(
+      input,
+      { x: 100, y: -30 },
+      { x: 100, y: 30 },
+      10,
+      12,
+    )!;
+    expect(parts).toHaveLength(2);
+    for (const part of parts) {
+      const samples = factoryBrushSamples(part);
+      expect(samples).toHaveLength(part.points.length);
+      for (const sample of samples) {
+        const previous = original.find(
+          (p) => Math.abs(p.x - sample.x - part.x) < 1e-7,
+        );
+        if (previous) {
+          expect(sample.width).toBeCloseTo(previous.width, 6);
+        }
+      }
+    }
+    const second = eraseStroke(
+      parts[1],
+      { x: 170, y: -30 },
+      { x: 170, y: 30 },
+      4,
+      5,
+    )!;
+    expect(second).toHaveLength(2);
+    expect(factoryBrushSamples(second[0])[0].width).toBeCloseTo(
+      factoryBrushSamples(parts[1])[0].width,
+    );
+    const rotated = eraseStroke(
+      { ...input, angle: (Math.PI / 2) as Radians },
+      { x: 100, y: 0 },
+      { x: 100, y: 0 },
+      10,
+      12,
+    )!;
+    expect(rotated).toHaveLength(2);
+    expect(rotated[0].customData?.fcInk.brushAngle).toBe(Math.PI / 2);
+  });
   it("retains the original dashed pen phase on each surviving fragment", () => {
     const input = {
       ...stroke(),

@@ -5,12 +5,20 @@ import {
   newElementWith,
 } from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
+import {
+  factoryBrushSamples,
+  isFactoryBrush,
+} from "@excalidraw/element/factoryBrush";
 
 import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
 type Point = { x: number; y: number };
-type Sample = Point & { pressure: number; distance: number };
+type Sample = Point & {
+  pressure: number;
+  distance: number;
+  brushWidth: number;
+};
 const cross = (a: Point, b: Point, c: Point) =>
   (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 
@@ -84,7 +92,10 @@ export const eraseStroke = (
   if (element.locked || element.isDeleted || !element.points.length) {
     return null;
   }
-  const cap = element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25);
+  const brush = isFactoryBrush(element) ? factoryBrushSamples(element) : null;
+  const cap = brush
+    ? brush.reduce((maximum, sample) => Math.max(maximum, sample.width), 0)
+    : element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25);
   const bounds = getElementBounds(element, new Map());
   if (
     Math.max(from.x, to.x) + (width + cap) / 2 < bounds[0] ||
@@ -97,13 +108,15 @@ export const eraseStroke = (
   const [, , , , cx, cy] = getElementAbsoluteCoords(element, new Map());
   const cos = Math.cos(element.angle);
   const sin = Math.sin(element.angle);
+  const brushAngle =
+    (element.customData?.fcInk?.brushAngle || 0) + element.angle;
+  const brushCos = Math.cos(brushAngle);
+  const brushSin = Math.sin(brushAngle);
   let travelled = element.customData?.fcInk?.dashOffset || 0;
-  const samples = element.points.map(([x, y], i): Sample => {
+  const input = brush || element.points.map(([x, y]) => ({ x, y, width: 0 }));
+  const samples = input.map(({ x, y, width: brushWidth }, i): Sample => {
     if (i) {
-      travelled += Math.hypot(
-        x - element.points[i - 1][0],
-        y - element.points[i - 1][1],
-      );
+      travelled += Math.hypot(x - input[i - 1].x, y - input[i - 1].y);
     }
     const dx = element.x + x - cx;
     const dy = element.y + y - cy;
@@ -112,6 +125,7 @@ export const eraseStroke = (
       y: cy + dx * sin + dy * cos,
       pressure: element.pressures[i] ?? 0.5,
       distance: travelled,
+      brushWidth,
     };
   });
   // Include the stroke cap so a cut doesn't leave half a round cap in the erased area.
@@ -130,6 +144,7 @@ export const eraseStroke = (
     y: a.y + (b.y - a.y) * t,
     pressure: a.pressure + (b.pressure - a.pressure) * t,
     distance: a.distance + (b.distance - a.distance) * t,
+    brushWidth: a.brushWidth + (b.brushWidth - a.brushWidth) * t,
   });
   if (samples.length === 1) {
     return insideInterval(samples[0], samples[0], area) ? [] : null;
@@ -137,7 +152,19 @@ export const eraseStroke = (
   for (let i = 1; i < samples.length; i++) {
     const a = samples[i - 1];
     const b = samples[i];
-    const hit = insideInterval(a, b, area);
+    const brushCap = Math.max(a.brushWidth, b.brushWidth);
+    const hit = insideInterval(
+      a,
+      b,
+      brush
+        ? sweptRectangle(
+            from,
+            to,
+            width + brushCap * Math.hypot(brushCos, brushSin / 2),
+            height + brushCap * Math.hypot(brushSin, brushCos / 2),
+          )
+        : area,
+    );
     const cut = hit && hit[1] - hit[0] > 1e-10;
     touched ||= !!cut;
     const intervals = !cut
@@ -178,13 +205,22 @@ export const eraseStroke = (
       x: first.x,
       y: first.y,
       angle: 0 as Radians,
-      ...(element.customData?.fcInk && element.strokeStyle === "dashed"
+      ...(brush ||
+      (element.customData?.fcInk && element.strokeStyle === "dashed")
         ? {
             customData: {
               ...element.customData,
               fcInk: {
-                ...element.customData.fcInk,
+                ...element.customData?.fcInk,
                 dashOffset: first.distance,
+                ...(brush
+                  ? {
+                      brushWidths: fragment.map(
+                        (p) => p.brushWidth / element.strokeWidth,
+                      ),
+                      brushAngle,
+                    }
+                  : {}),
               },
             },
           }

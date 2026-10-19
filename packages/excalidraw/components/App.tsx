@@ -8935,10 +8935,11 @@ class App extends React.Component<AppProps, AppState> {
               : this.props.UIOptions.inkProfile?.hardPenWidth ?? 4)) /
           this.state.zoom.value
         : this.state.currentItemStrokeWidth,
-      strokeStyle:
-        boardInk && this.state.currentItemPenMode === "dashed"
+      strokeStyle: boardInk
+        ? this.state.currentItemPenMode === "dashed"
           ? "dashed"
-          : this.state.currentItemStrokeStyle,
+          : "solid"
+        : this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity:
         boardInk && this.state.currentItemPenMode === "highlighter"
@@ -8953,7 +8954,7 @@ class App extends React.Component<AppProps, AppState> {
       customData: boardInk
         ? {
             fcInk: {
-              version: 2,
+              version: this.state.currentItemPenMode === "brush" ? 3 : 2,
               pen: this.state.currentItemPenMode || "hard",
               unit:
                 (this.props.UIOptions.inkProfile?.hardPenWidth ?? 4) /

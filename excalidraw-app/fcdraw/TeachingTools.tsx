@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { ToolbarExtras } from "@excalidraw/excalidraw";
 import { getCommonBounds } from "@excalidraw/element";
 import {
   CloseIcon,
   gridIcon,
   playerPlayIcon,
+  abacusIcon,
+  eyeIcon,
+  historyIcon,
+  share,
+  sidebarRightIcon,
+  usersIcon,
 } from "@excalidraw/excalidraw/components/icons";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -12,6 +19,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { insertionPoint, selectedPlot } from "./board";
 import { useAnchoredPanel, placePanel } from "./floating";
 import { classroomCommands } from "./commands";
+import { Classroom } from "./native";
 import {
   configureWidget,
   readWidgets,
@@ -23,6 +31,19 @@ import {
 } from "./widgets";
 
 import type { Widget, WidgetKind, WidgetParams } from "./widgets";
+import type { FactoryTool } from "./native";
+
+const factoryTools: Record<
+  FactoryTool,
+  { label: string; icon: React.ReactNode }
+> = {
+  transfer: { label: "快传", icon: share },
+  split: { label: "分屏", icon: sidebarRightIcon },
+  vote: { label: "投票", icon: usersIcon },
+  calculator: { label: "计算器", icon: abacusIcon },
+  spotlight: { label: "聚光灯", icon: eyeIcon },
+  timer: { label: "计时器", icon: historyIcon },
+};
 
 const parameters: Partial<Record<WidgetKind, (keyof WidgetParams)[]>> = {
   cube: ["rotation", "size"],
@@ -61,6 +82,41 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const panel = useRef<HTMLElement>(null);
   const pickerStyle = useAnchoredPanel(panel, "[data-teaching-tools]", open);
   const [error, setError] = useState("");
+  const [factory, setFactory] = useState<FactoryTool[]>([]);
+  const [factoryLoading, setFactoryLoading] = useState(
+    Capacitor.isNativePlatform,
+  );
+  const [factoryPending, setFactoryPending] = useState<FactoryTool>();
+  const factoryBusy = useRef(false);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    let disposed = false;
+    Classroom.getFactoryTools()
+      .then(({ available }) => {
+        if (!disposed) {
+          setFactory(
+            (Object.keys(factoryTools) as FactoryTool[]).filter((tool) =>
+              available.includes(tool),
+            ),
+          );
+        }
+      })
+      .catch((failure) => {
+        if (!disposed) {
+          setError(`无法读取大屏工具：${String(failure)}`);
+        }
+      })
+      .finally(() => {
+        if (!disposed) {
+          setFactoryLoading(false);
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
   const [widgetPlacement, setWidgetPlacement] = useState({ left: 12, top: 12 });
   useEffect(() => {
     const refresh = () => {
@@ -300,7 +356,43 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       classroomCommands.context("tools", () => ({
         selected: selected?.id,
         widgets: readWidgets(api),
+        factory,
       })),
+      ...(factory.length
+        ? [
+            classroomCommands.register(
+              "tools.factory",
+              `打开大屏原厂应用，args.tool=${factory.join(
+                "|",
+              )}，依次对应 ${factory
+                .map((tool) => factoryTools[tool].label)
+                .join("、")}`,
+              async (args) => {
+                const tool = args.tool as FactoryTool;
+                if (!factory.includes(tool)) {
+                  throw new Error("当前设备没有这项大屏工具");
+                }
+                if (factoryBusy.current) {
+                  throw new Error("正在打开大屏工具，请稍候");
+                }
+                factoryBusy.current = true;
+                setFactoryPending(tool);
+                setError("");
+                try {
+                  await Classroom.openFactoryTool({ tool });
+                  setOpen(false);
+                  return { opened: tool };
+                } catch (failure) {
+                  setError(String(failure));
+                  throw failure;
+                } finally {
+                  factoryBusy.current = false;
+                  setFactoryPending(undefined);
+                }
+              },
+            ),
+          ]
+        : []),
     ];
     return () => registrations.forEach((stop) => stop());
   });
@@ -353,6 +445,43 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               {CloseIcon}
             </button>
           </header>
+          {factoryLoading && <p role="status">正在读取大屏工具…</p>}
+          {!factoryLoading &&
+            Capacitor.isNativePlatform() &&
+            !factory.length && (
+              <p role="status">当前设备未提供出厂工具，可继续使用白板教具。</p>
+            )}
+          {factory.length > 0 && (
+            <>
+              <div
+                className="fc-tools-grid fc-factory-tools"
+                role="group"
+                aria-label="大屏工具"
+              >
+                {factory.map((tool) => (
+                  <button
+                    key={tool}
+                    type="button"
+                    aria-label={`打开${factoryTools[tool].label}`}
+                    disabled={!!factoryPending}
+                    aria-busy={factoryPending === tool}
+                    onClick={() => {
+                      void classroomCommands
+                        .execute({ name: "tools.factory", args: { tool } })
+                        .catch((failure) => setError(String(failure)));
+                    }}
+                  >
+                    {factoryTools[tool].icon}
+                    <span>
+                      {factoryPending === tool
+                        ? "正在打开…"
+                        : factoryTools[tool].label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <div className="fc-tools-grid">
             {(Object.entries(teachingTools) as [WidgetKind, string][]).map(
               ([kind, name]) => (

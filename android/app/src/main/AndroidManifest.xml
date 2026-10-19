@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <queries>
+        <package android:name="com.bsd.fastfile" />
+        <package android:name="com.bsd.vote.android" />
+        <package android:name="com.bsd.bsdcalculator" />
+        <package android:name="com.hwh.spotlight" />
+        <package android:name="com.bsd.timer" />
+        <intent><action android:name="bsd.intent.action.SPLITE_SCREEN" /></intent>
+        <provider android:authorities="com.bsd.systemservice.db.sourceContentProvider" />
+    </queries>
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />

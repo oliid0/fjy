@@ -30,6 +30,29 @@ import java.io.ByteArrayOutputStream;
 /** Paired, opt-in LAN uploads. Reading received files stays inside Capacitor's bridge. */
 @CapacitorPlugin(name = "FcboardClassroom")
 public class ClassroomPlugin extends Plugin {
+    @PluginMethod
+    public void getFactoryTools(PluginCall call) {
+        try {
+            JSArray available = new JSArray();
+            for (String tool : FactoryTools.PACKAGES.keySet()) {
+                if (FactoryTools.resolve(getContext(), tool) != null) available.put(tool);
+            }
+            JSObject result = new JSObject(); result.put("available", available); call.resolve(result);
+        } catch (Exception error) { call.reject("无法读取大屏工具", error); }
+    }
+
+    @PluginMethod
+    public void openFactoryTool(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                android.content.Intent intent = FactoryTools.resolve(getContext(), call.getString("tool"));
+                if (intent == null) { call.reject("当前设备未安装或未开放这项大屏工具"); return; }
+                getActivity().startActivity(intent);
+                call.resolve();
+            } catch (Exception error) { call.reject("无法打开大屏工具：" + error.getMessage(), error); }
+        });
+    }
+
     private Receiver receiver;
     private BoardShareServer boardShare;
     private final Handler shareTimer = new Handler(Looper.getMainLooper());

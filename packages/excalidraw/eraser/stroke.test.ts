@@ -1,7 +1,7 @@
 import { pointFrom } from "@excalidraw/math";
+import { factoryBrushSamples } from "@excalidraw/element/factoryBrush";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
-import { factoryBrushSamples } from "@excalidraw/element/factoryBrush";
 
 import { API } from "../tests/helpers/api";
 

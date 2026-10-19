@@ -77,7 +77,9 @@
         </button>
         <button id="type"><span>⌨</span><small>文字</small></button>
         <button id="fullscreen"><span>⛶</span><small>全屏</small></button>
-        <button id="disconnect"><span>×</span><small>断开</small></button>
+        <button id="disconnect" aria-label="断开">
+          <span aria-hidden="true">×</span><small>断开</small>
+        </button>
       </nav>
       <form id="text" hidden>
         <label class="sr-only" for="message">输入到大屏</label

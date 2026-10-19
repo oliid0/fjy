@@ -355,6 +355,7 @@ export interface AppState {
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed";
   multiStroke?: boolean;
   toolbarReversed?: boolean;
+  toolbarHidden?: boolean;
   eraserMode?: "stroke" | "object";
   eraserSize?: number;
   palmEraser?: boolean;

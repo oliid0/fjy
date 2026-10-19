@@ -41,6 +41,26 @@ for (const viewport of [
     ).toHaveCount(0);
     await expect(toolbar.locator(".undo-redo-buttons")).toHaveCount(1);
     await expect(toolbar.locator(".zoom-actions")).toHaveCount(0);
+    const historyLabels = await toolbar
+      .locator(".undo-redo-buttons button")
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const icon = button.querySelector(".ToolIcon__icon")!;
+          const style = getComputedStyle(button);
+          return {
+            available: button.clientHeight,
+            content:
+              icon.getBoundingClientRect().height +
+              parseFloat(getComputedStyle(button, "::after").lineHeight) +
+              parseFloat(style.rowGap) +
+              parseFloat(style.paddingTop) +
+              parseFloat(style.paddingBottom),
+          };
+        }),
+      );
+    expect(
+      historyLabels.every(({ available, content }) => content <= available),
+    ).toBe(true);
     const groups = await toolbar.locator(":scope > div").evaluateAll((nodes) =>
       nodes.map((node) => {
         const rect = node.getBoundingClientRect();

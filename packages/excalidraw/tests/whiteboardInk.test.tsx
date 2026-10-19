@@ -40,6 +40,29 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  it("dismisses anchored tool settings when hiding the toolbar and keeps them dismissed after restoring it", async () => {
+    await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    expect(
+      screen.getByRole("dialog", { name: "画笔与对象属性" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "隐藏工具栏" }));
+    expect(
+      screen.queryByRole("dialog", { name: "画笔与对象属性" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "显示工具栏" }));
+    expect(
+      screen.queryByRole("dialog", { name: "画笔与对象属性" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "橡皮" }));
+    fireEvent.click(screen.getByRole("button", { name: "橡皮" }));
+    expect(screen.getByLabelText("橡皮设置")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "隐藏工具栏" }));
+    expect(screen.queryByLabelText("橡皮设置")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "显示工具栏" }));
+    expect(screen.queryByLabelText("橡皮设置")).not.toBeInTheDocument();
+  });
   it("clears only after the eraser slider reaches its end, preserves the board, and restores content with one undo", async () => {
     const { container } = await render(
       <Excalidraw UIOptions={{ unifiedToolbar: true }} />,

@@ -121,6 +121,9 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   useEffect(() => {
     const refresh = () => {
       const state = api.getAppState();
+      if (state.toolbarHidden) {
+        setOpen(false);
+      }
       const document = classroomCommands.read("document") as
         | { selection?: string[]; ink: { id: string; widget?: Widget }[] }
         | undefined;
@@ -321,6 +324,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         if (classroomCommands.has("panel.close")) {
           void classroomCommands.execute({ name: "panel.close" });
         }
+        api.updateScene({ appState: { toolbarHidden: false } });
         setOpen(true);
       }),
       classroomCommands.register(

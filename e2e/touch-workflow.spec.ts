@@ -154,6 +154,39 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     .getByRole("button", { name: "显示工具栏", exact: true })
     .click();
   await expect(menu).toBeVisible();
+  await toolbar.getByRole("button", { name: "教学工具", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "教学工具", exact: true }),
+  ).toBeVisible();
+  await toolbar
+    .getByRole("button", { name: "隐藏工具栏", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "教学工具", exact: true }),
+  ).toHaveCount(0);
+  await toolbar
+    .getByRole("button", { name: "显示工具栏", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "教学工具", exact: true }),
+  ).toHaveCount(0);
+  await pen.click();
+  await pen.click();
+  await expect(
+    page.getByRole("dialog", { name: "画笔与对象属性" }),
+  ).toBeVisible();
+  await toolbar
+    .getByRole("button", { name: "隐藏工具栏", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "画笔与对象属性" }),
+  ).toHaveCount(0);
+  await toolbar
+    .getByRole("button", { name: "显示工具栏", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "画笔与对象属性" }),
+  ).toHaveCount(0);
 });
 test("green and black chalkboards use visible white ink and restore dark ink on white", async ({
   page,

@@ -115,10 +115,16 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         setValue({ ...controller.value });
       }
     });
-    const stopWatch = api.onChange(boot);
+    const stopWatch = api.onChange((_elements, state) => {
+      if (state.toolbarHidden) {
+        setOpen(false);
+      }
+      boot();
+    });
     boot();
     const registrations = [
       classroomCommands.register("board.list", "打开白板列表", () => {
+        api.updateScene({ appState: { toolbarHidden: false } });
         setValue({ ...controller.value });
         setOpen(true);
       }),

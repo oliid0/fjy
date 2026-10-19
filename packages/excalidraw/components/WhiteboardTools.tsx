@@ -55,7 +55,7 @@ export const WhiteboardTools = ({
   React.useEffect(() => {
     setOpen(false);
     setEraserOpen(false);
-  }, [activeTool.type]);
+  }, [activeTool.type, state.toolbarHidden]);
   return (
     <>
       <ToolButton

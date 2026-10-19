@@ -279,6 +279,13 @@
       font: 400 11px/16px system-ui;
       margin: 0;
     }
+    &.ToolIcon--selected:not(.fc-board-mode) {
+      background-color: var(--fc-blue);
+      --icon-fill-color: white;
+    }
+    &.fc-board-mode.ToolIcon--selected {
+      background-color: transparent;
+    }
   }
   .fc-insert-tools {
     z-index: 20;
@@ -441,9 +448,17 @@
     align-items: center;
     min-height: 56px;
     gap: 2px;
+    .ToolIcon__icon {
+      height: 28px;
+      flex: 0 0 28px;
+    }
     &::after {
       font: 400 11px/16px system-ui;
+      flex: 0 0 16px;
     }
+  }
+  .fc-unified-toolbar .undo-redo-buttons button {
+    background-color: var(--fc-surface) !important;
   }
   .fc-unified-toolbar .main-menu-trigger::after {
     content: "菜单";

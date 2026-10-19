@@ -108,6 +108,34 @@ it("does not advertise unavailable device actions to the AI", async () => {
   expect(screen.getByRole("button", { name: "插入计时器" })).toBeEnabled();
 });
 
+it("closes the tool picker with the toolbar and allows the AI to show it again", async () => {
+  const api = emptyApi();
+  const state = { ...api.getAppState(), toolbarHidden: false };
+  vi.spyOn(api, "getAppState").mockImplementation(() => state);
+  let change: () => void = () => {};
+  vi.spyOn(api, "onChange").mockImplementation((callback) => {
+    change = () => callback([], state, {});
+    return () => {};
+  });
+  render(<TeachingTools api={api} />);
+  fireEvent.click(screen.getByRole("button", { name: "教学工具" }));
+  expect(screen.getByRole("dialog", { name: "教学工具" })).toBeInTheDocument();
+  act(() => {
+    state.toolbarHidden = true;
+    change();
+  });
+  expect(
+    screen.queryByRole("dialog", { name: "教学工具" }),
+  ).not.toBeInTheDocument();
+  await act(async () => {
+    await classroomCommands.execute({ name: "tools.open" });
+  });
+  expect(api.updateScene).toHaveBeenCalledWith({
+    appState: { toolbarHidden: false },
+  });
+  expect(screen.getByRole("dialog", { name: "教学工具" })).toBeInTheDocument();
+});
+
 it("executes one AI request that inserts, configures and starts a timer before React commits the selection", async () => {
   let scene: readonly ExcalidrawElement[] = [];
   const api = {

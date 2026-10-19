@@ -77,6 +77,18 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
   const animations = new Set<LessonCanvas>();
   const registrations = [
     classroomCommands.register(
+      "canvas.toolbar",
+      "显示或隐藏原白板工具栏，args.visible 必须是布尔值；隐藏会收起工具属性和菜单",
+      (args) => {
+        if (typeof args.visible !== "boolean") {
+          throw new Error("请指定是否显示工具栏");
+        }
+        api.updateScene({
+          appState: { toolbarHidden: !args.visible, openMenu: null },
+        });
+      },
+    ),
+    classroomCommands.register(
       "canvas.action",
       `执行原白板动作，args.action 仅限 ${Array.from(actions).join(",")}`,
       (args) => {

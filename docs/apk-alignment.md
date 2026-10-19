@@ -30,7 +30,7 @@
 | `HDashedCurveObject.createDashEffect` | 虚线段 max(1.6× 笔宽,8)、间隔 max(1.8× 笔宽,10)。按设备单位换算并共用于 Canvas / SVG；局部擦除后的片段保留虚线相位。 |
 | `ZWhiteBoardActivity.doHighlighter:2810` | 荧光笔 alpha110/255；当前荧光笔保留同样透明度比例，独立于用户透明度设置。 |
 | `HEraserSettingWindow.onStopTrackingTouch:59` | 清屏滑块低于 98 回零，达到 98 清空并回到画笔；小中大 100 / 150 / 200 物理像素。当前增加相同阈值与尺寸换算，清屏保留背景 / 画笔偏好且可一次撤销。 |
-| `exchangeMorePosition:2746`、`setBottomMenuCollapsed:1131` | Cutover 切换侧边操作位置，Hide 收起工具栏。不是系统返回桌面操作。 |
+| `exchangeMorePosition:2746`、`setBottomMenuCollapsed:1131` | Cutover 切换侧边操作位置；Hide 收起工具栏并关闭底部弹层。隐藏状态沿现有 AppState 传递到属性、橡皮、工具箱与页列表，恢复时旧弹层保持关闭；状态不存入文件、浏览器或协作数据。AI 共用 canvas.toolbar 路由。不是系统返回桌面操作。 |
 
 `NativeWhiteboard.java` 的 13 个 native 声明与 ARM64 .so 的 JNI 符号已对应；底层刷新 / framebuffer 代码不是 Java，不能把现有 JNI 包装声明记作“已经移植原生加速”。
 

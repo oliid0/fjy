@@ -544,7 +544,7 @@ const LayerUI = ({
   };
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
-  const [toolbarHidden, setToolbarHidden] = React.useState(false);
+  const toolbarHidden = !!appState.toolbarHidden;
   const penBase = appState.currentItemPenMode === "brush" ? 15 : 4;
   const inkThickness =
     (appState.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) *
@@ -552,7 +552,7 @@ const LayerUI = ({
 
   const renderUnifiedToolbar = () => (
     <>
-      {showProperties && !appState.viewModeEnabled && (
+      {showProperties && !toolbarHidden && !appState.viewModeEnabled && (
         <div
           className="fc-editor-properties"
           role="dialog"
@@ -684,7 +684,7 @@ const LayerUI = ({
             <UndoRedoActions renderAction={actionManager.renderAction} />
             <ToolButton
               type="button"
-              className="fc-board-tool"
+              className="fc-board-tool fc-board-mode"
               icon={handIcon}
               aria-label={
                 appState.multiStroke !== false ? "多点书写" : "单点书写"
@@ -720,7 +720,10 @@ const LayerUI = ({
             icon={toolbarHidden ? chevronLeftIcon : chevronRight}
             aria-label={toolbarHidden ? "显示工具栏" : "隐藏工具栏"}
             showAriaLabel
-            onClick={() => setToolbarHidden((hidden) => !hidden)}
+            onClick={() => {
+              setShowProperties(false);
+              setAppState({ toolbarHidden: !toolbarHidden, openMenu: null });
+            }}
           />
         </div>
       </div>

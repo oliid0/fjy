@@ -241,6 +241,7 @@ import {
   isLineElement,
   isSimpleArrow,
   StoreDelta,
+  StoreChange,
   type ApplyToOptions,
   positionElementsOnGrid,
   calculateFixedPointForNonElbowArrowBinding,
@@ -7118,7 +7119,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  /** Each contact owns its stroke; overlapping contacts commit together when the last lifts. */
+  /** Each contact owns its stroke and undo entry, as in HCanvas.onAllTouchUp. */
   private beginParallelInk = (event: React.PointerEvent<HTMLElement>) => {
     event.preventDefault();
     if (this.parallelInk.has(event.pointerId)) {
@@ -7193,8 +7194,27 @@ class App extends React.Component<AppProps, AppState> {
             : [...element.pressures, element.pressures[0]],
         });
       }
+      const completedStroke = this.scene
+        .getElementsMapIncludingDeleted()
+        .get(element.id);
+      if (!cancelled && completedStroke && !completedStroke.isDeleted) {
+        // Capture this completed stroke only. Other contacts are still changing
+        // and must not become partial strokes in this pointer's undo entry.
+        const previous = this.store.snapshot;
+        const completed = new Map(previous.elements) as SceneElementsMap;
+        completed.set(element.id, completedStroke);
+        const next = previous.maybeClone(
+          CaptureUpdateAction.IMMEDIATELY,
+          completed,
+          undefined,
+        );
+        this.store.scheduleMicroAction({
+          action: CaptureUpdateAction.IMMEDIATELY,
+          change: StoreChange.create(previous, next),
+          delta: StoreDelta.calculate(previous, next),
+        });
+      }
       if (!this.parallelInk.size) {
-        this.store.scheduleCapture();
         this.setState({ cursorButton: "up" });
       }
       this.props.onPointerUp?.(tool, pointerDownState);

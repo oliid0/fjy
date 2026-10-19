@@ -127,56 +127,72 @@ describe("APK-style whiteboard ink", () => {
     expect(live()[0].width).toBe(300);
     expect(h.state.zoom.value).toBe(zoom);
   });
-  it("writes independent simultaneous contacts in multi-point mode and undoes the overlapping gesture once", async () => {
-    const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
-    );
-    const canvas = container.querySelector("canvas.interactive")!;
-    act(() => h.app.setActiveTool({ type: "freedraw" }));
-    expect(
-      screen.getByRole("button", { name: "多点书写" }),
-    ).toBeInTheDocument();
-    const zoom = h.state.zoom.value;
-    pointer(canvas, "pointerdown", 100, 200, {
-      pointerType: "touch",
-      pointerId: 1,
-    });
-    pointer(canvas, "pointerdown", 100, 300, {
-      pointerType: "touch",
-      pointerId: 2,
-      isPrimary: false,
-    });
-    pointer(canvas, "pointermove", 400, 200, {
-      pointerType: "touch",
-      pointerId: 1,
-    });
-    pointer(canvas, "pointermove", 300, 300, {
-      pointerType: "touch",
-      pointerId: 2,
-      isPrimary: false,
-    });
-    pointer(canvas, "pointerup", 400, 200, {
-      pointerType: "touch",
-      pointerId: 1,
-    });
-    pointer(canvas, "pointermove", 500, 300, {
-      pointerType: "touch",
-      pointerId: 2,
-      isPrimary: false,
-    });
-    pointer(canvas, "pointerup", 500, 300, {
-      pointerType: "touch",
-      pointerId: 2,
-      isPrimary: false,
-    });
-    expect(h.state.zoom.value).toBe(zoom);
-    expect(live()).toHaveLength(2);
-    expect(live().map((el) => el.width)).toEqual([300, 400]);
-    fireEvent.click(screen.getByTestId("button-undo"));
-    expect(live()).toHaveLength(0);
-    fireEvent.click(screen.getByTestId("button-redo"));
-    expect(live()).toHaveLength(2);
-  });
+  it.each([false, true])(
+    "undoes each completed stroke separately with batched lifts: %s",
+    async (batched) => {
+      const { container } = await render(
+        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      );
+      const canvas = container.querySelector("canvas.interactive")!;
+      act(() => h.app.setActiveTool({ type: "freedraw" }));
+      expect(
+        screen.getByRole("button", { name: "多点书写" }),
+      ).toBeInTheDocument();
+      const zoom = h.state.zoom.value;
+      pointer(canvas, "pointerdown", 100, 200, {
+        pointerType: "touch",
+        pointerId: 1,
+      });
+      pointer(canvas, "pointerdown", 100, 300, {
+        pointerType: "touch",
+        pointerId: 2,
+        isPrimary: false,
+      });
+      pointer(canvas, "pointermove", 400, 200, {
+        pointerType: "touch",
+        pointerId: 1,
+      });
+      pointer(canvas, "pointermove", 300, 300, {
+        pointerType: "touch",
+        pointerId: 2,
+        isPrimary: false,
+      });
+      const finishBoth = () => {
+        pointer(canvas, "pointerup", 400, 200, {
+          pointerType: "touch",
+          pointerId: 1,
+        });
+        pointer(canvas, "pointermove", 500, 300, {
+          pointerType: "touch",
+          pointerId: 2,
+          isPrimary: false,
+        });
+        pointer(canvas, "pointerup", 500, 300, {
+          pointerType: "touch",
+          pointerId: 2,
+          isPrimary: false,
+        });
+      };
+      if (batched) {
+        act(finishBoth);
+      } else {
+        finishBoth();
+      }
+      expect(h.state.zoom.value).toBe(zoom);
+      expect(live()).toHaveLength(2);
+      expect(live().map((el) => el.width)).toEqual([300, 400]);
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(live()).toHaveLength(1);
+      expect(live()[0].width).toBe(300);
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(live()).toHaveLength(0);
+      fireEvent.click(screen.getByTestId("button-redo"));
+      expect(live()).toHaveLength(1);
+      expect(live()[0].width).toBe(300);
+      fireEvent.click(screen.getByTestId("button-redo"));
+      expect(live()).toHaveLength(2);
+    },
+  );
 
   it("cancels only the affected contact while another user keeps writing", async () => {
     const { container } = await render(

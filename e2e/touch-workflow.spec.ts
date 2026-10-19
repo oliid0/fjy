@@ -32,7 +32,7 @@ test("the existing share menu exports the chosen saved page as an actual PNG", a
   await expect(share).toHaveCount(0);
 });
 
-test("two touchscreen contacts write separate strokes and undo together in multi-point mode", async ({
+test("two touchscreen contacts write and undo independently in multi-point mode", async ({
   page,
 }) => {
   await page.goto("/");
@@ -69,7 +69,11 @@ test("two touchscreen contacts write separate strokes and undo together in multi
     (await strokes()).every((el: { width: number }) => el.width > 250),
   ).toBe(true);
   await page.getByTestId("button-undo").click();
+  await expect.poll(async () => (await strokes()).length).toBe(1);
+  await page.getByTestId("button-undo").click();
   await expect.poll(async () => (await strokes()).length).toBe(0);
+  await page.getByTestId("button-redo").click();
+  await expect.poll(async () => (await strokes()).length).toBe(1);
   await page.getByTestId("button-redo").click();
   await expect.poll(async () => (await strokes()).length).toBe(2);
   const geometry = JSON.stringify(await strokes());

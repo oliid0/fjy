@@ -41,6 +41,14 @@ for (const viewport of [
     ).toHaveCount(0);
     await expect(toolbar.locator(".undo-redo-buttons")).toHaveCount(1);
     await expect(toolbar.locator(".zoom-actions")).toHaveCount(0);
+    const groups = await toolbar.locator(":scope > div").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, right: rect.right };
+      }),
+    );
+    expect(groups[0].right).toBeLessThanOrEqual(groups[1].left);
+    expect(groups[1].right).toBeLessThanOrEqual(groups[2].left);
     await expect(
       page.getByRole("button", { name: "绘制函数", exact: true }),
     ).toHaveCount(0);

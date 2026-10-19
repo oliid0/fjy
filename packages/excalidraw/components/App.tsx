@@ -697,6 +697,7 @@ class App extends React.Component<AppProps, AppState> {
   laserTrails = new LaserTrails(this.animationFrameHandler, this);
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
   private stopInkErasure: (() => void) | null = null;
+  private parallelInk = new Map<number, (cancelled: boolean) => void>();
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
 
   onChangeEmitter = new Emitter<
@@ -3113,6 +3114,9 @@ class App extends React.Component<AppProps, AppState> {
 
   public componentWillUnmount() {
     this.stopInkErasure?.();
+    for (const finish of this.parallelInk.values()) {
+      finish(true);
+    }
     (window as any).launchQueue?.setConsumer(() => {});
     this.renderer.destroy();
     this.scene.destroy();
@@ -3521,6 +3525,13 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private onTouchStart = (event: TouchEvent) => {
+    if (
+      this.props.UIOptions.unifiedToolbar &&
+      ["freedraw", "eraser"].includes(this.state.activeTool.type)
+    ) {
+      // Repeated pen contacts are handwriting, including dots, never a text double tap.
+      return;
+    }
     // fix for Apple Pencil Scribble (do not prevent for other devices)
     if (isIOS) {
       event.preventDefault();
@@ -5437,6 +5448,9 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
+    for (const finish of this.parallelInk.values()) {
+      finish(false);
+    }
     const nextActiveTool = updateActiveTool(this.state, tool);
     if (nextActiveTool.type === "hand") {
       setCursor(this.interactiveCanvas, CURSOR_TYPE.GRAB);
@@ -6437,7 +6451,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerMove = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
-    if (this.stopInkErasure) {
+    if (this.stopInkErasure || this.parallelInk.size) {
       return;
     }
     if (
@@ -7086,6 +7100,118 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
+  /** Each contact owns its stroke; overlapping contacts commit together when the last lifts. */
+  private beginParallelInk = (event: React.PointerEvent<HTMLElement>) => {
+    event.preventDefault();
+    if (this.parallelInk.has(event.pointerId)) {
+      return;
+    }
+    if (!this.parallelInk.size) {
+      this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
+    }
+    const pointerDownState = this.initialPointerDownState(event);
+    const element = this.createInkElement(
+      event,
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+    );
+    const target = event.currentTarget || this.interactiveCanvas!;
+    const tool = this.state.activeTool;
+    let samples: PointerEvent[] = [];
+    let finished = false;
+    const append = withBatchedUpdatesThrottled(() => {
+      const points = [...element.points];
+      const pressures = [...element.pressures];
+      for (const sample of samples) {
+        const at = viewportCoordsToSceneCoords(sample, this.state);
+        const dx = at.x - element.x;
+        const dy = at.y - element.y;
+        const last = points.at(-1)!;
+        if (last[0] !== dx || last[1] !== dy) {
+          points.push(pointFrom<LocalPoint>(dx, dy));
+          if (!element.simulatePressure) {
+            pressures.push(sample.pressure);
+          }
+        }
+      }
+      samples = [];
+      if (points.length !== element.points.length) {
+        this.scene.mutateElement(element, { points, pressures });
+      }
+    });
+    const move = (next: PointerEvent) => {
+      if (next.pointerId !== event.pointerId) {
+        return;
+      }
+      next.preventDefault();
+      samples.push(...pointerSamples(next));
+      append();
+    };
+    const finish = (cancelled: boolean, lastEvent?: PointerEvent) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      append.flush();
+      append.cancel();
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", cancelAll);
+      target.removeEventListener("lostpointercapture", cancel);
+      unsubscribe();
+      this.parallelInk.delete(event.pointerId);
+      if (cancelled) {
+        this.scene.replaceAllElements(
+          this.scene
+            .getElementsIncludingDeleted()
+            .filter((item) => item.id !== element.id),
+        );
+      } else if (element.points.length === 1) {
+        this.scene.mutateElement(element, {
+          points: [...element.points, pointFrom<LocalPoint>(0.0001, 0.0001)],
+          pressures: element.simulatePressure
+            ? []
+            : [...element.pressures, element.pressures[0]],
+        });
+      }
+      if (!this.parallelInk.size) {
+        this.store.scheduleCapture();
+        this.setState({ cursorButton: "up" });
+      }
+      this.props.onPointerUp?.(tool, pointerDownState);
+      this.onPointerUpEmitter.trigger(
+        tool,
+        pointerDownState,
+        lastEvent || event.nativeEvent,
+      );
+    };
+    const up = (next: PointerEvent) => {
+      if (next.pointerId === event.pointerId) {
+        move(next);
+        finish(false, next);
+      }
+    };
+    const cancel = (next: PointerEvent) => {
+      if (next.pointerId === event.pointerId) {
+        finish(true, next);
+      }
+    };
+    const cancelAll = () => finish(true);
+    const unsubscribe = this.missingPointerEventCleanupEmitter.on(cancelAll);
+    this.parallelInk.set(event.pointerId, finish);
+    target.setPointerCapture?.(event.pointerId);
+    this.scene.insertElement(element);
+    this.setState({ selectedElementIds: {}, cursorButton: "down" });
+    this.props.onPointerDown?.(tool, pointerDownState);
+    this.onPointerDownEmitter.trigger(tool, pointerDownState, event);
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", cancelAll);
+    target.addEventListener("lostpointercapture", cancel);
+  };
+
   private beginInkErasure = (
     event: React.PointerEvent<HTMLElement>,
     palm: boolean,
@@ -7408,6 +7534,13 @@ class App extends React.Component<AppProps, AppState> {
       const penEraser =
         event.pointerType === "pen" &&
         (event.button === 5 || !!(event.buttons & 34));
+      if (
+        (palm || penEraser || this.state.activeTool.type !== "freedraw") &&
+        this.parallelInk.size
+      ) {
+        event.preventDefault();
+        return;
+      }
       if (palm && this.state.newElement) {
         event.preventDefault();
         return;
@@ -7419,6 +7552,14 @@ class App extends React.Component<AppProps, AppState> {
           this.state.eraserMode !== "object")
       ) {
         this.beginInkErasure(event, palm);
+        return;
+      }
+      if (
+        this.state.multiStroke &&
+        this.state.activeTool.type === "freedraw" &&
+        event.button === 0
+      ) {
+        this.beginParallelInk(event);
         return;
       }
     }
@@ -8742,18 +8883,11 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private handleFreeDrawElementOnPointerDown = (
+  private createInkElement = (
     event: React.PointerEvent<HTMLElement>,
-    elementType: ExcalidrawFreeDrawElement["type"],
-    pointerDownState: PointerDownState,
+    gridX: number,
+    gridY: number,
   ) => {
-    // Begin a mark capture. This does not have to update state yet.
-    const [gridX, gridY] = getGridPoint(
-      pointerDownState.origin.x,
-      pointerDownState.origin.y,
-      null,
-    );
-
     const topLayerFrame = this.getTopLayerFrameAtSceneCoords({
       x: gridX,
       y: gridY,
@@ -8764,8 +8898,8 @@ class App extends React.Component<AppProps, AppState> {
       ? event.pointerType !== "pen"
       : event.pressure === 0.5;
 
-    const element = newFreeDrawElement({
-      type: elementType,
+    return newFreeDrawElement({
+      type: "freedraw",
       x: gridX,
       y: gridY,
       strokeColor: this.state.currentItemStrokeColor,
@@ -8793,7 +8927,21 @@ class App extends React.Component<AppProps, AppState> {
           }
         : undefined,
     });
+  };
 
+  private handleFreeDrawElementOnPointerDown = (
+    event: React.PointerEvent<HTMLElement>,
+    _elementType: ExcalidrawFreeDrawElement["type"],
+    pointerDownState: PointerDownState,
+  ) => {
+    // Begin a mark capture. This does not have to update state yet.
+    const [gridX, gridY] = getGridPoint(
+      pointerDownState.origin.x,
+      pointerDownState.origin.y,
+      null,
+    );
+
+    const element = this.createInkElement(event, gridX, gridY);
     this.scene.insertElement(element);
 
     this.setState((prevState) => {

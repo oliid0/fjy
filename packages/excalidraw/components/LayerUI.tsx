@@ -64,7 +64,13 @@ import { JSONExportDialog } from "./JSONExportDialog";
 import { LaserPointerButton } from "./LaserPointerButton";
 import { Toast } from "./Toast";
 import { ToolButton } from "./ToolButton";
-import { CircleIcon, CloseIcon, chevronRight, chevronLeftIcon } from "./icons";
+import {
+  CircleIcon,
+  CloseIcon,
+  chevronRight,
+  chevronLeftIcon,
+  handIcon,
+} from "./icons";
 import { WhiteboardTools } from "./WhiteboardTools";
 
 import "./LayerUI.scss";
@@ -642,6 +648,18 @@ const LayerUI = ({
             </WhiteboardTools>
             <tunnels.ToolbarExtrasTunnel.Out />
             <UndoRedoActions renderAction={actionManager.renderAction} />
+            <ToolButton
+              type="button"
+              className="fc-board-tool"
+              icon={handIcon}
+              aria-label={appState.multiStroke ? "多点书写" : "单点书写"}
+              title="单点：双指缩放；多点：多人同时书写"
+              showAriaLabel
+              selected={!!appState.multiStroke}
+              onClick={() =>
+                setAppState({ multiStroke: !appState.multiStroke })
+              }
+            />
           </div>
         ) : (
           <ExitViewModeButton actionManager={actionManager} />

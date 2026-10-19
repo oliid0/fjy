@@ -4,7 +4,6 @@ import {
   PlusIcon,
   TrashIcon,
   save,
-  file,
   CloseIcon,
   chevronLeftIcon,
   chevronRight,
@@ -285,8 +284,6 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               setOpen(!open);
             }}
           >
-            {file}
-            <span>白板</span>
             <span className="fc-board-count">
               {value.boards.findIndex((board) => board.id === value.active) +
                 1 || 1}{" "}

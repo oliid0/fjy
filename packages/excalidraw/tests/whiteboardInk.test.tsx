@@ -38,6 +38,88 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  it("writes independent simultaneous contacts in multi-point mode and undoes the overlapping gesture once", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "单点书写" }));
+    const zoom = h.state.zoom.value;
+    pointer(canvas, "pointerdown", 100, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointerdown", 100, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+      isPrimary: false,
+    });
+    pointer(canvas, "pointermove", 400, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointermove", 300, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+      isPrimary: false,
+    });
+    pointer(canvas, "pointerup", 400, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointermove", 500, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+      isPrimary: false,
+    });
+    pointer(canvas, "pointerup", 500, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+      isPrimary: false,
+    });
+    expect(h.state.zoom.value).toBe(zoom);
+    expect(live()).toHaveLength(2);
+    expect(live().map((el) => el.width)).toEqual([300, 400]);
+    fireEvent.click(screen.getByTestId("button-undo"));
+    expect(live()).toHaveLength(0);
+    fireEvent.click(screen.getByTestId("button-redo"));
+    expect(live()).toHaveLength(2);
+  });
+
+  it("cancels only the affected contact while another user keeps writing", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    API.setAppState({ multiStroke: true });
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    pointer(canvas, "pointerdown", 100, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointerdown", 100, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+    });
+    pointer(canvas, "pointercancel", 100, 200, {
+      pointerType: "touch",
+      pointerId: 1,
+    });
+    pointer(canvas, "pointermove", 400, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+    });
+    pointer(canvas, "pointerup", 400, 300, {
+      pointerType: "touch",
+      pointerId: 2,
+    });
+    expect(live()).toHaveLength(1);
+    expect(live()[0].width).toBe(300);
+    fireEvent.click(screen.getByTestId("button-undo"));
+    expect(live()).toHaveLength(0);
+  });
+
   it("uses the host device calibration without persisting it as a drawing preference", async () => {
     const { container } = await render(
       <Excalidraw

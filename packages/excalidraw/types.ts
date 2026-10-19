@@ -353,6 +353,7 @@ export interface AppState {
   currentItemFillStyle: ExcalidrawElement["fillStyle"];
   currentItemStrokeWidth: number;
   currentItemPenMode?: "hard" | "brush";
+  multiStroke?: boolean;
   eraserMode?: "stroke" | "object";
   eraserSize?: number;
   palmEraser?: boolean;

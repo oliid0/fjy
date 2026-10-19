@@ -98,9 +98,19 @@ test("transparent PPT ink survives closing, can be erased, and undo restores it"
   });
   await page.mouse.up();
   await expect(layer.locator("polyline")).toHaveCount(1);
+  const original = (await layer
+    .locator("polyline")
+    .getAttribute("points"))!.split(" ");
   await page.getByRole("button", { name: "擦除板书", exact: true }).click();
   await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.3);
-  await expect(layer.locator("polyline")).toHaveCount(0);
+  await expect(layer.locator("polyline")).toHaveCount(2);
+  const fragments = await layer
+    .locator("polyline")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("points")!.split(" ")),
+    );
+  expect(fragments[0][0]).toBe(original[0]);
+  expect(fragments[1].at(-1)).toBe(original.at(-1));
   await page.getByRole("button", { name: "撤销板书", exact: true }).click();
   await expect(layer.locator("polyline")).toHaveCount(1);
   await page.getByRole("button", { name: "关闭课件" }).click();
@@ -286,7 +296,7 @@ test("voice uses the same component actions to create a new board without a mode
   await expect(
     page.getByRole("button", { name: "新建白板", exact: true }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "语音指令", exact: true }).click();
+  await selectMenu(page, "语音指令");
   await page.getByRole("button", { name: "切换白板", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "切换到 白板 2", exact: true }),

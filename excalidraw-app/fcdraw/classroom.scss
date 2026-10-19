@@ -306,6 +306,14 @@
     .fc-unified-toolbar {
       gap: 2px;
       padding-inline: 2px;
+      grid-template-columns: 56px minmax(0, 1fr) 56px;
+    }
+    .fc-toolbar-visibility {
+      width: 48px;
+      padding-inline: 0;
+      .fc-tool-label {
+        display: none;
+      }
     }
   }
   .fc-unified-toolbar .ToolIcon:has(.fc-tool-label),
@@ -696,11 +704,8 @@
   position: relative;
 }
 .fc-board-count {
-  font-size: 11px;
-  position: absolute;
-  right: 5px;
-  top: 2px;
-  bottom: auto;
+  font: 400 14px/1.4 system-ui;
+  white-space: nowrap;
 }
 
 .fc-network-panel {

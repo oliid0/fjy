@@ -1,5 +1,46 @@
 import { expect, test } from "@playwright/test";
 
+test("two touchscreen contacts write separate strokes and undo together in multi-point mode", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.getByRole("button", { name: "单点书写", exact: true }).click();
+  const input = await page.context().newCDPSession(page);
+  const contacts = (x: number) => [
+    { id: 1, x, y: 200, radiusX: 2, radiusY: 2 },
+    { id: 2, x, y: 350, radiusX: 2, radiusY: 2 },
+  ];
+  await input.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: contacts(200),
+  });
+  await input.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: contacts(500),
+  });
+  await input.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  const strokes = () =>
+    page.evaluate(() =>
+      JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        (el: { type: string; isDeleted: boolean }) =>
+          el.type === "freedraw" && !el.isDeleted,
+      ),
+    );
+  await expect.poll(async () => (await strokes()).length).toBe(2);
+  expect(
+    (await strokes()).every((el: { width: number }) => el.width > 250),
+  ).toBe(true);
+  await page.getByTestId("button-undo").click();
+  await expect.poll(async () => (await strokes()).length).toBe(0);
+  await page.getByTestId("button-redo").click();
+  await expect.poll(async () => (await strokes()).length).toBe(2);
+  await input.detach();
+});
+
 test("APK toolbar keeps drawing controls compact and insertion tools contextual", async ({
   page,
 }, info) => {

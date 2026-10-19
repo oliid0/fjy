@@ -173,6 +173,7 @@ const APP_STATE_STORAGE_CONF = (<
   currentItemStrokeStyle: { browser: true, export: false, server: false },
   currentItemStrokeWidth: { browser: true, export: false, server: false },
   currentItemPenMode: { browser: true, export: false, server: false },
+  multiStroke: { browser: true, export: false, server: false },
   eraserMode: { browser: true, export: false, server: false },
   eraserSize: { browser: true, export: false, server: false },
   palmEraser: { browser: true, export: false, server: false },

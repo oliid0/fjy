@@ -4,6 +4,98 @@ import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
 
+test("rainbow ink preserves its actual colors across erasure, undo and zoom", async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  const pen = page.getByRole("button", { name: "画笔", exact: true });
+  await pen.click();
+  await pen.click();
+  await page.getByRole("button", { name: "彩虹笔", exact: true }).click();
+  const thickness = page.getByRole("slider", { name: "书写粗细", exact: true });
+  await thickness.press("Home");
+  for (let i = 0; i < 22; i++) {
+    await thickness.press("ArrowRight");
+  }
+  await expect(thickness).toHaveValue("12");
+  await page.getByRole("button", { name: "关闭属性", exact: true }).click();
+  await page.mouse.move(100, 200);
+  await page.mouse.down();
+  await page.mouse.move(1100, 200, { steps: 24 });
+  await page.mouse.up();
+  const pixels = () =>
+    page.evaluate(() => {
+      const canvas =
+        document.querySelector<HTMLCanvasElement>("canvas.static")!;
+      const context = canvas.getContext("2d")!;
+      const state = JSON.parse(
+        localStorage.getItem("excalidraw-state") || "{}",
+      );
+      const scale = canvas.width / canvas.getBoundingClientRect().width;
+      const zoom = state.zoom?.value ?? 1;
+      return [200, 640, 1000].map((x) =>
+        Array.from(
+          context.getImageData(
+            Math.round((x + (state.scrollX || 0)) * zoom * scale),
+            Math.round((200 + (state.scrollY || 0)) * zoom * scale),
+            1,
+            1,
+          ).data,
+        ),
+      );
+    });
+  await expect
+    .poll(async () =>
+      (
+        await pixels()
+      ).every(
+        (rgba) =>
+          Math.max(...rgba.slice(0, 3)) - Math.min(...rgba.slice(0, 3)) > 40,
+      ),
+    )
+    .toBe(true);
+  const before = await pixels();
+  expect(before[0]).not.toEqual(before[1]);
+  expect(before[1]).not.toEqual(before[2]);
+  await page.getByRole("button", { name: "橡皮", exact: true }).click();
+  await page.mouse.move(640, 160);
+  await page.mouse.down();
+  await page.mouse.move(640, 240, { steps: 4 });
+  await page.mouse.up();
+  const cut = [before[0], [255, 255, 255, 255], before[2]];
+  await expect.poll(pixels).toEqual(cut);
+  await page.getByTestId("button-undo").click();
+  await expect.poll(pixels).toEqual(before);
+  await page.getByTestId("button-redo").click();
+  await expect.poll(pixels).toEqual(cut);
+  await page.keyboard.press("Shift+Equal");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
+            ?.value || 1,
+      ),
+    )
+    .toBeGreaterThan(1);
+  // Pixel centers shift by a fraction of a scene unit at a new zoom.
+  await expect
+    .poll(async () =>
+      Math.max(
+        ...(
+          await pixels()
+        ).flatMap((rgba, i) =>
+          rgba.map((channel, j) => Math.abs(channel - cut[i][j])),
+        ),
+      ),
+    )
+    .toBeLessThanOrEqual(2);
+  await page.screenshot({
+    path: info.outputPath("rainbow-ink-erased-zoomed.png"),
+  });
+});
+
 test("the existing share menu exports the chosen saved page as an actual PNG", async ({
   page,
 }) => {

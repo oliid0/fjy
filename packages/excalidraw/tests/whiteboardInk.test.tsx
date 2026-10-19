@@ -88,7 +88,7 @@ describe("APK-style whiteboard ink", () => {
     fireEvent.click(screen.getByTestId("button-undo"));
     expect(live()).toHaveLength(1);
   });
-  it("offers working fountain, highlighter and dashed pens without replacing the canvas", async () => {
+  it("offers working fountain, highlighter, dashed and rainbow pens without replacing the canvas", async () => {
     const { container } = await render(
       <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
     );
@@ -112,6 +112,14 @@ describe("APK-style whiteboard ink", () => {
     draw(canvas);
     expect(live().at(-1)!.customData?.fcInk.pen).toBe("brush");
     expect(live().at(-1)!.opacity).toBe(100);
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    fireEvent.click(screen.getByRole("button", { name: "彩虹笔" }));
+    API.setAppState({ width: 1000, zoom: { value: getNormalizedZoom(2) } });
+    draw(canvas);
+    const rainbow = live().at(-1)!;
+    expect(rainbow.customData?.fcInk.pen).toBe("rainbow");
+    expect(rainbow.customData?.fcInk.rainbow.width).toBe(500);
+    expect(rainbow.strokeStyle).toBe("solid");
   });
 
   it("ignores a second writing contact in explicit single mode without starting a pinch", async () => {

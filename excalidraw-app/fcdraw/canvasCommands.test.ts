@@ -10,6 +10,39 @@ import { shapeInk } from "./documents";
 
 import type { InkStroke } from "./documents";
 
+it("exposes the original pen modes to AI and validates the complete style request before changing the pen", async () => {
+  const api = {
+    updateScene: vi.fn(),
+    executeAction: vi.fn(),
+  } as unknown as ExcalidrawImperativeAPI;
+  const stop = registerCanvasCommands(api);
+  try {
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.style",
+        args: { pen: "missing" },
+      }),
+    ).rejects.toThrow("笔型不存在");
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.style",
+        args: { pen: "rainbow", color: "invalid" },
+      }),
+    ).rejects.toThrow("颜色无效");
+    expect(api.updateScene).not.toHaveBeenCalled();
+    expect(api.executeAction).not.toHaveBeenCalled();
+    await classroomCommands.execute({
+      name: "canvas.style",
+      args: { pen: "rainbow" },
+    });
+    expect(api.updateScene).toHaveBeenCalledWith({
+      appState: { currentItemPenMode: "rainbow" },
+    });
+  } finally {
+    stop();
+  }
+});
+
 it("routes text, shapes, selection and plots into the visible document instead of the hidden board", async () => {
   const api = {
     getSceneElements: () => [],

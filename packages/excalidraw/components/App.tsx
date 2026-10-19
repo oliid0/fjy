@@ -8976,6 +8976,21 @@ class App extends React.Component<AppProps, AppState> {
             fcInk: {
               version: this.state.currentItemPenMode === "brush" ? 3 : 2,
               pen: this.state.currentItemPenMode || "hard",
+              ...(this.state.currentItemPenMode === "rainbow"
+                ? {
+                    rainbow: {
+                      x: viewportCoordsToSceneCoords(
+                        {
+                          clientX: this.state.offsetLeft,
+                          clientY: this.state.offsetTop,
+                        },
+                        this.state,
+                      ).x,
+                      width:
+                        Math.max(1, this.state.width) / this.state.zoom.value,
+                    },
+                  }
+                : {}),
               unit:
                 (this.props.UIOptions.inkProfile?.hardPenWidth ?? 4) /
                 4 /

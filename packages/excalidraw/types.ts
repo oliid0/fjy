@@ -352,7 +352,7 @@ export interface AppState {
   currentItemBackgroundColor: string;
   currentItemFillStyle: ExcalidrawElement["fillStyle"];
   currentItemStrokeWidth: number;
-  currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed";
+  currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
   multiStroke?: boolean;
   toolbarReversed?: boolean;
   toolbarHidden?: boolean;

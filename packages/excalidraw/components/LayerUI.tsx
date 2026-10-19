@@ -580,6 +580,7 @@ const LayerUI = ({
                     ["brush", "钢笔"],
                     ["highlighter", "荧光笔"],
                     ["dashed", "虚线笔"],
+                    ["rainbow", "彩虹笔"],
                   ] as const
                 ).map(([mode, label]) => (
                   <button

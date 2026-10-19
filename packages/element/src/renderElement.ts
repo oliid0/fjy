@@ -68,6 +68,7 @@ import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
 import { factoryInkDashes, isFactoryStroke } from "./factoryInk";
+import { rainbowInkCoordinates, rainbowInkStops } from "./rainbowInk";
 
 import type {
   ExcalidrawElement,
@@ -434,6 +435,14 @@ const drawElementOnCanvas = (
           }
           if (isFactoryStroke(element)) {
             context.strokeStyle = context.fillStyle;
+            const rainbow = rainbowInkCoordinates(element);
+            if (rainbow) {
+              const gradient = context.createLinearGradient(...rainbow);
+              for (const [offset, color] of rainbowInkStops) {
+                gradient.addColorStop(offset, color);
+              }
+              context.strokeStyle = gradient;
+            }
             context.lineWidth = element.strokeWidth;
             context.lineCap = "round";
             context.lineJoin = "round";

@@ -150,7 +150,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
     ),
     classroomCommands.register(
       "canvas.style",
-      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted",
+      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow 设置白板后续书写笔型",
       (args) => {
         if (classroomCommands.has("document.style")) {
           return classroomCommands.execute({ name: "document.style", args });
@@ -166,12 +166,19 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           "textAlign",
           "fillStyle",
           "strokeStyle",
+          "pen",
         ];
         if (
           !Object.keys(args).length ||
           Object.keys(args).some((key) => !supported.includes(key))
         ) {
           throw new Error("样式参数无效");
+        }
+        const pen = (
+          ["hard", "brush", "highlighter", "dashed", "rainbow"] as const
+        ).find((value) => value === args.pen);
+        if (args.pen !== undefined && !pen) {
+          throw new Error("笔型不存在");
         }
         for (const key of ["color", "background"] as const) {
           if (
@@ -256,6 +263,9 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           api.executeAction("changeFontFamily", {
             currentItemFontFamily: args.fontFamily,
           });
+        }
+        if (pen) {
+          api.updateScene({ appState: { currentItemPenMode: pen } });
         }
       },
     ),

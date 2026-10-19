@@ -37,6 +37,10 @@ import {
   factoryInkDashes,
   isFactoryStroke,
 } from "@excalidraw/element/factoryInk";
+import {
+  rainbowInkCoordinates,
+  rainbowInkStops,
+} from "@excalidraw/element/rainbowInk";
 
 import { getElementAbsoluteCoords } from "@excalidraw/element";
 
@@ -397,6 +401,36 @@ const renderElementToSvg = (
           path.setAttribute("d", shape);
           if (isFactoryStroke(element)) {
             path.setAttribute("stroke", path.getAttribute("fill")!);
+            const rainbow = rainbowInkCoordinates(element);
+            if (rainbow) {
+              const gradient = svgRoot.ownerDocument.createElementNS(
+                SVG_NS,
+                "linearGradient",
+              );
+              const id = `rainbow-${element.id}`;
+              gradient.setAttribute("id", id);
+              gradient.setAttribute("gradientUnits", "userSpaceOnUse");
+              gradient.setAttribute("spreadMethod", "pad");
+              for (const [index, attribute] of [
+                "x1",
+                "y1",
+                "x2",
+                "y2",
+              ].entries()) {
+                gradient.setAttribute(attribute, String(rainbow[index]));
+              }
+              for (const [offset, color] of rainbowInkStops) {
+                const stop = svgRoot.ownerDocument.createElementNS(
+                  SVG_NS,
+                  "stop",
+                );
+                stop.setAttribute("offset", String(offset));
+                stop.setAttribute("stop-color", color);
+                gradient.appendChild(stop);
+              }
+              wrapper.appendChild(gradient);
+              path.setAttribute("stroke", `url(#${id})`);
+            }
             path.setAttribute("fill", "none");
             path.setAttribute("stroke-width", String(element.strokeWidth));
             path.setAttribute("stroke-linecap", "round");

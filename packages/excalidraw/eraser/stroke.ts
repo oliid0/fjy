@@ -9,6 +9,10 @@ import {
   factoryBrushSamples,
   isFactoryBrush,
 } from "@excalidraw/element/factoryBrush";
+import {
+  factoryInkSamples,
+  isFactoryStroke,
+} from "@excalidraw/element/factoryInk";
 
 import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
 import type { LocalPoint, Radians } from "@excalidraw/math";
@@ -105,6 +109,7 @@ export const eraseStroke = (
   ) {
     return null;
   }
+  const factory = isFactoryStroke(element) ? factoryInkSamples(element) : null;
   const [, , , , cx, cy] = getElementAbsoluteCoords(element, new Map());
   const cos = Math.cos(element.angle);
   const sin = Math.sin(element.angle);
@@ -113,7 +118,10 @@ export const eraseStroke = (
   const brushCos = Math.cos(brushAngle);
   const brushSin = Math.sin(brushAngle);
   let travelled = element.customData?.fcInk?.dashOffset || 0;
-  const input = brush || element.points.map(([x, y]) => ({ x, y, width: 0 }));
+  const input =
+    brush ||
+    factory?.map((p) => ({ ...p, width: 0 })) ||
+    element.points.map(([x, y]) => ({ x, y, width: 0 }));
   const samples = input.map(({ x, y, width: brushWidth }, i): Sample => {
     if (i) {
       travelled += Math.hypot(x - input[i - 1].x, y - input[i - 1].y);
@@ -123,7 +131,7 @@ export const eraseStroke = (
     return {
       x: cx + dx * cos - dy * sin,
       y: cy + dx * sin + dy * cos,
-      pressure: element.pressures[i] ?? 0.5,
+      pressure: factory?.[i].pressure ?? element.pressures[i] ?? 0.5,
       distance: travelled,
       brushWidth,
     };
@@ -206,6 +214,7 @@ export const eraseStroke = (
       y: first.y,
       angle: 0 as Radians,
       ...(brush ||
+      factory ||
       (element.customData?.fcInk && element.strokeStyle === "dashed")
         ? {
             customData: {
@@ -213,6 +222,7 @@ export const eraseStroke = (
               fcInk: {
                 ...element.customData?.fcInk,
                 dashOffset: first.distance,
+                ...(factory ? { centerline: true } : {}),
                 ...(brush
                   ? {
                       brushWidths: fragment.map(

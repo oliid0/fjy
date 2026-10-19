@@ -22,6 +22,52 @@ const stroke = () => ({
 });
 
 describe("local stroke erasure", () => {
+  it("erases the visible quadratic curve rather than its raw control polygon, without smoothing surviving fragments again", () => {
+    const input = {
+      ...stroke(),
+      points: [
+        pointFrom<LocalPoint>(0, 0),
+        pointFrom<LocalPoint>(100, 200),
+        pointFrom<LocalPoint>(200, 0),
+      ],
+      customData: { fcInk: { version: 2, pen: "hard", unit: 1 } },
+    };
+    // The second quadratic peaks at (100,150); neither raw segment passes here.
+    const parts = eraseStroke(
+      input,
+      { x: 100, y: 150 },
+      { x: 100, y: 150 },
+      6,
+      6,
+    )!;
+    expect(parts).toHaveLength(2);
+    expect(
+      eraseStroke(input, { x: 100, y: 200 }, { x: 100, y: 200 }, 6, 6),
+    ).toBeNull();
+    expect(parts[0].points.at(-1)![0] + parts[0].x).toBeLessThan(100);
+    expect(parts[1].x).toBeGreaterThan(100);
+    for (const part of parts) {
+      expect(part.customData?.fcInk.centerline).toBe(true);
+      expect(Math.max(...part.points.map((p) => p[1] + part.y))).toBeLessThan(
+        150,
+      );
+    }
+    const again = eraseStroke(
+      parts[0],
+      { x: 40, y: 80 },
+      { x: 40, y: 80 },
+      6,
+      6,
+    )!;
+    expect(again).toHaveLength(2);
+    expect(again[0].points[0]).toEqual(parts[0].points[0]);
+    expect(again[1].points.at(-1)![0] + again[1].x).toBeCloseTo(
+      parts[0].points.at(-1)![0] + parts[0].x,
+    );
+    expect(again[1].points.at(-1)![1] + again[1].y).toBeCloseTo(
+      parts[0].points.at(-1)![1] + parts[0].y,
+    );
+  });
   it("keeps the brush curve and width on both sides of a cut, including repeated cuts", () => {
     const input = {
       ...stroke(),

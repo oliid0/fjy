@@ -4,6 +4,45 @@ import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
 
+test("a small eraser cuts the displayed bend rather than the raw handwriting samples", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.mouse.move(100, 200);
+  await page.mouse.down();
+  await page.mouse.move(200, 400);
+  await page.mouse.move(300, 200);
+  await page.mouse.up();
+  const pixel = (x: number, y: number) =>
+    page.evaluate(
+      ({ x, y }) => {
+        const canvas =
+          document.querySelector<HTMLCanvasElement>("canvas.static")!;
+        const scale = canvas.width / canvas.getBoundingClientRect().width;
+        return Array.from(
+          canvas.getContext("2d")!.getImageData(x * scale, y * scale, 1, 1)
+            .data,
+        );
+      },
+      { x, y },
+    );
+  await expect.poll(async () => (await pixel(200, 350))[0]).toBeLessThan(100);
+  const left = await pixel(150, 300);
+  const eraser = page.getByRole("button", { name: "橡皮", exact: true });
+  await eraser.click();
+  await eraser.click();
+  const size = page.getByRole("slider", { name: /^橡皮大小/ });
+  await size.press("Home");
+  await expect(size).toHaveValue("12");
+  await page.keyboard.press("Escape");
+  await page.mouse.click(200, 350);
+  await expect.poll(() => pixel(200, 350)).toEqual([255, 255, 255, 255]);
+  expect(await pixel(150, 300)).toEqual(left);
+  await page.getByTestId("button-undo").click();
+  await expect.poll(async () => (await pixel(200, 350))[0]).toBeLessThan(100);
+});
+
 test("rainbow ink preserves its actual colors across erasure, undo and zoom", async ({
   page,
 }, info) => {

@@ -16,6 +16,7 @@ import {
 import { drawPlot, insertionPoint, insertText, selectedPlot } from "./board";
 import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
+import { BoardShare } from "./BoardShare";
 import { LanSession } from "./LanSession";
 import { classroomCommands, directCommand } from "./commands";
 import { DOCUMENT_ACCEPT } from "./documents";
@@ -1741,6 +1742,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   return (
     <div className="fc-classroom">
       <BoardSwitcher api={api} />
+      <BoardShare />
       <LanSession api={api} />
       <Teacher api={api} onCommand={execute} />
       <TeachingTools api={api} />

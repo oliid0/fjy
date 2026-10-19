@@ -31,6 +31,50 @@ import java.io.ByteArrayOutputStream;
 @CapacitorPlugin(name = "FcboardClassroom")
 public class ClassroomPlugin extends Plugin {
     private Receiver receiver;
+    private BoardShareServer boardShare;
+    private final Handler shareTimer = new Handler(Looper.getMainLooper());
+
+    @PluginMethod
+    public synchronized void startShare(PluginCall call) {
+        try {
+            JSArray pages = call.getArray("pages");
+            if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("请选择 1 至 20 页分享");
+            List<byte[]> images = new ArrayList<>();
+            int total = 0;
+            for (int index = 0; index < pages.length(); index++) {
+                String value = pages.getString(index);
+                if (!value.startsWith("data:image/png;base64,") || value.length() > 14000000) throw new IOException("分享页面格式或大小无效");
+                byte[] image = Base64.decode(value.substring(22), Base64.DEFAULT);
+                if (image.length < 8 || image[0] != (byte)137 || image[1] != 80 || image[2] != 78 || image[3] != 71) throw new IOException("分享页面必须是 PNG 图片");
+                total += image.length;
+                if (total > 20000000) throw new IOException("分享图片总大小超过 20 MB，请减少页数");
+                images.add(image);
+            }
+            List<String> addresses = new ArrayList<>();
+            for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!network.isUp() || network.isLoopback()) continue;
+                for (InetAddress address : Collections.list(network.getInetAddresses())) {
+                    if (address instanceof Inet4Address && address.isSiteLocalAddress()) addresses.add(address.getHostAddress());
+                }
+            }
+            if (addresses.isEmpty()) throw new IOException("请先连接局域网后再分享");
+            stopBoardShare();
+            boardShare = new BoardShareServer(images, 600000);
+            boardShare.start(15000, true);
+            JSArray urls = new JSArray();
+            for (String address : addresses) urls.put("http://" + address + ":" + boardShare.getListeningPort() + "/" + boardShare.token + "/");
+            shareTimer.postDelayed(this::stopBoardShare, 600000);
+            JSObject result = new JSObject(); result.put("urls", urls); call.resolve(result);
+        } catch (Exception error) { stopBoardShare(); call.reject(error.getMessage(), error); }
+    }
+
+    private synchronized void stopBoardShare() {
+        shareTimer.removeCallbacksAndMessages(null);
+        if (boardShare != null) { boardShare.stop(); boardShare = null; }
+    }
+
+    @PluginMethod
+    public void stopShare(PluginCall call) { stopBoardShare(); call.resolve(); }
     private final java.util.concurrent.ExecutorService imageEncoder = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     /** The factory whiteboard uses physical pixels and the manufacturer's touch calibration. */
@@ -160,6 +204,7 @@ public class ClassroomPlugin extends Plugin {
 
     @Override
     protected synchronized void handleOnDestroy() {
+        stopBoardShare();
         imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }
     }

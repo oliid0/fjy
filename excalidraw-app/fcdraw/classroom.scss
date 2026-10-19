@@ -209,6 +209,7 @@
   .fc-toolbar-trailing {
     width: max-content;
     max-width: 100%;
+    box-sizing: border-box;
     padding: 2px;
     border: 1px solid var(--fc-border);
     border-radius: 6px;
@@ -217,7 +218,32 @@
   }
   .fc-toolbar-trailing {
     justify-self: end;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+  .fc-toolbar-leading,
+  .fc-drawing-tools,
+  .fc-toolbar-trailing {
+    grid-row: 1;
+  }
+  .fc-toolbar-leading {
+    grid-column: 1;
+  }
+  .fc-drawing-tools {
+    grid-column: 2;
+  }
+  .fc-toolbar-trailing {
+    grid-column: 3;
+  }
+  .fc-toolbar-reversed {
+    .fc-toolbar-leading {
+      grid-column: 3;
+      justify-self: end;
+    }
+    .fc-toolbar-trailing {
+      grid-column: 1;
+      justify-self: start;
+    }
   }
   .fc-toolbar-collapsed {
     .fc-toolbar-leading,
@@ -228,6 +254,9 @@
     .fc-toolbar-trailing {
       grid-column: 3;
     }
+  }
+  .fc-toolbar-collapsed.fc-toolbar-reversed .fc-toolbar-trailing {
+    grid-column: 1;
   }
   .fc-drawing-tools {
     justify-self: center;
@@ -311,7 +340,7 @@
     .fc-toolbar-visibility {
       width: 48px;
       padding-inline: 0;
-      .fc-tool-label {
+      .ToolIcon__label {
         display: none;
       }
     }
@@ -706,6 +735,23 @@
 .fc-board-count {
   font: 400 14px/1.4 system-ui;
   white-space: nowrap;
+}
+.fc-share-page {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+.fc-share-code {
+  margin: 12px;
+  overflow-wrap: anywhere;
+  svg {
+    display: block;
+    width: 180px;
+    height: 180px;
+    max-width: 100%;
+    margin-bottom: 12px;
+  }
 }
 
 .fc-network-panel {

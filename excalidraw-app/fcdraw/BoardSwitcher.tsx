@@ -169,6 +169,10 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       classroomCommands.register("board.save", "保存当前白板到本机", () =>
         controller.flush(),
       ),
+      classroomCommands.register("board.pages", "@internal", async () => {
+        await controller.flush();
+        return controller.value;
+      }),
       classroomCommands.context("boards", () => ({
         active: controller.value.active,
         boards: controller.value.boards.map(({ id, name }) => ({ id, name })),

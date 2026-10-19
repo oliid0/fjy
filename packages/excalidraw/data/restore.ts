@@ -941,6 +941,9 @@ export const restoreAppState = (
   if (typeof inkPreferences.multiStroke === "boolean") {
     nextAppState.multiStroke = inkPreferences.multiStroke;
   }
+  if (typeof inkPreferences.toolbarReversed === "boolean") {
+    nextAppState.toolbarReversed = inkPreferences.toolbarReversed;
+  }
   for (const [key, min, max] of [
     ["eraserSize", 12, 240],
     ["palmEraserThreshold", 16, 120],

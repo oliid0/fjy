@@ -44,7 +44,9 @@ describe("APK-style whiteboard ink", () => {
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => h.app.setActiveTool({ type: "freedraw" }));
-    fireEvent.click(screen.getByRole("button", { name: "单点书写" }));
+    expect(
+      screen.getByRole("button", { name: "多点书写" }),
+    ).toBeInTheDocument();
     const zoom = h.state.zoom.value;
     pointer(canvas, "pointerdown", 100, 200, {
       pointerType: "touch",

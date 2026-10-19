@@ -38,6 +38,7 @@ export const AppMainMenu: React.FC<{
       {[
         ["新建白板", "board.new"],
         ["切换白板", "board.list"],
+        ["扫码分享", "board.share"],
         ["提问与讲解", "assistant.open"],
         ["教学工具", "tools.open"],
         ["课堂录制", "record.open"],

@@ -6451,7 +6451,24 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerMove = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
-    if (this.stopInkErasure || this.parallelInk.size) {
+    if (this.stopInkErasure) {
+      return;
+    }
+    if (this.parallelInk.size) {
+      if (
+        this.state.palmEraser !== false &&
+        isPalmContact(
+          event,
+          this.state.palmEraserThreshold ??
+            this.props.UIOptions.inkProfile?.palmThreshold ??
+            36,
+        )
+      ) {
+        this.parallelInk.get(event.pointerId)?.(true);
+        if (!this.parallelInk.size) {
+          this.beginInkErasure(event, true);
+        }
+      }
       return;
     }
     if (
@@ -7555,10 +7572,14 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
       if (
-        this.state.multiStroke &&
         this.state.activeTool.type === "freedraw" &&
-        event.button === 0
+        event.button === 0 &&
+        !isHoldingSpace
       ) {
+        if (this.state.multiStroke === false && this.parallelInk.size) {
+          event.preventDefault();
+          return;
+        }
         this.beginParallelInk(event);
         return;
       }

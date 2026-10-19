@@ -1,11 +1,45 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
+
+import { selectMenu } from "./menu";
+
+test("the existing share menu exports the chosen saved page as an actual PNG", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
+  await page.keyboard.press("t");
+  await page.mouse.click(200, 200);
+  await page.locator("textarea.excalidraw-wysiwyg").fill("分享的第一页");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "新建白板", exact: true }).click();
+  await selectMenu(page, "扫码分享");
+  const share = page.getByRole("dialog", { name: "分享白板", exact: true });
+  await share.getByRole("checkbox", { name: /第 2 页/ }).uncheck();
+  await share.getByRole("checkbox", { name: /第 1 页/ }).check();
+  const downloaded = page.waitForEvent("download");
+  await share.getByRole("button", { name: "下载选中页面" }).click();
+  const file = await downloaded;
+  expect(file.suggestedFilename()).toBe("Fcboard-1.png");
+  const data = await readFile((await file.path())!);
+  expect(Array.from(data.subarray(0, 8))).toEqual([
+    137, 80, 78, 71, 13, 10, 26, 10,
+  ]);
+  await share.getByRole("button", { name: "关闭分享" }).click();
+  await expect(share).toHaveCount(0);
+});
 
 test("two touchscreen contacts write separate strokes and undo together in multi-point mode", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "画笔", exact: true }).click();
-  await page.getByRole("button", { name: "单点书写", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "多点书写", exact: true }),
+  ).toBeVisible();
   const input = await page.context().newCDPSession(page);
   const contacts = (x: number) => [
     { id: 1, x, y: 200, radiusX: 2, radiusY: 2 },
@@ -74,6 +108,19 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await page.screenshot({
     path: info.outputPath("apk-toolbar-eraser-settings.png"),
   });
+  await page.keyboard.press("Escape");
+  const menu = page.getByTestId("main-menu-trigger");
+  const initial = (await menu.boundingBox())!;
+  await toolbar.getByRole("button", { name: "切换", exact: true }).click();
+  expect((await menu.boundingBox())!.x).toBeGreaterThan(initial.x + 500);
+  await toolbar
+    .getByRole("button", { name: "隐藏工具栏", exact: true })
+    .click();
+  await expect(menu).toBeHidden();
+  await toolbar
+    .getByRole("button", { name: "显示工具栏", exact: true })
+    .click();
+  await expect(menu).toBeVisible();
 });
 test("green and black chalkboards use visible white ink and restore dark ink on white", async ({
   page,

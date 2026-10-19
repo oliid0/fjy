@@ -70,6 +70,7 @@ import {
   chevronRight,
   chevronLeftIcon,
   handIcon,
+  RedoIcon,
 } from "./icons";
 import { WhiteboardTools } from "./WhiteboardTools";
 
@@ -588,6 +589,7 @@ const LayerUI = ({
       <div
         className={clsx("fc-unified-toolbar", {
           "fc-toolbar-collapsed": toolbarHidden,
+          "fc-toolbar-reversed": appState.toolbarReversed,
         })}
         role="toolbar"
         aria-label="白板工具栏"
@@ -652,12 +654,14 @@ const LayerUI = ({
               type="button"
               className="fc-board-tool"
               icon={handIcon}
-              aria-label={appState.multiStroke ? "多点书写" : "单点书写"}
-              title="单点：双指缩放；多点：多人同时书写"
+              aria-label={
+                appState.multiStroke !== false ? "多点书写" : "单点书写"
+              }
+              title="多点：多人同时书写；单点：仅接收一处笔迹。选择或移动工具可双指缩放"
               showAriaLabel
-              selected={!!appState.multiStroke}
+              selected={appState.multiStroke !== false}
               onClick={() =>
-                setAppState({ multiStroke: !appState.multiStroke })
+                setAppState({ multiStroke: appState.multiStroke === false })
               }
             />
           </div>
@@ -669,7 +673,18 @@ const LayerUI = ({
           {renderTopRightUI?.(editorInterface.formFactor === "phone", appState)}
           <ToolButton
             type="button"
-            className="fc-toolbar-visibility"
+            className="fc-board-tool"
+            icon={RedoIcon}
+            aria-label="切换"
+            title="左右切换底栏"
+            showAriaLabel
+            onClick={() =>
+              setAppState({ toolbarReversed: !appState.toolbarReversed })
+            }
+          />
+          <ToolButton
+            type="button"
+            className="fc-board-tool fc-toolbar-visibility"
             icon={toolbarHidden ? chevronLeftIcon : chevronRight}
             aria-label={toolbarHidden ? "显示工具栏" : "隐藏工具栏"}
             showAriaLabel

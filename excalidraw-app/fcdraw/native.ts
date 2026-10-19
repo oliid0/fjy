@@ -4,6 +4,8 @@ import type { PluginListenerHandle } from "@capacitor/core";
 
 export type Upload = { id: string; name: string; path: string; size: number };
 export const Classroom = registerPlugin<{
+  startShare(options: { pages: string[] }): Promise<{ urls: string[] }>;
+  stopShare(): Promise<void>;
   getInkProfile(): Promise<{
     hardPenWidth: number;
     brushPenWidth: number;

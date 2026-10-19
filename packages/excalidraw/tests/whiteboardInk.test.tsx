@@ -40,6 +40,24 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  it("dismisses tool settings with Escape without cancelling the selected tool", async () => {
+    await render(
+      <Excalidraw
+        handleKeyboardGlobally
+        UIOptions={{ unifiedToolbar: true }}
+      />,
+    );
+    const eraser = screen.getByRole("button", { name: "橡皮" });
+    fireEvent.click(eraser);
+    fireEvent.click(eraser);
+    fireEvent.keyDown(screen.getByLabelText("橡皮设置"), { key: "Escape" });
+    expect(screen.queryByLabelText("橡皮设置")).not.toBeInTheDocument();
+    expect(h.state.activeTool.type).toBe("eraser");
+    fireEvent.click(screen.getByRole("button", { name: "插入" }));
+    fireEvent.keyDown(screen.getByLabelText("插入与工具"), { key: "Escape" });
+    expect(screen.queryByLabelText("插入与工具")).not.toBeInTheDocument();
+    expect(h.state.activeTool.type).toBe("eraser");
+  });
   it("dismisses anchored tool settings when hiding the toolbar and keeps them dismissed after restoring it", async () => {
     await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
     act(() => h.app.setActiveTool({ type: "freedraw" }));

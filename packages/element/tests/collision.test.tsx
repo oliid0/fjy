@@ -9,6 +9,56 @@ import { render } from "@excalidraw/excalidraw/tests/test-utils";
 import * as distance from "../src/distance";
 import { hitElementItself } from "../src/collision";
 
+it.each([0, Math.PI / 2])(
+  "selects the displayed factory curve rather than an unrelated spline at angle %s",
+  (angle) => {
+    const element = {
+      ...API.createElement({
+        type: "freedraw",
+        points: [
+          pointFrom<LocalPoint>(0, 0),
+          pointFrom<LocalPoint>(100, 200),
+          pointFrom<LocalPoint>(200, 0),
+        ],
+        angle,
+      }),
+      customData: { fcInk: { version: 2, pen: "hard", unit: 1 } },
+    };
+    const hit = (x: number, y: number) =>
+      hitElementItself({
+        point: pointFrom<GlobalPoint>(
+          100 + (x - 100) * Math.cos(angle) - (y - 100) * Math.sin(angle),
+          100 + (x - 100) * Math.sin(angle) + (y - 100) * Math.cos(angle),
+        ),
+        element,
+        threshold: 2,
+        elementsMap: arrayToMap([element]),
+      });
+    expect(hit(100, 150)).toBe(true);
+    expect(hit(100, 200)).toBe(false);
+  },
+);
+
+it("lets a factory ink dot be selected", () => {
+  const element = {
+    ...API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 200,
+      points: [pointFrom<LocalPoint>(0, 0)],
+    }),
+    customData: { fcInk: { version: 2, pen: "hard", unit: 1 } },
+  };
+  expect(
+    hitElementItself({
+      point: pointFrom<GlobalPoint>(100, 200),
+      element,
+      threshold: 2,
+      elementsMap: arrayToMap([element]),
+    }),
+  ).toBe(true);
+});
+
 describe("check rotated elements can be hit:", () => {
   beforeEach(async () => {
     localStorage.clear();

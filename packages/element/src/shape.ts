@@ -44,8 +44,16 @@ import type {
 
 import { elementWithCanvasCache } from "./renderElement";
 import { dashedInk } from "./dashedInk";
-import { factoryInkPath, isFactoryStroke } from "./factoryInk";
-import { factoryBrushPath, isFactoryBrush } from "./factoryBrush";
+import {
+  factoryInkPath,
+  factoryInkSamples,
+  isFactoryStroke,
+} from "./factoryInk";
+import {
+  factoryBrushPath,
+  factoryBrushSamples,
+  isFactoryBrush,
+} from "./factoryBrush";
 
 import {
   canBecomePolygon,
@@ -556,6 +564,24 @@ export const generateLinearCollisionShape = (
         });
     }
     case "freedraw": {
+      if (isFactoryStroke(element) || isFactoryBrush(element)) {
+        const samples = isFactoryStroke(element)
+          ? factoryInkSamples(element)
+          : factoryBrushSamples(element);
+        const points =
+          samples.length === 1 ? [samples[0], samples[0]] : samples;
+        return points.map(({ x, y }, index) => {
+          const point = pointRotateRads(
+            pointFrom<GlobalPoint>(element.x + x, element.y + y),
+            center,
+            element.angle,
+          );
+          return {
+            op: index ? "lineTo" : "move",
+            data: [point[0] - element.x, point[1] - element.y],
+          };
+        });
+      }
       if (element.points.length < 2) {
         return [];
       }

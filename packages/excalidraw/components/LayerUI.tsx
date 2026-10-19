@@ -560,6 +560,7 @@ const LayerUI = ({
           style={propertiesAnchor}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
+              event.stopPropagation();
               setShowProperties(false);
             }
           }}

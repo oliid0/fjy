@@ -99,6 +99,7 @@ export const WhiteboardTools = ({
             sideOffset={12}
             collisionPadding={12}
             aria-label="橡皮设置"
+            onEscapeKeyDown={(event) => event.stopPropagation()}
           >
             <label>
               滑动清屏
@@ -257,6 +258,7 @@ export const WhiteboardTools = ({
             sideOffset={12}
             collisionPadding={12}
             aria-label="插入与工具"
+            onEscapeKeyDown={(event) => event.stopPropagation()}
           >
             <div className="fc-insert-shapes">
               <ShapesSwitcher

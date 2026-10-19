@@ -4,6 +4,49 @@ import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
 
+test("displayed handwriting can be dragged and lasso-selected at its visible bend", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.mouse.move(100, 200);
+  await page.mouse.down();
+  await page.mouse.move(200, 400);
+  await page.mouse.move(300, 200);
+  await page.mouse.up();
+  const strokes = () =>
+    page.evaluate(() =>
+      JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        (element: { type: string; isDeleted?: boolean }) =>
+          element.type === "freedraw" && !element.isDeleted,
+      ),
+    );
+  await expect.poll(async () => (await strokes()).length).toBe(1);
+  await page.keyboard.press("v");
+  await page.mouse.move(200, 350);
+  await page.mouse.down();
+  await page.mouse.move(240, 350, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () => (await strokes())[0].x).toBe(140);
+  await page.getByTestId("button-undo").click();
+  await expect.poll(async () => (await strokes())[0].x).toBe(100);
+  await page.mouse.click(80, 80);
+  await page.getByRole("button", { name: "选择", exact: true }).click();
+  await page.mouse.move(180, 340);
+  await page.mouse.down();
+  for (const [x, y] of [
+    [220, 340],
+    [220, 360],
+    [180, 360],
+    [180, 340],
+  ]) {
+    await page.mouse.move(x, y, { steps: 2 });
+  }
+  await page.mouse.up();
+  await page.keyboard.press("Delete");
+  await expect.poll(async () => (await strokes()).length).toBe(0);
+});
+
 test("a small eraser cuts the displayed bend rather than the raw handwriting samples", async ({
   page,
 }) => {
@@ -36,6 +79,7 @@ test("a small eraser cuts the displayed bend rather than the raw handwriting sam
   await size.press("Home");
   await expect(size).toHaveValue("12");
   await page.keyboard.press("Escape");
+  await expect(eraser).toHaveClass(/ToolIcon--selected/);
   await page.mouse.click(200, 350);
   await expect.poll(() => pixel(200, 350)).toEqual([255, 255, 255, 255]);
   expect(await pixel(150, 300)).toEqual(left);

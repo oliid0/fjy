@@ -1,5 +1,4 @@
 import { defaultLang } from "@excalidraw/excalidraw/i18n";
-import { UI } from "@excalidraw/excalidraw/tests/helpers/ui";
 import {
   screen,
   fireEvent,
@@ -14,8 +13,8 @@ describe("Test LanguageList", () => {
     await render(<ExcalidrawApp />);
 
     // Properties are explicitly opened from the shared bottom toolbar.
-    UI.clickTool("rectangle");
-    fireEvent.click(screen.getByRole("button", { name: "画笔与对象属性" }));
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
     // english lang should display `thin` label
     expect(screen.queryByTitle(/thin/i)).not.toBeNull();
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);

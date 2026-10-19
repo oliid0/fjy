@@ -1,4 +1,5 @@
 import { createStore, get, set } from "idb-keyval";
+import { canvasStrokeColor } from "@excalidraw/common";
 
 import type {
   ExcalidrawImperativeAPI,
@@ -18,8 +19,11 @@ export type Board = {
   updated: number;
 };
 export type Workspace = { active: string; boards: Board[] };
-const storage = createStore("fcdraw-boards", "workspace");
-export const readWorkspace = () => get<Workspace>("workspace", storage);
+const storage = createStore("fcboard-boards", "workspace");
+const legacyStorage = createStore("fcdraw-boards", "workspace");
+export const readWorkspace = async () =>
+  (await get<Workspace>("workspace", storage)) ??
+  get<Workspace>("workspace", legacyStorage);
 export const writeWorkspace = (value: Workspace) =>
   set("workspace", value, storage);
 
@@ -119,12 +123,21 @@ export class BoardBook {
       throw new Error("白板不存在");
     }
     this.switching = true;
+    const previousState = this.api.getAppState();
     classroomCommands.invalidate();
     this.api.resetScene();
     this.api.addFiles(Object.values(board.files));
     this.api.updateScene({
       elements: board.elements,
-      appState: { ...board.view, selectedElementIds: {} },
+      appState: {
+        ...board.view,
+        selectedElementIds: {},
+        currentItemStrokeColor: canvasStrokeColor(
+          board.view.viewBackgroundColor,
+          previousState.currentItemStrokeColor,
+          previousState.viewBackgroundColor,
+        ),
+      },
     });
     this.api.history.clear();
     this.switching = false;

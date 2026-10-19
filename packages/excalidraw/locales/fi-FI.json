@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "",
     "fontSize": "Kirjasinkoko",
     "fontFamily": "Kirjasintyyppi",
-    "addWatermark": "Lisää \"Tehty Fcdrawilla\"",
+    "addWatermark": "Lisää \"Tehty Fcboardilla\"",
     "handDrawn": "Käsinpiirretty",
     "normal": "Tavallinen",
     "code": "Koodi",
@@ -91,7 +91,7 @@
     "untitled": "Nimetön",
     "name": "Nimi",
     "yourName": "Nimesi",
-    "madeWithExcalidraw": "Tehty Fcdrawilla",
+    "madeWithExcalidraw": "Tehty Fcboardilla",
     "group": "Ryhmitä valinta",
     "ungroup": "Pura valittu ryhmä",
     "collaborators": "Yhteistyökumppanit",
@@ -121,7 +121,7 @@
     "toggleTheme": "",
     "theme": "Teema",
     "personalLib": "Oma kirjasto",
-    "excalidrawLib": "Fcdraw kirjasto",
+    "excalidrawLib": "Fcboard kirjasto",
     "decreaseFontSize": "Pienennä kirjasinkokoa",
     "increaseFontSize": "Kasvata kirjasinkokoa",
     "unbindText": "Irroita teksti",
@@ -159,7 +159,7 @@
     "textToDiagram": "Teksti kaavioksi",
     "prompt": "",
     "followUs": "Seuraa meitä",
-    "discordChat": "Fcdraw-keskustelu",
+    "discordChat": "Fcboard-keskustelu",
     "zoomToFitViewport": "",
     "zoomToFitSelection": "",
     "zoomToFit": "",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Tyhjää piirtoaluetta ei voi viedä.",
     "couldNotCopyToClipboard": "Leikepöydälle vieminen epäonnistui.",
     "decryptFailed": "Salauksen purkaminen epäonnistui.",
-    "uploadedSecurly": "Lähetys on turvattu päästä-päähän-salauksella. Fcdrawin palvelin ja kolmannet osapuolet eivät voi lukea sisältöä.",
+    "uploadedSecurly": "Lähetys on turvattu päästä-päähän-salauksella. Fcboardin palvelin ja kolmannet osapuolet eivät voi lukea sisältöä.",
     "loadSceneOverridePrompt": "Ulkopuolisen piirroksen lataaminen korvaa nykyisen sisältösi. Jatketaanko?",
     "collabStopOverridePrompt": "Istunnon lopettaminen korvaa aiemman, paikallisesti tallennetun piirustuksen. Jatketaanko?\n\n(Jos haluat säilyttää paikallisesti tallennetun piirustuksen, sulje selaimen välilehti lopettamisen sijaan.)",
     "errorAddingToLibrary": "Kohdetta ei voitu lisätä kirjastoon",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Tämä lisää {{numShapes}} muotoa kirjastoosi. Jatketaanko?",
     "imageDoesNotContainScene": "Tämä kuva ei näytä sisältävän piirrostietoja. Oletko ottanut käyttöön piirroksen tallennuksen viennin aikana?",
     "cannotRestoreFromImage": "Teosta ei voitu palauttaa tästä kuvatiedostosta",
-    "invalidSceneUrl": "Teosta ei voitu tuoda annetusta URL-osoitteesta. Tallenne on vioittunut, tai osoitteessa ei ole Fcdraw JSON-dataa.",
+    "invalidSceneUrl": "Teosta ei voitu tuoda annetusta URL-osoitteesta. Tallenne on vioittunut, tai osoitteessa ei ole Fcboard JSON-dataa.",
     "resetLibrary": "Tämä tyhjentää kirjastosi. Jatketaanko?",
     "removeItemsFromsLibrary": "Poista {{count}} kohdetta kirjastosta?",
     "invalidEncryptionKey": "Salausavaimen on oltava 22 merkkiä pitkä. Live-yhteistyö ei ole käytössä.",
@@ -312,7 +312,7 @@
     "laser": "Laserosoitin",
     "hand": "Käsi (panning-työkalu)",
     "extraTools": "Lisää työkaluja",
-    "mermaidToExcalidraw": "Mermaid Fcdrawiksi",
+    "mermaidToExcalidraw": "Mermaid Fcboardiksi",
     "convertElementType": ""
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Mikäli sivun lataaminen uudelleen ei auta, yritä <button>tyhjentää piirtoalue.</button>",
     "clearCanvasCaveat": " Tämä johtaa työn menetykseen ",
     "trackedToSentry": "Virhe tunnisteella {{eventId}} tallennettiin järjestelmäämme.",
-    "openIssueMessage": "Olimme varovaisia emmekä sisällyttäneet tietoa piirroksestasi virheeseen. Mikäli piirroksesi ei ole yksityinen, harkitsethan kertovasi meille <button>virheenseurantajärjestelmässämme.</button> Sisällytä alla olevat tiedot kopioimalla ne Fcdraw-ongelmaan.",
+    "openIssueMessage": "Olimme varovaisia emmekä sisällyttäneet tietoa piirroksestasi virheeseen. Mikäli piirroksesi ei ole yksityinen, harkitsethan kertovasi meille <button>virheenseurantajärjestelmässämme.</button> Sisällytä alla olevat tiedot kopioimalla ne Fcboard-ongelmaan.",
     "sceneContent": "Piirroksen tiedot:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Jaettu istunto on nyt käynnissä.",
     "desc_shareLink": "Jaa tämä linkki kenelle tahansa, jonka kanssa haluat tehdä yhteistyötä:",
     "desc_exitSession": "Istunnon pysäyttäminen katkaisee yhteyden huoneeseen, mutta voit vielä jatkaa työskentelyä paikallisesti. Huomaa, että tämä ei vaikuta muihin käyttäjiin ja he voivat jatkaa oman versionsa parissa työskentelyä.",
-    "shareTitle": "Liity Fcdraw live-yhteistyöistuntoon"
+    "shareTitle": "Liity Fcboard live-yhteistyöistuntoon"
   },
   "errorDialog": {
     "title": "Virhe"
@@ -402,9 +402,9 @@
     "link_title": "Jaettava linkki",
     "link_details": "Vie vain luku -linkkinä.",
     "link_button": "Vie linkkinä",
-    "excalidrawplus_description": "Tallenna teos Fcdraw tilaan.",
+    "excalidrawplus_description": "Tallenna teos Fcboard tilaan.",
     "excalidrawplus_button": "Vie",
-    "excalidrawplus_exportError": "Ei voitu viedä Fcdraw-palveluun tällä hetkellä..."
+    "excalidrawplus_exportError": "Ei voitu viedä Fcboard-palveluun tällä hetkellä..."
   },
   "helpDialog": {
     "blog": "Lue blogiamme",
@@ -446,7 +446,7 @@
     "title": "Julkaise kirjasto",
     "itemName": "Kohteen nimi",
     "authorName": "Tekijän nimi",
-    "githubUsername": "Fcdraw-käyttäjätunnus",
+    "githubUsername": "Fcboard-käyttäjätunnus",
     "twitterUsername": "Twitter-käyttäjätunnus",
     "libraryName": "Kirjaston nimi",
     "libraryDesc": "Kirjaston kuvaus",
@@ -455,7 +455,7 @@
       "authorName": "Nimesi tai käyttäjänimesi",
       "libraryName": "Kirjastosi nimi",
       "libraryDesc": "Kirjaston kuvaus, joka auttaa ihmisiä ymmärtämään sen käyttötarkoitukset",
-      "githubHandle": "Fcdraw-tunnuksesi (valinnainen), jotta voit muokata kirjastoa sen jälkeen kun se on lähetetty tarkastettavaksi",
+      "githubHandle": "Fcboard-tunnuksesi (valinnainen), jotta voit muokata kirjastoa sen jälkeen kun se on lähetetty tarkastettavaksi",
       "twitterHandle": "Twitter-tunnus (valinnainen), jotta tiedämme ketä kiittää kun viestimme Twitterissä",
       "website": "Linkki henkilökohtaiselle verkkosivustollesi tai muualle (valinnainen)"
     },
@@ -464,7 +464,7 @@
       "website": "Syötä oikeamuotoinen URL-osoite"
     },
     "noteDescription": "Lähetä kirjastosi, jotta se voidaan sisällyttää <link>julkisessa kirjastolistauksessa</link>muiden käyttöön omissa piirrustuksissaan.",
-    "noteGuidelines": "Kirjasto on ensin hyväksyttävä manuaalisesti. Ole hyvä ja lue <link>ohjeet</link> ennen lähettämistä. Tarvitset Fcdraw-tilin, jotta voit viestiä ja tehdä muutoksia pyydettäessä, mutta se ei ole ehdottoman välttämätöntä.",
+    "noteGuidelines": "Kirjasto on ensin hyväksyttävä manuaalisesti. Ole hyvä ja lue <link>ohjeet</link> ennen lähettämistä. Tarvitset Fcboard-tilin, jotta voit viestiä ja tehdä muutoksia pyydettäessä, mutta se ei ole ehdottoman välttämätöntä.",
     "noteLicense": "Lähettämällä hyväksyt että kirjasto julkaistaan <link>MIT-lisenssin </link>alla, mikä lyhyesti antaa muiden käyttää sitä ilman rajoituksia.",
     "noteItems": "Jokaisella kirjaston kohteella on oltava oma nimensä suodatusta varten. Seuraavat kirjaston kohteet sisältyvät:",
     "atleastOneLibItem": "Valitse vähintään yksi kirjaston kohde aloittaaksesi",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Piirroksesi ovat päästä-päähän-salattuja, joten Fcdrawin palvelimet eivät koskaan näe niitä.",
-    "link": "Blogiartikkeli päästä päähän -salauksesta Fcdraw:ssa"
+    "tooltip": "Piirroksesi ovat päästä-päähän-salattuja, joten Fcboardin palvelimet eivät koskaan näe niitä.",
+    "link": "Blogiartikkeli päästä päähän -salauksesta Fcboard:ssa"
   },
   "stats": {
     "angle": "Kulma",
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Haluatko sen sijaan mennä Fcdraw:aan?",
+      "center_heading_plus": "Haluatko sen sijaan mennä Fcboard:aan?",
       "menuHint": "Vie, asetukset, kielet, ..."
     },
     "defaults": {
@@ -591,8 +591,8 @@
         "description": ""
       },
       "excalidrawPlus": {
-        "title": "Fcdraw",
-        "button": "Vie Fcdraw:aan",
+        "title": "Fcboard",
+        "button": "Vie Fcboard:aan",
         "description": ""
       }
     },

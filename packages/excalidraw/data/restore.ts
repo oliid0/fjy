@@ -928,6 +928,26 @@ export const restoreAppState = (
         : defaultValue;
   }
 
+  const inkPreferences = { ...localAppState, ...appState };
+  if (["hard", "brush"].includes(String(inkPreferences.currentItemPenMode))) {
+    nextAppState.currentItemPenMode = inkPreferences.currentItemPenMode;
+  }
+  if (["stroke", "object"].includes(String(inkPreferences.eraserMode))) {
+    nextAppState.eraserMode = inkPreferences.eraserMode;
+  }
+  if (typeof inkPreferences.palmEraser === "boolean") {
+    nextAppState.palmEraser = inkPreferences.palmEraser;
+  }
+  for (const [key, min, max] of [
+    ["eraserSize", 12, 240],
+    ["palmEraserThreshold", 16, 120],
+  ] as const) {
+    const value = inkPreferences[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      nextAppState[key] = Math.min(max, Math.max(min, value));
+    }
+  }
+
   return {
     ...nextAppState,
     cursorButton: localAppState?.cursorButton || "up",

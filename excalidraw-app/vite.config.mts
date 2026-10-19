@@ -83,6 +83,10 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "build",
       rollupOptions: {
+        input: {
+          app: path.resolve(__dirname, "index.html"),
+          remote: path.resolve(__dirname, "remote.html"),
+        },
         output: {
           assetFileNames(chunkInfo) {
             if (chunkInfo?.name?.endsWith(".woff2")) {
@@ -101,7 +105,7 @@ export default defineConfig(({ mode }) => {
               id.includes("/node_modules/mathjs/") ||
               id.includes("/node_modules/nerdamer/")
             ) {
-              return "fcdraw-math";
+              return "fcboard-math";
             }
             if (
               id.includes("packages/excalidraw/locales") &&
@@ -222,19 +226,19 @@ export default defineConfig(({ mode }) => {
           maximumFileSizeToCacheInBytes: 6 * 1024 ** 2,
         },
         manifest: {
-          short_name: "Fcdraw",
-          name: "方成教育 Fcdraw",
+          short_name: "Fcboard",
+          name: "Fcboard",
           description: "方成教育教学与会议智能白板。",
           icons: [
             {
-              src: "fcdraw.svg",
+              src: "fcboard.svg",
               sizes: "any",
               type: "image/svg+xml",
               purpose: "any",
             },
           ],
           start_url: "/",
-          id: "fcdraw",
+          id: "fcboard",
           display: "standalone",
           theme_color: "#121212",
           background_color: "#ffffff",

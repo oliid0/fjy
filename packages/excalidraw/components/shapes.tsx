@@ -13,6 +13,7 @@ import {
   EraserIcon,
   laserPointerToolIcon,
   handIcon,
+  LassoIcon,
 } from "./icons";
 
 import type { AppClassProperties } from "../types";
@@ -117,19 +118,12 @@ export const SHAPES = [
 ] as const;
 
 export const getToolbarTools = (app: AppClassProperties) => {
-  return app.state.preferredSelectionTool.type === "lasso"
-    ? ([
-        {
-          value: "lasso",
-          icon: SelectionIcon,
-          key: KEYS.V,
-          numericKey: KEYS["1"],
-          fillable: true,
-          toolbar: true,
-        },
-        ...SHAPES.slice(1),
-      ] as const)
-    : SHAPES;
+  return SHAPES.map((shape) =>
+    shape.value === "selection" &&
+    app.state.preferredSelectionTool.type === "lasso"
+      ? { ...shape, value: "lasso" as const, icon: LassoIcon }
+      : shape,
+  );
 };
 
 export const findShapeByKey = (key: string, app: AppClassProperties) => {

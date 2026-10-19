@@ -6,7 +6,8 @@ export type Material = {
   pages: Record<number, string>;
   updated: number;
 };
-const storage = createStore("fcdraw-materials", "materials");
+const storage = createStore("fcboard-materials", "materials");
+const legacyStorage = createStore("fcdraw-materials", "materials");
 let writing: Promise<unknown> = Promise.resolve();
 export const rememberPage = (
   id: string,
@@ -17,7 +18,10 @@ export const rememberPage = (
   writing = writing
     .catch(() => {})
     .then(async () => {
-      const all = (await get<Material[]>("materials", storage)) || [];
+      const all =
+        ((await get<Material[]>("materials", storage)) ??
+          (await get<Material[]>("materials", legacyStorage))) ||
+        [];
       const existing = all.find((item) => item.id === id) || {
         id,
         name,
@@ -41,7 +45,10 @@ export const rememberPage = (
 /** Local retrieval over the user's actual courseware, with page citations. */
 export const searchMaterials = async (query: string) => {
   await writing.catch(() => {});
-  const all = (await get<Material[]>("materials", storage)) || [];
+  const all =
+    ((await get<Material[]>("materials", storage)) ??
+      (await get<Material[]>("materials", legacyStorage))) ||
+    [];
   const terms = (
     query.toLowerCase().match(/[a-z0-9]{2,}|[\u3400-\u9fff]{2,}/g) || []
   ).flatMap((word) =>

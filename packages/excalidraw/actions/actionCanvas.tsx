@@ -10,6 +10,7 @@ import {
   updateActiveTool,
   CODES,
   KEYS,
+  canvasStrokeColor,
 } from "@excalidraw/common";
 
 import { getNonDeletedElements } from "@excalidraw/element";
@@ -63,7 +64,17 @@ export const actionChangeViewBackgroundColor = register<Partial<AppState>>({
   },
   perform: (_, appState, value) => {
     return {
-      appState: { ...appState, ...value },
+      appState: {
+        ...appState,
+        ...value,
+        ...(value?.viewBackgroundColor && {
+          currentItemStrokeColor: canvasStrokeColor(
+            value.viewBackgroundColor,
+            appState.currentItemStrokeColor,
+            appState.viewBackgroundColor,
+          ),
+        }),
+      },
       captureUpdate: !!value?.viewBackgroundColor
         ? CaptureUpdateAction.IMMEDIATELY
         : CaptureUpdateAction.EVENTUALLY,

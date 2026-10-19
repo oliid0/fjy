@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
 export const BRAND = {
-  name: "Fcdraw",
+  name: "Fcboard",
   company: "方成教育",
   website: "http://www.fcjyboard.com/",
 };
@@ -38,7 +38,11 @@ export const loadSettings = (): Settings => {
   try {
     return {
       ...defaults,
-      ...JSON.parse(localStorage.getItem("fcdraw-settings") || "{}"),
+      ...JSON.parse(
+        localStorage.getItem("fcboard-settings") ||
+          localStorage.getItem("fcdraw-settings") ||
+          "{}",
+      ),
     };
   } catch {
     return { ...defaults };
@@ -47,7 +51,7 @@ export const loadSettings = (): Settings => {
 
 export const saveSettings = (settings: Settings, rememberKey: boolean) => {
   sessionStorage.setItem(
-    "fcdraw-keys",
+    "fcboard-keys",
     JSON.stringify({
       apiKey: settings.apiKey,
       speechKey: settings.speechKey,
@@ -55,7 +59,7 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
     }),
   );
   localStorage.setItem(
-    "fcdraw-settings",
+    "fcboard-settings",
     JSON.stringify({
       ...settings,
       apiKey: rememberKey ? settings.apiKey : "",
@@ -63,6 +67,8 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
       ttsKey: rememberKey ? settings.ttsKey : "",
     }),
   );
+  localStorage.removeItem("fcdraw-settings");
+  sessionStorage.removeItem("fcdraw-keys");
 };
 
 export const currentSettings = (): Settings => {
@@ -70,7 +76,11 @@ export const currentSettings = (): Settings => {
   try {
     return {
       ...settings,
-      ...JSON.parse(sessionStorage.getItem("fcdraw-keys") || "{}"),
+      ...JSON.parse(
+        sessionStorage.getItem("fcboard-keys") ||
+          sessionStorage.getItem("fcdraw-keys") ||
+          "{}",
+      ),
     };
   } catch {
     return settings;

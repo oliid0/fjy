@@ -69,7 +69,7 @@ export const ToolPopover = ({
   }, [app]);
 
   return (
-    <Popover.Root open={isPopupOpen}>
+    <Popover.Root open={isPopupOpen} onOpenChange={setIsPopupOpen}>
       <Popover.Trigger asChild>
         <ToolButton
           className={clsx(className, {
@@ -80,18 +80,23 @@ export const ToolPopover = ({
           icon={displayedOption.icon}
           checked={isActive}
           name="editor-current-shape"
-          title={title}
+          title={`${title} · 长按切换`}
           aria-label={title}
           data-testid={dataTestId}
+          label={title}
           onPointerDown={() => {
-            setIsPopupOpen((v) => !v);
+            setIsPopupOpen(false);
             onToolChange(defaultOption);
           }}
+          onChange={() => onToolChange(defaultOption)}
+          onLongPress={() => setIsPopupOpen(true)}
         />
       </Popover.Trigger>
 
       <Popover.Content
         className="tool-popover-content"
+        aria-label={title}
+        side="top"
         sideOffset={SIDE_OFFSET}
         collisionBoundary={container ?? undefined}
       >
@@ -115,6 +120,7 @@ export const ToolPopover = ({
               }
               app.setActiveTool({ type: type as any });
               onToolChange?.(type);
+              setIsPopupOpen(false);
             }}
           />
         ))}

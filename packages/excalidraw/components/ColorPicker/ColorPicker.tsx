@@ -9,7 +9,7 @@ import {
   isWritableElement,
 } from "@excalidraw/common";
 
-import type { ColorTuple, ColorPaletteCustom } from "@excalidraw/common";
+import type { ColorPaletteCustom } from "@excalidraw/common";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
@@ -50,7 +50,7 @@ interface ColorPickerProps {
   elements: readonly ExcalidrawElement[];
   appState: AppState;
   palette?: ColorPaletteCustom | null;
-  topPicks?: ColorTuple;
+  topPicks?: readonly string[];
   updateData: (formData?: any) => void;
 }
 

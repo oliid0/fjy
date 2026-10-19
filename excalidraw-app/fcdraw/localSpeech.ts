@@ -12,7 +12,7 @@ const engine = registerPlugin<{
     sampleRate: number;
   }): Promise<{ lines: TranscriptLine[] }>;
   stop(options: { session: string }): Promise<{ lines: TranscriptLine[] }>;
-}>("FcdrawLocalSpeech");
+}>("FcboardLocalSpeech");
 
 export type LocalSpeechHandle = {
   stop(): Promise<void>;
@@ -114,7 +114,7 @@ export const startLocalSpeech = async (
     await context.audioWorklet.addModule(
       `${import.meta.env.BASE_URL}fc-pcm-worklet.js`,
     );
-    node = new AudioWorkletNode(context, "fcdraw-pcm");
+    node = new AudioWorkletNode(context, "fcboard-pcm");
     source = context.createMediaStreamSource(media);
     node.port.onmessage = ({
       data,

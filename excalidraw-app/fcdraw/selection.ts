@@ -2,6 +2,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { selectedBoardElements } from "./ai";
+import { classroomCommands } from "./commands";
 
 export const selectionSignature = (elements: readonly ExcalidrawElement[]) =>
   elements
@@ -19,11 +20,11 @@ export const observeMathSelection = (
   ) => Promise<void>,
   onBusy: (busy: boolean) => void,
   onError: (error: unknown) => void,
+  handled = new Set<string>(),
 ) => {
   let previous = "";
   let timer: ReturnType<typeof setTimeout>;
   let controller: AbortController | undefined;
-  const handled = new Set<string>();
   const refresh = () => {
     const state = api.getAppState();
     const selected = selectedBoardElements(api);
@@ -79,10 +80,17 @@ export const observeMathSelection = (
     }, 400);
   };
   const unsubscribe = api.onChange(refresh);
+  const invalidate = classroomCommands.onInvalidate(() => {
+    previous = "";
+    clearTimeout(timer);
+    controller?.abort();
+    onBusy(false);
+  });
   refresh();
   return () => {
     clearTimeout(timer);
     controller?.abort();
     unsubscribe();
+    invalidate();
   };
 };

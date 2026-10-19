@@ -71,7 +71,7 @@ def create_handler(model, reference_audio, token, origins):
                 self.failure(429, "Speech engine busy; retry when playback finishes")
                 return
             try:
-                with tempfile.TemporaryDirectory(prefix="fcdraw-tts-") as directory:
+                with tempfile.TemporaryDirectory(prefix="fcboard-tts-") as directory:
                     output = Path(directory) / "speech.wav"
                     model.infer(spk_audio_prompt=str(reference_audio), text=text, output_path=str(output))
                     self.send(200, output.read_bytes(), "audio/wav")
@@ -90,15 +90,15 @@ def create_handler(model, reference_audio, token, origins):
 def main():
     from indextts.infer_v2 import IndexTTS2
 
-    token = os.environ.get("FCDRAW_TTS_TOKEN", "")
-    reference = Path(os.environ.get("FCDRAW_TTS_REFERENCE", ""))
+    token = os.environ.get("FCBOARD_TTS_TOKEN", "")
+    reference = Path(os.environ.get("FCBOARD_TTS_REFERENCE", ""))
     if len(token) < 16 or not reference.is_file():
-        raise SystemExit("Set FCDRAW_TTS_TOKEN (16+ characters) and FCDRAW_TTS_REFERENCE (an authorized reference WAV).")
-    directory = Path(os.environ.get("FCDRAW_TTS_MODELS", "checkpoints"))
+        raise SystemExit("Set FCBOARD_TTS_TOKEN (16+ characters) and FCBOARD_TTS_REFERENCE (an authorized reference WAV).")
+    directory = Path(os.environ.get("FCBOARD_TTS_MODELS", "checkpoints"))
     model = IndexTTS2(cfg_path=str(directory / "config.yaml"), model_dir=str(directory), use_fp16=False)
-    origins = set(os.environ.get("FCDRAW_TTS_ORIGINS", "https://localhost,http://localhost").split(","))
+    origins = set(os.environ.get("FCBOARD_TTS_ORIGINS", "https://localhost,http://localhost").split(","))
     server = ThreadingHTTPServer(
-        (os.environ.get("FCDRAW_TTS_HOST", "0.0.0.0"), int(os.environ.get("FCDRAW_TTS_PORT", "8766"))),
+        (os.environ.get("FCBOARD_TTS_HOST", "0.0.0.0"), int(os.environ.get("FCBOARD_TTS_PORT", "8766"))),
         create_handler(model, reference, token, origins),
     )
     try:

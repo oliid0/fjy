@@ -8,7 +8,7 @@ const manifest = JSON.parse(
   ),
 );
 const directory = new URL(
-  "../node_modules/.fcdraw-research/courseware/",
+  "../node_modules/.fcboard-research/courseware/",
   import.meta.url,
 );
 await mkdir(directory, { recursive: true });

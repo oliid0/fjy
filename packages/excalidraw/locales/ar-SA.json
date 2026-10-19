@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "سهم زاوي",
     "fontSize": "حجم الخط",
     "fontFamily": "نوع الخط",
-    "addWatermark": "إضافة \"مصنوعة بواسطة Fcdraw\"",
+    "addWatermark": "إضافة \"مصنوعة بواسطة Fcboard\"",
     "handDrawn": "رسم باليد",
     "normal": "عادي",
     "code": "رمز",
@@ -91,7 +91,7 @@
     "untitled": "غير معنون",
     "name": "الاسم",
     "yourName": "اسمك",
-    "madeWithExcalidraw": "مصنوعة بواسطة Fcdraw",
+    "madeWithExcalidraw": "مصنوعة بواسطة Fcboard",
     "group": "تحديد مجموعة",
     "ungroup": "إلغاء تحديد مجموعة",
     "collaborators": "المتعاونون",
@@ -163,7 +163,7 @@
     "zoomToFitViewport": "التكبير لتناسب العرض",
     "zoomToFitSelection": "تكبير للعنصر المحدد",
     "zoomToFit": "تكبير لتلائم جميع العناصر",
-    "installPWA": "تثبيت Fcdraw محليًا (PWA)",
+    "installPWA": "تثبيت Fcboard محليًا (PWA)",
     "autoResize": "تمكين تغيير حجم النص تلقائيًا",
     "imageCropping": "قص الصورة",
     "unCroppedDimension": "الأبعاد غير المقصوصة",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "لا يمكن تصدير لوحة فارغة.",
     "couldNotCopyToClipboard": "تعذر النسخ إلى الحافظة.",
     "decryptFailed": "تعذر فك تشفير البيانات.",
-    "uploadedSecurly": "تم تأمين التحميل بتشفير النهاية إلى النهاية، مما يعني أن خادم Fcdraw والأطراف الثالثة لا يمكنها قراءة المحتوى.",
+    "uploadedSecurly": "تم تأمين التحميل بتشفير النهاية إلى النهاية، مما يعني أن خادم Fcboard والأطراف الثالثة لا يمكنها قراءة المحتوى.",
     "loadSceneOverridePrompt": "تحميل الرسم الخارجي سيحل محل المحتوى الموجود لديك. هل ترغب في المتابعة؟",
     "collabStopOverridePrompt": "إيقاف الجلسة سيؤدي إلى الكتابة فوق رسومك السابقة المخزنة داخليًا. هل أنت متأكد؟\n\n(إذا كنت ترغب في الاحتفاظ برسمك المخزن داخليًا، أغلق علامة تبويب المتصفح بدلاً من ذلك.)",
     "errorAddingToLibrary": "تعذر إضافة العنصر إلى المكتبة",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "هذا سيضيف {{numShapes}} شكل إلى مكتبتك. هل أنت متأكد؟",
     "imageDoesNotContainScene": "يبدو أن هذه الصورة لا تحتوي على أي بيانات مشهد. هل قمت بتمكين تضمين المشهد أثناء التصدير؟",
     "cannotRestoreFromImage": "تعذر استعادة المشهد من ملف الصورة",
-    "invalidSceneUrl": "تعذر استيراد المشهد من عنوان URL المتوفر. إما أنها مشوهة، أو لا تحتوي على بيانات Fcdraw JSON صالحة.",
+    "invalidSceneUrl": "تعذر استيراد المشهد من عنوان URL المتوفر. إما أنها مشوهة، أو لا تحتوي على بيانات Fcboard JSON صالحة.",
     "resetLibrary": "هذا سيؤدي إلى مسح مكتبتك. هل أنت متأكد؟",
     "removeItemsFromsLibrary": "حذف {{count}} عنصر (عناصر) من المكتبة؟",
     "invalidEncryptionKey": "مفتاح التشفير يجب أن يكون من 22 حرفًا. التعاون المباشر معطل.",
@@ -279,7 +279,7 @@
       "line1": "يبدو أنك تستخدم متصفح Brave مع إعداد <bold>حظر صارم لتتبع البصمة</bold>.",
       "line2": "قد يؤدي هذا إلى كسر <bold>عناصر النص</bold> في الرسومات الخاصة بك.",
       "line3": "من المستحسن إلغاء تفعيل هذا الإعداد. يمكنك اتباع <link>هذه الخطوات</link> لفعل ذلك.",
-      "line4": "إذا لم يصلح تعطيل هذا الإعداد طريقة عرض النصوص، الرجاء كتابة <issueLink>بلاغ</issueLink> على حسابنا في Fcdraw، أو راسلنا على <discordLink>Fcdraw</discordLink>"
+      "line4": "إذا لم يصلح تعطيل هذا الإعداد طريقة عرض النصوص، الرجاء كتابة <issueLink>بلاغ</issueLink> على حسابنا في Fcboard، أو راسلنا على <discordLink>Fcboard</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "لا يمكن إضافة العناصر القابلة للتضمين في المكتبة.",
@@ -312,7 +312,7 @@
     "laser": "مؤشر ليزر",
     "hand": "يد (أداة الإزاحة)",
     "extraTools": "المزيد من الأدوات",
-    "mermaidToExcalidraw": "من Mermaid إلى Fcdraw",
+    "mermaidToExcalidraw": "من Mermaid إلى Fcboard",
     "convertElementType": ""
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "إذا لم تعمل إعادة التحميل، حاول مرة أخرى ",
     "clearCanvasCaveat": "هذا سيؤدي إلى فقدان العمل",
     "trackedToSentry": "تم تتبع الخطأ في المعرف {{eventId}} على نظامنا.",
-    "openIssueMessage": "حرصنا على عدم إضافة معلومات المشهد في بلاغ الخطأ. في حال كون مشهدك لا يحمل أي معلومات خاصة، نرجو المتابعة على <button>نظام تتبع الأخطاء</button>. نرجو إضافة المعلومات أدناه بنسخها ولصقها في محتوى البلاغ على Fcdraw.",
+    "openIssueMessage": "حرصنا على عدم إضافة معلومات المشهد في بلاغ الخطأ. في حال كون مشهدك لا يحمل أي معلومات خاصة، نرجو المتابعة على <button>نظام تتبع الأخطاء</button>. نرجو إضافة المعلومات أدناه بنسخها ولصقها في محتوى البلاغ على Fcboard.",
     "sceneContent": "محتوى المشهد:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "تجري الآن جلسة تعاون مباشرة.",
     "desc_shareLink": "شارك هذا الرابط مع أي شخص تريده أن يشاركك الجلسة:",
     "desc_exitSession": "إيقاف الجلسة سيؤدي إلى قطع الاتصال الخاص بك من الغرفة، ولكن ستتمكن من مواصلة العمل مع المشهد محليًا. لاحظ أن هذا لن يؤثر على الأشخاص الآخرين، وسيظلون قادرين على التعاون في إصدارهم.",
-    "shareTitle": "الانضمام إلى جلسة تعاون مباشرة على Fcdraw"
+    "shareTitle": "الانضمام إلى جلسة تعاون مباشرة على Fcboard"
   },
   "errorDialog": {
     "title": "خطأ"
@@ -402,9 +402,9 @@
     "link_title": "رابط قابل للمشاركة",
     "link_details": "تصدير الملف للمشاهدة فقط.",
     "link_button": "تصدير كرابط",
-    "excalidrawplus_description": "حفظ المشهد إلى مساحة العمل +Fcdraw الخاصة بك.",
+    "excalidrawplus_description": "حفظ المشهد إلى مساحة العمل +Fcboard الخاصة بك.",
     "excalidrawplus_button": "تصدير",
-    "excalidrawplus_exportError": "تعذر التص несп في الوقت الحالي إلى +Fcdraw..."
+    "excalidrawplus_exportError": "تعذر التص несп في الوقت الحالي إلى +Fcboard..."
   },
   "helpDialog": {
     "blog": "اقرأ مدونتنا",
@@ -446,7 +446,7 @@
     "title": "نشر المكتبة",
     "itemName": "اسم العنصر",
     "authorName": "اسم المؤلف",
-    "githubUsername": "اسم المستخدم في Fcdraw",
+    "githubUsername": "اسم المستخدم في Fcboard",
     "twitterUsername": "اسم المستخدم في تويتر",
     "libraryName": "اسم المكتبة",
     "libraryDesc": "وصف المكتبة",
@@ -455,7 +455,7 @@
       "authorName": "اسمك أو اسم المستخدم",
       "libraryName": "اسم مكتبتك",
       "libraryDesc": "وصف مكتبتك لمساعدة الناس على فهم استخدامها",
-      "githubHandle": "معرف Fcdraw (اختياري)، حتى تتمكن من تحرير المكتبة عند إرسالها للمراجعة",
+      "githubHandle": "معرف Fcboard (اختياري)، حتى تتمكن من تحرير المكتبة عند إرسالها للمراجعة",
       "twitterHandle": "اسم مستخدم تويتر (اختياري)، حتى نعرف من الذي سيتم الإشارة إليه عند الترويج عبر تويتر",
       "website": "رابط إلى موقعك الشخصي أو مكان آخر (اختياري)"
     },
@@ -464,7 +464,7 @@
       "website": "أدخل عنوان URL صالح"
     },
     "noteDescription": "تقديم مكتبتك لتضمينها في مستودع المكتبة العامة <link></link> ليستخدمها الآخرون في رسوماتهم.",
-    "noteGuidelines": "تحتاج المكتبة إلى الموافقة أولاً. يرجى قراءة <link>المعايير</link> قبل تقديمها. ستحتاج إلى حساب Fcdraw للتواصل وإجراء التغييرات عند الطلب، ولكنه ليس مطلوبًا بشكل صارم.",
+    "noteGuidelines": "تحتاج المكتبة إلى الموافقة أولاً. يرجى قراءة <link>المعايير</link> قبل تقديمها. ستحتاج إلى حساب Fcboard للتواصل وإجراء التغييرات عند الطلب، ولكنه ليس مطلوبًا بشكل صارم.",
     "noteLicense": "تقديمك يعني موافقتك على نشر المكتبة المقدمة تحت <link>ترخيص MIT</link>، مما يعني أن لأي شخص الحق في استخدامها دون قيود.",
     "noteItems": "يجب أن يكون لكل عنصر مكتبة اسم خاص به ليكون قابلًا للتصفية. سيتم تضمين عناصر المكتبة التالية:",
     "atleastOneLibItem": "يرجى تحديد عنصر مكتبة واحد على الأقل للبدء",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "رسوماتك مشفرة من النهاية إلى النهاية، لذا لا يمكن لخوادم Fcdraw رؤيتها أبدًا.",
-    "link": "مشاركة المدونة حول التشفير من النهاية إلى النهاية في Fcdraw"
+    "tooltip": "رسوماتك مشفرة من النهاية إلى النهاية، لذا لا يمكن لخوادم Fcboard رؤيتها أبدًا.",
+    "link": "مشاركة المدونة حول التشفير من النهاية إلى النهاية في Fcboard"
   },
   "stats": {
     "angle": "الزاوية",
@@ -534,7 +534,7 @@
     "canvas": "لوحة الرسم",
     "selection": "العنصر المحدد",
     "pasteAsSingleElement": "استخدم {{shortcut}} للصق كعنصر واحد،\nأو لصق في محرر نص موجود",
-    "unableToEmbed": "تضمين هذا الرابط غير مسموح حاليًا. افتح بلاغًا على Fcdraw لطلب إدراج عنوان URL في القائمة البيضاء",
+    "unableToEmbed": "تضمين هذا الرابط غير مسموح حاليًا. افتح بلاغًا على Fcboard لطلب إدراج عنوان URL في القائمة البيضاء",
     "unrecognizedLinkFormat": "الرابط الذي أدرجته لا يتطابق مع التنسيق المتوقع. الرجاء محاولة لصق النص 'المضمن' المُزوَد من موقع المصدر",
     "elementLinkCopied": "تم نسخ الرابط إلى الحافظة"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "هل تريد الانتقال إلى Fcdraw بدلاً من ذلك؟",
+      "center_heading_plus": "هل تريد الانتقال إلى Fcboard بدلاً من ذلك؟",
       "menuHint": "التصدير، التفضيلات، اللغات..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "تصدير بيانات المشهد إلى ملف يمكنك الاستيراد منه لاحقًا."
       },
       "excalidrawPlus": {
-        "title": "Fcdraw",
-        "button": "تصدير إلى Fcdraw",
-        "description": "حفظ المشهد إلى مساحة العمل +Fcdraw الخاصة بك."
+        "title": "Fcboard",
+        "button": "تصدير إلى Fcboard",
+        "description": "حفظ المشهد إلى مساحة العمل +Fcboard الخاصة بك."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid إلى Fcdraw",
+    "title": "Mermaid إلى Fcboard",
     "button": "إدراج",
-    "description": "حاليًا، يتم دعم <flowchartLink>مخططات التدفق</flowchartLink>، <sequenceLink>التسلسلات</sequenceLink>، و<classLink>الفئات</classLink> فقط. سيتم عرض الأنواع الأخرى كصورة في Fcdraw.",
+    "description": "حاليًا، يتم دعم <flowchartLink>مخططات التدفق</flowchartLink>، <sequenceLink>التسلسلات</sequenceLink>، و<classLink>الفئات</classLink> فقط. سيتم عرض الأنواع الأخرى كصورة في Fcboard.",
     "syntax": "صيغة Mermaid",
     "preview": "معاينة",
     "label": "",

@@ -4,6 +4,8 @@ import { registerSW } from "virtual:pwa-register";
 
 import "../excalidraw-app/sentry";
 
+import "./fcdraw/lanCrypto";
+
 import ExcalidrawApp from "./App";
 
 window.__EXCALIDRAW_SHA__ = import.meta.env.VITE_APP_GIT_SHA;

@@ -12,17 +12,24 @@ import {
   RedoIcon,
   MagicIcon,
   gridIcon,
+  DeviceDesktopIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { polygonIncludesPointNonZero } from "@excalidraw/math";
 import { Capacitor } from "@capacitor/core";
+import {
+  isPalmContact,
+  pointerSamples,
+} from "@excalidraw/excalidraw/eraser/stroke";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
 import { classroomCommands } from "./commands";
 import { Classroom as NativeClassroom } from "./native";
+import { useDeviceInkProfile } from "./ink";
 
 import {
   documentKey,
+  eraseDocumentInk,
   hitStroke,
   htmlText,
   loadInk,
@@ -56,6 +63,7 @@ export const FilePreview = ({
   onReady?: (error?: string) => void;
   onTools?: () => void;
 }) => {
+  const inkProfile = useDeviceInkProfile();
   const host = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -76,6 +84,11 @@ export const FilePreview = ({
   const future = useRef<Record<number, InkStroke[][]>>({});
   const animationBefore = useRef(new Map<string, InkStroke[]>());
   const gestureBefore = useRef<InkStroke[]>([]);
+  const erasing = useRef<{
+    previous: [number, number];
+    width: number;
+    height: number;
+  } | null>(null);
   const [, refreshHistory] = useState(0);
   const [color, setColor] = useState("#dc2626");
   const [penWidth, setPenWidth] = useState(3);
@@ -859,6 +872,9 @@ export const FilePreview = ({
         );
       }),
       classroomCommands.register("document.plot", "@internal", (args) => {
+        setInkOn(true);
+        setSelecting(true);
+        setErase(false);
         const remove = new Set(args.replaceIds as string[]);
         const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
           (shape) => shapeInk(shape, "plot"),
@@ -918,22 +934,30 @@ export const FilePreview = ({
     ];
   };
   const removeAt = (position: [number, number]) => {
-    const widgets = new Set(
-      (inkRef.current[page] || [])
-        .filter((stroke) => hitStroke(stroke, position))
-        .map((stroke) => stroke.widget?.id)
-        .filter(Boolean),
+    const gesture = erasing.current;
+    if (!gesture) {
+      return;
+    }
+    const previous = inkRef.current[page] || [];
+    const next = eraseDocumentInk(
+      previous,
+      gesture.previous,
+      position,
+      gesture.width,
+      gesture.height,
     );
-    commitInk(
-      {
-        ...inkRef.current,
-        [page]: (inkRef.current[page] || []).filter(
-          (stroke) =>
-            !hitStroke(stroke, position) && !widgets.has(stroke.widget?.id),
-        ),
-      },
-      false,
-    );
+    gesture.previous = position;
+    if (next !== previous) {
+      commitInk({ ...inkRef.current, [page]: next }, false);
+    }
+  };
+  const cancelInkGesture = () => {
+    if (erasing.current) {
+      commitInk({ ...inkRef.current, [page]: gestureBefore.current }, false);
+    }
+    erasing.current = null;
+    draftRef.current = null;
+    setDraft(null);
   };
   const paths = [...(ink[page] || []), ...(draft ? [draft] : [])];
   return (
@@ -1026,13 +1050,33 @@ export const FilePreview = ({
               }
               gestureBefore.current = inkRef.current[page] || [];
               event.currentTarget.setPointerCapture(event.pointerId);
-              if (erase) {
+              if (
+                erase ||
+                (!selecting &&
+                  isPalmContact(event, inkProfile?.palmThreshold ?? 36))
+              ) {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const scale = 1000 / rect.width;
+                erasing.current = {
+                  previous: point(event),
+                  width:
+                    Math.max(inkProfile?.eraserSize ?? 60, event.width) * scale,
+                  height:
+                    Math.max(
+                      (inkProfile?.eraserSize ?? 60) * 1.2,
+                      event.height,
+                    ) * scale,
+                };
                 removeAt(point(event));
               } else {
                 const stroke: InkStroke = {
                   id: crypto.randomUUID(),
                   color,
-                  width: penWidth,
+                  width:
+                    (penWidth *
+                      (inkProfile ? inkProfile.hardPenWidth / 4 : 1) *
+                      1000) /
+                    event.currentTarget.getBoundingClientRect().width,
                   opacity,
                   points: [point(event)],
                 };
@@ -1044,18 +1088,28 @@ export const FilePreview = ({
               if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
                 return;
               }
-              if (erase) {
-                removeAt(point(event));
+              const rect = event.currentTarget.getBoundingClientRect();
+              const samples = pointerSamples(event.nativeEvent).map(
+                (sample): [number, number] => [
+                  ((sample.clientX - rect.left) / rect.width) * 1000,
+                  ((sample.clientY - rect.top) / rect.width) * 1000 + scroll,
+                ],
+              );
+              if (erasing.current) {
+                samples.forEach(removeAt);
               } else if (draftRef.current) {
                 const stroke = {
                   ...draftRef.current,
-                  points: [...draftRef.current.points, point(event)],
+                  points: [...draftRef.current.points, ...samples],
                 };
                 draftRef.current = stroke;
                 setDraft(stroke);
               }
             }}
             onPointerUp={(event) => {
+              if (erasing.current) {
+                removeAt(point(event));
+              }
               if (draftRef.current && selecting) {
                 const polygon = draftRef.current.points;
                 const ids = (inkRef.current[page] || [])
@@ -1070,6 +1124,17 @@ export const FilePreview = ({
                 selectedInkRef.current = ids;
                 setLasso(polygon);
                 classroomCommands.changed("document");
+                if (
+                  polygon.length < 3 &&
+                  ids.some((id) =>
+                    (inkRef.current[page] || []).some(
+                      (stroke) => stroke.id === id && stroke.plot,
+                    ),
+                  ) &&
+                  classroomCommands.has("math.inspect")
+                ) {
+                  void classroomCommands.execute({ name: "math.inspect" });
+                }
               } else if (draftRef.current) {
                 const stroke = draftRef.current;
                 if (stroke.points.length === 1) {
@@ -1083,30 +1148,22 @@ export const FilePreview = ({
                   [page]: [...(inkRef.current[page] || []), draftRef.current],
                 });
               } else if (
-                erase &&
-                gestureBefore.current.length !==
-                  (inkRef.current[page] || []).length
+                erasing.current &&
+                gestureBefore.current !== inkRef.current[page]
               ) {
                 (past.current[page] ||= []).push(gestureBefore.current);
                 future.current[page] = [];
                 refreshHistory((value) => value + 1);
               }
+              erasing.current = null;
               draftRef.current = null;
               setDraft(null);
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId);
               }
             }}
-            onPointerCancel={() => {
-              if (erase) {
-                commitInk(
-                  { ...inkRef.current, [page]: gestureBefore.current },
-                  false,
-                );
-              }
-              draftRef.current = null;
-              setDraft(null);
-            }}
+            onPointerCancel={cancelInkGesture}
+            onLostPointerCapture={cancelInkGesture}
           >
             {lasso.length > 2 && (
               <polygon
@@ -1182,6 +1239,7 @@ export const FilePreview = ({
           }}
         >
           {CloseIcon}
+          <span>白板</span>
         </button>
         <span className="fc-document-name" title={file.name}>
           {file.name}
@@ -1194,6 +1252,7 @@ export const FilePreview = ({
           }}
         >
           {chevronLeftIcon}
+          <span>上页</span>
         </button>
         <select
           aria-label="课件页码"
@@ -1222,6 +1281,7 @@ export const FilePreview = ({
           }}
         >
           {chevronRight}
+          <span>下页</span>
         </button>
         <button
           aria-label="板书开关"
@@ -1231,6 +1291,7 @@ export const FilePreview = ({
           onClick={() => setInkOn(!inkOn)}
         >
           {pencilIcon}
+          <span>板书</span>
         </button>
         <button
           aria-label="缩小课件"
@@ -1292,6 +1353,7 @@ export const FilePreview = ({
               }}
             >
               {EraserIcon}
+              <span>橡皮</span>
             </button>
             <button
               aria-label="圈选课件板书"
@@ -1302,6 +1364,7 @@ export const FilePreview = ({
               }}
             >
               {SelectionIcon}
+              <span>圈选</span>
             </button>
             <button
               aria-label="撤销板书"
@@ -1309,6 +1372,7 @@ export const FilePreview = ({
               onClick={() => undoInk()}
             >
               {UndoIcon}
+              <span>撤销</span>
             </button>
             <button
               aria-label="重做板书"
@@ -1316,6 +1380,7 @@ export const FilePreview = ({
               onClick={() => undoInk(true)}
             >
               {RedoIcon}
+              <span>重做</span>
             </button>
           </>
         )}
@@ -1326,6 +1391,7 @@ export const FilePreview = ({
           title="下载原文件"
         >
           {exportToFileIcon}
+          <span>原件</span>
         </a>
         {onVoice && (
           <button
@@ -1335,6 +1401,7 @@ export const FilePreview = ({
             onClick={onVoice}
           >
             {microphoneIcon}
+            <span>语音</span>
           </button>
         )}
         <button
@@ -1345,10 +1412,27 @@ export const FilePreview = ({
           }}
         >
           {MagicIcon}
+          <span>助教</span>
         </button>
         {onTools && (
           <button aria-label="课件教学工具" title="教学工具" onClick={onTools}>
             {gridIcon}
+            <span>教具</span>
+          </button>
+        )}
+        {Capacitor.isNativePlatform() && (
+          <button
+            aria-label="设备控制"
+            data-network="remote"
+            onClick={() =>
+              void classroomCommands.execute({
+                name: "network.panel",
+                args: { panel: "remote" },
+              })
+            }
+          >
+            {DeviceDesktopIcon}
+            <span>控制</span>
           </button>
         )}
       </footer>

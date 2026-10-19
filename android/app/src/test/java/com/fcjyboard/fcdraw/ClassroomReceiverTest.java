@@ -1,4 +1,4 @@
-package com.fcjyboard.fcdraw;
+package com.fcjy.fcboard;
 
 import org.junit.After;
 import org.junit.Before;

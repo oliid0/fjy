@@ -1,4 +1,4 @@
-package com.fcjyboard.fcdraw;
+package com.fcjy.fcboard;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -28,10 +28,30 @@ import android.util.Base64;
 import java.io.ByteArrayOutputStream;
 
 /** Paired, opt-in LAN uploads. Reading received files stays inside Capacitor's bridge. */
-@CapacitorPlugin(name = "FcdrawClassroom")
+@CapacitorPlugin(name = "FcboardClassroom")
 public class ClassroomPlugin extends Plugin {
     private Receiver receiver;
     private final java.util.concurrent.ExecutorService imageEncoder = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    /** The factory whiteboard uses physical pixels and the manufacturer's touch calibration. */
+    @PluginMethod
+    public void getInkProfile(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("hardPenWidth", 4);
+        result.put("brushPenWidth", 15);
+        result.put("eraserSize", 150);
+        try (android.database.Cursor cursor = getContext().getContentResolver().query(
+                android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
+                new String[]{"touch_threshold"}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("touch_threshold"));
+                if (Float.isFinite(threshold) && threshold > 0) result.put("palmThreshold", threshold * 2.0 / 3.0);
+            }
+        } catch (Exception unavailable) {
+            // Other Android devices need no vendor provider; keep the manual CSS-pixel setting.
+        }
+        call.resolve(result);
+    }
 
     /** Capture only this app's visible WebView, including Office frames and transparent ink. */
     @PluginMethod
@@ -68,7 +88,7 @@ public class ClassroomPlugin extends Plugin {
         });
     }
     private File directory() {
-        File dir = new File(getContext().getFilesDir(), "fcdraw-uploads");
+        File dir = new File(getContext().getFilesDir(), "fcboard-uploads");
         if (!dir.exists()) { dir.mkdirs(); }
         return dir;
     }
@@ -167,7 +187,7 @@ public class ClassroomPlugin extends Plugin {
             String base = "/" + token + "/";
             if (!session.getUri().equals(base) && !session.getUri().equals(base + "upload")) { return reply(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "接收地址无效或已关闭"); }
             if (session.getMethod() == Method.GET && session.getUri().equals(base)) {
-                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcdraw · 方成教育</h1><h2>局域网课件快传</h2><p>手机与白板连同一网络，选好课件立即上屏。支持 PowerPoint、Word、Excel、PDF 和图片，单个文件上限 100 MB。</p><input id='files' type='file' hidden multiple accept='.ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>选择文件上屏</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');const picker=document.getElementById('files');button.onclick=()=>picker.click();picker.onchange=async()=>{const files=picker.files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='已发送到白板，课件将自动上屏';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;picker.value='';}};</script></html>");
+                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcboard · 方成教育</h1><h2>局域网课件快传</h2><p>手机与白板连同一网络，选好课件立即上屏。支持 PowerPoint、Word、Excel、PDF 和图片，单个文件上限 100 MB。</p><input id='files' type='file' hidden multiple accept='.ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>选择文件上屏</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');const picker=document.getElementById('files');button.onclick=()=>picker.click();picker.onchange=async()=>{const files=picker.files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='已发送到白板，课件将自动上屏';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;picker.value='';}};</script></html>");
             }
             if (session.getMethod() != Method.POST || !session.getUri().equals(base + "upload")) { return reply(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "不支持此操作"); }
             String name = session.getParms().get("name");

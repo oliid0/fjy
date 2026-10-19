@@ -8,6 +8,8 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { currentSettings, validateEndpoint } from "./settings";
 
+import type { Settings } from "./settings";
+
 type Content =
   | string
   | (
@@ -22,8 +24,8 @@ export type Message = {
 export const chat = async (
   messages: Message[],
   signal?: AbortSignal,
+  settings: Settings = currentSettings(),
 ): Promise<string> => {
-  const settings = currentSettings();
   if (!settings.apiKey || !settings.model.trim()) {
     throw new Error(
       "请先在 AI 设置中填写 API 密钥和支持视觉的模型 ID / 接入点 ID",
@@ -40,48 +42,95 @@ export const chat = async (
     stream: false,
     temperature: 0.2,
   };
-  let data;
-  if (Capacitor.isNativePlatform()) {
-    const response = await CapacitorHttp.post({
-      url,
-      headers,
-      data: body,
-      connectTimeout: 15000,
-      readTimeout: 90000,
-    });
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        `AI 请求失败 (${response.status})：${
-          response.data?.error?.message || "请检查接口、模型与密钥"
-        }`,
-      );
-    }
-    data = response.data;
-  } else {
-    const timeout = AbortSignal.timeout(90000);
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: signal || timeout,
-    });
-    data = await response.json();
-    if (!response.ok) {
-      throw new Error(
-        `AI 请求失败 (${response.status})：${
-          data?.error?.message || "请检查接口、模型与密钥"
-        }`,
-      );
-    }
-  }
+  const controller = new AbortController();
+  const cancel = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", cancel, { once: true });
   if (signal?.aborted) {
-    throw new DOMException("已取消", "AbortError");
+    cancel();
   }
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) {
-    throw new Error("AI 返回了空内容，请确认模型支持所请求的功能");
+  const timer = setTimeout(
+    () => controller.abort(new Error("AI 请求超时，请检查网络或稍后重试")),
+    90000,
+  );
+  let unsubscribe = () => {};
+  try {
+    if (controller.signal.aborted) {
+      throw controller.signal.reason;
+    }
+    const cancelled = new Promise<never>((_, reject) => {
+      const abort = () => reject(controller.signal.reason);
+      controller.signal.addEventListener("abort", abort, { once: true });
+      unsubscribe = () => controller.signal.removeEventListener("abort", abort);
+    });
+    const request = async () => {
+      let status: number;
+      let data;
+      if (Capacitor.isNativePlatform()) {
+        const response = await CapacitorHttp.post({
+          url,
+          headers,
+          data: body,
+          connectTimeout: 15000,
+          readTimeout: 90000,
+        });
+        status = response.status;
+        data = response.data;
+      } else {
+        let response;
+        try {
+          response = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        } catch (error) {
+          if (controller.signal.aborted) {
+            throw controller.signal.reason;
+          }
+          throw new Error(
+            "无法连接 AI 接口，请检查网络、接口地址及浏览器跨域配置",
+          );
+        }
+        status = response.status;
+        data = await response.text();
+      }
+      if (typeof data === "string") {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          throw new Error(
+            `AI 接口未返回 JSON (${status})，请填写完整的 chat/completions 地址`,
+          );
+        }
+      }
+      if (status < 200 || status >= 300) {
+        throw new Error(
+          `AI 请求失败 (${status})：${
+            data?.error?.message || "请检查接口、模型与密钥"
+          }`,
+        );
+      }
+      const result = data?.choices?.[0]?.message?.content;
+      const content = Array.isArray(result)
+        ? result
+            .filter(
+              (part) => part?.type === "text" && typeof part.text === "string",
+            )
+            .map((part) => part.text)
+            .join("\n")
+        : result;
+      if (typeof content !== "string" || !content.trim()) {
+        throw new Error("AI 返回了空内容，请确认模型支持所请求的功能");
+      }
+      return content;
+    };
+    return await Promise.race([request(), cancelled]);
+  } finally {
+    clearTimeout(timer);
+    unsubscribe();
+    signal?.removeEventListener("abort", cancel);
   }
-  return content;
 };
 
 export const selectedBoardElements = (api: ExcalidrawImperativeAPI) =>

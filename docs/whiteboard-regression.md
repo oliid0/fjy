@@ -12,13 +12,15 @@
 | 图片、文件格式、导入与导出 | 原 `image`、`clipboard`、`export`、`restore` 测试继续运行；新增生产页面测试覆盖图片插入、包含图片的 `.excalidraw` 文件导出后重新打开，以及真实 PNG / SVG 文件内容。 |
 | 主题、语言、画笔 / 对象属性、文件菜单 | 保留原菜单及属性组件，入口集中到底栏；已覆盖四种屏幕宽度、菜单和属性浮层。 |
 | 离线与本地保存 | 保留 PWA，Office WASM 也加入离线缓存；多板额外保存图片和视图，持久化失败时保留原场景。浏览器存储被用户清除后无法恢复未导出的板书。 |
-| 实时协作、云端只读分享 | 源码保留配置入口。协作需要 `VITE_APP_WS_SERVER_URL` 对应服务，分享也需要自己的后端；本轮没有对未配置的服务声称可用，尚未做多设备网络联调。 |
+| 实时协作、云端只读分享 | 新增 APK 内的局域网 relay，扫码在不同浏览器会话实时同步元素、笔迹、图片与删除，并在重连时合并。冲突沿用原版本 / nonce 规则，接收者也收到服务端认可的版本。原云端配置入口保留，需要 `VITE_APP_WS_SERVER_URL` 和自己的文件 / 分享后端；这部分不混称为已部署云服务。 |
 | 素材库 / 上游社交和商业入口 | 按用户明确要求隐藏原素材库并换为教学工具；移除非本品牌的社交 / 帮助 / 商业入口。第三方版权和原文件格式标识保留。 |
 
 生产页面测试文件为 `e2e/classroom.spec.ts`、`e2e/courseware.spec.ts` 和 `e2e/whiteboard-regression.spec.ts`。完整打包、浏览器和安卓验证只在 Actions 中执行；最终状态以对应提交的 CI 为准，不以静态检查替代运行验证。
 
 ## tldraw 参考
 
-阅读了 [tldraw README](https://github.com/tldraw/tldraw) 和官方 [`PagePanelExample.tsx`](https://github.com/tldraw/tldraw/blob/9bbecbe7973d0b6103adc441410662f04d2658e9/apps/examples/src/examples/ui/page-panel/PagePanelExample.tsx)。采用其“页面在外部管理、当前画布保持专注、缩略图按需导出、页面操作与内容更新保持一致”的交互组织方式。Fcdraw 的列表现在使用本仓库的 `exportToBlob` 生成真实缩略图，不把不同的手写白板都显示成相同的占位文字；绘图内核继续使用现有实现。
+阅读了 [tldraw README](https://github.com/tldraw/tldraw) 和官方 [`PagePanelExample.tsx`](https://github.com/tldraw/tldraw/blob/9bbecbe7973d0b6103adc441410662f04d2658e9/apps/examples/src/examples/ui/page-panel/PagePanelExample.tsx)。采用其“页面在外部管理、当前画布保持专注、缩略图按需导出、页面操作与内容更新保持一致”的交互组织方式。Fcboard 的列表现在使用本仓库的 `exportToBlob` 生成真实缩略图，不把不同的手写白板都显示成相同的占位文字；绘图内核继续使用现有实现。
 
 发现并修复了 `tunnel-rat` 扩展工具更新时重新追加、改变底栏位置的问题。新增只用于底栏的稳定注册通道，状态更新保持顺序和 DOM 身份；其他原有菜单通道不变。回归测试同时检查顺序与节点身份，避免快速操作点到相邻按钮。
+
+后续按触屏要求将属性入口改成长按，保留原属性动作和键盘操作；修复套索偏好导致选择按钮重复、手形工具消失的问题。墨绿 / 黑色板面使用白笔，静态画布、绘图预览与文字编辑保持同一颜色语义；原主题继续控制界面和其他背景。

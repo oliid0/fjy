@@ -131,6 +131,7 @@ import { AIComponents } from "./components/AI";
 import "./index.scss";
 
 import { Classroom } from "./fcdraw/Classroom";
+import { useDeviceInkProfile } from "./fcdraw/ink";
 
 import type { CollabAPI } from "./collab/Collab";
 
@@ -356,6 +357,7 @@ const initializeScene = async (opts: {
 };
 
 const ExcalidrawWrapper = () => {
+  const inkProfile = useDeviceInkProfile();
   const excalidrawAPI = useExcalidrawAPI();
 
   const [errorMessage, setErrorMessage] = useState("");
@@ -862,6 +864,7 @@ const ExcalidrawWrapper = () => {
         onPointerUpdate={collabAPI?.onPointerUpdate}
         UIOptions={{
           unifiedToolbar: true,
+          inkProfile,
           library: false,
           canvasActions: {
             toggleTheme: true,

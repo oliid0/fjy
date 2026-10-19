@@ -12,14 +12,14 @@ describe("one audible teacher", () => {
     localStorage.clear();
     sessionStorage.clear();
     sessionStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({
         ttsEndpoint: "https://voice.example.test/v1/audio/speech",
       }),
     );
     // Settings themselves are localStorage; secrets alone live in sessionStorage.
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({
         ttsEndpoint: "https://voice.example.test/v1/audio/speech",
       }),

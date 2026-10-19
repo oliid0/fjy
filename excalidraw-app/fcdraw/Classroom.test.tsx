@@ -18,6 +18,7 @@ import { Classroom } from "./Classroom";
 import * as ai from "./ai";
 import { classroomCommands } from "./commands";
 import { BoardRecorder } from "./recording";
+import { currentSettings, defaults, saveSettings } from "./settings";
 
 vi.mock("@excalidraw/excalidraw", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@excalidraw/excalidraw")>()),
@@ -60,6 +61,7 @@ describe("selection-driven classroom controls", () => {
       }),
       getFiles: () => ({}),
       onPointerDown: () => () => {},
+      onPointerUp: () => () => {},
       updateScene: vi.fn((update) => {
         if (update.elements) {
           scene = update.elements;
@@ -89,13 +91,17 @@ describe("selection-driven classroom controls", () => {
         }),
     );
     render(<Classroom api={api} />);
-    fireEvent.click(screen.getByRole("button", { name: "AI 教师" }));
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
     fireEvent.change(screen.getByRole("textbox", { name: "向 AI 教师提问" }), {
       target: { value: "插入一个矩形" },
     });
     fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
     await waitFor(() => expect(ai.chat).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "AI 教师" }));
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
     fireEvent.change(screen.getByRole("textbox", { name: "向 AI 教师提问" }), {
       target: { value: "清空当前白板" },
     });
@@ -126,6 +132,38 @@ describe("selection-driven classroom controls", () => {
       await classroomCommands.execute({ name: "record.stop" });
     });
     expect(BoardRecorder.prototype.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("tests unsaved configuration and displays the actual model reply", async () => {
+    saveSettings({ ...defaults, apiKey: "test", model: "saved-model" }, false);
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [],
+      text: "",
+      image: undefined,
+    });
+    vi.spyOn(ai, "chat").mockResolvedValue("连接成功");
+    render(<Classroom api={api} />);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "panel.open",
+        args: { panel: "settings" },
+      });
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: /模型 ID/ }), {
+      target: { value: "unsaved-model" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "测试当前配置" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "连接测试返回：连接成功",
+      ),
+    );
+    expect(ai.chat).toHaveBeenCalledWith(
+      expect.any(Array),
+      undefined,
+      expect.objectContaining({ model: "unsaved-model" }),
+    );
+    expect(currentSettings().model).toBe("saved-model");
   });
 
   it("keeps ordinary selections on the canvas without additional AI controls", async () => {
@@ -161,6 +199,9 @@ describe("selection-driven classroom controls", () => {
     const result = scene.find((el) => el.type === "text" && el.text === "2")!;
     expect(result.x).toBeGreaterThan(scene[0].x);
     expect(result.customData?.fcAnswerSource).toBe(scene[0].id);
+    expect(
+      result.type === "text" && scene[0].type === "text" && result.fontSize,
+    ).toBe(scene[0].type === "text" && scene[0].fontSize);
     await act(async () => {
       selected = {};
       change.forEach((listener) => listener());
@@ -171,6 +212,62 @@ describe("selection-driven classroom controls", () => {
     expect(
       scene.filter((el) => el.type === "text" && el.text === "2"),
     ).toHaveLength(1);
+  });
+
+  it("answers a selected question using editable canvas text without an AI panel", async () => {
+    selectText("牛顿第一定律是什么？");
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: scene,
+      text: "牛顿第一定律是什么？",
+      image: undefined,
+    });
+    vi.spyOn(ai, "chat").mockResolvedValue(
+      JSON.stringify({
+        action: "text",
+        text: "合外力为零时，物体保持静止或匀速直线运动。",
+      }),
+    );
+    render(<Classroom api={api} />);
+    await waitFor(() =>
+      expect(scene.filter((element) => element.type === "text")).toHaveLength(
+        2,
+      ),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "AI 教师" })).toBeNull();
+    expect(scene[1].type === "text" && scene[1].text).toContain("合外力");
+    await act(async () => {
+      selected = {};
+      change.forEach((listener) => listener());
+      selected = { [scene[0].id]: true };
+      change.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(ai.chat).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not write a selected question's late answer after the selection changes", async () => {
+    selectText("这一步为什么成立？");
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: scene,
+      text: "这一步为什么成立？",
+      image: undefined,
+    });
+    let finish!: (result: string) => void;
+    vi.spyOn(ai, "chat").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<Classroom api={api} />);
+    await waitFor(() => expect(ai.chat).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      selected = {};
+      change.forEach((listener) => listener());
+      finish(JSON.stringify({ action: "text", text: "过期回答" }));
+    });
+    expect(scene).toHaveLength(1);
   });
 
   it("waits for pointer release before interpreting a selection", async () => {

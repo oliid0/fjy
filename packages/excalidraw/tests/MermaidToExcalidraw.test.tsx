@@ -99,7 +99,14 @@ describe("Test <MermaidToExcalidraw/>", () => {
   it("should open mermaid popup when active tool is mermaid", async () => {
     const dialog = document.querySelector(".ttd-dialog")!;
     await waitFor(() => expect(dialog.querySelector("canvas")).not.toBeNull());
-    expect(dialog.outerHTML).toMatchSnapshot();
+    // Radix suppresses mount animation for one frame; it is unrelated to dialog content.
+    const snapshot = dialog.cloneNode(true) as HTMLElement;
+    snapshot
+      .querySelectorAll<HTMLElement>('[role="tabpanel"]')
+      .forEach((panel) => {
+        panel.style.removeProperty("animation-duration");
+      });
+    expect(snapshot.outerHTML).toMatchSnapshot();
   });
 
   it("should show error in preview when mermaid library throws error", async () => {

@@ -528,6 +528,7 @@ export const renderWidget = (
   const existing = api.getSceneElements();
   const elements = convertToExcalidrawElements(
     widgetShapes(widget).map((shape, index) => ({
+      strokeColor: api.getAppState().currentItemStrokeColor,
       ...shape,
       id: `${widget.id}-${index}`,
       x: widget.position.x + (shape.x || 0),

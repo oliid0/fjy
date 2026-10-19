@@ -352,6 +352,11 @@ export interface AppState {
   currentItemBackgroundColor: string;
   currentItemFillStyle: ExcalidrawElement["fillStyle"];
   currentItemStrokeWidth: number;
+  currentItemPenMode?: "hard" | "brush";
+  eraserMode?: "stroke" | "object";
+  eraserSize?: number;
+  palmEraser?: boolean;
+  palmEraserThreshold?: number;
   currentItemStrokeStyle: ExcalidrawElement["strokeStyle"];
   currentItemRoughness: number;
   currentItemOpacity: number;
@@ -734,6 +739,13 @@ export type CanvasActions = Partial<{
 export type UIOptions = Partial<{
   /** Place drawing, navigation and host controls in one bottom toolbar. */
   unifiedToolbar: boolean;
+  /** Device calibration in CSS pixels; independent of saved drawing preferences. */
+  inkProfile: {
+    hardPenWidth: number;
+    brushPenWidth: number;
+    palmThreshold: number;
+    eraserSize: number;
+  };
   /** Host applications can replace the asset library with their own teaching tools. */
   library: boolean;
   dockedSidebarBreakpoint: number;

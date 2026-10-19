@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  // This fixture is produced by the Android instrumentation job afterwards.
+  testIgnore: "**/remote-stream.spec.ts",
   workers: 1,
   timeout: 60000,
   retries: 0,

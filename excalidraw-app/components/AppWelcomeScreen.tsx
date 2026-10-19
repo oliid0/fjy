@@ -7,7 +7,7 @@ export const AppWelcomeScreen = React.memo(
       <WelcomeScreen.Center>
         <WelcomeScreen.Center.Logo />
         <WelcomeScreen.Center.Heading>
-          方成教育 · Fcdraw
+          · Fcboard
           <br />
           让每一次讲解清晰可见
         </WelcomeScreen.Center.Heading>

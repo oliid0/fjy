@@ -1,4 +1,4 @@
-package com.fcjyboard.fcdraw;
+package com.fcjy.fcboard;
 
 import android.util.Base64;
 import com.getcapacitor.JSArray;
@@ -23,7 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Offline STT. PCM comes from the same WebAudio microphone as the recording. */
-@CapacitorPlugin(name = "FcdrawLocalSpeech")
+@CapacitorPlugin(name = "FcboardLocalSpeech")
 public class LocalSpeechPlugin extends Plugin {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private Transcriber transcriber;

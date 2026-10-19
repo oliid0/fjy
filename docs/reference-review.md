@@ -1,10 +1,12 @@
 # 大屏白板改版的实现依据
 
+本文件记录参考项目的历史实现依据。原出厂 APK 的实际行为、本轮修正和未完成项以 [HWhiteBoard 5.42 对齐记录](apk-alignment.md) 为准，不能将 Excalidraw 原能力等同于原出厂白板全部功能已对齐。
+
 本次按目录检查了用户提供的七个参考项目，阅读各自 README，再追踪与选区、画板命令、工具带、语音和浮层相关的实现。参考目录 `ss/` 保持用户原样，不提交项目副本或其中的依赖。
 
-针对“圈选后直接完成”的补充要求，又核对了下表七个项目的选区上下文、命令执行与图表层。参考项目并没有统一的自动数学选择接口：Fcdraw 将已有 `onChange`、`getSelectedElements`、图像导出及元素转换接口连成一条流程，等待选择手势结束后直接识别和计算 / 绘图。选区切换使旧请求失效，生成对象记录来源，防止重复；普通文字不弹出菜单。函数参数直接显示并立即生效，移除了计算、绘图、再次打开参数等中间按钮。坐标轴与曲面共用投影，曲线限制在坐标范围内。
+针对“圈选后直接完成”的补充要求，又核对了下表七个项目的选区上下文、命令执行与图表层。参考项目并没有统一的自动数学选择接口：Fcboard 将已有 `onChange`、`getSelectedElements`、图像导出及元素转换接口连成一条流程，等待选择手势结束后直接识别和计算 / 绘图。选区切换使旧请求失效，生成对象记录来源，防止重复；普通文字不弹出菜单。函数参数直接显示并立即生效，移除了计算、绘图、再次打开参数等中间按钮。坐标轴与曲面共用投影，曲线限制在坐标范围内。
 
-| 参考目录 | 检查的主要代码 | 用在 Fcdraw 中的行为 |
+| 参考目录 | 检查的主要代码 | 用在 Fcboard 中的行为 |
 | --- | --- | --- |
 | ai-math-tutor-main | `apps/web/components/math-tutor/math-tutor-workspace.tsx`、`lib/math-tutor/canvas-context.ts`、`apply-tutor-actions.ts`、`tutor-action-layout.ts`，以及 agent 的 `canvas_vision.ts` | 优先使用选区，截图和结构化文字一起交给视觉模型；返回对象写入画板，计算结果放在输入旁边。 |
 | ai-tutor-main | `frontend/web/components/Whiteboard.tsx`、`components/whiteboard/SketchBoard.tsx`、`lib/voice.ts`、`lib/useVoiceDirector.ts` | 图形与说明使用各自适合的呈现方式；播报只有一个播放者，关闭、重新播放和语音输入均可停止播报。 |

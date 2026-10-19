@@ -1,5 +1,8 @@
 import { createStore, get, set } from "idb-keyval";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
+import { newFreeDrawElement } from "@excalidraw/element";
+import { pointFrom } from "@excalidraw/math";
+import { eraseStroke } from "@excalidraw/excalidraw/eraser/stroke";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
@@ -32,7 +35,53 @@ export type InkStroke = {
   };
 };
 export type DocumentInk = Record<number, InkStroke[]>;
-const storage = createStore("fcdraw-documents", "documents");
+
+/** Courseware uses the same swept eraser geometry as the main whiteboard. */
+export const eraseDocumentInk = (
+  strokes: InkStroke[],
+  from: [number, number],
+  to: [number, number],
+  width: number,
+  height: number,
+) => {
+  let changed = false;
+  const next = strokes.flatMap((stroke) => {
+    if (stroke.text || stroke.image || stroke.widget) {
+      return [stroke];
+    }
+    const element = newFreeDrawElement({
+      type: "freedraw",
+      x: 0,
+      y: 0,
+      points: stroke.points.map(([x, y]) => pointFrom(x, y)),
+      simulatePressure: true,
+      strokeWidth: stroke.width,
+      customData: { fcInk: { pen: "hard" } },
+    });
+    const parts = eraseStroke(
+      element,
+      { x: from[0], y: from[1] },
+      { x: to[0], y: to[1] },
+      width,
+      height,
+    );
+    if (!parts) {
+      return [stroke];
+    }
+    changed = true;
+    return parts.map((part, index) => ({
+      ...stroke,
+      id: index ? part.id : stroke.id,
+      points: part.points.map(([x, y]): [number, number] => [
+        part.x + x,
+        part.y + y,
+      ]),
+    }));
+  });
+  return changed ? next : strokes;
+};
+const storage = createStore("fcboard-documents", "documents");
+const legacyStorage = createStore("fcdraw-documents", "documents");
 export const documentKey = async (file: File) => {
   const bytes = await file.arrayBuffer();
   const hash = await crypto.subtle.digest("SHA-256", bytes);
@@ -41,7 +90,9 @@ export const documentKey = async (file: File) => {
   ).join("");
 };
 export const loadInk = async (key: string) =>
-  (await get<DocumentInk>(`ink:${key}`, storage)) || {};
+  ((await get<DocumentInk>(`ink:${key}`, storage)) ??
+    (await get<DocumentInk>(`ink:${key}`, legacyStorage))) ||
+  {};
 export const saveInk = (key: string, value: DocumentInk) =>
   set(`ink:${key}`, value, storage);
 

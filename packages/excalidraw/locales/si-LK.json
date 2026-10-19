@@ -91,7 +91,7 @@
     "untitled": "නිර්නාමික",
     "name": "නම",
     "yourName": "ඔබගේ නම",
-    "madeWithExcalidraw": "Fcdraw සමඟ සාදන ලද",
+    "madeWithExcalidraw": "Fcboard සමඟ සාදන ලද",
     "group": "කණ්ඩායම",
     "ungroup": "කණ්ඩායම් ඉවත් කරන්න",
     "collaborators": "සහයෝගිකයන්",
@@ -121,7 +121,7 @@
     "toggleTheme": "තේමාව ටොගල් කරන්න",
     "theme": "",
     "personalLib": "පුද්ගලික පුස්තකාලය",
-    "excalidrawLib": "Fcdraw පුස්තකාලය",
+    "excalidrawLib": "Fcboard පුස්තකාලය",
     "decreaseFontSize": "අකුරු ප්‍රමාණය අඩු කරන්න",
     "increaseFontSize": "අකුරු ප්‍රමාණය වැඩි කරන්න",
     "unbindText": "පෙළ විසන්ධි කරන්න",
@@ -312,7 +312,7 @@
     "laser": "ලේසර්",
     "hand": "අත",
     "extraTools": "අමතර මෙවලම්",
-    "mermaidToExcalidraw": "Mermaid වලින් Fcdraw වෙත",
+    "mermaidToExcalidraw": "Mermaid වලින් Fcboard වෙත",
     "convertElementType": ""
   },
   "element": {
@@ -402,9 +402,9 @@
     "link_title": "සබැඳි මාතෘකාව",
     "link_details": "සබැඳි විස්තර",
     "link_button": "සබැඳි බොත්තම",
-    "excalidrawplus_description": "FcdrawPlus විස්තර",
-    "excalidrawplus_button": "FcdrawPlus බොත්තම",
-    "excalidrawplus_exportError": "FcdrawPlus නිර්යාත දෝෂය"
+    "excalidrawplus_description": "FcboardPlus විස්තර",
+    "excalidrawplus_button": "FcboardPlus බොත්තම",
+    "excalidrawplus_exportError": "FcboardPlus නිර්යාත දෝෂය"
   },
   "helpDialog": {
     "blog": "බ්ලොග්",
@@ -421,7 +421,7 @@
     "editor": "සංස්කාරක",
     "editLineArrowPoints": "රේඛා ඊතල ලක්ෂ්‍ය සංස්කරණය",
     "editText": "පෙළ සංස්කරණය",
-    "github": "Fcdraw",
+    "github": "Fcboard",
     "howto": "කෙසේද",
     "or": "හෝ",
     "preventBinding": "බන්ධනය වැළැක්වීම",
@@ -446,7 +446,7 @@
     "title": "ප්‍රකාශන සංවාදය",
     "itemName": "අයිතම නම",
     "authorName": "කතුවරයාගේ නම",
-    "githubUsername": "Fcdraw පරිශීලක නම",
+    "githubUsername": "Fcboard පරිශීලක නම",
     "twitterUsername": "Twitter පරිශීලක නම",
     "libraryName": "පුස්තකාලයේ නම",
     "libraryDesc": "පුස්තකාල විස්තර",
@@ -455,7 +455,7 @@
       "authorName": "කතුවරයාගේ නම ඇතුලත් කරන්න",
       "libraryName": "පුස්තකාලයේ නම ඇතුලත් කරන්න",
       "libraryDesc": "පුස්තකාල විස්තර ඇතුලත් කරන්න",
-      "githubHandle": "Fcdraw හසුරුව ඇතුලත් කරන්න",
+      "githubHandle": "Fcboard හසුරුව ඇතුලත් කරන්න",
       "twitterHandle": "Twitter හසුරුව ඇතුලත් කරන්න",
       "website": "වෙබ් අඩවිය ඇතුලත් කරන්න"
     },
@@ -591,9 +591,9 @@
         "description": "තැටියට සුරැකීම විස්තර"
       },
       "excalidrawPlus": {
-        "title": "FcdrawPlus ආවරණය",
-        "button": "FcdrawPlus බොත්තම",
-        "description": "FcdrawPlus විස්තර"
+        "title": "FcboardPlus ආවරණය",
+        "button": "FcboardPlus බොත්තම",
+        "description": "FcboardPlus විස්තර"
       }
     },
     "modal": {

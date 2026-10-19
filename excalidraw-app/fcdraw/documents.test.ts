@@ -1,4 +1,4 @@
-import { hitStroke, htmlText, shapeInk } from "./documents";
+import { eraseDocumentInk, hitStroke, htmlText, shapeInk } from "./documents";
 import {
   configureWidget,
   projectilePoint,
@@ -9,6 +9,33 @@ import {
 } from "./widgets";
 
 describe("document ink and classroom tools", () => {
+  it("cuts the swept part of a courseware annotation without removing the rest or its source text", () => {
+    const input = [
+      {
+        id: "ink",
+        color: "#000",
+        width: 4,
+        points: [
+          [0, 0],
+          [200, 0],
+        ] as [number, number][],
+      },
+      {
+        id: "text",
+        text: "课件批注",
+        color: "#000",
+        width: 1,
+        points: [[80, 0]] as [number, number][],
+      },
+    ];
+    const cut = eraseDocumentInk(input, [100, -50], [100, 50], 20, 24);
+    expect(cut).toHaveLength(3);
+    expect(cut[0].points.at(-1)![0]).toBeCloseTo(88);
+    expect(cut[1].points[0][0]).toBeCloseTo(112);
+    expect(cut[2]).toBe(input[1]);
+    expect(input[0].points).toHaveLength(2);
+    expect(eraseDocumentInk(input, [400, 0], [500, 0], 20, 24)).toBe(input);
+  });
   it("erases intersected ink segments and generated text without touching the source document", () => {
     const line = {
       id: "stroke",

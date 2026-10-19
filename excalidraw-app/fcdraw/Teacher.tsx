@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { ToolbarExtras } from "@excalidraw/excalidraw";
+
 import {
   CloseIcon,
-  MagicIcon,
   playerPlayIcon,
 } from "@excalidraw/excalidraw/components/icons";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+
+import { useAnchoredPanel } from "./floating";
 
 import { boardContext, chat, parseJSON, visualMessage } from "./ai";
 import { classroomCommands } from "./commands";
@@ -18,7 +19,11 @@ import type { Lens, TeachingSession } from "./teaching";
 
 const preferences = () => {
   try {
-    return JSON.parse(localStorage.getItem("fcdraw-teaching") || "{}") as {
+    return JSON.parse(
+      localStorage.getItem("fcboard-teaching") ||
+        localStorage.getItem("fcdraw-teaching") ||
+        "{}",
+    ) as {
       lens?: Lens;
       speed?: number;
     };
@@ -30,14 +35,14 @@ export const LearningSettings = () => {
   const [value, setValue] = useState(preferences);
   useEffect(() => {
     const refresh = () => setValue(preferences());
-    window.addEventListener("fcdraw-teaching-settings", refresh);
+    window.addEventListener("fcboard-teaching-settings", refresh);
     return () =>
-      window.removeEventListener("fcdraw-teaching-settings", refresh);
+      window.removeEventListener("fcboard-teaching-settings", refresh);
   }, []);
   const update = (next: typeof value) => {
     setValue(next);
-    localStorage.setItem("fcdraw-teaching", JSON.stringify(next));
-    window.dispatchEvent(new Event("fcdraw-teaching-settings"));
+    localStorage.setItem("fcboard-teaching", JSON.stringify(next));
+    window.dispatchEvent(new Event("fcboard-teaching-settings"));
   };
   return (
     <>
@@ -93,6 +98,12 @@ export const Teacher = ({
   const input = useRef<HTMLInputElement>(null);
   const session = useRef<string>("");
   const active = state.mode !== "idle";
+  const surface = useRef<HTMLElement>(null);
+  const floatingStyle = useAnchoredPanel(
+    surface,
+    "[data-testid='main-menu-trigger']",
+    active || asking || !!error,
+  );
 
   useEffect(() => {
     const configure = () => {
@@ -138,7 +149,7 @@ export const Teacher = ({
         controller.pause();
       }
     });
-    window.addEventListener("fcdraw-teaching-settings", configure);
+    window.addEventListener("fcboard-teaching-settings", configure);
     return () => {
       request.current?.abort();
       controller.cancel();
@@ -146,7 +157,7 @@ export const Teacher = ({
       stop();
       invalidate();
       pointer();
-      window.removeEventListener("fcdraw-teaching-settings", configure);
+      window.removeEventListener("fcboard-teaching-settings", configure);
     };
   }, [api, controller]);
   useEffect(() => {
@@ -167,106 +178,126 @@ export const Teacher = ({
       setAsking(true);
     }
   };
-  const teach = async (question: string, branch: boolean) => {
+  const teach = async (
+    question: string,
+    branch: boolean,
+    signal?: AbortSignal,
+  ) => {
     if (!question.trim()) {
       throw new Error("请说出想学的内容，或选中题目后提问");
     }
     request.current?.abort();
     const abort = new AbortController();
     request.current = abort;
-    const revision = classroomCommands.revision;
-    setError("");
-    if (branch) {
-      controller.interrupt();
-    } else {
-      controller.generating();
+    const cancel = () => abort.abort();
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) {
+      cancel();
     }
-    const context = await boardContext(api);
-    const sources = await searchMaterials(question);
-    const document = (
-      classroomCommands.has("document.snapshot")
-        ? await classroomCommands.execute({ name: "document.snapshot" })
-        : undefined
-    ) as
-      | {
-          text: string;
-          name: string;
-          page: number;
-          image?: string;
-          ink?: unknown;
-        }
-      | undefined;
-    if (abort.signal.aborted || revision !== classroomCommands.revision) {
-      return;
-    }
-    const lens = controller.state.lens;
-    const documentText = document
-      ? {
-          text: document.text,
-          name: document.name,
-          page: document.page,
-          ink: document.ink,
-        }
-      : undefined;
-    const result = await chat(
-      [
-        {
-          role: "system",
-          content: `你是方成教育的现场教师。${LESSON_FORMAT}\n${
-            document
-              ? "当前在课件透明板书层，坐标相对课件左上角，范围0..900宽、0..480高。优先用圈线和箭头解释现有课件，板书简短并避开原文；不可擦除原课件。"
-              : ""
-          }\n${
-            branch
-              ? "这是对当前讲解的追问：围绕学生圈中的位置解答，换例子、分解推理或纠正误解，只写2到4个短步骤，quiz 留空。不要重新开始整节课。"
-              : "先观察学生已写的步骤，循序渐进地引导，结束给2道理解测验；先问学生关键一步，不直接跳到答案。"
-          }\n教学模式=${lens}。${
-            lens === "audio"
-              ? "每个图形和方向都在 say 中完整描述，避免只说看这里。"
-              : lens === "reading"
-              ? "句子短，术语分开解释，避免大段文字。"
-              : lens === "focus"
-              ? "每步只讲一个概念，say 少于80字。"
-              : "语音、字幕和绘图互相配合。"
-          } 不推断学生残障或能力。${
-            controller.state.attempts > controller.state.correct ||
-            controller.state.interruptions > 1
-              ? "学生已经反复提问或答错，改用具体类比，降低步幅。"
-              : ""
-          }`,
-        },
-        visualMessage(
-          `${question}\n白板文字：${context.text}\n选中对象：${JSON.stringify(
-            context.elements.map((el) => ({
-              id: el.id,
-              type: el.type,
-              x: el.x,
-              y: el.y,
-              text: el.type === "text" ? el.text : undefined,
-            })),
-          )}\n当前课件：${JSON.stringify(
-            documentText,
-          )}\n用户资料原文与页码（仅引用这里真实存在的来源）：${JSON.stringify(
-            sources,
-          )}\n正在讲解的步骤：${JSON.stringify(
-            controller.state.lesson?.steps[controller.state.step],
-          )}`,
-          document?.image || context.image,
-        ),
-      ],
-      abort.signal,
-    );
-    if (abort.signal.aborted || revision !== classroomCommands.revision) {
-      return;
-    }
-    const lesson = validateLesson(parseJSON(result));
-    setAsking(false);
-    setPrompt("");
-    if (branch) {
-      void controller.branch(lesson).catch(fail);
-    } else {
-      session.current = crypto.randomUUID();
-      void controller.start(lesson).catch(fail);
+    try {
+      const revision = classroomCommands.revision;
+      setError("");
+      if (branch) {
+        controller.interrupt();
+      } else {
+        controller.generating();
+      }
+      const context = await boardContext(api);
+      const sources = await searchMaterials(question);
+      const document = (
+        classroomCommands.has("document.snapshot")
+          ? await classroomCommands.execute({ name: "document.snapshot" })
+          : undefined
+      ) as
+        | {
+            text: string;
+            name: string;
+            page: number;
+            image?: string;
+            ink?: unknown;
+          }
+        | undefined;
+      if (abort.signal.aborted || revision !== classroomCommands.revision) {
+        return;
+      }
+      const lens = controller.state.lens;
+      const documentText = document
+        ? {
+            text: document.text,
+            name: document.name,
+            page: document.page,
+            ink: document.ink,
+          }
+        : undefined;
+      const result = await chat(
+        [
+          {
+            role: "system",
+            content: `你是方成教育的现场教师。${LESSON_FORMAT}\n${
+              document
+                ? "当前在课件透明板书层，坐标相对课件左上角，范围0..900宽、0..480高。优先用圈线和箭头解释现有课件，板书简短并避开原文；不可擦除原课件。"
+                : ""
+            }\n${
+              branch
+                ? "这是对当前讲解的追问：围绕学生圈中的位置解答，换例子、分解推理或纠正误解，只写2到4个短步骤，quiz 留空。不要重新开始整节课。"
+                : "先观察学生已写的步骤，循序渐进地引导，结束给2道理解测验；先问学生关键一步，不直接跳到答案。"
+            }\n教学模式=${lens}。${
+              lens === "audio"
+                ? "每个图形和方向都在 say 中完整描述，避免只说看这里。"
+                : lens === "reading"
+                ? "句子短，术语分开解释，避免大段文字。"
+                : lens === "focus"
+                ? "每步只讲一个概念，say 少于80字。"
+                : "语音、字幕和绘图互相配合。"
+            } 不推断学生残障或能力。${
+              controller.state.attempts > controller.state.correct ||
+              controller.state.interruptions > 1
+                ? "学生已经反复提问或答错，改用具体类比，降低步幅。"
+                : ""
+            }`,
+          },
+          visualMessage(
+            `${question}\n白板文字：${context.text}\n选中对象：${JSON.stringify(
+              context.elements.map((el) => ({
+                id: el.id,
+                type: el.type,
+                x: el.x,
+                y: el.y,
+                text: el.type === "text" ? el.text : undefined,
+              })),
+            )}\n当前课件：${JSON.stringify(
+              documentText,
+            )}\n用户资料原文与页码（仅引用这里真实存在的来源）：${JSON.stringify(
+              sources,
+            )}\n正在讲解的步骤：${JSON.stringify(
+              controller.state.lesson?.steps[controller.state.step],
+            )}`,
+            document?.image || context.image,
+          ),
+        ],
+        abort.signal,
+      );
+      if (abort.signal.aborted || revision !== classroomCommands.revision) {
+        return;
+      }
+      const lesson = validateLesson(parseJSON(result));
+      setAsking(false);
+      setPrompt("");
+      if (branch) {
+        void controller.branch(lesson).catch(fail);
+      } else {
+        session.current = crypto.randomUUID();
+        void controller.start(lesson).catch(fail);
+      }
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+      if (
+        abort.signal.aborted &&
+        request.current === abort &&
+        controller.state.mode === "generating"
+      ) {
+        controller.cancel();
+      }
     }
   };
   useEffect(() => {
@@ -305,14 +336,19 @@ export const Teacher = ({
             lens: (args.lens || saved.lens || "standard") as Lens,
             speed: Number(args.speed || saved.speed || 1),
           };
-          localStorage.setItem("fcdraw-teaching", JSON.stringify(next));
-          window.dispatchEvent(new Event("fcdraw-teaching-settings"));
+          localStorage.setItem("fcboard-teaching", JSON.stringify(next));
+          window.dispatchEvent(new Event("fcboard-teaching-settings"));
         },
       ),
       classroomCommands.register(
         "lesson.teach",
         "逐步讲课并画图，args.prompt 为主题或问题；不要用于单纯操作界面",
-        (args) => teach(String(args.prompt || "请讲解当前选中的题目"), false),
+        (args) =>
+          teach(
+            String(args.prompt || "请讲解当前选中的题目"),
+            false,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.register(
         "lesson.ask",
@@ -321,6 +357,7 @@ export const Teacher = ({
           teach(
             String(args.prompt || "请讲解我圈出的内容"),
             !!controller.state.lesson && controller.state.mode !== "complete",
+            args.signal instanceof AbortSignal ? args.signal : undefined,
           ),
       ),
       classroomCommands.register(
@@ -430,23 +467,10 @@ export const Teacher = ({
 
   return (
     <>
-      <ToolbarExtras>
-        <div className="fc-toolbar-extras">
-          <button
-            aria-label="AI 教师"
-            title="提问或开始讲解"
-            aria-expanded={asking}
-            onClick={() => {
-              controller.pause();
-              setAsking(!asking);
-            }}
-          >
-            {MagicIcon}
-          </button>
-        </div>
-      </ToolbarExtras>
       {(active || asking || error) && (
         <section
+          ref={surface}
+          style={floatingStyle}
           className={`fc-teacher fc-surface fc-lens-${state.lens}`}
           aria-label="AI 教师"
           onKeyDown={(event) => {

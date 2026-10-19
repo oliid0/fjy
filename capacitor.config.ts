@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.fcjyboard.fcdraw",
-  appName: "方成教育 Fcdraw",
+  appId: "com.fcjy.fcboard",
+  appName: "Fcboard",
   webDir: "excalidraw-app/build",
 };
 

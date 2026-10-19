@@ -35,6 +35,7 @@ type ToolButtonBaseProps = {
   className?: string;
   style?: CSSProperties;
   isLoading?: boolean;
+  onLongPress?: (anchor: HTMLElement) => void;
 };
 
 type ToolButtonProps =
@@ -108,6 +109,14 @@ export const ToolButton = React.forwardRef(
     }, []);
 
     const lastPointerTypeRef = useRef<PointerType | null>(null);
+    const press = useRef<{
+      timer?: ReturnType<typeof setTimeout>;
+      x: number;
+      y: number;
+      handled: boolean;
+    }>({ x: 0, y: 0, handled: false });
+    const cancelPress = () => clearTimeout(press.current.timer);
+    useEffect(() => cancelPress, []);
 
     if (
       props.type === "button" ||
@@ -172,10 +181,49 @@ export const ToolButton = React.forwardRef(
         className={clsx("ToolIcon", className)}
         title={props.title}
         onPointerDown={(event) => {
+          cancelPress();
+          press.current = {
+            x: event.clientX,
+            y: event.clientY,
+            handled: false,
+          };
           lastPointerTypeRef.current = event.pointerType || null;
           props.onPointerDown?.({ pointerType: event.pointerType || null });
+          if (props.onLongPress && event.button === 0) {
+            const anchor = event.currentTarget;
+            press.current.timer = setTimeout(() => {
+              press.current.handled = true;
+              props.onLongPress?.(anchor);
+            }, 450);
+          }
+        }}
+        onPointerMove={(event) => {
+          if (
+            Math.hypot(
+              event.clientX - press.current.x,
+              event.clientY - press.current.y,
+            ) > 8
+          ) {
+            cancelPress();
+          }
+        }}
+        onPointerCancel={cancelPress}
+        onPointerLeave={cancelPress}
+        onContextMenu={(event) => {
+          if (props.onLongPress) {
+            event.preventDefault();
+            cancelPress();
+            press.current.handled = true;
+            props.onLongPress(event.currentTarget);
+          }
+        }}
+        onClick={(event) => {
+          if (press.current.handled) {
+            event.preventDefault();
+          }
         }}
         onPointerUp={() => {
+          cancelPress();
           requestAnimationFrame(() => {
             lastPointerTypeRef.current = null;
           });
@@ -186,11 +234,27 @@ export const ToolButton = React.forwardRef(
           type="radio"
           name={props.name}
           aria-label={props["aria-label"]}
-          aria-keyshortcuts={props["aria-keyshortcuts"]}
+          aria-keyshortcuts={
+            [props["aria-keyshortcuts"], props.onLongPress && "Shift+F10"]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
           data-testid={props["data-testid"]}
           id={`${excalId}-${props.id}`}
           onChange={() => {
-            props.onChange?.({ pointerType: lastPointerTypeRef.current });
+            if (!press.current.handled) {
+              props.onChange?.({ pointerType: lastPointerTypeRef.current });
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              props.onLongPress &&
+              (event.key === "ContextMenu" ||
+                (event.shiftKey && event.key === "F10"))
+            ) {
+              event.preventDefault();
+              props.onLongPress(event.currentTarget.parentElement!);
+            }
           }}
           checked={props.checked}
           ref={innerRef}
@@ -203,6 +267,11 @@ export const ToolButton = React.forwardRef(
             </span>
           )}
         </div>
+        {props.label && (
+          <span className="fc-tool-label" aria-hidden="true">
+            {props.label}
+          </span>
+        )}
       </label>
     );
   },

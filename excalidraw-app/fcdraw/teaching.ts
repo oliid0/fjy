@@ -44,9 +44,12 @@ export type TeachingSession = {
     document?: { name: string; page: number };
   };
 };
-const storage = createStore("fcdraw-lessons", "lessons");
+const storage = createStore("fcboard-lessons", "lessons");
+const legacyStorage = createStore("fcdraw-lessons", "lessons");
 export const lessonSessions = async () =>
-  (await get<TeachingSession[]>("sessions", storage)) || [];
+  ((await get<TeachingSession[]>("sessions", storage)) ??
+    (await get<TeachingSession[]>("sessions", legacyStorage))) ||
+  [];
 export const saveLessonSession = async (session: TeachingSession) => {
   const sessions = await lessonSessions();
   await set(

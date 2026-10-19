@@ -209,7 +209,10 @@ export const DEFAULT_CANVAS_BACKGROUND_PICKS = [
   "#fffce8",
   // radix bronze2
   "#fdf8f6",
-] as ColorTuple;
+  // Classroom chalkboards
+  "#123d32",
+  "#000000",
+] as const;
 
 // palette defaults
 // -----------------------------------------------------------------------------
@@ -326,6 +329,28 @@ export const isColorDark = (color: string, threshold = 160): boolean => {
   const { r, g, b } = tc.toRgb();
   return calculateContrast(r, g, b) < threshold;
 };
+
+export const canvasStrokeColor = (
+  background: string,
+  stroke: string,
+  previousBackground: string,
+) =>
+  isColorDark(background)
+    ? "#ffffff"
+    : isColorDark(previousBackground) &&
+      tinycolor(stroke).toHexString() === "#ffffff"
+    ? "#1e1e1e"
+    : stroke;
+
+/** Classroom chalkboard pigments stay literal while the surrounding UI can remain dark. */
+export const canvasTheme = (
+  theme: "light" | "dark",
+  background: string,
+  classroom: boolean,
+) =>
+  classroom && ["#000000", "#123d32"].includes(background.toLowerCase())
+    ? "light"
+    : theme;
 
 // -----------------------------------------------------------------------------
 // normalization

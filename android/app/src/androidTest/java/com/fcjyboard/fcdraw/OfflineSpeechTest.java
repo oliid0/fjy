@@ -1,4 +1,4 @@
-package com.fcjyboard.fcdraw;
+package com.fcjy.fcboard;
 
 import static org.junit.Assert.assertTrue;
 import androidx.test.ext.junit.runners.AndroidJUnit4;

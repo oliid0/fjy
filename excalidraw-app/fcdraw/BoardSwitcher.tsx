@@ -6,11 +6,14 @@ import {
   save,
   file,
   CloseIcon,
+  chevronLeftIcon,
+  chevronRight,
 } from "@excalidraw/excalidraw/components/icons";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { BoardBook } from "./boards";
+import { useAnchoredPanel } from "./floating";
 
 import { classroomCommands } from "./commands";
 
@@ -61,6 +64,15 @@ const BoardThumbnail = ({ board }: { board: Board }) => {
 
 export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const leavePresentation = async () => {
+    if (
+      (
+        classroomCommands.read("network") as
+          | { collaborating?: boolean }
+          | undefined
+      )?.collaborating
+    ) {
+      await classroomCommands.execute({ name: "collaboration.stop" });
+    }
     if (classroomCommands.has("document.close")) {
       await classroomCommands.execute({
         name: "document.close",
@@ -77,6 +89,11 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const panel = useRef<HTMLElement>(null);
+  const panelStyle = useAnchoredPanel(
+    panel,
+    "[data-board-switcher], [data-testid='main-menu-trigger']",
+    open,
+  );
   useEffect(() => {
     const controller = new BoardBook(api, (failure) =>
       setError(String(failure)),
@@ -94,6 +111,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         .catch((failure) => setError(`白板保存不可用：${String(failure)}`));
     };
     const unsubscribe = controller.subscribe(() => {
+      classroomCommands.changed("boards");
       if (!cancelled) {
         setValue({ ...controller.value });
       }
@@ -101,6 +119,10 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     const stopWatch = api.onChange(boot);
     boot();
     const registrations = [
+      classroomCommands.register("board.list", "打开白板列表", () => {
+        setValue({ ...controller.value });
+        setOpen(true);
+      }),
       classroomCommands.register(
         "board.new",
         "新建并切换白板，args.name 可选；原板自动保存",
@@ -211,7 +233,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           JSON.stringify({
             type: "excalidraw",
             version: 2,
-            source: "Fcdraw",
+            source: "Fcboard",
             elements: board.elements,
             files: board.files,
             appState: board.view,
@@ -228,8 +250,29 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   };
   return (
     <>
-      <ToolbarExtras>
+      <ToolbarExtras placement="navigation">
         <div className="fc-toolbar-extras fc-board-controls">
+          <button
+            aria-label="上一块白板"
+            disabled={
+              busy ||
+              value.boards.findIndex((board) => board.id === value.active) <= 0
+            }
+            onClick={() =>
+              void run(async () => {
+                const index = book.current!.value.boards.findIndex(
+                  (board) => board.id === book.current!.value.active,
+                );
+                await leavePresentation();
+                await book.current!.switch(
+                  book.current!.value.boards[index - 1].id,
+                );
+              })
+            }
+          >
+            {chevronLeftIcon}
+          </button>
+
           <button
             data-board-switcher
             aria-label="切换白板"
@@ -243,10 +286,34 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             }}
           >
             {file}
+            <span>白板</span>
             <span className="fc-board-count">
               {value.boards.findIndex((board) => board.id === value.active) +
-                1 || 1}
+                1 || 1}{" "}
+              / {value.boards.length || 1}
             </span>
+          </button>
+          <button
+            aria-label="下一块白板"
+            disabled={
+              busy ||
+              !value.active ||
+              value.boards.findIndex((board) => board.id === value.active) >=
+                value.boards.length - 1
+            }
+            onClick={() =>
+              void run(async () => {
+                const index = book.current!.value.boards.findIndex(
+                  (board) => board.id === book.current!.value.active,
+                );
+                await leavePresentation();
+                await book.current!.switch(
+                  book.current!.value.boards[index + 1].id,
+                );
+              })
+            }
+          >
+            {chevronRight}
           </button>
           <button
             aria-label="新建白板"
@@ -260,6 +327,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             }}
           >
             {PlusIcon}
+            <span>新建</span>
           </button>
         </div>
       </ToolbarExtras>
@@ -267,6 +335,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         <section
           ref={panel}
           className="fc-board-picker fc-surface"
+          style={panelStyle}
           role="dialog"
           aria-label="我的白板"
           onKeyDown={(event) => {

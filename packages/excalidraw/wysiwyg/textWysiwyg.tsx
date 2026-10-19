@@ -10,6 +10,7 @@ import {
   isTestEnv,
   MIME_TYPES,
   applyDarkModeFilter,
+  canvasTheme,
 } from "@excalidraw/common";
 
 import {
@@ -277,7 +278,11 @@ export const textWysiwyg = ({
         textAlign,
         verticalAlign,
         color:
-          appState.theme === THEME.DARK
+          canvasTheme(
+            appState.theme,
+            appState.viewBackgroundColor,
+            !!app.props.UIOptions.unifiedToolbar,
+          ) === THEME.DARK
             ? applyDarkModeFilter(updatedTextElement.strokeColor)
             : updatedTextElement.strokeColor,
         opacity: updatedTextElement.opacity / 100,

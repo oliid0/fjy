@@ -16,14 +16,20 @@ export type Recording = {
   transcript: TranscriptLine[];
   summary: string;
 };
-const store = createStore("fcdraw-recordings", "sessions");
+const store = createStore("fcboard-recordings", "sessions");
+const legacyStorage = createStore("fcdraw-recordings", "sessions");
 type BinaryRecording = Omit<Recording, "blob"> & {
   data: ArrayBuffer;
   mime: string;
 };
 export const loadRecordings = async (): Promise<Recording[]> => {
   const items =
-    (await get<(Recording | BinaryRecording)[]>("recordings", store)) || [];
+    ((await get<(Recording | BinaryRecording)[]>("recordings", store)) ??
+      (await get<(Recording | BinaryRecording)[]>(
+        "recordings",
+        legacyStorage,
+      ))) ||
+    [];
   return items.map((item) => {
     if ("blob" in item) {
       return item;

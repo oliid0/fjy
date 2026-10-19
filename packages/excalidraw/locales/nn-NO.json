@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "",
     "fontSize": "Skriftstorleik",
     "fontFamily": "Skrifttype",
-    "addWatermark": "Legg til «Laga med Fcdraw»",
+    "addWatermark": "Legg til «Laga med Fcboard»",
     "handDrawn": "Handteikna",
     "normal": "",
     "code": "Kode",
@@ -91,7 +91,7 @@
     "untitled": "Utan namn",
     "name": "Namn",
     "yourName": "Namnet ditt",
-    "madeWithExcalidraw": "Laga med Fcdraw",
+    "madeWithExcalidraw": "Laga med Fcboard",
     "group": "Grupper utval",
     "ungroup": "Avgrupper utval",
     "collaborators": "Samarbeidarar",
@@ -121,7 +121,7 @@
     "toggleTheme": "",
     "theme": "",
     "personalLib": "Personleg bibliotek",
-    "excalidrawLib": "Fcdraw-bibliotek",
+    "excalidrawLib": "Fcboard-bibliotek",
     "decreaseFontSize": "Gjer skriftstorleik mindre",
     "increaseFontSize": "Gjer skriftstorleik større",
     "unbindText": "Avbind tekst",
@@ -159,7 +159,7 @@
     "textToDiagram": "",
     "prompt": "",
     "followUs": "Følg oss",
-    "discordChat": "Fcdraw chat",
+    "discordChat": "Fcboard chat",
     "zoomToFitViewport": "",
     "zoomToFitSelection": "",
     "zoomToFit": "",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Kan ikkje eksportere eit tomt lerret.",
     "couldNotCopyToClipboard": "",
     "decryptFailed": "Kunne ikkje dekryptere data.",
-    "uploadedSecurly": "Opplastinga er kryptert og er ikkje mogleg å lese av Fcdraw-serveren eller tredjepartar.",
+    "uploadedSecurly": "Opplastinga er kryptert og er ikkje mogleg å lese av Fcboard-serveren eller tredjepartar.",
     "loadSceneOverridePrompt": "Innlasting av ekstern teikning erstattar ditt eksisterande innhald. Ynskjer du å fortsette?",
     "collabStopOverridePrompt": "Viss du avsluttar økta overskriv du den førre, lokalt lagra teikninga di. Er du sikker?\n\n(Ønsker du å halde fram med denne? Då er det berre å lukke denne fana.)",
     "errorAddingToLibrary": "Kunne ikkje legge elementet i biblioteket",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Dette vil legge til {{numShapes}} form(er) i biblioteket ditt. Er du sikker?",
     "imageDoesNotContainScene": "Dette biletet ser ikkje ut til å ha noko scenedata. Har du skrutt på innbygging av scene medan eksporteringa heldt på?",
     "cannotRestoreFromImage": "Scena kunne ikkje gjenopprettast frå denne biletfila",
-    "invalidSceneUrl": "Kunne ikkje hente noko scene frå den URL-en. Ho er anten øydelagd eller inneheld ikkje gyldig Fcdraw JSON-data.",
+    "invalidSceneUrl": "Kunne ikkje hente noko scene frå den URL-en. Ho er anten øydelagd eller inneheld ikkje gyldig Fcboard JSON-data.",
     "resetLibrary": "Dette vil fjerne alt innhald frå biblioteket. Er du sikker?",
     "removeItemsFromsLibrary": "Slette {{count}} element frå biblioteket?",
     "invalidEncryptionKey": "Krypteringsnøkkelen må ha 22 teikn. Sanntidssamarbeid er deaktivert.",
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Om ny sidelasting ikkje fungerer, prøv <button>å tømme lerretet.</button>",
     "clearCanvasCaveat": " Dette vil føre til tap av arbeid ",
     "trackedToSentry": "Feilen med identifikator {{eventId}} vart logga i systemet vårt.",
-    "openIssueMessage": "Vi er veldig nøye med å ikkje inkludere scene-opplysingane dine i feilmeldinga. Viss scena di ikkje er privat kan du vurdere å følge opp i <button>feilrapporteringssystemet vårt.</button> Ta med opplysingane nedanfor ved å kopiere og lime inn i Fcdraw-saka.",
+    "openIssueMessage": "Vi er veldig nøye med å ikkje inkludere scene-opplysingane dine i feilmeldinga. Viss scena di ikkje er privat kan du vurdere å følge opp i <button>feilrapporteringssystemet vårt.</button> Ta med opplysingane nedanfor ved å kopiere og lime inn i Fcboard-saka.",
     "sceneContent": "Scene-innhald:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Sanntids-samarbeidsøkt er no i gang.",
     "desc_shareLink": "Del denne lenka med dei du vil samarbeide med:",
     "desc_exitSession": "Dersom du avsluttar økta blir du kopla frå rommet, men du kan halde fram med å arbeide med scena lokalt. Ver merksam på at dette ikkje vil påverke andre personar, og desse vil framleis ha moglegheit til å samarbeide på deira eigen versjon.",
-    "shareTitle": "Bli med på eit sanntidssamarbeid på Fcdraw"
+    "shareTitle": "Bli med på eit sanntidssamarbeid på Fcboard"
   },
   "errorDialog": {
     "title": "Feil"
@@ -402,9 +402,9 @@
     "link_title": "Deleleg lenke",
     "link_details": "Eksporter som skrivebeskytta lenke.",
     "link_button": "Eksporter til lenke",
-    "excalidrawplus_description": "Lagre scena til Fcdraw-arbeidsområdet ditt.",
+    "excalidrawplus_description": "Lagre scena til Fcboard-arbeidsområdet ditt.",
     "excalidrawplus_button": "Eksporter",
-    "excalidrawplus_exportError": "Kunne ikkje eksportere til Fcdraw akkurat no..."
+    "excalidrawplus_exportError": "Kunne ikkje eksportere til Fcboard akkurat no..."
   },
   "helpDialog": {
     "blog": "Les bloggen vår",
@@ -446,7 +446,7 @@
     "title": "Publiser bibliotek",
     "itemName": "Elementnamn",
     "authorName": "Eigaren sitt namn",
-    "githubUsername": "Fcdraw-brukarnamn",
+    "githubUsername": "Fcboard-brukarnamn",
     "twitterUsername": "Twitter-brukarnamn",
     "libraryName": "Biblioteknamn",
     "libraryDesc": "Bibliotekskildring",
@@ -455,7 +455,7 @@
       "authorName": "Namnet eller brukarnamnet ditt",
       "libraryName": "Namnet på biblioteket ditt",
       "libraryDesc": "Skildring av biblioteket ditt sånn at andre forstår bruken av det",
-      "githubHandle": "Fcdraw-brukarnamn (valfritt), slik at du kan redigere bibiloteket når det er sendt inn til vurdering",
+      "githubHandle": "Fcboard-brukarnamn (valfritt), slik at du kan redigere bibiloteket når det er sendt inn til vurdering",
       "twitterHandle": "Twitter-brukarnamn (valfritt), så vi veit kven vi skal kreditere på Twitter",
       "website": "Lenke til den personlege nettstaden din eller ein anna stad (valfritt)"
     },
@@ -464,7 +464,7 @@
       "website": "Fyll inn ein gyldig URL"
     },
     "noteDescription": "Send inn biblioteket ditt til inkludering i <link>den offentlege bibliotek-kjeldekoda</link>slik at andre kan bruke det i teikningane deira.",
-    "noteGuidelines": "Biblioteket må godkjennast manuelt fyrst. Ver vennleg å lese <link>retningslinjene</link> før du sender inn. Du kjem til å trenge ein Fcdraw-konto for å kommunisere og gjere endringar dersom kravt, men det er ikkje strengt naudsynt.",
+    "noteGuidelines": "Biblioteket må godkjennast manuelt fyrst. Ver vennleg å lese <link>retningslinjene</link> før du sender inn. Du kjem til å trenge ein Fcboard-konto for å kommunisere og gjere endringar dersom kravt, men det er ikkje strengt naudsynt.",
     "noteLicense": "Ved å sende inn godkjenner du at biblioteket vert publisert under <link>MIT-lisensen, </link>som kort sagt betyr at kven som helst kan bruke det utan avgrensingar.",
     "noteItems": "Kvart bibliotekselement må ha eit eige namn, slik at det er mogleg å filtrere. Dei følgande bibliotekselementa blir inkludert:",
     "atleastOneLibItem": "Ver vennleg å markere minst eitt bibliotekselement for å starte",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Teikningane dine er ende-til-ende-krypterte slik at Fcdraw sine serverar aldri får sjå dei.",
-    "link": "Blogginnlegg om ende-til-ende-kryptering i Fcdraw"
+    "tooltip": "Teikningane dine er ende-til-ende-krypterte slik at Fcboard sine serverar aldri får sjå dei.",
+    "link": "Blogginnlegg om ende-til-ende-kryptering i Fcboard"
   },
   "stats": {
     "angle": "Vinkel",

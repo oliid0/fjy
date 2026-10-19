@@ -1,6 +1,6 @@
 /* global sampleRate */
 // Audio runs off the UI thread; send half-second mono blocks to the offline engine.
-class FcdrawPCM extends AudioWorkletProcessor {
+class FcboardPCM extends AudioWorkletProcessor {
   constructor() {
     super();
     this.buffer = new Float32Array(Math.round(sampleRate / 2));
@@ -38,4 +38,4 @@ class FcdrawPCM extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor("fcdraw-pcm", FcdrawPCM);
+registerProcessor("fcboard-pcm", FcboardPCM);

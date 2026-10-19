@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ToolbarExtras } from "@excalidraw/excalidraw";
+import { getCommonBounds } from "@excalidraw/element";
 import {
   CloseIcon,
   gridIcon,
@@ -9,6 +10,7 @@ import {
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { insertionPoint, selectedPlot } from "./board";
+import { useAnchoredPanel, placePanel } from "./floating";
 import { classroomCommands } from "./commands";
 import {
   configureWidget,
@@ -57,7 +59,9 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [selected, setSelected] = useState<Widget | null>(null);
   const selectedRef = useRef<Widget | null>(null);
   const panel = useRef<HTMLElement>(null);
+  const pickerStyle = useAnchoredPanel(panel, "[data-teaching-tools]", open);
   const [error, setError] = useState("");
+  const [widgetPlacement, setWidgetPlacement] = useState({ left: 12, top: 12 });
   useEffect(() => {
     const refresh = () => {
       const state = api.getAppState();
@@ -83,6 +87,49 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           ? readWidgets(api).find((widget) => ids.has(widget.id)) || null
           : null;
       selectedRef.current = next;
+      if (next) {
+        const stage = window.document
+          .querySelector(".fc-document-stage")
+          ?.getBoundingClientRect();
+        const items = api
+          .getSceneElements()
+          .filter((el) => el.customData?.fcWidget?.id === next.id);
+        if ((document && stage) || items.length) {
+          const bounds =
+            document && stage
+              ? [
+                  next.position.x - 200,
+                  next.position.y - 200,
+                  next.position.x + 220,
+                  next.position.y + 240,
+                ]
+              : getCommonBounds(items);
+          const scale =
+            document && stage ? stage.width / 1000 : state.zoom.value;
+          const x =
+            document && stage
+              ? stage.left - state.offsetLeft
+              : state.scrollX * scale;
+          const y =
+            document && stage
+              ? stage.top - state.offsetTop
+              : state.scrollY * scale;
+          const placement = placePanel(
+            {
+              left: x + bounds[0] * scale,
+              top: y + bounds[1] * scale,
+              right: x + bounds[2] * scale,
+              bottom: y + bounds[3] * scale,
+            },
+            { width: state.width, height: state.height - 92 },
+          );
+          setWidgetPlacement((previous) =>
+            previous.left === placement.left && previous.top === placement.top
+              ? previous
+              : { left: placement.left, top: placement.top },
+          );
+        }
+      }
       setSelected((previous) =>
         JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
       );
@@ -282,6 +329,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             }}
           >
             {gridIcon}
+            <span>教具</span>
           </button>
         </div>
       </ToolbarExtras>
@@ -289,6 +337,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         <section
           ref={panel}
           className="fc-tools-picker fc-surface"
+          style={pickerStyle}
           role="dialog"
           aria-label="教学工具"
           onKeyDown={(event) => {
@@ -371,6 +420,13 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       {!open && selected && !["ruler", "protractor"].includes(selected.kind) && (
         <section
           className="fc-widget-panel fc-surface"
+          style={{
+            ...widgetPlacement,
+            right: "auto",
+            bottom: "auto",
+            width: "min(280px, calc(100% - 24px))",
+            maxHeight: `calc(100% - ${widgetPlacement.top + 92}px)`,
+          }}
           role="dialog"
           aria-label={`${teachingTools[selected.kind]}参数`}
           onKeyDown={(event) => event.stopPropagation()}

@@ -3,11 +3,13 @@ import {
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
 import { getCommonBounds } from "@excalidraw/element";
+import { FONT_FAMILY } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { project3D, samplePlot } from "./math";
 import { classroomCommands } from "./commands";
@@ -57,20 +59,45 @@ export const insertText = (
   text: string,
   position = insertionPoint(api),
   customData?: Record<string, unknown>,
-) =>
-  insertElements(api, [
+  styleSource?: readonly ExcalidrawElement[],
+) => {
+  const textSource = styleSource?.find((element) => element.type === "text");
+  const inkSource = styleSource?.find((element) => element.type === "freedraw");
+  const source = textSource || inkSource;
+  const size =
+    textSource?.type === "text"
+      ? textSource.fontSize
+      : inkSource && styleSource
+      ? Math.max(
+          12,
+          Math.min(
+            160,
+            (getCommonBounds(styleSource)[3] -
+              getCommonBounds(styleSource)[1]) /
+              1.25,
+          ),
+        )
+      : undefined;
+  return insertElements(api, [
     {
       type: "text",
       ...position,
       text,
-      fontSize: api.getAppState().currentItemFontSize || 24,
-      fontFamily: api.getAppState().currentItemFontFamily || 2,
-      strokeColor: api.getAppState().currentItemStrokeColor,
-      opacity: api.getAppState().currentItemOpacity ?? 100,
+      fontSize: size || api.getAppState().currentItemFontSize || 24,
+      fontFamily:
+        textSource?.type === "text"
+          ? textSource.fontFamily
+          : inkSource
+          ? FONT_FAMILY.Excalifont
+          : api.getAppState().currentItemFontFamily || 2,
+      strokeColor:
+        source?.strokeColor || api.getAppState().currentItemStrokeColor,
+      opacity: source?.opacity ?? api.getAppState().currentItemOpacity ?? 100,
       textAlign: api.getAppState().currentItemTextAlign || "left",
       customData,
     },
   ]);
+};
 
 export const insertCube = (api: ExcalidrawImperativeAPI) => {
   const origin = insertionPoint(api);
@@ -251,6 +278,7 @@ export const drawPlot = (
   }
   const plotId = crypto.randomUUID();
   const shapes = skeletons.map((shape) => ({
+    strokeColor: api.getAppState().currentItemStrokeColor,
     ...shape,
     id: crypto.randomUUID(),
     groupIds: [plotId],

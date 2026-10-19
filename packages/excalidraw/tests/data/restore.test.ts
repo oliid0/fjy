@@ -541,6 +541,24 @@ describe("restoreElements", () => {
 });
 
 describe("restoreAppState", () => {
+  it("restores and bounds device-specific ink preferences without changing legacy scenes", () => {
+    expect(
+      restore.restoreAppState(null, {
+        currentItemPenMode: "brush",
+        eraserMode: "stroke",
+        eraserSize: 1000,
+        palmEraser: false,
+        palmEraserThreshold: 1,
+      }),
+    ).toMatchObject({
+      currentItemPenMode: "brush",
+      eraserMode: "stroke",
+      eraserSize: 240,
+      palmEraser: false,
+      palmEraserThreshold: 16,
+    });
+  });
+
   it("when appState is null it should return the local app state property", () => {
     const stubLocalAppState = getDefaultAppState();
     stubLocalAppState.cursorButton = "down";

@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Puščica tipa komolca",
     "fontSize": "Velikost pisave",
     "fontFamily": "Družina pisave",
-    "addWatermark": "Dodaj \"Izdelano z Fcdraw\"",
+    "addWatermark": "Dodaj \"Izdelano z Fcboard\"",
     "handDrawn": "Ročno narisano",
     "normal": "Običajno",
     "code": "Koda",
@@ -91,7 +91,7 @@
     "untitled": "Neimenovana",
     "name": "Ime",
     "yourName": "Vaše ime",
-    "madeWithExcalidraw": "Izdelano z Fcdraw",
+    "madeWithExcalidraw": "Izdelano z Fcboard",
     "group": "Združi izbor",
     "ungroup": "Razdruži izbor",
     "collaborators": "Sodelavci",
@@ -121,7 +121,7 @@
     "toggleTheme": "Preklapljanje med svetlo/temno temo",
     "theme": "Tema",
     "personalLib": "Osebna knjižnica",
-    "excalidrawLib": "Knjižnica Fcdraw",
+    "excalidrawLib": "Knjižnica Fcboard",
     "decreaseFontSize": "Zmanjšaj velikost pisave",
     "increaseFontSize": "Povečaj velikost pisave",
     "unbindText": "Veži besedilo",
@@ -159,11 +159,11 @@
     "textToDiagram": "Besedilo v diagram",
     "prompt": "Poziv",
     "followUs": "Sledi nas",
-    "discordChat": "Klepet v Fcdrawu",
+    "discordChat": "Klepet v Fcboardu",
     "zoomToFitViewport": "Približaj na vidno polje",
     "zoomToFitSelection": "Približaj na izbor",
     "zoomToFit": "Približaj na vse elemente",
-    "installPWA": "Namesti Fcdraw lokalno (PWA)",
+    "installPWA": "Namesti Fcboard lokalno (PWA)",
     "autoResize": "Omogoči samodejno spreminjanje velikosti besedila",
     "imageCropping": "Obrezovanje slike",
     "unCroppedDimension": "Neobrezana dimenzija",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Izvoz prazne scene ni mogoč.",
     "couldNotCopyToClipboard": "Kopiranje v odložišče ni uspelo.",
     "decryptFailed": "Dešifriranje podatkov ni uspelo.",
-    "uploadedSecurly": "Nalaganje je bilo zaščiteno s šifriranjem od konca do konca, kar pomeni, da strežnik Fcdraw in tretje osebe ne morejo brati vsebine.",
+    "uploadedSecurly": "Nalaganje je bilo zaščiteno s šifriranjem od konca do konca, kar pomeni, da strežnik Fcboard in tretje osebe ne morejo brati vsebine.",
     "loadSceneOverridePrompt": "Nalaganje zunanje risbe bo nadomestilo vašo obstoječo vsebino. Ali želite nadaljevati?",
     "collabStopOverridePrompt": "Ustavitev seje bo prepisala vašo prejšnjo, lokalno shranjeno risbo. Ali ste prepričani?\n\n(Če želite obdržati lokalno risbo, preprosto zaprite zavihek brskalnika.)",
     "errorAddingToLibrary": "Elementa ni bilo mogoče dodati v knjižnico",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "S tem boste v vašo knjižnico dodali oblike ({{numShapes}}). Ali ste prepričani?",
     "imageDoesNotContainScene": "Zdi se, da ta slika ne vsebuje podatkov o sceni. Ali ste med izvozom omogočili vdelavo scene?",
     "cannotRestoreFromImage": "Scene ni bilo mogoče obnoviti iz te slikovne datoteke",
-    "invalidSceneUrl": "S priloženega URL-ja ni bilo mogoče uvoziti scene. Je napačno oblikovana ali pa ne vsebuje veljavnih podatkov Fcdraw JSON.",
+    "invalidSceneUrl": "S priloženega URL-ja ni bilo mogoče uvoziti scene. Je napačno oblikovana ali pa ne vsebuje veljavnih podatkov Fcboard JSON.",
     "resetLibrary": "To bo počistilo vašo knjižnico. Ali ste prepričani?",
     "removeItemsFromsLibrary": "Izbriši elemente ({{count}}) iz knjižnice?",
     "invalidEncryptionKey": "Ključ za šifriranje mora vsebovati 22 znakov. Sodelovanje v živo je onemogočeno.",
@@ -279,7 +279,7 @@
       "line1": "Videti je, da uporabljate brskalnik Brave z omogočeno nastavitvijo <bold>Agresivno blokiranje prstnih odtisov</bold>.",
       "line2": "To bi lahko povzročilo motnje v obnašanju <bold>besedilnih elementov</bold> v vaših risbah.",
       "line3": "Močno priporočamo, da onemogočite to nastavitev. Sledite <link>tem korakom</link>, kako to storiti.",
-      "line4": "Če onemogočanje te nastavitve ne popravi prikaza besedilnih elementov, odprite <issueLink>vprašanje</issueLink> na našem Fcdrawu ali nam pišite na <discordLink>Fcdraw</discordLink>"
+      "line4": "Če onemogočanje te nastavitve ne popravi prikaza besedilnih elementov, odprite <issueLink>vprašanje</issueLink> na našem Fcboardu ali nam pišite na <discordLink>Fcboard</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Vdelani elementi ne morejo biti dodani v knjižnico.",
@@ -312,7 +312,7 @@
     "laser": "Laserski kazalec",
     "hand": "Roka (orodje za premikanje)",
     "extraTools": "Več orodij",
-    "mermaidToExcalidraw": "Mermaid v Fcdraw",
+    "mermaidToExcalidraw": "Mermaid v Fcboard",
     "convertElementType": ""
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Če ponovno nalaganje ne deluje, poskusite <button>počistiti platno.</button>",
     "clearCanvasCaveat": " To bo povzročilo izgubo dela ",
     "trackedToSentry": "Napaka z identifikatorjem {{eventId}} smo zabeležili v naš sistem.",
-    "openIssueMessage": "Zelo smo bili previdni, da v podatke o napaki nismo vključili vaših podatkov o sceni. Če vaša scena ni zasebna, vas prosimo, da napišete več podrobnosti na našem <button>sledilniku hroščev.</button> Prosimo, vključite spodnje informacije tako, da jih kopirate in prilepite v Fcdraw vprašanje.",
+    "openIssueMessage": "Zelo smo bili previdni, da v podatke o napaki nismo vključili vaših podatkov o sceni. Če vaša scena ni zasebna, vas prosimo, da napišete več podrobnosti na našem <button>sledilniku hroščev.</button> Prosimo, vključite spodnje informacije tako, da jih kopirate in prilepite v Fcboard vprašanje.",
     "sceneContent": "Vsebina scene:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "Seja sodelovanja v živo je v teku.",
     "desc_shareLink": "Delite to povezavo z vsemi, s katerimi želite sodelovati:",
     "desc_exitSession": "Ustavitev seje vas bo odklopila od sobe, vendar boste lahko lokalno nadaljevali delo s sceno. To pa ne bo vplivalo na druge osebe. Druge osebe bodo še vedno lahko sodelovale v svoji različici.",
-    "shareTitle": "Pridruži se seji sodelovanja v živo na Fcdraw"
+    "shareTitle": "Pridruži se seji sodelovanja v živo na Fcboard"
   },
   "errorDialog": {
     "title": "Napaka"
@@ -402,9 +402,9 @@
     "link_title": "Povezava za deljenje",
     "link_details": "Izvoz kot povezava samo za branje.",
     "link_button": "Izvoz kot povezava",
-    "excalidrawplus_description": "Shrani sceno v svoj delovni prostor Fcdraw.",
+    "excalidrawplus_description": "Shrani sceno v svoj delovni prostor Fcboard.",
     "excalidrawplus_button": "Izvoz",
-    "excalidrawplus_exportError": "Trenutno ni bilo mogoče izvoziti v Fcdraw..."
+    "excalidrawplus_exportError": "Trenutno ni bilo mogoče izvoziti v Fcboard..."
   },
   "helpDialog": {
     "blog": "Preberite naš blog",
@@ -446,7 +446,7 @@
     "title": "Objavi knjižnico",
     "itemName": "Ime elementa",
     "authorName": "Ime avtorja",
-    "githubUsername": "Fcdraw uporabniško ime",
+    "githubUsername": "Fcboard uporabniško ime",
     "twitterUsername": "Twitter uporabniško ime",
     "libraryName": "Ime knjižnice",
     "libraryDesc": "Opis knijžnice",
@@ -455,7 +455,7 @@
       "authorName": "Vaše ime ali uporabniško ime",
       "libraryName": "Ime vaše knjižnice",
       "libraryDesc": "Opis vaše knjižnice, da bodo ljudje lažje razumeli njeno uporabo",
-      "githubHandle": "Fcdraw uporabniško ime (neobvezno), tako da lahko urejate knjižnico potem, ko jo pošljete v pregled",
+      "githubHandle": "Fcboard uporabniško ime (neobvezno), tako da lahko urejate knjižnico potem, ko jo pošljete v pregled",
       "twitterHandle": "Twitter uporabniško ime (neobvezno), tako da vemo, koga omeniti pri promociji prek Twitterja",
       "website": "Povezava na vašo osebno spletno stran ali drugam (neobvezno)"
     },
@@ -464,7 +464,7 @@
       "website": "Vnesite veljaven URL"
     },
     "noteDescription": "Predložite svojo knjižnico, da bo vključena v <link>javno skladišče knjižnic,</link>da jih drugi lahko uporabljajo v svojih risbah.",
-    "noteGuidelines": "Knjižnica mora biti najprej ročno odobrena. Prosimo vas, da pred oddajanjem preberete naše <link>smernice.</link>Za komunikacijo in spreminjanje po potrebi boste potrebovali račun Fcdraw, vendar to ni obvezno.",
+    "noteGuidelines": "Knjižnica mora biti najprej ročno odobrena. Prosimo vas, da pred oddajanjem preberete naše <link>smernice.</link>Za komunikacijo in spreminjanje po potrebi boste potrebovali račun Fcboard, vendar to ni obvezno.",
     "noteLicense": "Z oddajo se strinjate, da bo knjižnica objavljena pod <link>licenco MIT, </link>kar na kratko pomeni, da jo lahko kdorkoli uporablja brez omejitev.",
     "noteItems": "Vsak element knjižnice mora imeti svoje ime, tako da ga je mogoče filtrirati. Vključeni bodo naslednji elementi knjižnice:",
     "atleastOneLibItem": "Za začetek izberite vsaj en element knjižnice",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Vaše risbe so šifrirane od konca do konca, tako da jih strežniki Fcdraw nikoli ne bodo videli.",
-    "link": "Blog objava o šifriranju od konca do konca v Fcdraw"
+    "tooltip": "Vaše risbe so šifrirane od konca do konca, tako da jih strežniki Fcboard nikoli ne bodo videli.",
+    "link": "Blog objava o šifriranju od konca do konca v Fcboard"
   },
   "stats": {
     "angle": "Kot",
@@ -534,7 +534,7 @@
     "canvas": "platno",
     "selection": "izbor",
     "pasteAsSingleElement": "Uporabite {{shortcut}}, da prilepite kot en element,\n ali prilepite v obstoječ urejevalnik besedil",
-    "unableToEmbed": "Vdelava tega URL-ja trenutno ni dovoljena. Ustvarite vprašanje na Fcdraw-u in prosite za vmestitev URL-ja na seznam dovoljenih",
+    "unableToEmbed": "Vdelava tega URL-ja trenutno ni dovoljena. Ustvarite vprašanje na Fcboard-u in prosite za vmestitev URL-ja na seznam dovoljenih",
     "unrecognizedLinkFormat": "Povezava, ki ste jo vdelali, se ne ujema s pričakovano obliko. Poskusite prilepiti niz za vdelavo, ki ste ga prejeli na izvorni strani",
     "elementLinkCopied": "Povezava kopirana na odložišče"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Ste namesto tega želeli odpreti Fcdraw?",
+      "center_heading_plus": "Ste namesto tega želeli odpreti Fcboard?",
       "menuHint": "Izvoz, nastavitve, jeziki, ..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Izvozite podatke scene v datoteko, iz katere jo lahko pozneje uvozite."
       },
       "excalidrawPlus": {
-        "title": "Fcdraw",
-        "button": "Izvozi v Fcdraw",
-        "description": "Shrani sceno v svoj delovni prostor Fcdraw."
+        "title": "Fcboard",
+        "button": "Izvozi v Fcboard",
+        "description": "Shrani sceno v svoj delovni prostor Fcboard."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid v Fcdraw",
+    "title": "Mermaid v Fcboard",
     "button": "Vstavi",
-    "description": "Trenutno so podprti samo <flowchartLink>diagrami poteka</flowchartLink>, <sequenceLink>diagrami zaporedij</sequenceLink> in <classLink>Razredni diagrami</classLink>. Druge vrste bodo upodobljene kot slike v Fcdraw.",
+    "description": "Trenutno so podprti samo <flowchartLink>diagrami poteka</flowchartLink>, <sequenceLink>diagrami zaporedij</sequenceLink> in <classLink>Razredni diagrami</classLink>. Druge vrste bodo upodobljene kot slike v Fcboard.",
     "syntax": "Sintaksa Mermaid",
     "preview": "Predogled",
     "label": "",

@@ -19,6 +19,7 @@ import {
 
 import {
   COLOR_PALETTE,
+  canvasTheme,
   CODES,
   shouldResizeFromCenter,
   shouldMaintainAspectRatio,
@@ -424,6 +425,7 @@ import { isMaybeMermaidDefinition } from "../mermaid";
 import { LassoTrail } from "../lasso";
 
 import { EraserTrail } from "../eraser";
+import { eraseStroke, isPalmContact, pointerSamples } from "../eraser/stroke";
 
 import { getShortcutKey } from "../shortcut";
 
@@ -694,6 +696,7 @@ class App extends React.Component<AppProps, AppState> {
 
   laserTrails = new LaserTrails(this.animationFrameHandler, this);
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
+  private stopInkErasure: (() => void) | null = null;
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
 
   onChangeEmitter = new Emitter<
@@ -2019,6 +2022,15 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   public render() {
+    const boardTheme = canvasTheme(
+      this.state.theme,
+      this.state.viewBackgroundColor,
+      !!this.props.UIOptions.unifiedToolbar,
+    );
+    const canvasAppState =
+      boardTheme === this.state.theme
+        ? this.state
+        : { ...this.state, theme: boardTheme };
     const selectedElements = this.scene.getSelectedElements(this.state);
     const { renderTopRightUI, renderTopLeftUI, renderCustomStats } = this.props;
 
@@ -2259,7 +2271,7 @@ class App extends React.Component<AppProps, AppState> {
                               this.state.selectionElement?.versionNonce
                             }
                             scale={window.devicePixelRatio}
-                            appState={this.state}
+                            appState={canvasAppState}
                             renderConfig={{
                               imageCache: this.imageCache,
                               isExporting: false,
@@ -2272,12 +2284,12 @@ class App extends React.Component<AppProps, AppState> {
                                 this.elementsPendingErasure,
                               pendingFlowchartNodes:
                                 this.flowChartCreator.pendingNodes,
-                              theme: this.state.theme,
+                              theme: boardTheme,
                             }}
                           />
                           {this.state.newElement && (
                             <NewElementCanvas
-                              appState={this.state}
+                              appState={canvasAppState}
                               scale={window.devicePixelRatio}
                               rc={this.rc}
                               elementsMap={elementsMap}
@@ -2293,7 +2305,7 @@ class App extends React.Component<AppProps, AppState> {
                                 elementsPendingErasure:
                                   this.elementsPendingErasure,
                                 pendingFlowchartNodes: null,
-                                theme: this.state.theme,
+                                theme: boardTheme,
                               }}
                             />
                           )}
@@ -3100,6 +3112,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   public componentWillUnmount() {
+    this.stopInkErasure?.();
     (window as any).launchQueue?.setConsumer(() => {});
     this.renderer.destroy();
     this.scene.destroy();
@@ -6424,6 +6437,32 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerMove = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
+    if (this.stopInkErasure) {
+      return;
+    }
+    if (
+      this.props.UIOptions.unifiedToolbar &&
+      this.state.palmEraser !== false &&
+      this.state.newElement?.type === "freedraw" &&
+      this.lastPointerDownEvent?.pointerId === event.pointerId &&
+      isPalmContact(
+        event,
+        this.state.palmEraserThreshold ??
+          this.props.UIOptions.inkProfile?.palmThreshold ??
+          36,
+      )
+    ) {
+      const unfinished = this.state.newElement.id;
+      this.scene.replaceAllElements(
+        this.scene
+          .getElementsIncludingDeleted()
+          .filter((element) => element.id !== unfinished),
+      );
+      this.setState({ newElement: null }, () =>
+        this.beginInkErasure(event, true),
+      );
+      return;
+    }
     this.savePointer(event.clientX, event.clientY, this.state.cursorButton);
     this.lastPointerMoveEvent = event.nativeEvent;
     const scenePointer = viewportCoordsToSceneCoords(event, this.state);
@@ -7047,6 +7086,155 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
+  private beginInkErasure = (
+    event: React.PointerEvent<HTMLElement>,
+    palm: boolean,
+  ) => {
+    event.preventDefault();
+    this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
+    const pointerDownState = this.initialPointerDownState(event);
+    const before = this.scene.getElementsIncludingDeleted();
+    const zoom = this.state.zoom.value;
+    const size = Math.max(
+      12,
+      Math.min(
+        240,
+        this.state.eraserSize ??
+          this.props.UIOptions.inkProfile?.eraserSize ??
+          60,
+      ),
+    );
+    const width = palm ? Math.max(size, event.width) : size;
+    const height = palm ? Math.max(size * 1.2, event.height) : size * 1.2;
+    let previous = viewportCoordsToSceneCoords(event, this.state);
+    let changed = false;
+    let finished = false;
+    const target = event.currentTarget || this.interactiveCanvas!;
+    target.setPointerCapture?.(event.pointerId);
+    const preview = document.createElement("div");
+    preview.className = "fc-eraser-preview";
+    preview.setAttribute("aria-hidden", "true");
+    Object.assign(preview.style, {
+      position: "fixed",
+      pointerEvents: "none",
+      zIndex: "30",
+      width: `${width}px`,
+      height: `${height}px`,
+      border: "1px solid #222",
+      outline: "1px solid #fff",
+      borderRadius: "3px",
+      background: "#ffffff66",
+      transform: "translate(-50%, -50%)",
+    });
+    this.excalidrawContainerRef.current?.appendChild(preview);
+    const erase = (samples: PointerEvent[]) => {
+      let elements: readonly ExcalidrawElement[] =
+        this.scene.getElementsIncludingDeleted();
+      let update = false;
+      for (const sample of samples) {
+        const next = viewportCoordsToSceneCoords(sample, this.state);
+        preview.style.left = `${sample.clientX}px`;
+        preview.style.top = `${sample.clientY}px`;
+        const nextElements: ExcalidrawElement[] = [];
+        for (const element of elements) {
+          if (element.type !== "freedraw") {
+            nextElements.push(element);
+            continue;
+          }
+          const survivors = eraseStroke(
+            element,
+            previous,
+            next,
+            width / zoom,
+            height / zoom,
+          );
+          if (!survivors) {
+            nextElements.push(element);
+            continue;
+          }
+          update = true;
+          nextElements.push(
+            ...(survivors.length
+              ? survivors
+              : [newElementWith(element, { isDeleted: true })]),
+          );
+        }
+        elements = nextElements;
+        previous = next;
+      }
+      if (update) {
+        changed = true;
+        this.scene.replaceAllElements(elements);
+      }
+    };
+    const move = (next: PointerEvent) => {
+      if (next.pointerId !== event.pointerId) {
+        return;
+      }
+      next.preventDefault();
+      erase(pointerSamples(next));
+    };
+    const finish = (cancelled: boolean) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", cancelAll);
+      target.removeEventListener("lostpointercapture", cancel);
+      unsubscribe();
+      this.stopInkErasure = null;
+      preview.remove();
+      if (cancelled && changed) {
+        this.scene.replaceAllElements(before);
+      } else if (changed) {
+        this.store.scheduleCapture();
+      }
+      this.setState({ cursorButton: "up" });
+      resetCursor(this.interactiveCanvas);
+      this.props.onPointerUp?.(this.state.activeTool, pointerDownState);
+      this.onPointerUpEmitter.trigger(
+        this.state.activeTool,
+        pointerDownState,
+        event.nativeEvent,
+      );
+    };
+    const up = (next: PointerEvent) => {
+      if (next.pointerId === event.pointerId) {
+        move(next);
+        finish(false);
+      }
+    };
+    const cancel = (next: PointerEvent) => {
+      if (next.pointerId === event.pointerId) {
+        finish(true);
+      }
+    };
+    const cancelAll = () => finish(true);
+    const unsubscribe = this.missingPointerEventCleanupEmitter.on(() =>
+      finish(false),
+    );
+    this.stopInkErasure = cancelAll;
+    this.setState({ selectedElementIds: {}, cursorButton: "down" });
+    this.props.onPointerDown?.(this.state.activeTool, pointerDownState);
+    this.onPointerDownEmitter.trigger(
+      this.state.activeTool,
+      pointerDownState,
+      event,
+    );
+    if (this.interactiveCanvas) {
+      this.interactiveCanvas.style.cursor = "none";
+    }
+    erase([event.nativeEvent]);
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", cancelAll);
+    target.addEventListener("lostpointercapture", cancel);
+  };
+
   private handleEraser = (
     event: PointerEvent,
     scenePointer: { x: number; y: number },
@@ -7204,6 +7392,36 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerDown = (
     event: React.PointerEvent<HTMLElement>,
   ) => {
+    if (this.stopInkErasure) {
+      event.preventDefault();
+      return;
+    }
+    if (this.props.UIOptions.unifiedToolbar && !this.state.viewModeEnabled) {
+      const palm =
+        this.state.palmEraser !== false &&
+        isPalmContact(
+          event,
+          this.state.palmEraserThreshold ??
+            this.props.UIOptions.inkProfile?.palmThreshold ??
+            36,
+        );
+      const penEraser =
+        event.pointerType === "pen" &&
+        (event.button === 5 || !!(event.buttons & 34));
+      if (palm && this.state.newElement) {
+        event.preventDefault();
+        return;
+      }
+      if (
+        (palm && this.state.activeTool.type === "freedraw") ||
+        penEraser ||
+        (this.state.activeTool.type === "eraser" &&
+          this.state.eraserMode !== "object")
+      ) {
+        this.beginInkErasure(event, palm);
+        return;
+      }
+    }
     // If Ctrl is not held, ensure isBindingEnabled reflects the user preference.
     if (!event.ctrlKey) {
       const preferenceEnabled = this.state.bindingPreference === "enabled";
@@ -7800,7 +8018,7 @@ class App extends React.Component<AppProps, AppState> {
 
     let nextPastePrevented = false;
     const isLinux =
-      typeof window === undefined
+      typeof window === "undefined"
         ? false
         : /Linux/.test(window.navigator.platform);
 
@@ -8541,7 +8759,10 @@ class App extends React.Component<AppProps, AppState> {
       y: gridY,
     });
 
-    const simulatePressure = event.pressure === 0.5;
+    const boardInk = this.props.UIOptions.unifiedToolbar;
+    const simulatePressure = boardInk
+      ? event.pointerType !== "pen"
+      : event.pressure === 0.5;
 
     const element = newFreeDrawElement({
       type: elementType,
@@ -8550,7 +8771,13 @@ class App extends React.Component<AppProps, AppState> {
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: boardInk
+        ? (this.state.currentItemStrokeWidth *
+            (this.state.currentItemPenMode === "brush"
+              ? this.props.UIOptions.inkProfile?.brushPenWidth ?? 15
+              : this.props.UIOptions.inkProfile?.hardPenWidth ?? 4)) /
+          this.state.zoom.value
+        : this.state.currentItemStrokeWidth,
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,
@@ -8560,6 +8787,11 @@ class App extends React.Component<AppProps, AppState> {
       frameId: topLayerFrame ? topLayerFrame.id : null,
       points: [pointFrom<LocalPoint>(0, 0)],
       pressures: simulatePressure ? [] : [event.pressure],
+      customData: boardInk
+        ? {
+            fcInk: { version: 1, pen: this.state.currentItemPenMode || "hard" },
+          }
+        : undefined,
     });
 
     this.scene.insertElement(element);
@@ -9201,7 +9433,9 @@ class App extends React.Component<AppProps, AppState> {
   private onPointerMoveFromPointerDownHandler(
     pointerDownState: PointerDownState,
   ) {
-    return withBatchedUpdatesThrottled((event: PointerEvent) => {
+    const pendingSamples: PointerEvent[] = [];
+    const throttled = withBatchedUpdatesThrottled((event: PointerEvent) => {
+      const samples = pendingSamples.splice(0);
       if (this.state.openDialog?.name === "elementLinkSelector") {
         return;
       }
@@ -9894,34 +10128,30 @@ class App extends React.Component<AppProps, AppState> {
         }
 
         if (newElement.type === "freedraw") {
-          const points = newElement.points;
-          const dx = pointerCoords.x - newElement.x;
-          const dy = pointerCoords.y - newElement.y;
-
-          const lastPoint = points.length > 0 && points[points.length - 1];
-          const discardPoint =
-            lastPoint && lastPoint[0] === dx && lastPoint[1] === dy;
-
-          if (!discardPoint) {
-            const pressures = newElement.simulatePressure
-              ? newElement.pressures
-              : [...newElement.pressures, event.pressure];
-
+          const points = [...newElement.points];
+          const pressures = [...newElement.pressures];
+          let appended = false;
+          for (const sample of samples.length ? samples : [event]) {
+            const position = viewportCoordsToSceneCoords(sample, this.state);
+            const dx = position.x - newElement.x;
+            const dy = position.y - newElement.y;
+            const last = points[points.length - 1];
+            if (last && last[0] === dx && last[1] === dy) {
+              continue;
+            }
+            points.push(pointFrom<LocalPoint>(dx, dy));
+            if (!newElement.simulatePressure) {
+              pressures.push(sample.pressure);
+            }
+            appended = true;
+          }
+          if (appended) {
             this.scene.mutateElement(
               newElement,
-              {
-                points: [...points, pointFrom<LocalPoint>(dx, dy)],
-                pressures,
-              },
-              {
-                informMutation: false,
-                isDragging: false,
-              },
+              { points, pressures },
+              { informMutation: false, isDragging: false },
             );
-
-            this.setState({
-              newElement,
-            });
+            this.setState({ newElement });
           }
         } else if (isLinearElement(newElement) && !newElement.isDeleted) {
           pointerDownState.drag.hasOccurred = true;
@@ -10068,6 +10298,18 @@ class App extends React.Component<AppProps, AppState> {
         }
       }
     });
+    const move = (event: PointerEvent) => {
+      if (this.state.newElement?.type === "freedraw") {
+        pendingSamples.push(...pointerSamples(event));
+      }
+      throttled(event);
+    };
+    move.flush = throttled.flush;
+    move.cancel = () => {
+      pendingSamples.length = 0;
+      throttled.cancel();
+    };
+    return move;
   }
 
   // Returns whether the pointer move happened over either scrollbar

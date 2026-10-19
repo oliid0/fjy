@@ -20,7 +20,16 @@ describe("unified bottom toolbar", () => {
     expect(
       toolbar.querySelector(".default-sidebar-trigger"),
     ).toBeInTheDocument();
-    expect(toolbar.querySelector(".zoom-actions")).toBeInTheDocument();
+    expect(toolbar.querySelector(".zoom-actions")).toBeNull();
+    expect(within(toolbar).queryByTestId("toolbar-rectangle")).toBeNull();
+    fireEvent.click(within(toolbar).getByRole("button", { name: "插入" }));
+    expect(
+      screen.getByRole("dialog", { name: "插入与工具" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("toolbar-rectangle")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "插入与工具" }), {
+      key: "Escape",
+    });
     expect(toolbar.querySelector(".undo-redo-buttons")).toBeInTheDocument();
     expect(
       within(toolbar).getByRole("button", { name: "语音指令" }),
@@ -29,9 +38,10 @@ describe("unified bottom toolbar", () => {
     expect(container.querySelector(".FixedSideContainer_side_top")).toBeNull();
     expect(container.querySelector(".layer-ui__wrapper__footer")).toBeNull();
     expect(container.querySelector(".fc-editor-properties")).toBeNull();
-    fireEvent.click(
-      within(toolbar).getByRole("button", { name: "画笔与对象属性" }),
-    );
+    const pen = within(toolbar).getByRole("button", { name: "画笔" });
+    fireEvent.click(pen);
+    expect(screen.queryByRole("dialog", { name: "画笔与对象属性" })).toBeNull();
+    fireEvent.click(pen);
     expect(
       screen.getByRole("dialog", { name: "画笔与对象属性" }),
     ).toBeInTheDocument();

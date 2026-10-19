@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { selectMenu } from "./menu";
+
 import type { Page } from "@playwright/test";
 
 const enterText = async (page: Page, text: string, select = true) => {
@@ -38,13 +40,11 @@ for (const viewport of [
       ),
     ).toHaveCount(0);
     await expect(toolbar.locator(".undo-redo-buttons")).toHaveCount(1);
-    await expect(toolbar.locator(".zoom-actions")).toHaveCount(1);
+    await expect(toolbar.locator(".zoom-actions")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "绘制函数", exact: true }),
     ).toHaveCount(0);
-    await toolbar
-      .getByRole("button", { name: "AI 与语音设置", exact: true })
-      .click();
+    await selectMenu(page, "AI 与语音设置");
     await expect(
       page.getByRole("dialog", { name: "AI 与语音设置" }),
     ).toBeVisible();
@@ -118,7 +118,7 @@ test("selecting handwriting automatically recognizes its PNG and writes the resu
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({
         model: "visual-test",
         apiKey: "test-only",
@@ -184,7 +184,7 @@ test("screenshot summary sends a real board image and returns to an editable can
 }, testInfo) => {
   await page.addInitScript(() => {
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({
         model: "visual-test",
         apiKey: "test-only",
@@ -222,11 +222,20 @@ test("screenshot summary sends a real board image and returns to an editable can
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "一次函数：斜率和截距");
-  await page.getByRole("button", { name: "截屏", exact: true }).click();
+  await selectMenu(page, "截屏");
   await page
     .getByRole("button", { name: "总结选区 / 白板", exact: true })
     .click();
-  await expect(page.locator(".fc-output")).toContainText("斜率决定变化趋势");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+          (element: { text?: string; isDeleted?: boolean }) =>
+            !element.isDeleted && element.text?.includes("斜率决定变化趋势"),
+        ),
+      ),
+    )
+    .toBe(true);
   expect(imageSent).toBe(true);
   await page.getByRole("button", { name: "关闭工具浮层" }).click();
   await page.mouse.click(100, 500);

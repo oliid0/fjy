@@ -25,7 +25,7 @@ const LogoText = () => (
       marginLeft: 12,
     }}
   >
-    Fcdraw
+    Fcboard
   </span>
 );
 

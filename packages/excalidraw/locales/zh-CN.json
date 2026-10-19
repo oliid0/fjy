@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "拐角箭头",
     "fontSize": "字体大小",
     "fontFamily": "字体",
-    "addWatermark": "添加 “使用 Fcdraw 创建” 水印",
+    "addWatermark": "添加 “使用 Fcboard 创建” 水印",
     "handDrawn": "手写",
     "normal": "普通",
     "code": "代码",
@@ -91,7 +91,7 @@
     "untitled": "无标题",
     "name": "名字",
     "yourName": "您的姓名",
-    "madeWithExcalidraw": "使用 Fcdraw 创建",
+    "madeWithExcalidraw": "使用 Fcboard 创建",
     "group": "编组",
     "ungroup": "解除编组",
     "collaborators": "协作者",
@@ -121,7 +121,7 @@
     "toggleTheme": "切换浅色/深色主题",
     "theme": "主题",
     "personalLib": "个人素材库",
-    "excalidrawLib": "Fcdraw 素材库",
+    "excalidrawLib": "Fcboard 素材库",
     "decreaseFontSize": "缩小字体大小",
     "increaseFontSize": "放大字体大小",
     "unbindText": "取消文本绑定",
@@ -159,11 +159,11 @@
     "textToDiagram": "文字至图表",
     "prompt": "Prompt",
     "followUs": "关注我们",
-    "discordChat": "Fcdraw 群组",
+    "discordChat": "Fcboard 群组",
     "zoomToFitViewport": "缩放以适应视图",
     "zoomToFitSelection": "缩放以适应选区",
     "zoomToFit": "缩放以适应所有元素",
-    "installPWA": "在本地安装 Fcdraw (PWA)",
+    "installPWA": "在本地安装 Fcboard (PWA)",
     "autoResize": "启用文本自动缩放",
     "imageCropping": "图片裁剪",
     "unCroppedDimension": "未裁剪的尺寸",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "无法导出空白画布。",
     "couldNotCopyToClipboard": "无法复制到剪贴板。",
     "decryptFailed": "无法解密数据。",
-    "uploadedSecurly": "上传已被端到端加密保护，这意味着 Fcdraw 的服务器和第三方都无法读取内容。",
+    "uploadedSecurly": "上传已被端到端加密保护，这意味着 Fcboard 的服务器和第三方都无法读取内容。",
     "loadSceneOverridePrompt": "加载外部绘图将取代您现有的内容。您想要继续吗？",
     "collabStopOverridePrompt": "停止会话将覆盖您先前本地存储的绘图。 您确定吗？\n\n(如果您想保持本地绘图，只需关闭浏览器选项卡。)",
     "errorAddingToLibrary": "无法将项目添加到素材库中",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "这将添加 {{numShapes}} 个形状到您的素材库中。您确定吗？",
     "imageDoesNotContainScene": "此图像似乎不包含任何画布数据。您是否在导出时启用了画布嵌入功能？",
     "cannotRestoreFromImage": "无法从此图像文件恢复画布",
-    "invalidSceneUrl": "无法从提供的 URL 导入场景。它或者格式不正确，或者不包含有效的 Fcdraw JSON 数据。",
+    "invalidSceneUrl": "无法从提供的 URL 导入场景。它或者格式不正确，或者不包含有效的 Fcboard JSON 数据。",
     "resetLibrary": "这将会清除你的素材库。你确定要这么做吗？",
     "removeItemsFromsLibrary": "确定要从素材库中删除 {{count}} 个项目吗？",
     "invalidEncryptionKey": "密钥必须包含22个字符。实时协作已被禁用。",
@@ -279,7 +279,7 @@
       "line1": "您似乎正在使用 Brave 浏览器并启用了<bold>积极阻止指纹识别</bold>的设置。",
       "line2": "这可能会破坏绘图中的 <bold>文本元素</bold>。",
       "line3": "我们强烈建议禁用此设置。您可以按照<link>这些步骤</link>来设置。",
-      "line4": "如果禁用此设置无法修复文本元素的显示，请在 Fcdraw 上提交一个 <issueLink>issue</issueLink> ，或者在 <discordLink>Fcdraw</discordLink> 上反馈"
+      "line4": "如果禁用此设置无法修复文本元素的显示，请在 Fcboard 上提交一个 <issueLink>issue</issueLink> ，或者在 <discordLink>Fcboard</discordLink> 上反馈"
     },
     "libraryElementTypeError": {
       "embeddable": "嵌入元素不能添加到素材库。",
@@ -312,7 +312,7 @@
     "laser": "激光笔",
     "hand": "抓手（平移工具）",
     "extraTools": "更多工具",
-    "mermaidToExcalidraw": "Mermaid 至 Fcdraw",
+    "mermaidToExcalidraw": "Mermaid 至 Fcboard",
     "convertElementType": "切换形状种类"
   },
   "element": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "实时协作会话进行中。",
     "desc_shareLink": "分享此链接给你要协作的用户",
     "desc_exitSession": "停止会话将中断您与房间的连接，但您依然可以在本地继续使用画布。请注意，这不会影响到其他用户，他们仍可以在他们的版本上继续协作。",
-    "shareTitle": "加入 Fcdraw 实时协作会话"
+    "shareTitle": "加入 Fcboard 实时协作会话"
   },
   "errorDialog": {
     "title": "错误"
@@ -402,9 +402,9 @@
     "link_title": "分享链接",
     "link_details": "导出为只读链接。",
     "link_button": "导出链接",
-    "excalidrawplus_description": "将画布保存到您的 Fcdraw 工作区。",
+    "excalidrawplus_description": "将画布保存到您的 Fcboard 工作区。",
     "excalidrawplus_button": "导出",
-    "excalidrawplus_exportError": "暂时无法导出到 Fcdraw ..."
+    "excalidrawplus_exportError": "暂时无法导出到 Fcboard ..."
   },
   "helpDialog": {
     "blog": "浏览我们的博客",
@@ -446,7 +446,7 @@
     "title": "发布素材库",
     "itemName": "项目名称",
     "authorName": "作者名",
-    "githubUsername": "Fcdraw 用户名",
+    "githubUsername": "Fcboard 用户名",
     "twitterUsername": "Twitter 用户名",
     "libraryName": "名称",
     "libraryDesc": "简介",
@@ -455,7 +455,7 @@
       "authorName": "您的名字或用户名",
       "libraryName": "素材库名称",
       "libraryDesc": "介绍您的素材库，让人们了解其用途",
-      "githubHandle": "Fcdraw 用户名（可选），填写后，您可以编辑已提交待审的素材库",
+      "githubHandle": "Fcboard 用户名（可选），填写后，您可以编辑已提交待审的素材库",
       "twitterHandle": "Twitter 用户名（可选），填写后，当我们在Twitter发布推广信息时便可提及您",
       "website": "您个人网站的或任意的链接（可选）"
     },
@@ -464,7 +464,7 @@
       "website": "输入一个有效的URL"
     },
     "noteDescription": "提交后，您的素材库将被包含在<link>公共素材库广场</link>以供其他人在绘图中使用。",
-    "noteGuidelines": "提交的素材库需先经人工审核。在提交之前，请先阅读<link>指南</link> 。后续沟通和对库的修改需要 Fcdraw 账号，但这不是必须的。",
+    "noteGuidelines": "提交的素材库需先经人工审核。在提交之前，请先阅读<link>指南</link> 。后续沟通和对库的修改需要 Fcboard 账号，但这不是必须的。",
     "noteLicense": "提交即表明您已同意素材库将遵循 <link>MIT 许可证</link>，简而言之，任何人都可以不受限制地使用它们。",
     "noteItems": "素材库中每个项目都有各自的名称以供筛选。以下项目将被包含：",
     "atleastOneLibItem": "请选择至少一个素材库以开始",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "您的绘图采用端到端加密，其内容对于 Fcdraw 服务器是不可见的。",
-    "link": "Fcdraw 中关于端到端加密的博客"
+    "tooltip": "您的绘图采用端到端加密，其内容对于 Fcboard 服务器是不可见的。",
+    "link": "Fcboard 中关于端到端加密的博客"
   },
   "stats": {
     "angle": "角度",
@@ -534,7 +534,7 @@
     "canvas": "画布",
     "selection": "所选项",
     "pasteAsSingleElement": "使用 {{shortcut}} 粘贴为单个元素，\n或粘贴到现有的文本编辑器里",
-    "unableToEmbed": "目前不允许嵌入此网址。请在 Fcdraw 上提 issue 请求将此网址加入白名单",
+    "unableToEmbed": "目前不允许嵌入此网址。请在 Fcboard 上提 issue 请求将此网址加入白名单",
     "unrecognizedLinkFormat": "您嵌入的链接不符合格式要求。请尝试粘贴源网站提供的“嵌入 (embed)”字符串",
     "elementLinkCopied": "链接已复制到剪贴板"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "是否前往 Fcdraw ？",
+      "center_heading_plus": "是否前往 Fcboard ？",
       "menuHint": "导出、首选项、语言……"
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "将画布数据导出为文件，以便以后导入。"
       },
       "excalidrawPlus": {
-        "title": "Fcdraw",
-        "button": "导出到 Fcdraw",
-        "description": "将画布保存到您的 Fcdraw 工作区。"
+        "title": "Fcboard",
+        "button": "导出到 Fcboard",
+        "description": "将画布保存到您的 Fcboard 工作区。"
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid 至 Fcdraw",
+    "title": "Mermaid 至 Fcboard",
     "button": "插入",
-    "description": "目前仅支持<flowchartLink>流程图</flowchartLink>、<sequenceLink>序列图</sequenceLink>和<classLink>类图</classLink>。其他类型在 Fcdraw 中将以图像呈现。",
+    "description": "目前仅支持<flowchartLink>流程图</flowchartLink>、<sequenceLink>序列图</sequenceLink>和<classLink>类图</classLink>。其他类型在 Fcboard 中将以图像呈现。",
     "syntax": "Mermaid 语法",
     "preview": "预览",
     "label": "",

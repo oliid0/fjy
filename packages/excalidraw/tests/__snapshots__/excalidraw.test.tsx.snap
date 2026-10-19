@@ -630,6 +630,28 @@ exports[`<Excalidraw/> > Test UIOptions prop > Test canvasActions > should rende
                   class="color-picker__button-outline"
                 />
               </button>
+              <button
+                class="color-picker__button"
+                data-testid="color-top-pick-#123d32"
+                style="--swatch-color: #123d32;"
+                title="#123d32"
+                type="button"
+              >
+                <div
+                  class="color-picker__button-outline"
+                />
+              </button>
+              <button
+                class="color-picker__button"
+                data-testid="color-top-pick-#000000"
+                style="--swatch-color: #000000;"
+                title="#000000"
+                type="button"
+              >
+                <div
+                  class="color-picker__button-outline"
+                />
+              </button>
             </div>
             <div
               style="width: 1px; height: 1rem; margin: 0px auto;"

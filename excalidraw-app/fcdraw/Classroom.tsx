@@ -1,7 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCommonBounds } from "@excalidraw/element";
-import { ToolbarExtras } from "@excalidraw/excalidraw";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -17,12 +16,17 @@ import {
 import { drawPlot, insertionPoint, insertText, selectedPlot } from "./board";
 import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
+import { LanSession } from "./LanSession";
 import { classroomCommands, directCommand } from "./commands";
 import { DOCUMENT_ACCEPT } from "./documents";
 import { Teacher, LearningSettings } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
 import { registerCanvasCommands } from "./canvasCommands";
-import { localMathIntent, selectionMathIntent } from "./intent";
+import {
+  localMathIntent,
+  selectionMathIntent,
+  selectionRequest,
+} from "./intent";
 import { calculate, defaultPlot, plotExpression } from "./math";
 import { Classroom as NativeClassroom } from "./native";
 import { createNarrator } from "./narration";
@@ -35,6 +39,7 @@ import {
 } from "./recording";
 import { currentSettings, saveSettings, validateEndpoint } from "./settings";
 import { observeMathSelection, selectionSignature } from "./selection";
+import { placePanel, useAnchoredPanel } from "./floating";
 import { startSystemSpeech, transcribe } from "./speech";
 
 import "./classroom.scss";
@@ -81,7 +86,7 @@ const RecordingPlayer = ({ recording }: { recording: Recording }) => {
       />
       <a
         href={url}
-        download={`Fcdraw-${recording.id}.${
+        download={`Fcboard-${recording.id}.${
           recording.blob.type.includes("mp4") ? "mp4" : "webm"
         }`}
       >
@@ -123,6 +128,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const [wholeBoard, setWholeBoard] = useState(false);
   const [autoMath, setAutoMath] = useState(() => currentSettings().autoMath);
   const [selectionBusy, setSelectionBusy] = useState(false);
+  const handledSelections = useRef(new Set<string>());
   const [plotPlacement, setPlotPlacement] = useState({ left: 16, top: 16 });
   const [capture, setCapture] = useState<string>();
   const capturedContext = useRef<Awaited<
@@ -174,6 +180,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const assistantGeneration = useRef(0);
   const returnFocus = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const panelStyle = useAnchoredPanel(
+    panelRef,
+    "[data-testid='main-menu-trigger'], .fc-presentation-toolbar",
+    !!panel && panel !== "plot",
+  );
   const active = records.find((item) => item.id === activeId);
   useEffect(() => registerCanvasCommands(api), [api]);
   const showPreview = useCallback((file: File) => {
@@ -228,25 +239,26 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               .querySelector(".fc-document-stage")
               ?.getBoundingClientRect()
           : undefined;
-        const left = Math.max(
-          16,
-          Math.min(
-            state.width - Math.min(480, state.width - 32) - 16,
-            documentRect
-              ? documentRect.left +
-                  ((graph.position.x + 260) / 1000) * documentRect.width
-              : (graph.position.x + 260 + state.scrollX) * state.zoom.value,
-          ),
-        );
-        const top = Math.max(
-          12,
-          Math.min(
-            state.height - 300,
-            documentRect
-              ? documentRect.top +
-                  ((graph.position.y - 245) / 1000) * documentRect.width
-              : (graph.position.y - 245 + state.scrollY) * state.zoom.value,
-          ),
+        const root = panelRef.current?.offsetParent?.getBoundingClientRect();
+        const scale = documentRect
+          ? documentRect.width / 1000
+          : state.zoom.value;
+        const center = {
+          x: documentRect
+            ? documentRect.left - (root?.left || 0) + graph.position.x * scale
+            : (graph.position.x + state.scrollX) * scale,
+          y: documentRect
+            ? documentRect.top - (root?.top || 0) + graph.position.y * scale
+            : (graph.position.y + state.scrollY) * scale,
+        };
+        const { left, top } = placePanel(
+          {
+            left: center.x - 245 * scale,
+            right: center.x + 245 * scale,
+            top: center.y - 245 * scale,
+            bottom: center.y + 245 * scale,
+          },
+          { width: state.width, height: state.height - 92 },
         );
         setPlotPlacement((value) =>
           value.left === left && value.top === top ? value : { left, top },
@@ -263,12 +275,53 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     };
     refresh();
     const stop = api.onChange(refresh);
+    const pointerUp = api.onPointerUp((tool, _, event) => {
+      if (
+        !["selection", "lasso"].includes(tool.type) ||
+        classroomCommands.read("document")
+      ) {
+        return;
+      }
+      const graph = selectedPlot(api);
+      if (!graph) {
+        return;
+      }
+      const state = api.getAppState();
+      const x =
+        (event.clientX - state.offsetLeft) / state.zoom.value - state.scrollX;
+      const y =
+        (event.clientY - state.offsetTop) / state.zoom.value - state.scrollY;
+      if (
+        Math.abs(x - graph.position.x) <= 245 &&
+        Math.abs(y - graph.position.y) <= 245
+      ) {
+        setPanel("plot");
+      }
+    });
     const documentChanged = classroomCommands.watch("document", refresh);
     return () => {
       stop();
+      pointerUp();
       documentChanged();
     };
   }, [api]);
+
+  useEffect(() => {
+    if (!panel) {
+      return;
+    }
+    const dismiss = (event: PointerEvent) => {
+      if (
+        !panelRef.current?.contains(event.target as Node) &&
+        !(event.target as Element).closest?.("[aria-controls='fc-panel']")
+      ) {
+        assistantGeneration.current++;
+        setPanel(null);
+      }
+    };
+    window.addEventListener("pointerdown", dismiss);
+    return () => window.removeEventListener("pointerdown", dismiss);
+  }, [panel]);
 
   const persistRecords = useCallback(async (next: Recording[]) => {
     recordsRef.current = next;
@@ -408,12 +461,6 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     setPanel(null);
     returnFocus.current?.focus();
   };
-  const open = (value: Panel) => {
-    returnFocus.current = document.activeElement as HTMLElement;
-    setPanel((previous) => (previous === value ? null : value));
-    setError("");
-  };
-
   const run = useCallback(async (operation: () => Promise<void>) => {
     if (actionBusy.current) {
       return;
@@ -560,6 +607,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               fcAnswerVersion: lastSource.version,
             }
           : undefined,
+        lastSource ? [lastSource] : undefined,
       );
       setOutput(`${expression} = ${answer}`);
       setStatus("计算结果已写入白板，可撤销或擦除");
@@ -601,6 +649,12 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       );
       plotRef.current = { ids, position };
       if (!classroomCommands.has("document.plot")) {
+        if (
+          !replace &&
+          !["selection", "lasso"].includes(api.getAppState().activeTool.type)
+        ) {
+          api.setActiveTool({ type: "selection" });
+        }
         api.updateScene({
           appState: {
             selectedElementIds: Object.fromEntries(ids.map((id) => [id, true])),
@@ -611,95 +665,6 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       setStatus("函数图像已插入；调节参数可观察变化");
     },
     [api],
-  );
-
-  useEffect(
-    () =>
-      observeMathSelection(
-        api,
-        async (source, signature, signal) => {
-          const text = source
-            .filter((el) => el.type === "text")
-            .map((el) => (el.type === "text" ? el.text : ""))
-            .join("\n")
-            .trim();
-          let intent = selectionMathIntent(text);
-          if (
-            source.some((el) => el.type === "freedraw" || el.type === "image")
-          ) {
-            const context = await boardContext(api, false, source);
-            if (signal.aborted) {
-              return;
-            }
-            const response = parseJSON(
-              await chat(
-                [
-                  visualMessage(
-                    '识别所选白板区域，仅返回 JSON。若是函数表达式（y=f(x)、f(x)=... 或 z=f(x,y)），返回 {"action":"plot","expression":"x+1","surface":false}；三维函数 surface=true。若是待计算算式，返回 {"action":"calculate","expression":"1+1"}。积分用 integrate(expr,x) 或 defint(expr,a,b,x)，求导 diff(expr,x)，极限 limit(expr,x,a)，方程 solve(expr,x)，复数用 i。只识别，不计算答案。若内容非数学、已给出答案或无法确定，返回 {"action":"none"}。不要猜测，不要输出解释。',
-                    context.image,
-                  ),
-                ],
-                signal,
-              ),
-            );
-            if (response && typeof response === "object") {
-              const value = response as {
-                action?: string;
-                expression?: string;
-                surface?: boolean;
-              };
-              intent =
-                value.action === "plot" && typeof value.expression === "string"
-                  ? {
-                      action: "plot",
-                      expression: plotExpression(value.expression),
-                      surface: !!value.surface,
-                    }
-                  : value.action === "calculate" &&
-                    typeof value.expression === "string"
-                  ? { action: "calculate", expression: value.expression }
-                  : null;
-            } else {
-              throw new Error("选区识别返回格式无效，请重新圈选");
-            }
-          }
-          if (!intent || signal.aborted) {
-            return;
-          }
-          if (intent.action === "plot") {
-            createPlot(
-              {
-                ...defaultPlot,
-                expression: intent.expression,
-                surface: intent.surface,
-              },
-              false,
-              signature,
-            );
-          } else {
-            const answer = calculate(intent.expression);
-            const [, top, right, bottom] = getCommonBounds(source);
-            const last = source[source.length - 1];
-            insertText(
-              api,
-              answer,
-              {
-                x: right + 16,
-                y: source.length === 1 ? top : Math.max(top, bottom - 32),
-              },
-              {
-                fcSelectionSource: signature,
-                fcAnswerSource: last.id,
-                fcAnswerVersion: last.version,
-              },
-            );
-            setStatus("计算结果已写入白板，可撤销或擦除");
-          }
-        },
-        setSelectionBusy,
-        (failure) => setError(errorMessage(failure)),
-      ),
-    [api, createPlot],
   );
 
   const summarize = useCallback(
@@ -734,7 +699,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       setOutput(result);
-      setPanel("ai");
+      await classroomCommands.execute({
+        name: "canvas.text",
+        args: { text: result },
+      });
+      setStatus("总结已写入白板，可编辑、撤销或擦除");
     },
     [api],
   );
@@ -830,7 +799,17 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, [createPlot]);
 
   const execute = useCallback(
-    async (text: string, whole = false) => {
+    async (
+      text: string,
+      whole = false,
+      selection?: {
+        context: Awaited<ReturnType<typeof boardContext>>;
+        signal: AbortSignal;
+      },
+    ) => {
+      if (selection?.signal.aborted) {
+        return;
+      }
       const generation = ++assistantGeneration.current;
       setPrompt(text);
       const direct = directCommand(text);
@@ -845,7 +824,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       ) {
         await classroomCommands.execute({
           name: "lesson.ask",
-          args: { prompt: text },
+          args: { prompt: text, signal: selection?.signal },
         });
         return;
       }
@@ -888,24 +867,29 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       const context =
-        whole && capturedContext.current
+        selection?.context ||
+        (whole && capturedContext.current
           ? capturedContext.current
-          : await boardContext(api, whole);
+          : await boardContext(api, whole));
       const response = parseJSON(
-        await chat([
-          {
-            role: "system",
-            content: `你是方成教育白板助教。将用户要求转成 JSON，不要 markdown。操作组件优先返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}]}，可组合最多20项。现有命令：\n${classroomCommands.describe()}\n只用已注册命令；不猜测对象或文件id，依据上下文。删除、丢弃、清空仅在用户明确要求时执行。要讲解或引导，使用 lesson.ask；问答也可结合课件、圈选与当前教学步骤。数学可返回 {"action":"plot","expression":"x+1","surface":false} 或 {"action":"calculate","expression":"1+1"}；图形可返回 {"action":"shapes","shapes":[{"type":"rectangle","x":0,"y":0,"width":140,"height":80}]}，type 仅 rectangle,ellipse,diamond,line,arrow,text；文本返回 {"action":"text","text":"回答"}。需要逐步动画使用 canvas.animate。不要任意代码、外链或假成功。`,
-          },
-          visualMessage(
-            `${text}\n白板文字：${context.text}\n组件状态：${JSON.stringify(
-              classroomCommands.snapshot(),
-            )}`,
-            context.image,
-          ),
-        ]),
+        await chat(
+          [
+            {
+              role: "system",
+              content: `你是方成教育白板助教。将用户要求转成 JSON，不要 markdown。操作组件优先返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}]}，可组合最多20项。现有命令：\n${classroomCommands.describe()}\n只用已注册命令；不猜测对象或文件id，依据上下文。删除、丢弃、清空仅在用户明确要求时执行。要讲解或引导，使用 lesson.ask；问答也可结合课件、圈选与当前教学步骤。数学可返回 {"action":"plot","expression":"x+1","surface":false} 或 {"action":"calculate","expression":"1+1"}；图形可返回 {"action":"shapes","shapes":[{"type":"rectangle","x":0,"y":0,"width":140,"height":80}]}，type 仅 rectangle,ellipse,diamond,line,arrow,text；文本返回 {"action":"text","text":"回答"}。需要逐步动画使用 canvas.animate。不要任意代码、外链或假成功。`,
+            },
+            visualMessage(
+              `${text}\n白板文字：${context.text}\n组件状态：${JSON.stringify(
+                classroomCommands.snapshot(),
+              )}`,
+              context.image,
+            ),
+          ],
+          selection?.signal,
+        ),
       );
       if (
+        selection?.signal.aborted ||
         revision !== classroomCommands.revision ||
         generation !== assistantGeneration.current
       ) {
@@ -937,8 +921,28 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         ) {
           throw new Error("AI 组件命令格式无效");
         }
+        if (
+          !action.commands.length ||
+          !action.commands.every(
+            (command) =>
+              classroomCommands.has(command.name) &&
+              command.name !== "ui.invoke",
+          )
+        ) {
+          throw new Error("AI 请求了当前不可用的操作，请重新描述");
+        }
         for (const command of action.commands) {
-          await classroomCommands.execute(command);
+          if (generation !== assistantGeneration.current) {
+            return;
+          }
+          await classroomCommands.execute(
+            selection && ["lesson.ask", "lesson.teach"].includes(command.name)
+              ? {
+                  ...command,
+                  args: { ...command.args, signal: selection.signal },
+                }
+              : command,
+          );
         }
       } else if (
         action.action === "plot" &&
@@ -964,12 +968,126 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         setStatus("图形已写入白板，可编辑、撤销或擦除");
       } else if (action.action === "text" && typeof action.text === "string") {
         setOutput(action.text);
-        setPanel("ai");
+        await classroomCommands.execute({
+          name: "canvas.text",
+          args: { text: action.text },
+        });
+        setStatus("回答已写入白板，可编辑、撤销或擦除");
       } else {
         throw new Error("AI 返回了无法执行的操作，请重新描述");
       }
     },
     [api, plot, summarize, solveMath, createPlot],
+  );
+
+  useEffect(
+    () =>
+      observeMathSelection(
+        api,
+        async (source, signature, signal) => {
+          const text = source
+            .filter((el) => el.type === "text")
+            .map((el) => (el.type === "text" ? el.text : ""))
+            .join("\n")
+            .trim();
+          let intent = selectionMathIntent(text);
+          const request = async (question: string) => {
+            const context = await boardContext(api, false, source);
+            if (!signal.aborted) {
+              await execute(question, false, { context, signal });
+            }
+          };
+          if (!intent && selectionRequest(text)) {
+            await request(text);
+            return;
+          }
+          if (
+            source.some((el) => el.type === "freedraw" || el.type === "image")
+          ) {
+            const context = await boardContext(api, false, source);
+            if (signal.aborted) {
+              return;
+            }
+            const response = parseJSON(
+              await chat(
+                [
+                  visualMessage(
+                    '识别所选白板区域，仅返回 JSON。若是函数表达式（y=f(x)、f(x)=... 或 z=f(x,y)），返回 {"action":"plot","expression":"x+1","surface":false}；三维函数 surface=true。若是待计算算式，返回 {"action":"calculate","expression":"1+1"}。积分用 integrate(expr,x) 或 defint(expr,a,b,x)，求导 diff(expr,x)，极限 limit(expr,x,a)，方程 solve(expr,x)，复数用 i。只识别，不计算答案。若是明确的问题或操作请求（例如讲解牛顿定律、画图、总结、录制课件），返回 {"action":"request","text":"逐字识别的问题或指令"}。若仅是普通笔记、已给出答案或无法确定，返回 {"action":"none"}。不要猜测，不要输出解释。',
+                    context.image,
+                  ),
+                ],
+                signal,
+              ),
+            );
+            if (response && typeof response === "object") {
+              const value = response as {
+                action?: string;
+                expression?: string;
+                surface?: boolean;
+                text?: string;
+              };
+              if (
+                value.action === "request" &&
+                typeof value.text === "string" &&
+                value.text.trim()
+              ) {
+                await request(value.text);
+                return;
+              }
+              intent =
+                value.action === "plot" && typeof value.expression === "string"
+                  ? {
+                      action: "plot",
+                      expression: plotExpression(value.expression),
+                      surface: !!value.surface,
+                    }
+                  : value.action === "calculate" &&
+                    typeof value.expression === "string"
+                  ? { action: "calculate", expression: value.expression }
+                  : null;
+            } else {
+              throw new Error("选区识别返回格式无效，请重新圈选");
+            }
+          }
+          if (!intent || signal.aborted) {
+            return;
+          }
+          if (intent.action === "plot") {
+            createPlot(
+              {
+                ...defaultPlot,
+                expression: intent.expression,
+                surface: intent.surface,
+              },
+              false,
+              signature,
+            );
+          } else {
+            const answer = calculate(intent.expression);
+            const [, top, right, bottom] = getCommonBounds(source);
+            const last = source[source.length - 1];
+            insertText(
+              api,
+              answer,
+              {
+                x: right + 16,
+                y: source.length === 1 ? top : Math.max(top, bottom - 32),
+              },
+              {
+                fcSelectionSource: signature,
+                fcAnswerSource: last.id,
+                fcAnswerVersion: last.version,
+              },
+              source,
+            );
+            setStatus("计算结果已写入白板，可撤销或擦除");
+          }
+        },
+        setSelectionBusy,
+        (failure) => setError(errorMessage(failure)),
+        handledSelections.current,
+      ),
+    [api, createPlot, execute],
   );
 
   const executeVoice = (text: string) => {
@@ -1399,6 +1517,42 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
   useEffect(() => {
     const registrations = [
+      classroomCommands.register("ui.invoke", "@internal", async (args) => {
+        returnFocus.current = document.querySelector<HTMLElement>(
+          "[data-testid='main-menu-trigger']",
+        );
+        await run(async () => {
+          if (
+            typeof args.command !== "string" ||
+            args.command === "ui.invoke"
+          ) {
+            throw new Error("菜单操作无效");
+          }
+          await classroomCommands.execute({
+            name: args.command,
+            args: args.args as Record<string, unknown> | undefined,
+          });
+        });
+      }),
+      classroomCommands.register(
+        "voice.toggle",
+        "开始或结束语音指令",
+        toggleVoice,
+      ),
+      classroomCommands.register(
+        "canvas.capture",
+        "截取当前整板用于提问",
+        async () => {
+          const context = await boardContext(api, true);
+          if (!context.elements.length) {
+            throw new Error("请先在白板书写内容");
+          }
+          setCapture(context.image);
+          capturedContext.current = context;
+          setWholeBoard(true);
+          setPanel("ai");
+        },
+      ),
       classroomCommands.register(
         "math.calculate",
         "计算算式，args.expression 可省略以识别圈选；结果写在板上",
@@ -1407,6 +1561,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             typeof args.expression === "string" ? args.expression : undefined,
           ),
       ),
+      classroomCommands.register("math.inspect", "@internal", () => {
+        if (selectedPlot(api)) {
+          setPanel("plot");
+        }
+      }),
       classroomCommands.register(
         "math.plot",
         "插入函数图，args.expression，args.surface 选三维；可带x,y,z,a,b,c数值",
@@ -1582,73 +1741,32 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   return (
     <div className="fc-classroom">
       <BoardSwitcher api={api} />
+      <LanSession api={api} />
       <Teacher api={api} onCommand={execute} />
       <TeachingTools api={api} />
-      <ToolbarExtras>
-        <div className="fc-toolbar-extras" role="group" aria-label="课堂工具">
-          <button
-            disabled={busy}
-            aria-expanded={panel === "ai" && wholeBoard}
-            onClick={() => {
-              void run(async () => {
-                const context = await boardContext(api, true);
-                if (!context.elements.length) {
-                  throw new Error("请先在白板书写内容");
-                }
-                setCapture(context.image);
-                capturedContext.current = context;
-                setWholeBoard(true);
-                setPanel("ai");
-              });
-            }}
-          >
-            截屏
-          </button>
-          {(["record", "files", "settings"] as const).map((value) => (
-            <button
-              key={value}
-              aria-expanded={panel === value}
-              aria-label={titles[value]}
-              aria-controls="fc-panel"
-              onClick={() => open(value)}
-            >
-              {value === "record" && recording
-                ? `● ${timestamp(elapsed)}`
-                : { record: "录制", files: "课件快传", settings: "设置" }[
-                    value
-                  ]}
-            </button>
-          ))}
-          <button
-            aria-pressed={listening}
-            disabled={recording && currentSettings().speech !== "local"}
-            onClick={() => {
-              void toggleVoice().catch((failure) =>
-                setError(errorMessage(failure)),
-              );
-            }}
-          >
-            {listening ? "■ 结束语音" : "语音指令"}
-          </button>
-          {recording && (
-            <button
-              className="fc-stop"
-              disabled={busy}
-              onClick={() => {
-                void run(stopRecording);
-              }}
-            >
-              停止录制
-            </button>
-          )}
-        </div>
-      </ToolbarExtras>
-      {(error || status || busy || selectionBusy) && (
+      {(error || status || busy || selectionBusy || recording || listening) && (
         <div
           className={`fc-notice ${error ? "fc-error" : ""}`}
           role={error ? "alert" : "status"}
         >
-          <span>{error || (busy || selectionBusy ? "正在处理…" : status)}</span>
+          <span>
+            {error ||
+              (busy || selectionBusy
+                ? "正在处理…"
+                : recording
+                ? `录制中 ${timestamp(elapsed)}`
+                : listening
+                ? "正在聆听…"
+                : status)}
+          </span>
+          {recording && (
+            <button disabled={busy} onClick={() => void run(stopRecording)}>
+              停止录制
+            </button>
+          )}
+          {listening && (
+            <button onClick={() => void run(toggleVoice)}>结束语音</button>
+          )}
           <button
             aria-label="关闭提示"
             onClick={() => {
@@ -1669,11 +1787,12 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             panel === "plot"
               ? {
                   ...plotPlacement,
+                  width: "min(280px, calc(100% - 24px))",
                   right: "auto",
                   bottom: "auto",
                   maxHeight: `calc(100% - ${plotPlacement.top + 84}px)`,
                 }
-              : undefined
+              : panelStyle
           }
           role="dialog"
           aria-modal="false"
@@ -1687,7 +1806,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         >
           <header>
             <div>
-              <small>Fcdraw · 方成教育</small>
+              <small>Fcboard · 方成教育</small>
               <h2>{titles[panel]}</h2>
             </div>
             <button onClick={() => close()} aria-label="关闭工具浮层">
@@ -1892,6 +2011,37 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 </p>
                 <button className="fc-primary" type="submit">
                   保存设置
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      const context = await boardContext(api);
+                      const result = await chat(
+                        [
+                          visualMessage(
+                            context.image
+                              ? "确认可以读取这张白板截图，只回复识别到的一小段内容。"
+                              : "连接测试，请回复连接成功。",
+                            context.image,
+                          ),
+                        ],
+                        undefined,
+                        settings,
+                      );
+                      setStatus(
+                        context.image
+                          ? `截图识别返回：${result.slice(0, 160)}`
+                          : `连接测试返回：${result.slice(
+                              0,
+                              160,
+                            )}；在白板书写后可测试截图识别`,
+                      );
+                    })
+                  }
+                >
+                  测试当前配置
                 </button>
               </form>
             )}

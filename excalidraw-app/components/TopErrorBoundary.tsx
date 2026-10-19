@@ -26,7 +26,7 @@ export class TopErrorBoundary extends React.Component<
   componentDidCatch(error: Error, errorInfo: any) {
     const _localStorage: any = {};
     for (const [key, value] of Object.entries({ ...localStorage })) {
-      if (key === "fcdraw-settings") {
+      if (key === "fcboard-settings") {
         continue;
       }
       try {

@@ -2,14 +2,14 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { selectMenu } from "./menu";
+
 import type { Page } from "@playwright/test";
 
 const fixture = (name: string) =>
-  path.resolve("node_modules/.fcdraw-research/courseware", name);
+  path.resolve("node_modules/.fcboard-research/courseware", name);
 const openFile = async (page: Page, name: string) => {
-  await page
-    .getByRole("button", { name: "课件 / 局域网快传", exact: true })
-    .click();
+  await selectMenu(page, "课件 / 局域网快传");
   await page
     .locator('.fc-panel input[type="file"]')
     .setInputFiles(fixture(name));
@@ -19,7 +19,17 @@ const openFile = async (page: Page, name: string) => {
   await expect(page.locator(".fc-document-status")).toHaveCount(0);
 };
 const ask = async (page: Page, text: string) => {
-  await page.getByRole("button", { name: "AI 教师", exact: true }).click();
+  if (
+    await page
+      .getByRole("button", { name: "课件 AI 教师", exact: true })
+      .isVisible()
+  ) {
+    await page
+      .getByRole("button", { name: "课件 AI 教师", exact: true })
+      .click();
+  } else {
+    await selectMenu(page, "提问与讲解");
+  }
   await page.getByRole("textbox", { name: "向 AI 教师提问" }).fill(text);
   await page.getByRole("button", { name: "发送问题" }).click();
 };
@@ -139,11 +149,11 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
 }, info) => {
   await page.addInitScript(() => {
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({ apiKey: "test-only", model: "test", autoMath: false }),
     );
     localStorage.setItem(
-      "fcdraw-teaching",
+      "fcboard-teaching",
       JSON.stringify({ lens: "captions", speed: 1 }),
     );
   });
@@ -253,7 +263,7 @@ test("voice uses the same component actions to create a new board without a mode
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({ speech: "system", autoMath: false }),
     );
     class Recognition {
@@ -288,7 +298,7 @@ test("voice draws into the visible PPT and function controls update its transpar
 }, info) => {
   await page.addInitScript(() => {
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({ speech: "system", autoMath: false }),
     );
     Object.assign(window, { fcTestSpeech: "帮我画个立方体" });

@@ -1062,10 +1062,10 @@ export const getFreedrawOutlinePoints = (
 
   return getStroke(inputPoints as number[][], {
     simulatePressure: element.simulatePressure,
-    size: element.strokeWidth * 4.25,
-    thinning: 0.6,
+    size: element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25),
+    thinning: element.customData?.fcInk?.pen === "hard" ? 0 : 0.6,
     smoothing: 0.5,
-    streamline: 0.5,
+    streamline: element.customData?.fcInk ? 0.15 : 0.5,
     easing: (t) => Math.sin((t * Math.PI) / 2), // https://easings.net/#easeOutSine
     last: true,
   }) as [number, number][];

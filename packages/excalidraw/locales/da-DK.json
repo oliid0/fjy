@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Albuepil",
     "fontSize": "Skriftstørrelse",
     "fontFamily": "Skrifttypefamilie",
-    "addWatermark": "Tilføj \"Lavet med Fcdraw\"",
+    "addWatermark": "Tilføj \"Lavet med Fcboard\"",
     "handDrawn": "Hånd-tegnet",
     "normal": "Normal",
     "code": "Kode",
@@ -91,7 +91,7 @@
     "untitled": "Unavngivet",
     "name": "Navn",
     "yourName": "Dit navn",
-    "madeWithExcalidraw": "Fremstillet med Fcdraw",
+    "madeWithExcalidraw": "Fremstillet med Fcboard",
     "group": "Gruppér valgte",
     "ungroup": "Afgruppér valgte",
     "collaborators": "Samarbejdspartnere",
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "",
     "clearCanvasCaveat": "",
     "trackedToSentry": "",
-    "openIssueMessage": "<button></button> Kopiere og indsæt venligst oplysningerne nedenfor i et Fcdraw problem.",
+    "openIssueMessage": "<button></button> Kopiere og indsæt venligst oplysningerne nedenfor i et Fcboard problem.",
     "sceneContent": "Scene indhold:"
   },
   "shareDialog": {

@@ -56,7 +56,7 @@
     "arrowtype_elbowed": "Seta em cotovelo",
     "fontSize": "Tamanho do tipo de letra",
     "fontFamily": "Família do tipo de letra",
-    "addWatermark": "Adicionar \"Feito com Fcdraw\"",
+    "addWatermark": "Adicionar \"Feito com Fcboard\"",
     "handDrawn": "Manuscrito",
     "normal": "Normal",
     "code": "Código",
@@ -91,7 +91,7 @@
     "untitled": "Sem título",
     "name": "Nome",
     "yourName": "O seu nome",
-    "madeWithExcalidraw": "Feito com Fcdraw",
+    "madeWithExcalidraw": "Feito com Fcboard",
     "group": "Agrupar seleção",
     "ungroup": "Desagrupar seleção",
     "collaborators": "Colaboradores",
@@ -121,7 +121,7 @@
     "toggleTheme": "Alternar tema claro/escuro",
     "theme": "Tema",
     "personalLib": "Biblioteca pessoal",
-    "excalidrawLib": "Biblioteca do Fcdraw",
+    "excalidrawLib": "Biblioteca do Fcboard",
     "decreaseFontSize": "Reduzir o tamanho do tipo de letra",
     "increaseFontSize": "Aumentar o tamanho do tipo de letra",
     "unbindText": "Desligar texto",
@@ -159,11 +159,11 @@
     "textToDiagram": "Texto para diagrama",
     "prompt": "Entrada de código",
     "followUs": "Siga-nos",
-    "discordChat": "Conversação no Fcdraw",
+    "discordChat": "Conversação no Fcboard",
     "zoomToFitViewport": "Aproximar para enquadrar no cisualizador",
     "zoomToFitSelection": "Aproximar para enquadrar a seleção",
     "zoomToFit": "Aproximar para enquadrar todos os elementos",
-    "installPWA": "Instalar Fcdraw localmente (PWA)",
+    "installPWA": "Instalar Fcboard localmente (PWA)",
     "autoResize": "Ativar redimensionamento automático do texto",
     "imageCropping": "Corte de imagem",
     "unCroppedDimension": "Dimensão sem corte",
@@ -248,7 +248,7 @@
     "cannotExportEmptyCanvas": "Não é possível exportar uma área de desenho vazia.",
     "couldNotCopyToClipboard": "Não foi possível copiar para a área de transferência.",
     "decryptFailed": "Não foi possível desencriptar os dados.",
-    "uploadedSecurly": "O envio foi protegido com encriptação de ponta a ponta, o que significa que o servidor do Fcdraw e terceiros não podem ler o conteúdo.",
+    "uploadedSecurly": "O envio foi protegido com encriptação de ponta a ponta, o que significa que o servidor do Fcboard e terceiros não podem ler o conteúdo.",
     "loadSceneOverridePrompt": "Se carregar um desenho externo substituirá o conteúdo existente. Quer continuar?",
     "collabStopOverridePrompt": "Ao interromper a sessão irá substituir o último desenho guardado. Tem a certeza?\n\n(Caso queira manter o último desenho, simplesmente feche a janela do navegador.)",
     "errorAddingToLibrary": "Não foi possível adicionar o item à biblioteca",
@@ -256,7 +256,7 @@
     "confirmAddLibrary": "Isto irá adicionar {{numShapes}} forma(s) à sua biblioteca. Tem a certeza?",
     "imageDoesNotContainScene": "Esta imagem parece não conter dados de cenas. Ativou a incorporação da cena durante a exportação?",
     "cannotRestoreFromImage": "Não foi possível restaurar a cena deste ficheiro de imagem",
-    "invalidSceneUrl": "Não foi possível importar a cena a partir do URL fornecido. Ou está mal formado ou não contém dados JSON do Fcdraw válidos.",
+    "invalidSceneUrl": "Não foi possível importar a cena a partir do URL fornecido. Ou está mal formado ou não contém dados JSON do Fcboard válidos.",
     "resetLibrary": "Isto irá limpar a sua biblioteca. Tem a certeza?",
     "removeItemsFromsLibrary": "Apagar {{count}} item(ns) da biblioteca?",
     "invalidEncryptionKey": "A chave de encriptação deve ter 22 caracteres. A colaboração ao vivo está desativada.",
@@ -279,7 +279,7 @@
       "line1": "Parece que está a utilizar o navegador Brave com a configuração <bold>Bloquear impressões digitais (fingerprinting) no modo restrito/agressivo</bold> ativada.",
       "line2": "Isto pode resultar na quebra dos <bold>Elementos de texto</bold> nos seus desenhos.",
       "line3": "Recomendamos vivamente a desativação desta configuração. Pode seguir <link>estes passos</link> para saber como o fazer.",
-      "line4": "Se a desativação desta configuração não corrigir a apresentação de elementos de texto, reporte um <issueLink>problema</issueLink> no nosso Fcdraw ou diga-nos no <discordLink>Fcdraw</discordLink>"
+      "line4": "Se a desativação desta configuração não corrigir a apresentação de elementos de texto, reporte um <issueLink>problema</issueLink> no nosso Fcboard ou diga-nos no <discordLink>Fcboard</discordLink>"
     },
     "libraryElementTypeError": {
       "embeddable": "Os elementos incorporáveis não podem ser adicionados à biblioteca.",
@@ -312,7 +312,7 @@
     "laser": "Ponteiro laser",
     "hand": "Mão (ferramenta de deslocar vista)",
     "extraTools": "Mais ferramentas",
-    "mermaidToExcalidraw": "Mermaid para Fcdraw",
+    "mermaidToExcalidraw": "Mermaid para Fcboard",
     "convertElementType": ""
   },
   "element": {
@@ -376,7 +376,7 @@
     "clearCanvasMessage": "Se o recarregar da página não funcionar, tente <button>limpar a área de desenho</button>.",
     "clearCanvasCaveat": " Isto resultará na perda do trabalho ",
     "trackedToSentry": "O erro com o identificador {{eventId}} foi rastreado no nosso sistema.",
-    "openIssueMessage": "Tivemos muito cuidado para não incluir as informações da sua cena no erro. Se a sua cena não for privada, considere fazer o acompanhamento no nosso <button>rastreador de problemas</button>. Inclua as informações abaixo copiando e colando no problema do Fcdraw.",
+    "openIssueMessage": "Tivemos muito cuidado para não incluir as informações da sua cena no erro. Se a sua cena não for privada, considere fazer o acompanhamento no nosso <button>rastreador de problemas</button>. Inclua as informações abaixo copiando e colando no problema do Fcboard.",
     "sceneContent": "Conteúdo da cena:"
   },
   "shareDialog": {
@@ -390,7 +390,7 @@
     "desc_inProgressIntro": "A sessão de colaboração ao vivo está agora a decorrer.",
     "desc_shareLink": "Partilhe esta hiperligação com qualquer pessoa com quem queira colaborar:",
     "desc_exitSession": "Se interromper a sessão, será desconectado da sala, mas poderá continuar a trabalhar com a cena localmente. Tenha em atenção que isto não afetará as outras pessoas, que poderão continuar a colaborar na sua versão.",
-    "shareTitle": "Participe numa sessão de colaboração ao vivo no Fcdraw"
+    "shareTitle": "Participe numa sessão de colaboração ao vivo no Fcboard"
   },
   "errorDialog": {
     "title": "Erro"
@@ -402,9 +402,9 @@
     "link_title": "Hiperligação partilhável",
     "link_details": "Exportar como uma hiperligação de apenas leitura.",
     "link_button": "Exportar para hiperligação",
-    "excalidrawplus_description": "Guardar a cena no seu espaço de trabalho do Fcdraw.",
+    "excalidrawplus_description": "Guardar a cena no seu espaço de trabalho do Fcboard.",
     "excalidrawplus_button": "Exportar",
-    "excalidrawplus_exportError": "Não foi possível exportar para o Fcdraw neste momento..."
+    "excalidrawplus_exportError": "Não foi possível exportar para o Fcboard neste momento..."
   },
   "helpDialog": {
     "blog": "Leia o nosso blogue",
@@ -446,7 +446,7 @@
     "title": "Publicar biblioteca",
     "itemName": "Nome do item",
     "authorName": "Nome do autor",
-    "githubUsername": "Nome de utilizador no Fcdraw",
+    "githubUsername": "Nome de utilizador no Fcboard",
     "twitterUsername": "Nome de utilizador no Twitter",
     "libraryName": "Nome da biblioteca",
     "libraryDesc": "Descrição da biblioteca",
@@ -455,7 +455,7 @@
       "authorName": "Introduza o seu nome ou nome de utilizador",
       "libraryName": "Nome da sua biblioteca",
       "libraryDesc": "Descrição da sua biblioteca para ajudar as pessoas a compreenderem a sua utilização",
-      "githubHandle": "Identificador do Fcdraw (handle opcional), para que possa editar a biblioteca depois desta ser enviada para revisão",
+      "githubHandle": "Identificador do Fcboard (handle opcional), para que possa editar a biblioteca depois desta ser enviada para revisão",
       "twitterHandle": "Nome de utilizador no Twitter (opcional), para que saibamos a quem atribuir os créditos quando promovermos através do Twitter",
       "website": "Hiperligação para o seu sítio web pessoal ou outro (opcional)"
     },
@@ -464,7 +464,7 @@
       "website": "Introduza um URL válido"
     },
     "noteDescription": "Envie a sua biblioteca para ser incluída no <link>repositório de bibliotecas públicas</link> para que outras pessoas a possam utilizar nos seus desenhos.",
-    "noteGuidelines": "A biblioteca precisa de ser aprovada manualmente primeiro. Por favor, leia as <link>orientações</link> antes de enviar. Precisará de uma conta Fcdraw para comunicar e fazer alterações, se solicitado, mas não é estritamente necessário.",
+    "noteGuidelines": "A biblioteca precisa de ser aprovada manualmente primeiro. Por favor, leia as <link>orientações</link> antes de enviar. Precisará de uma conta Fcboard para comunicar e fazer alterações, se solicitado, mas não é estritamente necessário.",
     "noteLicense": "Ao submeter, concorda que a biblioteca será publicada ao abrigo da <link>Licença MIT</link>, o que, resumidamente, significa que qualquer pessoa pode utilizá-la sem restrições.",
     "noteItems": "Cada item de biblioteca deve ter o seu próprio nome para que possa ser filtrado. Serão incluídos os seguintes itens de biblioteca:",
     "atleastOneLibItem": "Por favor selecione pelo menos um item da biblioteca para começar",
@@ -503,8 +503,8 @@
     }
   },
   "encrypted": {
-    "tooltip": "Os seus desenhos são encriptados de ponta a ponta para que os servidores do Fcdraw nunca os vejam.",
-    "link": "Publicação no blogue sobre a encriptação de ponta a ponta no Fcdraw"
+    "tooltip": "Os seus desenhos são encriptados de ponta a ponta para que os servidores do Fcboard nunca os vejam.",
+    "link": "Publicação no blogue sobre a encriptação de ponta a ponta no Fcboard"
   },
   "stats": {
     "angle": "Ângulo",
@@ -534,7 +534,7 @@
     "canvas": "área de desenho",
     "selection": "seleção",
     "pasteAsSingleElement": "Usar {{shortcut}} para colar como um único elemento,\nou colar num editor de texto existente",
-    "unableToEmbed": "A incorporação deste URL não é atualmente permitida. Reporte o problema no Fcdraw para solicitar a inclusão do URL na lista branca para deixar de o bloquear",
+    "unableToEmbed": "A incorporação deste URL não é atualmente permitida. Reporte o problema no Fcboard para solicitar a inclusão do URL na lista branca para deixar de o bloquear",
     "unrecognizedLinkFormat": "A ligação que incorporou não corresponde ao formato esperado. Tente colar a cadeia de caracteres 'incorporada' fornecida pelo sítio de origem",
     "elementLinkCopied": "Hiperligação copiada para a área de transferência"
   },
@@ -560,7 +560,7 @@
       "center_heading": "",
       "center_heading_line2": "",
       "center_heading_line3": "",
-      "center_heading_plus": "Queria antes ir para o Fcdraw?",
+      "center_heading_plus": "Queria antes ir para o Fcboard?",
       "menuHint": "Exportar, preferências, idiomas..."
     },
     "defaults": {
@@ -591,9 +591,9 @@
         "description": "Exportar os dados da cena para um ficheiro do qual poderá importar mais tarde."
       },
       "excalidrawPlus": {
-        "title": "Fcdraw",
-        "button": "Exportar para Fcdraw",
-        "description": "Guardar a cena no seu espaço de trabalho do Fcdraw."
+        "title": "Fcboard",
+        "button": "Exportar para Fcboard",
+        "description": "Guardar a cena no seu espaço de trabalho do Fcboard."
       }
     },
     "modal": {
@@ -610,9 +610,9 @@
     }
   },
   "mermaid": {
-    "title": "Mermaid para Fcdraw",
+    "title": "Mermaid para Fcboard",
     "button": "Inserir",
-    "description": "Atualmente apenas são suportados diagramas <flowchartLink>fluxo</flowchartLink>, <sequenceLink>sequência, </sequenceLink> e <classLink>classe</classLink>. Os outros tipos serão renderizados como imagem no Fcdraw.",
+    "description": "Atualmente apenas são suportados diagramas <flowchartLink>fluxo</flowchartLink>, <sequenceLink>sequência, </sequenceLink> e <classLink>classe</classLink>. Os outros tipos serão renderizados como imagem no Fcboard.",
     "syntax": "Sintaxe Mermaid",
     "preview": "Pré-visualizar",
     "label": "",

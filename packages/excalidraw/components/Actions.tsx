@@ -1043,11 +1043,13 @@ export const ShapesSwitcher = ({
   setAppState,
   app,
   UIOptions,
+  onProperties,
 }: {
   activeTool: UIAppState["activeTool"];
   setAppState: React.Component<any, AppState>["setState"];
   app: AppClassProperties;
   UIOptions: AppProps["UIOptions"];
+  onProperties?: (anchor: HTMLElement) => void;
 }) => {
   const [isExtraToolsMenuOpen, setIsExtraToolsMenuOpen] = useState(false);
   const stylesPanelMode = useStylesPanelMode();
@@ -1095,6 +1097,15 @@ export const ShapesSwitcher = ({
           }
 
           const label = t(`toolBar.${value}`);
+          const propertiesAvailable = [
+            "rectangle",
+            "diamond",
+            "ellipse",
+            "arrow",
+            "line",
+            "freedraw",
+            "text",
+          ].includes(value);
           const letter =
             key && capitalizeString(typeof key === "string" ? key : key[0]);
           const shortcut = letter
@@ -1107,7 +1118,7 @@ export const ShapesSwitcher = ({
           // use a ToolPopover for selection/lasso toggle as well
           if (
             (value === "selection" || value === "lasso") &&
-            isCompactStylesPanel
+            (isCompactStylesPanel || UIOptions.unifiedToolbar)
           ) {
             return (
               <ToolPopover
@@ -1146,17 +1157,32 @@ export const ShapesSwitcher = ({
               icon={icon}
               checked={activeTool.type === value}
               name="editor-current-shape"
-              title={`${capitalizeString(label)} — ${shortcut}`}
+              title={`${capitalizeString(label)} — ${shortcut}${
+                UIOptions.unifiedToolbar && propertiesAvailable
+                  ? " · 长按设置"
+                  : ""
+              }`}
               keyBindingLabel={keybindingLabel}
               aria-label={capitalizeString(label)}
               aria-keyshortcuts={shortcut}
               data-testid={`toolbar-${value}`}
+              label={
+                UIOptions.unifiedToolbar ? capitalizeString(label) : undefined
+              }
+              onLongPress={
+                onProperties && propertiesAvailable
+                  ? (anchor) => {
+                      app.setActiveTool({ type: value });
+                      onProperties(anchor);
+                    }
+                  : undefined
+              }
               onPointerDown={({ pointerType }) => {
                 if (!app.state.penDetected && pointerType === "pen") {
                   app.togglePenMode(true);
                 }
 
-                if (value === "selection") {
+                if (value === "selection" && !UIOptions.unifiedToolbar) {
                   if (app.state.activeTool.type === "selection") {
                     app.setActiveTool({ type: "lasso" });
                   } else {

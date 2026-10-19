@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
+import { selectMenu } from "./menu";
+
 import type { Page } from "@playwright/test";
 
 type Element = {
@@ -23,7 +25,7 @@ const ready = async (page: Page) => {
     Reflect.deleteProperty(window, "showOpenFilePicker");
     Reflect.deleteProperty(window, "showSaveFilePicker");
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({ autoMath: false }),
     );
   });
@@ -67,6 +69,7 @@ test("original selection, moving, duplication, deletion, history and zoom remain
   await expect.poll(async () => (await elements(page)).length).toBe(2);
   await page.getByRole("button", { name: "重做", exact: true }).click();
   await expect.poll(async () => (await elements(page)).length).toBe(1);
+  await page.getByRole("button", { name: "插入", exact: true }).click();
   await page.getByRole("button", { name: "放大", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "重置缩放", exact: true }),
@@ -155,7 +158,7 @@ test("AI style commands update selected text and the next insertion through orig
   await ready(page);
   await page.evaluate(() =>
     localStorage.setItem(
-      "fcdraw-settings",
+      "fcboard-settings",
       JSON.stringify({ apiKey: "test-only", model: "test", autoMath: false }),
     ),
   );
@@ -194,7 +197,17 @@ test("AI style commands update selected text and the next insertion through orig
   await editor.press("Escape");
   await page.keyboard.press("v");
   await page.keyboard.press("Control+a");
-  await page.getByRole("button", { name: "AI 教师", exact: true }).click();
+  if (
+    await page
+      .getByRole("button", { name: "课件 AI 教师", exact: true })
+      .isVisible()
+  ) {
+    await page
+      .getByRole("button", { name: "课件 AI 教师", exact: true })
+      .click();
+  } else {
+    await selectMenu(page, "提问与讲解");
+  }
   await page
     .getByRole("textbox", { name: "向 AI 教师提问" })
     .fill("把选中的字设为40号红色居中，再写已统一样式");

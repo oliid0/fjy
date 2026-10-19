@@ -64,7 +64,8 @@ import { JSONExportDialog } from "./JSONExportDialog";
 import { LaserPointerButton } from "./LaserPointerButton";
 import { Toast } from "./Toast";
 import { ToolButton } from "./ToolButton";
-import { CircleIcon, CloseIcon } from "./icons";
+import { CircleIcon, CloseIcon, chevronRight, chevronLeftIcon } from "./icons";
+import { WhiteboardTools } from "./WhiteboardTools";
 
 import "./LayerUI.scss";
 import "./Toolbar.scss";
@@ -168,6 +169,45 @@ const LayerUI = ({
   const isCompactStylesPanel = stylesPanelMode === "compact";
   const unifiedToolbar = UIOptions.unifiedToolbar;
   const [showProperties, setShowProperties] = React.useState(false);
+  const [propertiesAnchor, setPropertiesAnchor] = React.useState({
+    left: 12,
+    bottom: 84,
+  });
+  React.useEffect(() => {
+    if (!unifiedToolbar || !showProperties) {
+      return;
+    }
+    const close = () => setShowProperties(false);
+    const unsubscribe = app.onPointerDownEmitter.on(close);
+    const outside = (event: PointerEvent) => {
+      if (
+        !(event.target as Element).closest?.(
+          ".fc-editor-properties, [data-radix-popper-content-wrapper], [data-prevent-outside-click]",
+        )
+      ) {
+        close();
+      }
+    };
+    window.addEventListener("pointerdown", outside);
+    window.addEventListener("resize", close);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("pointerdown", outside);
+      window.removeEventListener("resize", close);
+    };
+  }, [app, showProperties, unifiedToolbar]);
+  const openProperties = (anchor: HTMLElement) => {
+    const bounds = anchor.getBoundingClientRect();
+    const root = anchor.closest(".excalidraw")!.getBoundingClientRect();
+    setPropertiesAnchor({
+      left: Math.max(
+        12,
+        Math.min(bounds.left - root.left - 110, root.width - 304),
+      ),
+      bottom: root.bottom - bounds.top + 12,
+    });
+    setShowProperties(true);
+  };
   const tunnels = useInitializeTunnels();
 
   const spacing = isCompactStylesPanel
@@ -241,7 +281,7 @@ const LayerUI = ({
   );
 
   const renderSelectedShapeActions = () => {
-    const isCompactMode = isCompactStylesPanel;
+    const isCompactMode = isCompactStylesPanel && !unifiedToolbar;
 
     return (
       <Section
@@ -496,6 +536,7 @@ const LayerUI = ({
   };
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
+  const [toolbarHidden, setToolbarHidden] = React.useState(false);
 
   const renderUnifiedToolbar = () => (
     <>
@@ -504,6 +545,12 @@ const LayerUI = ({
           className="fc-editor-properties"
           role="dialog"
           aria-label="画笔与对象属性"
+          style={propertiesAnchor}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setShowProperties(false);
+            }
+          }}
         >
           <ToolButton
             type="button"
@@ -512,68 +559,105 @@ const LayerUI = ({
             title="关闭属性"
             onClick={() => setShowProperties(false)}
           />
+          {appState.activeTool.type === "freedraw" && (
+            <label className="fc-pen-mode">
+              笔型
+              <select
+                aria-label="笔型"
+                value={appState.currentItemPenMode || "hard"}
+                onChange={(event) =>
+                  setAppState({
+                    currentItemPenMode: event.target.value as "hard" | "brush",
+                  })
+                }
+              >
+                <option value="hard">硬笔（固定宽度）</option>
+                <option value="brush">毛笔（压感 / 速度）</option>
+              </select>
+            </label>
+          )}
           {renderSelectedShapeActions()}
         </div>
       )}
       <div
-        className="fc-unified-toolbar"
+        className={clsx("fc-unified-toolbar", {
+          "fc-toolbar-collapsed": toolbarHidden,
+        })}
         role="toolbar"
         aria-label="白板工具栏"
       >
-        <div className="fc-toolbar-group" role="group" aria-label="文件与素材">
-          {renderTopLeftUI?.(editorInterface.formFactor === "phone", appState)}
-          <tunnels.MainMenuTunnel.Out />
-          {UIOptions.library !== false && (
-            <tunnels.DefaultSidebarTriggerTunnel.Out />
-          )}
-        </div>
-        {!appState.viewModeEnabled ? (
+        <div className="fc-toolbar-side fc-toolbar-leading">
           <div
             className="fc-toolbar-group"
             role="group"
+            aria-label="文件与素材"
+          >
+            {renderTopLeftUI?.(
+              editorInterface.formFactor === "phone",
+              appState,
+            )}
+            <tunnels.MainMenuTunnel.Out />
+            {UIOptions.library !== false && (
+              <tunnels.DefaultSidebarTriggerTunnel.Out />
+            )}
+          </div>
+          <tunnels.ToolbarNavigationTunnel.Out />
+        </div>
+        {!appState.viewModeEnabled ? (
+          <div
+            className="fc-toolbar-group fc-drawing-tools"
+            role="group"
             aria-label="书写与绘图"
           >
-            <PenModeButton
-              checked={appState.penMode}
-              onChange={() => onPenModeToggle(null)}
-              title={t("toolBar.penMode")}
-              penDetected={appState.penDetected}
-            />
-            <LockButton
-              checked={appState.activeTool.locked}
-              onChange={onLockToggle}
-              title={t("toolBar.lock")}
-            />
-            <ShapesSwitcher
+            <WhiteboardTools
               setAppState={setAppState}
               activeTool={appState.activeTool}
               UIOptions={UIOptions}
               app={app}
-            />
-            <ToolButton
-              type="button"
-              icon={CircleIcon}
-              aria-label="画笔与对象属性"
-              title="画笔与对象属性"
-              selected={showProperties}
-              onClick={() => setShowProperties((value) => !value)}
-            />
+              onProperties={openProperties}
+            >
+              <div className="fc-insert-options">
+                <PenModeButton
+                  checked={appState.penMode}
+                  onChange={() => onPenModeToggle(null)}
+                  title={t("toolBar.penMode")}
+                  penDetected={appState.penDetected}
+                />
+                <LockButton
+                  checked={appState.activeTool.locked}
+                  onChange={onLockToggle}
+                  title={t("toolBar.lock")}
+                />
+                <button
+                  type="button"
+                  onClick={(event) => openProperties(event.currentTarget)}
+                >
+                  画笔与对象属性
+                </button>
+                <ZoomActions
+                  renderAction={actionManager.renderAction}
+                  zoom={appState.zoom}
+                />
+              </div>
+            </WhiteboardTools>
+            <tunnels.ToolbarExtrasTunnel.Out />
+            <UndoRedoActions renderAction={actionManager.renderAction} />
           </div>
         ) : (
           <ExitViewModeButton actionManager={actionManager} />
         )}
-        <div className="fc-toolbar-group" role="group" aria-label="撤销与视图">
-          {!appState.viewModeEnabled && (
-            <UndoRedoActions renderAction={actionManager.renderAction} />
-          )}
-          <ZoomActions
-            renderAction={actionManager.renderAction}
-            zoom={appState.zoom}
+        <div className="fc-toolbar-side fc-toolbar-trailing">
+          <tunnels.FooterCenterTunnel.Out />
+          {renderTopRightUI?.(editorInterface.formFactor === "phone", appState)}
+          <ToolButton
+            type="button"
+            className="fc-toolbar-visibility"
+            icon={toolbarHidden ? chevronLeftIcon : chevronRight}
+            aria-label={toolbarHidden ? "显示工具栏" : "隐藏工具栏"}
+            showAriaLabel
+            onClick={() => setToolbarHidden((hidden) => !hidden)}
           />
         </div>
-        <tunnels.ToolbarExtrasTunnel.Out />
-        <tunnels.FooterCenterTunnel.Out />
-        {renderTopRightUI?.(editorInterface.formFactor === "phone", appState)}
       </div>
     </>
   );

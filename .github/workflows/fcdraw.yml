@@ -1,4 +1,4 @@
-name: Fcdraw verification and Android APK
+name: Fcboard verification and Android APK
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: fcdraw-${{ github.ref }}
+  group: fcboard-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -69,18 +69,14 @@ jobs:
         run: |
           node scripts/fetch-courseware-fixtures.mjs
           pnpm exec playwright test
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Fcdraw-UI-verification
-          path: test-results
-          if-no-files-found: warn
       - uses: actions/cache@v4
         with:
           path: android/app/src/main/assets/speech
-          key: fcdraw-speech-${{ hashFiles('scripts/speech-models.json') }}
+          key: fcboard-speech-${{ hashFiles('scripts/speech-models.json') }}
       - name: Bundle offline Chinese speech model
         run: node scripts/fetch-speech-models.mjs
+      - name: Bundle verified Scrcpy server
+        run: node scripts/fetch-scrcpy.mjs
       - name: Package and verify Android
         working-directory: android
         run: |
@@ -91,29 +87,37 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Verify bundled offline speech on Android
+      - name: Verify offline speech, screen capture and Scrcpy on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           arch: x86_64
           target: default
           disable-animations: true
-          script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
+          script: cd android && adb tcpip 5555 && adb wait-for-device && ./gradlew :app:connectedDebugAndroidTest --no-daemon && mkdir -p ../node_modules/.fcboard-research && adb pull /sdcard/Android/data/com.fcjy.fcboard/files/scrcpy-stream.bin ../node_modules/.fcboard-research/scrcpy-stream.bin
+      - name: Verify actual Scrcpy stream in the browser
+        run: pnpm exec playwright test --config playwright.scrcpy.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Fcdraw-Android-verification
+          name: Fcboard-UI-verification
+          path: test-results
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Fcboard-Android-verification
           path: |
             android/app/build/reports
             android/app/build/outputs/androidTest-results
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
-          name: Fcdraw-Android-APK
+          name: Fcboard-Android-APK
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
-          name: Fcdraw-Web
+          name: Fcboard-Web
           path: excalidraw-app/build
           if-no-files-found: error

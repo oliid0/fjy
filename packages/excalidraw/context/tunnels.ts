@@ -14,6 +14,7 @@ type TunnelsContextValue = {
   WelcomeScreenCenterTunnel: Tunnel;
   FooterCenterTunnel: Tunnel;
   ToolbarExtrasTunnel: Tunnel;
+  ToolbarNavigationTunnel: Tunnel;
   DefaultSidebarTriggerTunnel: Tunnel;
   DefaultSidebarTabTriggersTunnel: Tunnel;
   OverwriteConfirmDialogTunnel: Tunnel;
@@ -39,6 +40,7 @@ export const useInitializeTunnels = () => {
       WelcomeScreenCenterTunnel: tunnel(),
       FooterCenterTunnel: tunnel(),
       ToolbarExtrasTunnel: stableToolbarTunnel(),
+      ToolbarNavigationTunnel: stableToolbarTunnel(),
       DefaultSidebarTriggerTunnel: tunnel(),
       DefaultSidebarTabTriggersTunnel: tunnel(),
       OverwriteConfirmDialogTunnel: tunnel(),

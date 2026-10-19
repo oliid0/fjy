@@ -3,4 +3,9 @@ packages:
   - packages/*
   - examples/*
 
+allowBuilds:
+  core-js: true
+  esbuild: true
+  protobufjs: true
+
 linkWorkspacePackages: true

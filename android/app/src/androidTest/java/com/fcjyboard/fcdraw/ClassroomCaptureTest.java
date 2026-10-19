@@ -1,4 +1,4 @@
-package com.fcjyboard.fcdraw;
+package com.fcjy.fcboard;
 
 import static org.junit.Assert.*;
 import androidx.test.core.app.ActivityScenario;
@@ -33,8 +33,8 @@ public class ClassroomCaptureTest {
             AtomicReference<String> image = new AtomicReference<>();
             AtomicReference<String> error = new AtomicReference<>();
             scenario.onActivity(activity -> {
-                ClassroomPlugin plugin = (ClassroomPlugin) activity.getBridge().getPlugin("FcdrawClassroom").getInstance();
-                PluginCall call = new PluginCall(null, "FcdrawClassroom", "test", "captureFrame", new JSObject()) {
+                ClassroomPlugin plugin = (ClassroomPlugin) activity.getBridge().getPlugin("FcboardClassroom").getInstance();
+                PluginCall call = new PluginCall(null, "FcboardClassroom", "test", "captureFrame", new JSObject()) {
                     @Override public void resolve(JSObject data) { image.set(data.getString("image")); captured.countDown(); }
                     @Override public void reject(String message, String code, Exception exception, JSObject data) { error.set(message); captured.countDown(); }
                 };

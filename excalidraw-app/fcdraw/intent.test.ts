@@ -1,6 +1,23 @@
-import { localMathIntent, selectionMathIntent } from "./intent";
+import {
+  localMathIntent,
+  selectionMathIntent,
+  selectionRequest,
+} from "./intent";
 
 describe("local mathematical voice commands", () => {
+  it("distinguishes explicit selected requests from ordinary headings", () => {
+    for (const text of [
+      "牛顿定律是什么？",
+      "讲解牛顿定律",
+      "录制这节课",
+      "帮我画一个受力图",
+    ]) {
+      expect(selectionRequest(text)).toBe(true);
+    }
+    for (const text of ["课堂笔记", "画布", "画笔", "牛顿定律"]) {
+      expect(selectionRequest(text)).toBe(false);
+    }
+  });
   it("handles explicit functions, Mandarin operators, complex numbers and calculus", () => {
     expect(localMathIntent("帮我画 y 等于 x 加一的函数图像")).toEqual({
       action: "plot",

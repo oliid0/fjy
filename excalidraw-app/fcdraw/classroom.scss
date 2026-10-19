@@ -133,21 +133,23 @@
     position: absolute;
     z-index: 10;
     inset: auto 8px calc(8px + env(safe-area-inset-bottom));
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(96px, 1fr) minmax(0, max-content) minmax(
+        96px,
+        1fr
+      );
     align-items: center;
     gap: 8px;
-    min-height: 64px;
+    min-height: 52px;
     max-width: calc(100% - 16px);
     box-sizing: border-box;
-    padding: 6px 8px;
-    border: 1px solid var(--fc-border);
-    border-radius: 14px;
-    background: var(--fc-surface);
-    box-shadow: 0 4px 20px #17243c18;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    pointer-events: none;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
-    pointer-events: auto;
 
     > *,
     .ToolIcon,
@@ -191,6 +193,156 @@
     align-items: center;
     gap: 4px;
   }
+  .fc-toolbar-side {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 4px;
+    overflow: visible;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+  .fc-toolbar-leading,
+  .fc-drawing-tools,
+  .fc-toolbar-trailing {
+    width: max-content;
+    max-width: 100%;
+    padding: 2px;
+    border: 1px solid var(--fc-border);
+    border-radius: 6px;
+    background: var(--fc-surface);
+    pointer-events: auto;
+  }
+  .fc-toolbar-trailing {
+    justify-self: end;
+    justify-content: flex-end;
+  }
+  .fc-toolbar-collapsed {
+    .fc-toolbar-leading,
+    .fc-drawing-tools,
+    .fc-toolbar-trailing > :not(.fc-toolbar-visibility) {
+      display: none;
+    }
+    .fc-toolbar-trailing {
+      grid-column: 3;
+    }
+  }
+  .fc-drawing-tools {
+    justify-self: center;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .fc-board-tool {
+    display: flex;
+    flex-direction: column;
+    min-width: 48px;
+    min-height: 56px;
+    padding: 3px;
+    .ToolIcon__icon {
+      min-height: 28px;
+      height: 28px;
+    }
+    .ToolIcon__label {
+      font: 400 11px/16px system-ui;
+      margin: 0;
+    }
+  }
+  .fc-insert-tools {
+    z-index: 20;
+    pointer-events: auto;
+    width: min(420px, calc(100vw - 24px));
+    max-height: var(--radix-popover-content-available-height);
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--fc-border);
+    border-radius: 8px;
+    background: var(--fc-surface);
+    color: var(--fc-ink);
+    box-shadow: 0 4px 24px #17243c22;
+  }
+  .fc-insert-shapes,
+  .fc-insert-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .fc-insert-options {
+    margin-top: 12px;
+  }
+  .main-menu .dropdown-menu-container {
+    max-height: min(
+      calc(100dvh - 104px),
+      var(--radix-dropdown-menu-content-available-height, calc(100dvh - 104px))
+    );
+  }
+
+  .fc-eraser-settings label,
+  .fc-pen-mode {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 12px;
+    font: 14px/1.5 system-ui;
+    input[type="range"] {
+      flex: 1;
+      min-width: 120px;
+    }
+    input,
+    select {
+      accent-color: var(--fc-blue);
+    }
+  }
+
+  @media (max-width: 800px) {
+    .fc-toolbar-leading .fc-board-controls {
+      display: none;
+    }
+    .fc-unified-toolbar {
+      gap: 2px;
+      padding-inline: 2px;
+    }
+  }
+  .fc-unified-toolbar .ToolIcon:has(.fc-tool-label),
+  .fc-unified-toolbar .ToolIcon__lock,
+  .fc-unified-toolbar .ToolIcon__penMode,
+  .fc-unified-toolbar .fc-toolbar-extras button {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 48px;
+    min-height: 56px;
+    padding: 3px 6px;
+    .ToolIcon__icon {
+      width: 36px;
+      height: 28px;
+      min-width: 36px;
+      min-height: 28px;
+    }
+    svg {
+      width: 21px;
+      height: 21px;
+    }
+    .fc-tool-label,
+    > span:not(.fc-board-count) {
+      font: 400 11px/16px system-ui, "Microsoft YaHei", sans-serif;
+      white-space: nowrap;
+    }
+  }
+  .fc-unified-toolbar .ToolIcon__lock::after {
+    content: "连画";
+    font: 400 11px/16px system-ui;
+  }
+  .fc-unified-toolbar .ToolIcon__penMode::after {
+    content: "触控";
+    font: 400 11px/16px system-ui;
+  }
   .fc-toolbar-group + .fc-toolbar-group,
   .fc-toolbar-extras {
     border-inline-start: 1px solid var(--fc-border);
@@ -224,6 +376,38 @@
       outline-offset: -3px;
     }
   }
+  .fc-unified-toolbar .main-menu-trigger,
+  .fc-unified-toolbar .undo-redo-buttons button,
+  .fc-unified-toolbar .zoom-button,
+  .fc-unified-toolbar .App-toolbar__extra-tools-trigger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 56px;
+    gap: 2px;
+    &::after {
+      font: 400 11px/16px system-ui;
+    }
+  }
+  .fc-unified-toolbar .main-menu-trigger::after {
+    content: "菜单";
+  }
+  .fc-unified-toolbar [data-testid="button-undo"]::after {
+    content: "撤销";
+  }
+  .fc-unified-toolbar [data-testid="button-redo"]::after {
+    content: "重做";
+  }
+  .fc-unified-toolbar .zoom-in-button::after {
+    content: "放大";
+  }
+  .fc-unified-toolbar .zoom-out-button::after {
+    content: "缩小";
+  }
+  .fc-unified-toolbar .App-toolbar__extra-tools-trigger::after {
+    content: "更多";
+  }
   .fc-editor-properties {
     position: absolute;
     z-index: 12;
@@ -236,6 +420,8 @@
     background: var(--fc-surface);
     box-shadow: 0 4px 24px #17243c22;
     pointer-events: auto;
+    width: 280px;
+    animation: fc-panel-enter 110ms ease-out;
     > .ToolIcon {
       margin-left: auto;
       display: block;
@@ -265,6 +451,7 @@
 }
 
 .fc-panel {
+  animation: fc-panel-enter 110ms ease-out;
   position: absolute;
   z-index: 9;
   right: 16px;
@@ -449,7 +636,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .fc-classroom * {
+  .fc-classroom *,
+  .excalidraw .fc-editor-properties,
+  .excalidraw .tool-popover-content {
     scroll-behavior: auto !important;
     transition: none !important;
     animation: none !important;
@@ -510,7 +699,71 @@
   font-size: 11px;
   position: absolute;
   right: 5px;
-  bottom: 3px;
+  top: 2px;
+  bottom: auto;
+}
+
+.fc-network-panel {
+  position: absolute;
+  z-index: 33;
+  right: 16px;
+  bottom: 92px;
+  width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 110px);
+  overflow: auto;
+  pointer-events: auto;
+  padding-bottom: 12px;
+  animation: fc-panel-enter 110ms ease-out;
+  > p,
+  > output,
+  > div,
+  > button {
+    margin-inline: 12px;
+  }
+  > p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .ShareDialog__active__qrcode {
+    width: 156px;
+    margin: 12px auto;
+    svg {
+      width: 156px;
+      height: 156px;
+    }
+  }
+}
+.fc-network-address {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.fc-network-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fc-pair-pin {
+  display: block;
+  text-align: center;
+  font: 600 28px/1.5 system-ui;
+  letter-spacing: 0.25em;
+}
+
+@keyframes fc-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fc-board-picker,
+.fc-tools-picker,
+.fc-widget-panel,
+.fc-teacher {
+  animation: fc-panel-enter 110ms ease-out;
 }
 .fc-board-picker {
   position: absolute;
@@ -677,6 +930,24 @@
   white-space: nowrap;
   font-size: 14px;
   margin-right: auto;
+}
+
+.fc-presentation-toolbar button:has(svg),
+.fc-presentation-toolbar a:has(svg) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  > span {
+    font: 400 11px/16px system-ui, "Microsoft YaHei", sans-serif;
+    white-space: nowrap;
+  }
+  > svg {
+    width: 21px;
+    height: 21px;
+  }
 }
 .fc-document-status {
   position: absolute;

@@ -52,7 +52,7 @@ public class SystemSpeechPlugin extends Plugin {
             if (pending != null) { call.reject("Recognition already running", "busy"); return; }
             pending = call;
             try {
-                recognizer = !SpeechRecognizer.isRecognitionAvailable(getContext()) && onDeviceAvailable() ? SpeechRecognizer.createOnDeviceSpeechRecognizer(getContext()) : SpeechRecognizer.createSpeechRecognizer(getContext());
+                recognizer = Build.VERSION.SDK_INT >= 31 && !SpeechRecognizer.isRecognitionAvailable(getContext()) && onDeviceAvailable() ? SpeechRecognizer.createOnDeviceSpeechRecognizer(getContext()) : SpeechRecognizer.createSpeechRecognizer(getContext());
                 recognizer.setRecognitionListener(new RecognitionListener() {
                     public void onReadyForSpeech(Bundle params) {}
                     public void onBeginningOfSpeech() {}

@@ -15,6 +15,8 @@ public class AIStreamTransportTest {
         String frames = "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}\n\ndata: [DONE]\n\n";
         NanoHTTPD server = new NanoHTTPD("127.0.0.1", 0) {
             @Override public Response serve(IHTTPSession session) {
+                try { session.parseBody(new HashMap<>()); }
+                catch (Exception error) { return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", error.toString()); }
                 if (session.getUri().equals("/error")) return newFixedLengthResponse(Response.Status.UNAUTHORIZED, "application/json", "{\"error\":{\"message\":\"invalid key\"}}");
                 return newChunkedResponse(Response.Status.OK, "text/event-stream", new ByteArrayInputStream(frames.getBytes(StandardCharsets.UTF_8)));
             }
@@ -35,7 +37,7 @@ public class AIStreamTransportTest {
             CountDownLatch rejected = new CountDownLatch(1);
             transport.start("two", "http://127.0.0.1:" + server.getListeningPort() + "/error", new HashMap<>(), "{}", new AIStreamTransport.Callback() {
                 public void chunk(String chunk) { failure.set(new Exception("Streamed an HTTP error")); }
-                public void complete(int status, String data, boolean stream) { if (status != 401 || stream || !data.contains("invalid key")) failure.set(new Exception("Lost gateway error")); rejected.countDown(); }
+                public void complete(int status, String data, boolean stream) { if (status != 401 || stream || !data.contains("invalid key")) failure.set(new Exception("Lost gateway error: HTTP " + status + " " + data)); rejected.countDown(); }
                 public void failed(Exception error) { failure.set(error); rejected.countDown(); }
             });
             assertTrue(rejected.await(5, TimeUnit.SECONDS)); assertNull(failure.get());

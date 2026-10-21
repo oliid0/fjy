@@ -74,7 +74,9 @@ final class AIStreamTransport {
                 connection.setDoOutput(true);
                 for (Map.Entry<String, String> header : headers.entrySet()) connection.setRequestProperty(header.getKey(), header.getValue());
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-                connection.setFixedLengthStreamingMode(bytes.length);
+                // Buffer the bounded request: JDK streaming-output mode disconnects
+                // on 401 before getErrorStream() can retain the provider's error.
+                // Response reads below remain incremental for SSE.
                 if (request.cancelled) throw new IOException("AI request cancelled");
                 try (OutputStream output = connection.getOutputStream()) { output.write(bytes); }
                 int status = connection.getResponseCode();

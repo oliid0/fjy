@@ -29,9 +29,10 @@ import { type AnimationFrameHandler } from "../animation-frame-handler";
 
 import { AnimatedTrail } from "../animated-trail";
 
-import { getLassoSelectedElementIds } from "./utils";
+import { getLassoBounds, getLassoSelectedElementIds } from "./utils";
 
 import type App from "../components/App";
+import type { AppState } from "../types";
 
 type CanvasTranslate = {
   scrollX: number;
@@ -89,7 +90,10 @@ export class LassoTrail extends AnimatedTrail {
     }
   }
 
-  selectElementsFromIds = (ids: string[]) => {
+  selectElementsFromIds = (
+    ids: string[],
+    bounds?: NonNullable<AppState["whiteboardSelection"]>["bounds"],
+  ) => {
     this.app.setState((prevState) => {
       const nextSelectedElementIds = ids.reduce((acc, id) => {
         acc[id] = true;
@@ -146,6 +150,10 @@ export class LassoTrail extends AnimatedTrail {
       const selectedGroupIds = [...Object.keys(nextSelection.selectedGroupIds)];
 
       return {
+        whiteboardSelection:
+          bounds && !this.keepPreviousSelection
+            ? { bounds, elementIds: selectedIds }
+            : undefined,
         selectedElementIds: nextSelection.selectedElementIds,
         selectedGroupIds: nextSelection.selectedGroupIds,
         selectedLinearElement:
@@ -204,9 +212,21 @@ export class LassoTrail extends AnimatedTrail {
         intersectedElements: this.intersectedElements,
         enclosedElements: this.enclosedElements,
         simplifyDistance: 5 / this.app.state.zoom.value,
+        ...(this.app.props.UIOptions.unifiedToolbar
+          ? { looseBounds: 12 / this.app.state.zoom.value }
+          : {}),
       });
 
-      this.selectElementsFromIds(selectedElementIds);
+      const [left, top, right, bottom] = getLassoBounds(
+        lassoPath,
+        12 / this.app.state.zoom.value,
+      );
+      this.selectElementsFromIds(
+        selectedElementIds,
+        this.app.props.UIOptions.unifiedToolbar && lassoPath.length > 1
+          ? { left, top, right, bottom }
+          : undefined,
+      );
     }
   };
 

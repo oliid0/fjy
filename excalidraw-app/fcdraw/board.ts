@@ -1,9 +1,10 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
 import { getCommonBounds } from "@excalidraw/element";
-import { FONT_FAMILY } from "@excalidraw/common";
+import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -13,37 +14,201 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { project3D, samplePlot } from "./math";
 import { classroomCommands } from "./commands";
+import { currentSettings } from "./settings";
+import { handwritingElements, inkLineHeight, inkLines } from "./handwriting";
+import { findContentPosition } from "./placement";
+
+import type { Settings } from "./settings";
 
 import type { InkStroke } from "./documents";
 
 import type { Plot } from "./math";
 
-export const insertionPoint = (api: ExcalidrawImperativeAPI) => {
+const toolbarClearance = (api: ExcalidrawImperativeAPI) => {
+  const state = api.getAppState();
+  if (state.toolbarHidden) {
+    return 16;
+  }
+  const toolbar = document.querySelector<HTMLElement>(
+    `.excalidraw[data-excalidraw-id="${api.id}"] .fc-unified-toolbar`,
+  );
+  const rect = toolbar?.getBoundingClientRect();
+  if (rect?.height) {
+    return Math.max(16, state.height - rect.top + (state.offsetTop || 0) + 16);
+  }
+  return (
+    84 *
+    Math.max(
+      0.85,
+      Math.min((state.width || 1280) / 1280, (state.height || 688) / 688),
+    )
+  );
+};
+
+export const contentPosition = (
+  api: ExcalidrawImperativeAPI,
+  preferred: { x: number; y: number },
+  size: { width: number; height: number },
+  excludeIds: readonly string[] = [],
+) => {
+  const state = api.getAppState();
+  const zoom = state.zoom.value;
+  const gap = 16 / zoom;
+  return findContentPosition(
+    preferred,
+    size,
+    {
+      left: -state.scrollX + gap,
+      top: -state.scrollY + gap,
+      right: -state.scrollX + (state.width || 1280) / zoom - gap,
+      bottom:
+        -state.scrollY + ((state.height || 720) - toolbarClearance(api)) / zoom,
+    },
+    api
+      .getSceneElements()
+      .filter(
+        (element) => !element.isDeleted && !excludeIds.includes(element.id),
+      )
+      .map((element) => {
+        const [left, top, right, bottom] = getCommonBounds([element]);
+        return { left, top, right, bottom };
+      }),
+    gap,
+  );
+};
+
+export const insertionPoint = (
+  api: ExcalidrawImperativeAPI,
+  size = { width: 300, height: 180 },
+) => {
   const state = api.getAppState();
   const selected = api
     .getSceneElements()
     .filter((el) => state.selectedElementIds[el.id]);
   if (selected.length) {
+    const region =
+      state.activeTool.type === "lasso" ? state.whiteboardSelection : undefined;
+    if (
+      region?.elementIds.length ===
+        Object.keys(state.selectedElementIds).length &&
+      region?.elementIds.every((id) => state.selectedElementIds[id])
+    ) {
+      return contentPosition(
+        api,
+        { x: region.bounds.right + 24, y: region.bounds.top },
+        size,
+      );
+    }
     const [, top, right] = getCommonBounds(selected);
-    return { x: right + 24, y: top };
+    return contentPosition(api, { x: right + 24, y: top }, size);
   }
-  return {
-    x: -state.scrollX + state.width / state.zoom.value / 3,
-    y: -state.scrollY + state.height / state.zoom.value / 3,
-  };
+  return contentPosition(
+    api,
+    {
+      x: -state.scrollX + state.width / state.zoom.value / 3,
+      y: -state.scrollY + state.height / state.zoom.value / 3,
+    },
+    size,
+  );
+};
+
+export const answerPosition = (
+  api: ExcalidrawImperativeAPI,
+  source: readonly ExcalidrawElement[],
+  width = 120,
+  boundsOverride?: readonly [number, number, number, number],
+) => {
+  const bounds = boundsOverride || getCommonBounds(source);
+  if (!bounds.every(Number.isFinite)) {
+    throw new Error(t("fcboard.选区缺少有效边界，请重新圈选笔迹"));
+  }
+  const row = boundsOverride ? undefined : inkLines(source).at(-1);
+  const state = api.getAppState();
+  const left = -state.scrollX;
+  const right = state.width / state.zoom.value - state.scrollX;
+  const x = (row?.right ?? bounds[2]) + 16;
+  const preferred =
+    x + width < right - 16
+      ? { x, y: row?.top ?? bounds[1] }
+      : {
+          x: Math.max(left + 16, Math.min(bounds[0], right - width - 16)),
+          y: bounds[3] + 16,
+        };
+  return contentPosition(api, preferred, {
+    width,
+    height: row ? row.bottom - row.top : 32,
+  });
+};
+
+const arrangeElements = <T extends ExcalidrawElement>(
+  api: ExcalidrawImperativeAPI,
+  elements: T[],
+) => {
+  if (!elements.length) {
+    return elements;
+  }
+  const [left, top, right, bottom] = getCommonBounds(elements);
+  const position = contentPosition(
+    api,
+    { x: left, y: top },
+    { width: right - left, height: bottom - top },
+  );
+  return elements.map((element) => ({
+    ...element,
+    x: element.x + position.x - left,
+    y: element.y + position.y - top,
+  }));
+};
+
+export const revealNewContent = (
+  api: ExcalidrawImperativeAPI,
+  elements: readonly ExcalidrawElement[],
+  context?: readonly ExcalidrawElement[],
+) => {
+  if (!elements.length) {
+    return;
+  }
+  const state = api.getAppState();
+  const [left, top, right, bottom] = getCommonBounds(elements);
+  const zoom = state.zoom.value;
+  const clearance = toolbarClearance(api);
+  if (
+    left >= -state.scrollX &&
+    top >= -state.scrollY &&
+    right <= -state.scrollX + state.width / zoom &&
+    bottom <= -state.scrollY + (state.height - clearance) / zoom
+  ) {
+    return;
+  }
+  const selected =
+    context ||
+    api
+      .getSceneElements()
+      .filter((element) => state.selectedElementIds[element.id]);
+  api.scrollToContent?.([...selected, ...elements], {
+    fitToContent: true,
+    minZoom: Math.min(0.5, zoom),
+    maxZoom: zoom,
+    animate: true,
+    canvasOffsets: { top: 16, right: 16, bottom: clearance, left: 16 },
+  });
 };
 
 export const insertElements = (
   api: ExcalidrawImperativeAPI,
   skeletons: ExcalidrawElementSkeleton[],
   replaceIds: string[] = [],
+  arrange = false,
 ) => {
-  const elements = convertToExcalidrawElements(
+  let elements = convertToExcalidrawElements(
     skeletons.map((element) => ({
       ...element,
       customData: { ...element.customData, fcGenerated: true },
     })),
   );
+  if (arrange) {
+    elements = arrangeElements(api, elements);
+  }
   api.updateScene({
     elements: [
       ...api.getSceneElements().filter((el) => !replaceIds.includes(el.id)),
@@ -51,16 +216,27 @@ export const insertElements = (
     ],
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
+  if (arrange) {
+    revealNewContent(api, elements);
+  }
   return elements.map((el) => el.id);
 };
 
 export const insertText = (
   api: ExcalidrawImperativeAPI,
   text: string,
-  position = insertionPoint(api),
+  position?: { x: number; y: number },
   customData?: Record<string, unknown>,
   styleSource?: readonly ExcalidrawElement[],
+  presentation: Settings["answerStyle"] = currentSettings().answerStyle,
 ) => {
+  const arrange = !position || !!styleSource?.length;
+  position ||= styleSource?.length
+    ? answerPosition(api, styleSource, text.length > 20 ? 280 : 80)
+    : insertionPoint(api);
+  if (![position.x, position.y].every(Number.isFinite)) {
+    throw new Error(t("fcboard.选区缺少有效边界，请重新圈选笔迹"));
+  }
   const textSource = styleSource?.find((element) => element.type === "text");
   const inkSource = styleSource?.find((element) => element.type === "freedraw");
   const source = textSource || inkSource;
@@ -68,39 +244,202 @@ export const insertText = (
     textSource?.type === "text"
       ? textSource.fontSize
       : inkSource && styleSource
-      ? Math.max(
-          12,
-          Math.min(
-            160,
-            (getCommonBounds(styleSource)[3] -
-              getCommonBounds(styleSource)[1]) /
-              1.25,
-          ),
-        )
+      ? inkLineHeight(styleSource) / 1.25
       : undefined;
-  return insertElements(api, [
+  if (
+    presentation === "handwritten" ||
+    (presentation === "match" && inkSource)
+  ) {
+    const state = api.getAppState();
+    const height =
+      inkSource && styleSource
+        ? inkLineHeight(styleSource)
+        : size || state.currentItemFontSize || 24;
+    const ink = handwritingElements(text, {
+      ...position,
+      height,
+      color: source?.strokeColor || state.currentItemStrokeColor || "#000000",
+      width:
+        inkSource?.strokeWidth ||
+        (((state.currentItemStrokeWidth || DEFAULT_ELEMENT_PROPS.strokeWidth) /
+          DEFAULT_ELEMENT_PROPS.strokeWidth) *
+          4) /
+          (window.devicePixelRatio || 1) /
+          state.zoom.value,
+      opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
+      maxWidth: Math.max(
+        height * 4,
+        state.width / state.zoom.value - position.x - state.scrollX - 24,
+      ),
+      source: styleSource,
+      customData,
+    });
+    if (ink) {
+      const placed = arrange ? arrangeElements(api, ink) : ink;
+      api.updateScene({
+        elements: [...api.getSceneElements(), ...placed],
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      if (arrange) {
+        revealNewContent(api, placed);
+      }
+      return ink.map((element) => element.id);
+    }
+  }
+  return insertElements(
+    api,
+    [
+      {
+        type: "text",
+        ...position,
+        text,
+        width: Math.max(
+          (size || 24) * 4,
+          Math.min(
+            600 / api.getAppState().zoom.value,
+            api.getAppState().width / api.getAppState().zoom.value -
+              position.x -
+              api.getAppState().scrollX -
+              24,
+          ),
+        ),
+        fontSize: size || api.getAppState().currentItemFontSize || 24,
+        fontFamily:
+          presentation === "handwritten"
+            ? FONT_FAMILY.Excalifont
+            : presentation === "text"
+            ? FONT_FAMILY.Helvetica
+            : textSource?.type === "text"
+            ? textSource.fontFamily
+            : inkSource
+            ? FONT_FAMILY.Excalifont
+            : api.getAppState().currentItemFontFamily || 2,
+        strokeColor:
+          source?.strokeColor || api.getAppState().currentItemStrokeColor,
+        opacity: source?.opacity ?? api.getAppState().currentItemOpacity ?? 100,
+        textAlign: api.getAppState().currentItemTextAlign || "left",
+        customData,
+      },
+    ],
+    [],
+    arrange,
+  );
+};
+
+export const drawAxes = async (
+  api: ExcalidrawImperativeAPI,
+  selectionSource?: string,
+) => {
+  const origin = classroomCommands.has("document.insertion")
+    ? { x: 60, y: 60 }
+    : insertionPoint(api, { width: 450, height: 450 });
+  const x = origin.x + 200;
+  const y = origin.y + 200;
+  const group = crypto.randomUUID();
+  const color = api.getAppState().currentItemStrokeColor || "#000000";
+  const shapes: ExcalidrawElementSkeleton[] = [
+    {
+      type: "arrow",
+      x: x - 200,
+      y,
+      points: [pointFrom(0, 0), pointFrom(410, 0)],
+      endArrowhead: "arrow",
+    },
+    {
+      type: "arrow",
+      x,
+      y: y + 200,
+      points: [pointFrom(0, 0), pointFrom(0, -410)],
+      endArrowhead: "arrow",
+    },
     {
       type: "text",
-      ...position,
-      text,
-      fontSize: size || api.getAppState().currentItemFontSize || 24,
-      fontFamily:
-        textSource?.type === "text"
-          ? textSource.fontFamily
-          : inkSource
-          ? FONT_FAMILY.Excalifont
-          : api.getAppState().currentItemFontFamily || 2,
-      strokeColor:
-        source?.strokeColor || api.getAppState().currentItemStrokeColor,
-      opacity: source?.opacity ?? api.getAppState().currentItemOpacity ?? 100,
-      textAlign: api.getAppState().currentItemTextAlign || "left",
-      customData,
+      x: x + 212,
+      y: y - 10,
+      text: "x",
+      fontSize: 16,
+      fontFamily: 2,
     },
-  ]);
+    {
+      type: "text",
+      x: x + 10,
+      y: y - 218,
+      text: "y",
+      fontSize: 16,
+      fontFamily: 2,
+    },
+    {
+      type: "text",
+      x: x + 6,
+      y: y + 6,
+      text: "0",
+      fontSize: 14,
+      fontFamily: 2,
+    },
+  ];
+  for (let tick = -4; tick <= 4; tick++) {
+    if (!tick) {
+      continue;
+    }
+    shapes.push(
+      {
+        type: "line",
+        x: x + tick * 40,
+        y,
+        points: [pointFrom(0, 0), pointFrom(0, -5)],
+      },
+      {
+        type: "text",
+        x: x + tick * 40 - 5,
+        y: y + 8,
+        text: String(tick),
+        fontSize: 12,
+        fontFamily: 2,
+      },
+      {
+        type: "line",
+        x,
+        y: y - tick * 40,
+        points: [pointFrom(0, 0), pointFrom(5, 0)],
+      },
+      {
+        type: "text",
+        x: x + 8,
+        y: y - tick * 40 - 8,
+        text: String(tick),
+        fontSize: 12,
+        fontFamily: 2,
+      },
+    );
+  }
+  const objects = shapes.map((shape) => ({
+    ...shape,
+    id: crypto.randomUUID(),
+    strokeColor: color,
+    strokeWidth: 1.3,
+    roughness: 0,
+    groupIds: [group],
+    customData: {
+      fcAxes: { x, y, unit: 40 },
+      fcSelectionSource: selectionSource,
+    },
+  }));
+  if (classroomCommands.has("document.insertion")) {
+    return classroomCommands.execute({
+      name: "document.insertion",
+      args: { id: group, shapes: objects },
+    });
+  }
+  const ids = insertElements(api, objects);
+  revealNewContent(
+    api,
+    api.getSceneElements().filter((element) => ids.includes(element.id)),
+  );
+  return ids;
 };
 
 export const insertCube = (api: ExcalidrawImperativeAPI) => {
-  const origin = insertionPoint(api);
+  const origin = insertionPoint(api, { width: 200, height: 195 });
   const vertices = [
     [0, 50],
     [140, 50],
@@ -369,7 +708,7 @@ export const selectedPlot = (api: ExcalidrawImperativeAPI) => {
 
 export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
   if (!Array.isArray(value) || !value.length || value.length > 160) {
-    throw new Error("AI 图形数据无效");
+    throw new Error(t("fcboard.AI 图形数据无效"));
   }
   return value.map((shape) => {
     if (
@@ -382,7 +721,7 @@ export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
       Math.abs(shape.x) > 3000 ||
       Math.abs(shape.y) > 3000
     ) {
-      throw new Error("AI 返回了无效图形坐标");
+      throw new Error(t("fcboard.AI 返回了无效图形坐标"));
     }
     const base = {
       type: shape.type,
@@ -393,7 +732,7 @@ export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
     };
     if (shape.type === "text") {
       if (typeof shape.text !== "string" || shape.text.length > 4000) {
-        throw new Error("AI 返回了无效文本");
+        throw new Error(t("fcboard.AI 返回了无效文本"));
       }
       return {
         ...base,
@@ -409,7 +748,7 @@ export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
       Math.abs(shape.width) > 2000 ||
       Math.abs(shape.height) > 2000
     ) {
-      throw new Error("AI 图形尺寸无效");
+      throw new Error(t("fcboard.AI 图形尺寸无效"));
     }
     return { ...base, width: shape.width, height: shape.height };
   });

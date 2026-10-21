@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { createStore, get, set } from "idb-keyval";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -320,7 +321,7 @@ export class TeachingEngine {
       index < 0 ||
       index >= question.choices.length
     ) {
-      throw new Error("当前没有这道测验选项");
+      throw new Error(t("fcboard.当前没有这道测验选项"));
     }
     const correct = index === question.answer;
     this.voice.stop();

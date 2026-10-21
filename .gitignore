@@ -1,6 +1,7 @@
 .DS_Store
 .env.development.local
 .env.local
+env.local
 .env.production.local
 .env.test.local
 .envrc
@@ -28,6 +29,7 @@ html
 meta*.json
 .claude
 android/app/src/main/assets/speech/
+public/ocr/
 test-results/
 playwright-report/
 __pycache__/

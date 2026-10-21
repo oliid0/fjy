@@ -18,4 +18,17 @@ describe("context panel placement", () => {
     expect(panel.left + panel.width).toBeLessThanOrEqual(1268);
     expect(panel.top + 430).toBeLessThan(620);
   });
+  it("centers a factory popup over its trigger with the native 16 dp gap", () => {
+    const panel = placePanel(
+      { left: 582, right: 638, top: 634, bottom: 682 },
+      { width: 1280, height: 688 },
+      196,
+      174,
+      "above",
+      16,
+    );
+    expect(panel.left).toBe(512);
+    expect(panel.top).toBe(444);
+    expect(panel.top + 174 + 16).toBe(634);
+  });
 });

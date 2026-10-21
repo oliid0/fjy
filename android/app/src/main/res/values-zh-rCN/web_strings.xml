@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="web_back">后退</string>
+    <string name="web_forward">前进</string>
+    <string name="web_reload">刷新</string>
+    <string name="web_close">关闭</string>
+    <string name="web_external_app">此页面要求外部应用，请在白板插入菜单打开对应应用</string>
+    <string name="web_load_failed">网页加载失败，请检查网络后刷新</string>
+</resources>

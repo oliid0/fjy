@@ -1,3 +1,4 @@
+import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { Capacitor } from "@capacitor/core";
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@excalidraw/excalidraw/components/icons";
@@ -16,8 +17,22 @@ import type { ScenePacket } from "./sceneSync";
 
 const failureMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+const networkStatus = () => ({
+  离开协作: t("fcboard.离开协作"),
+  已开启: t("fcboard.已开启"),
+  等待配对: t("fcboard.等待配对"),
+  "正在加入…": t("fcboard.正在加入…"),
+  实时同步中: t("fcboard.实时同步中"),
+  "连接中断，正在重连…": t("fcboard.连接中断，正在重连…"),
+  "已配对，等待连接无线调试": t("fcboard.已配对，等待连接无线调试"),
+  已连接: t("fcboard.已连接"),
+  "协作已结束，本机保留板书": t("fcboard.协作已结束，本机保留板书"),
+});
+const statusText = (value: string) =>
+  (networkStatus() as Record<string, string>)[value] || value;
 const native = Capacitor.isNativePlatform();
 export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+  useI18n();
   const [panel, setPanel] = useState<"collab" | "remote" | null>(null);
   const surface = useRef<HTMLElement>(null);
   const panelStyle = useAnchoredPanel(
@@ -67,7 +82,9 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   };
   const start = async () => {
     if (!native) {
-      throw new Error("请在安卓大屏开启协作，再用其他设备扫描二维码加入");
+      throw new Error(
+        t("fcboard.请在安卓大屏开启协作，再用其他设备扫描二维码加入"),
+      );
     }
     if (classroomCommands.has("document.close")) {
       await classroomCommands.execute({
@@ -211,7 +228,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         } else {
           await classroomCommands.execute({
             name: "board.new",
-            args: { name: "协作白板" },
+            args: { name: t("fcboard.协作白板") },
           });
         }
         const current = classroomCommands.read("boards") as { active: string };
@@ -228,7 +245,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           api,
           async (packet) => {
             if (socket.current?.readyState !== WebSocket.OPEN) {
-              throw new Error("连接中断，重连后会自动补同步");
+              throw new Error(t("fcboard.连接中断，重连后会自动补同步"));
             }
             socket.current.send(JSON.stringify(packet));
           },
@@ -384,7 +401,9 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           className="fc-network-panel fc-surface"
           style={panelStyle}
           role="dialog"
-          aria-label={panel === "remote" ? "设备控制" : "实时协作"}
+          aria-label={
+            panel === "remote" ? t("fcboard.设备控制") : t("fcboard.实时协作")
+          }
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -394,9 +413,13 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           }}
         >
           <header>
-            <strong>{panel === "remote" ? "设备控制" : "实时协作"}</strong>
+            <strong>
+              {panel === "remote"
+                ? t("fcboard.设备控制")
+                : t("fcboard.实时协作")}
+            </strong>
             <button
-              aria-label="关闭网络浮层"
+              aria-label={t("fcboard.关闭网络浮层")}
               onClick={() => {
                 setPanel(null);
                 setError("");
@@ -411,8 +434,10 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               {sharing ? (
                 <>
                   <p role="status">
-                    {connection}
-                    {native ? ` · ${peers} 台设备` : ""}
+                    {statusText(connection)}
+                    {native
+                      ? ` · ${t("fcboard.{{count}} 台设备", { count: peers })}`
+                      : ""}
                   </p>
                   {urls.map((url) => (
                     <div key={url}>
@@ -421,20 +446,28 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     </div>
                   ))}
                   <button disabled={busy} onClick={() => void run(leave)}>
-                    {hosted.current ? "结束协作" : "离开协作"}
+                    {hosted.current
+                      ? t("fcboard.结束协作")
+                      : t("fcboard.离开协作")}
                   </button>
                 </>
               ) : native ? (
                 <>
-                  <p>同一局域网扫码加入，书写、图片与撤销实时同步。</p>
+                  <p>
+                    {t(
+                      "fcboard.同一局域网扫码加入，书写、图片与撤销实时同步。",
+                    )}
+                  </p>
                   <button disabled={busy} onClick={() => void run(start)}>
-                    {busy ? "正在开启…" : "开启协作"}
+                    {busy ? t("fcboard.正在开启…") : t("fcboard.开启协作")}
                   </button>
                 </>
               ) : (
                 <p>
                   {connection ||
-                    "请用此设备扫描安卓大屏的协作二维码，直接加入白板。"}
+                    t(
+                      "fcboard.请用此设备扫描安卓大屏的协作二维码，直接加入白板。",
+                    )}
                 </p>
               )}
             </>
@@ -442,14 +475,19 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           {panel === "remote" && (
             <>
               <p>
-                手机浏览器控制整个大屏，可切换应用、翻页和书写。先在大屏开启无线调试，再用手机完成配对。
+                {t(
+                  "fcboard.手机浏览器控制整个大屏，可切换应用、翻页和书写。先在大屏开启无线调试，再用手机完成配对。",
+                )}
               </p>
               {remote && (
                 <>
-                  <p role="status">{remoteState}</p>
+                  <p role="status">{statusText(remoteState)}</p>
                   {remoteState === "等待配对" && (
                     <>
-                      <output className="fc-pair-pin" aria-label="设备配对码">
+                      <output
+                        className="fc-pair-pin"
+                        aria-label={t("fcboard.设备配对码")}
+                      >
                         {remote.pin}
                       </output>
                       <p>
@@ -457,7 +495,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                           0,
                           Math.ceil((remote.expiresAt - now) / 1000),
                         )}{" "}
-                        秒内输入
+                        {t("fcboard.秒内输入")}
                       </p>
                     </>
                   )}
@@ -471,7 +509,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               )}
               <div className="fc-network-actions">
                 <button disabled={busy} onClick={() => void run(startRemote)}>
-                  {remote ? "重新配对" : "开启控制"}
+                  {remote ? t("fcboard.重新配对") : t("fcboard.开启控制")}
                 </button>
                 {remote && (
                   <>
@@ -480,7 +518,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                         void run(() => Network.openWirelessSettings())
                       }
                     >
-                      无线调试
+                      {t("fcboard.无线调试")}
                     </button>
                     <button
                       disabled={busy}
@@ -491,7 +529,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                         })
                       }
                     >
-                      结束控制
+                      {t("fcboard.结束控制")}
                     </button>
                   </>
                 )}
@@ -506,7 +544,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         connection !== "已开启" &&
         connection !== "实时同步中" && (
           <div className="fc-notice" role="status">
-            {connection}
+            {statusText(connection)}
           </div>
         )}
     </>

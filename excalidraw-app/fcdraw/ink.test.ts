@@ -67,6 +67,7 @@ describe("factory ink calibration", () => {
       brushPenWidth: 5,
       eraserSize: 50,
       palmThreshold: 36,
+      penWidthMax: 40,
     });
   });
 });

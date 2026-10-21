@@ -30,6 +30,55 @@ import java.io.ByteArrayOutputStream;
 /** Paired, opt-in LAN uploads. Reading received files stays inside Capacitor's bridge. */
 @CapacitorPlugin(name = "FcboardClassroom")
 public class ClassroomPlugin extends Plugin {
+    private final AIStreamTransport aiTransport = new AIStreamTransport();
+
+    @PluginMethod
+    public void postAIStream(PluginCall call) {
+        try {
+            String id = call.getString("id");
+            JSObject inputHeaders = call.getObject("headers", new JSObject());
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            headers.put("Content-Type", "application/json");
+            headers.put("Authorization", inputHeaders.getString("Authorization", ""));
+            aiTransport.start(id, call.getString("url"), headers, call.getString("body"), new AIStreamTransport.Callback() {
+                public void chunk(String chunk) {
+                    JSObject event = new JSObject(); event.put("id", id); event.put("chunk", chunk);
+                    notifyListeners("aiStream", event);
+                }
+                public void complete(int status, String data, boolean stream) {
+                    JSObject result = new JSObject(); result.put("status", status); result.put("data", data); result.put("stream", stream);
+                    call.resolve(result);
+                }
+                public void failed(Exception error) { call.reject("AI connection failed", error); }
+            });
+        } catch (Exception error) { call.reject("AI request failed", error); }
+    }
+
+    @PluginMethod
+    public void cancelAIStream(PluginCall call) { aiTransport.cancel(call.getString("id")); call.resolve(); }
+
+    private WebResourceDialog webResource;
+
+    @PluginMethod
+    public void openWebResource(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                String url = WebResourceDialog.checkedUrl(call.getString("url"));
+                if (webResource != null && webResource.isShowing()) webResource.dismiss();
+                webResource = new WebResourceDialog(getActivity(), url, call.getString("language", java.util.Locale.getDefault().toLanguageTag()));
+                webResource.show();
+                call.resolve();
+            } catch (Exception error) { call.reject("无法打开教学网页：" + error.getMessage(), error); }
+        });
+    }
+
+    @PluginMethod
+    public void webResourceAction(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            if (webResource == null || !webResource.isShowing()) { call.reject("请先打开教学网页"); return; }
+            webResource.action(call.getData(), call);
+        });
+    }
     @PluginMethod
     public void getFactoryTools(PluginCall call) {
         try {
@@ -54,6 +103,29 @@ public class ClassroomPlugin extends Plugin {
     }
 
     private Receiver receiver;
+    @PluginMethod
+    public void getFactoryInsertions(PluginCall call) {
+        try {
+            JSArray available = new JSArray();
+            for (String insertion : FactoryTools.INSERTIONS.keySet()) {
+                if (FactoryTools.resolveInsertion(getContext(), insertion) != null) available.put(insertion);
+            }
+            JSObject result = new JSObject(); result.put("available", available); call.resolve(result);
+        } catch (Exception error) { call.reject("无法读取插入应用", error); }
+    }
+
+    @PluginMethod
+    public void openFactoryInsertion(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                android.content.Intent intent = FactoryTools.resolveInsertion(getContext(), call.getString("insertion"));
+                if (intent == null) { call.reject("当前设备未安装或未开放这项插入应用"); return; }
+                getActivity().startActivity(intent);
+                call.resolve();
+            } catch (Exception error) { call.reject("无法打开插入应用：" + error.getMessage(), error); }
+        });
+    }
+
     private BoardShareServer boardShare;
     private final Handler shareTimer = new Handler(Looper.getMainLooper());
 
@@ -98,6 +170,28 @@ public class ClassroomPlugin extends Plugin {
 
     @PluginMethod
     public void stopShare(PluginCall call) { stopBoardShare(); call.resolve(); }
+
+    /** Open the system attachment composer; the user chooses the recipient and sends. */
+    @PluginMethod
+    public void sharePages(PluginCall call) {
+        try {
+            android.content.Intent intent = BoardAttachments.create(getContext(), call.getArray("pages"));
+            getActivity().runOnUiThread(() -> {
+                try {
+                    getActivity().startActivity(android.content.Intent.createChooser(intent, "邮件发送 / 分享白板"));
+                    call.resolve();
+                } catch (Exception error) { call.reject("无法打开邮件或分享应用", error); }
+            });
+        } catch (Exception error) { call.reject(error.getMessage(), error); }
+    }
+
+    @PluginMethod
+    public void exitApp(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            call.resolve();
+            getActivity().finish();
+        });
+    }
     private final java.util.concurrent.ExecutorService imageEncoder = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     /** The factory whiteboard uses physical pixels and the manufacturer's touch calibration. */
@@ -107,6 +201,17 @@ public class ClassroomPlugin extends Plugin {
         result.put("hardPenWidth", 4);
         result.put("brushPenWidth", 15);
         result.put("eraserSize", 150);
+        // HDataSet.hasNib / HPenSettingWindow: nib firmware uses 2..20, otherwise 2..40.
+        int penWidthMax = 40;
+        try {
+            Object nib = Class.forName("android.os.SystemProperties")
+                .getMethod("getInt", String.class, int.class)
+                .invoke(null, "persist.sys.wb.addNib", 1);
+            if (Integer.valueOf(1).equals(nib)) penWidthMax = 20;
+        } catch (ReflectiveOperationException | SecurityException unavailable) {
+            // Non-factory Android devices can prohibit access to this firmware property.
+        }
+        result.put("penWidthMax", penWidthMax);
         try (android.database.Cursor cursor = getContext().getContentResolver().query(
                 android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
                 new String[]{"touch_threshold"}, null, null, null)) {
@@ -125,7 +230,9 @@ public class ClassroomPlugin extends Plugin {
     public void captureFrame(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                android.webkit.WebView view = getBridge().getWebView();
+                boolean resourceOpen = webResource != null && webResource.isShowing();
+                android.webkit.WebView view = resourceOpen ? webResource.web : getBridge().getWebView();
+                android.view.Window window = resourceOpen ? webResource.getWindow() : getActivity().getWindow();
                 int[] location = new int[2]; view.getLocationInWindow(location);
                 JSObject region = call.getObject("region");
                 double x = region == null ? 0 : region.optDouble("x", 0);
@@ -138,7 +245,7 @@ public class ClassroomPlugin extends Plugin {
                 Rect area = new Rect(location[0] + (int)(x * view.getWidth()), location[1] + (int)(y * view.getHeight()), location[0] + (int)((x + w) * view.getWidth()), location[1] + (int)((y + h) * view.getHeight()));
                 double scale = Math.min(1, 1280.0 / area.width());
                 Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int)(area.width() * scale)), Math.max(1, (int)(area.height() * scale)), Bitmap.Config.ARGB_8888);
-                PixelCopy.request(getActivity().getWindow(), area, bitmap, status -> {
+                PixelCopy.request(window, area, bitmap, status -> {
                     if (imageEncoder.isShutdown()) { bitmap.recycle(); return; }
                     if (status != PixelCopy.SUCCESS) { bitmap.recycle(); call.reject("当前画面尚未准备好，请稍后重试"); return; }
                     imageEncoder.execute(() -> {
@@ -227,6 +334,10 @@ public class ClassroomPlugin extends Plugin {
 
     @Override
     protected synchronized void handleOnDestroy() {
+        aiTransport.close();
+        WebResourceDialog resource = webResource;
+        webResource = null;
+        if (resource != null) getActivity().runOnUiThread(() -> { if (resource.isShowing()) resource.dismiss(); });
         stopBoardShare();
         imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }

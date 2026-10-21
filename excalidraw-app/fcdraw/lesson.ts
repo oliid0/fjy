@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
@@ -77,19 +78,19 @@ const number = (value: unknown, fallback: number, min: number, max: number) => {
     result < min ||
     result > max
   ) {
-    throw new Error("教学命令的数值超出范围");
+    throw new Error(t("fcboard.教学命令的数值超出范围"));
   }
   return result;
 };
 const text = (value: unknown, max: number) => {
   if (typeof value !== "string" || value.length > max) {
-    throw new Error("教学内容格式无效");
+    throw new Error(t("fcboard.教学内容格式无效"));
   }
   return value;
 };
 const quiz = (value: unknown): Quiz => {
   if (!value || typeof value !== "object") {
-    throw new Error("测验格式无效");
+    throw new Error(t("fcboard.测验格式无效"));
   }
   const item = value as Quiz;
   if (
@@ -97,12 +98,12 @@ const quiz = (value: unknown): Quiz => {
     item.choices.length < 2 ||
     item.choices.length > 6
   ) {
-    throw new Error("测验选项无效");
+    throw new Error(t("fcboard.测验选项无效"));
   }
   const choices = item.choices.map((choice) => text(choice, 500));
   const answer = number(item.answer, -1, 0, choices.length - 1);
   if (!Number.isInteger(answer)) {
-    throw new Error("测验答案无效");
+    throw new Error(t("fcboard.测验答案无效"));
   }
   return {
     question: text(item.question, 1200),
@@ -113,7 +114,7 @@ const quiz = (value: unknown): Quiz => {
 };
 export const validateLesson = (value: unknown): Lesson => {
   if (!value || typeof value !== "object") {
-    throw new Error("教学脚本格式无效");
+    throw new Error(t("fcboard.教学脚本格式无效"));
   }
   const source = value as Record<string, unknown>;
   if (
@@ -121,32 +122,36 @@ export const validateLesson = (value: unknown): Lesson => {
     !source.steps.length ||
     source.steps.length > 60
   ) {
-    throw new Error("课程应包含 1 到 60 个步骤");
+    throw new Error(t("fcboard.课程应包含 1 到 60 个步骤"));
   }
   let commandCount = 0;
   const steps = source.steps.map((raw): TeachingStep => {
     if (!raw || typeof raw !== "object") {
-      throw new Error("教学步骤格式无效");
+      throw new Error(t("fcboard.教学步骤格式无效"));
     }
     const step = raw as Record<string, unknown>;
     if (
       !Array.isArray(step.commands) ||
       (commandCount += step.commands.length) > 400
     ) {
-      throw new Error("教学命令过多或格式无效");
+      throw new Error(t("fcboard.教学命令过多或格式无效"));
     }
     const commands = step.commands.map((input): LessonCommand => {
       if (!input || typeof input !== "object") {
-        throw new Error("教学命令格式无效");
+        throw new Error(t("fcboard.教学命令格式无效"));
       }
       const command = input as Record<string, unknown>;
       if (!types.has(String(command.type))) {
-        throw new Error(`不支持的教学命令：${String(command.type)}`);
+        throw new Error(
+          t("fcboard.不支持的教学命令：{{type}}", {
+            type: String(command.type),
+          }),
+        );
       }
       const id = text(command.id || crypto.randomUUID(), 100);
       const color = text(command.color || "#245bd6", 20);
       if (!/^#[a-f0-9]{3}(?:[a-f0-9]{3})?$/i.test(color)) {
-        throw new Error("教学命令颜色无效");
+        throw new Error(t("fcboard.教学命令颜色无效"));
       }
       let points: [number, number][] | undefined;
       if (command.points !== undefined) {
@@ -155,11 +160,11 @@ export const validateLesson = (value: unknown): Lesson => {
           command.points.length < 2 ||
           command.points.length > 1500
         ) {
-          throw new Error("路径需要 2 到 1500 个点");
+          throw new Error(t("fcboard.路径需要 2 到 1500 个点"));
         }
         points = command.points.map((pair) => {
           if (!Array.isArray(pair) || pair.length !== 2) {
-            throw new Error("路径坐标无效");
+            throw new Error(t("fcboard.路径坐标无效"));
           }
           return [
             number(pair[0], 0, -1600, 3200),
@@ -168,16 +173,16 @@ export const validateLesson = (value: unknown): Lesson => {
         });
       }
       if (command.type === "draw_path" && !points) {
-        throw new Error("路径命令缺少 points");
+        throw new Error(t("fcboard.路径命令缺少 points"));
       }
       if (
         (command.type === "write_text" || command.type === "write_math") &&
         !command.text
       ) {
-        throw new Error("写字命令缺少 text");
+        throw new Error(t("fcboard.写字命令缺少 text"));
       }
       if (command.type === "erase_object" && !command.target) {
-        throw new Error("擦除命令缺少 target");
+        throw new Error(t("fcboard.擦除命令缺少 target"));
       }
       return {
         type: command.type as LessonCommand["type"],
@@ -204,7 +209,7 @@ export const validateLesson = (value: unknown): Lesson => {
     source.quiz !== undefined &&
     (!Array.isArray(source.quiz) || source.quiz.length > 10)
   ) {
-    throw new Error("测验数量无效");
+    throw new Error(t("fcboard.测验数量无效"));
   }
   return {
     title: text(source.title || "白板讲解", 160),
@@ -281,7 +286,9 @@ export class LessonCanvas {
         current?.name !== this.document.name ||
         current.page !== this.document.page
       ) {
-        throw new Error("课件页已切换，请回到原页继续讲解或重新提问");
+        throw new Error(
+          t("fcboard.课件页已切换，请回到原页继续讲解或重新提问"),
+        );
       }
       if (
         [
@@ -392,7 +399,9 @@ export class LessonCanvas {
           current?.name !== this.document.name ||
           current?.page !== this.document.page
         ) {
-          throw new Error("课件页已切换，请回到原页继续讲解或重新提问");
+          throw new Error(
+            t("fcboard.课件页已切换，请回到原页继续讲解或重新提问"),
+          );
         }
         if (
           renderedInk &&

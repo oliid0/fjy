@@ -13,6 +13,7 @@ import { orderByFractionalIndex } from "@excalidraw/element";
 import type { SceneElementsMap } from "@excalidraw/element/types";
 
 import { ToolButton } from "../components/ToolButton";
+import { FactoryIcon } from "../components/FactoryIcon";
 import { UndoIcon, RedoIcon } from "../components/icons";
 import { HistoryChangedEvent } from "../history";
 import { useEmitter } from "../hooks/useEmitter";
@@ -88,7 +89,13 @@ export const createUndoAction: ActionCreator = (history) => ({
     return (
       <ToolButton
         type="button"
-        icon={UndoIcon}
+        icon={
+          app.props.UIOptions.unifiedToolbar ? (
+            <FactoryIcon name="undo" />
+          ) : (
+            UndoIcon
+          )
+        }
         aria-label={t("buttons.undo")}
         onClick={updateData}
         size={data?.size || "medium"}
@@ -128,7 +135,13 @@ export const createRedoAction: ActionCreator = (history) => ({
     return (
       <ToolButton
         type="button"
-        icon={RedoIcon}
+        icon={
+          app.props.UIOptions.unifiedToolbar ? (
+            <FactoryIcon name="redo" />
+          ) : (
+            RedoIcon
+          )
+        }
         aria-label={t("buttons.redo")}
         onClick={updateData}
         size={data?.size || "medium"}

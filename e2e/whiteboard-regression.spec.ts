@@ -70,6 +70,7 @@ test("original selection, moving, duplication, deletion, history and zoom remain
   await page.getByRole("button", { name: "重做", exact: true }).click();
   await expect.poll(async () => (await elements(page)).length).toBe(1);
   await page.getByRole("button", { name: "插入", exact: true }).click();
+  await page.getByRole("button", { name: "图形", exact: true }).click();
   await page.getByRole("button", { name: "放大", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "重置缩放", exact: true }),

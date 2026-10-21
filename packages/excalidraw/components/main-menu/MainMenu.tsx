@@ -5,7 +5,12 @@ import { composeEventHandlers } from "@excalidraw/common";
 import { useTunnels } from "../../context/tunnels";
 import { useUIAppState } from "../../context/ui-appState";
 import { t } from "../../i18n";
-import { useEditorInterface, useExcalidrawSetAppState } from "../App";
+import {
+  useAppProps,
+  useEditorInterface,
+  useExcalidrawSetAppState,
+} from "../App";
+import { FactoryIcon } from "../FactoryIcon";
 import { UserList } from "../UserList";
 import DropdownMenu from "../dropdownMenu/DropdownMenu";
 import DropdownMenuSub from "../dropdownMenu/DropdownMenuSub";
@@ -30,6 +35,8 @@ const MainMenu = Object.assign(
       const { MainMenuTunnel } = useTunnels();
       const editorInterface = useEditorInterface();
       const appState = useUIAppState();
+      const { UIOptions } = useAppProps();
+      const [gap, setGap] = React.useState(16);
       const setAppState = useExcalidrawSetAppState();
 
       return (
@@ -45,16 +52,37 @@ const MainMenu = Object.assign(
               }}
               data-testid="main-menu-trigger"
               className="main-menu-trigger"
+              onFocus={(event) =>
+                setGap(
+                  (16 * event.currentTarget.getBoundingClientRect().height) /
+                    48,
+                )
+              }
+              onPointerDown={(event) =>
+                setGap(
+                  (16 * event.currentTarget.getBoundingClientRect().height) /
+                    48,
+                )
+              }
             >
-              {HamburgerMenuIcon}
+              {UIOptions.unifiedToolbar ? (
+                <FactoryIcon name="menu" />
+              ) : (
+                HamburgerMenuIcon
+              )}
             </DropdownMenu.Trigger>
             <DropdownMenu.Content
               onClickOutside={() => setAppState({ openMenu: null })}
               onSelect={composeEventHandlers(onSelect, () => {
                 setAppState({ openMenu: null });
               })}
-              className="main-menu"
+              className={
+                UIOptions.unifiedToolbar
+                  ? "main-menu fc-factory-menu"
+                  : "main-menu"
+              }
               align="start"
+              sideOffset={UIOptions.unifiedToolbar ? gap : 8}
             >
               {children}
               {editorInterface.formFactor === "phone" &&

@@ -10,6 +10,7 @@ export const cssInkProfile = (
     hardPenWidth: number;
     brushPenWidth: number;
     eraserSize: number;
+    penWidthMax?: 20 | 40;
     palmThreshold?: number;
   },
   dpr: number,
@@ -22,6 +23,7 @@ export const cssInkProfile = (
     brushPenWidth: positive(native.brushPenWidth, 15 / scale),
     eraserSize: positive(native.eraserSize, 150 / scale),
     palmThreshold: positive(native.palmThreshold, 36),
+    penWidthMax: native.penWidthMax === 20 ? 20 : 40,
   };
 };
 

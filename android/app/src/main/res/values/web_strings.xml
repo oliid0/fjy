@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="web_back">Back</string>
+    <string name="web_forward">Forward</string>
+    <string name="web_reload">Reload</string>
+    <string name="web_close">Close</string>
+    <string name="web_external_app">This page requires another app. Open it from the board Insert menu.</string>
+    <string name="web_load_failed">Could not load this page. Check your network and reload.</string>
+</resources>

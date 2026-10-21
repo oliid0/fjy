@@ -1,3 +1,5 @@
+import { t } from "@excalidraw/excalidraw/i18n";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
@@ -12,6 +14,7 @@ import type { InkStroke } from "./documents";
 
 it("exposes the original pen modes to AI and validates the complete style request before changing the pen", async () => {
   const api = {
+    getAppState: () => ({ currentItemStrokeWidth: 2 }),
     updateScene: vi.fn(),
     executeAction: vi.fn(),
   } as unknown as ExcalidrawImperativeAPI;
@@ -22,13 +25,13 @@ it("exposes the original pen modes to AI and validates the complete style reques
         name: "canvas.style",
         args: { pen: "missing" },
       }),
-    ).rejects.toThrow("笔型不存在");
+    ).rejects.toThrow(t("fcboard.笔型不存在"));
     await expect(
       classroomCommands.execute({
         name: "canvas.style",
         args: { pen: "rainbow", color: "invalid" },
       }),
-    ).rejects.toThrow("颜色无效");
+    ).rejects.toThrow(t("fcboard.颜色无效"));
     expect(api.updateScene).not.toHaveBeenCalled();
     expect(api.executeAction).not.toHaveBeenCalled();
     await classroomCommands.execute({
@@ -36,7 +39,11 @@ it("exposes the original pen modes to AI and validates the complete style reques
       args: { pen: "rainbow" },
     });
     expect(api.updateScene).toHaveBeenCalledWith({
-      appState: { currentItemPenMode: "rainbow" },
+      appState: expect.objectContaining({
+        currentItemPenMode: "rainbow",
+        currentItemStrokeWidth: 2,
+        whiteboardPenWidths: { hard: 2 },
+      }),
     });
   } finally {
     stop();

@@ -1,3 +1,5 @@
+import { t } from "@excalidraw/excalidraw/i18n";
+
 import {
   localMathIntent,
   selectionMathIntent,
@@ -14,7 +16,7 @@ describe("local mathematical voice commands", () => {
     ]) {
       expect(selectionRequest(text)).toBe(true);
     }
-    for (const text of ["课堂笔记", "画布", "画笔", "牛顿定律"]) {
+    for (const text of ["课堂笔记", "画布", t("fcboard.画笔"), "牛顿定律"]) {
       expect(selectionRequest(text)).toBe(false);
     }
   });
@@ -63,6 +65,8 @@ describe("local mathematical voice commands", () => {
       surface: false,
     });
     expect(selectionMathIntent("f(x,y)=sin(x*y)")?.action).toBe("plot");
+    expect(selectionMathIntent("fx=y")?.action).toBe("axes");
+    expect(selectionMathIntent("f(x)=y")?.action).toBe("axes");
     for (const text of [
       "课堂笔记",
       "chapter-one",

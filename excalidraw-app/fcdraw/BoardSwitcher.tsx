@@ -1,13 +1,12 @@
+import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
 import { ToolbarExtras, exportToBlob } from "@excalidraw/excalidraw";
 import {
-  PlusIcon,
   TrashIcon,
   save,
   CloseIcon,
-  chevronLeftIcon,
-  chevronRight,
 } from "@excalidraw/excalidraw/components/icons";
+import { FactoryIcon } from "@excalidraw/excalidraw/components/FactoryIcon";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -56,12 +55,13 @@ const BoardThumbnail = ({ board }: { board: Board }) => {
     <img
       className="fc-board-thumbnail"
       src={source}
-      alt={`${board.name}预览`}
+      alt={t("fcboard.{{name}}预览", { name: board.name })}
     />
   ) : null;
 };
 
 export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+  useI18n();
   const leavePresentation = async () => {
     if (
       (
@@ -107,7 +107,11 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       started = true;
       void controller
         .initialize()
-        .catch((failure) => setError(`白板保存不可用：${String(failure)}`));
+        .catch((failure) =>
+          setError(
+            t("fcboard.白板保存不可用：{{error}}", { error: String(failure) }),
+          ),
+        );
     };
     const unsubscribe = controller.subscribe(() => {
       classroomCommands.changed("boards");
@@ -149,7 +153,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               index + 1 === args.index,
           );
           if (!board) {
-            throw new Error("找不到这块白板");
+            throw new Error(t("fcboard.找不到这块白板"));
           }
           await leavePresentation();
           await controller.switch(board.id);
@@ -262,7 +266,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       <ToolbarExtras placement="navigation">
         <div className="fc-toolbar-extras fc-board-controls">
           <button
-            aria-label="上一块白板"
+            aria-label={t("fcboard.上一块白板")}
             disabled={
               busy ||
               value.boards.findIndex((board) => board.id === value.active) <= 0
@@ -279,13 +283,13 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               })
             }
           >
-            {chevronLeftIcon}
+            <FactoryIcon name="previous" />
           </button>
 
           <button
             data-board-switcher
-            aria-label="切换白板"
-            title="切换白板"
+            aria-label={t("fcboard.切换白板")}
+            title={t("fcboard.切换白板")}
             aria-expanded={open}
             onClick={() => {
               if (book.current) {
@@ -301,7 +305,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             </span>
           </button>
           <button
-            aria-label="下一块白板"
+            aria-label={t("fcboard.下一块白板")}
             disabled={
               busy ||
               !value.active ||
@@ -320,11 +324,11 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               })
             }
           >
-            {chevronRight}
+            <FactoryIcon name="next" />
           </button>
           <button
-            aria-label="新建白板"
-            title="新建白板"
+            aria-label={t("fcboard.新建白板")}
+            title={t("fcboard.新建白板")}
             disabled={busy || !value.active}
             onClick={() => {
               void run(async () => {
@@ -333,8 +337,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               });
             }}
           >
-            {PlusIcon}
-            <span>新建</span>
+            <FactoryIcon name="add" />
           </button>
         </div>
       </ToolbarExtras>
@@ -344,7 +347,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           className="fc-board-picker fc-surface"
           style={panelStyle}
           role="dialog"
-          aria-label="我的白板"
+          aria-label={t("fcboard.我的白板")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -353,9 +356,9 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           }}
         >
           <header>
-            <strong>白板</strong>
+            <strong>{t("fcboard.白板")}</strong>
             <button
-              aria-label="关闭白板列表"
+              aria-label={t("fcboard.关闭白板列表")}
               onClick={() => {
                 setOpen(false);
                 setError("");
@@ -376,7 +379,9 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 <button
                   className="fc-board-select"
                   disabled={busy}
-                  aria-label={`切换到 ${board.name}`}
+                  aria-label={t("fcboard.切换到 {{name}}", {
+                    name: board.name,
+                  })}
                   aria-pressed={board.id === value.active}
                   onClick={() => {
                     void run(async () => {
@@ -394,11 +399,15 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       .map((el) => (el.type === "text" ? el.text : ""))
                       .join(" · ")
                       .slice(0, 90) ||
-                      (board.elements.length ? "手写与图形" : "空白")}
+                      (board.elements.length
+                        ? t("fcboard.手写与图形")
+                        : t("fcboard.空白"))}
                   </span>
                 </button>
                 <input
-                  aria-label={`白板 ${index + 1} 名称`}
+                  aria-label={t("fcboard.白板 {{page}} 名称", {
+                    page: index + 1,
+                  })}
                   defaultValue={board.name}
                   key={`${board.id}:${board.name}`}
                   onBlur={(event) => {
@@ -415,8 +424,8 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   }}
                 />
                 <button
-                  aria-label={`丢弃 ${board.name}`}
-                  title="丢弃"
+                  aria-label={t("fcboard.丢弃 {{name}}", { name: board.name })}
+                  title={t("fcboard.丢弃")}
                   disabled={busy}
                   onClick={() => {
                     void run(() => book.current!.discard(board.id));
@@ -435,7 +444,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               }}
             >
               {save}
-              <span>保存副本</span>
+              <span>{t("fcboard.保存副本")}</span>
             </button>
           </footer>
         </section>

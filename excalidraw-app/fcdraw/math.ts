@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { all, create } from "mathjs";
 import nerdamer from "nerdamer/all";
 
@@ -48,7 +49,7 @@ export const normalizeExpression = (text: string) =>
 
 export const compileExpression = (expression: string) => {
   if (!expression || expression.length > 500) {
-    throw new Error("请输入 500 字以内的数学表达式");
+    throw new Error(t("fcboard.请输入 500 字以内的数学表达式"));
   }
   const node = math.parse(normalizeExpression(expression));
   let count = 0;
@@ -64,13 +65,13 @@ export const compileExpression = (expression: string) => {
         "ParenthesisNode",
       ].includes(child.type)
     ) {
-      throw new Error("该表达式包含不支持的操作");
+      throw new Error(t("fcboard.该表达式包含不支持的操作"));
     }
     if (
       child.type === "FunctionNode" &&
       !allowedFunctions.has((child as import("mathjs").FunctionNode).fn.name)
     ) {
-      throw new Error("该函数不支持数值绘图，请使用计算功能");
+      throw new Error(t("fcboard.该函数不支持数值绘图，请使用计算功能"));
     }
     if (
       child.type === "SymbolNode" &&
@@ -79,7 +80,7 @@ export const compileExpression = (expression: string) => {
       ) &&
       !allowedFunctions.has((child as import("mathjs").SymbolNode).name)
     ) {
-      throw new Error("未知变量；支持 x、y、z、a、b、c");
+      throw new Error(t("fcboard.未知变量；支持 x、y、z、a、b、c"));
     }
   });
   return node.compile();
@@ -88,13 +89,13 @@ export const compileExpression = (expression: string) => {
 export const calculate = (input: string): string => {
   const expression = normalizeExpression(input);
   if (expression.length > 500 || !/^[\w\s+\-*/^().,!=[\]]+$/.test(expression)) {
-    throw new Error("无法识别算式，请检查输入或使用 AI 识别手写");
+    throw new Error(t("fcboard.无法识别算式，请检查输入或使用 AI 识别手写"));
   }
   // Nerdamer supplies symbolic integration, differentiation, limits and equation solving.
   if (/^(integrate|defint|diff|limit|solve|sum|product)\(/.test(expression)) {
     const result = nerdamer(expression).toString();
     if (!result || result === "undefined") {
-      throw new Error("该算式没有可用结果");
+      throw new Error(t("fcboard.该算式没有可用结果"));
     }
     return result;
   }
@@ -147,7 +148,7 @@ export const samplePlot = (plot: Plot): number[][][] => {
     }
   };
   if (!Number.isFinite(plot.range) || plot.range <= 0 || plot.range > 1000) {
-    throw new Error("坐标范围必须在 0 到 1000 之间");
+    throw new Error(t("fcboard.坐标范围必须在 0 到 1000 之间"));
   }
   for (let grid = 0; grid < (plot.surface ? 22 : 1); grid++) {
     let line: number[][] = [];
@@ -180,7 +181,7 @@ export const samplePlot = (plot: Plot): number[][][] => {
     flush();
   }
   if (!lines.length) {
-    throw new Error("当前范围内没有可绘制的实数图像");
+    throw new Error(t("fcboard.当前范围内没有可绘制的实数图像"));
   }
   return lines;
 };

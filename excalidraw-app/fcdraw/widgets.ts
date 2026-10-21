@@ -3,12 +3,15 @@ import {
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
 import { pointFrom } from "@excalidraw/math";
+import { getCommonBounds } from "@excalidraw/element";
+import { t } from "@excalidraw/excalidraw/i18n";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
 import { project3D } from "./math";
 import { classroomCommands } from "./commands";
+import { contentPosition, revealNewContent } from "./board";
 
 import type { InkStroke } from "./documents";
 
@@ -94,14 +97,14 @@ export const configureWidget = (
         value < limits[key][0] ||
         value > limits[key][1]
       ) {
-        throw new Error(`教学工具参数 ${key} 超出范围`);
+        throw new Error(t("fcboard.教学工具参数 {{key}} 超出范围", { key }));
       }
       next[key] = value;
     }
   }
   if (changes.running !== undefined) {
     if (typeof changes.running !== "boolean") {
-      throw new Error("播放状态无效");
+      throw new Error(t("fcboard.播放状态无效"));
     }
     next.running = changes.running;
   }
@@ -111,7 +114,7 @@ export const configureWidget = (
         typeof changes[key] !== "string" ||
         (changes[key] as string).length > (key === "names" ? 5000 : 120)
       ) {
-        throw new Error("抽取内容过长");
+        throw new Error(t("fcboard.抽取内容过长"));
       }
       next[key] = changes[key] as string;
     }
@@ -264,7 +267,11 @@ export const widgetShapes = (
       label(
         4,
         84,
-        remaining <= 0 ? "时间到" : params.running ? "计时中" : "计时器",
+        remaining <= 0
+          ? t("fcboard.时间到")
+          : params.running
+          ? t("fcboard.计时中")
+          : t("fcboard.计时器"),
         16,
       ),
     );
@@ -526,6 +533,20 @@ export const renderWidget = (
   remember = true,
 ) => {
   const existing = api.getSceneElements();
+  if (
+    !classroomCommands.has("document.widget") &&
+    !existing.some((element) => element.customData?.fcWidget?.id === widget.id)
+  ) {
+    const [left, top, right, bottom] = getCommonBounds(
+      convertToExcalidrawElements(widgetShapes(widget)),
+    );
+    const point = contentPosition(
+      api,
+      { x: widget.position.x + left, y: widget.position.y + top },
+      { width: right - left, height: bottom - top },
+    );
+    widget = { ...widget, position: { x: point.x - left, y: point.y - top } };
+  }
   const elements = convertToExcalidrawElements(
     widgetShapes(widget).map((shape, index) => ({
       strokeColor: api.getAppState().currentItemStrokeColor,
@@ -566,5 +587,10 @@ export const renderWidget = (
       ? CaptureUpdateAction.IMMEDIATELY
       : CaptureUpdateAction.NEVER,
   });
+  if (
+    !existing.some((element) => element.customData?.fcWidget?.id === widget.id)
+  ) {
+    revealNewContent(api, elements);
+  }
   return elements;
 };

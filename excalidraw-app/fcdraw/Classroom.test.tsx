@@ -1,11 +1,7 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { t } from "@excalidraw/excalidraw/i18n";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { pointFrom } from "@excalidraw/math";
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
 
 import type {
@@ -14,11 +10,17 @@ import type {
 } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
+import { render } from "./test/render";
+
 import { Classroom } from "./Classroom";
+import { SelectionActions } from "./SelectionActions";
 import * as ai from "./ai";
+import * as ocr from "./ocr";
 import { classroomCommands } from "./commands";
 import { BoardRecorder } from "./recording";
 import { currentSettings, defaults, saveSettings } from "./settings";
+import { handwritingText } from "./handwriting";
+import { insertionDefaults, renderInsertion } from "./insertObjects";
 
 vi.mock("@excalidraw/excalidraw", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@excalidraw/excalidraw")>()),
@@ -47,6 +49,15 @@ describe("selection-driven classroom controls", () => {
     cursorButton = "up";
     localStorage.clear();
     sessionStorage.clear();
+    saveSettings(
+      {
+        ...defaults,
+        model: "mock-visual-model",
+        apiKey: "mock-key",
+        answerStyle: "text",
+      },
+      false,
+    );
     api = {
       getSceneElements: () => scene,
       getAppState: () => ({
@@ -94,18 +105,28 @@ describe("selection-driven classroom controls", () => {
     await act(async () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "向 AI 教师提问" }), {
-      target: { value: "插入一个矩形" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
+      {
+        target: { value: "插入一个矩形" },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.发送问题") }),
+    );
     await waitFor(() => expect(ai.chat).toHaveBeenCalledTimes(1));
     await act(async () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "向 AI 教师提问" }), {
-      target: { value: "清空当前白板" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "发送问题" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
+      {
+        target: { value: "清空当前白板" },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.发送问题") }),
+    );
     await act(async () => {
       finish(
         JSON.stringify({
@@ -149,13 +170,20 @@ describe("selection-driven classroom controls", () => {
         args: { panel: "settings" },
       });
     });
-    fireEvent.change(screen.getByRole("textbox", { name: /模型 ID/ }), {
-      target: { value: "unsaved-model" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "测试当前配置" }));
+    fireEvent.change(
+      screen.getByPlaceholderText(t("fcboard.填写支持视觉的模型 ID")),
+      {
+        target: { value: "unsaved-model" },
+      },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.测试当前配置") }),
+    );
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        "连接测试返回：连接成功",
+        t("fcboard.连接测试返回：{{result}}；在白板书写后可测试截图识别", {
+          result: "连接成功",
+        }),
       ),
     );
     expect(ai.chat).toHaveBeenCalledWith(
@@ -185,12 +213,300 @@ describe("selection-driven classroom controls", () => {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });
+  it("preserves handwriting selection without cloud calls or error popups before AI is configured", async () => {
+    saveSettings({ ...defaults, autoMath: false }, false);
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(40, 30)],
+    });
+    scene = [ink];
+    selected = { [ink.id]: true };
+    const chat = vi.spyOn(ai, "chat");
+    render(<Classroom api={api} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(chat).not.toHaveBeenCalled();
+    expect(scene).toEqual([ink]);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("never sends handwriting requests on selection or idle even with old autoMath settings", async () => {
+    saveSettings(
+      { ...defaults, autoMath: true, apiKey: "test", model: "test" },
+      false,
+    );
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(40, 30)],
+    });
+    scene = [ink];
+    selected = { [ink.id]: true };
+    const chat = vi.spyOn(ai, "chat");
+    const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+    render(<Classroom api={api} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2100));
+    });
+    expect(chat).not.toHaveBeenCalled();
+    expect(recognize).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("toolbar", { name: t("fcboard.选区操作") }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: t("fcboard.计算") }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: t("fcboard.图像") }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: t("fcboard.问答") }),
+    ).toBeEnabled();
+    expect(scene).toEqual([ink]);
+  });
+
+  it("reuses selected handwriting OCR when switching from calculation to a text-only answer", async () => {
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(40, 30)],
+    });
+    scene = [ink];
+    selected = { [ink.id]: true };
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [ink],
+      text: "",
+      image: "data:image/png;base64,test" as DataURL,
+    });
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockResolvedValue("1+1=");
+    const chat = vi.spyOn(ai, "chat").mockResolvedValue("两个一相加等于二。");
+    render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
+    await waitFor(() =>
+      expect(scene.some((el) => el.type === "text" && el.text === "2")).toBe(
+        true,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.问答") }));
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(chat.mock.calls[0][0]).toEqual([
+      { role: "system", content: expect.any(String) },
+      { role: "user", content: "1+1=" },
+    ]);
+  });
+
+  it("crops and answers beside the gesture rather than the full bounds of a long stroke", async () => {
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 0,
+      y: 100,
+      width: 1000,
+      height: 0,
+      points: [pointFrom(0, 0), pointFrom(1000, 0)],
+    });
+    scene = [ink];
+    selected = { [ink.id]: true };
+    const original = api.getAppState;
+    const region = { left: 200, top: 80, right: 320, bottom: 140 };
+    vi.spyOn(api, "getAppState").mockImplementation(() => ({
+      ...original(),
+      activeTool: { ...original().activeTool, type: "lasso", customType: null },
+      whiteboardSelection: { bounds: region, elementIds: [ink.id] },
+    }));
+    const capture = vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [ink],
+      text: "",
+      image: "data:image/png;base64,test" as DataURL,
+    });
+    vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue("1+1=");
+    render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
+    await waitFor(() =>
+      expect(scene.some((el) => el.type === "text" && el.text === "2")).toBe(
+        true,
+      ),
+    );
+    expect(capture).toHaveBeenCalledWith(api, false, [ink], region);
+    const answer = scene.find((el) => el.type === "text" && el.text === "2")!;
+    expect(answer.x).toBe(336);
+    expect(answer.x).toBeLessThan(ink.width);
+  });
+
+  it("recognizes the visible part of a text object instead of reading its complete text", async () => {
+    selectText("1+1=     9+9=");
+    const source = scene[0];
+    const region = {
+      left: source.x,
+      top: source.y - 4,
+      right: source.x + 60,
+      bottom: source.y + source.height + 4,
+    };
+    const original = api.getAppState;
+    vi.spyOn(api, "getAppState").mockImplementation(() => ({
+      ...original(),
+      activeTool: { ...original().activeTool, type: "lasso", customType: null },
+      whiteboardSelection: { bounds: region, elementIds: [source.id] },
+    }));
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [source],
+      text: "",
+      image: "data:image/png;base64,crop" as DataURL,
+    });
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockResolvedValue("1+1=");
+    render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
+    await waitFor(() =>
+      expect(
+        scene.some(
+          (element) => element.type === "text" && element.text === "2",
+        ),
+      ).toBe(true),
+    );
+    expect(recognize).toHaveBeenCalledTimes(1);
+  });
+
+  it("crops the current document viewport after scrolling and includes page content behind text annotations", async () => {
+    const doc = {
+      name: "lesson.pdf",
+      page: 1,
+      ink: [
+        {
+          id: "note",
+          points: [[100, 150]],
+          text: "9+9=",
+          width: 2,
+          color: "#fff",
+        },
+      ],
+      selection: ["note"],
+      region: [
+        [80, 130],
+        [220, 210],
+      ],
+      viewport: { left: 0, top: 0, width: 1000, height: 500, scroll: 0 },
+    };
+    const release = classroomCommands.context("document", () => doc);
+    const snapshot = classroomCommands.register(
+      "document.snapshot",
+      "@internal",
+      () => ({ image: "data:image/png;base64,page" }),
+    );
+    const write = vi.fn();
+    const releaseWrite = classroomCommands.register(
+      "canvas.text",
+      "@internal",
+      write,
+    );
+    const crop = vi
+      .spyOn(ai, "cropImage")
+      .mockResolvedValue("data:image/png;base64,crop" as DataURL);
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockResolvedValue("1+1=");
+    const rendered = render(
+      <SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />,
+    );
+    try {
+      act(() => {
+        doc.viewport.scroll = 100;
+        classroomCommands.changed("document");
+      });
+      fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
+      await waitFor(() =>
+        expect(write).toHaveBeenCalledWith(
+          expect.objectContaining({ text: "2" }),
+        ),
+      );
+      expect(crop).toHaveBeenCalledWith(
+        "data:image/png;base64,page",
+        { left: 0.068, right: 0.232, top: 0.036, bottom: 0.244 },
+        expect.any(AbortSignal),
+      );
+      expect(recognize).toHaveBeenCalledTimes(1);
+    } finally {
+      rendered.unmount();
+      releaseWrite();
+      snapshot();
+      release();
+    }
+  });
+
+  it("keeps a casually circled table free of automatic object-property popups", async () => {
+    await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+    const original = api.getAppState;
+    vi.spyOn(api, "getAppState").mockImplementation(() => ({
+      ...original(),
+      activeTool: { ...original().activeTool, type: "lasso", customType: null },
+      whiteboardSelection: {
+        bounds: { left: 80, top: 80, right: 480, bottom: 300 },
+        elementIds: Object.keys(selected),
+      },
+    }));
+    const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+    render(<Classroom api={api} />);
+    expect(
+      screen.getByRole("toolbar", { name: t("fcboard.选区操作") }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.表格") }),
+    ).toBeNull();
+    expect(recognize).not.toHaveBeenCalled();
+  });
+
+  it("answers selected geometry in one visual request without discarding the diagram through OCR", async () => {
+    scene = convertToExcalidrawElements([
+      { type: "rectangle", x: 100, y: 100, width: 120, height: 80 },
+      { type: "text", x: 100, y: 210, text: "解释这个图形" },
+    ]);
+    selected = Object.fromEntries(scene.map((element) => [element.id, true]));
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: scene,
+      text: "解释这个图形",
+      image: "data:image/png;base64,diagram" as DataURL,
+    });
+    const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValue("这是一个长方形，对边相等。");
+    render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.问答") }));
+    await waitFor(() =>
+      expect(
+        scene.some(
+          (element) =>
+            element.type === "text" && element.text.includes("对边相等"),
+        ),
+      ).toBe(true),
+    );
+    expect(recognize).not.toHaveBeenCalled();
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chat.mock.calls[0][0][0].content).toEqual(
+      expect.arrayContaining([
+        {
+          type: "image_url",
+          image_url: { url: "data:image/png;base64,diagram" },
+        },
+      ]),
+    );
+  });
 
   it("calculates a selected equation without an extra input step", async () => {
     selectText("1+1=");
     await act(async () => {
       render(<Classroom api={api} />);
     });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
     await waitFor(() =>
       expect(scene.some((el) => el.type === "text" && el.text === "2")).toBe(
         true,
@@ -198,7 +514,9 @@ describe("selection-driven classroom controls", () => {
     );
     const result = scene.find((el) => el.type === "text" && el.text === "2")!;
     expect(result.x).toBeGreaterThan(scene[0].x);
-    expect(result.customData?.fcAnswerSource).toBe(scene[0].id);
+    expect(result.customData?.fcSelectionSource).toBe(
+      `${scene[0].id}:${scene[0].version}`,
+    );
     expect(
       result.type === "text" && scene[0].type === "text" && result.fontSize,
     ).toBe(scene[0].type === "text" && scene[0].fontSize);
@@ -222,12 +540,10 @@ describe("selection-driven classroom controls", () => {
       image: undefined,
     });
     vi.spyOn(ai, "chat").mockResolvedValue(
-      JSON.stringify({
-        action: "text",
-        text: "合外力为零时，物体保持静止或匀速直线运动。",
-      }),
+      "合外力为零时，物体保持静止或匀速直线运动。",
     );
     render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.问答") }));
     await waitFor(() =>
       expect(scene.filter((element) => element.type === "text")).toHaveLength(
         2,
@@ -261,11 +577,12 @@ describe("selection-driven classroom controls", () => {
         }),
     );
     render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.问答") }));
     await waitFor(() => expect(ai.chat).toHaveBeenCalledTimes(1));
     await act(async () => {
       selected = {};
       change.forEach((listener) => listener());
-      finish(JSON.stringify({ action: "text", text: "过期回答" }));
+      finish("过期回答");
     });
     expect(scene).toHaveLength(1);
   });
@@ -282,6 +599,7 @@ describe("selection-driven classroom controls", () => {
       cursorButton = "up";
       change.forEach((listener) => listener());
     });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
     await waitFor(() =>
       expect(scene.some((el) => el.type === "text" && el.text === "21")).toBe(
         true,
@@ -290,42 +608,55 @@ describe("selection-driven classroom controls", () => {
   });
 
   it("recognizes only the selected handwriting and discards a stale AI response", async () => {
-    const ink = API.createElement({ type: "freedraw", x: 100, y: 100 });
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(40, 30)],
+    });
     scene = [ink];
     selected = { [ink.id]: true };
+    saveSettings({ ...currentSettings(), answerStyle: "handwritten" }, false);
     const capture = vi.spyOn(ai, "boardContext").mockResolvedValue({
       elements: [ink],
       text: "",
       image: "data:image/png;base64,selected" as DataURL,
     });
     let finish!: (value: string) => void;
-    const chat = vi.spyOn(ai, "chat").mockImplementation(
+    const chat = vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
       () =>
         new Promise((resolve) => {
           finish = resolve;
         }),
     );
     render(<Classroom api={api} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
-    expect(capture).toHaveBeenCalledWith(api, false, [ink]);
+    expect(capture).toHaveBeenCalledWith(api, false, [ink], undefined);
     const signal = chat.mock.calls[0][1]!;
     await act(async () => {
       selected = {};
       change.forEach((listener) => listener());
-      finish('{"action":"calculate","expression":"8*8"}');
+      finish("8*8");
     });
     expect(signal.aborted).toBe(true);
     expect(scene).toHaveLength(1);
-    chat.mockResolvedValue('{"action":"calculate","expression":"8*8"}');
+    chat.mockResolvedValue("8*8");
     await act(async () => {
       selected = { [ink.id]: true };
       change.forEach((listener) => listener());
     });
-    await waitFor(() =>
-      expect(scene.some((el) => el.type === "text" && el.text === "64")).toBe(
-        true,
-      ),
-    );
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.计算") }));
+    await waitFor(() => expect(handwritingText(scene)).toContain("64"));
+    expect(
+      scene
+        .filter(
+          (element) =>
+            element.customData?.fcSelectionSource ===
+            `${ink.id}:${ink.version}`,
+        )
+        .every((element) => element.type === "freedraw"),
+    ).toBe(true);
   });
 
   it("plots the selection and reopens the same graph's parameter controls", async () => {
@@ -333,6 +664,7 @@ describe("selection-driven classroom controls", () => {
     await act(async () => {
       render(<Classroom api={api} />);
     });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.图像") }));
     await waitFor(() => expect(scene.length).toBeGreaterThan(5));
     const original = scene.filter((el) => el.customData?.fcPlot);
     const axes = original.filter((el) => el.type === "arrow");
@@ -344,23 +676,34 @@ describe("selection-driven classroom controls", () => {
       axes[1].type === "arrow" &&
         axes[1].points.every((point) => point[0] === 0),
     ).toBe(true);
-    fireEvent.change(screen.getByRole("slider", { name: "调节 a" }), {
-      target: { value: "2" },
-    });
+    fireEvent.change(
+      screen.getByRole("slider", {
+        name: t("fcboard.调节 {{key}}", { key: "a" }),
+      }),
+      {
+        target: { value: "2" },
+      },
+    );
     expect(scene.filter((el) => el.customData?.fcPlot)).toHaveLength(
       original.length,
     );
     expect(scene.some((el) => original.some((old) => old.id === el.id))).toBe(
       false,
     );
-    fireEvent.click(screen.getByRole("button", { name: "关闭工具浮层" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.关闭工具浮层") }),
+    );
     await act(async () => {
       selected = {};
       change.forEach((listener) => listener());
       selected = { [scene.find((el) => el.customData?.fcPlot)!.id]: true };
       change.forEach((listener) => listener());
     });
-    expect(screen.getByRole("slider", { name: "调节 a" })).toHaveValue("2");
+    expect(
+      screen.getByRole("slider", {
+        name: t("fcboard.调节 {{key}}", { key: "a" }),
+      }),
+    ).toHaveValue("2");
   });
 
   it("uses the same projection for the 3D surface and its x/y/z axes", async () => {
@@ -368,6 +711,7 @@ describe("selection-driven classroom controls", () => {
     await act(async () => {
       render(<Classroom api={api} />);
     });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.图像") }));
     await waitFor(() =>
       expect(scene.filter((el) => el.type === "arrow")).toHaveLength(3),
     );

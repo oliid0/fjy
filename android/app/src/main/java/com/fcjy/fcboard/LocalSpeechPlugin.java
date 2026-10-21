@@ -27,6 +27,7 @@ import java.util.concurrent.Executors;
 public class LocalSpeechPlugin extends Plugin {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private Transcriber transcriber;
+    private int stream = -1;
     private String session;
     private JSArray completed = new JSArray();
     private static final String[] FILES = {
@@ -63,9 +64,9 @@ public class LocalSpeechPlugin extends Plugin {
     public void prepare(PluginCall call) {
         worker.execute(() -> {
             try {
-                modelDirectory(getContext());
+                prepareModel();
                 call.resolve();
-            } catch (Exception error) { call.reject("离线中文语音模型不可用：" + error.getMessage()); }
+            } catch (Exception | LinkageError error) { release(); call.reject("离线中文语音模型不可用：" + error.getMessage()); }
         });
     }
 
@@ -74,22 +75,10 @@ public class LocalSpeechPlugin extends Plugin {
         worker.execute(() -> {
             if (session != null) { call.reject("已有语音任务正在运行"); return; }
             try {
-                transcriber = new Transcriber(Collections.singletonList(
-                    new TranscriberOption("max_tokens_per_second", "13.0")));
-                transcriber.loadFromFiles(modelDirectory(getContext()).getAbsolutePath(), JNI.MOONSHINE_MODEL_ARCH_TINY_STREAMING);
+                prepareModel();
                 completed = new JSArray();
-                transcriber.addListener(event -> {
-                    if (event instanceof TranscriptEvent.LineCompleted) {
-                        TranscriptLine line = ((TranscriptEvent.LineCompleted) event).line;
-                        if (line.text != null && !line.text.trim().isEmpty()) {
-                            JSObject value = new JSObject();
-                            value.put("time", Math.max(0, line.startTime));
-                            value.put("text", line.text.trim());
-                            completed.put(value);
-                        }
-                    }
-                });
-                transcriber.start();
+                stream = transcriber.createStream();
+                transcriber.startStream(stream);
                 session = UUID.randomUUID().toString();
                 JSObject result = new JSObject(); result.put("session", session); call.resolve(result);
             } catch (Exception | LinkageError error) {
@@ -115,7 +104,7 @@ public class LocalSpeechPlugin extends Plugin {
                 ByteBuffer input = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
                 float[] samples = new float[data.length / 2];
                 for (int i = 0; i < samples.length; i++) { samples[i] = input.getShort() / 32768f; }
-                transcriber.addAudio(samples, rate);
+                transcriber.addAudioToStream(stream, samples, rate);
                 call.resolve(drain());
             } catch (Exception | LinkageError error) {
                 call.reject("离线识别失败：" + error.getMessage());
@@ -130,10 +119,10 @@ public class LocalSpeechPlugin extends Plugin {
                 call.reject("语音任务已结束"); return;
             }
             try {
-                transcriber.stop();
+                transcriber.stopStream(stream);
                 call.resolve(drain());
             } catch (Exception | LinkageError error) { call.reject("无法结束离线识别：" + error.getMessage()); }
-            finally { release(); }
+            finally { releaseSession(); }
         });
     }
 
@@ -145,7 +134,35 @@ public class LocalSpeechPlugin extends Plugin {
     private JSObject drain() {
         JSObject result = new JSObject(); result.put("lines", completed); completed = new JSArray(); return result;
     }
+    private void prepareModel() throws Exception {
+        if (transcriber != null && transcriber.isLoaded()) { return; }
+        Transcriber model = new Transcriber(Collections.singletonList(
+            new TranscriberOption("max_tokens_per_second", "13.0")));
+        try {
+            model.loadFromFiles(modelDirectory(getContext()).getAbsolutePath(), JNI.MOONSHINE_MODEL_ARCH_TINY_STREAMING);
+            model.setUpdateInterval(0.5);
+            model.addListener(event -> {
+                if (event instanceof TranscriptEvent.LineCompleted) {
+                    TranscriptLine line = ((TranscriptEvent.LineCompleted) event).line;
+                    if (line.text != null && !line.text.trim().isEmpty()) {
+                        JSObject value = new JSObject();
+                        value.put("time", Math.max(0, line.startTime));
+                        value.put("text", line.text.trim());
+                        completed.put(value);
+                    }
+                }
+            });
+            transcriber = model;
+        } catch (Exception | LinkageError error) { model.close(); throw error; }
+    }
+    private void releaseSession() {
+        if (transcriber != null && stream >= 0) { transcriber.freeStream(stream); }
+        stream = -1;
+        session = null;
+        completed = new JSArray();
+    }
     private void release() {
+        releaseSession();
         if (transcriber != null) { transcriber.close(); transcriber = null; }
         session = null; completed = new JSArray();
     }

@@ -73,7 +73,7 @@
     "test:all": "pnpm check && pnpm lint && pnpm test:other && pnpm test",
     "test:app": "vitest",
     "test:code": "eslint --max-warnings=0 --ext .js,.ts,.tsx .",
-    "test:other": "prettier \"**/*.{css,scss,json,md,html,yml,yaml}\" --ignore-path=.eslintignore --check",
+    "test:other": "prettier \"**/*.{css,scss,json,md,html,yml,yaml}\" --ignore-path=.prettierignore --check",
     "test:typecheck": "tsc",
     "test:update": "npm run test:app -- --update --watch=false",
     "test": "vitest run",
@@ -86,7 +86,7 @@
     "locales-coverage": "node scripts/build-locales-coverage.js",
     "locales-coverage:description": "node scripts/locales-coverage-description.js",
     "prepare": "husky install",
-    "prettier": "prettier \"**/*.{css,scss,json,md,html,yml}\" --ignore-path=.eslintignore",
+    "prettier": "prettier \"**/*.{css,scss,json,md,html,yml}\" --ignore-path=.prettierignore",
     "release": "node scripts/release.js",
     "release:test": "node scripts/release.js --tag=test",
     "release:next": "node scripts/release.js --tag=next",
@@ -112,5 +112,116 @@
       "@types/react": "19.0.10",
       "@types/react-dom": "19.0.4"
     }
-  }
+  },
+  "eslintConfig": {
+    "extends": [
+      "@excalidraw/eslint-config",
+      "react-app"
+    ],
+    "rules": {
+      "import/order": [
+        "warn",
+        {
+          "groups": [
+            "builtin",
+            "external",
+            "internal",
+            "parent",
+            "sibling",
+            "index",
+            "object",
+            "type"
+          ],
+          "pathGroups": [
+            {
+              "pattern": "@excalidraw/**",
+              "group": "external",
+              "position": "after"
+            }
+          ],
+          "newlines-between": "always-and-inside-groups",
+          "warnOnUnassignedImports": true
+        }
+      ],
+      "import/no-anonymous-default-export": "off",
+      "no-restricted-globals": "off",
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          "prefer": "type-imports",
+          "disallowTypeAnnotations": false,
+          "fixStyle": "separate-type-imports"
+        }
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          "name": "jotai",
+          "message": "Do not import from \"jotai\" directly. Use our app-specific modules (\"editor-jotai\" or \"app-jotai\")."
+        }
+      ],
+      "react/jsx-no-target-blank": [
+        "error",
+        {
+          "allowReferrer": true
+        }
+      ]
+    },
+    "overrides": [
+      {
+        "files": [
+          "packages/excalidraw/**/*.{ts,tsx}"
+        ],
+        "excludedFiles": [
+          "packages/excalidraw/**/*.test.{ts,tsx}",
+          "packages/excalidraw/**/*.test.*.{ts,tsx}"
+        ],
+        "rules": {
+          "@typescript-eslint/no-restricted-imports": [
+            "error",
+            {
+              "patterns": [
+                {
+                  "group": [
+                    "@excalidraw/excalidraw"
+                  ],
+                  "message": "Do not import from the barrel 'index.tsx' files. Use direct relative imports to the specific module instead.",
+                  "allowTypeImports": true
+                }
+              ],
+              "paths": [
+                ".",
+                "..",
+                "../..",
+                "../../..",
+                "../../../..",
+                "../../../../..",
+                "../index",
+                "../../index",
+                "../../../index",
+                "../../../../index"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "eslintIgnore": [
+    "node_modules/",
+    "build/",
+    "package-lock.json",
+    ".vscode/",
+    "firebase/",
+    "dist/",
+    "public/workbox",
+    "packages/excalidraw/types",
+    "examples/**/public",
+    "dev-dist",
+    "coverage",
+    "pnpm-lock.yaml",
+    "ss/",
+    "android/vendor/libadb/src/",
+    "public/ocr/"
+  ]
 }

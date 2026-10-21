@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { CaptureUpdateAction, restoreElements } from "@excalidraw/excalidraw";
 import { canvasStrokeColor } from "@excalidraw/common";
 import { flushSync } from "react-dom";
@@ -140,7 +141,7 @@ export class SceneSync {
       !packet.files ||
       typeof packet.files !== "object"
     ) {
-      throw new Error("同步数据无效");
+      throw new Error(t("fcboard.同步数据无效"));
     }
     if (!replace) {
       this.flush();

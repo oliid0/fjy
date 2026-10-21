@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { createStore, get, set } from "idb-keyval";
 import { blobToArrayBuffer } from "@excalidraw/excalidraw/data/blob";
 import { Capacitor } from "@capacitor/core";
@@ -77,7 +78,9 @@ export class BoardRecorder {
       typeof MediaRecorder === "undefined"
     ) {
       throw new Error(
-        "当前设备不支持录制，请升级系统 WebView 并允许麦克风/摄像头权限",
+        t(
+          "fcboard.当前设备不支持录制，请升级系统 WebView 并允许麦克风/摄像头权限",
+        ),
       );
     }
     try {
@@ -100,7 +103,7 @@ export class BoardRecorder {
         canvas.height = 1080;
         const context = canvas.getContext("2d");
         if (!context || !canvas.captureStream) {
-          throw new Error("当前设备不支持白板画面录制");
+          throw new Error(t("fcboard.当前设备不支持白板画面录制"));
         }
         let camera: HTMLVideoElement | undefined;
         let screen: HTMLVideoElement | undefined;
@@ -234,12 +237,14 @@ export class BoardRecorder {
           const blob = new Blob(this.chunks, { type: this.recorder!.mimeType });
           this.release();
           onStopped();
-          blob.size ? resolve(blob) : reject(new Error("录制内容为空，请重试"));
+          blob.size
+            ? resolve(blob)
+            : reject(new Error(t("fcboard.录制内容为空，请重试")));
         };
         this.recorder!.onerror = () => {
           this.release();
           onStopped();
-          reject(new Error("设备录制失败，请检查存储与权限"));
+          reject(new Error(t("fcboard.设备录制失败，请检查存储与权限")));
         };
       });
       // Keep a handler attached while the user is still recording.
@@ -254,7 +259,7 @@ export class BoardRecorder {
 
   async stop() {
     if (!this.recorder || !this.stopPromise) {
-      throw new Error("没有正在进行的录制");
+      throw new Error(t("fcboard.没有正在进行的录制"));
     }
     const duration = (Date.now() - this.started) / 1000;
     if (this.recorder.state !== "inactive") {

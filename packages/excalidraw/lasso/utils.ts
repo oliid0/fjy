@@ -19,6 +19,24 @@ import {
 import type { ElementsSegmentsMap, GlobalPoint } from "@excalidraw/math/types";
 import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
 
+export const getLassoBounds = (path: GlobalPoint[], padding = 0): Bounds => {
+  const bounds = path.reduce<Bounds>(
+    (value, point) => [
+      Math.min(value[0], point[0]),
+      Math.min(value[1], point[1]),
+      Math.max(value[2], point[0]),
+      Math.max(value[3], point[1]),
+    ],
+    [Infinity, Infinity, -Infinity, -Infinity],
+  );
+  return [
+    bounds[0] - padding,
+    bounds[1] - padding,
+    bounds[2] + padding,
+    bounds[3] + padding,
+  ];
+};
+
 export const getLassoSelectedElementIds = (input: {
   lassoPath: GlobalPoint[];
   elements: readonly ExcalidrawElement[];
@@ -27,6 +45,7 @@ export const getLassoSelectedElementIds = (input: {
   intersectedElements: Set<ExcalidrawElement["id"]>;
   enclosedElements: Set<ExcalidrawElement["id"]>;
   simplifyDistance?: number;
+  looseBounds?: number;
 }): {
   selectedElementIds: string[];
 } => {
@@ -48,22 +67,29 @@ export const getLassoSelectedElementIds = (input: {
   // as the path might not enclose a shape anymore, clear before checking
   enclosedElements.clear();
   intersectedElements.clear();
-  const lassoBounds = lassoPath.reduce(
-    (acc, item) => {
-      return [
-        Math.min(acc[0], item[0]),
-        Math.min(acc[1], item[1]),
-        Math.max(acc[2], item[0]),
-        Math.max(acc[3], item[1]),
-      ];
-    },
-    [Infinity, Infinity, -Infinity, -Infinity],
-  ) as Bounds;
+  const lassoBounds = getLassoBounds(lassoPath);
   for (const element of unlockedElements) {
     // First check if the lasso segment intersects the element's axis-aligned
     // bounding box as it is much faster than checking intersection against
     // the element's shape
     const elementBounds = getElementBounds(element, elementsMap);
+    if (input.looseBounds !== undefined && lassoPath.length > 1) {
+      const padding = input.looseBounds;
+      if (
+        doBoundsIntersect(
+          [
+            lassoBounds[0] - padding,
+            lassoBounds[1] - padding,
+            lassoBounds[2] + padding,
+            lassoBounds[3] + padding,
+          ],
+          elementBounds,
+        )
+      ) {
+        intersectedElements.add(element.id);
+      }
+      continue;
+    }
 
     if (
       doBoundsIntersect(lassoBounds, elementBounds) &&

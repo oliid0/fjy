@@ -101,6 +101,7 @@ test("selecting a formula draws an editable graph and changing its parameter upd
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "y=a*x+1");
+  await page.getByRole("button", { name: "图像", exact: true }).click();
   const slider = page.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
   await slider.focus();
@@ -116,12 +117,20 @@ test("selecting a formula draws an editable graph and changing its parameter upd
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });
 });
 
-test("typed equations complete directly on the board without opening an AI panel", async ({
+test("typed equations calculate only after tapping the selection action", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
-  await enterText(page, "1+1=", false);
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "fcboard-settings",
+      JSON.stringify({ answerStyle: "text" }),
+    ),
+  );
+  await page.reload();
+  await enterText(page, "1+1=");
+  await page.getByRole("button", { name: "计算", exact: true }).click();
   await expect
     .poll(
       () =>
@@ -141,7 +150,7 @@ test("typed equations complete directly on the board without opening an AI panel
   await page.screenshot({ path: testInfo.outputPath("automatic-answer.png") });
 });
 
-test("selecting handwriting automatically recognizes its PNG and writes the result once", async ({
+test("selected handwriting sends its PNG only after tapping calculate", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -151,6 +160,8 @@ test("selecting handwriting automatically recognizes its PNG and writes the resu
         model: "visual-test",
         apiKey: "test-only",
         autoMath: false,
+        ocr: "cloud",
+        answerStyle: "text",
       }),
     );
   });
@@ -171,7 +182,7 @@ test("selecting handwriting automatically recognizes its PNG and writes the resu
         json: {
           choices: [
             {
-              message: { content: '{"action":"calculate","expression":"8*8"}' },
+              message: { content: "8*8" },
             },
           ],
         },
@@ -187,6 +198,9 @@ test("selecting handwriting automatically recognizes its PNG and writes the resu
   await page.mouse.up();
   await page.keyboard.press("v");
   await page.keyboard.press("Control+a");
+  await expect(page.getByRole("toolbar", { name: "选区操作" })).toBeVisible();
+  expect(requests).toBe(0);
+  await page.getByRole("button", { name: "计算", exact: true }).click();
   await expect
     .poll(
       () =>

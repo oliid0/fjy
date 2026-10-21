@@ -1,3 +1,4 @@
+import { t, setLanguage, languages } from "@excalidraw/excalidraw/i18n";
 import { TinyH264Decoder } from "@yume-chan/scrcpy-decoder-tinyh264";
 import {
   ScrcpyOptions3_3_1,
@@ -9,8 +10,38 @@ import {
 } from "@yume-chan/scrcpy";
 import { Consumable, ReadableStream } from "@yume-chan/stream-extra";
 
+import type { TranslationKeys } from "@excalidraw/excalidraw/i18n";
+
+import { getPreferredLanguage } from "../app-language/language-detector";
+
 import { screenPoint } from "./remoteControl";
 import "./remote.scss";
+
+const applyLanguage = async () => {
+  const language = languages.find(
+    (item) => item.code === getPreferredLanguage(true),
+  );
+  if (language) {
+    await setLanguage(language);
+  }
+  for (const node of document.querySelectorAll<HTMLElement>("[data-i18n]")) {
+    node.textContent = t(node.dataset.i18n as TranslationKeys);
+  }
+  for (const attribute of ["aria-label", "placeholder"]) {
+    for (const node of document.querySelectorAll<HTMLElement>(
+      `[data-i18n-${attribute}]`,
+    )) {
+      node.setAttribute(
+        attribute,
+        t(node.getAttribute(`data-i18n-${attribute}`) as TranslationKeys),
+      );
+    }
+  }
+};
+void applyLanguage();
+window.addEventListener("languagechange", () => {
+  void applyLanguage();
+});
 
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -46,7 +77,7 @@ const api = async (path: string, body = {}) => {
     authorized();
   }
   if (!response.ok || result.error) {
-    throw new Error(result.error || "连接失败");
+    throw new Error(result.error || t("fcboard.连接失败"));
   }
   return result;
 };
@@ -77,7 +108,7 @@ authorize.onsubmit = (event) => {
     sessionStorage.setItem("fcboard-device-session", token);
     authorize.reset();
     authorized();
-    status.textContent = "已配对，请连接大屏无线调试";
+    status.textContent = t("fcboard.已配对，请连接大屏无线调试");
   });
 };
 const connectVideo = () => {
@@ -106,7 +137,7 @@ const connectVideo = () => {
   const writer = new Consumable.WritableStream<Uint8Array>({
     write(bytes) {
       if (transport.readyState !== WebSocket.OPEN) {
-        throw new Error("设备已断开");
+        throw new Error(t("fcboard.设备已断开"));
       }
       transport.send(new Uint8Array(bytes));
     },
@@ -119,7 +150,9 @@ const connectVideo = () => {
   }, 10000);
   const waiting = setTimeout(() => {
     if (!ready && !disposed) {
-      report("没有收到可解码画面，请检查无线调试连接与大屏的屏幕捕获支持");
+      report(
+        t("fcboard.没有收到可解码画面，请检查无线调试连接与大屏的屏幕捕获支持"),
+      );
       cleanup?.();
     }
   }, 20000);
@@ -134,7 +167,7 @@ const connectVideo = () => {
           report(value.error);
         }
       } catch {
-        report("设备消息无效");
+        report(t("fcboard.设备消息无效"));
       }
       return;
     }
@@ -146,20 +179,21 @@ const connectVideo = () => {
   transport.onclose = (event) => {
     if (!disposed) {
       cleanup?.();
-      status.textContent = "连接已断开，可重新连接";
+      status.textContent = t("fcboard.连接已断开，可重新连接");
       if (event.reason === "设备控制已结束") {
         token = "";
         sessionStorage.removeItem("fcboard-device-session");
         authorized();
-        status.textContent = "大屏已结束会话，请重新配对";
+        status.textContent = t("fcboard.大屏已结束会话，请重新配对");
       }
     }
   };
-  transport.onerror = () => report("无法连接设备，请检查局域网与大屏会话");
+  transport.onerror = () =>
+    report(t("fcboard.无法连接设备，请检查局域网与大屏会话"));
   setup.hidden = true;
   screen.hidden = false;
   controls.hidden = false;
-  status.textContent = "正在接收画面…";
+  status.textContent = t("fcboard.正在接收画面…");
   let frame = 0;
   const observeFrame = () => {
     if (disposed) {
@@ -168,7 +202,7 @@ const connectVideo = () => {
     if (currentDecoder.framesRendered > 0) {
       ready = true;
       clearTimeout(waiting);
-      status.textContent = "已连接";
+      status.textContent = t("fcboard.已连接");
       canvas.focus();
     } else {
       frame = requestAnimationFrame(observeFrame);
@@ -213,7 +247,7 @@ const connectVideo = () => {
 adb.onsubmit = (event) => {
   event.preventDefault();
   void run(adb, async () => {
-    status.textContent = "正在连接无线调试…";
+    status.textContent = t("fcboard.正在连接无线调试…");
     const data = new FormData(adb);
     await api("connect", {
       port: Number(data.get("port")),
@@ -394,14 +428,14 @@ element("fullscreen").onclick = () => {
   } else if (document.documentElement.requestFullscreen) {
     void document.documentElement.requestFullscreen().catch(report);
   } else {
-    report("此浏览器不支持全屏，可横屏使用");
+    report(t("fcboard.此浏览器不支持全屏，可横屏使用"));
   }
 };
 element("disconnect").onclick = () => {
   cleanup?.();
   void api("disconnect")
     .then(() => {
-      status.textContent = "已断开";
+      status.textContent = t("fcboard.已断开");
     })
     .catch(report);
 };

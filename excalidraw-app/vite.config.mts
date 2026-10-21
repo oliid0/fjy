@@ -102,6 +102,14 @@ export default defineConfig(({ mode }) => {
           // or fallback hence not clubbing with locales so first load followed by offline mode works fine. This is how CRA used to work too.
           manualChunks(id) {
             if (
+              id.includes("@paddleocr/paddleocr-js") ||
+              id.includes("@techstark/opencv-js") ||
+              id.includes("onnxruntime-web") ||
+              id.includes("clipper-lib")
+            ) {
+              return "fcboard-ocr.chunk";
+            }
+            if (
               id.includes("/node_modules/mathjs/") ||
               id.includes("/node_modules/nerdamer/")
             ) {
@@ -163,6 +171,7 @@ export default defineConfig(({ mode }) => {
         workbox: {
           // don't precache fonts, locales and separate chunks
           globIgnores: [
+            "**/ocr/**",
             "fonts.css",
             "**/locales/**",
             "service-worker.js",
@@ -174,6 +183,19 @@ export default defineConfig(({ mode }) => {
             "**/CodeMirrorEditor-*.js",
           ],
           runtimeCaching: [
+            {
+              urlPattern: ({ url }) =>
+                url.origin === self.location.origin &&
+                url.pathname.includes("/ocr/"),
+              handler: "CacheFirst",
+              options: {
+                cacheName: "fcboard-ocr-0.4.2",
+                expiration: {
+                  maxEntries: 12,
+                  maxAgeSeconds: 60 * 60 * 24 * 90,
+                },
+              },
+            },
             {
               urlPattern: new RegExp(".+.woff2"),
               handler: "CacheFirst",

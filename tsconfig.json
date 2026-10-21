@@ -19,6 +19,7 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
+      "@paddleocr/paddleocr-js": ["./node_modules/@paddleocr/paddleocr-js/dist/index.d.ts", "./excalidraw-app/node_modules/@paddleocr/paddleocr-js/dist/index.d.ts"],
       "@excalidraw/common": ["./packages/common/src/index.ts"],
       "@excalidraw/common/*": ["./packages/common/src/*"],
       "@excalidraw/excalidraw": ["./packages/excalidraw/index.tsx"],

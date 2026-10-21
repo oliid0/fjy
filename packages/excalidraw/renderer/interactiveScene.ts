@@ -1717,10 +1717,19 @@ const _renderInteractiveScene = ({
       editorInterface,
     );
 
+    const selection = appState.whiteboardSelection;
+    const region =
+      appState.activeTool.type === "lasso" &&
+      selection?.elementIds.length ===
+        Object.keys(appState.selectedElementIds).length &&
+      selection.elementIds.every((id) => appState.selectedElementIds[id])
+        ? selection.bounds
+        : undefined;
     const isSingleLinearElementSelected =
       selectedElements.length === 1 && isLinearElement(selectedElements[0]);
     // render selected linear element points
     if (
+      !region &&
       isSingleLinearElementSelected &&
       appState.selectedLinearElement?.elementId === selectedElements[0].id &&
       !selectedElements[0].locked
@@ -1758,7 +1767,8 @@ const _renderInteractiveScene = ({
           // local user
           if (
             locallySelectedIds.has(element.id) &&
-            !isSelectedViaGroup(appState, element)
+            !isSelectedViaGroup(appState, element) &&
+            !region
           ) {
             selectionColors.push(selectionColor);
           }
@@ -1825,10 +1835,12 @@ const _renderInteractiveScene = ({
 
       for (const groupId of getSelectedGroupIds(appState)) {
         // TODO: support multiplayer selected group IDs
-        addSelectionForGroupId(groupId);
+        if (!region) {
+          addSelectionForGroupId(groupId);
+        }
       }
 
-      if (appState.editingGroupId) {
+      if (!region && appState.editingGroupId) {
         addSelectionForGroupId(appState.editingGroupId);
       }
 
@@ -1836,11 +1848,26 @@ const _renderInteractiveScene = ({
         renderSelectionBorder(context, appState, selection),
       );
     }
+    if (region && selectedElements.length) {
+      renderSelectionBorder(context, appState, {
+        angle: 0 as Radians,
+        x1: region.left,
+        y1: region.top,
+        x2: region.right,
+        y2: region.bottom,
+        cx: (region.left + region.right) / 2,
+        cy: (region.top + region.bottom) / 2,
+        selectionColors: [selectionColor],
+        dashed: true,
+        activeEmbeddable: false,
+        padding: 0,
+      });
+    }
     // Paint resize transformHandles
     context.save();
     context.translate(appState.scrollX, appState.scrollY);
 
-    if (selectedElements.length === 1) {
+    if (!region && selectedElements.length === 1) {
       context.fillStyle = "#fff";
       const transformHandles = getTransformHandles(
         selectedElements[0],
@@ -1880,6 +1907,7 @@ const _renderInteractiveScene = ({
         }
       }
     } else if (
+      !region &&
       selectedElements.length > 1 &&
       !appState.isRotating &&
       !selectedElements.some((el) => el.locked)

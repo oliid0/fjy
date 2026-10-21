@@ -1,3 +1,5 @@
+import { t } from "@excalidraw/excalidraw/i18n";
+
 import { createNarrator } from "./narration";
 
 describe("one audible teacher", () => {
@@ -79,7 +81,9 @@ describe("one audible teacher", () => {
       blob: async () => new Blob(["html"], { type: "text/html" }),
     } as Response);
     const narrator = createNarrator();
-    await expect(narrator.speak("讲解")).rejects.toThrow("有效音频");
+    await expect(narrator.speak("讲解")).rejects.toThrow(
+      t("fcboard.播报接口未返回有效音频"),
+    );
     await narrator.finished;
     expect(players).toHaveLength(0);
     narrator.stop();

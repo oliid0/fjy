@@ -75,6 +75,7 @@ test("a small eraser cuts the displayed bend rather than the raw handwriting sam
   const eraser = page.getByRole("button", { name: "橡皮", exact: true });
   await eraser.click();
   await eraser.click();
+  await page.getByText("触控与橡皮设置", { exact: true }).click();
   const size = page.getByRole("slider", { name: /^橡皮大小/ });
   await size.press("Home");
   await expect(size).toHaveValue("12");
@@ -96,6 +97,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   await pen.click();
   await pen.click();
   await page.getByRole("button", { name: "彩虹笔", exact: true }).click();
+  await pen.click();
   const thickness = page.getByRole("slider", { name: "书写粗细", exact: true });
   await thickness.press("Home");
   for (let i = 0; i < 22; i++) {

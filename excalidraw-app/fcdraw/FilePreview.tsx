@@ -1,3 +1,4 @@
+import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CloseIcon,
@@ -14,8 +15,10 @@ import {
   gridIcon,
   DeviceDesktopIcon,
 } from "@excalidraw/excalidraw/components/icons";
-import { polygonIncludesPointNonZero } from "@excalidraw/math";
 import { Capacitor } from "@capacitor/core";
+import { FONT_FAMILY, getFontFamilyString } from "@excalidraw/common";
+import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { Fonts } from "@excalidraw/excalidraw/fonts";
 import {
   isPalmContact,
   pointerSamples,
@@ -40,6 +43,7 @@ import {
 } from "./documents";
 
 import { rememberPage } from "./materials";
+import { currentSettings } from "./settings";
 
 import type { Viewer } from "@web-ppt/viewer-core";
 import type { Presentation } from "@web-ppt/core";
@@ -63,6 +67,7 @@ export const FilePreview = ({
   onReady?: (error?: string) => void;
   onTools?: () => void;
 }) => {
+  useI18n();
   const inkProfile = useDeviceInkProfile();
   const host = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLElement>(null);
@@ -209,7 +214,7 @@ export const FilePreview = ({
               file.name,
               index,
               instance.text(index),
-            ).catch(() => setNotice("课件可播放，资料索引保存失败"));
+            ).catch(() => setNotice(t("fcboard.课件可播放，资料索引保存失败")));
           }
         } else if (!isImage) {
           const reader = new OfficeReader();
@@ -219,7 +224,7 @@ export const FilePreview = ({
             return;
           }
           if (!views.length) {
-            throw new Error("文件中没有可显示的页面");
+            throw new Error(t("fcboard.文件中没有可显示的页面"));
           }
           const firstHtml = await reader.render(views[0].index);
           if (!active) {
@@ -244,14 +249,16 @@ export const FilePreview = ({
               file.name,
               view.index,
               htmlText(rendered),
-            ).catch(() => setNotice("课件可预览，资料索引保存失败"));
+            ).catch(() => setNotice(t("fcboard.课件可预览，资料索引保存失败")));
           }
         } else {
           setPages([{ index: 0, name: "1" }]);
         }
       } catch (failure) {
         if (active) {
-          setError(`课件打开失败：${String(failure)}`);
+          setError(
+            t("fcboard.课件打开失败：{{error}}", { error: String(failure) }),
+          );
         }
       } finally {
         if (active) {
@@ -284,7 +291,11 @@ export const FilePreview = ({
         .catch(() => {})
         .then(() => saveInk(key, inkRef.current))
         .catch((failure) => {
-          setNotice(`板书保存失败，请保持课件打开后重试：${String(failure)}`);
+          setNotice(
+            t("fcboard.板书保存失败，请保持课件打开后重试：{{error}}", {
+              error: String(failure),
+            }),
+          );
           throw failure;
         });
       void saveQueue.current.catch(() => {});
@@ -310,7 +321,7 @@ export const FilePreview = ({
     (index: number) => {
       const task = (async () => {
         if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
-          throw new Error("页码超出范围");
+          throw new Error(t("fcboard.页码超出范围"));
         }
         if (classroomCommands.has("lesson.pause")) {
           await classroomCommands.execute({ name: "lesson.pause" });
@@ -406,8 +417,8 @@ export const FilePreview = ({
         }
         onClose(advance);
       } catch {
-        setNotice("板书尚未保存，请稍后重试");
-        throw new Error("板书尚未保存，课件保持打开");
+        setNotice(t("fcboard.板书尚未保存，请稍后重试"));
+        throw new Error(t("fcboard.板书尚未保存，课件保持打开"));
       }
     },
     [onClose, key, ready],
@@ -440,7 +451,7 @@ export const FilePreview = ({
         (args) => {
           const index = Number(args.page) - 1;
           if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
-            throw new Error("页码超出范围");
+            throw new Error(t("fcboard.页码超出范围"));
           }
           return navigate(index);
         },
@@ -458,7 +469,7 @@ export const FilePreview = ({
               ? zoomRef.current - 0.25
               : 1;
           if (!Number.isFinite(value) || value < 0.5 || value > 3) {
-            throw new Error("课件缩放范围为50%到300%");
+            throw new Error(t("fcboard.课件缩放范围为50%到300%"));
           }
           zoomRef.current = value;
           setZoom(value);
@@ -491,7 +502,9 @@ export const FilePreview = ({
             !ids.length ||
             !ids.every((id) => typeof id === "string")
           ) {
-            throw new Error("请先圈选要擦除的板书；原课件内容不会被擦除");
+            throw new Error(
+              t("fcboard.请先圈选要擦除的板书；原课件内容不会被擦除"),
+            );
           }
           const chosen = new Set(ids);
           commitInk({
@@ -512,7 +525,7 @@ export const FilePreview = ({
             !Array.isArray(args.ids) ||
             !args.ids.every((id) => typeof id === "string")
           ) {
-            throw new Error("板书选区无效");
+            throw new Error(t("fcboard.板书选区无效"));
           }
           const ids = new Set(args.ids);
           selectedInkRef.current = (inkRef.current[pageRef.current] || [])
@@ -529,7 +542,9 @@ export const FilePreview = ({
             !["freedraw", "eraser", "selection"].includes(String(args.tool))
           ) {
             throw new Error(
-              "课件上可使用笔、橡皮或圈选；也可直接说要插入的文字或图形",
+              t(
+                "fcboard.课件上可使用笔、橡皮或圈选；也可直接说要插入的文字或图形",
+              ),
             );
           }
           setInkOn(true);
@@ -547,7 +562,9 @@ export const FilePreview = ({
               (key) => !["color", "width", "fontSize", "opacity"].includes(key),
             )
           ) {
-            throw new Error("课件板书可调整颜色、笔宽、字号与透明度");
+            throw new Error(
+              t("fcboard.课件板书可调整颜色、笔宽、字号与透明度"),
+            );
           }
           for (const [key, min, max] of [
             ["fontSize", 8, 200],
@@ -560,7 +577,7 @@ export const FilePreview = ({
                 (args[key] as number) < min ||
                 (args[key] as number) > max)
             ) {
-              throw new Error("板书样式超出范围");
+              throw new Error(t("fcboard.板书样式超出范围"));
             }
           }
           if (
@@ -570,14 +587,14 @@ export const FilePreview = ({
               args.width < 1 ||
               args.width > 30)
           ) {
-            throw new Error("笔画宽度必须在1到30之间");
+            throw new Error(t("fcboard.笔画宽度必须在1到30之间"));
           }
           if (
             args.color !== undefined &&
             (typeof args.color !== "string" ||
               !/^#[a-f0-9]{3}(?:[a-f0-9]{3})?$/i.test(args.color))
           ) {
-            throw new Error("板书颜色无效");
+            throw new Error(t("fcboard.板书颜色无效"));
           }
           if (typeof args.color === "string") {
             setColor(args.color);
@@ -639,20 +656,37 @@ export const FilePreview = ({
           }
         },
       ),
-      classroomCommands.register("document.text", "@internal", (args) => {
+      classroomCommands.register("document.text", "@internal", async (args) => {
         if (
           typeof args.text !== "string" ||
           !args.text.trim() ||
           args.text.length > 10000
         ) {
-          throw new Error("板书文本为空或过长");
+          throw new Error(t("fcboard.板书文本为空或过长"));
         }
         const strokes = inkRef.current[pageRef.current] || [];
+        const selected = strokes.filter((stroke) =>
+          selectedInkRef.current.includes(stroke.id),
+        );
+        const source = selected.find((stroke) => stroke.text) || selected[0];
+        const presentation = args.presentation ?? currentSettings().answerStyle;
+        if (!["match", "handwritten", "text"].includes(String(presentation))) {
+          throw new Error(t("fcboard.回答样式不存在"));
+        }
+        const fontFamily =
+          presentation === "handwritten"
+            ? FONT_FAMILY.Excalifont
+            : presentation === "text"
+            ? FONT_FAMILY.Helvetica
+            : source?.fontFamily ||
+              (source && !source.text
+                ? FONT_FAMILY.Excalifont
+                : FONT_FAMILY.Helvetica);
         const existing = args.id
           ? strokes.find((stroke) => stroke.id === args.id && stroke.text)
           : undefined;
         if (args.id && !existing) {
-          throw new Error("找不到这段课件板书");
+          throw new Error(t("fcboard.找不到这段课件板书"));
         }
         const points = strokes
           .filter((stroke) => selectedInkRef.current.includes(stroke.id))
@@ -669,20 +703,43 @@ export const FilePreview = ({
               ),
             );
         const next: InkStroke = existing
-          ? { ...existing, text: args.text }
+          ? {
+              ...existing,
+              text: args.text,
+              ...(args.presentation !== undefined ? { fontFamily } : {}),
+            }
           : {
               id: crypto.randomUUID(),
               text: args.text,
               points: [[x, y]],
-              color: pen.current.color,
+              color: source?.color || pen.current.color,
               width: pen.current.penWidth,
-              fontSize: pen.current.fontSize,
-              opacity: pen.current.opacity,
+              fontSize: source?.fontSize || pen.current.fontSize,
+              fontFamily,
+              opacity: source?.opacity ?? pen.current.opacity,
             };
+        const targetPage = pageRef.current;
+        await Fonts.loadElementsFonts(
+          convertToExcalidrawElements([
+            {
+              type: "text",
+              x: 0,
+              y: 0,
+              text: args.text,
+              fontFamily: next.fontFamily,
+              fontSize: next.fontSize,
+            },
+          ]),
+        );
+        if (args.signal instanceof AbortSignal && args.signal.aborted) {
+          return;
+        }
         commitInk({
           ...inkRef.current,
-          [pageRef.current]: [
-            ...strokes.filter((stroke) => stroke.id !== next.id),
+          [targetPage]: [
+            ...(inkRef.current[targetPage] || []).filter(
+              (stroke) => stroke.id !== next.id,
+            ),
             next,
           ],
         });
@@ -696,13 +753,13 @@ export const FilePreview = ({
           Math.abs(args.dx) > 10000 ||
           Math.abs(args.dy) > 10000
         ) {
-          throw new Error("移动距离无效");
+          throw new Error(t("fcboard.移动距离无效"));
         }
         const ids = new Set(
           Array.isArray(args.ids) ? args.ids : selectedInkRef.current,
         );
         if (!ids.size) {
-          throw new Error("请先圈选板书");
+          throw new Error(t("fcboard.请先圈选板书"));
         }
         commitInk({
           ...inkRef.current,
@@ -744,6 +801,13 @@ export const FilePreview = ({
         ink: inkRef.current[pageRef.current] || [],
         selection: selectedInkRef.current,
         region: lasso,
+        viewport: {
+          left: stage.current?.getBoundingClientRect().left || 0,
+          top: stage.current?.getBoundingClientRect().top || 0,
+          width: size.width * zoomRef.current,
+          height: size.height * zoomRef.current,
+          scroll,
+        },
       })),
       classroomCommands.register("document.snapshot", "@internal", async () => {
         await navigation.current;
@@ -850,10 +914,29 @@ export const FilePreview = ({
           false,
         );
       }),
+      classroomCommands.register("document.insertion", "@internal", (args) => {
+        if (typeof args.id !== "string" || !Array.isArray(args.shapes)) {
+          throw new Error(t("fcboard.插入对象数据无效"));
+        }
+        const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
+          (shape) => shapeInk(shape, "insertion"),
+        );
+        commitInk({
+          ...inkRef.current,
+          [page]: [
+            ...(inkRef.current[page] || []).filter(
+              (stroke) => stroke.insertion?.id !== args.id,
+            ),
+            ...strokes,
+          ],
+        });
+        selectedInkRef.current = strokes.map((stroke) => stroke.id);
+        classroomCommands.changed("document");
+      }),
       classroomCommands.register("document.widget", "@internal", (args) => {
         const widget = args.widget as { id: string };
         if (!widget?.id || !Array.isArray(args.shapes)) {
-          throw new Error("教学工具数据无效");
+          throw new Error(t("fcboard.教学工具数据无效"));
         }
         const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
           (shape) => shapeInk(shape, "widget"),
@@ -967,7 +1050,7 @@ export const FilePreview = ({
       className="fc-preview fc-presentation"
       role="dialog"
       aria-modal="false"
-      aria-label={`预览 ${file.name}`}
+      aria-label={t("fcboard.预览 {{name}}", { name: file.name })}
       onKeyDown={(event) => {
         event.stopPropagation();
         if ((event.target as HTMLElement).closest("input,select,textarea")) {
@@ -1031,7 +1114,7 @@ export const FilePreview = ({
           </div>
           <svg
             className="fc-document-ink"
-            aria-label="课件透明板书"
+            aria-label={t("fcboard.课件透明板书")}
             data-ink-enabled={inkOn}
             style={{
               pointerEvents: inkOn && !loading && !error ? "auto" : "none",
@@ -1112,13 +1195,19 @@ export const FilePreview = ({
               }
               if (draftRef.current && selecting) {
                 const polygon = draftRef.current.points;
+                const left = Math.min(...polygon.map((p) => p[0])) - 12 / zoom;
+                const top = Math.min(...polygon.map((p) => p[1])) - 12 / zoom;
+                const right = Math.max(...polygon.map((p) => p[0])) + 12 / zoom;
+                const bottom =
+                  Math.max(...polygon.map((p) => p[1])) + 12 / zoom;
                 const ids = (inkRef.current[page] || [])
                   .filter((stroke) =>
                     polygon.length < 3
                       ? hitStroke(stroke, polygon[0])
-                      : stroke.points.filter((point) =>
-                          polygonIncludesPointNonZero(point, polygon),
-                        ).length >= Math.max(1, stroke.points.length * 0.8),
+                      : stroke.points.some(
+                          ([x, y]) =>
+                            x >= left && x <= right && y >= top && y <= bottom,
+                        ),
                   )
                   .map((stroke) => stroke.id);
                 selectedInkRef.current = ids;
@@ -1192,6 +1281,9 @@ export const FilePreview = ({
                   y={stroke.points[0][1]}
                   fill={stroke.color}
                   fontSize={stroke.fontSize || 26}
+                  fontFamily={getFontFamilyString({
+                    fontFamily: stroke.fontFamily || FONT_FAMILY.Helvetica,
+                  })}
                   opacity={(stroke.opacity ?? 100) / 100}
                   dominantBaseline="hanging"
                 >
@@ -1223,39 +1315,39 @@ export const FilePreview = ({
       </div>
       {(loading || error || notice) && (
         <p className="fc-document-status" role={error ? "alert" : "status"}>
-          {error || notice || "正在打开课件…"}
+          {error || notice || t("fcboard.正在打开课件…")}
         </p>
       )}
       <footer
         className="fc-presentation-toolbar"
         role="toolbar"
-        aria-label="课件工具栏"
+        aria-label={t("fcboard.课件工具栏")}
       >
         <button
-          aria-label="关闭课件"
-          title="返回白板"
+          aria-label={t("fcboard.关闭课件")}
+          title={t("fcboard.返回白板")}
           onClick={() => {
             void close().catch(() => {});
           }}
         >
           {CloseIcon}
-          <span>白板</span>
+          <span>{t("fcboard.白板")}</span>
         </button>
         <span className="fc-document-name" title={file.name}>
           {file.name}
         </span>
         <button
-          aria-label="上一页"
+          aria-label={t("fcboard.上一页")}
           disabled={page === 0 || loading}
           onClick={() => {
             void previous().catch((failure) => setError(String(failure)));
           }}
         >
           {chevronLeftIcon}
-          <span>上页</span>
+          <span>{t("fcboard.上页")}</span>
         </button>
         <select
-          aria-label="课件页码"
+          aria-label={t("fcboard.课件页码")}
           value={page}
           disabled={loading}
           onChange={(event) => {
@@ -1274,27 +1366,27 @@ export const FilePreview = ({
           ))}
         </select>
         <button
-          aria-label="下一页"
+          aria-label={t("fcboard.下一页")}
           disabled={loading || (page >= pages.length - 1 && !pendingAnimation)}
           onClick={() => {
             void next().catch((failure) => setError(String(failure)));
           }}
         >
           {chevronRight}
-          <span>下页</span>
+          <span>{t("fcboard.下页")}</span>
         </button>
         <button
-          aria-label="板书开关"
-          title="在课件上板书"
+          aria-label={t("fcboard.板书开关")}
+          title={t("fcboard.在课件上板书")}
           aria-pressed={inkOn}
           disabled={loading || !!error}
           onClick={() => setInkOn(!inkOn)}
         >
           {pencilIcon}
-          <span>板书</span>
+          <span>{t("fcboard.板书")}</span>
         </button>
         <button
-          aria-label="缩小课件"
+          aria-label={t("fcboard.缩小课件")}
           disabled={zoom <= 0.5}
           onClick={() => {
             void classroomCommands.execute({
@@ -1306,7 +1398,7 @@ export const FilePreview = ({
           −
         </button>
         <button
-          aria-label="重置课件缩放"
+          aria-label={t("fcboard.重置课件缩放")}
           onClick={() => {
             void classroomCommands.execute({
               name: "document.zoom",
@@ -1317,7 +1409,7 @@ export const FilePreview = ({
           {Math.round(zoom * 100)}%
         </button>
         <button
-          aria-label="放大课件"
+          aria-label={t("fcboard.放大课件")}
           disabled={zoom >= 3}
           onClick={() => {
             void classroomCommands.execute({
@@ -1333,7 +1425,7 @@ export const FilePreview = ({
             {["#dc2626", "#2563eb", "#17243c"].map((value) => (
               <button
                 key={value}
-                aria-label={`笔色 ${value}`}
+                aria-label={t("fcboard.笔色 {{color}}", { color: value })}
                 aria-pressed={color === value && !erase}
                 onClick={() => {
                   setColor(value);
@@ -1345,7 +1437,7 @@ export const FilePreview = ({
               </button>
             ))}
             <button
-              aria-label="擦除板书"
+              aria-label={t("fcboard.擦除板书")}
               aria-pressed={erase}
               onClick={() => {
                 setErase(!erase);
@@ -1353,10 +1445,10 @@ export const FilePreview = ({
               }}
             >
               {EraserIcon}
-              <span>橡皮</span>
+              <span>{t("fcboard.橡皮")}</span>
             </button>
             <button
-              aria-label="圈选课件板书"
+              aria-label={t("fcboard.圈选课件板书")}
               aria-pressed={selecting}
               onClick={() => {
                 setSelecting(!selecting);
@@ -1364,65 +1456,69 @@ export const FilePreview = ({
               }}
             >
               {SelectionIcon}
-              <span>圈选</span>
+              <span>{t("fcboard.圈选")}</span>
             </button>
             <button
-              aria-label="撤销板书"
+              aria-label={t("fcboard.撤销板书")}
               disabled={!past.current[page]?.length}
               onClick={() => undoInk()}
             >
               {UndoIcon}
-              <span>撤销</span>
+              <span>{t("fcboard.撤销")}</span>
             </button>
             <button
-              aria-label="重做板书"
+              aria-label={t("fcboard.重做板书")}
               disabled={!future.current[page]?.length}
               onClick={() => undoInk(true)}
             >
               {RedoIcon}
-              <span>重做</span>
+              <span>{t("fcboard.重做")}</span>
             </button>
           </>
         )}
         <a
           href={url}
           download={file.name}
-          aria-label="下载原文件"
-          title="下载原文件"
+          aria-label={t("fcboard.下载原文件")}
+          title={t("fcboard.下载原文件")}
         >
           {exportToFileIcon}
-          <span>原件</span>
+          <span>{t("fcboard.原件")}</span>
         </a>
         {onVoice && (
           <button
-            aria-label="课件语音指令"
-            title="对这页说点什么"
+            aria-label={t("fcboard.课件语音指令")}
+            title={t("fcboard.对这页说点什么")}
             aria-pressed={listening}
             onClick={onVoice}
           >
             {microphoneIcon}
-            <span>语音</span>
+            <span>{t("fcboard.语音")}</span>
           </button>
         )}
         <button
-          aria-label="课件 AI 教师"
-          title="提问或操作课件"
+          aria-label={t("fcboard.课件 AI 教师")}
+          title={t("fcboard.提问或操作课件")}
           onClick={() => {
             void classroomCommands.execute({ name: "assistant.open" });
           }}
         >
           {MagicIcon}
-          <span>助教</span>
+          <span>{t("fcboard.助教")}</span>
         </button>
         {onTools && (
-          <button aria-label="课件教学工具" title="教学工具" onClick={onTools}>
+          <button
+            aria-label={t("fcboard.课件教学工具")}
+            title={t("fcboard.教学工具")}
+            onClick={onTools}
+          >
             {gridIcon}
-            <span>教具</span>
+            <span>{t("fcboard.教具")}</span>
           </button>
         )}
         {Capacitor.isNativePlatform() && (
           <button
-            aria-label="设备控制"
+            aria-label={t("fcboard.设备控制")}
             data-network="remote"
             onClick={() =>
               void classroomCommands.execute({
@@ -1432,7 +1528,7 @@ export const FilePreview = ({
             }
           >
             {DeviceDesktopIcon}
-            <span>控制</span>
+            <span>{t("fcboard.控制")}</span>
           </button>
         )}
       </footer>

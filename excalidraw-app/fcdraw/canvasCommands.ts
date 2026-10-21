@@ -1,9 +1,11 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
 import { getCommonBounds } from "@excalidraw/element";
 import { FONT_FAMILY } from "@excalidraw/common";
+import { switchWhiteboardPen } from "@excalidraw/excalidraw/whiteboardPen";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ActionName } from "@excalidraw/excalidraw/actions/types";
@@ -81,7 +83,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
       "显示或隐藏原白板工具栏，args.visible 必须是布尔值；隐藏会收起工具属性和菜单",
       (args) => {
         if (typeof args.visible !== "boolean") {
-          throw new Error("请指定是否显示工具栏");
+          throw new Error(t("fcboard.请指定是否显示工具栏"));
         }
         api.updateScene({
           appState: { toolbarHidden: !args.visible, openMenu: null },
@@ -110,11 +112,13 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             });
           }
           throw new Error(
-            "这项操作用于白板；在课件上可翻页、板书、圈选、撤销或直接说要插入的内容",
+            t(
+              "fcboard.这项操作用于白板；在课件上可翻页、板书、圈选、撤销或直接说要插入的内容",
+            ),
           );
         }
         if (!actions.has(args.action as ActionName)) {
-          throw new Error("此白板动作不可用");
+          throw new Error(t("fcboard.此白板动作不可用"));
         }
         api.executeAction(args.action as ActionName);
       },
@@ -143,7 +147,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
         ] as const;
         const tool = tools.find((value) => value === args.tool);
         if (!tool) {
-          throw new Error("工具不存在");
+          throw new Error(t("fcboard.工具不存在"));
         }
         api.setActiveTool({ type: tool });
       },
@@ -172,13 +176,13 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           !Object.keys(args).length ||
           Object.keys(args).some((key) => !supported.includes(key))
         ) {
-          throw new Error("样式参数无效");
+          throw new Error(t("fcboard.样式参数无效"));
         }
         const pen = (
           ["hard", "brush", "highlighter", "dashed", "rainbow"] as const
         ).find((value) => value === args.pen);
         if (args.pen !== undefined && !pen) {
-          throw new Error("笔型不存在");
+          throw new Error(t("fcboard.笔型不存在"));
         }
         for (const key of ["color", "background"] as const) {
           if (
@@ -187,7 +191,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
               (!/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(args[key] as string) &&
                 !(key === "background" && args[key] === "transparent")))
           ) {
-            throw new Error("颜色无效");
+            throw new Error(t("fcboard.颜色无效"));
           }
         }
         const numeric: Record<string, [number, number, ActionName]> = {
@@ -203,7 +207,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
               (args[key] as number) < min ||
               (args[key] as number) > max)
           ) {
-            throw new Error(`样式 ${key} 超出范围`);
+            throw new Error(t("fcboard.样式 {{key}} 超出范围", { key }));
           }
         }
         const choices: Record<string, [string[], ActionName]> = {
@@ -216,7 +220,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
         };
         for (const [key, [values]] of Object.entries(choices)) {
           if (args[key] !== undefined && !values.includes(String(args[key]))) {
-            throw new Error(`样式 ${key} 无效`);
+            throw new Error(t("fcboard.样式 {{key}} 无效", { key }));
           }
         }
         if (
@@ -225,7 +229,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             args.fontFamily as typeof FONT_FAMILY.Helvetica,
           )
         ) {
-          throw new Error("字体不存在");
+          throw new Error(t("fcboard.字体不存在"));
         }
         if (
           args.width !== undefined &&
@@ -234,7 +238,15 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             args.width < 1 ||
             args.width > 30)
         ) {
-          throw new Error("笔画宽度必须在 1 到 30 之间");
+          throw new Error(t("fcboard.笔画宽度必须在 1 到 30 之间"));
+        }
+        if (pen) {
+          api.updateScene({
+            appState: {
+              ...switchWhiteboardPen(api.getAppState(), pen),
+              currentItemInkAssist: undefined,
+            },
+          });
         }
         if (args.color) {
           api.executeAction("changeStrokeColor", {
@@ -264,21 +276,24 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             currentItemFontFamily: args.fontFamily,
           });
         }
-        if (pen) {
-          api.updateScene({ appState: { currentItemPenMode: pen } });
-        }
       },
     ),
     classroomCommands.register(
       "canvas.text",
-      "插入或修改文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入",
+      "插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text 可选择跟随原字、手写字体或印刷文本",
       async (args) => {
         if (
           typeof args.text !== "string" ||
           !args.text.trim() ||
           args.text.length > 10000
         ) {
-          throw new Error("文本为空或过长");
+          throw new Error(t("fcboard.文本为空或过长"));
+        }
+        if (
+          args.presentation !== undefined &&
+          !["match", "handwritten", "text"].includes(String(args.presentation))
+        ) {
+          throw new Error(t("fcboard.回答样式不存在"));
         }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });
@@ -289,7 +304,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
               .find((el) => el.id === args.id && el.type === "text")
           : undefined;
         if (args.id && !existing) {
-          throw new Error("找不到要修改的文本");
+          throw new Error(t("fcboard.找不到要修改的文本"));
         }
         if (existing?.type === "text") {
           const next = convertToExcalidrawElements(
@@ -300,6 +315,11 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
                 text: args.text,
                 originalText: args.text,
                 version: existing.version + 1,
+                ...(args.presentation === "handwritten"
+                  ? { fontFamily: FONT_FAMILY.Excalifont }
+                  : args.presentation === "text"
+                  ? { fontFamily: FONT_FAMILY.Helvetica }
+                  : {}),
               },
             ],
             { regenerateIds: false },
@@ -311,7 +331,14 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
           });
         } else {
-          insertText(api, args.text);
+          insertText(
+            api,
+            args.text,
+            undefined,
+            undefined,
+            selectedBoardElements(api),
+            args.presentation as "match" | "handwritten" | "text" | undefined,
+          );
         }
       },
     ),
@@ -346,6 +373,8 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             x: origin.x + (shape.x || 0),
             y: origin.y + (shape.y || 0),
           })),
+          [],
+          true,
         );
       },
     ),
@@ -390,7 +419,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           ids.length > 3000 ||
           !ids.every((id) => typeof id === "string")
         ) {
-          throw new Error("请先圈选要擦除的内容");
+          throw new Error(t("fcboard.请先圈选要擦除的内容"));
         }
         const selected = new Set(ids);
         api.updateScene({
@@ -423,7 +452,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           !Array.isArray(args.ids) ||
           !args.ids.every((id) => typeof id === "string")
         ) {
-          throw new Error("选区格式无效");
+          throw new Error(t("fcboard.选区格式无效"));
         }
         const ids = new Set(args.ids);
         api.updateScene({
@@ -453,7 +482,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           Math.abs(args.dx) > 10000 ||
           Math.abs(args.dy) > 10000
         ) {
-          throw new Error("移动距离无效");
+          throw new Error(t("fcboard.移动距离无效"));
         }
         const ids = new Set(
           Array.isArray(args.ids)
@@ -461,7 +490,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             : selectedBoardElements(api).map((el) => el.id),
         );
         if (!ids.size) {
-          throw new Error("请先选择对象");
+          throw new Error(t("fcboard.请先选择对象"));
         }
         const elements = api.getSceneElements();
         elements

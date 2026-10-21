@@ -1,12 +1,16 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { createStore, get, set } from "idb-keyval";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
 import { newFreeDrawElement } from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
 import { eraseStroke } from "@excalidraw/excalidraw/eraser/stroke";
+import { FONT_FAMILY, getFontString } from "@excalidraw/common";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FontFamilyValues } from "@excalidraw/element/types";
 
 import type { Widget } from "./widgets";
+import type { InsertObject } from "./insertObjects";
 import type { Plot } from "./math";
 
 export const DOCUMENT_ACCEPT =
@@ -20,6 +24,7 @@ export type InkStroke = {
   anchor?: { x: number; y: number };
   text?: string;
   fontSize?: number;
+  fontFamily?: FontFamilyValues;
   image?: string;
   imageWidth?: number;
   imageHeight?: number;
@@ -27,6 +32,10 @@ export type InkStroke = {
   commandId?: string;
   annotation?: boolean;
   widget?: Widget & { origin: { x: number; y: number } };
+  insertion?: InsertObject & {
+    origin: { x: number; y: number };
+    textIndex?: number;
+  };
   plot?: {
     id: string;
     plot: Plot;
@@ -111,14 +120,20 @@ export class OfficeReader {
       const task = this.pending.get(data.id);
       this.pending.delete(data.id);
       if (data.error) {
-        task?.reject(new Error(data.error));
+        const message =
+          data.error === "文件已加密，请使用未加密的课件"
+            ? t("fcboard.文件已加密，请使用未加密的课件")
+            : data.error === "课件尚未打开"
+            ? t("fcboard.课件尚未打开")
+            : data.error;
+        task?.reject(new Error(message));
       } else {
         task?.resolve(data.value);
       }
     };
     this.worker.onerror = () => {
       this.pending.forEach((task) =>
-        task.reject(new Error("文档引擎启动失败，请重新打开文件")),
+        task.reject(new Error(t("fcboard.文档引擎启动失败，请重新打开文件"))),
       );
       this.pending.clear();
     };
@@ -204,7 +219,7 @@ export const shapeInk = (
   image?: string,
 ): InkStroke => {
   if (!shape.id || !Number.isFinite(shape.x) || !Number.isFinite(shape.y)) {
-    throw new Error("课件板书坐标无效");
+    throw new Error(t("fcboard.课件板书坐标无效"));
   }
   const x = shape.x || 0;
   const y = shape.y || 0;
@@ -269,9 +284,11 @@ export const shapeInk = (
     commandId: shape.customData?.fcTutorId,
     annotation: !!shape.customData?.fcAnnotation,
     widget: shape.customData?.fcWidget,
+    insertion: shape.customData?.fcInsertion,
     plot: shape.customData?.fcPlot,
     text: shape.type === "text" ? shape.text : undefined,
     fontSize: shape.type === "text" ? shape.fontSize : undefined,
+    fontFamily: shape.type === "text" ? shape.fontFamily : undefined,
     image: shape.type === "image" ? image : undefined,
     imageWidth: shape.type === "image" ? shape.width : undefined,
     imageHeight: shape.type === "image" ? shape.height : undefined,
@@ -289,7 +306,7 @@ export const inkSnapshot = async (
   canvas.height = Math.max(1, Math.min(1600, Math.round(height)));
   const context = canvas.getContext("2d");
   if (!context) {
-    throw new Error("设备无法生成课件截图");
+    throw new Error(t("fcboard.设备无法生成课件截图"));
   }
   context.fillStyle = "#fff";
   context.fillRect(0, 0, canvas.width, canvas.height);
@@ -303,7 +320,7 @@ export const inkSnapshot = async (
     const image = new Image();
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
-      image.onerror = () => reject(new Error("课件图像读取失败"));
+      image.onerror = () => reject(new Error(t("fcboard.课件图像读取失败")));
       image.src = source;
     });
     context.drawImage(image, x, y, width, size);
@@ -333,7 +350,10 @@ export const inkSnapshot = async (
         stroke.imageHeight || 40,
       );
     } else if (stroke.text) {
-      context.font = `${stroke.fontSize || 26}px sans-serif`;
+      context.font = getFontString({
+        fontSize: stroke.fontSize || 26,
+        fontFamily: stroke.fontFamily || FONT_FAMILY.Helvetica,
+      });
       context.textBaseline = "top";
       stroke.text
         .split("\n")
@@ -360,7 +380,9 @@ export const inkSnapshot = async (
     await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
         (blob) =>
-          blob ? resolve(blob) : reject(new Error("课件截图生成失败")),
+          blob
+            ? resolve(blob)
+            : reject(new Error(t("fcboard.课件截图生成失败"))),
         "image/png",
       ),
     ),

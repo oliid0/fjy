@@ -30,10 +30,17 @@ export const useAnchoredPanel = (
         return;
       }
       const rect = anchor.getBoundingClientRect();
+      // Native toolbar targets are 48 dp tall; their measured height resolves
+      // the shared CSS clamp and the WebView's actual density without guessing DPR.
+      const unit = rect.height / 48 || 1;
+      const gap = 16 * unit;
       const toolbar = anchor
         .closest("[role='toolbar'], .fc-presentation-toolbar")
         ?.getBoundingClientRect();
-      const availableHeight = (toolbar?.top ?? rect.top) - parent.top - 12;
+      const availableHeight = Math.max(
+        112,
+        (toolbar?.top ?? rect.top) - parent.top - gap,
+      );
       const placement = placePanel(
         {
           left: rect.left - parent.left,
@@ -45,11 +52,16 @@ export const useAnchoredPanel = (
         panel.getBoundingClientRect().width,
         Math.min(panel.scrollHeight, availableHeight - 12),
         "above",
+        gap,
       );
       const next = {
-        ...placement,
+        left: placement.left,
+        top: placement.top,
         right: "auto",
         bottom: "auto",
+        // Legacy picker styles used translateX(-50%). Placement already centers it.
+        transform: "none",
+        maxWidth: Math.max(0, Math.min(parent.width, innerWidth) - 24),
         maxHeight: Math.max(100, availableHeight - 12),
       };
       setStyle((previous) =>
@@ -80,8 +92,8 @@ export const placePanel = (
   width = 280,
   height = 340,
   side: "side" | "above" = "side",
+  gap = 12,
 ) => {
-  const gap = 12;
   const w = Math.min(width, viewport.width - gap * 2);
   const h = Math.min(height, viewport.height - gap * 2);
   const candidates = [
@@ -94,7 +106,7 @@ export const placePanel = (
   if (side === "above") {
     candidates[2].left = Math.max(
       gap,
-      Math.min(viewport.width - w - gap, anchor.left),
+      Math.min(viewport.width - w - gap, (anchor.left + anchor.right - w) / 2),
     );
   }
   const next =

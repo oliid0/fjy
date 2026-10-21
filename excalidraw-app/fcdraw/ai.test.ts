@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 import { chat, parseJSON } from "./ai";
@@ -23,7 +24,7 @@ describe("AI configuration and transport", () => {
       "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
     );
     await expect(chat([{ role: "user", content: "hello" }])).rejects.toThrow(
-      "设置",
+      t("fcboard.请先在 AI 设置中填写 API 密钥和支持视觉的模型 ID / 接入点 ID"),
     );
   });
   it("keeps keys in the session unless explicitly remembered", () => {
@@ -76,6 +77,64 @@ describe("AI configuration and transport", () => {
     });
     await expect(chat([])).rejects.toThrow("invalid key");
   });
+  it("uses Ark Responses input blocks and reads output_text without thinking for quick actions", async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          output: [
+            { type: "reasoning", summary: [] },
+            {
+              type: "message",
+              content: [{ type: "output_text", text: "1+1=" }],
+            },
+          ],
+        }),
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const reply = await chat(
+      [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: { url: "data:image/png;base64,test" },
+            },
+            { type: "text", text: "识别文字" },
+          ],
+        },
+      ],
+      undefined,
+      {
+        ...defaults,
+        model: "doubao-seed-evolving",
+        apiKey: "test-key",
+        endpoint: "https://ark.cn-beijing.volces.com/api/v3/responses",
+      },
+      { maxTokens: 256 },
+    );
+    expect(reply).toBe("1+1=");
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body).toMatchObject({
+      model: "doubao-seed-evolving",
+      reasoning: { effort: "minimal" },
+      service_tier: "fast",
+      stream: true,
+      max_output_tokens: 256,
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_image", image_url: "data:image/png;base64,test" },
+            { type: "input_text", text: "识别文字" },
+          ],
+        },
+      ],
+    });
+    expect(body.messages).toBeUndefined();
+  });
+
   it("parses fenced JSON and refuses malformed responses", () => {
     expect(parseJSON('```json\n{"action":"plot"}\n```')).toEqual({
       action: "plot",
@@ -115,7 +174,9 @@ describe("AI configuration and transport", () => {
       model: "test",
       apiKey: "test",
     });
-    const result = expect(request).rejects.toThrow("超时");
+    const result = expect(request).rejects.toThrow(
+      t("fcboard.AI 请求超时，请检查网络或稍后重试"),
+    );
     await vi.advanceTimersByTimeAsync(90000);
     await result;
   });
@@ -154,7 +215,7 @@ describe("AI configuration and transport", () => {
       text: async () => "<html>gateway error</html>",
     });
     vi.stubGlobal("fetch", fetcher);
-    await expect(chat([], undefined, settings)).rejects.toThrow("JSON (502)");
+    await expect(chat([], undefined, settings)).rejects.toThrow("502");
     fetcher.mockResolvedValue({
       status: 200,
       text: async () =>
@@ -165,7 +226,7 @@ describe("AI configuration and transport", () => {
         }),
     });
     expect(await chat([], undefined, settings)).toBe("answer");
-    expect(currentSettings().model).toBe("");
+    expect(currentSettings().model).toBe("doubao-seed-2-0-mini-260428");
   });
 });
 

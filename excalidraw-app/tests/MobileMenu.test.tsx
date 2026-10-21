@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { UI } from "@excalidraw/excalidraw/tests/helpers/ui";
 import {
   mockBoundingClientRect,
@@ -31,19 +32,24 @@ describe("Test MobileMenu", () => {
   });
 
   it("keeps a blank board and the same toolbar before and after choosing a drawing tool", async () => {
-    const toolbar = screen.getByRole("toolbar", { name: "白板工具栏" });
+    const toolbar = screen.getByRole("toolbar", {
+      name: t("fcboard.白板工具栏"),
+    });
     expect(document.querySelector(".welcome-screen-center")).toBeNull();
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(toolbar.querySelector(".undo-redo-buttons")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "插入" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.插入") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.图形") }));
     expect(
       screen
-        .getByRole("dialog", { name: "插入与工具" })
+        .getByRole("dialog", { name: t("fcboard.插入与工具") })
         .querySelector(".zoom-actions"),
     ).not.toBeNull();
     UI.clickTool("rectangle");
     expect(h.state.activeTool.type).toBe("rectangle");
-    expect(screen.getByRole("toolbar", { name: "白板工具栏" })).toBe(toolbar);
+    expect(screen.getByRole("toolbar", { name: t("fcboard.白板工具栏") })).toBe(
+      toolbar,
+    );
     expect(document.querySelector(".welcome-screen-center")).toBeNull();
   });
 });

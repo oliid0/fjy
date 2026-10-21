@@ -929,12 +929,33 @@ export const restoreAppState = (
   }
 
   const inkPreferences = { ...localAppState, ...appState };
+  if (inkPreferences.whiteboardPenWidths) {
+    nextAppState.whiteboardPenWidths = {};
+    for (const kind of ["hard", "brush"] as const) {
+      const width = inkPreferences.whiteboardPenWidths[kind];
+      if (
+        typeof width === "number" &&
+        Number.isFinite(width) &&
+        width > 0 &&
+        width <= 100
+      ) {
+        nextAppState.whiteboardPenWidths[kind] = width;
+      }
+    }
+  }
   if (
-    ["hard", "brush", "highlighter", "dashed"].includes(
+    ["hard", "brush", "highlighter", "dashed", "rainbow"].includes(
       String(inkPreferences.currentItemPenMode),
     )
   ) {
     nextAppState.currentItemPenMode = inkPreferences.currentItemPenMode;
+  }
+  if (
+    ["text", "shape", "magic"].includes(
+      String(inkPreferences.currentItemInkAssist),
+    )
+  ) {
+    nextAppState.currentItemInkAssist = inkPreferences.currentItemInkAssist;
   }
   if (["stroke", "object"].includes(String(inkPreferences.eraserMode))) {
     nextAppState.eraserMode = inkPreferences.eraserMode;

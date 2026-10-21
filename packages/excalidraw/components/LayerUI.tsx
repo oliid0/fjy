@@ -4,7 +4,6 @@ import React from "react";
 import {
   CLASSES,
   DEFAULT_SIDEBAR,
-  DEFAULT_ELEMENT_PROPS,
   TOOL_TYPE,
   arrayToMap,
   capitalizeString,
@@ -25,7 +24,7 @@ import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { UIAppStateContext } from "../context/ui-appState";
 import { useAtom, useAtomValue } from "../editor-jotai";
 
-import { t } from "../i18n";
+import { t, useI18n } from "../i18n";
 import { calculateScrollCenter } from "../scene";
 
 import {
@@ -65,14 +64,9 @@ import { JSONExportDialog } from "./JSONExportDialog";
 import { LaserPointerButton } from "./LaserPointerButton";
 import { Toast } from "./Toast";
 import { ToolButton } from "./ToolButton";
-import {
-  CircleIcon,
-  CloseIcon,
-  chevronRight,
-  chevronLeftIcon,
-  handIcon,
-  RedoIcon,
-} from "./icons";
+import { CircleIcon, CloseIcon } from "./icons";
+import { FactoryIcon } from "./FactoryIcon";
+import { FactoryPenSettings } from "./FactoryPenSettings";
 import { WhiteboardTools } from "./WhiteboardTools";
 
 import "./LayerUI.scss";
@@ -172,6 +166,7 @@ const LayerUI = ({
   isCollaborating,
   generateLinkForSelection,
 }: LayerUIProps) => {
+  useI18n();
   const editorInterface = useEditorInterface();
   const stylesPanelMode = useStylesPanelMode();
   const isCompactStylesPanel = stylesPanelMode === "compact";
@@ -207,12 +202,20 @@ const LayerUI = ({
   const openProperties = (anchor: HTMLElement) => {
     const bounds = anchor.getBoundingClientRect();
     const root = anchor.closest(".excalidraw")!.getBoundingClientRect();
+    const unit = bounds.height / 48;
+    const width = Math.min(
+      (appState.activeTool.type === "freedraw" ? 215 : 280) * unit,
+      root.width - 24,
+    );
     setPropertiesAnchor({
       left: Math.max(
         12,
-        Math.min(bounds.left - root.left - 110, root.width - 304),
+        Math.min(
+          (bounds.left + bounds.right - width) / 2 - root.left,
+          root.width - width - 12,
+        ),
       ),
-      bottom: root.bottom - bounds.top + 12,
+      bottom: root.bottom - bounds.top + 16 * unit,
     });
     setShowProperties(true);
   };
@@ -545,18 +548,16 @@ const LayerUI = ({
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
   const toolbarHidden = !!appState.toolbarHidden;
-  const penBase = appState.currentItemPenMode === "brush" ? 15 : 4;
-  const inkThickness =
-    (appState.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) *
-    penBase;
 
   const renderUnifiedToolbar = () => (
     <>
       {showProperties && !toolbarHidden && !appState.viewModeEnabled && (
         <div
-          className="fc-editor-properties"
+          className={`fc-editor-properties${
+            appState.activeTool.type === "freedraw" ? " fc-pen-properties" : ""
+          }`}
           role="dialog"
-          aria-label="画笔与对象属性"
+          aria-label={t("fcboard.画笔与对象属性")}
           style={propertiesAnchor}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -568,56 +569,25 @@ const LayerUI = ({
           <ToolButton
             type="button"
             icon={CloseIcon}
-            aria-label="关闭属性"
-            title="关闭属性"
+            aria-label={t("fcboard.关闭属性")}
+            title={t("fcboard.关闭属性")}
             onClick={() => setShowProperties(false)}
           />
           {appState.activeTool.type === "freedraw" && (
-            <>
-              <div role="group" aria-label="笔型" className="fc-pen-types">
-                {(
-                  [
-                    ["hard", "画笔"],
-                    ["brush", "钢笔"],
-                    ["highlighter", "荧光笔"],
-                    ["dashed", "虚线笔"],
-                    ["rainbow", "彩虹笔"],
-                  ] as const
-                ).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={
-                      (appState.currentItemPenMode || "hard") === mode
-                    }
-                    onClick={() => setAppState({ currentItemPenMode: mode })}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <label className="fc-pen-mode">
-                粗细
-                <input
-                  aria-label="书写粗细"
-                  type="range"
-                  min="1"
-                  max="40"
-                  step="0.5"
-                  value={inkThickness}
-                  onChange={(event) =>
-                    setAppState({
-                      currentItemStrokeWidth:
-                        (Number(event.target.value) / penBase) *
-                        DEFAULT_ELEMENT_PROPS.strokeWidth,
-                    })
-                  }
-                />
-                <output>{Math.round(inkThickness * 100) / 100}</output>
-              </label>
-            </>
+            <FactoryPenSettings
+              app={app}
+              state={appState}
+              close={() => setShowProperties(false)}
+            />
           )}
-          {renderSelectedShapeActions()}
+          {appState.activeTool.type === "freedraw" ? (
+            <details className="fc-pen-advanced">
+              <summary>{t("fcboard.更多属性")}</summary>
+              {renderSelectedShapeActions()}
+            </details>
+          ) : (
+            renderSelectedShapeActions()
+          )}
         </div>
       )}
       <div
@@ -626,13 +596,13 @@ const LayerUI = ({
           "fc-toolbar-reversed": appState.toolbarReversed,
         })}
         role="toolbar"
-        aria-label="白板工具栏"
+        aria-label={t("fcboard.白板工具栏")}
       >
         <div className="fc-toolbar-side fc-toolbar-leading">
           <div
             className="fc-toolbar-group"
             role="group"
-            aria-label="文件与素材"
+            aria-label={t("fcboard.文件与素材")}
           >
             {renderTopLeftUI?.(
               editorInterface.formFactor === "phone",
@@ -649,7 +619,7 @@ const LayerUI = ({
           <div
             className="fc-toolbar-group fc-drawing-tools"
             role="group"
-            aria-label="书写与绘图"
+            aria-label={t("fcboard.书写与绘图")}
           >
             <WhiteboardTools
               setAppState={setAppState}
@@ -674,7 +644,7 @@ const LayerUI = ({
                   type="button"
                   onClick={(event) => openProperties(event.currentTarget)}
                 >
-                  画笔与对象属性
+                  {t("fcboard.画笔与对象属性")}
                 </button>
                 <ZoomActions
                   renderAction={actionManager.renderAction}
@@ -687,17 +657,30 @@ const LayerUI = ({
             <ToolButton
               type="button"
               className="fc-board-tool fc-board-mode"
-              icon={handIcon}
-              aria-label={
-                appState.multiStroke !== false ? "多点书写" : "单点书写"
+              icon={
+                <FactoryIcon
+                  name={appState.multiStroke !== false ? "multi" : "single"}
+                />
               }
-              title="多点：多人同时书写；单点：仅接收一处笔迹。选择或移动工具可双指缩放"
-              showAriaLabel
+              aria-label={
+                appState.multiStroke !== false
+                  ? t("fcboard.多点书写")
+                  : t("fcboard.单点书写")
+              }
+              title={t(
+                "fcboard.多点：多人同时书写；单点：仅接收一处笔迹。选择或移动工具可双指缩放",
+              )}
               selected={appState.multiStroke !== false}
               onClick={() =>
                 setAppState({ multiStroke: appState.multiStroke === false })
               }
-            />
+            >
+              <span className="ToolIcon__label">
+                {appState.multiStroke !== false
+                  ? t("fcboard.多点")
+                  : t("fcboard.单点")}
+              </span>
+            </ToolButton>
           </div>
         ) : (
           <ExitViewModeButton actionManager={actionManager} />
@@ -708,9 +691,9 @@ const LayerUI = ({
           <ToolButton
             type="button"
             className="fc-board-tool"
-            icon={RedoIcon}
-            aria-label="切换"
-            title="左右切换底栏"
+            icon={<FactoryIcon name="cutover" />}
+            aria-label={t("fcboard.切换")}
+            title={t("fcboard.左右切换底栏")}
             showAriaLabel
             onClick={() =>
               setAppState({ toolbarReversed: !appState.toolbarReversed })
@@ -719,14 +702,19 @@ const LayerUI = ({
           <ToolButton
             type="button"
             className="fc-board-tool fc-toolbar-visibility"
-            icon={toolbarHidden ? chevronLeftIcon : chevronRight}
-            aria-label={toolbarHidden ? "显示工具栏" : "隐藏工具栏"}
-            showAriaLabel
+            icon={<FactoryIcon name={toolbarHidden ? "show" : "hide"} />}
+            aria-label={
+              toolbarHidden ? t("fcboard.显示工具栏") : t("fcboard.隐藏工具栏")
+            }
             onClick={() => {
               setShowProperties(false);
               setAppState({ toolbarHidden: !toolbarHidden, openMenu: null });
             }}
-          />
+          >
+            <span className="ToolIcon__label">
+              {toolbarHidden ? t("fcboard.显示") : t("fcboard.隐藏")}
+            </span>
+          </ToolButton>
         </div>
       </div>
     </>

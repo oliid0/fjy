@@ -6,12 +6,14 @@ export const ToolbarExtras = ({
   placement = "tools",
 }: {
   children: React.ReactNode;
-  placement?: "navigation" | "tools";
+  placement?: "navigation" | "tools" | "insert";
 }) => {
   const tunnels = useTunnels();
   const Tunnel =
     placement === "navigation"
       ? tunnels.ToolbarNavigationTunnel
+      : placement === "insert"
+      ? tunnels.ToolbarInsertTunnel
       : tunnels.ToolbarExtrasTunnel;
   return <Tunnel.In>{children}</Tunnel.In>;
 };

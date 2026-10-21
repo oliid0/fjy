@@ -371,7 +371,8 @@ import {
   hasBackground,
   isSomeElementSelected,
 } from "../scene";
-import { getStateForZoom } from "../scene/zoom";
+import { getStateForZoom, getStateForPinch } from "../scene/zoom";
+
 import {
   dataURLToString,
   generateIdFromFile,
@@ -432,6 +433,8 @@ import { eraseStroke, isPalmContact, pointerSamples } from "../eraser/stroke";
 import { getShortcutKey } from "../shortcut";
 
 import { tryParseSpreadsheet } from "../charts";
+
+import factoryEraser from "./FactoryEraser.png?url";
 
 import ConvertElementTypePopup, {
   getConversionTypeFromElements,
@@ -2089,6 +2092,7 @@ class App extends React.Component<AppProps, AppState> {
           ["--right-sidebar-width" as any]: "302px",
         }}
         ref={this.excalidrawContainerRef}
+        data-excalidraw-id={this.id}
         onDrop={this.handleAppOnDrop}
         tabIndex={0}
         onKeyDown={
@@ -6520,6 +6524,7 @@ class App extends React.Component<AppProps, AppState> {
       gesture.initialDistance
     ) {
       const center = getCenter(gesture.pointers);
+      const previousCenter = gesture.lastCenter;
       const deltaX = center.x - gesture.lastCenter.x;
       const deltaY = center.y - gesture.lastCenter.y;
       gesture.lastCenter = center;
@@ -6530,31 +6535,42 @@ class App extends React.Component<AppProps, AppState> {
           ? 1
           : distance / gesture.initialDistance;
 
+      const factoryGesture = this.props.UIOptions.unifiedToolbar;
       const nextZoom = scaleFactor
-        ? getNormalizedZoom(initialScale * scaleFactor)
+        ? getNormalizedZoom(
+            factoryGesture
+              ? Math.max(0.5, Math.min(2, initialScale * scaleFactor))
+              : initialScale * scaleFactor,
+          )
         : this.state.zoom.value;
+      if (factoryGesture) {
+        // HCanvas.doScaleWithTwo uses incremental distances, including at 50/200%.
+        // Reversing at a limit must respond immediately instead of crossing an old baseline.
+        gesture.initialScale = nextZoom;
+        gesture.initialDistance = distance;
+      }
 
-      this.setState((state) => {
-        const zoomState = getStateForZoom(
-          {
-            viewportX: center.x,
-            viewportY: center.y,
-            nextZoom,
-          },
-          state,
-        );
+      this.translateCanvas((state) => {
+        const zoomState = factoryGesture
+          ? getStateForPinch(previousCenter, center, nextZoom, state)
+          : getStateForZoom(
+              {
+                viewportX: center.x,
+                viewportY: center.y,
+                nextZoom,
+              },
+              state,
+            );
 
-        this.translateCanvas({
+        return {
           zoom: zoomState.zoom,
-          // 2x multiplier is just a magic number that makes this work correctly
-          // on touchscreen devices (note: if we get report that panning is slower/faster
-          // than actual movement, consider swapping with devicePixelRatio)
-          scrollX: zoomState.scrollX + 2 * (deltaX / nextZoom),
-          scrollY: zoomState.scrollY + 2 * (deltaY / nextZoom),
+          // Keep the legacy editor behavior outside the factory whiteboard.
+          scrollX:
+            zoomState.scrollX + (factoryGesture ? 0 : 2 * (deltaX / nextZoom)),
+          scrollY:
+            zoomState.scrollY + (factoryGesture ? 0 : 2 * (deltaY / nextZoom)),
           shouldCacheIgnoreZoom: true,
-        });
-
-        return null;
+        };
       });
       this.resetShouldCacheIgnoreZoomDebounced();
     } else {
@@ -7284,10 +7300,7 @@ class App extends React.Component<AppProps, AppState> {
       zIndex: "30",
       width: `${width}px`,
       height: `${height}px`,
-      border: "1px solid #222",
-      outline: "1px solid #fff",
-      borderRadius: "3px",
-      background: "#ffffff66",
+      background: `url("${factoryEraser}") center / 100% 100% no-repeat`,
       transform: "translate(-50%, -50%)",
     });
     this.excalidrawContainerRef.current?.appendChild(preview);
@@ -7556,6 +7569,9 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerDown = (
     event: React.PointerEvent<HTMLElement>,
   ) => {
+    if (this.state.whiteboardSelection) {
+      this.setState({ whiteboardSelection: undefined });
+    }
     if (this.stopInkErasure) {
       event.preventDefault();
       return;
@@ -8976,6 +8992,7 @@ class App extends React.Component<AppProps, AppState> {
             fcInk: {
               version: this.state.currentItemPenMode === "brush" ? 3 : 2,
               pen: this.state.currentItemPenMode || "hard",
+              assist: this.state.currentItemInkAssist,
               ...(this.state.currentItemPenMode === "rainbow"
                 ? {
                     rainbow: {

@@ -140,6 +140,7 @@ test("new boards preserve previous work and replace the old material library wit
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
   await page.getByRole("button", { name: "教学工具", exact: true }).click();
+  await page.getByText("更多工具", { exact: true }).click();
   await page.getByRole("button", { name: "插入单摆", exact: true }).click();
   const length = page.getByRole("slider", { name: "摆长 L（m）", exact: true });
   await expect(length).toBeVisible();

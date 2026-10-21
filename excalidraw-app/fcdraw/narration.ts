@@ -1,3 +1,5 @@
+import { t, getLanguage } from "@excalidraw/excalidraw/i18n";
+
 import { currentSettings, validateEndpoint } from "./settings";
 
 let activeOwner: { pause: () => void } | undefined;
@@ -53,7 +55,7 @@ export const createNarrator = () => {
     const start = offset;
     const next = new SpeechSynthesisUtterance(words.slice(start));
     utterance = next;
-    next.lang = "zh-CN";
+    next.lang = getLanguage().code;
     next.rate = rate;
     next.onboundary = (event) => {
       offset = start + event.charIndex;
@@ -123,7 +125,9 @@ export const createNarrator = () => {
             typeof SpeechSynthesisUtterance === "undefined"
           ) {
             throw new Error(
-              "此设备没有播报引擎，请在设置中连接语音播报；当前可使用字幕讲解",
+              t(
+                "fcboard.此设备没有播报引擎，请在设置中连接语音播报；当前可使用字幕讲解",
+              ),
             );
           }
           synthesize();
@@ -141,11 +145,15 @@ export const createNarrator = () => {
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error(`语音播报请求失败 (${response.status})`);
+          throw new Error(
+            t("fcboard.语音播报请求失败 ({{status}})", {
+              status: response.status,
+            }),
+          );
         }
         const blob = await response.blob();
         if (!blob.size || !blob.type.startsWith("audio/")) {
-          throw new Error("播报接口未返回有效音频");
+          throw new Error(t("fcboard.播报接口未返回有效音频"));
         }
         if (controller.signal.aborted) {
           return;

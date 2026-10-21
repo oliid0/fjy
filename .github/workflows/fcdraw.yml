@@ -58,6 +58,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Package web application
+        # Models and runtime are shipped with the app; no first-use CDN download.
+        run: node scripts/fetch-ocr-models.mjs
+      - name: Package whiteboard web assets
         run: pnpm --dir excalidraw-app exec vite build
         env:
           VITE_APP_ENABLE_TRACKING: "false"

@@ -29,6 +29,7 @@
     "@capacitor-community/speech-recognition": "7.0.1",
     "@excalidraw/random-username": "1.0.0",
     "@opendocument/odr-core": "7.5.2",
+    "@paddleocr/paddleocr-js": "0.4.2",
     "@sentry/browser": "9.0.1",
     "@web-ppt/core": "0.4.5",
     "@web-ppt/viewer-core": "0.4.5",

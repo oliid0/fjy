@@ -9,3 +9,6 @@ allowBuilds:
   protobufjs: true
 
 linkWorkspacePackages: true
+
+# Keep Capacitor and ESLint dependency paths stable without a project .npmrc.
+nodeLinker: hoisted

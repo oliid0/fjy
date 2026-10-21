@@ -1,3 +1,4 @@
+import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { Capacitor } from "@capacitor/core";
 import { exportToBlob } from "@excalidraw/excalidraw";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
@@ -13,6 +14,7 @@ import type { Board, Workspace } from "./boards";
 
 /** The existing menu shares chosen pages; collaboration is a separate operation. */
 export const BoardShare = () => {
+  useI18n();
   const [open, setOpen] = useState(false);
   const [pages, setPages] = useState<Board[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -20,6 +22,7 @@ export const BoardShare = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [mail, setMail] = useState(false);
   const panel = useRef<HTMLElement>(null);
   const generation = useRef(0);
   const style = useAnchoredPanel(
@@ -28,30 +31,52 @@ export const BoardShare = () => {
     open,
   );
   const native = Capacitor.isNativePlatform();
-  useEffect(
-    () =>
-      classroomCommands.register(
-        "board.share",
-        "选择白板页面以导出图片或扫码分享",
-        async () => {
-          setOpen(true);
-          setBusy(true);
-          setError("");
-          try {
-            const workspace = (await classroomCommands.execute({
-              name: "board.pages",
-            })) as Workspace;
-            setPages(workspace.boards);
-            setSelected([workspace.active]);
-          } catch (failure) {
-            setError(String(failure));
-          } finally {
-            setBusy(false);
-          }
-        },
-      ),
-    [],
-  );
+  useEffect(() => {
+    const openPages = async (email: boolean) => {
+      const current = ++generation.current;
+      setMail(email);
+      setOpen(true);
+      setBusy(true);
+      setError("");
+      setStatus("");
+      setUrls([]);
+      try {
+        if (native) {
+          await Classroom.stopShare();
+        }
+        const workspace = (await classroomCommands.execute({
+          name: "board.pages",
+        })) as Workspace;
+        if (current !== generation.current) {
+          return;
+        }
+        setPages(workspace.boards);
+        setSelected([workspace.active]);
+      } catch (failure) {
+        if (current === generation.current) {
+          setError(String(failure));
+        }
+      } finally {
+        if (current === generation.current) {
+          setBusy(false);
+        }
+      }
+    };
+    const stopShare = classroomCommands.register(
+      "board.share",
+      "选择白板页面以导出图片或扫码分享",
+      () => openPages(false),
+    );
+    const stopMail = classroomCommands.register(
+      "board.mail",
+      "选择白板页面，以附件打开系统邮件 / 分享窗口，由用户确认发送",
+      () => openPages(true),
+    );
+    return () => {
+      stopShare();
+      stopMail();
+    };
+  }, [native]);
   useEffect(
     () => () => {
       generation.current++;
@@ -67,7 +92,7 @@ export const BoardShare = () => {
     }
     const timer = setTimeout(() => {
       setUrls([]);
-      setStatus("分享已到期，可重新生成二维码");
+      setStatus(t("fcboard.分享已到期，可重新生成二维码"));
     }, 600000);
     return () => clearTimeout(timer);
   }, [urls]);
@@ -86,16 +111,17 @@ export const BoardShare = () => {
       setError(String(failure));
     }
   };
-  const share = async (qr: boolean) => {
+  const share = async (method: "qr" | "download" | "mail") => {
     const current = ++generation.current;
     setBusy(true);
     setError("");
     setStatus("");
     try {
       if (!selected.length || selected.length > 20) {
-        throw new Error("请选择 1 至 20 页");
+        throw new Error(t("fcboard.请选择 1 至 20 页"));
       }
       const images: string[] = [];
+      const files: File[] = [];
       for (const board of pages.filter((page) => selected.includes(page.id))) {
         const blob = await exportToBlob({
           elements: board.elements.filter((el) => !el.isDeleted),
@@ -111,8 +137,14 @@ export const BoardShare = () => {
         if (current !== generation.current) {
           return;
         }
-        if (qr) {
+        if (method === "qr" || (method === "mail" && native)) {
           images.push(await getDataURL(blob));
+        } else if (method === "mail") {
+          files.push(
+            new File([blob], `Fcboard-${pages.indexOf(board) + 1}.png`, {
+              type: "image/png",
+            }),
+          );
         } else {
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
@@ -122,15 +154,33 @@ export const BoardShare = () => {
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
       }
-      if (qr) {
+      if (method === "qr") {
         const result = await Classroom.startShare({ pages: images });
         if (current !== generation.current) {
           return;
         }
         setUrls(result.urls);
-        setStatus("扫码下载所选页面，十分钟后失效；关闭窗口即结束分享");
+        setStatus(
+          t("fcboard.扫码下载所选页面，十分钟后失效；关闭窗口即结束分享"),
+        );
+      } else if (method === "mail") {
+        if (native) {
+          await Classroom.sharePages({ pages: images });
+        } else if (navigator.canShare?.({ files })) {
+          await navigator.share({ files, title: t("fcboard.Fcboard 白板") });
+        } else {
+          throw new Error(
+            t("fcboard.当前浏览器不支持附件分享，请下载页面后在邮件中添加附件"),
+          );
+        }
+        if (current !== generation.current) {
+          return;
+        }
+        setStatus(
+          t("fcboard.已打开系统邮件 / 分享窗口，请选择收件应用并确认发送"),
+        );
       } else {
-        setStatus("所选页面已导出为 PNG");
+        setStatus(t("fcboard.所选页面已导出为 PNG"));
       }
     } catch (failure) {
       if (current === generation.current) {
@@ -151,7 +201,7 @@ export const BoardShare = () => {
       className="fc-board-picker fc-surface"
       style={style}
       role="dialog"
-      aria-label="分享白板"
+      aria-label={t("fcboard.分享白板")}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
@@ -160,14 +210,14 @@ export const BoardShare = () => {
       }}
     >
       <header>
-        <strong>分享白板</strong>
-        <button aria-label="关闭分享" onClick={() => void close()}>
-          关闭
+        <strong>{mail ? t("fcboard.邮件发送") : t("fcboard.分享白板")}</strong>
+        <button aria-label={t("fcboard.关闭分享")} onClick={() => void close()}>
+          {t("fcboard.关闭")}
         </button>
       </header>
       {error && <p role="alert">{error}</p>}
       <fieldset disabled={busy}>
-        <legend>选择页面</legend>
+        <legend>{t("fcboard.选择页面")}</legend>
         {pages.map((page, index) => (
           <label key={page.id} className="fc-share-page">
             <input
@@ -181,11 +231,11 @@ export const BoardShare = () => {
                 )
               }
             />
-            第 {index + 1} 页 · {page.name}
+            {t("fcboard.第 {{page}} 页", { page: index + 1 })} · {page.name}
           </label>
         ))}
       </fieldset>
-      {busy && <p role="status">正在准备页面…</p>}
+      {busy && <p role="status">{t("fcboard.正在准备页面…")}</p>}
       {status && <p role="status">{status}</p>}
       {urls.map((url) => (
         <div key={url} className="fc-share-code">
@@ -196,23 +246,35 @@ export const BoardShare = () => {
         </div>
       ))}
       <footer>
-        {native && (
+        {mail && (
           <button
             disabled={busy || !selected.length}
-            onClick={() => void share(true)}
+            onClick={() => void share("mail")}
           >
-            生成分享二维码
+            {t("fcboard.打开邮件 / 分享窗口")}
+          </button>
+        )}
+        {native && !mail && (
+          <button
+            disabled={busy || !selected.length}
+            onClick={() => void share("qr")}
+          >
+            {t("fcboard.生成分享二维码")}
           </button>
         )}
         <button
           disabled={busy || !selected.length}
-          onClick={() => void share(false)}
+          onClick={() => void share("download")}
         >
-          下载选中页面
+          {t("fcboard.下载选中页面")}
         </button>
       </footer>
       {!native && (
-        <p>Android 大屏支持同一局域网扫码下载；此处可直接导出页面。</p>
+        <p>
+          {t(
+            "fcboard.Android 大屏支持同一局域网扫码下载；此处可直接导出页面。",
+          )}
+        </p>
       )}
     </section>
   );

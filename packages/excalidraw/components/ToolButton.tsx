@@ -147,7 +147,63 @@ export const ToolButton = React.forwardRef(
           title={props.title}
           aria-label={props["aria-label"]}
           type={type}
-          onClick={onClick}
+          onPointerDown={(event) => {
+            cancelPress();
+            press.current = {
+              x: event.clientX,
+              y: event.clientY,
+              handled: false,
+            };
+            if (props.onLongPress && event.button === 0) {
+              const anchor = event.currentTarget;
+              press.current.timer = setTimeout(() => {
+                press.current.handled = true;
+                props.onLongPress?.(anchor);
+              }, 450);
+            }
+          }}
+          onPointerMove={(event) => {
+            if (
+              Math.hypot(
+                event.clientX - press.current.x,
+                event.clientY - press.current.y,
+              ) > 8
+            ) {
+              cancelPress();
+            }
+          }}
+          onPointerUp={cancelPress}
+          onPointerCancel={cancelPress}
+          onPointerLeave={cancelPress}
+          onLostPointerCapture={cancelPress}
+          onContextMenu={(event) => {
+            if (props.onLongPress) {
+              event.preventDefault();
+              cancelPress();
+              if (!press.current.handled) {
+                press.current.handled = true;
+                props.onLongPress(event.currentTarget);
+              }
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              props.onLongPress &&
+              (event.key === "ContextMenu" ||
+                (event.shiftKey && event.key === "F10"))
+            ) {
+              event.preventDefault();
+              props.onLongPress(event.currentTarget);
+            }
+          }}
+          onClick={(event) => {
+            if (press.current.handled && event.detail !== 0) {
+              event.preventDefault();
+              press.current.handled = false;
+              return;
+            }
+            void onClick(event);
+          }}
           ref={innerRef}
           disabled={isLoading || props.isLoading || !!props.disabled}
         >

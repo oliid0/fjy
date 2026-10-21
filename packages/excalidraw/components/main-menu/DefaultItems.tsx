@@ -8,6 +8,7 @@ import {
   actionClearCanvas,
   actionLoadScene,
   actionSaveToActiveFile,
+  actionSaveFileToDisk,
   actionShortcuts,
   actionToggleArrowBinding,
   actionToggleGridMode,
@@ -40,6 +41,7 @@ import DropdownMenuItemContentRadio from "../dropdownMenu/DropdownMenuItemConten
 import DropdownMenuItemLink from "../dropdownMenu/DropdownMenuItemLink";
 import DropdownMenuSub from "../dropdownMenu/DropdownMenuSub";
 import { settingsIcon } from "../icons";
+import { FactoryIcon } from "../FactoryIcon";
 import {
   boltIcon,
   DeviceDesktopIcon,
@@ -59,6 +61,7 @@ import "./DefaultItems.scss";
 
 export const LoadScene = () => {
   const { t } = useI18n();
+  const { UIOptions } = useAppProps();
   const actionManager = useExcalidrawActionManager();
   const elements = useExcalidrawElements();
 
@@ -88,7 +91,7 @@ export const LoadScene = () => {
 
   return (
     <DropdownMenuItem
-      icon={LoadIcon}
+      icon={UIOptions.unifiedToolbar ? <FactoryIcon name="open" /> : LoadIcon}
       onSelect={handleSelect}
       data-testid="load-button"
       shortcut={getShortcutFromShortcutName("loadScene")}
@@ -102,9 +105,17 @@ LoadScene.displayName = "LoadScene";
 
 export const SaveToActiveFile = () => {
   const { t } = useI18n();
+  const { UIOptions } = useAppProps();
   const actionManager = useExcalidrawActionManager();
 
-  if (!actionManager.isActionEnabled(actionSaveToActiveFile)) {
+  // Factory boards must allow their first save before a file handle exists.
+  const action =
+    UIOptions.unifiedToolbar &&
+    UIOptions.canvasActions.saveToActiveFile &&
+    !actionManager.isActionEnabled(actionSaveToActiveFile)
+      ? actionSaveFileToDisk
+      : actionSaveToActiveFile;
+  if (!actionManager.isActionEnabled(action)) {
     return null;
   }
 
@@ -112,8 +123,8 @@ export const SaveToActiveFile = () => {
     <DropdownMenuItem
       shortcut={getShortcutFromShortcutName("saveScene")}
       data-testid="save-button"
-      onSelect={() => actionManager.executeAction(actionSaveToActiveFile)}
-      icon={save}
+      onSelect={() => actionManager.executeAction(action)}
+      icon={UIOptions.unifiedToolbar ? <FactoryIcon name="save" /> : save}
       aria-label={`${t("buttons.save")}`}
     >{`${t("buttons.save")}`}</DropdownMenuItem>
   );

@@ -214,6 +214,7 @@ export type StaticCanvasAppState = Readonly<
 export type InteractiveCanvasAppState = Readonly<
   _CommonCanvasAppState & {
     activeTool: AppState["activeTool"];
+    whiteboardSelection?: AppState["whiteboardSelection"];
     // renderInteractiveScene
     activeEmbeddable: AppState["activeEmbeddable"];
     selectionElement: AppState["selectionElement"];
@@ -353,6 +354,12 @@ export interface AppState {
   currentItemFillStyle: ExcalidrawElement["fillStyle"];
   currentItemStrokeWidth: number;
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
+  whiteboardPenWidths?: { hard?: number; brush?: number };
+  currentItemInkAssist?: "text" | "shape" | "magic";
+  whiteboardSelection?: {
+    bounds: { left: number; top: number; right: number; bottom: number };
+    elementIds: readonly string[];
+  };
   multiStroke?: boolean;
   toolbarReversed?: boolean;
   toolbarHidden?: boolean;
@@ -748,6 +755,8 @@ export type UIOptions = Partial<{
     brushPenWidth: number;
     palmThreshold: number;
     eraserSize: number;
+    /** Native slider units; unaffected by the display density. */
+    penWidthMax?: 20 | 40;
   };
   /** Host applications can replace the asset library with their own teaching tools. */
   library: boolean;

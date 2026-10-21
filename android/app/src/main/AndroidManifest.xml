@@ -2,11 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
         <package android:name="com.bsd.fastfile" />
         <package android:name="com.bsd.vote.android" />
         <package android:name="com.bsd.bsdcalculator" />
         <package android:name="com.hwh.spotlight" />
         <package android:name="com.bsd.timer" />
+        <package android:name="cn.wps.moffice_eng" />
+        <package android:name="cn.wps.moffice_i18n" />
+        <package android:name="com.hht.uc.FileBrowser" />
+        <package android:name="com.beststar.android.livetv" />
         <intent><action android:name="bsd.intent.action.SPLITE_SCREEN" /></intent>
         <provider android:authorities="com.bsd.systemservice.db.sourceContentProvider" />
     </queries>

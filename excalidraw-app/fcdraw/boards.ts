@@ -1,5 +1,6 @@
 import { createStore, get, set } from "idb-keyval";
 import { canvasStrokeColor } from "@excalidraw/common";
+import { t } from "@excalidraw/excalidraw/i18n";
 
 import type {
   ExcalidrawImperativeAPI,
@@ -67,7 +68,7 @@ export class BoardBook {
       this.value = stored;
       this.restore(stored.active);
     } else {
-      const first = this.capture("白板 1");
+      const first = this.capture(`${t("fcboard.白板")} 1`);
       this.value = { active: first.id, boards: [first] };
       await this.flush();
     }
@@ -120,7 +121,7 @@ export class BoardBook {
   private restore(id: string) {
     const board = this.value.boards.find((item) => item.id === id);
     if (!board) {
-      throw new Error("白板不存在");
+      throw new Error(t("fcboard.白板不存在"));
     }
     this.switching = true;
     const previousState = this.api.getAppState();
@@ -147,7 +148,7 @@ export class BoardBook {
       return;
     }
     if (!this.value.boards.some((board) => board.id === id)) {
-      throw new Error("白板不存在");
+      throw new Error(t("fcboard.白板不存在"));
     }
     await this.flush();
     const previous = this.value;
@@ -165,7 +166,8 @@ export class BoardBook {
     await this.flush();
     const board: Board = {
       ...this.capture(
-        name?.trim().slice(0, 80) || `白板 ${this.value.boards.length + 1}`,
+        name?.trim().slice(0, 80) ||
+          `${t("fcboard.白板")} ${this.value.boards.length + 1}`,
       ),
       elements: [],
       files: {},
@@ -185,7 +187,7 @@ export class BoardBook {
   async rename(id: string, name: string) {
     const trimmed = name.trim().slice(0, 80);
     if (!trimmed) {
-      throw new Error("请输入白板名称");
+      throw new Error(t("fcboard.请输入白板名称"));
     }
     const previous = this.value;
     this.value = {
@@ -210,7 +212,7 @@ export class BoardBook {
     const previous = this.value;
     const boards = previous.boards.filter((board) => board.id !== id);
     if (boards.length === previous.boards.length) {
-      throw new Error("白板不存在");
+      throw new Error(t("fcboard.白板不存在"));
     }
     const active = previous.active === id ? boards[0].id : previous.active;
     this.value = { active, boards };

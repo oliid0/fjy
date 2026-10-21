@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { within } from "@testing-library/react";
 
 import { Excalidraw, ToolbarExtras } from "../index";
@@ -9,11 +10,13 @@ describe("unified bottom toolbar", () => {
     const { container } = await render(
       <Excalidraw UIOptions={{ unifiedToolbar: true }}>
         <ToolbarExtras>
-          <button>语音指令</button>
+          <button>{t("fcboard.语音指令")}</button>
         </ToolbarExtras>
       </Excalidraw>,
     );
-    const toolbar = screen.getByRole("toolbar", { name: "白板工具栏" });
+    const toolbar = screen.getByRole("toolbar", {
+      name: t("fcboard.白板工具栏"),
+    });
     expect(
       within(toolbar).getByTestId("main-menu-trigger"),
     ).toBeInTheDocument();
@@ -22,30 +25,44 @@ describe("unified bottom toolbar", () => {
     ).toBeInTheDocument();
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(within(toolbar).queryByTestId("toolbar-rectangle")).toBeNull();
-    fireEvent.click(within(toolbar).getByRole("button", { name: "插入" }));
+    fireEvent.click(
+      within(toolbar).getByRole("button", { name: t("fcboard.插入") }),
+    );
     expect(
-      screen.getByRole("dialog", { name: "插入与工具" }),
+      screen.getByRole("dialog", { name: t("fcboard.插入与工具") }),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.图形") }));
     expect(screen.getByTestId("toolbar-rectangle")).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "插入与工具" }), {
-      key: "Escape",
-    });
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: t("fcboard.插入与工具") }),
+      {
+        key: "Escape",
+      },
+    );
     expect(toolbar.querySelector(".undo-redo-buttons")).toBeInTheDocument();
     expect(
-      within(toolbar).getByRole("button", { name: "语音指令" }),
+      within(toolbar).getByRole("button", { name: t("fcboard.语音指令") }),
     ).toBeInTheDocument();
     expect(container.querySelector(".shapes-section-container")).toBeNull();
     expect(container.querySelector(".FixedSideContainer_side_top")).toBeNull();
     expect(container.querySelector(".layer-ui__wrapper__footer")).toBeNull();
     expect(container.querySelector(".fc-editor-properties")).toBeNull();
-    const pen = within(toolbar).getByRole("button", { name: "画笔" });
-    fireEvent.click(pen);
-    expect(screen.queryByRole("dialog", { name: "画笔与对象属性" })).toBeNull();
+    const pen = within(toolbar).getByRole("button", {
+      name: t("fcboard.画笔"),
+    });
     fireEvent.click(pen);
     expect(
-      screen.getByRole("dialog", { name: "画笔与对象属性" }),
+      screen.queryByRole("dialog", { name: t("fcboard.画笔与对象属性") }),
+    ).toBeNull();
+    fireEvent.click(pen);
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.画笔与对象属性") }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "关闭属性" }));
-    expect(screen.queryByRole("dialog", { name: "画笔与对象属性" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.关闭属性") }),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.画笔与对象属性") }),
+    ).toBeNull();
   });
 });

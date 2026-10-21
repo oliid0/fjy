@@ -10,15 +10,61 @@ export type FactoryTool =
   | "spotlight"
   | "timer"
   | "split";
+export type FactoryInsertion = "document" | "media" | "signal";
 export const Classroom = registerPlugin<{
+  postAIStream(options: {
+    id: string;
+    url: string;
+    headers: Record<string, string>;
+    body: string;
+  }): Promise<{ status: number; data: string; stream: boolean }>;
+  cancelAIStream(options: { id: string }): Promise<void>;
+  addListener(
+    event: "aiStream",
+    listener: (event: { id: string; chunk: string }) => void,
+  ): Promise<PluginListenerHandle>;
+  openWebResource(options: { url: string; language?: string }): Promise<void>;
+  webResourceAction(options: {
+    action:
+      | "read"
+      | "click"
+      | "set"
+      | "key"
+      | "scroll"
+      | "back"
+      | "forward"
+      | "reload"
+      | "close";
+    selector?: string;
+    value?: string;
+    key?: string;
+    x?: number;
+    y?: number;
+  }): Promise<{
+    url?: string;
+    title?: string;
+    text?: string;
+    controls?: {
+      selector: string;
+      role: string;
+      label: string;
+      value?: string;
+      disabled: boolean;
+    }[];
+  }>;
+  getFactoryInsertions(): Promise<{ available: FactoryInsertion[] }>;
+  openFactoryInsertion(options: { insertion: FactoryInsertion }): Promise<void>;
   getFactoryTools(): Promise<{ available: FactoryTool[] }>;
   openFactoryTool(options: { tool: FactoryTool }): Promise<void>;
   startShare(options: { pages: string[] }): Promise<{ urls: string[] }>;
   stopShare(): Promise<void>;
+  sharePages(options: { pages: string[] }): Promise<void>;
+  exitApp(): Promise<void>;
   getInkProfile(): Promise<{
     hardPenWidth: number;
     brushPenWidth: number;
     eraserSize: number;
+    penWidthMax?: 20 | 40;
     palmThreshold?: number;
   }>;
   captureFrame(options?: {

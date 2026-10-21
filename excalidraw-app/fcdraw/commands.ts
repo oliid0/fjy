@@ -1,3 +1,5 @@
+import { t } from "@excalidraw/excalidraw/i18n";
+
 export type Command = { name: string; args?: Record<string, unknown> };
 type Handler = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -69,7 +71,9 @@ export class CommandRouter {
   async execute(command: Command) {
     const entry = this.commands.get(command.name);
     if (!entry) {
-      throw new Error(`当前无法执行 ${command.name}`);
+      throw new Error(
+        t("fcboard.当前无法执行 {{command}}", { command: command.name }),
+      );
     }
     return entry.handler(command.args || {});
   }

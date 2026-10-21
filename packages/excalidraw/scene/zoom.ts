@@ -33,3 +33,21 @@ export const getStateForZoom = (
     },
   };
 };
+
+/** Keep the scene point under the old centroid under the new centroid. */
+export const getStateForPinch = (
+  previous: { x: number; y: number },
+  center: { x: number; y: number },
+  nextZoom: NormalizedZoomValue,
+  appState: AppState,
+) => {
+  const state = getStateForZoom(
+    { viewportX: previous.x, viewportY: previous.y, nextZoom },
+    appState,
+  );
+  return {
+    ...state,
+    scrollX: state.scrollX + (center.x - previous.x) / nextZoom,
+    scrollY: state.scrollY + (center.y - previous.y) / nextZoom,
+  };
+};

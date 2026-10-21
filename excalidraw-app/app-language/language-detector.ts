@@ -7,19 +7,31 @@ languageDetector.init({
   languageUtils: {},
 });
 
-export const getPreferredLanguage = () => {
-  const detectedLanguages = languageDetector.detect();
+export const getPreferredLanguage = (system = false) => {
+  const detectedLanguages = languageDetector.detect(
+    system ? ["navigator"] : undefined,
+  );
 
-  const detectedLanguage = Array.isArray(detectedLanguages)
-    ? detectedLanguages[0]
-    : detectedLanguages;
-
-  const initialLanguage =
-    (detectedLanguage
-      ? // region code may not be defined if user uses generic preferred language
-        // (e.g. chinese vs instead of chinese-simplified)
-        languages.find((lang) => lang.code.startsWith(detectedLanguage))?.code
-      : null) || defaultLang.code;
-
-  return initialLanguage;
+  for (const detected of Array.isArray(detectedLanguages)
+    ? detectedLanguages
+    : [detectedLanguages]) {
+    if (!detected) {
+      continue;
+    }
+    const code = detected.replace(/_/g, "-").toLowerCase();
+    const exact = languages.find((lang) => lang.code.toLowerCase() === code);
+    if (exact) {
+      return exact.code;
+    }
+    if (code.startsWith("zh")) {
+      return /(?:hant|tw|hk|mo)/.test(code) ? "zh-TW" : "zh-CN";
+    }
+    const base = languages.find(
+      (lang) => lang.code.split("-")[0] === code.split("-")[0],
+    );
+    if (base) {
+      return base.code;
+    }
+  }
+  return defaultLang.code;
 };

@@ -1,5 +1,4 @@
-import { Capacitor } from "@capacitor/core";
-
+import { t } from "@excalidraw/excalidraw/i18n";
 export const BRAND = {
   name: "Fcboard",
   company: "方成教育",
@@ -9,6 +8,10 @@ export const BRAND = {
 export type Settings = {
   endpoint: string;
   model: string;
+  ocrModel: string;
+  textModel: string;
+  imageModel: string;
+  ocr: "auto" | "local" | "cloud";
   apiKey: string;
   speech: "local" | "system" | "custom";
   speechEndpoint: string;
@@ -18,31 +21,39 @@ export type Settings = {
   ttsKey: string;
   autoSummary: boolean;
   autoMath: boolean;
+  answerStyle: "match" | "handwritten" | "text";
 };
 
 export const defaults: Settings = {
   endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-  model: "",
+  model: "doubao-seed-2-0-mini-260428",
+  ocrModel: "",
+  textModel: "",
+  imageModel: "",
+  ocr: "auto",
   apiKey: "",
-  speech: Capacitor.isNativePlatform() ? "local" : "system",
+  speech: "system",
   speechEndpoint: "",
   speechKey: "",
   speechModel: "whisper-1",
   ttsEndpoint: "",
   ttsKey: "",
   autoSummary: true,
-  autoMath: true,
+  autoMath: false,
+  answerStyle: "handwritten",
 };
 
 export const loadSettings = (): Settings => {
   try {
+    const saved = JSON.parse(
+      localStorage.getItem("fcboard-settings") ||
+        localStorage.getItem("fcdraw-settings") ||
+        "{}",
+    );
     return {
       ...defaults,
-      ...JSON.parse(
-        localStorage.getItem("fcboard-settings") ||
-          localStorage.getItem("fcdraw-settings") ||
-          "{}",
-      ),
+      ...saved,
+      model: saved.model?.trim() || defaults.model,
     };
   } catch {
     return { ...defaults };
@@ -101,10 +112,10 @@ export const validateEndpoint = (value: string) => {
         (octets[0] === 192 && octets[1] === 168) ||
         (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)));
   if (url.protocol !== "https:" && !(url.protocol === "http:" && local)) {
-    throw new Error("请使用 HTTPS 接口或局域网 HTTP 接口");
+    throw new Error(t("fcboard.请使用 HTTPS 接口或局域网 HTTP 接口"));
   }
   if (url.username || url.password) {
-    throw new Error("请将密钥填入密钥栏");
+    throw new Error(t("fcboard.请将密钥填入密钥栏"));
   }
   return url.href;
 };

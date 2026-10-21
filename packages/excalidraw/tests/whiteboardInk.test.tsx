@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { DEFAULT_ELEMENT_PROPS } from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
@@ -40,6 +41,107 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  it("keeps hard and fountain widths independent and uses the firmware's integer thickness range", async () => {
+    const { container } = await render(
+      <Excalidraw
+        UIOptions={{
+          unifiedToolbar: true,
+          inkProfile: {
+            hardPenWidth: 4,
+            brushPenWidth: 15,
+            palmThreshold: 36,
+            eraserSize: 60,
+            penWidthMax: 20,
+          },
+        }}
+      />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    draw(canvas);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    let settings = screen.getByRole("dialog", {
+      name: t("fcboard.画笔与对象属性"),
+    });
+    const thickness = settings.querySelector("input[type='range']")!;
+    expect(thickness).toHaveAttribute("min", "2");
+    expect(thickness).toHaveAttribute("max", "20");
+    expect(thickness).toHaveAttribute("step", "1");
+    fireEvent.change(thickness, { target: { value: "8" } });
+    fireEvent.click(
+      settings.querySelector(`button[aria-label='${t("fcboard.钢笔")}']`)!,
+    );
+    pointer(canvas, "pointerdown", 100, 250);
+    pointer(canvas, "pointermove", 200, 250);
+    pointer(canvas, "pointerup", 200, 250);
+    expect(live().at(-1)!.strokeWidth).toBeCloseTo(15);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    settings = screen.getByRole("dialog", {
+      name: t("fcboard.画笔与对象属性"),
+    });
+    fireEvent.change(settings.querySelector("input[type='range']")!, {
+      target: { value: "20" },
+    });
+    fireEvent.click(
+      settings.querySelector(`button[aria-label='${t("fcboard.画笔")}']`)!,
+    );
+    pointer(canvas, "pointerdown", 100, 300);
+    pointer(canvas, "pointermove", 200, 300);
+    pointer(canvas, "pointerup", 200, 300);
+    expect(live().at(-1)!.strokeWidth).toBeCloseTo(8);
+    expect(live()[1].strokeWidth).toBeCloseTo(15);
+  });
+  it("moves the canvas one-to-one with the touch centroid and reverses immediately at the native scale limit", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    act(() => {
+      API.setAppState({
+        scrollX: 0,
+        scrollY: 0,
+        zoom: { value: getNormalizedZoom(1) },
+      });
+      h.app.setActiveTool({ type: "hand" });
+    });
+    pointer(canvas, "pointerdown", 100, 100, {
+      pointerId: 31,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointerdown", 300, 100, {
+      pointerId: 32,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointermove", 150, 120, {
+      pointerId: 31,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointermove", 350, 120, {
+      pointerId: 32,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBeCloseTo(1);
+    expect(h.state.scrollX).toBeCloseTo(50);
+    expect(h.state.scrollY).toBeCloseTo(20);
+    pointer(canvas, "pointermove", 650, 120, {
+      pointerId: 32,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBe(2);
+    pointer(canvas, "pointermove", 600, 120, {
+      pointerId: 32,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBeCloseTo(1.8);
+    pointer(canvas, "pointerup", 150, 120, {
+      pointerId: 31,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointerup", 600, 120, {
+      pointerId: 32,
+      pointerType: "touch",
+    });
+    expect(live()).toHaveLength(0);
+  });
   it("dismisses tool settings with Escape without cancelling the selected tool", async () => {
     await render(
       <Excalidraw
@@ -47,39 +149,59 @@ describe("APK-style whiteboard ink", () => {
         UIOptions={{ unifiedToolbar: true }}
       />,
     );
-    const eraser = screen.getByRole("button", { name: "橡皮" });
+    const eraser = screen.getByRole("button", { name: t("fcboard.橡皮") });
     fireEvent.click(eraser);
     fireEvent.click(eraser);
-    fireEvent.keyDown(screen.getByLabelText("橡皮设置"), { key: "Escape" });
-    expect(screen.queryByLabelText("橡皮设置")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByLabelText(t("fcboard.橡皮设置")), {
+      key: "Escape",
+    });
+    expect(
+      screen.queryByLabelText(t("fcboard.橡皮设置")),
+    ).not.toBeInTheDocument();
     expect(h.state.activeTool.type).toBe("eraser");
-    fireEvent.click(screen.getByRole("button", { name: "插入" }));
-    fireEvent.keyDown(screen.getByLabelText("插入与工具"), { key: "Escape" });
-    expect(screen.queryByLabelText("插入与工具")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.插入") }));
+    fireEvent.keyDown(screen.getByLabelText(t("fcboard.插入与工具")), {
+      key: "Escape",
+    });
+    expect(
+      screen.queryByLabelText(t("fcboard.插入与工具")),
+    ).not.toBeInTheDocument();
     expect(h.state.activeTool.type).toBe("eraser");
   });
   it("dismisses anchored tool settings when hiding the toolbar and keeps them dismissed after restoring it", async () => {
     await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
     act(() => h.app.setActiveTool({ type: "freedraw" }));
-    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
     expect(
-      screen.getByRole("dialog", { name: "画笔与对象属性" }),
+      screen.getByRole("dialog", { name: t("fcboard.画笔与对象属性") }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "隐藏工具栏" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.隐藏工具栏") }),
+    );
     expect(
-      screen.queryByRole("dialog", { name: "画笔与对象属性" }),
+      screen.queryByRole("dialog", { name: t("fcboard.画笔与对象属性") }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "显示工具栏" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.显示工具栏") }),
+    );
     expect(
-      screen.queryByRole("dialog", { name: "画笔与对象属性" }),
+      screen.queryByRole("dialog", { name: t("fcboard.画笔与对象属性") }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "橡皮" }));
-    fireEvent.click(screen.getByRole("button", { name: "橡皮" }));
-    expect(screen.getByLabelText("橡皮设置")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "隐藏工具栏" }));
-    expect(screen.queryByLabelText("橡皮设置")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "显示工具栏" }));
-    expect(screen.queryByLabelText("橡皮设置")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.橡皮") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.橡皮") }));
+    expect(screen.getByLabelText(t("fcboard.橡皮设置"))).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.隐藏工具栏") }),
+    );
+    expect(
+      screen.queryByLabelText(t("fcboard.橡皮设置")),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.显示工具栏") }),
+    );
+    expect(
+      screen.queryByLabelText(t("fcboard.橡皮设置")),
+    ).not.toBeInTheDocument();
   });
   it("clears only after the eraser slider reaches its end, preserves the board, and restores content with one undo", async () => {
     const { container } = await render(
@@ -91,10 +213,12 @@ describe("APK-style whiteboard ink", () => {
       currentItemPenMode: "brush",
     });
     draw(canvas);
-    const eraser = screen.getByRole("button", { name: "橡皮" });
+    const eraser = screen.getByRole("button", { name: t("fcboard.橡皮") });
     fireEvent.click(eraser);
     fireEvent.click(eraser);
-    const slider = screen.getByRole("slider", { name: "滑动清空当前白板" });
+    const slider = screen.getByRole("slider", {
+      name: t("fcboard.滑动清空当前白板"),
+    });
     fireEvent.change(slider, { target: { value: "80" } });
     fireEvent.pointerUp(slider);
     expect(live()).toHaveLength(1);
@@ -112,26 +236,30 @@ describe("APK-style whiteboard ink", () => {
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => h.app.setActiveTool({ type: "freedraw" }));
-    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
-    fireEvent.click(screen.getByRole("button", { name: "荧光笔" }));
-    fireEvent.change(screen.getByRole("slider", { name: "书写粗细" }), {
-      target: { value: "10" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.荧光笔") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    fireEvent.change(
+      screen.getByRole("slider", { name: t("fcboard.书写粗细") }),
+      {
+        target: { value: "10" },
+      },
+    );
     draw(canvas);
     expect(live()[0].opacity).toBe(43);
     expect(live()[0].strokeWidth).toBe(10);
     expect(live()[0].customData?.fcInk.pen).toBe("highlighter");
-    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
-    fireEvent.click(screen.getByRole("button", { name: "虚线笔" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.虚线笔") }));
     draw(canvas);
     expect(live().at(-1)!.strokeStyle).toBe("dashed");
-    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
-    fireEvent.click(screen.getByRole("button", { name: "钢笔" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.钢笔") }));
     draw(canvas);
     expect(live().at(-1)!.customData?.fcInk.pen).toBe("brush");
     expect(live().at(-1)!.opacity).toBe(100);
-    fireEvent.click(screen.getByRole("button", { name: "画笔" }));
-    fireEvent.click(screen.getByRole("button", { name: "彩虹笔" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.画笔") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.彩虹笔") }));
     API.setAppState({ width: 1000, zoom: { value: getNormalizedZoom(2) } });
     draw(canvas);
     const rainbow = live().at(-1)!;
@@ -185,7 +313,7 @@ describe("APK-style whiteboard ink", () => {
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => h.app.setActiveTool({ type: "freedraw" }));
       expect(
-        screen.getByRole("button", { name: "多点书写" }),
+        screen.getByRole("button", { name: t("fcboard.多点书写") }),
       ).toBeInTheDocument();
       const zoom = h.state.zoom.value;
       pointer(canvas, "pointerdown", 100, 200, {

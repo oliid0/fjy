@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="web_back">後退</string>
+    <string name="web_forward">前進</string>
+    <string name="web_reload">重新整理</string>
+    <string name="web_close">關閉</string>
+    <string name="web_external_app">此頁面需要其他應用程式，請從白板插入選單開啟。</string>
+    <string name="web_load_failed">網頁載入失敗，請檢查網路後重新整理。</string>
+</resources>

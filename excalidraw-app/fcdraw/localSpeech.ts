@@ -1,3 +1,4 @@
+import { t } from "@excalidraw/excalidraw/i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { blobToArrayBuffer } from "@excalidraw/excalidraw/data/blob";
 
@@ -13,6 +14,15 @@ const engine = registerPlugin<{
   }): Promise<{ lines: TranscriptLine[] }>;
   stop(options: { session: string }): Promise<{ lines: TranscriptLine[] }>;
 }>("FcboardLocalSpeech");
+
+let preparation: Promise<void> | undefined;
+export const prepareLocalSpeech = () => {
+  preparation ||= engine.prepare().catch((error) => {
+    preparation = undefined;
+    throw error;
+  });
+  return preparation;
+};
 
 export type LocalSpeechHandle = {
   stop(): Promise<void>;
@@ -45,13 +55,17 @@ export const startLocalSpeech = async (
 ): Promise<LocalSpeechHandle> => {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(
-      "内置离线中文识别请使用安卓版；浏览器可在设置选择系统或自定义语音",
+      t(
+        "fcboard.内置离线中文识别请使用安卓版；浏览器可在设置选择系统或自定义语音",
+      ),
     );
   }
   if (!window.AudioContext || !window.AudioWorkletNode) {
-    throw new Error("当前 WebView 不支持离线语音采集，请更新安卓系统 WebView");
+    throw new Error(
+      t("fcboard.当前 WebView 不支持离线语音采集，请更新安卓系统 WebView"),
+    );
   }
-  await engine.prepare();
+  await prepareLocalSpeech();
   const { session } = await engine.start();
   let media = stream;
   let context: AudioContext | undefined;
@@ -131,7 +145,7 @@ export const startLocalSpeech = async (
         return;
       }
       if (++queued > 20) {
-        onError("设备语音处理速度不足，已停止识别；录制不受影响");
+        onError(t("fcboard.设备语音处理速度不足，已停止识别；录制不受影响"));
         void finish(true).catch(() => {});
         return;
       }
@@ -168,7 +182,7 @@ export const transcribeLocalRecording = async (
   blob: Blob,
 ): Promise<TranscriptLine[]> => {
   if (!Capacitor.isNativePlatform()) {
-    throw new Error("内置离线转写请使用安卓版");
+    throw new Error(t("fcboard.内置离线转写请使用安卓版"));
   }
   const audio = new AudioContext();
   let session: string | undefined;
@@ -176,10 +190,10 @@ export const transcribeLocalRecording = async (
     const buffer = await audio.decodeAudioData(await blobToArrayBuffer(blob));
     if (buffer.duration > 1800) {
       throw new Error(
-        "超过 30 分钟的资料请使用录制时的实时文稿或自定义转写接口",
+        t("fcboard.超过 30 分钟的资料请使用录制时的实时文稿或自定义转写接口"),
       );
     }
-    await engine.prepare();
+    await prepareLocalSpeech();
     session = (await engine.start()).session;
     const lines: TranscriptLine[] = [];
     const channels = Array.from(
@@ -210,7 +224,7 @@ export const transcribeLocalRecording = async (
   } catch (error) {
     if (error instanceof DOMException) {
       throw new Error(
-        "此设备无法解析该录制的音轨，请使用实时文稿或自定义转写接口",
+        t("fcboard.此设备无法解析该录制的音轨，请使用实时文稿或自定义转写接口"),
       );
     }
     throw error;

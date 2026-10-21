@@ -1,34 +1,9 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import { t } from "@excalidraw/excalidraw/i18n";
 
 import { LessonCanvas, revealPath, validateLesson } from "./lesson";
 import { formulaSvg } from "./formula";
+import { sceneAPI } from "./test/scene";
 
-export const sceneAPI = () => {
-  let scene: readonly ExcalidrawElement[] = convertToExcalidrawElements([
-    { type: "text", text: "学生的题目", x: 10, y: 10 },
-  ]);
-  const api = {
-    getSceneElements: () => scene,
-    getAppState: () => ({
-      scrollX: 0,
-      scrollY: 0,
-      width: 1600,
-      height: 900,
-      zoom: { value: 1 },
-      selectedElementIds: {},
-    }),
-    addFiles: vi.fn(),
-    updateScene: vi.fn((update) => {
-      if (update.elements) {
-        scene = update.elements;
-      }
-    }),
-  } as unknown as ExcalidrawImperativeAPI;
-  return api;
-};
 const script = (commands: unknown[]) =>
   validateLesson({
     title: "一次函数",
@@ -93,7 +68,7 @@ describe("progressive lesson writing", () => {
   });
   it("rejects unknown AI operations before changing a scene", () => {
     expect(() => script([{ type: "eval", text: "alert(1)" }])).toThrow(
-      "不支持",
+      t("fcboard.不支持的教学命令：{{type}}", { type: "eval" }),
     );
     expect(() =>
       script([
@@ -105,7 +80,7 @@ describe("progressive lesson writing", () => {
           ],
         },
       ]),
-    ).toThrow("范围");
+    ).toThrow(t("fcboard.教学命令的数值超出范围"));
     expect(() =>
       validateLesson({
         steps: [

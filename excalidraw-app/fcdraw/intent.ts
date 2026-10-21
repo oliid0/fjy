@@ -69,6 +69,9 @@ export const localMathIntent = (
 /** Selection is an implicit math request; ordinary prose and lone labels stay untouched. */
 export const selectionMathIntent = (text: string) => {
   const normalized = normalizeExpression(text).trim();
+  if (/^f\s*\(?x\)?\s*=\s*y$/i.test(normalized)) {
+    return { action: "axes" as const };
+  }
   const intent = localMathIntent(normalized);
   if (intent) {
     return intent;

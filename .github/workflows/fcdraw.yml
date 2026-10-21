@@ -66,12 +66,6 @@ jobs:
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
       - run: pnpm exec cap sync android
-      - name: Install browser for layout and interaction checks
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Verify production whiteboard interactions
-        run: |
-          node scripts/fetch-courseware-fixtures.mjs
-          pnpm exec playwright test
       - uses: actions/cache@v4
         with:
           path: android/app/src/main/assets/speech
@@ -90,6 +84,12 @@ jobs:
           name: Fcboard-Android-APK
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+      - name: Install browser for layout and interaction checks
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify production whiteboard interactions
+        run: |
+          node scripts/fetch-courseware-fixtures.mjs
+          pnpm exec playwright test
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

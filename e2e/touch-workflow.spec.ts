@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
-import { selectMenu } from "./menu";
+import { openSettingsMenu, selectMenu } from "./menu";
 
 test("displayed handwriting can be dragged and lasso-selected at its visible bend", async ({
   page,
@@ -373,7 +373,7 @@ test("green and black chalkboards use visible white ink and restore dark ink on 
     page.getByRole("button", { name: "新建白板", exact: true }),
   ).toBeEnabled();
   for (const [index, color] of ["#123d32", "#000000", "#ffffff"].entries()) {
-    await page.getByTestId("main-menu-trigger").click();
+    await openSettingsMenu(page);
     await page.getByTestId(`color-top-pick-${color}`).click();
     await page.keyboard.press("Escape");
     await page.keyboard.press("t");
@@ -410,7 +410,7 @@ test("chalkboard background and white writing remain literal in a dark interface
   await expect(
     page.getByRole("button", { name: "新建白板", exact: true }),
   ).toBeEnabled();
-  await page.getByTestId("main-menu-trigger").click();
+  await openSettingsMenu(page);
   await page.getByTestId("color-top-pick-#000000").click();
   await page.keyboard.press("Escape");
   await expect

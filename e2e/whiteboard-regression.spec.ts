@@ -130,8 +130,7 @@ test("original PNG and SVG export still produce usable images", async ({
 }, info) => {
   await ready(page);
   await rectangle(page);
-  await page.getByTestId("main-menu-trigger").click();
-  await page.getByText("导出图片...", { exact: true }).click();
+  await selectMenu(page, "导出图片...");
   for (const [name, extension] of [
     ["导出为 PNG", "png"],
     ["导出为 SVG", "svg"],

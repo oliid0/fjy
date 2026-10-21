@@ -1,5 +1,12 @@
 import type { Page } from "@playwright/test";
 
+export const openSettingsMenu = async (page: Page) => {
+  await page.getByTestId("main-menu-trigger").click();
+  const settings = page.getByRole("menuitem", { name: "设置", exact: true });
+  await settings.focus();
+  await settings.press("ArrowRight");
+};
+
 export const selectMenu = async (page: Page, label: string) => {
   if (
     [

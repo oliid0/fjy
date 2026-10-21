@@ -169,12 +169,17 @@ test("selected handwriting sends its PNG only after tapping calculate", async ({
   await page.route(
     "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
     async (route) => {
-      const content = route.request().postDataJSON().messages[0].content;
+      const messages = route.request().postDataJSON().messages;
       expect(
-        content.some(
-          (part: { type: string; image_url?: { url: string } }) =>
-            part.type === "image_url" &&
-            part.image_url?.url.startsWith("data:image/png;base64,"),
+        messages.some(
+          (message: { role: string; content: unknown }) =>
+            message.role === "user" &&
+            Array.isArray(message.content) &&
+            message.content.some(
+              (part: { type: string; image_url?: { url: string } }) =>
+                part.type === "image_url" &&
+                part.image_url?.url.startsWith("data:image/png;base64,"),
+            ),
         ),
       ).toBe(true);
       requests++;

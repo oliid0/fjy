@@ -329,7 +329,6 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           void classroomCommands.execute({ name: "panel.close" });
         }
         api.updateScene({ appState: { toolbarHidden: false } });
-        api.setActiveTool({ type: "freedraw" });
         setOpen(true);
       }),
       classroomCommands.register(
@@ -512,7 +511,6 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               if (classroomCommands.has("panel.close")) {
                 void classroomCommands.execute({ name: "panel.close" });
               }
-              api.setActiveTool({ type: "freedraw" });
               setOpen(!open);
             }}
           >

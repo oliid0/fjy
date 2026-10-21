@@ -5,6 +5,9 @@ import { selectMenu } from "./menu";
 import type { Page } from "@playwright/test";
 
 const enterText = async (page: Page, text: string, select = true) => {
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
   const editor = page.locator("textarea.excalidraw-wysiwyg");

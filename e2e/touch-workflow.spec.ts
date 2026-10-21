@@ -100,7 +100,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   await pen.click();
   const thickness = page.getByRole("slider", { name: "书写粗细", exact: true });
   await thickness.press("Home");
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 10; i++) {
     await thickness.press("ArrowRight");
   }
   await expect(thickness).toHaveValue("12");
@@ -309,6 +309,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     page.getByRole("dialog", { name: "画笔与对象属性" }),
   ).toHaveCount(0);
   await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+  await page.getByRole("button", { name: "图形", exact: true }).click();
   await expect(page.getByTestId("toolbar-rectangle")).toBeVisible();
   await page.keyboard.press("Escape");
   const eraser = toolbar.getByRole("button", { name: "橡皮", exact: true });

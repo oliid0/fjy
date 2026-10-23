@@ -12,7 +12,8 @@ import Sitemap from "vite-plugin-sitemap";
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
   // To load .env variables
-  const envVars = loadEnv(mode, `../`);
+  const envDir = path.resolve(__dirname, "../config");
+  const envVars = loadEnv(mode, envDir);
   // https://vitejs.dev/config/
   return {
     server: {
@@ -20,9 +21,7 @@ export default defineConfig(({ mode }) => {
       // open the browser
       open: true,
     },
-    // We need to specify the envDir since now there are no
-    //more located in parallel with the vite.config.ts file but in parent dir
-    envDir: "../",
+    envDir,
     worker: { format: "es" },
     resolve: {
       alias: [
@@ -50,10 +49,7 @@ export default defineConfig(({ mode }) => {
         },
         {
           find: /^@excalidraw\/excalidraw$/,
-          replacement: path.resolve(
-            __dirname,
-            "../packages/fcboard/index.tsx",
-          ),
+          replacement: path.resolve(__dirname, "../packages/fcboard/index.tsx"),
         },
         {
           find: /^@excalidraw\/excalidraw\/(.*?)/,

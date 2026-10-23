@@ -100,6 +100,7 @@ export const FactoryMenu = ({
               >
                 <MenuList
                   key={pages.length}
+                  data-testid="dropdown-menu"
                   autoFocusItem
                   aria-label={page ? String(page.title) : t("buttons.menu")}
                   onKeyDown={(event) => {
@@ -146,18 +147,24 @@ export const FactoryMenu = ({
                     if (!trigger || !content) {
                       return null;
                     }
+                    const enter = () =>
+                      setPages([
+                        ...pages,
+                        {
+                          title: trigger.props.children,
+                          children: content.props.children,
+                        },
+                      ]);
                     return (
                       <MenuItem
                         aria-haspopup="menu"
-                        onClick={() =>
-                          setPages([
-                            ...pages,
-                            {
-                              title: trigger.props.children,
-                              children: content.props.children,
-                            },
-                          ])
-                        }
+                        onClick={enter}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowRight") {
+                            event.preventDefault();
+                            enter();
+                          }
+                        }}
                       >
                         <MenuItemContent icon={trigger.props.icon}>
                           {trigger.props.children}

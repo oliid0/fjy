@@ -1,3 +1,4 @@
+base_path: ..
 files:
   - source: /packages/fcboard/locales/en.json
     translation: /packages/fcboard/locales/%locale%.json

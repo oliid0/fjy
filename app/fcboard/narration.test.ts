@@ -1,12 +1,20 @@
 import { t } from "@excalidraw/excalidraw/i18n";
+import { Capacitor } from "@capacitor/core";
 
 import { createNarrator } from "./narration";
+import { OfflineTts, narrationChunks } from "./nativeNarration";
+
+vi.mock("./nativeNarration", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./nativeNarration")>()),
+  OfflineTts: { synthesize: vi.fn(), cancel: vi.fn() },
+}));
 
 describe("one audible teacher", () => {
   const pause = vi.fn();
   const play = vi.fn().mockResolvedValue(undefined);
   const players: {
     onended?: () => void;
+    onerror?: () => void;
     pause: typeof pause;
     play: typeof play;
   }[] = [];
@@ -29,6 +37,11 @@ describe("one audible teacher", () => {
     players.length = 0;
     pause.mockClear();
     play.mockClear();
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("web");
+    vi.mocked(OfflineTts.synthesize).mockResolvedValue({
+      path: "file:///data/cache/voice.wav",
+    });
+    vi.mocked(OfflineTts.cancel).mockResolvedValue(undefined);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -86,6 +99,84 @@ describe("one audible teacher", () => {
     );
     await narrator.finished;
     expect(players).toHaveLength(0);
+    narrator.stop();
+  });
+  const android = () => {
+    localStorage.setItem("fcboard-settings", "{}");
+    vi.mocked(Capacitor.getPlatform).mockReturnValue("android");
+  };
+  it("uses the bundled Android engine without an endpoint or browser speech service", async () => {
+    android();
+    const narrator = createNarrator();
+    const boundary = vi.fn();
+    await narrator.speak("牛顿定律", { onBoundary: boundary });
+    expect(OfflineTts.synthesize).toHaveBeenCalledWith({
+      id: expect.any(String),
+      text: "牛顿定律",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(1);
+    players[0].onended?.();
+    await narrator.finished;
+    expect(boundary).toHaveBeenLastCalledWith(4);
+    expect(OfflineTts.cancel).toHaveBeenCalledWith({
+      id: vi.mocked(OfflineTts.synthesize).mock.calls[0][0].id,
+    });
+    narrator.stop();
+  });
+  it("does not play a cancelled native result after the board or lesson changes", async () => {
+    android();
+    let resolve!: (value: { path: string }) => void;
+    vi.mocked(OfflineTts.synthesize).mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const narrator = createNarrator();
+    const pending = narrator.speak("已经取消");
+    narrator.stop();
+    resolve({ path: "file:///data/cache/late.wav" });
+    await pending;
+    await narrator.finished;
+    expect(OfflineTts.cancel).toHaveBeenCalledTimes(1);
+    expect(players).toHaveLength(0);
+  });
+  it("bounds long mixed-language inference, preserves text, and pauses across chunk preparation", async () => {
+    android();
+    const text = "牛顿定律， describes motion. 🧑‍🏫 ".repeat(20);
+    const chunks = narrationChunks(text);
+    expect(chunks.join("")).toBe(text);
+    expect(chunks.every((chunk) => Array.from(chunk).length <= 80)).toBe(true);
+    expect(chunks.every((chunk) => !/[\ud800-\udbff]$/.test(chunk))).toBe(true);
+    const narrator = createNarrator();
+    await narrator.speak(text);
+    let ended = false;
+    void narrator.finished.then(() => {
+      ended = true;
+    });
+    narrator.pause();
+    players[0].onended?.();
+    await vi.waitFor(() => expect(players).toHaveLength(2));
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(ended).toBe(false);
+    await narrator.resume();
+    expect(play).toHaveBeenCalledTimes(2);
+    narrator.stop();
+    await narrator.finished;
+  });
+  it("reports real native and playback errors so teaching can use paced captions", async () => {
+    android();
+    const narrator = createNarrator();
+    vi.mocked(OfflineTts.synthesize).mockRejectedValueOnce(
+      new Error("model unavailable"),
+    );
+    await expect(narrator.speak("讲解")).rejects.toThrow("model unavailable");
+    await narrator.finished;
+    await narrator.speak("再次讲解");
+    players[0].onerror?.();
+    await expect(narrator.finished).rejects.toThrow(
+      t("fcboard.播报接口未返回有效音频"),
+    );
     narrator.stop();
   });
 });

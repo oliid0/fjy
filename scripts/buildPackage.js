@@ -9,11 +9,11 @@ const { parseEnvVariables } = require("../packages/fcboard/env.cjs");
 
 const ENV_VARS = {
   development: {
-    ...parseEnvVariables(`${__dirname}/../.env.development`),
+    ...parseEnvVariables(`${__dirname}/../config/.env.development`),
     DEV: true,
   },
   production: {
-    ...parseEnvVariables(`${__dirname}/../.env.production`),
+    ...parseEnvVariables(`${__dirname}/../config/.env.production`),
     PROD: true,
   },
 };

@@ -121,9 +121,8 @@ export const BoardSettings = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     : "#ffffff"
                 }
                 onChange={(event) =>
-                  api.updateScene({
-                    appState: { viewBackgroundColor: event.target.value },
-                    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+                  api.executeAction("changeViewBackgroundColor", {
+                    viewBackgroundColor: event.target.value,
                   })
                 }
               />

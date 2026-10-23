@@ -3,7 +3,7 @@ name: Fcboard verification and Android APK
 on:
   push:
     branches: [main]
-    paths-ignore: [history.md, README.md]
+    paths-ignore: [history.md, docs/README.md]
   pull_request:
   workflow_dispatch:
 
@@ -65,16 +65,25 @@ jobs:
         env:
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
-      - run: pnpm exec cap sync android
+      - run: pnpm --dir app exec cap sync android
       - uses: actions/cache@v4
         with:
           path: android/app/src/main/assets/speech
           key: fcboard-speech-${{ hashFiles('scripts/speech-models.json') }}
       - name: Bundle offline Chinese speech model
         run: node scripts/fetch-speech-models.mjs
+      - uses: actions/cache@v4
+        with:
+          path: |
+            android/app/src/main/assets/tts
+            android/app/libs/sherpa-onnx-1.13.8.aar
+          key: fcboard-tts-${{ hashFiles('scripts/tts-models.json') }}
+      - name: Bundle verified offline Chinese and English narration
+        run: python3 scripts/fetch-tts-models.py
       - name: Bundle verified offline Digital Ink models
         run: python3 scripts/fetch-ink-models.py
       - name: Package and verify Android
+        id: android-package
         working-directory: android
         run: |
           chmod +x gradlew
@@ -89,13 +98,15 @@ jobs:
       - name: Verify production whiteboard interactions
         run: |
           node scripts/fetch-courseware-fixtures.mjs
-          pnpm exec playwright test
+          pnpm exec playwright test --config config/playwright.config.ts
       - name: Enable emulator acceleration
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Verify offline speech and screen capture on Android
+      - name: Verify offline handwriting, speech, narration and screen capture on Android
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35

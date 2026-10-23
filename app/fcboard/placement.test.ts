@@ -117,6 +117,36 @@ it("preserves the question and reports a full visible board instead of inserting
   expect(api.scrollToContent).not.toHaveBeenCalled();
 });
 
+it("keeps the selected text alignment and size when inserting the next answer", () => {
+  const api = sceneAPI();
+  insertElements(api, [
+    {
+      type: "text",
+      text: "课程笔记",
+      x: 120,
+      y: 100,
+      fontSize: 40,
+      strokeColor: "#dc2626",
+      textAlign: "center",
+    },
+  ]);
+  const source = api
+    .getSceneElements()
+    .filter(
+      (element) => element.type === "text" && element.text === "课程笔记",
+    );
+  const ids = insertText(api, "已统一样式", undefined, undefined, source);
+  const answer = api
+    .getSceneElements()
+    .find((element) => ids.includes(element.id));
+  expect(answer).toMatchObject({
+    type: "text",
+    fontSize: 40,
+    strokeColor: "#dc2626",
+    textAlign: "center",
+  });
+});
+
 it.each([0.5, 1, 2])(
   "fits long Chinese/English answers into a 3080×1240 visible board at zoom %s",
   (zoom) => {

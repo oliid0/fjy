@@ -1,6 +1,8 @@
 import { t, getLanguage } from "@excalidraw/excalidraw/i18n";
+import { Capacitor } from "@capacitor/core";
 
 import { currentSettings, validateEndpoint } from "./settings";
+import { OfflineTts, narrationChunks } from "./nativeNarration";
 
 let activeOwner: { pause: () => void } | undefined;
 
@@ -10,16 +12,25 @@ export const createNarrator = () => {
   let player: HTMLAudioElement | undefined;
   let url: string | undefined;
   let utterance: SpeechSynthesisUtterance | undefined;
+  let nativeId: string | undefined;
   let paused = false;
   let words = "";
   let offset = 0;
   let rate = 1;
   let boundary: ((offset: number) => void) | undefined;
   let complete: (() => void) | undefined;
+  let reject: ((error: Error) => void) | undefined;
   let finished = Promise.resolve();
   const finish = () => {
     complete?.();
     complete = undefined;
+    reject = undefined;
+  };
+  const fail = (error: Error) => {
+    reject?.(error);
+    complete = undefined;
+    reject = undefined;
+    stop();
   };
   const owner = { pause: () => pause() };
   const stop = () => {
@@ -31,6 +42,10 @@ export const createNarrator = () => {
       player.pause();
     }
     player = undefined;
+    if (nativeId) {
+      void OfflineTts.cancel({ id: nativeId }).catch(() => {});
+      nativeId = undefined;
+    }
     if (utterance && activeOwner === owner) {
       window.speechSynthesis?.cancel();
     }
@@ -70,7 +85,7 @@ export const createNarrator = () => {
     };
     next.onerror = () => {
       if (!paused && utterance === next) {
-        finish();
+        fail(new Error(t("fcboard.播报接口未返回有效音频")));
       }
     };
     window.speechSynthesis.cancel();
@@ -112,14 +127,65 @@ export const createNarrator = () => {
       offset = 0;
       rate = Math.min(2, Math.max(0.5, options?.rate || 1));
       boundary = options?.onBoundary;
-      finished = new Promise<void>((resolve) => {
+      finished = new Promise<void>((resolve, failure) => {
         complete = resolve;
+        reject = failure;
       });
+      // Playback can fail before the caller has returned from speak().
+      void finished.catch(() => {});
       const settings = currentSettings();
       const controller = new AbortController();
       request = controller;
       try {
-        if (!settings.ttsEndpoint) {
+        if (!settings.ttsEndpoint && Capacitor.getPlatform() === "android") {
+          const chunks = narrationChunks(text);
+          if (!chunks.length) {
+            finish();
+            return;
+          }
+          const next = async (index: number) => {
+            if (controller.signal.aborted) {
+              return;
+            }
+            const id = crypto.randomUUID();
+            nativeId = id;
+            const result = await OfflineTts.synthesize({
+              id,
+              text: chunks[index],
+            });
+            if (controller.signal.aborted) {
+              return;
+            }
+            player = new Audio(Capacitor.convertFileSrc(result.path));
+            player.playbackRate = rate;
+            player.onerror = () =>
+              fail(new Error(t("fcboard.播报接口未返回有效音频")));
+            player.onended = () => {
+              if (controller.signal.aborted) {
+                return;
+              }
+              player = undefined;
+              nativeId = undefined;
+              void OfflineTts.cancel({ id }).catch(() => {});
+              offset += chunks[index].length;
+              boundary?.(offset);
+              if (index + 1 === chunks.length) {
+                finish();
+              } else {
+                void next(index + 1).catch((error) => {
+                  if (!controller.signal.aborted) {
+                    fail(error);
+                  }
+                });
+              }
+            };
+            if (!paused) {
+              await player.play();
+            }
+          };
+          await next(0);
+          return;
+        } else if (!settings.ttsEndpoint) {
           if (
             !window.speechSynthesis ||
             typeof SpeechSynthesisUtterance === "undefined"
@@ -160,9 +226,15 @@ export const createNarrator = () => {
         }
         url = URL.createObjectURL(blob);
         player = new Audio(url);
+
         player.playbackRate = rate;
-        player.onended = finish;
-        player.onerror = finish;
+        player.onended = () => {
+          offset = words.length;
+          boundary?.(offset);
+          finish();
+        };
+        player.onerror = () =>
+          fail(new Error(t("fcboard.播报接口未返回有效音频")));
         if (!paused) {
           await player.play();
         }

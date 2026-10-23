@@ -97,25 +97,28 @@ test("transparent PPT ink survives closing, can be erased, and undo restores it"
     steps: 10,
   });
   await page.mouse.up();
-  await expect(layer.locator("polyline")).toHaveCount(1);
-  const original = (await layer
-    .locator("polyline")
-    .getAttribute("points"))!.split(" ");
+  await expect(layer.locator("path")).toHaveCount(1);
+  const original = (await layer.locator("path").getAttribute("d"))!.match(
+    /-?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi,
+  )!;
   await page.getByRole("button", { name: "擦除板书", exact: true }).click();
   await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.3);
-  await expect(layer.locator("polyline")).toHaveCount(2);
+  await expect(layer.locator("path")).toHaveCount(2);
   const fragments = await layer
-    .locator("polyline")
+    .locator("path")
     .evaluateAll((nodes) =>
-      nodes.map((node) => node.getAttribute("points")!.split(" ")),
+      nodes.map(
+        (node) =>
+          node.getAttribute("d")!.match(/-?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi)!,
+      ),
     );
-  expect(fragments[0][0]).toBe(original[0]);
-  expect(fragments[1].at(-1)).toBe(original.at(-1));
+  expect(fragments[0].slice(0, 2)).toEqual(original.slice(0, 2));
+  expect(fragments[1].slice(-2)).toEqual(original.slice(-2));
   await page.getByRole("button", { name: "撤销板书", exact: true }).click();
-  await expect(layer.locator("polyline")).toHaveCount(1);
+  await expect(layer.locator("path")).toHaveCount(1);
   await page.getByRole("button", { name: "关闭课件" }).click();
   await openFile(page, "testPPT.pptx");
-  await expect(layer.locator("polyline")).toHaveCount(1);
+  await expect(layer.locator("path")).toHaveCount(1);
   await page.screenshot({ path: info.outputPath("ppt-transparent-ink.png") });
 });
 
@@ -344,7 +347,7 @@ test("voice draws into the visible PPT and function controls update its transpar
     page.getByRole("slider", { name: "旋转", exact: true }),
   ).toBeVisible();
   await expect
-    .poll(() => page.locator(".fc-document-ink polyline").count())
+    .poll(() => page.locator(".fc-document-ink path").count())
     .toBeGreaterThan(3);
   await page.getByRole("button", { name: "收起工具参数" }).click();
   await page.evaluate(() =>
@@ -358,7 +361,7 @@ test("voice draws into the visible PPT and function controls update its transpar
   await expect(slider).toHaveValue("1.1");
   const panelBounds = (await page.locator(".fc-panel").boundingBox())!;
   const curveBounds = (await page
-    .locator(".fc-document-ink polyline")
+    .locator(".fc-document-ink path")
     .last()
     .boundingBox())!;
   expect(panelBounds.x).toBeGreaterThan(curveBounds.x + curveBounds.width);

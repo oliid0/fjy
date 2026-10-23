@@ -382,7 +382,10 @@ export const insertText = (
           ...layout,
           strokeColor: source?.strokeColor || state.currentItemStrokeColor,
           opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
-          textAlign: "left",
+          textAlign:
+            textSource?.type === "text"
+              ? textSource.textAlign
+              : state.currentItemTextAlign || "left",
           customData,
         },
       ]);

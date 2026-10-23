@@ -1902,7 +1902,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     <section aria-label={t("fcboard.语音播报（可选）")}>
                       <h3>{t("fcboard.语音播报（可选）")}</h3>
                       <label>
-                        {t("fcboard.IndexTTS / 自定义播报接口")}
+                        {t("fcboard.自定义播报接口（可选）")}
                         <input
                           type="url"
                           value={settings.ttsEndpoint}
@@ -1931,7 +1931,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       </label>
                       <p>
                         {t(
-                          "fcboard.IndexTTS 运行在局域网电脑上。留空时不启用播报；不影响内置语音识别。",
+                          "fcboard.安卓版留空使用内置离线中英文播报；浏览器使用系统声音。填写接口可替换播报引擎。",
                         )}
                       </p>
                     </section>

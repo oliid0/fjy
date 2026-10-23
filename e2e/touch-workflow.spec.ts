@@ -4,6 +4,24 @@ import { expect, test } from "@playwright/test";
 
 import { openSettingsMenu, selectMenu } from "./menu";
 
+import type { Page } from "@playwright/test";
+
+const setBackground = async (page: Page, color: string) => {
+  await openSettingsMenu(page);
+  await page
+    .locator('.fc-board-settings input[type="color"]')
+    .evaluate((input, value) => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }, color);
+  await page
+    .getByRole("dialog", { name: "白板设置", exact: true })
+    .press("Escape");
+};
+
 test("displayed handwriting can be dragged and lasso-selected at its visible bend", async ({
   page,
 }) => {
@@ -374,9 +392,7 @@ test("green and black chalkboards use visible white ink and restore dark ink on 
     page.getByRole("button", { name: "新建白板", exact: true }),
   ).toBeEnabled();
   for (const [index, color] of ["#123d32", "#000000", "#ffffff"].entries()) {
-    await openSettingsMenu(page);
-    await page.getByTestId(`color-top-pick-${color}`).click();
-    await page.keyboard.press("Escape");
+    await setBackground(page, color);
     await page.keyboard.press("t");
     await page.mouse.click(180 + index * 260, 200);
     const input = page.locator("textarea.excalidraw-wysiwyg");
@@ -411,9 +427,7 @@ test("chalkboard background and white writing remain literal in a dark interface
   await expect(
     page.getByRole("button", { name: "新建白板", exact: true }),
   ).toBeEnabled();
-  await openSettingsMenu(page);
-  await page.getByTestId("color-top-pick-#000000").click();
-  await page.keyboard.press("Escape");
+  await setBackground(page, "#000000");
   await expect
     .poll(() =>
       page

@@ -1,7 +1,10 @@
+import path from "node:path";
+
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: "../e2e",
+  outputDir: path.resolve(__dirname, "../test-results"),
   workers: 1,
   timeout: 60000,
   retries: 0,
@@ -13,6 +16,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
+    cwd: path.resolve(__dirname, ".."),
     command: "pnpm exec http-server app/build -a 127.0.0.1 -p 4173 --silent",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,

@@ -33,6 +33,8 @@ repositories {
 dependencies {
     implementation 'com.google.mlkit:digital-ink-recognition:18.1.0'
     implementation 'ai.moonshine:moonshine-voice:0.1.5'
+    implementation files('libs/sherpa-onnx-1.13.8.aar')
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.7.20'
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
     implementation 'org.nanohttpd:nanohttpd-websocket:2.3.1'
     implementation fileTree(include: ['*.jar'], dir: 'libs')

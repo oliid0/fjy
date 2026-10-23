@@ -5,7 +5,7 @@ import {
 } from "@excalidraw/common";
 import { vi } from "vitest";
 
-// Import directly to avoid the @excalidraw/common throttleRAF mock from setupTests.ts.
+// Import directly to avoid the @excalidraw/common throttleRAF mock from tests/setup.ts.
 import { throttleRAF } from "./utils";
 
 type RafCallback = FrameRequestCallback;

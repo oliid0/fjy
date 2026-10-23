@@ -69,16 +69,16 @@ test("original selection, moving, duplication, deletion, history and zoom remain
   await expect.poll(async () => (await elements(page)).length).toBe(2);
   await page.getByRole("button", { name: "重做", exact: true }).click();
   await expect.poll(async () => (await elements(page)).length).toBe(1);
-  await page.getByRole("button", { name: "插入", exact: true }).click();
-  await page.getByRole("button", { name: "图形", exact: true }).click();
-  await page.getByRole("button", { name: "放大", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "重置缩放", exact: true }),
-  ).not.toHaveText("100%");
-  await page.getByRole("button", { name: "重置缩放", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "重置缩放", exact: true }),
-  ).toHaveText("100%");
+  const zoom = () =>
+    page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
+          ?.value,
+    );
+  await page.keyboard.press("Control+Equal");
+  await expect.poll(zoom).toBeGreaterThan(1);
+  await page.keyboard.press("Control+Digit0");
+  await expect.poll(zoom).toBe(1);
   await page.screenshot({ path: info.outputPath("native-edit-history.png") });
 });
 

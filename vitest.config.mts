@@ -58,7 +58,7 @@ export default defineConfig({
     sequence: {
       hooks: "parallel",
     },
-    setupFiles: ["./setupTests.ts"],
+    setupFiles: ["./tests/setup.ts"],
     globals: true,
     minWorkers: 1,
     maxWorkers: 2,

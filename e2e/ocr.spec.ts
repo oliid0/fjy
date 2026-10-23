@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import letters from "../excalidraw-app/fcdraw/handwriting/glyphs.json";
+import letters from "../app/fcboard/handwriting/glyphs.json";
 
 test("handwritten selection calculates with bundled OCR and no cloud request", async ({
   page,
@@ -66,7 +66,7 @@ test("handwritten selection calculates with bundled OCR and no cloud request", a
   await page.waitForTimeout(2100);
   expect(cloudRequests).toBe(0);
   const started = Date.now();
-  await page.getByRole("button", { name: "计算", exact: true }).click();
+  await page.getByRole("button", { name: "AI", exact: true }).click();
   await expect
     .poll(
       () =>

@@ -68,6 +68,8 @@ import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
 import { factoryInkDashes, isFactoryStroke } from "./factoryInk";
+import { isFactoryBrush } from "./factoryBrush";
+import { factoryPath2D } from "./factoryPath";
 import { rainbowInkCoordinates, rainbowInkStops } from "./rainbowInk";
 
 import type {
@@ -419,6 +421,41 @@ const drawElementOnCanvas = (
     case "freedraw": {
       // Draw directly to canvas
       context.save();
+
+      if (
+        (isFactoryStroke(element) || isFactoryBrush(element)) &&
+        element.backgroundColor === "transparent"
+      ) {
+        context.fillStyle =
+          renderConfig.theme === THEME.DARK
+            ? applyDarkModeFilter(element.strokeColor)
+            : element.strokeColor;
+        if (isFactoryBrush(element)) {
+          context.fill(factoryPath2D(element));
+        } else {
+          context.strokeStyle = context.fillStyle;
+          const rainbow = rainbowInkCoordinates(element);
+          if (rainbow) {
+            const gradient = context.createLinearGradient(...rainbow);
+            rainbowInkStops.forEach(([offset, color]) =>
+              gradient.addColorStop(offset, color),
+            );
+            context.strokeStyle = gradient;
+          }
+          context.lineWidth = element.strokeWidth;
+          context.lineCap = "round";
+          context.lineJoin = "round";
+          if (element.strokeStyle !== "solid") {
+            context.setLineDash(factoryInkDashes(element));
+            context.lineDashOffset = -(
+              element.customData?.fcInk?.dashOffset || 0
+            );
+          }
+          context.stroke(factoryPath2D(element));
+        }
+        context.restore();
+        break;
+      }
 
       const shapes = ShapeCache.generateElementShape(element, renderConfig);
 

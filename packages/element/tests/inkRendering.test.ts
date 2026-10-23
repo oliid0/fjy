@@ -13,15 +13,15 @@ import type {
 import { Scene } from "../src/Scene";
 import { syncInvalidIndices } from "../src/fractionalIndex";
 
-import { getDefaultAppState } from "../../excalidraw/appState";
-import { getNormalizedZoom } from "../../excalidraw/scene";
-import { API } from "../../excalidraw/tests/helpers/api";
+import { getDefaultAppState } from "../../fcboard/appState";
+import { getNormalizedZoom } from "../../fcboard/scene";
+import { API } from "../../fcboard/tests/helpers/api";
 import { renderElement, elementWithCanvasCache } from "../src/renderElement";
 import { factoryInkPath } from "../src/factoryInk";
 import { factoryBrushPath } from "../src/factoryBrush";
 import { rainbowInkCoordinates, rainbowInkStops } from "../src/rainbowInk";
 import { getElementAbsoluteCoords } from "../src/bounds";
-import { eraseStroke } from "../../excalidraw/eraser/stroke";
+import { eraseStroke } from "../../fcboard/eraser/stroke";
 
 describe("whiteboard vector ink", () => {
   it.each([0, Math.PI / 3])(

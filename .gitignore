@@ -22,13 +22,14 @@ npm-debug.log*
 package-lock.json
 yarn-debug.log*
 yarn-error.log*
-packages/excalidraw/types
+packages/fcboard/types
 coverage
 dev-dist
 html
 meta*.json
 .claude
 android/app/src/main/assets/speech/
+android/app/src/main/assets/digital-ink/
 public/ocr/
 test-results/
 playwright-report/

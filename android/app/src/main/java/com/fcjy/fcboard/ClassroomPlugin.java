@@ -208,6 +208,10 @@ public class ClassroomPlugin extends Plugin {
                 .getMethod("getInt", String.class, int.class)
                 .invoke(null, "persist.sys.wb.addNib", 1);
             if (Integer.valueOf(1).equals(nib)) penWidthMax = 20;
+            Object dual = Class.forName("android.os.SystemProperties")
+                .getMethod("getInt", String.class, int.class)
+                .invoke(null, "persist.sys.custom.doublePen.switch", 0);
+            result.put("dualPen", Integer.valueOf(1).equals(dual));
         } catch (ReflectiveOperationException | SecurityException unavailable) {
             // Non-factory Android devices can prohibit access to this firmware property.
         }
@@ -221,6 +225,17 @@ public class ClassroomPlugin extends Plugin {
             }
         } catch (Exception unavailable) {
             // Other Android devices need no vendor provider; keep the manual CSS-pixel setting.
+        }
+        // ZWhiteBoardActivity.getThickSize applies 4/5 to the stored physical contact threshold.
+        try (android.database.Cursor cursor = getContext().getContentResolver().query(
+                android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
+                new String[]{"thick_threshold"}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("thick_threshold"));
+                if (Float.isFinite(threshold) && threshold > 0) result.put("thickThreshold", threshold * 4.0 / 5.0);
+            }
+        } catch (Exception unavailable) {
+            // Manual calibration and explicit fine/thick selection remain available.
         }
         call.resolve(result);
     }

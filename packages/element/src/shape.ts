@@ -1073,7 +1073,7 @@ export const toggleLinePolygonState = (
 // -----------------------------------------------------------------------------
 
 // NOTE not cached (-> for SVG export)
-const getFreeDrawSvgPath = (element: ExcalidrawFreeDrawElement) => {
+export const getFreeDrawSvgPath = (element: ExcalidrawFreeDrawElement) => {
   if (isFactoryBrush(element)) {
     return factoryBrushPath(element) as SVGPathString;
   }

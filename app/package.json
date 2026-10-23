@@ -1,0 +1,69 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "private": true,
+  "homepage": ".",
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not ie <= 11",
+      "not op_mini all",
+      "not safari < 12",
+      "not kaios <= 2.5",
+      "not edge < 79",
+      "not chrome < 70",
+      "not and_uc < 13",
+      "not samsung < 10"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@capacitor-community/speech-recognition": "7.0.1",
+    "@emotion/react": "11.14.0",
+    "@emotion/styled": "11.14.1",
+    "@excalidraw/random-username": "1.0.0",
+    "@mui/material": "9.5.0",
+    "@opendocument/odr-core": "7.5.2",
+    "@paddleocr/paddleocr-js": "0.4.2",
+    "@sentry/browser": "9.0.1",
+    "@web-ppt/core": "0.4.5",
+    "@web-ppt/viewer-core": "0.4.5",
+    "callsites": "4.2.0",
+    "firebase": "11.3.1",
+    "i18next-browser-languagedetector": "6.1.4",
+    "idb-keyval": "6.0.3",
+    "interval-arithmetic": "1.1.3",
+    "jotai": "2.11.0",
+    "mathjax-full": "3.2.2",
+    "mathjs": "15.2.0",
+    "nerdamer": "1.1.13",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "socket.io-client": "4.7.2",
+    "uqr": "0.1.2",
+    "vite-plugin-html": "3.2.2"
+  },
+  "prettier": "@excalidraw/prettier-config",
+  "scripts": {
+    "build-node": "node ./scripts/build-node.js",
+    "build:app:docker": "cross-env VITE_APP_DISABLE_SENTRY=true vite build",
+    "build:app": "cross-env VITE_APP_GIT_SHA=$VERCEL_GIT_COMMIT_SHA cross-env VITE_APP_ENABLE_TRACKING=true vite build",
+    "build:version": "node ../scripts/build-version.js",
+    "build": "npm run build:app && npm run build:version",
+    "start": "npm install && vite",
+    "start:production": "npm run build && npm run serve",
+    "serve": "npx http-server build -a localhost -p 5001 -o",
+    "build:preview": "npm run build && vite preview --port 5000"
+  },
+  "devDependencies": {
+    "vite-plugin-sitemap": "0.7.1"
+  }
+}

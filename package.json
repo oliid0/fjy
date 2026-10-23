@@ -2,7 +2,7 @@
   "private": true,
   "name": "fcboard-monorepo",
   "workspaces": [
-    "excalidraw-app",
+    "app",
     "packages/*",
     "examples/*"
   ],
@@ -57,18 +57,18 @@
   "prettier": "@excalidraw/prettier-config",
   "scripts": {
     "build-node": "node ./scripts/build-node.js",
-    "build:app:docker": "npm run build:app:docker --prefix ./excalidraw-app",
-    "build:app": "npm run build:app --prefix ./excalidraw-app",
+    "build:app:docker": "npm run build:app:docker --prefix ./app",
+    "build:app": "npm run build:app --prefix ./app",
     "build:common": "npm run build:esm --prefix ./packages/common",
     "build:element": "npm run build:esm --prefix ./packages/element",
-    "build:excalidraw": "npm run build:esm --prefix ./packages/excalidraw",
+    "build:excalidraw": "npm run build:esm --prefix ./packages/fcboard",
     "build:math": "npm run build:esm --prefix ./packages/math",
     "build:packages": "npm run build:common && npm run build:math && npm run build:element && npm run build:excalidraw",
-    "build:version": "npm run build:version --prefix ./excalidraw-app",
-    "build": "npm run build --prefix ./excalidraw-app",
-    "build:preview": "npm run build:preview --prefix ./excalidraw-app",
-    "start": "npm run start --prefix ./excalidraw-app",
-    "start:production": "npm run start:production --prefix ./excalidraw-app",
+    "build:version": "npm run build:version --prefix ./app",
+    "build": "npm run build --prefix ./app",
+    "build:preview": "npm run build:preview --prefix ./app",
+    "start": "npm run start --prefix ./app",
+    "start:production": "npm run start:production --prefix ./app",
     "start:example": "npm run build:packages && npm run start --prefix ./examples/with-script-in-browser",
     "test:all": "pnpm check && pnpm lint && pnpm test:other && pnpm test",
     "test:app": "vitest",
@@ -91,8 +91,8 @@
     "release:test": "node scripts/release.js --tag=test",
     "release:next": "node scripts/release.js --tag=next",
     "release:latest": "node scripts/release.js --tag=latest",
-    "rm:build": "rimraf --glob excalidraw-app/build excalidraw-app/dist excalidraw-app/dev-dist packages/*/dist packages/*/build examples/*/build examples/*/dist",
-    "rm:node_modules": "rimraf --glob node_modules excalidraw-app/node_modules packages/*/node_modules",
+    "rm:build": "rimraf --glob app/build app/dist app/dev-dist packages/*/dist packages/*/build examples/*/build examples/*/dist",
+    "rm:node_modules": "rimraf --glob node_modules app/node_modules packages/*/node_modules",
     "clean-install": "npm run rm:node_modules && npm install",
     "check": "tsc --noEmit",
     "lint": "eslint --max-warnings=0 --ext .js,.ts,.tsx ."
@@ -170,11 +170,11 @@
     "overrides": [
       {
         "files": [
-          "packages/excalidraw/**/*.{ts,tsx}"
+          "packages/fcboard/**/*.{ts,tsx}"
         ],
         "excludedFiles": [
-          "packages/excalidraw/**/*.test.{ts,tsx}",
-          "packages/excalidraw/**/*.test.*.{ts,tsx}"
+          "packages/fcboard/**/*.test.{ts,tsx}",
+          "packages/fcboard/**/*.test.*.{ts,tsx}"
         ],
         "rules": {
           "@typescript-eslint/no-restricted-imports": [
@@ -215,7 +215,7 @@
     "firebase/",
     "dist/",
     "public/workbox",
-    "packages/excalidraw/types",
+    "packages/fcboard/types",
     "examples/**/public",
     "dev-dist",
     "coverage",

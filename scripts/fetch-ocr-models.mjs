@@ -24,7 +24,7 @@ try {
 } catch {
   worker = await readFile(
     new URL(
-      "../excalidraw-app/node_modules/@paddleocr/paddleocr-js/dist/assets/worker-entry-C9UNuyOJ.js",
+      "../app/node_modules/@paddleocr/paddleocr-js/dist/assets/worker-entry-C9UNuyOJ.js",
       import.meta.url,
     ),
   );

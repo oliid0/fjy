@@ -5,7 +5,7 @@ package-lock.json
 firebase/
 dist/
 public/workbox
-packages/excalidraw/types
+packages/fcboard/types
 examples/**/public
 dev-dist
 coverage
@@ -13,3 +13,4 @@ pnpm-lock.yaml
 ss/
 android/vendor/libadb/src/
 public/ocr/
+android/app/src/main/assets/digital-ink/

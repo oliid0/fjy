@@ -1,0 +1,290 @@
+import { getCommonBounds, newFreeDrawElement } from "@excalidraw/element";
+import { pointFrom } from "@excalidraw/math";
+
+import { findContentPosition } from "./placement";
+import {
+  contentPosition,
+  insertText,
+  insertElements,
+  drawPlot,
+  selectedPlot,
+} from "./board";
+import { validatedPlot } from "./mathRecognition";
+import {
+  insertionDefaults,
+  readInsertions,
+  renderInsertion,
+} from "./insertObjects";
+import { sceneAPI } from "./test/scene";
+
+const viewport = { left: 16, top: 16, right: 1264, bottom: 604 };
+const overlaps = (a: readonly number[], b: readonly number[]) =>
+  a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
+it.each([
+  [800, 600, 1],
+  [3080, 1240, 0.5],
+  [3080, 1240, 2],
+])(
+  "fits editable function axes, labels and curves inside %s×%s at zoom %s",
+  (width, height, zoom) => {
+    const api = sceneAPI();
+    vi.spyOn(api, "getAppState").mockReturnValue({
+      ...api.getAppState(),
+      width,
+      height,
+      zoom: { value: zoom as never },
+    });
+    const plot = validatedPlot({ expression: "2*x+1", relation: ">=" });
+    const ids = drawPlot(api, plot, { x: 2000, y: 1800 });
+    const objects = api
+      .getSceneElements()
+      .filter((element) => ids.includes(element.id));
+    const [left, top, right, bottom] = getCommonBounds(objects);
+    expect(left).toBeGreaterThanOrEqual(16 / zoom - 0.01);
+    expect(top).toBeGreaterThanOrEqual(16 / zoom - 0.01);
+    expect(right).toBeLessThanOrEqual((width - 16) / zoom + 0.01);
+    expect(bottom).toBeLessThanOrEqual((height - 84) / zoom + 0.01);
+    expect(objects.some((object) => object.backgroundColor === "#2563eb")).toBe(
+      true,
+    );
+    vi.spyOn(api, "getAppState").mockReturnValue({
+      ...api.getAppState(),
+      selectedElementIds: { [ids[0]]: true },
+    });
+    expect(selectedPlot(api)?.plot).toEqual(plot);
+  },
+);
+
+it("keeps new content near its question while avoiding occupied space", () => {
+  const question = { left: 80, top: 80, right: 320, bottom: 220 };
+  const answer = { left: 340, top: 80, right: 640, bottom: 240 };
+  const position = findContentPosition(
+    { x: 340, y: 80 },
+    { width: 280, height: 120 },
+    viewport,
+    [question, answer],
+    16,
+  );
+  const bounds = [position.x, position.y, position.x + 280, position.y + 120];
+  expect(
+    overlaps(bounds, [
+      question.left,
+      question.top,
+      question.right,
+      question.bottom,
+    ]),
+  ).toBe(false);
+  expect(
+    overlaps(bounds, [answer.left, answer.top, answer.right, answer.bottom]),
+  ).toBe(false);
+  expect(position.y + 120).toBeLessThanOrEqual(viewport.bottom);
+});
+
+it("uses an empty area below a full viewport instead of covering the question", () => {
+  const position = findContentPosition(
+    { x: 400, y: 200 },
+    { width: 400, height: 300 },
+    viewport,
+    [viewport],
+    16,
+  );
+  expect(position.y).toBeGreaterThanOrEqual(viewport.bottom + 16);
+});
+
+it("does not jump to distant offscreen objects when the visible board is full", () => {
+  const position = findContentPosition(
+    { x: 400, y: 200 },
+    { width: 400, height: 300 },
+    viewport,
+    [viewport, { left: 100, right: 800, top: 100000, bottom: 100500 }],
+    16,
+  );
+  expect(position.y).toBe(viewport.bottom + 16);
+});
+
+it("preserves the question and reports a full visible board instead of inserting invisible text", () => {
+  const api = sceneAPI();
+  insertElements(api, [
+    { type: "rectangle", x: 0, y: 0, width: 1600, height: 900 },
+  ]);
+  const original = [...api.getSceneElements()];
+  api.scrollToContent = vi.fn();
+  expect(() =>
+    insertText(api, "Answer", undefined, undefined, original, "text"),
+  ).toThrow();
+  expect(api.getSceneElements()).toEqual(original);
+  expect(api.scrollToContent).not.toHaveBeenCalled();
+});
+
+it.each([0.5, 1, 2])(
+  "fits long Chinese/English answers into a 3080×1240 visible board at zoom %s",
+  (zoom) => {
+    const api = sceneAPI();
+    const state = api.getAppState();
+    vi.spyOn(api, "getAppState").mockReturnValue({
+      ...state,
+      width: 3080,
+      height: 1240,
+      zoom: { value: zoom as typeof state.zoom.value },
+      scrollX: -300,
+      scrollY: -100,
+    });
+    const source = newFreeDrawElement({
+      type: "freedraw",
+      x: 400,
+      y: 200,
+      points: [pointFrom(0, 0), pointFrom(80 / zoom, 32 / zoom)],
+      strokeColor: "#ff0000",
+      strokeWidth: 2 / zoom,
+      simulatePressure: true,
+    });
+    api.updateScene({ elements: [source] });
+    const ids = insertText(
+      api,
+      "牛顿第二定律 F=ma。".repeat(100) + " VeryLongEnglishWord".repeat(100),
+      undefined,
+      undefined,
+      [source],
+      "text",
+    );
+    const answer = api
+      .getSceneElements()
+      .filter((element) => ids.includes(element.id));
+    const [left, top, right, bottom] = getCommonBounds(answer);
+    expect(left).toBeGreaterThanOrEqual(300 + 16 / zoom);
+    expect(top).toBeGreaterThan(200 + 32 / zoom);
+    expect(right).toBeLessThanOrEqual(300 + (3080 - 16) / zoom);
+    expect(bottom).toBeLessThanOrEqual(100 + (1240 - 84) / zoom);
+    expect(answer[0].type === "text" && answer[0].fontSize).toBeLessThanOrEqual(
+      32 / zoom / 1.25,
+    );
+    expect(answer[0].type === "text" && answer[0].text).toContain("\n");
+  },
+);
+
+it("puts a short handwritten calculation result after the equation, with matching height and colour", () => {
+  const api = sceneAPI();
+  const source = newFreeDrawElement({
+    type: "freedraw",
+    x: 100,
+    y: 100,
+    points: [pointFrom(0, 0), pointFrom(160, 40)],
+    strokeColor: "#ff0000",
+    strokeWidth: 2,
+    simulatePressure: true,
+  });
+  api.updateScene({ elements: [source] });
+  const ids = insertText(api, "2", undefined, undefined, [source], "match", {
+    mode: "inline",
+  });
+  const ink = api
+    .getSceneElements()
+    .filter((element) => ids.includes(element.id));
+  const [left, top, , bottom] = getCommonBounds(ink);
+  expect(left).toBeGreaterThan(260);
+  expect(top).toBeCloseTo(100);
+  expect(bottom - top).toBeLessThanOrEqual(44);
+  expect(
+    ink.every(
+      (element) =>
+        element.type === "freedraw" && element.strokeColor === "#ff0000",
+    ),
+  ).toBe(true);
+});
+
+it("reserves the toolbar and converts viewport limits through the current zoom and scroll", () => {
+  const api = sceneAPI();
+  const state = api.getAppState();
+  vi.spyOn(api, "getAppState").mockReturnValue({
+    ...state,
+    scrollX: -300,
+    scrollY: -200,
+    zoom: { value: 2 as typeof state.zoom.value },
+  });
+  const position = contentPosition(
+    api,
+    { x: 1090, y: 610 },
+    { width: 200, height: 100 },
+  );
+  expect(position.x).toBeGreaterThanOrEqual(308);
+  expect(position.x + 200).toBeLessThanOrEqual(1092);
+  expect(position.y + 100).toBeLessThanOrEqual(608);
+});
+
+it("uses the actual toolbar bounds for an offset or resized board", () => {
+  const api = sceneAPI();
+  api.id = "placement-test";
+  const state = api.getAppState();
+  vi.spyOn(api, "getAppState").mockReturnValue({ ...state, offsetTop: 100 });
+  const root = document.createElement("div");
+  root.className = "excalidraw";
+  root.dataset.excalidrawId = api.id;
+  const toolbar = document.createElement("div");
+  toolbar.className = "fc-unified-toolbar";
+  vi.spyOn(toolbar, "getBoundingClientRect").mockReturnValue({
+    top: 800,
+    bottom: 900,
+    left: 0,
+    right: 1600,
+    width: 1600,
+    height: 100,
+    x: 0,
+    y: 800,
+    toJSON: () => ({}),
+  });
+  root.append(toolbar);
+  document.body.append(root);
+  try {
+    const position = contentPosition(
+      api,
+      { x: 300, y: 850 },
+      { width: 200, height: 100 },
+    );
+    expect(position.y + 100).toBeLessThanOrEqual(684);
+  } finally {
+    root.remove();
+  }
+});
+
+it("places repeated tables without overlapping and keeps edited object coordinates stable", async () => {
+  const api = sceneAPI();
+  const first = insertionDefaults("table", { x: 100, y: 100 });
+  await renderInsertion(api, first);
+  const second = insertionDefaults("table", { x: 100, y: 100 });
+  await renderInsertion(api, second);
+  const bounds = (id: string) =>
+    getCommonBounds(
+      api
+        .getSceneElements()
+        .filter((element) => element.customData?.fcInsertion?.id === id),
+    );
+  expect(overlaps(bounds(first.id), bounds(second.id))).toBe(false);
+  const before = bounds(first.id);
+  await renderInsertion(api, {
+    ...readInsertions(api).find((object) => object.id === first.id)!,
+    cells: ["edited"],
+  });
+  expect(bounds(first.id)).toEqual(before);
+});
+
+it("uses measured multi-line answer bounds for subsequent answers", () => {
+  const api = sceneAPI();
+  const source = api.getSceneElements();
+  const write = () =>
+    insertText(
+      api,
+      "First line\nSecond line\nThird line",
+      { x: 160, y: 100 },
+      undefined,
+      source,
+      "text",
+    );
+  const first = write();
+  const second = write();
+  const bounds = (ids: string[]) =>
+    getCommonBounds(
+      api.getSceneElements().filter((element) => ids.includes(element.id)),
+    );
+  expect(overlaps(bounds(first), bounds(second))).toBe(false);
+});

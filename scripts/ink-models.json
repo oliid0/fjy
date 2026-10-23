@@ -1,0 +1,80 @@
+{
+  "sdk": "18.1.0",
+  "package": "com.fcjy.fcboard",
+  "source": "HWhiteBoard 5.42 model.zip / ML Kit MDD 18.1.0; official Google archives, no vendor binaries or installation identity",
+  "files": [
+    {
+      "url": "https://dl.google.com/handwriting/models/qrnn.shapes.reco_20200616.fst_none.recospec.zip",
+      "archiveSha1": "0f7a0e12c06659392e90f6ea5c91ff3eb0c821e9",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706692/qrnn.shapes.reco_20200616.fst_none.recospec.local",
+      "size": 244,
+      "sha256": "4ec0b0276811630c6a7c5b2adbc1bc8dcd88dc57d1b90d0f2f2a5636032b0013"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/lstm.shapes.1x64.tflite.20200616.zip",
+      "archiveSha1": "aa343d108d55101f05ac9dd9f674d6be36da3892",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706693/shapes.ondevice.tflite",
+      "size": 46960,
+      "sha256": "bfec3e2af27f297108e600c35b89e1ed1a66e216c736593b91f6204f5816eea4"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/qrnn.zh_cn.reco_20191217.fst_20190322.recospec.zip",
+      "archiveSha1": "645c5f0e83109da41e8774214b33ce58fb9e5329",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706270/qrnn.zh_cn.reco_20191217.fst_20190322.recospec.local",
+      "size": 174627,
+      "sha256": "844c95a2ab1cd26b9c598062b3aff2a71d737e50d8aa4d61cd75cca9065b9e6a"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/lstm.chinese.tflite_4_192.tflite.20181109.zip",
+      "archiveSha1": "dfa5e45d52ef73cfb870fb53b2fc2eec544ce5b6",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706172/chinese_lstm_4x192.tflite",
+      "size": 7802328,
+      "sha256": "b14fd839784b72c4872b0e923815baf1b42734326059145a63ef338a6d866f65"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/zh_cn.20190322.compact.fst.zip",
+      "archiveSha1": "1613e79d85d936a09c0219f6846ee30e810a1988",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706271/zh_cn.compact.fst.local",
+      "size": 18255999,
+      "sha256": "fca2242de4fca6cb06bc8c2d0263d53d9e56f254a1ebfcc3fade323dd4b5e9db"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/qrnn.en_us.reco_20200318.fst_20191208.recospec.zip",
+      "archiveSha1": "dcc0fcc19e8801e30d8c32309d762d0b5926cf12",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706710/qrnn.en_us.reco_20200318.fst_20191208.recospec.local",
+      "size": 3929,
+      "sha256": "3b05814c9576f65422891e68e98ad9f4a91ff868e1e88c2c73d5b6757b041569"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/indy_lstm.latin.6x216.tflite.20191208.zip",
+      "archiveSha1": "27cfb1b5a7e5a4dee7ba6c07aaea9c3343b34ee4",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560705987/latin_indy_lstm_6x216_20191208.tflite",
+      "size": 3992904,
+      "sha256": "80dcdb2090e16a3ded2bfb09d486d479e45a654917fac27afba5d868093d9c8b"
+    },
+    {
+      "url": "https://dl.google.com/handwriting/models/en_us.20191208.compact.fst.zip",
+      "archiveSha1": "9f1c95b8e0604cdf72bd326b3a913102626bb854",
+      "path": "mlkit_digital_ink_recognition/shared/datadownload/public/datadownloadfile_1766560706711/en_us.compact.fst.local",
+      "size": 21798892,
+      "sha256": "55c2e3ba4ae2db3d911cdb206e7d3902888b6081260e4e0f4b5dac8b12f4c3db"
+    }
+  ],
+  "preferences": {
+    "gms_icing_mdd_shared_filesmlkit_digital_ink_recognition": {
+      "1613e79d85d936a09c0219f6846ee30e810a1988|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDYyNzEoBA",
+      "dcc0fcc19e8801e30d8c32309d762d0b5926cf12|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDY3MTAoBA",
+      "27cfb1b5a7e5a4dee7ba6c07aaea9c3343b34ee4|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDU5ODcoBA",
+      "645c5f0e83109da41e8774214b33ce58fb9e5329|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDYyNzAoBA",
+      "aa343d108d55101f05ac9dd9f674d6be36da3892|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDY2OTMoBA",
+      "9f1c95b8e0604cdf72bd326b3a913102626bb854|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDY3MTEoBA",
+      "0f7a0e12c06659392e90f6ea5c91ff3eb0c821e9|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDY2OTIoBA",
+      "dfa5e45d52ef73cfb870fb53b2fc2eec544ce5b6|0": "Ih5kYXRhZG93bmxvYWRmaWxlXzE3NjY1NjA3MDYxNzIoBA"
+    },
+    "gms_icing_mdd_groupsmlkit_digital_ink_recognition": {
+      "ChF6eHgtWnN5bS14LXNoYXBlcxIQY29tLmZjankuZmNib2FyZCAB": "ChF6eHgtWnN5bS14LXNoYXBlcxLBARJYaHR0cHM6Ly9kbC5nb29nbGUuY29tL2hhbmR3cml0aW5nL21vZGVscy9xcm5uLnNoYXBlcy5yZWNvXzIwMjAwNjE2LmZzdF9ub25lLnJlY29zcGVjLnppcCDTAzovcXJubl9zaGFwZXNfcmVjb18yMDIwMDYxNl9mc3Rfbm9uZV9yZWNvc3BlY196aXBaBwoFIgMKASpyKDBmN2EwZTEyYzA2NjU5MzkyZTkwZjZlYTVjOTFmZjNlYjBjODIxZTkSrAESTWh0dHBzOi8vZGwuZ29vZ2xlLmNvbS9oYW5kd3JpdGluZy9tb2RlbHMvbHN0bS5zaGFwZXMuMXg2NC50ZmxpdGUuMjAyMDA2MTYuemlwIIOsAjokbHN0bV9zaGFwZXNfMXg2NF90ZmxpdGVfMjAyMDA2MTZfemlwWgcKBSIDCgEqcihhYTM0M2QxMDhkNTUxMDFmMDVhYzlkZDlmNjc0ZDZiZTM2ZGEzODkyMhBjb20uZmNqeS5mY2JvYXJk8piTtQcXEIfY6fm0MxjP2er5tDMg4sfq+bQzKAE",
+      "Cgp6aC1IYW5pLUNOEhBjb20uZmNqeS5mY2JvYXJkIAE": "Cgp6aC1IYW5pLUNOEsgBEltodHRwczovL2RsLmdvb2dsZS5jb20vaGFuZHdyaXRpbmcvbW9kZWxzL3Fybm4uemhfY24ucmVjb18yMDE5MTIxNy5mc3RfMjAxOTAzMjIucmVjb3NwZWMuemlwINHqBDoycXJubl96aF9jbl9yZWNvXzIwMTkxMjE3X2ZzdF8yMDE5MDMyMl9yZWNvc3BlY196aXBaBwoFIgMKASpyKDY0NWM1ZjBlODMxMDlkYTQxZTg3NzQyMTRiMzNjZTU4ZmI5ZTUzMjkSvwESVmh0dHBzOi8vZGwuZ29vZ2xlLmNvbS9oYW5kd3JpdGluZy9tb2RlbHMvbHN0bS5jaGluZXNlLnRmbGl0ZV80XzE5Mi50ZmxpdGUuMjAxODExMDkuemlwINu4wAI6LWxzdG1fY2hpbmVzZV90ZmxpdGVfNF8xOTJfdGZsaXRlXzIwMTgxMTA5X3ppcFoHCgUiAwoBKnIoZGZhNWU0NWQ1MmVmNzNjZmI4NzBmYjUzYjJmYzJlZWM1NDRjZTViNhKhARJHaHR0cHM6Ly9kbC5nb29nbGUuY29tL2hhbmR3cml0aW5nL21vZGVscy96aF9jbi4yMDE5MDMyMi5jb21wYWN0LmZzdC56aXAgzpHeBToeemhfY25fMjAxOTAzMjJfY29tcGFjdF9mc3RfemlwWgcKBSIDCgEqcigxNjEzZTc5ZDg1ZDkzNmEwOWMwMjE5ZjY4NDZlZTMwZTgxMGExOTg4MhBjb20uZmNqeS5mY2JvYXJk8piTtQcXEL6s5vm0Mxiku/H5tDMg3cjq+bQzKAE",
+      "CgVlbi1VUxIQY29tLmZjankuZmNib2FyZCAB": "CgVlbi1VUxLHARJbaHR0cHM6Ly9kbC5nb29nbGUuY29tL2hhbmR3cml0aW5nL21vZGVscy9xcm5uLmVuX3VzLnJlY29fMjAyMDAzMTguZnN0XzIwMTkxMjA4LnJlY29zcGVjLnppcCDxFToycXJubl9lbl91c19yZWNvXzIwMjAwMzE4X2ZzdF8yMDE5MTIwOF9yZWNvc3BlY196aXBaBwoFIgMKASpyKGRjYzBmY2MxOWU4ODAxZTMwZDhjMzIzMDlkNzYyZDBiNTkyNmNmMTIStwESUmh0dHBzOi8vZGwuZ29vZ2xlLmNvbS9oYW5kd3JpdGluZy9tb2RlbHMvaW5keV9sc3RtLmxhdGluLjZ4MjE2LnRmbGl0ZS4yMDE5MTIwOC56aXAgpdrNATopaW5keV9sc3RtX2xhdGluXzZ4MjE2X3RmbGl0ZV8yMDE5MTIwOF96aXBaBwoFIgMKASpyKDI3Y2ZiMWI1YTdlNWE0ZGVlN2JhNmMwN2FhZWE5YzMzNDNiMzRlZTQSoQESR2h0dHBzOi8vZGwuZ29vZ2xlLmNvbS9oYW5kd3JpdGluZy9tb2RlbHMvZW5fdXMuMjAxOTEyMDguY29tcGFjdC5mc3QuemlwIPim/gQ6HmVuX3VzXzIwMTkxMjA4X2NvbXBhY3RfZnN0X3ppcFoHCgUiAwoBKnIoOWYxYzk1YjhlMDYwNGNkZjcyYmQzMjZiM2E5MTMxMDI2MjZiYjg1NDIQY29tLmZjankuZmNib2FyZPKYk7UHFxDs7On5tDMYqMTx+bQzIMnR6vm0MygB"
+    }
+  }
+}

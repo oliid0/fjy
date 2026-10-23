@@ -15,7 +15,7 @@ const storedWidths = (element: ExcalidrawFreeDrawElement): number[] | null => {
     saved.length === element.points.length &&
     saved.every(
       (width: unknown) =>
-        typeof width === "number" && Number.isFinite(width) && width > 0,
+        typeof width === "number" && Number.isFinite(width) && width >= 0,
     )
   ) {
     return saved;
@@ -34,7 +34,11 @@ export const factoryBrushWidths = (
   const unit = factoryInkUnit(element);
   const base = (element.strokeWidth * 4) / 3 + 3 * unit;
   // HDataSet.getBzPenThreshold defaults to 45, normalized by 50.
-  const variation = 45 / 50;
+  const configured = element.customData?.fcInk?.variation;
+  const variation =
+    (typeof configured === "number" && Number.isFinite(configured)
+      ? Math.max(0, Math.min(50, configured))
+      : 45) / 50;
   const pressureFactor = (index: number) =>
     element.simulatePressure
       ? 1
@@ -48,6 +52,13 @@ export const factoryBrushWidths = (
   let lastWidth = base * (1 + 0.4 * variation) * pressureFactor(0);
   let lastVelocity = 0;
   return element.points.map((point, index) => {
+    if (
+      index &&
+      index === element.points.length - 1 &&
+      element.customData?.fcInk?.finished === true
+    ) {
+      return 0;
+    }
     if (index) {
       const previous = element.points[index - 1];
       const velocity =
@@ -121,30 +132,21 @@ export const factoryBrushSamples = (
 };
 
 /** HBezierObject.drawLine: a filled union of horizontal 2:1 ellipses, every 2px. */
-export const factoryBrushPath = (element: ExcalidrawFreeDrawElement) => {
-  const samples = factoryBrushSamples(element);
+export const traceFactoryBrush = (
+  element: ExcalidrawFreeDrawElement,
+  stamp: (point: BrushSample, angle: number) => void,
+  samples = factoryBrushSamples(element),
+  from = 0,
+  end = samples.length,
+) => {
   const unit = factoryInkUnit(element);
-  const path: string[] = [];
   const angle = Number.isFinite(element.customData?.fcInk?.brushAngle)
     ? element.customData!.fcInk.brushAngle
     : 0;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const stamp = (point: BrushSample) => {
-    const rx = point.width / 2;
-    const ry = point.width / 4;
-    path.push(
-      `M${point.x - rx * cos},${point.y - rx * sin}a${rx},${ry} ${
-        (angle * 180) / Math.PI
-      } 1 0 ${2 * rx * cos},${2 * rx * sin}a${rx},${ry} ${
-        (angle * 180) / Math.PI
-      } 1 0 ${-2 * rx * cos},${-2 * rx * sin}Z`,
-    );
-  };
-  if (samples.length) {
-    stamp(samples[0]);
+  if (end && !from && samples[0].width > 0) {
+    stamp(samples[0], angle);
   }
-  for (let i = 1; i < samples.length; i++) {
+  for (let i = Math.max(1, from); i < end; i++) {
     const a = samples[i - 1];
     const b = samples[i];
     const steps = Math.min(
@@ -153,12 +155,32 @@ export const factoryBrushPath = (element: ExcalidrawFreeDrawElement) => {
     );
     for (let step = 1; step <= steps; step++) {
       const t = step / steps;
-      stamp({
+      const point = {
         x: a.x + (b.x - a.x) * t,
         y: a.y + (b.y - a.y) * t,
         width: a.width + (b.width - a.width) * t,
-      });
+      };
+      if (point.width > 0) {
+        stamp(point, angle);
+      }
     }
   }
+};
+
+export const factoryBrushPath = (element: ExcalidrawFreeDrawElement) => {
+  const path: string[] = [];
+  traceFactoryBrush(element, (point, angle) => {
+    const rx = point.width / 2;
+    const ry = point.width / 4;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    path.push(
+      `M${point.x - rx * cos},${point.y - rx * sin}a${rx},${ry} ${
+        (angle * 180) / Math.PI
+      } 1 0 ${2 * rx * cos},${2 * rx * sin}a${rx},${ry} ${
+        (angle * 180) / Math.PI
+      } 1 0 ${-2 * rx * cos},${-2 * rx * sin}Z`,
+    );
+  });
   return path.join(" ");
 };

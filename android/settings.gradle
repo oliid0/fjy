@@ -1,6 +1,4 @@
 include ':app'
-include ':fcboard-libadb'
-project(':fcboard-libadb').projectDir = new File('./vendor/libadb')
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 

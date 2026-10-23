@@ -1,5 +1,24 @@
 import type { ExcalidrawFreeDrawElement } from "./types";
 
+export type FactoryInkData = {
+  version: 2 | 3;
+  pen: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
+  unit: number;
+  variation?: number;
+  tip?: "fine" | "thick";
+  finished?: boolean;
+  assist?: "text" | "shape" | "magic" | "function" | "calculation";
+  centerline?: boolean;
+  brushWidths?: number[];
+  brushAngle?: number;
+  dashOffset?: number;
+  rainbow?: { x: number; width: number };
+};
+
+/** Pointer-up is distinct from a live sample; HBezierObject.onUp tapers to zero. */
+export const finishFactoryInk = (ink: FactoryInkData | undefined) =>
+  ink ? { ...ink, finished: true } : undefined;
+
 export const isFactoryStroke = (element: ExcalidrawFreeDrawElement) =>
   element.customData?.fcInk?.version === 2 &&
   element.customData.fcInk.pen !== "brush";
@@ -17,30 +36,58 @@ const roundInk = (coordinate: number, unit: number) => {
 };
 
 /** HObject.round and HCurveObject.continueStroke: half-pixel quadratic midpoints. */
-export const factoryInkPath = (element: ExcalidrawFreeDrawElement) => {
+export const traceFactoryInk = (
+  element: ExcalidrawFreeDrawElement,
+  target: Pick<Path2D, "moveTo" | "lineTo" | "quadraticCurveTo">,
+  from = 0,
+  complete = true,
+) => {
   const points = element.points;
   if (!points.length) {
-    return "";
+    return;
   }
   if (element.customData?.fcInk?.centerline === true) {
-    return `M${points.map(([x, y]) => `${x},${y}`).join(" L")} L${points
-      .at(-1)!
-      .join(",")}`;
+    if (!from) {
+      target.moveTo(points[0][0], points[0][1]);
+    }
+    for (let i = Math.max(1, from); i < points.length; i++) {
+      target.lineTo(points[i][0], points[i][1]);
+    }
+    const last = points.at(-1)!;
+    if (complete) {
+      target.lineTo(last[0], last[1]);
+    }
+    return;
   }
   const unit = factoryInkUnit(element);
   const round = (coordinate: number) => roundInk(coordinate, unit);
-  const pair = (x: number, y: number) => `${round(x)},${round(y)}`;
-  const path = [`M${pair(points[0][0], points[0][1])}`];
-  for (let i = 1; i < points.length; i++) {
+  if (!from) {
+    target.moveTo(round(points[0][0]), round(points[0][1]));
+  }
+  for (let i = Math.max(1, from); i < points.length; i++) {
     const a = points[i - 1];
     const b = points[i];
-    path.push(
-      `Q${pair(a[0], a[1])} ${pair((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)}`,
+    target.quadraticCurveTo(
+      round(a[0]),
+      round(a[1]),
+      round((a[0] + b[0]) / 2),
+      round((a[1] + b[1]) / 2),
     );
   }
   const last = points.at(-1)!;
   // Keep the visible tip at the latest real sample; do not predict future ink.
-  path.push(`L${pair(last[0], last[1])}`);
+  if (complete) {
+    target.lineTo(round(last[0]), round(last[1]));
+  }
+};
+
+export const factoryInkPath = (element: ExcalidrawFreeDrawElement) => {
+  const path: string[] = [];
+  traceFactoryInk(element, {
+    moveTo: (x, y) => path.push(`M${x},${y}`),
+    lineTo: (x, y) => path.push(`L${x},${y}`),
+    quadraticCurveTo: (a, b, x, y) => path.push(`Q${a},${b} ${x},${y}`),
+  });
   return path.join(" ");
 };
 

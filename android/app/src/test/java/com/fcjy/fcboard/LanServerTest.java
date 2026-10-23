@@ -54,7 +54,7 @@ public class LanServerTest {
     }
     @Test public void drawingDeletionBinaryAndLateJoinReachBothDevices() throws Exception {
         List<String> nativeMessages = new CopyOnWriteArrayList<>();
-        LanServer server = new LanServer(path -> new ByteArrayInputStream("Fcboard".getBytes(StandardCharsets.UTF_8)), nativeMessages::add, null);
+        LanServer server = new LanServer(path -> new ByteArrayInputStream("Fcboard".getBytes(StandardCharsets.UTF_8)), nativeMessages::add);
         server.start(5000, true);
         try {
             String room = server.startRoom(new JSONObject());
@@ -77,7 +77,7 @@ public class LanServerTest {
         } finally { server.stop(); }
     }
     @Test public void concurrentLoserReceivesWinningNonceInsteadOfDiverging() throws Exception {
-        LanServer server = new LanServer(path -> null, text -> {}, null); server.start(5000, true);
+        LanServer server = new LanServer(path -> null, text -> {}); server.start(5000, true);
         try {
             String room = server.startRoom(scene(element("same", 3, 1, false)));
             try (Client client = new Client(server.getListeningPort(), "/board/" + room)) {
@@ -89,35 +89,12 @@ public class LanServerTest {
         } finally { server.stop(); }
     }
     @Test public void unknownRoomCannotJoin() throws Exception {
-        LanServer server = new LanServer(path -> { throw new java.io.FileNotFoundException(path); }, text -> {}, null); server.start(5000, true);
+        LanServer server = new LanServer(path -> { throw new java.io.FileNotFoundException(path); }, text -> {}); server.start(5000, true);
         try (Socket socket = new Socket("127.0.0.1", server.getListeningPort())) {
             socket.setSoTimeout(3000);
             socket.getOutputStream().write(("GET /board/invalid HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
             assertTrue(new String(socket.getInputStream().readNBytes(100), StandardCharsets.UTF_8).contains("404"));
         } finally { server.stop(); }
     }
-    private java.net.HttpURLConnection request(LanServer server, String path, JSONObject body, String token) throws Exception {
-        java.net.HttpURLConnection request = (java.net.HttpURLConnection)new java.net.URL("http://127.0.0.1:" + server.getListeningPort() + "/remote-api/" + path).openConnection();
-        request.setRequestMethod("POST"); request.setDoOutput(true); request.setRequestProperty("Content-Type", "application/json");
-        if (token != null) request.setRequestProperty("X-Fcboard-Session", token);
-        request.getOutputStream().write(body.toString().getBytes(StandardCharsets.UTF_8));
-        return request;
-    }
-    @Test public void screenPinIsSingleUseAndEndingInvalidatesTheController() throws Exception {
-        LanServer server = new LanServer(path -> null, text -> {}, null); server.start(5000, true);
-        try {
-            String pin = server.startRemote();
-            java.net.HttpURLConnection wrong = request(server, "auth", new JSONObject().put("pin", "invalid"), null);
-            assertEquals(403, wrong.getResponseCode()); wrong.disconnect();
-            java.net.HttpURLConnection pair = request(server, "auth", new JSONObject().put("pin", pin), null);
-            assertEquals(200, pair.getResponseCode());
-            String token = new JSONObject(new String(pair.getInputStream().readAllBytes(), StandardCharsets.UTF_8)).getString("token"); pair.disconnect();
-            assertEquals(32, token.length());
-            java.net.HttpURLConnection reused = request(server, "auth", new JSONObject().put("pin", pin), null);
-            assertEquals(403, reused.getResponseCode()); reused.disconnect();
-            server.stopRemote();
-            java.net.HttpURLConnection ended = request(server, "connect", new JSONObject().put("port", 5555), token);
-            assertEquals(403, ended.getResponseCode()); ended.disconnect();
-        } finally { server.stop(); }
-    }
+
 }

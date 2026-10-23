@@ -1,0 +1,91 @@
+import { getFontString, getLineHeight } from "@excalidraw/common";
+import { measureText } from "@excalidraw/element/textMeasurements";
+import { wrapText } from "@excalidraw/element/textWrapping";
+
+import type { FontFamilyValues } from "@excalidraw/element/types";
+
+import { findVisibleContentPosition } from "./placement";
+
+import type { ContentRect } from "./placement";
+
+export type TextPlacement = {
+  mode?: "inline" | "below" | "replace";
+  bounds?: ContentRect;
+  sourceLines?: number;
+};
+
+/** Reflow at the source's size first; shrink only when the visible area requires it.
+ * Measurement and wrapping use the editor's font metrics, also used by SVG export.
+ */
+export const layoutBoardText = (
+  text: string,
+  fontSize: number,
+  fontFamily: FontFamilyValues,
+  viewport: ContentRect,
+  obstacles: readonly ContentRect[],
+  preferred: { x: number; y: number },
+  gap: number,
+  placement: TextPlacement = {},
+) => {
+  const source = placement.bounds;
+  const lineHeight = getLineHeight(fontFamily);
+  const fullWidth = viewport.right - viewport.left;
+  const fullHeight = viewport.bottom - viewport.top;
+  if (fullWidth <= 0 || fullHeight <= 0) {
+    return undefined;
+  }
+  // Below means below the actual writing, not below the loose lasso outline.
+  const below = source
+    ? {
+        x: Math.max(viewport.left, Math.min(source.left, viewport.right - gap)),
+        y: source.bottom + gap,
+      }
+    : preferred;
+  const inline = source ? { x: source.right + gap, y: source.top } : preferred;
+  const candidates =
+    placement.mode === "replace"
+      ? [preferred]
+      : placement.mode === "inline"
+      ? [inline, below]
+      : source
+      ? [below]
+      : [preferred];
+  for (let attempt = 0; attempt < 48; attempt++) {
+    const size = fontSize * 0.9 ** attempt;
+    if (size < Math.min(fontSize, (gap * 6) / 16)) {
+      break;
+    }
+    for (const origin of candidates) {
+      const x = Math.max(viewport.left, Math.min(origin.x, viewport.right));
+      const y = Math.max(viewport.top, origin.y);
+      const width = viewport.right - x;
+      if (width < size || y >= viewport.bottom) {
+        continue;
+      }
+      const font = getFontString({ fontFamily, fontSize: size });
+      const wrapped = wrapText(text, font, width);
+      const metrics = measureText(wrapped, font, lineHeight);
+      const area = { ...viewport, left: x, top: y };
+      const position = findVisibleContentPosition(
+        { x, y },
+        metrics,
+        area,
+        obstacles,
+        gap,
+      );
+      if (position) {
+        return {
+          ...position,
+          text: wrapped,
+          originalText: text,
+          fontSize: size,
+          fontFamily,
+          lineHeight,
+          ...metrics,
+          autoResize: false as const,
+        };
+      }
+    }
+  }
+  return undefined;
+};

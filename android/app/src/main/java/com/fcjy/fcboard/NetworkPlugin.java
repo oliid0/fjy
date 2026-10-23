@@ -2,7 +2,6 @@ package com.fcjy.fcboard;
 
 import android.content.Intent;
 import android.os.Build;
-import android.provider.Settings;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -20,9 +19,7 @@ import java.util.concurrent.ExecutorService;
 @CapacitorPlugin(name = "FcboardNetwork")
 public class NetworkPlugin extends Plugin {
     private LanServer server;
-    private ScrcpyBridge scrcpy;
     private boolean sharing;
-    private boolean controlling;
     private List<String> addresses = new ArrayList<>();
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
@@ -36,16 +33,14 @@ public class NetworkPlugin extends Plugin {
             }
         }
         if (addresses.isEmpty()) throw new IllegalStateException("请先连接同一局域网的 Wi-Fi 或有线网络");
-        scrcpy = new ScrcpyBridge(getContext().getApplicationContext(), "127.0.0.1");
         server = new LanServer(path -> getContext().getAssets().open("public/" + path), text -> {
             try { notifyListeners("message", new JSObject(text)); } catch (Exception ignored) { }
-        }, scrcpy);
+        });
         server.start(30000, true);
         NetworkSessionService.stopSession = () -> {
             synchronized (NetworkPlugin.this) {
                 if (server != null) server.stop();
-                server = null; sharing = false; controlling = false;
-                if (scrcpy != null) { scrcpy.dispose(); scrcpy = null; }
+                server = null; sharing = false;
                 JSObject event = new JSObject(); event.put("kind", "ended"); notifyListeners("message", event);
             }
         };
@@ -60,9 +55,8 @@ public class NetworkPlugin extends Plugin {
         return urls;
     }
     private synchronized void releaseIfIdle() {
-        if (sharing || controlling) return;
+        if (sharing) return;
         if (server != null) { server.stop(); server = null; }
-        if (scrcpy != null) { scrcpy.dispose(); scrcpy = null; }
         NetworkSessionService.stopSession = null;
         getContext().stopService(new Intent(getContext(), NetworkSessionService.class));
     }
@@ -91,24 +85,7 @@ public class NetworkPlugin extends Plugin {
     @PluginMethod public synchronized void stopCollaboration(PluginCall call) {
         if (server != null) server.stopRoom(); sharing = false; releaseIfIdle(); call.resolve();
     }
-    @PluginMethod public void startRemote(PluginCall call) {
-        worker.execute(() -> {
-            try {
-                ensureServer(); String pin = server.startRemote(); controlling = true;
-                JSObject result = new JSObject(); result.put("urls", urls("/remote.html")); result.put("pin", pin); result.put("expiresAt", System.currentTimeMillis() + 300000); call.resolve(result);
-            } catch (Exception error) { releaseIfIdle(); call.reject("无法开启设备控制：" + error.getMessage()); }
-        });
-    }
-    @PluginMethod public synchronized void stopRemote(PluginCall call) {
-        if (server != null) server.stopRemote(); controlling = false; releaseIfIdle(); call.resolve();
-    }
-    @PluginMethod public void openWirelessSettings(PluginCall call) {
-        try {
-            if (Build.VERSION.SDK_INT < 30) { call.reject("配对码无线调试需要 Android 11 或以上；旧设备需预先开启已授权的 TCP ADB"); return; }
-            getActivity().startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)); call.resolve();
-        } catch (Exception error) { call.reject("请在系统设置中打开开发者选项与无线调试"); }
-    }
     @Override protected synchronized void handleOnDestroy() {
-        sharing = false; controlling = false; releaseIfIdle(); worker.shutdownNow();
+        sharing = false; releaseIfIdle(); worker.shutdownNow();
     }
 }

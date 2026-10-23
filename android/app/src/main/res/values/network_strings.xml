@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="network_channel">Local collaboration</string>
+    <string name="network_title">Fcboard collaboration</string>
+    <string name="network_active">Collaboration is active. Tap to return to the board.</string>
+    <string name="network_stop">End collaboration</string>
+</resources>

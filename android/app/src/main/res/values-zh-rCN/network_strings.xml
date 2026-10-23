@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="network_channel">局域网协作</string>
+    <string name="network_title">Fcboard 实时协作</string>
+    <string name="network_active">协作已开启，点击返回白板</string>
+    <string name="network_stop">结束协作</string>
+</resources>

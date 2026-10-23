@@ -5,7 +5,7 @@ const { pathToFileURL } = require("url");
 const { build } = require("esbuild");
 const { sassPlugin } = require("esbuild-sass-plugin");
 
-const { parseEnvVariables } = require("../packages/excalidraw/env.cjs");
+const { parseEnvVariables } = require("../packages/fcboard/env.cjs");
 
 const ENV_VARS = {
   development: {

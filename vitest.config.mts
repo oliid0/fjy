@@ -23,11 +23,11 @@ export default defineConfig({
       },
       {
         find: /^@excalidraw\/excalidraw$/,
-        replacement: path.resolve(__dirname, "./packages/excalidraw/index.tsx"),
+        replacement: path.resolve(__dirname, "./packages/fcboard/index.tsx"),
       },
       {
         find: /^@excalidraw\/excalidraw\/(.*?)/,
-        replacement: path.resolve(__dirname, "./packages/excalidraw/$1"),
+        replacement: path.resolve(__dirname, "./packages/fcboard/$1"),
       },
       {
         find: /^@excalidraw\/math$/,
@@ -51,7 +51,7 @@ export default defineConfig({
   test: {
     include: [
       "packages/**/*.{test,spec}.{ts,tsx}",
-      "excalidraw-app/**/*.{test,spec}.{ts,tsx}",
+      "app/**/*.{test,spec}.{ts,tsx}",
     ],
     // Since hooks are running in stack in v2, which means all hooks run serially whereas
     // we need to run them in parallel

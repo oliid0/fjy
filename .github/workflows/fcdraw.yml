@@ -61,7 +61,7 @@ jobs:
         # Models and runtime are shipped with the app; no first-use CDN download.
         run: node scripts/fetch-ocr-models.mjs
       - name: Package whiteboard web assets
-        run: pnpm --dir excalidraw-app exec vite build
+        run: pnpm --dir app exec vite build
         env:
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
@@ -72,8 +72,8 @@ jobs:
           key: fcboard-speech-${{ hashFiles('scripts/speech-models.json') }}
       - name: Bundle offline Chinese speech model
         run: node scripts/fetch-speech-models.mjs
-      - name: Bundle verified Scrcpy server
-        run: node scripts/fetch-scrcpy.mjs
+      - name: Bundle verified offline Digital Ink models
+        run: python3 scripts/fetch-ink-models.py
       - name: Package and verify Android
         working-directory: android
         run: |
@@ -95,16 +95,14 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Verify offline speech, screen capture and Scrcpy on Android
+      - name: Verify offline speech and screen capture on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           arch: x86_64
           target: default
           disable-animations: true
-          script: python3 scripts/prepare-android-test-adb.py && cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon && cd .. && python3 scripts/collect-android-test-stream.py
-      - name: Verify actual Scrcpy stream in the browser
-        run: pnpm exec playwright test --config playwright.scrcpy.config.ts
+          script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -119,10 +117,9 @@ jobs:
             android/app/build/reports
             android/app/build/outputs/androidTest-results
             android/app/build/outputs/connected_android_test_additional_output
-            android/vendor/libadb/build/reports
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: Fcboard-Web
-          path: excalidraw-app/build
+          path: app/build
           if-no-files-found: error

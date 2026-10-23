@@ -19,11 +19,11 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@paddleocr/paddleocr-js": ["./node_modules/@paddleocr/paddleocr-js/dist/index.d.ts", "./excalidraw-app/node_modules/@paddleocr/paddleocr-js/dist/index.d.ts"],
+      "@paddleocr/paddleocr-js": ["./node_modules/@paddleocr/paddleocr-js/dist/index.d.ts", "./app/node_modules/@paddleocr/paddleocr-js/dist/index.d.ts"],
       "@excalidraw/common": ["./packages/common/src/index.ts"],
       "@excalidraw/common/*": ["./packages/common/src/*"],
-      "@excalidraw/excalidraw": ["./packages/excalidraw/index.tsx"],
-      "@excalidraw/excalidraw/*": ["./packages/excalidraw/*"],
+      "@excalidraw/excalidraw": ["./packages/fcboard/index.tsx"],
+      "@excalidraw/excalidraw/*": ["./packages/fcboard/*"],
       "@excalidraw/element": ["./packages/element/src/index.ts"],
       "@excalidraw/element/*": ["./packages/element/src/*"],
       "@excalidraw/math": ["./packages/math/src/index.ts"],
@@ -32,6 +32,6 @@
       "@excalidraw/utils/*": ["./packages/utils/src/*"]
     }
   },
-  "include": ["packages", "excalidraw-app"],
+  "include": ["packages", "app"],
   "exclude": ["examples", "dist", "types", "tests"]
 }

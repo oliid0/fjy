@@ -13,6 +13,14 @@ import java.util.function.BooleanSupplier;
 final class OfflineTtsEngine implements AutoCloseable {
     private final OfflineTts tts;
 
+    // The JNI looks up invoke(float[]) -> Integer, not the erased Function1 method.
+    // A Java lambda exposes only invoke(Object) and aborts ART inside this SDK.
+    static final class SynthesisCallback implements kotlin.jvm.functions.Function1<float[], Integer> {
+        private final BooleanSupplier cancelled;
+        SynthesisCallback(BooleanSupplier cancelled) { this.cancelled = cancelled; }
+        @Override public Integer invoke(float[] samples) { return cancelled.getAsBoolean() ? 0 : 1; }
+    }
+
     OfflineTtsEngine(Context context) {
         String assets = "tts/melo/";
         OfflineTtsConfig config = new OfflineTtsConfig();
@@ -32,7 +40,7 @@ final class OfflineTtsEngine implements AutoCloseable {
         }
         if (cancelled.getAsBoolean()) { throw new CancellationException(); }
         GeneratedAudio audio = tts.generateWithCallback(text, 0, 1.0f,
-            samples -> cancelled.getAsBoolean() ? 0 : 1);
+            new SynthesisCallback(cancelled));
         if (cancelled.getAsBoolean()) { throw new CancellationException(); }
         if (audio.getSampleRate() != 44100 || audio.getSamples().length == 0 || !audio.save(output.getAbsolutePath())) {
             throw new IllegalStateException("Offline speech synthesis returned no valid audio");

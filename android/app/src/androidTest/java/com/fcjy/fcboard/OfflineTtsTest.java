@@ -15,6 +15,8 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class OfflineTtsTest {
     @Test public void synthesizesAudibleChineseAndEnglishAndHonorsCancellation() throws Exception {
+        // Fail readably before entering JNI if bytecode erasure breaks the callback ABI.
+        assertEquals(Integer.class, OfflineTtsEngine.SynthesisCallback.class.getMethod("invoke", float[].class).getReturnType());
         android.content.Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         File output = new File(context.getCacheDir(), "tts-instrumentation.wav");
         try (OfflineTtsEngine engine = new OfflineTtsEngine(context)) {

@@ -192,6 +192,147 @@ describe("APK-style whiteboard ink", () => {
     });
     expect(live()).toHaveLength(0);
   });
+  it("scales with three and four contacts, and rebases when fingers join or leave", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    act(() => {
+      API.setAppState({
+        scrollX: 0,
+        scrollY: 0,
+        zoom: { value: getNormalizedZoom(1) },
+      });
+      h.app.setActiveTool({ type: "hand" });
+    });
+    const touch = (type: string, id: number, x: number, y: number) =>
+      pointer(canvas, type, x, y, { pointerId: id, pointerType: "touch" });
+    const view = () => [h.state.zoom.value, h.state.scrollX, h.state.scrollY];
+    touch("pointerdown", 31, 100, 100);
+    touch("pointerdown", 32, 300, 100);
+    const beforeThird = view();
+    touch("pointerdown", 33, 100, 300);
+    expect(view()).toEqual(beforeThird);
+    touch("pointermove", 33, 100, 500);
+    expect(h.state.zoom.value).toBeCloseTo(1.5);
+    // The same scene point remains below the old/new first-last midpoint.
+    expect(100 / h.state.zoom.value - h.state.scrollX).toBeCloseTo(100);
+    expect(300 / h.state.zoom.value - h.state.scrollY).toBeCloseTo(200);
+    const beforeFourth = view();
+    touch("pointerdown", 34, 500, 500);
+    expect(view()).toEqual(beforeFourth);
+    touch("pointermove", 34, 600, 500);
+    const expanded = h.state.zoom.value;
+    expect(expanded).toBeGreaterThan(1.5);
+    const beforeLift = view();
+    touch("pointerup", 34, 600, 500);
+    touch("pointerup", 33, 100, 500);
+    expect(view()).toEqual(beforeLift);
+    touch("pointermove", 32, 250, 100);
+    expect(h.state.zoom.value).toBeCloseTo(expanded * 0.75);
+    touch("pointerup", 31, 100, 100);
+    touch("pointerup", 32, 250, 100);
+    expect(live()).toHaveLength(0);
+  });
+
+  it("reacquires a valid multi-finger baseline after coincident contacts separate", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    act(() => {
+      API.setAppState({ zoom: { value: getNormalizedZoom(1) } });
+      h.app.setActiveTool({ type: "hand" });
+    });
+    for (const id of [51, 52, 53]) {
+      pointer(canvas, "pointerdown", 300, 300, {
+        pointerId: id,
+        pointerType: "touch",
+      });
+    }
+    pointer(canvas, "pointermove", 400, 300, {
+      pointerId: 53,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBe(1);
+    pointer(canvas, "pointermove", 500, 300, {
+      pointerId: 53,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBe(2);
+    pointer(canvas, "pointermove", 480, 300, {
+      pointerId: 53,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBeCloseTo(1.8);
+    for (const id of [51, 52, 53]) {
+      pointer(canvas, "pointerup", 300, 300, {
+        pointerId: id,
+        pointerType: "touch",
+      });
+    }
+  });
+
+  it.each(["pointercancel", "lostpointercapture", "blur", "focus"])(
+    "cleans gesture contacts on %s and allows the next single-finger drag",
+    async (type) => {
+      const { container } = await render(
+        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      );
+      const canvas = container.querySelector("canvas.interactive")!;
+      act(() => {
+        API.setAppState({
+          scrollX: 0,
+          scrollY: 0,
+          zoom: { value: getNormalizedZoom(1) },
+        });
+        h.app.setActiveTool({ type: "hand" });
+      });
+      for (const id of [61, 62, 63]) {
+        pointer(canvas, "pointerdown", 100 + (id - 61) * 100, 100, {
+          pointerId: id,
+          pointerType: "touch",
+        });
+      }
+      if (type === "blur" || type === "focus") {
+        fireEvent(window, new Event(type));
+      } else {
+        pointer(canvas, type, 100, 100, {
+          pointerId: 61,
+          pointerType: "touch",
+        });
+      }
+      pointer(canvas, "pointermove", 900, 900, {
+        pointerId: 61,
+        pointerType: "touch",
+      });
+      expect(h.state.zoom.value).toBe(1);
+      expect(h.state.scrollX).toBe(0);
+      expect(h.state.scrollY).toBe(0);
+      for (const id of [62, 63]) {
+        pointer(document.body, "pointerup", 200, 100, {
+          pointerId: id,
+          pointerType: "touch",
+        });
+      }
+      pointer(canvas, "pointerdown", 100, 100, {
+        pointerId: 64,
+        pointerType: "touch",
+      });
+      pointer(canvas, "pointermove", 150, 120, {
+        pointerId: 64,
+        pointerType: "touch",
+      });
+      pointer(canvas, "pointerup", 150, 120, {
+        pointerId: 64,
+        pointerType: "touch",
+      });
+      expect(h.state.scrollX).toBeCloseTo(50);
+      expect(h.state.scrollY).toBeCloseTo(20);
+      expect(live()).toHaveLength(0);
+    },
+  );
+
   it("dismisses tool settings with Escape without cancelling the selected tool", async () => {
     await render(
       <Excalidraw

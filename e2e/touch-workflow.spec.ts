@@ -303,6 +303,82 @@ test("two touchscreen contacts write and undo independently in multi-point mode"
   await input.detach();
 });
 
+test("three touchscreen contacts transform the view and cancel without leaving ghost fingers", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 3080, height: 1240 });
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
+  await page.keyboard.press("h");
+  const view = () =>
+    page.evaluate(() => {
+      const state = JSON.parse(
+        localStorage.getItem("excalidraw-state") || "{}",
+      );
+      return {
+        zoom: state.zoom?.value as number,
+        x: state.scrollX as number,
+        y: state.scrollY as number,
+      };
+    });
+  await expect.poll(async () => (await view()).zoom).toBe(1);
+  const original = await view();
+  const input = await page.context().newCDPSession(page);
+  const contacts = (y: number) => [
+    { id: 1, x: 200, y: 200 },
+    { id: 2, x: 400, y: 200 },
+    { id: 3, x: 200, y },
+  ];
+  try {
+    await input.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: contacts(400),
+    });
+    await input.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: contacts(600),
+    });
+    await expect.poll(async () => (await view()).zoom).toBeCloseTo(1.5);
+    const expanded = await view();
+    expect(200 / expanded.zoom - expanded.x).toBeCloseTo(200 - original.x);
+    expect(400 / expanded.zoom - expanded.y).toBeCloseTo(300 - original.y);
+    await input.send("Input.dispatchTouchEvent", {
+      type: "touchCancel",
+      touchPoints: [],
+    });
+    await input.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ id: 7, x: 500, y: 300 }],
+    });
+    await input.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ id: 7, x: 560, y: 330 }],
+    });
+    await input.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect
+      .poll(async () => (await view()).x)
+      .toBeCloseTo(expanded.x + 60 / expanded.zoom);
+    await expect
+      .poll(async () => (await view()).y)
+      .toBeCloseTo(expanded.y + 30 / expanded.zoom);
+    expect((await view()).zoom).toBeCloseTo(expanded.zoom);
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+          (el: { isDeleted: boolean }) => !el.isDeleted,
+        ),
+      ),
+    ).toHaveLength(0);
+  } finally {
+    await input.detach();
+  }
+});
+
 test("APK toolbar keeps drawing controls compact and insertion tools contextual", async ({
   page,
 }, info) => {

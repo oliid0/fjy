@@ -362,7 +362,7 @@ import {
 import { exportCanvas, loadFromBlob } from "../data";
 import Library, { distributeLibraryItemsOnSquareGrid } from "../data/library";
 import { restoreAppState, restoreElements } from "../data/restore";
-import { getCenter, getDistance } from "../gesture";
+import { getCenter, getDistance, getFactoryGesture } from "../gesture";
 import { History } from "../history";
 import { defaultLang, getLanguage, languages, setLanguage, t } from "../i18n";
 
@@ -2344,7 +2344,7 @@ class App extends React.Component<AppProps, AppState> {
                             onContextMenu={this.handleCanvasContextMenu}
                             onPointerMove={this.handleCanvasPointerMove}
                             onPointerUp={this.handleCanvasPointerUp}
-                            onPointerCancel={this.removePointer}
+                            onPointerCancel={this.handleCanvasPointerCancel}
                             onTouchMove={this.handleTouchMove}
                             onPointerDown={this.handleCanvasPointerDown}
                             onDoubleClick={this.handleCanvasDoubleClick}
@@ -2796,6 +2796,12 @@ class App extends React.Component<AppProps, AppState> {
 
   private onBlur = withBatchedUpdates(() => {
     isHoldingSpace = false;
+    if (this.props.UIOptions.unifiedToolbar) {
+      gesture.pointers.clear();
+      this.rebaseGesture();
+      this.resetContextMenuTimer();
+      lastPointerUp?.();
+    }
     this.setState({
       isBindingEnabled: this.state.bindingPreference === "enabled",
     });
@@ -3136,6 +3142,11 @@ class App extends React.Component<AppProps, AppState> {
     this.imageCache.clear();
     this.resizeObserver?.disconnect();
     this.unmounted = true;
+    if (this.props.UIOptions.unifiedToolbar) {
+      gesture.pointers.clear();
+      this.rebaseGesture();
+      lastPointerUp?.();
+    }
     this.removeEventListeners();
     this.library.destroy();
     this.laserTrails.stop();
@@ -3205,6 +3216,11 @@ class App extends React.Component<AppProps, AppState> {
       addEventListener(document, EVENT.POINTER_UP, this.removePointer, {
         passive: false,
       }), // #3553
+      addEventListener(
+        document,
+        "pointercancel",
+        this.handleCanvasPointerCancel,
+      ),
       addEventListener(document, EVENT.COPY, this.onCopy, { passive: false }),
       addEventListener(document, EVENT.KEYUP, this.onKeyUp, { passive: true }),
       addEventListener(
@@ -3609,6 +3625,7 @@ class App extends React.Component<AppProps, AppState> {
       });
     } else {
       gesture.pointers.clear();
+      this.rebaseGesture();
     }
   };
 
@@ -4167,7 +4184,40 @@ class App extends React.Component<AppProps, AppState> {
       this.resetContextMenuTimer();
     }
 
-    gesture.pointers.delete(event.pointerId);
+    if (
+      gesture.pointers.delete(event.pointerId) &&
+      this.props.UIOptions.unifiedToolbar
+    ) {
+      this.rebaseGesture();
+    }
+  };
+
+  private handleCanvasPointerCancel = (
+    event: React.PointerEvent<HTMLElement> | PointerEvent,
+  ) => {
+    const tracked = gesture.pointers.has(event.pointerId);
+    this.removePointer(event);
+    if (tracked && this.props.UIOptions.unifiedToolbar) {
+      lastPointerUp?.();
+    }
+  };
+
+  private gestureMetrics = () =>
+    this.props.UIOptions.unifiedToolbar
+      ? getFactoryGesture(gesture.pointers)
+      : gesture.pointers.size === 2
+      ? {
+          center: getCenter(gesture.pointers),
+          distance: getDistance(Array.from(gesture.pointers.values())),
+        }
+      : null;
+
+  /** Rebase membership changes; adding/lifting a finger must not change the view. */
+  private rebaseGesture = () => {
+    const metrics = this.gestureMetrics();
+    gesture.lastCenter = metrics?.center ?? null;
+    gesture.initialDistance = metrics?.distance ?? null;
+    gesture.initialScale = metrics ? this.state.zoom.value : null;
   };
 
   toggleLock = (source: "keyboard" | "ui" = "ui") => {
@@ -6520,19 +6570,19 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     const initialScale = gesture.initialScale;
+    const metrics = this.gestureMetrics();
     if (
-      gesture.pointers.size === 2 &&
+      metrics &&
       gesture.lastCenter &&
       initialScale &&
       gesture.initialDistance
     ) {
-      const center = getCenter(gesture.pointers);
+      const { center, distance } = metrics;
       const previousCenter = gesture.lastCenter;
       const deltaX = center.x - gesture.lastCenter.x;
       const deltaY = center.y - gesture.lastCenter.y;
       gesture.lastCenter = center;
 
-      const distance = getDistance(Array.from(gesture.pointers.values()));
       const scaleFactor =
         this.state.activeTool.type === "freedraw" && this.state.penMode
           ? 1
@@ -6547,7 +6597,7 @@ class App extends React.Component<AppProps, AppState> {
           )
         : this.state.zoom.value;
       if (factoryGesture) {
-        // HCanvas.doScaleWithTwo uses incremental distances, including at 50/200%.
+        // HCanvas.doScaleWithTwo/More use incremental distances, also at 50/200%.
         // Reversing at a limit must respond immediately instead of crossing an old baseline.
         gesture.initialScale = nextZoom;
         gesture.initialDistance = distance;
@@ -6577,10 +6627,7 @@ class App extends React.Component<AppProps, AppState> {
       });
       this.resetShouldCacheIgnoreZoomDebounced();
     } else {
-      gesture.lastCenter =
-        gesture.initialDistance =
-        gesture.initialScale =
-          null;
+      this.rebaseGesture();
     }
 
     if (
@@ -8228,6 +8275,11 @@ class App extends React.Component<AppProps, AppState> {
   private maybeCleanupAfterMissingPointerUp = (event: PointerEvent | null) => {
     lastPointerUp?.();
     this.missingPointerEventCleanupEmitter.trigger(event).clear();
+    if (!event && this.props.UIOptions.unifiedToolbar) {
+      gesture.pointers.clear();
+      this.rebaseGesture();
+      this.resetContextMenuTimer();
+    }
   };
 
   // Returns whether the event is a panning
@@ -8328,14 +8380,18 @@ class App extends React.Component<AppProps, AppState> {
             setCursorForShape(this.interactiveCanvas, this.state);
           }
         }
-        this.setState({
-          cursorButton: "up",
-        });
-        this.savePointer(event.clientX, event.clientY, "up");
+        if (!this.unmounted) {
+          this.setState({ cursorButton: "up" });
+          this.savePointer(event.clientX, event.clientY, "up");
+        }
         window.removeEventListener(EVENT.POINTER_MOVE, onPointerMove);
         window.removeEventListener(EVENT.POINTER_UP, teardown);
         window.removeEventListener(EVENT.BLUR, teardown);
-        onPointerMove.flush();
+        if (this.unmounted) {
+          onPointerMove.cancel();
+        } else {
+          onPointerMove.flush();
+        }
       }),
     );
     window.addEventListener(EVENT.BLUR, teardown);
@@ -8354,12 +8410,8 @@ class App extends React.Component<AppProps, AppState> {
       y: event.clientY,
     });
 
-    if (gesture.pointers.size === 2) {
-      gesture.lastCenter = getCenter(gesture.pointers);
-      gesture.initialScale = this.state.zoom.value;
-      gesture.initialDistance = getDistance(
-        Array.from(gesture.pointers.values()),
-      );
+    if (gesture.pointers.size === 2 || this.props.UIOptions.unifiedToolbar) {
+      this.rebaseGesture();
     }
   }
 

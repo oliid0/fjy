@@ -216,6 +216,7 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       onPointerMove={props.onPointerMove}
       onPointerUp={props.onPointerUp}
       onPointerCancel={props.onPointerCancel}
+      onLostPointerCapture={props.onPointerCancel}
       onTouchMove={props.onTouchMove}
       onPointerDown={props.onPointerDown}
       onDoubleClick={

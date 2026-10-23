@@ -21,6 +21,8 @@ const enterText = async (page: Page, text: string, select = true) => {
 };
 
 for (const viewport of [
+  { width: 3840, height: 2160 },
+  { width: 3080, height: 1240 },
   { width: 1920, height: 1080 },
   { width: 1280, height: 720 },
   { width: 800, height: 600 },

@@ -1,7 +1,7 @@
 # Fcboard / 方成教育
 
 - 目标：以 HWhiteBoard 5.42 APK 对齐书写、触控、原菜单及可见课件操作，AI 融入原工具。整体 90% 未完成，按[差距表](docs/apk-alignment.md)推进；不能将构建或单测当作真机验收。
-- 发布：基线 a38a0af 的 [CI](https://github.com/oliid0/fjy/actions/runs/39562248843) 曾通过并安装到 Android 16 / 3840×2160 / density 480。2026-10-23 用户明确要求先推送构建以便实测，允许整体目标未完成时发布本轮验证版本；当前准备提交 / 推送，CI 结果待记录。
+- 发布：基线 a38a0af 的 [CI](https://github.com/oliid0/fjy/actions/runs/39562248843) 曾通过并安装到 Android 16 / 3840×2160 / density 480。2026-10-23 用户明确要求先推送构建以便实测，允许整体目标未完成时发布本轮验证版本；已推送 dbb4a35，[首轮 CI](https://github.com/oliid0/fjy/actions/runs/39931979485) 在准备 OCR 资源时发现缺失 scripts/ocr-LICENSES.txt，尚未进入编译；恢复原打包输入后，node scripts/fetch-ocr-models.mjs 本地资源准备通过，继续推送修复并跟踪构建。
 - 迁移：保留用户 app、app/fcboard、packages/fcboard 目录迁移及远控移除、协作、资源和多语言修改。修复剩余 8 处失效相对引用与重复的 packages/fcboard 锁文件条目；清单 / 锁文件 specifier 一致。按用户新项目要求，仅用 fcboard 数据键；移除重复回退，修复设置保存后误删自身，保留会话 / 显式记住密钥语义。
 - 识别：APK 的文字识别是 ML Kit Digital Ink 18.1.0 原始轨迹，model.tflite 为图示分类器。新增 DigitalInkModels / Plugin、digitalInk.ts、八个 Google 模型下载及双重 SHA 校验、包名对应 MDD 注册与 OfflineInkTest；资源已验证。真实 SDK 运行、中文 / 英文准确率和耗时待 CI / 真机；Web PaddleOCR 不冒充等价能力。
 - 插入：主板 / FilePreview 共用真实字体测量、换行和可见区域布局，答案放问题下方，结果在算式后，匹配手写大小，先换行再缩小；无空间保留原内容。原始笔迹按旋转 / 选区裁切后识别，删除和目标变化取消旧请求。

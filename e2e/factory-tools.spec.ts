@@ -64,7 +64,13 @@ for (const width of [800, 1920]) {
     await page.goto("/");
     await page.getByRole("button", { name: "教学工具", exact: true }).click();
     const group = page.getByRole("group", { name: "大屏工具", exact: true });
-    await expect(group.getByRole("button")).toHaveCount(6);
+    await expect(group.getByRole("button")).toHaveCount(5);
+    await expect(
+      page.getByRole("button", { name: "快传", exact: true }),
+    ).toBeVisible();
+    await expect(
+      group.getByRole("button", { name: "打开快传", exact: true }),
+    ).toHaveCount(0);
     const box = await group.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);

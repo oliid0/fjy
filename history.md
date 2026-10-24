@@ -1,7 +1,7 @@
 # Fcboard / 方成教育
 
 - 目标：以 HWhiteBoard 5.42 APK 对齐书写、触控、原菜单和可见课件操作，AI 融入原工具。整体 90% 未完成，按[差距表](docs/apk-alignment.md)推进，不将构建或单测当作真机验收。用户已授权整体未完成也推送验证版供实测。
-- 发布 / CI：最新全绿基线 [251d52c](https://github.com/oliid0/fjy/actions/runs/40055192160)，通过 Web / APK、Android 单测 / lint、41 项生产页面和 8 项真实模型仪器测试。统一选框调整、整体复制 / 删除 / 撤销、取消回滚与课件撤销清旧区均通过；本轮菜单改动待新推送 CI，不混用旧包。
+- 发布 / CI：最新全绿基线 [251d52c](https://github.com/oliid0/fjy/actions/runs/40055192160)。[24356e5](https://github.com/oliid0/fjy/actions/runs/40058911777) 的完整前端检查、Web / APK、Android 单测 / lint、8 项模型仪器测试均通过，页面 39 通过 / 2 失败：旧厂商按钮断言仍为 6，内部快传迁移后实际应为 5；已按日志修正并检查内部快传仍可见。新增六分辨率菜单退出 / 工具箱 / 资源居中均通过，已查看真实 1920 / 3080 截图；下一次推送复验全部页面。
 - 本轮菜单：业务下拉共用 MUI MaterialSelect，Esc / 点外部取消且不改值，内层 Esc 不误关外层；异步列表未到不产生越界值警告。锚定工具浮层打开获得焦点，Esc 能退出，文本输入中的 Esc 同样正常关闭。设置保留居中横向窗口、左侧分类和右侧紧凑设置行，无卡片。
 - 本轮工具 / 资源：工具箱去掉“更多工具”及重复入口，MUI 按钮以紧凑横向网格自动换行；录制去掉课堂前缀，快传固定进入内部文件流程。教学资源依据原 layout_teach_res_setting / TeachingResWindow 的 900×560、240 左栏和四列改为居中横窗，默认数学，左右独立滚动。完整资源子分类 / AI 交互动画尚缺。
 - 本轮长按：按用户最新要求完全取消白板长按右键菜单，不启动触摸长按计时器，编辑 / 只读均阻止 contextmenu，不再长按命中对象；课件批注 SVG 同样阻止系统菜单。圈选后的复制 / 删除 / 搜索 / 唯一 AI 操作行保留。通用编辑器保留原功能。
@@ -9,7 +9,9 @@
 - 识别 / 数学：原 APK 是 ML Kit Digital Ink 18.1.0 原始轨迹识别；model.tflite 是图示分类器，hw.ttf 属四线格。八个官方模型 SHA 与本包 MDD 注册已验证，真实 SDK 识别“十”和“1”，不能据此声称准确率达标。数学用英文轨迹模型、最高候选和语法校验；mathjs / Nerdamer / 区间分析本地计算绘图，AI 只输出校验后的 JSON。复杂二维手写到 LaTeX 仍缺，见[数学边界](docs/math-pipeline.md)。
 - 插入 / 书写：文字按源笔迹测量，问题下方 / 算式右侧，先换行后缩小，限制可见区域；函数在源附近找空位。魔术笔主体描述 → 配置图像模型 → 原位替换，取消 / 换页拒绝旧图；仅模拟链路通过，真实画质待验收。共享二次曲线、压力 / 速度递推和 Canvas / SVG 几何，完整合并采样、增量 Path2D、细 / 粗笔、阈值、0..50 笔锋变化率、钢笔零宽收笔、局部擦除回滚均有回归；主板多指遵循 HCanvas 度量，课件捏合、普通笔独立尾锋与真机延迟仍缺。
 - 讲课 / 录制：唯一 AI 识字后路由到本地数学或现有命令，明确讲解进入 lesson.ask，写入可见白板 / 课件层。Moonshine 中文指令 / 静音及 sherpa-onnx 1.13.8 / MeloTTS 中英文 44100Hz 非静音 WAV / 取消已过真实模型 CI，麦克风 / 扬声器与同步仍待真机。录制已有时间戳文稿、保存和独立总结；已通过 GitHub MCP 阅读 Meetily 停止 / 文稿收尾 / 保存 / 总结分阶段代码，面板和失败重试待补，见[播报边界](docs/offline-narration.md)。
-- 本轮触及：MaterialSelect / MaterialPanel、Classroom / Teacher / FilePreview、LanguageList、WhiteboardTools / App、TeachingTools / TeachingResources、classroom.scss、三语录制标签、相关单测 / 六分辨率页面检查及差距表。
-- 本轮验证：pnpm 10.28.2；Node 26 使用 NODE_OPTIONS=--no-experimental-webstorage。check、lint（零警告）、test:other、完整 test 通过：157 文件 / 1664 通过 / 46 既有跳过 / 1 todo。新增菜单退出三项、长按编辑 / 只读两项回归；初次新增用例的空选区 null 断言已按实际初始 undefined 修正，完整套件通过。41 项页面已发现，新页面检查仅在推送 CI 执行。git diff --check 通过，未本地运行 build / dev / Gradle / Cargo。
-- 剩余：手写提问框及独立发送 / 语音、回答 / 总结的小字号和空位策略深化；原厂全部图形、内部多媒体 / 信号源、快传上传页 MUI / 持久配对 / 上传自动预览、完整资源子分类与 AI 交互动画；连续语音停顿 3 秒执行和中心空位写入。已通过 GitHub MCP 阅读 LiveKit turn.py 的终点检测 / 中断分离，现有语音仍是一轮即停止。继续完善录制阶段、复杂数学识别、课件捏合、普通笔尾锋、真机延迟 / DPI / 双笔尖 / 手背、非笔迹透明擦除、圆规 / 三角尺及厂商加速，不声称所有功能完美工作。
+- 连续语音：依据 LiveKit turn.py 的终点检测 / 中断分离，以现有本地 / 系统最终转写流实现 3 秒无新文本后按顺序执行；保持麦克风开启，不丢两字短命令。停止 / 卸载取消排队与在途请求；可见课件换页或白板失效清旧轮次，下一句继续监听。录制中的本地转写共用麦克风，指令监听关闭不停止录制。自定义上传转写仍需手动结束，中心空位写入、系统录制共用与真实回声 / 延迟待补。触及 Classroom、voiceTurns 及回归。
+- 讲解参考：已核对用户新指定四项目的 README 及关键实现：AgentBoard 的 DSL / patch 引用校验和增量上下文，whiteboard-teacher 的 SCRIPT_API 同步语音 / 绘图，whiteboard-teacher-ai 的结构化图表 JSON；ai-digital-whiteboard 的 LocalOfflineProvider 按笔画数返回固定文字与固定置信度，不能作为真实离线精度依据。现有有界命令循环仍需补可见层状态读取、执行结果验证和完整工具能力；继续以原 APK 为主，不移植独立聊天界面。
+- 本轮触及：MaterialSelect / MaterialPanel、Classroom / Teacher / FilePreview、LanguageList、WhiteboardTools / App、TeachingTools / TeachingResources、classroom.scss、三语标签、voiceTurns、单测 / 六分辨率页面及差距表。保留工作区另有的 pnpm-lock.yaml 变化，不混入本次功能提交。
+- 本轮验证：pnpm 10.28.2；Node 26 使用 NODE_OPTIONS=--no-experimental-webstorage。check、lint（零警告）、test:other、完整 test 通过：158 文件 / 1673 通过 / 46 既有跳过 / 1 todo；相关 50 项通过。覆盖连续多轮 / 排队 / 错误后继续 / 翻页失效 / 停止 / 初始化取消 / 录制共用。41 项页面已发现，仅在推送 CI 运行。git diff --check 通过，未本地运行 build / dev / Gradle / Cargo。
+- 剩余：完整讲解 agent（可见层状态、坐标、执行核验、画笔 / 擦除 / 图形 / 数学 / TTS 全部现有工具）、手写提问框及独立发送 / 语音、回答 / 总结的小字号和空位策略深化；原厂全部图形、内部多媒体 / 信号源、快传上传页 MUI / 持久配对 / 上传自动预览、完整资源子分类与 AI 交互动画；自定义语音自动分段与中心空位写入。继续完善录制阶段、复杂数学识别、课件捏合、普通笔尾锋、真机延迟 / DPI / 双笔尖 / 手背、非笔迹透明擦除、圆规 / 三角尺及厂商加速，不声称所有功能完美工作。
 - 目录决策：保留用户 app / app/fcboard / packages/fcboard 迁移及现有别名，只用 fcboard 数据键，无旧数据回退。配置在 config，私有 config/.env.local 忽略；Capacitor 在 app，测试初始化在 tests/setup.ts，README 在 docs。CI 用 pnpm --dir app exec cap sync android，保留锁文件和字体本地路径修复。

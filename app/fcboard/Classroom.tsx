@@ -65,6 +65,7 @@ import { recognizeHandwriting } from "./ocr";
 import { boardInk } from "./digitalInk";
 import { placePanel, useAnchoredPanel } from "./floating";
 import { startSystemSpeech, transcribe } from "./speech";
+import { createVoiceTurns } from "./voiceTurns";
 
 import "./classroom.scss";
 
@@ -79,6 +80,7 @@ import type { Recording, RecordingMode } from "./recording";
 import type { TranscriptLine } from "./speech";
 import type { LocalSpeechHandle } from "./localSpeech";
 import type { Settings } from "./settings";
+import type { VoiceTurns } from "./voiceTurns";
 
 type Panel = "ai" | "plot" | "record" | "files" | "settings";
 const titles = {
@@ -188,7 +190,10 @@ export const Classroom = ({
   const [listening, setListening] = useState(false);
   const stopSpeech = useRef<(() => void) | null>(null);
   const localSpeech = useRef<LocalSpeechHandle | null>(null);
-  const finishVoice = useRef<(() => Promise<void>) | null>(null);
+  const voiceTurns = useRef<VoiceTurns | null>(null);
+  const voiceExecute = useRef<
+    ((text: string, signal: AbortSignal) => Promise<void>) | null
+  >(null);
   const voiceGeneration = useRef(0);
   const recordingVoiceCommand = useRef(false);
   const narrator = useRef<ReturnType<typeof createNarrator> | null>(null);
@@ -268,6 +273,35 @@ export const Classroom = ({
   );
   const invalidateVoice = useCallback(() => {
     voiceGeneration.current++;
+    voiceTurns.current?.stop();
+    voiceTurns.current = null;
+    assistantGeneration.current++;
+  }, []);
+
+  useEffect(() => {
+    const documentKey = () => {
+      const target = classroomCommands.read("document") as
+        | { id: string; page: number }
+        | undefined;
+      return target ? `${target.id}:${target.page}` : "";
+    };
+    let previous = documentKey();
+    const reset = () => {
+      voiceTurns.current?.reset();
+      assistantGeneration.current++;
+    };
+    const unwatch = classroomCommands.watch("document", () => {
+      const next = documentKey();
+      if (next !== previous) {
+        previous = next;
+        reset();
+      }
+    });
+    const release = classroomCommands.onInvalidate(reset);
+    return () => {
+      unwatch();
+      release();
+    };
   }, []);
 
   useEffect(() => {
@@ -839,7 +873,7 @@ export const Classroom = ({
       text: string,
       whole = false,
       selection?: {
-        context: Awaited<ReturnType<typeof boardContext>>;
+        context?: Awaited<ReturnType<typeof boardContext>>;
         signal: AbortSignal;
       },
     ) => {
@@ -977,24 +1011,31 @@ export const Classroom = ({
     [api, plot, summarize, solveMath, createPlot],
   );
 
-  const executeVoice = (text: string) => {
+  voiceExecute.current = async (text, signal) => {
     setStatus(t("fcboard.正在理解指令…"));
-    const result = execute(text);
+    const result = execute(text, false, { signal });
     const generation = assistantGeneration.current;
-    void result
-      .then(() => {
-        if (generation !== assistantGeneration.current) {
-          return;
-        }
+    try {
+      await result;
+    } finally {
+      if (!signal.aborted && generation === assistantGeneration.current) {
         setStatus((previous) =>
           previous === t("fcboard.正在理解指令…") ? "" : previous,
         );
-      })
-      .catch((failure) => {
-        if (generation === assistantGeneration.current) {
-          setError(errorMessage(failure));
-        }
-      });
+      }
+    }
+  };
+  const beginVoiceTurns = () => {
+    const turns = createVoiceTurns(
+      async (text, signal) => {
+        narrator.current?.stop();
+        await voiceExecute.current?.(text, signal);
+      },
+      (failure) => setError(errorMessage(failure)),
+    );
+    voiceTurns.current = turns;
+    setListening(true);
+    return turns;
   };
 
   const toggleVoice = async () => {
@@ -1004,6 +1045,11 @@ export const Classroom = ({
     narrator.current?.stop();
     if (recording && currentSettings().speech === "local") {
       recordingVoiceCommand.current = !recordingVoiceCommand.current;
+      if (recordingVoiceCommand.current) {
+        beginVoiceTurns();
+      } else {
+        invalidateVoice();
+      }
       setListening(recordingVoiceCommand.current);
       setStatus(
         recordingVoiceCommand.current
@@ -1012,11 +1058,17 @@ export const Classroom = ({
       );
       return;
     }
+    if (voiceTurns.current) {
+      invalidateVoice();
+      setListening(false);
+      stopSpeech.current?.();
+      stopSpeech.current = null;
+      const handle = localSpeech.current;
+      localSpeech.current = null;
+      await handle?.cancel();
+      return;
+    }
     if (listening) {
-      if (finishVoice.current) {
-        await finishVoice.current();
-        return;
-      }
       if (voiceRecorder.current?.state !== "recording") {
         voiceGeneration.current++;
       }
@@ -1033,47 +1085,19 @@ export const Classroom = ({
     }
     if (currentSettings().speech === "local") {
       const generation = ++voiceGeneration.current;
-      const lines: TranscriptLine[] = [];
-      let finishing = false;
-      setListening(true);
+      const turns = beginVoiceTurns();
       setStatus(t("fcboard.正在准备内置中文语音…"));
       try {
-        const finish = async () => {
-          if (finishing || generation !== voiceGeneration.current) {
-            return;
-          }
-          finishing = true;
-          const handle = localSpeech.current;
-          try {
-            await handle?.stop();
-            setListening(false);
-            localSpeech.current = null;
-            finishVoice.current = null;
-            if (generation !== voiceGeneration.current) {
-              return;
-            }
-            const text = lines
-              .map((line) => line.text)
-              .join("")
-              .trim();
-            if (!text) {
-              throw new Error(t("fcboard.未识别到语音，请重试"));
-            }
-            executeVoice(text);
-          } catch (failure) {
-            setListening(false);
-            setError(errorMessage(failure));
-          }
-        };
         const handle = await startLocalSpeech(
           (line) => {
-            lines.push(line);
-            if (finishVoice.current) {
-              void finish().catch(() => {});
+            if (generation === voiceGeneration.current) {
+              turns.push(line.text);
             }
           },
           (message) => {
             if (generation === voiceGeneration.current) {
+              invalidateVoice();
+              localSpeech.current = null;
               setListening(false);
               setError(message);
             }
@@ -1084,11 +1108,13 @@ export const Classroom = ({
           return;
         }
         localSpeech.current = handle;
-        finishVoice.current = finish;
         setStatus(t("fcboard.正在听，停顿后执行指令；也可再次点击结束语音"));
       } catch (failure) {
-        setListening(false);
-        throw failure;
+        if (generation === voiceGeneration.current) {
+          invalidateVoice();
+          setListening(false);
+          throw failure;
+        }
       }
     } else if (currentSettings().speech === "custom") {
       const generation = ++voiceGeneration.current;
@@ -1138,7 +1164,7 @@ export const Classroom = ({
       setStatus(t("fcboard.正在听，请说出指令后再次点击语音按钮"));
     } else {
       const generation = ++voiceGeneration.current;
-      setListening(true);
+      const turns = beginVoiceTurns();
       setStatus(t("fcboard.正在听，请说出指令…"));
       try {
         const stop = await startSystemSpeech(
@@ -1146,20 +1172,19 @@ export const Classroom = ({
             if (generation !== voiceGeneration.current) {
               return;
             }
-            setListening(false);
-            stopSpeech.current?.();
-            stopSpeech.current = null;
-            executeVoice(text);
+            turns.push(text);
           },
           (message) => {
             if (generation !== voiceGeneration.current) {
               return;
             }
             setListening(false);
+            invalidateVoice();
             stopSpeech.current?.();
             stopSpeech.current = null;
             setError(message);
           },
+          true,
         );
         if (generation !== voiceGeneration.current) {
           stop();
@@ -1167,8 +1192,11 @@ export const Classroom = ({
           stopSpeech.current = stop;
         }
       } catch (failure) {
-        setListening(false);
-        throw failure;
+        if (generation === voiceGeneration.current) {
+          invalidateVoice();
+          setListening(false);
+          throw failure;
+        }
       }
     }
   };
@@ -1233,9 +1261,7 @@ export const Classroom = ({
           (line) => {
             transcript.current.push({ ...line, time: line.time + offset });
             if (recordingVoiceCommand.current) {
-              recordingVoiceCommand.current = false;
-              setListening(false);
-              executeVoice(line.text);
+              voiceTurns.current?.push(line.text);
             }
           },
           (message) =>
@@ -1288,6 +1314,7 @@ export const Classroom = ({
     stoppingRecording.current = true;
     try {
       recordingVoiceCommand.current = false;
+      invalidateVoice();
       setListening(false);
       try {
         await localSpeech.current?.stop();

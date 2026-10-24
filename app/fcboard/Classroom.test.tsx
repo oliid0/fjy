@@ -16,6 +16,8 @@ import { Classroom } from "./Classroom";
 import { SelectionActions } from "./SelectionActions";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
+import * as speech from "./speech";
+import * as localSpeech from "./localSpeech";
 import { classroomCommands } from "./commands";
 import { BoardRecorder } from "./recording";
 import { currentSettings, defaults, saveSettings } from "./settings";
@@ -92,6 +94,222 @@ describe("selection-driven classroom controls", () => {
     } as unknown as ExcalidrawImperativeAPI;
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(["local", "system"] as const)(
+    "keeps %s voice listening across consecutive turns until explicitly stopped",
+    async (provider) => {
+      saveSettings({ ...defaults, speech: provider }, false);
+      let deliver!: (text: string) => void;
+      const stop = vi.fn();
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const local = vi
+        .spyOn(localSpeech, "startLocalSpeech")
+        .mockImplementation(async (onLine) => {
+          deliver = (text) => onLine({ time: 0, text });
+          return { stop: vi.fn().mockResolvedValue(undefined), cancel };
+        });
+      const system = vi
+        .spyOn(speech, "startSystemSpeech")
+        .mockImplementation(async (onText) => {
+          deliver = onText;
+          return stop;
+        });
+      const cloud = vi.spyOn(ai, "chat");
+      const view = render(<Classroom api={api} />);
+      const clear = vi.fn();
+      const release = classroomCommands.register(
+        "canvas.clear",
+        "@internal",
+        clear,
+      );
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          await classroomCommands.execute({ name: "voice.toggle" });
+        });
+        act(() => deliver("清空"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2000);
+        });
+        act(() => deliver("白板"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2999);
+        });
+        expect(clear).not.toHaveBeenCalled();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(clear).toHaveBeenCalledTimes(1);
+        expect(stop).not.toHaveBeenCalled();
+        expect(cancel).not.toHaveBeenCalled();
+        act(() => deliver("清空白板"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+        expect(clear).toHaveBeenCalledTimes(2);
+        await act(async () => {
+          await classroomCommands.execute({ name: "voice.toggle" });
+        });
+        act(() => deliver("清空白板"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+        expect(clear).toHaveBeenCalledTimes(2);
+        expect(cloud).not.toHaveBeenCalled();
+        if (provider === "local") {
+          expect(local).toHaveBeenCalledTimes(1);
+          expect(cancel).toHaveBeenCalledTimes(1);
+          expect(system).not.toHaveBeenCalled();
+        } else {
+          expect(system).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            true,
+          );
+          expect(stop).toHaveBeenCalledTimes(1);
+          expect(local).not.toHaveBeenCalled();
+        }
+      } finally {
+        view.unmount();
+        release();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("drops old-page voice commands while keeping capture available for the new page", async () => {
+    saveSettings({ ...defaults, speech: "local" }, false);
+    let deliver!: (text: string) => void;
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      async (onLine) => {
+        deliver = (text) => onLine({ time: 0, text });
+        return { stop: vi.fn().mockResolvedValue(undefined), cancel };
+      },
+    );
+    const view = render(<Classroom api={api} />);
+    const clear = vi.fn();
+    let page = 1;
+    const release = [
+      classroomCommands.register("canvas.clear", "@internal", clear),
+      classroomCommands.context("document", () => ({
+        id: "course",
+        page,
+        ink: [],
+      })),
+    ];
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      act(() => deliver("清空白板"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      act(() => {
+        page = 2;
+        classroomCommands.changed("document");
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(clear).not.toHaveBeenCalled();
+      act(() => deliver("清空白板"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(clear).toHaveBeenCalledTimes(1);
+      expect(cancel).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      release.forEach((stop) => stop());
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels capture that becomes ready after the user stopped listening", async () => {
+    saveSettings({ ...defaults, speech: "local" }, false);
+    let ready!: (handle: localSpeech.LocalSpeechHandle) => void;
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const start = vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          ready = resolve;
+        }),
+    );
+    const view = render(<Classroom api={api} />);
+    let starting!: Promise<unknown>;
+    await act(async () => {
+      starting = classroomCommands.execute({ name: "voice.toggle" });
+      await Promise.resolve();
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await classroomCommands.execute({ name: "voice.toggle" });
+    });
+    await act(async () => {
+      ready({ stop: vi.fn().mockResolvedValue(undefined), cancel });
+      await starting;
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
+  it("shares recording transcription across multiple commands without restarting or stopping the microphone", async () => {
+    saveSettings({ ...defaults, speech: "local" }, false);
+    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+    let deliver!: (text: string) => void;
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const start = vi
+      .spyOn(localSpeech, "startLocalSpeech")
+      .mockImplementation(async (onLine) => {
+        deliver = (text) => onLine({ time: 0, text });
+        return { stop, cancel };
+      });
+    const view = render(<Classroom api={api} />);
+    const clear = vi.fn();
+    const release = classroomCommands.register(
+      "canvas.clear",
+      "@internal",
+      clear,
+    );
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "record.start",
+        args: { mode: "audio" },
+      });
+    });
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      for (let index = 0; index < 2; index++) {
+        act(() => deliver("清空白板"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+      }
+      expect(clear).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      act(() => deliver("清空白板"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(clear).toHaveBeenCalledTimes(2);
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(stop).not.toHaveBeenCalled();
+      expect(cancel).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      release();
+      vi.useRealTimers();
+    }
+  });
 
   it("does not apply an older AI component response after a newer command", async () => {
     let finish!: (value: string) => void;

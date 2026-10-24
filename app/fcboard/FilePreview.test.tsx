@@ -513,6 +513,8 @@ it("shares one adjustable region in courseware and cancels a border drag without
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.撤销板书") }));
   expect(context().ink[0].points[0]).toEqual([100, 100]);
   expect(context().ink).toHaveLength(2);
+  expect(context().region).toEqual([]);
+  expect(context().selection).toEqual([]);
 });
 
 it("starts a new courseware region from its interior and retains it on a tap-sized gesture", async () => {

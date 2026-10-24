@@ -586,6 +586,8 @@ export const FilePreview = ({
       }
       const target = redo ? past.current : future.current;
       (target[index] ||= []).push(inkRef.current[index] || []);
+      selectedInkRef.current = [];
+      setLasso([]);
       commitInk({ ...inkRef.current, [index]: previous }, false);
     },
     [commitInk],

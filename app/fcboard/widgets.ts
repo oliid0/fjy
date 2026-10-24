@@ -12,8 +12,10 @@ import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 import { project3D } from "./math";
 import { classroomCommands } from "./commands";
 import { contentPosition, revealNewContent } from "./board";
+import { configureSolid, solidDefaults, solidShapes } from "./solids";
 
 import type { InkStroke } from "./documents";
+import type { SolidSettings } from "./solids";
 
 export const teachingTools = {
   ruler: "直尺",
@@ -46,6 +48,7 @@ export type WidgetParams = {
   names: string;
   choice: string;
   size: number;
+  solid: SolidSettings;
 };
 export type Widget = {
   id: string;
@@ -67,6 +70,7 @@ export const widgetDefaults = (): WidgetParams => ({
   names: "1,2,3,4,5,6",
   choice: "?",
   size: 1,
+  solid: solidDefaults(),
 });
 export const widgetTime = (params: WidgetParams, now = Date.now()) =>
   params.elapsed +
@@ -76,6 +80,9 @@ export const configureWidget = (
   changes: Record<string, unknown>,
 ): WidgetParams => {
   const next = { ...params };
+  if (changes.solid !== undefined) {
+    next.solid = configureSolid(params.solid || solidDefaults(), changes.solid);
+  }
   const limits = {
     duration: [1, 7200],
     length: [0.2, 5],
@@ -393,32 +400,14 @@ export const widgetShapes = (
         height,
       ]);
     if (kind === "cube") {
-      const vertices = [
-        [-70, -70, -70],
-        [70, -70, -70],
-        [70, 70, -70],
-        [-70, 70, -70],
-        [-70, -70, 70],
-        [70, -70, 70],
-        [70, 70, 70],
-        [-70, 70, 70],
-      ];
-      for (const [a, b] of [
-        [0, 1],
-        [1, 2],
-        [2, 3],
-        [3, 0],
-        [4, 5],
-        [5, 6],
-        [6, 7],
-        [7, 4],
-        [0, 4],
-        [1, 5],
-        [2, 6],
-        [3, 7],
-      ]) {
-        path([vertices[a], vertices[b]]);
-      }
+      result.push(
+        ...solidShapes(
+          kind,
+          params.solid || solidDefaults(),
+          params.size,
+          params.rotation,
+        ),
+      );
     } else if (kind === "sphere") {
       for (let lat = -2; lat <= 2; lat++) {
         const angle = (lat * Math.PI) / 6;
@@ -437,7 +426,16 @@ export const widgetShapes = (
           }),
         );
       }
-    } else if (kind === "cylinder" || kind === "cone" || kind === "frustum") {
+    } else if (kind === "cylinder") {
+      result.push(
+        ...solidShapes(
+          kind,
+          params.solid || solidDefaults(),
+          params.size,
+          params.rotation,
+        ),
+      );
+    } else if (kind === "cone" || kind === "frustum") {
       const top = kind === "cone" ? 0 : kind === "frustum" ? 40 : 75;
       path(ring(75, -65));
       if (top) {
@@ -559,6 +557,7 @@ export const renderWidget = (
         (existing.find((el) => el.id === `${widget.id}-${index}`)?.version ||
           0) + 1,
       customData: {
+        ...shape.customData,
         fcGenerated: true,
         fcWidget: {
           ...widget,

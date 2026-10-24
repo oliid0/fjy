@@ -23,6 +23,9 @@ import { BoardRecorder } from "./recording";
 import { currentSettings, defaults, saveSettings } from "./settings";
 import { handwritingText } from "./handwriting";
 import { insertionDefaults, renderInsertion } from "./insertObjects";
+import { documentSourceSignature } from "./documents";
+
+import type { InkStroke } from "./documents";
 
 vi.mock("@excalidraw/excalidraw", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@excalidraw/excalidraw")>()),
@@ -460,6 +463,132 @@ describe("selection-driven classroom controls", () => {
       view.unmount();
     }
   });
+
+  it("calculates explicit courseware math without capturing or recognizing handwriting", async () => {
+    const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+    const capture = vi.spyOn(ai, "boardContext");
+    const snapshot = vi.fn();
+    const text = vi.fn();
+    const stops = [
+      classroomCommands.context("document", () => ({
+        id: "course",
+        page: 1,
+        ink: [],
+      })),
+      classroomCommands.register("document.snapshot", "@internal", snapshot),
+      classroomCommands.register("document.draw", "@internal", vi.fn()),
+      classroomCommands.register("document.text", "@internal", text),
+    ];
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await expect(
+          classroomCommands.execute({
+            name: "math.calculate",
+            args: { expression: "1+1=" },
+          }),
+        ).resolves.toEqual({ expression: "1+1", answer: "2" });
+      });
+      expect(text).toHaveBeenCalledWith({ text: "1+1 = 2" });
+      expect(snapshot).not.toHaveBeenCalled();
+      expect(recognize).not.toHaveBeenCalled();
+      expect(capture).not.toHaveBeenCalled();
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      stops.forEach((stop) => stop());
+    }
+  });
+
+  it.each([false, true])(
+    "uses selected raw courseware ink and rejects a changed source (%s)",
+    async (changeSource) => {
+      const stroke: InkStroke = {
+        id: "equation",
+        points: [
+          [10, 40],
+          [100, 40],
+        ],
+        width: 2,
+        color: "#101010",
+      };
+      const document = {
+        id: "course",
+        page: 1,
+        ink: [stroke],
+        selection: [stroke.id],
+        region: [
+          [20, 20],
+          [80, 60],
+        ],
+      };
+      let finish!: (text: string) => void;
+      const recognize = vi
+        .spyOn(ocr, "recognizeHandwriting")
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        );
+      const snapshot = vi.fn();
+      const text = vi.fn();
+      const stops = [
+        classroomCommands.context("document", () => document),
+        classroomCommands.register("document.snapshot", "@internal", snapshot),
+        classroomCommands.register("document.draw", "@internal", vi.fn()),
+        classroomCommands.register("document.text", "@internal", text),
+      ];
+      const view = render(<Classroom api={api} />);
+      try {
+        let request!: Promise<unknown>;
+        act(() => {
+          request = classroomCommands.execute({ name: "math.calculate" });
+        });
+        expect(recognize).toHaveBeenCalledWith(
+          expect.any(Function),
+          expect.any(AbortSignal),
+          expect.any(Function),
+          "math",
+          undefined,
+          [
+            [
+              [20, 40],
+              [80, 40],
+            ],
+          ],
+        );
+        if (changeSource) {
+          document.selection = [];
+        }
+        await act(async () => {
+          finish("1+1=");
+          await expect(request).resolves.toEqual(
+            changeSource
+              ? { cancelled: true }
+              : { expression: "1+1", answer: "2" },
+          );
+        });
+        if (changeSource) {
+          expect(text).not.toHaveBeenCalled();
+        } else {
+          expect(text).toHaveBeenCalledWith({
+            text: "2",
+            presentation: "match",
+            placement: "inline",
+            sourceIds: [stroke.id],
+            sourceSignature: documentSourceSignature([stroke]),
+            sourceLines: 1,
+          });
+        }
+        expect(snapshot).not.toHaveBeenCalled();
+        expect(api.updateScene).not.toHaveBeenCalled();
+      } finally {
+        view.unmount();
+        stops.forEach((stop) => stop());
+      }
+    },
+  );
 
   it("prepares a lesson using visible canvas tools and local math before drawing the validated lesson", async () => {
     const capture = vi

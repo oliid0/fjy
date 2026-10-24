@@ -38,13 +38,18 @@ import { agentContext, runBoardCommands } from "./agent";
 
 import { LanSession } from "./LanSession";
 import { classroomCommands, directCommand } from "./commands";
-import { DOCUMENT_ACCEPT, documentStrokeBounds } from "./documents";
+import {
+  DOCUMENT_ACCEPT,
+  documentStrokeBounds,
+  documentSourceSignature,
+} from "./documents";
 
 import { Teacher, LearningSettings } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
 import { registerCanvasCommands } from "./canvasCommands";
 import { localMathIntent } from "./intent";
 import { defaultPlot, plotExpression } from "./math";
+import { mathNotation } from "./mathNotation";
 import { calculateAsync } from "./mathComputation";
 import { validatedPlot } from "./mathRecognition";
 import { Classroom as NativeClassroom } from "./native";
@@ -62,7 +67,7 @@ import { SelectionActions } from "./SelectionActions";
 import { Spotlight } from "./Spotlight";
 import { BoardSettings } from "./BoardSettings";
 import { recognizeHandwriting } from "./ocr";
-import { boardInk } from "./digitalInk";
+import { boardInk, clipInk } from "./digitalInk";
 import { placePanel, useAnchoredPanel } from "./floating";
 import { startSystemSpeech, transcribe } from "./speech";
 import { createVoiceTurns } from "./voiceTurns";
@@ -620,22 +625,91 @@ export const Classroom = ({
         if (automatic) {
           return;
         }
-        const snapshot = (await classroomCommands.execute({
-          name: "document.snapshot",
-        })) as { text: string; image: string };
+        const readSource = () => {
+          const document = classroomCommands.read("document") as
+            | {
+                id?: string;
+                page?: number;
+                ink?: InkStroke[];
+                selection?: string[];
+                region?: [number, number][];
+              }
+            | undefined;
+          const ink = document?.ink || [];
+          const chosen = document?.selection?.length
+            ? ink.filter((stroke) => document.selection!.includes(stroke.id))
+            : ink;
+          return {
+            document,
+            chosen,
+            signature: JSON.stringify([
+              document?.id,
+              document?.page,
+              document?.selection,
+              document?.region,
+              chosen,
+            ]),
+          };
+        };
+        const source = readSource();
+        const sourceCurrent = () =>
+          !!input || source.signature === readSource().signature;
+        const region = source.document?.region;
+        const strokes =
+          source.chosen.length &&
+          source.chosen.every(
+            (stroke) =>
+              !stroke.text &&
+              !stroke.image &&
+              !stroke.widget &&
+              !stroke.insertion &&
+              !stroke.plot,
+          )
+            ? clipInk(
+                source.chosen.map((stroke) => stroke.points),
+                region?.length
+                  ? {
+                      left: Math.min(...region.map(([x]) => x)),
+                      right: Math.max(...region.map(([x]) => x)),
+                      top: Math.min(...region.map(([, y]) => y)),
+                      bottom: Math.max(...region.map(([, y]) => y)),
+                    }
+                  : undefined,
+              )
+            : [];
         const expression =
           input ||
           (await recognizeHandwriting(
-            snapshot.image,
+            async () => {
+              if (!sourceCurrent()) {
+                throw new DOMException(
+                  "Document selection changed",
+                  "AbortError",
+                );
+              }
+              const snapshot = (await classroomCommands.execute({
+                name: "document.snapshot",
+              })) as { image: string };
+              if (!sourceCurrent()) {
+                throw new DOMException(
+                  "Document selection changed",
+                  "AbortError",
+                );
+              }
+              return snapshot.image;
+            },
             AbortSignal.timeout(30000),
             setStatus,
             "math",
+            undefined,
+            strokes,
           ));
         if (
           revision !== classroomCommands.revision ||
-          generation !== assistantGeneration.current
+          generation !== assistantGeneration.current ||
+          !sourceCurrent()
         ) {
-          return;
+          return { cancelled: true };
         }
         if (expression === "NONE") {
           throw new Error(t("fcboard.未发现待计算算式"));
@@ -643,15 +717,30 @@ export const Classroom = ({
         const answer = await calculateAsync(expression);
         if (
           revision !== classroomCommands.revision ||
-          generation !== assistantGeneration.current
+          generation !== assistantGeneration.current ||
+          !sourceCurrent()
         ) {
-          return;
+          return { cancelled: true };
         }
+        const inline = !input && strokes.length > 0;
         await classroomCommands.execute({
           name: "canvas.text",
-          args: { text: `${expression} = ${answer}` },
+          args: inline
+            ? {
+                text: `${
+                  /=\s*$/.test(expression) || /^[xyz] =/.test(answer)
+                    ? ""
+                    : "= "
+                }${answer}`,
+                presentation: "match",
+                placement: "inline",
+                sourceIds: source.chosen.map((stroke) => stroke.id),
+                sourceSignature: documentSourceSignature(source.chosen),
+                sourceLines: expression.trim().split("\n").length,
+              }
+            : { text: `${mathNotation(expression)} = ${answer}` },
         });
-        return;
+        return { expression: mathNotation(expression), answer };
       }
       const elements = api.getSceneElements();
       const selected = automatic ? [] : selectedBoardElements(api);

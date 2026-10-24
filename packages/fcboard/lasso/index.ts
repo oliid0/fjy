@@ -215,9 +215,6 @@ export class LassoTrail extends AnimatedTrail {
         intersectedElements: this.intersectedElements,
         enclosedElements: this.enclosedElements,
         simplifyDistance: 5 / this.app.state.zoom.value,
-        ...(this.app.props.UIOptions.unifiedToolbar
-          ? { looseBounds: 12 / this.app.state.zoom.value }
-          : {}),
       });
 
       const [left, top, right, bottom] = getLassoBounds(

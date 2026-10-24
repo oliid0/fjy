@@ -577,6 +577,7 @@ export const drawPlot = (
   replaceIds: string[] = [],
   sourceSignature?: string,
   keepTool = false,
+  sourceBounds?: ContentRect,
 ) => {
   const lines = samplePlot(plot);
   const scale = 200 / plot.range;
@@ -742,6 +743,7 @@ export const drawPlot = (
             return { left, top, right, bottom };
           }),
     8 / (documentLayout?.scale || api.getAppState().zoom.value),
+    sourceBounds,
   );
   const plotId = crypto.randomUUID();
   const shapes = fitted.shapes.map((shape) => ({

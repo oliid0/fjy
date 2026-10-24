@@ -31,26 +31,22 @@ describe("Test MobileMenu", () => {
     expect(h.app.editorInterface.formFactor).toBe("phone");
   });
 
-  it("uses one anchored Material menu with back navigation and a dedicated factory background page", async () => {
+  it("opens centered settings directly, keeps its category navigation and changes the factory background", async () => {
     fireEvent.click(screen.getByTestId("main-menu-trigger"));
     expect(
       document.querySelector(".fc-material-menu.MuiPaper-root"),
     ).not.toBeNull();
     fireEvent.click(screen.getByRole("menuitem", { name: t("fcboard.设置") }));
-    expect(screen.queryByTestId("load-button")).toBeNull();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: t("buttons.export") }),
-    );
-    expect(screen.getByTestId("image-export-button")).toBeVisible();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: t("fcboard.返回设置") }),
-    );
-    expect(screen.queryByTestId("image-export-button")).toBeNull();
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: t("fcboard.白板设置") }),
-    );
     await screen.findByRole("dialog", { name: t("fcboard.白板设置") });
-    fireEvent.click(screen.getByRole("button", { name: /Background.*›/ }));
+    expect(screen.queryByTestId("dropdown-menu")).toBeNull();
+    const nav = screen.getByRole("navigation", { name: t("fcboard.设置导航") });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.工具箱") }));
+    expect(screen.getByTestId("image-export-button")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.背景") }));
+    expect(screen.queryByTestId("image-export-button")).toBeNull();
+    expect(
+      screen.getByRole("navigation", { name: t("fcboard.设置导航") }),
+    ).toBe(nav);
     const pattern = screen.getByRole("button", {
       name: t("fcboard.背景图案 {{number}}", { number: 4 }),
     });

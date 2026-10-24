@@ -15,6 +15,7 @@ export const fitPlot = (
   viewport: ContentRect,
   obstacles: ContentRect[],
   gap: number,
+  source?: ContentRect,
 ) => {
   // Text measurement rounds glyph metrics; retain a small rendering margin after scaling.
   viewport = {
@@ -41,10 +42,15 @@ export const fitPlot = (
       break;
     }
     const position = findVisibleContentPosition(
-      { x: left, y: top },
+      source
+        ? {
+            x: (source.left + source.right - size.width) / 2,
+            y: (source.top + source.bottom - size.height) / 2,
+          }
+        : { x: left, y: top },
       size,
       viewport,
-      obstacles,
+      source ? [...obstacles, source] : obstacles,
       gap,
     );
     if (!position) {

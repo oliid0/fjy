@@ -8,14 +8,25 @@ import type {
 import type { FileId } from "@excalidraw/element/types";
 
 import { currentSettings, validateEndpoint } from "./settings";
-import { insertElements, insertionPoint } from "./board";
+import { contentViewport, insertElements, insertionPoint } from "./board";
 import { classroomCommands } from "./commands";
+import { selectionSignature } from "./selection";
+
+import type { ContentRect } from "./placement";
 
 export const insertGeneratedImage = async (
   api: ExcalidrawImperativeAPI,
   prompt: string,
   signal: AbortSignal,
+  placement: {
+    bounds?: ContentRect;
+    replaceIds?: string[];
+    sourceSignature?: string;
+    sourcePage?: number;
+  } = {},
 ) => {
+  const revision = classroomCommands.revision;
+  const onDocument = classroomCommands.has("document.draw");
   const settings = currentSettings();
   if (!settings.apiKey || !settings.imageModel.trim()) {
     throw new Error(
@@ -99,20 +110,76 @@ export const insertGeneratedImage = async (
   image.src = dataURL;
   await image.decode();
   signal.throwIfAborted();
-  if (classroomCommands.has("document.draw")) {
+  if (
+    classroomCommands.revision !== revision ||
+    onDocument !== classroomCommands.has("document.draw")
+  ) {
+    throw new DOMException("Canvas changed", "AbortError");
+  }
+  if (
+    !onDocument &&
+    placement.sourceSignature &&
+    selectionSignature(
+      api
+        .getSceneElements()
+        .filter((element) => placement.replaceIds?.includes(element.id)),
+    ) !== placement.sourceSignature
+  ) {
+    throw new DOMException("Source changed", "AbortError");
+  }
+  const layout = classroomCommands.read("document.layout") as
+    | { viewport: ContentRect }
+    | undefined;
+  const viewport =
+    onDocument && layout ? layout.viewport : contentViewport(api);
+  const bounds = placement.bounds;
+  const scale = Math.min(
+    (bounds ? Math.max(1, bounds.right - bounds.left) : 400) /
+      image.naturalWidth,
+    (bounds ? Math.max(1, bounds.bottom - bounds.top) : 400) /
+      image.naturalHeight,
+    (viewport.right - viewport.left) / image.naturalWidth,
+    (viewport.bottom - viewport.top) / image.naturalHeight,
+  );
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  const position = bounds
+    ? {
+        x: Math.max(
+          viewport.left,
+          Math.min(
+            viewport.right - width,
+            (bounds.left + bounds.right - width) / 2,
+          ),
+        ),
+        y: Math.max(
+          viewport.top,
+          Math.min(
+            viewport.bottom - height,
+            (bounds.top + bounds.bottom - height) / 2,
+          ),
+        ),
+      }
+    : onDocument
+    ? { x: viewport.left, y: viewport.top }
+    : insertionPoint(api, { width, height });
+  if (onDocument) {
     await classroomCommands.execute({
       name: "document.draw",
       args: {
         lesson: "image",
         progress: 1,
         image: dataURL,
+        replaceIds: placement.replaceIds,
+        sourceSignature: placement.sourceSignature,
+        sourcePage: placement.sourcePage,
+        signal,
         shape: {
           id: crypto.randomUUID(),
           type: "image",
-          x: 60,
-          y: 60,
-          width: 400,
-          height: (400 * image.naturalHeight) / image.naturalWidth,
+          ...position,
+          width,
+          height,
         },
       },
     });
@@ -125,16 +192,13 @@ export const insertGeneratedImage = async (
     [
       {
         type: "image",
-        ...insertionPoint(api, {
-          width: 400,
-          height: (400 * image.naturalHeight) / image.naturalWidth,
-        }),
-        width: 400,
-        height: (400 * image.naturalHeight) / image.naturalWidth,
+        ...position,
+        width,
+        height,
         fileId,
       },
     ],
-    [],
-    true,
+    placement.replaceIds || [],
+    !bounds,
   );
 };

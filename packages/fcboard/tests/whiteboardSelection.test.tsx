@@ -109,3 +109,33 @@ it("moves a circled region as one selection without editing its individual lines
   );
   expect(h.state.selectedLinearElement).toBeNull();
 });
+
+it("does not select a bounding-box corner outside the circled triangle", async () => {
+  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  h.state.width = 1600;
+  h.state.height = 900;
+  const outside = API.createElement({
+    type: "rectangle",
+    x: 265,
+    y: 265,
+    width: 20,
+    height: 20,
+  });
+  const inside = API.createElement({
+    type: "rectangle",
+    x: 120,
+    y: 120,
+    width: 20,
+    height: 20,
+  });
+  API.updateScene({ elements: [outside, inside] });
+  act(() => {
+    h.app.setActiveTool({ type: "lasso" });
+    h.app.lassoTrail.startPath(100, 100);
+    h.app.lassoTrail.addPointToPath(300, 100);
+    h.app.lassoTrail.addPointToPath(100, 300);
+    h.app.lassoTrail.addPointToPath(100, 100);
+    h.app.lassoTrail.endPath();
+  });
+  expect(h.state.selectedElementIds).toEqual({ [inside.id]: true });
+});

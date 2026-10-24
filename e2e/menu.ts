@@ -2,7 +2,6 @@ import type { Page } from "@playwright/test";
 
 export const openSettingsMenu = async (page: Page) => {
   await selectMenu(page, "白板设置");
-  await page.getByRole("button", { name: "背景 ›", exact: true }).click();
 };
 
 export const selectMenu = async (page: Page, label: string) => {
@@ -31,13 +30,20 @@ export const selectMenu = async (page: Page, label: string) => {
     return;
   }
   await page.getByTestId("main-menu-trigger").click();
-  const paths: Record<string, string[]> = {
-    "AI 与语音设置": ["设置", label],
-    白板设置: ["设置", label],
-    实时协作: ["设置", "实时协作", label],
-    "导出图片...": ["设置", "保存到...", label],
-  };
-  for (const name of paths[label] || [label]) {
-    await page.getByRole("menuitem", { name, exact: true }).click();
+  if (
+    !["白板设置", "AI 与语音设置", "实时协作", "导出图片..."].includes(label)
+  ) {
+    await page.getByRole("menuitem", { name: label, exact: true }).click();
+    return;
   }
+  await page.getByRole("menuitem", { name: "设置", exact: true }).click();
+  if (label === "白板设置") {
+    return;
+  }
+  if (label === "AI 与语音设置") {
+    await page.getByRole("button", { name: "模型与连接", exact: true }).click();
+    return;
+  }
+  await page.getByRole("button", { name: "工具箱", exact: true }).click();
+  await page.getByRole("menuitem", { name: label, exact: true }).click();
 };

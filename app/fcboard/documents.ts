@@ -3,6 +3,10 @@ import { createStore, get, set } from "idb-keyval";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
 import { eraseStroke } from "@excalidraw/excalidraw/eraser/stroke";
 import { FONT_FAMILY, getFontString } from "@excalidraw/common";
+import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { getElementLineSegments } from "@excalidraw/element";
+import { getLassoSelectedElementIds } from "@excalidraw/excalidraw/lasso/utils";
+import { pointFrom } from "@excalidraw/math";
 import { measureText } from "@excalidraw/element/textMeasurements";
 
 import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
@@ -216,6 +220,51 @@ export const documentStrokeBounds = (stroke: InkStroke) => {
     right: stroke.image ? left + (stroke.imageWidth || 120) : Math.max(...xs),
     bottom: stroke.image ? top + (stroke.imageHeight || 40) : Math.max(...ys),
   };
+};
+
+/** Select the closed path's actual region, as SelectCacheLayer.computeRectFRegion does. */
+export const selectDocumentLasso = (
+  strokes: InkStroke[],
+  path: [number, number][],
+) => {
+  if (path.length < 3) {
+    return strokes
+      .filter((stroke) => path[0] && hitStroke(stroke, path[0]))
+      .map((stroke) => stroke.id);
+  }
+  const elements = strokes.map((stroke) => {
+    if (!stroke.text && !stroke.image) {
+      return documentInkElement(stroke);
+    }
+    const bounds = documentStrokeBounds(stroke);
+    return convertToExcalidrawElements(
+      [
+        {
+          type: "rectangle",
+          id: stroke.id,
+          x: bounds.left,
+          y: bounds.top,
+          width: bounds.right - bounds.left,
+          height: bounds.bottom - bounds.top,
+        },
+      ],
+      { regenerateIds: false },
+    )[0];
+  });
+  const elementsMap = new Map(elements.map((element) => [element.id, element]));
+  return getLassoSelectedElementIds({
+    lassoPath: path.map(([x, y]) => pointFrom(x, y)),
+    elements,
+    elementsMap,
+    elementsSegments: new Map(
+      elements.map((element) => [
+        element.id,
+        getElementLineSegments(element, elementsMap),
+      ]),
+    ),
+    enclosedElements: new Set(),
+    intersectedElements: new Set(),
+  }).selectedElementIds;
 };
 
 export const hitStroke = (

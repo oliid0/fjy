@@ -4,6 +4,9 @@ import { t } from "@excalidraw/excalidraw/i18n";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { insertGeneratedImage } from "./imageGeneration";
+import { sceneAPI } from "./test/scene";
+import { selectionSignature } from "./selection";
+import { classroomCommands } from "./commands";
 import { defaults, saveSettings } from "./settings";
 
 const image =
@@ -122,3 +125,55 @@ it("does not import a late generated image after cancellation", async () => {
   expect(api.addFiles).not.toHaveBeenCalled();
   expect(api.updateScene).not.toHaveBeenCalled();
 });
+
+it.each(["source", "surface"])(
+  "discards generated art after its %s changes while decoding",
+  async (change) => {
+    saveSettings(
+      { ...defaults, apiKey: "test-only", imageModel: "illustrator" },
+      false,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        status: 200,
+        json: async () => ({ data: [{ b64_json: image }] }),
+      }),
+    );
+    let finish!: () => void;
+    vi.stubGlobal(
+      "Image",
+      class {
+        naturalWidth = 100;
+        naturalHeight = 100;
+        src = "";
+        decode = () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+      },
+    );
+    const api = sceneAPI();
+    const source = api.getSceneElements();
+    const result = insertGeneratedImage(
+      api,
+      "手绘小狗",
+      new AbortController().signal,
+      {
+        bounds: { left: 10, top: 10, right: 110, bottom: 110 },
+        replaceIds: source.map((element) => element.id),
+        sourceSignature: selectionSignature(source),
+      },
+    );
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    if (change === "source") {
+      api.updateScene({ elements: [] });
+    } else {
+      classroomCommands.invalidate();
+    }
+    finish();
+    await expect(result).rejects.toMatchObject({ name: "AbortError" });
+    expect(api.addFiles).not.toHaveBeenCalled();
+    expect(api.getSceneElements()).toEqual(change === "source" ? [] : source);
+  },
+);

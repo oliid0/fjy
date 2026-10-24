@@ -16,12 +16,15 @@ import { handwritingText } from "./handwriting";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   localStorage.clear();
   sessionStorage.clear();
 });
 
-const setup = (mode: "text" | "shape" | "function" | "calculation") => {
+const setup = (
+  mode: "text" | "shape" | "function" | "calculation" | "magic",
+) => {
   let scene: readonly ExcalidrawElement[] = [];
   let refresh = () => {};
   const api = {
@@ -40,6 +43,7 @@ const setup = (mode: "text" | "shape" | "function" | "calculation") => {
       refresh = callback;
       return () => {};
     },
+    addFiles: vi.fn(),
     updateScene: vi.fn((update) => {
       scene = update.elements;
       refresh();
@@ -257,7 +261,7 @@ it.each(["function", "calculation"] as const)(
         expect.any(AbortSignal),
         expect.any(Function),
         "math",
-        undefined,
+        expect.any(Function),
         expect.any(Array),
       );
       expect(vi.mocked(ocr.recognizeHandwriting).mock.calls[1][5]).toHaveLength(
@@ -346,6 +350,68 @@ it("retries the whole unfinished word when new ink cancels a pending text recogn
       ink.id,
       "second-stroke",
     ]);
+  } finally {
+    stop();
+  }
+});
+
+it("turns a drawn dog into a generated hand-drawn image at its original location", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("magic");
+  saveSettings(
+    {
+      ...defaults,
+      model: "recognizer",
+      apiKey: "mock-key",
+      imageModel: "illustrator",
+    },
+    false,
+  );
+  vi.spyOn(ai, "chat").mockResolvedValue('{"description":"一只坐着的小狗"}');
+  const fetcher = vi.fn().mockResolvedValue({
+    status: 200,
+    json: async () => ({
+      data: [
+        {
+          b64_json:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+        },
+      ],
+    }),
+  });
+  vi.stubGlobal("fetch", fetcher);
+  vi.stubGlobal(
+    "Image",
+    class {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      src = "";
+      decode = async () => {};
+    },
+  );
+  const stop = observeInkAssistance(api, () => {}, vi.fn());
+  try {
+    draw();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const request = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(request.model).toBe("illustrator");
+    expect(request.prompt).toContain("一只坐着的小狗");
+    expect(request.prompt).toContain("手绘");
+    expect(api.getSceneElements()).toHaveLength(1);
+    const generated = api.getSceneElements()[0];
+    expect(generated).toMatchObject({
+      type: "image",
+      x: 120,
+      y: 100,
+      width: 60,
+      height: 60,
+    });
+    expect(generated.id).not.toBe(ink.id);
+    expect(api.addFiles).toHaveBeenCalledTimes(1);
+    expect(api.updateScene).toHaveBeenCalledTimes(1);
   } finally {
     stop();
   }

@@ -22,6 +22,8 @@ describe("Test LanguageList", () => {
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);
     expect(screen.getAllByRole("menuitem")).toHaveLength(6);
     fireEvent.click(screen.getByRole("menuitem", { name: t("fcboard.设置") }));
+    await screen.findByRole("dialog", { name: t("fcboard.白板设置") });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.工具箱") }));
     for (const label of [
       "课堂录制",
       "课件 / 局域网快传",
@@ -38,12 +40,25 @@ describe("Test LanguageList", () => {
     });
     // switching to german, `thin` label should no longer exist
     await waitFor(() => expect(screen.queryByTitle(/thin/i)).toBeNull());
-    expect(screen.getAllByRole("button", { name: "Stift" })[0]).toBeVisible();
-    expect(screen.getByText("Werkzeugkasten", { exact: true })).toBeVisible();
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: t("fcboard.白板设置") }),
+      { key: "Escape" },
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Stift" })[0]).toBeVisible(),
+    );
+    fireEvent.click(screen.getByTestId("main-menu-trigger"));
+    fireEvent.click(screen.getByRole("menuitem", { name: t("fcboard.设置") }));
+    await screen.findByRole("dialog", { name: t("fcboard.白板设置") });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.工具箱") }));
     // reset language
     fireEvent.change(document.querySelector(".dropdown-select__language")!, {
       target: { value: defaultLang.code },
     });
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: t("fcboard.白板设置") }),
+      { key: "Escape" },
+    );
     // switching back to English
     await waitFor(() => expect(screen.queryByTitle(/thin/i)).not.toBeNull());
   });

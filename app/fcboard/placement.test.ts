@@ -318,3 +318,28 @@ it("uses measured multi-line answer bounds for subsequent answers", () => {
     );
   expect(overlaps(bounds(first), bounds(second))).toBe(false);
 });
+
+it("places a function beside its source rather than at the old distant lower-right origin", () => {
+  const api = sceneAPI();
+  insertElements(api, [{ type: "text", text: "y=x+1", x: 200, y: 300 }]);
+  const source = api.getSceneElements().at(-1)!;
+  const [left, top, right, bottom] = getCommonBounds([source]);
+  const ids = drawPlot(
+    api,
+    validatedPlot({ expression: "x+1" }),
+    { x: 1800, y: 1600 },
+    [],
+    undefined,
+    true,
+    { left, top, right, bottom },
+  );
+  const graph = getCommonBounds(
+    api.getSceneElements().filter((element) => ids.includes(element.id)),
+  );
+  expect(overlaps(graph, [left, top, right, bottom])).toBe(false);
+  const gapX = Math.max(0, graph[0] - right, left - graph[2]);
+  const gapY = Math.max(0, graph[1] - bottom, top - graph[3]);
+  expect(Math.hypot(gapX, gapY)).toBeLessThanOrEqual(12);
+  expect(graph[2]).toBeLessThanOrEqual(1584);
+  expect(graph[3]).toBeLessThanOrEqual(816);
+});

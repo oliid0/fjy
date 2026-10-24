@@ -1,7 +1,9 @@
 import { chat, parseJSON, visualMessage } from "./ai";
 import { recognizeHandwriting } from "./ocr";
-import { recognizeMath } from "./mathRecognition";
-import { teachingResources } from "./TeachingResources";
+import { localMathResult, recognizeMath } from "./mathRecognition";
+import { prepareCalculation } from "./math";
+import { currentSettings } from "./settings";
+import { mathNotation } from "./mathNotation";
 
 import type { InkInput } from "./digitalInk";
 import type { MathResult } from "./mathRecognition";
@@ -22,7 +24,7 @@ export type InkRecognitionResult =
       kind: "shape";
       shape: "rectangle" | "ellipse" | "line" | "arrow" | "triangle";
     }
-  | { kind: "magic"; resourceId: string }
+  | { kind: "magic"; prompt: string }
   | (MathResult & { text: string });
 
 /** Both visible surfaces submit raw ink first and receive validated objects, never a rendered math image. */
@@ -38,7 +40,20 @@ export const recognizeInkContent = async (
       signal,
       () => {},
       mode === "text" ? "text" : "math",
-      undefined,
+      mode === "text"
+        ? undefined
+        : (candidate) => {
+            try {
+              if (mode === "calculation") {
+                prepareCalculation(mathNotation(candidate));
+              } else {
+                localMathResult(candidate, "function");
+              }
+              return true;
+            } catch {
+              return false;
+            }
+          },
       strokes,
     );
     signal.throwIfAborted();
@@ -50,14 +65,13 @@ export const recognizeInkContent = async (
     }
     return { ...(await recognizeMath(text, mode, signal)), text };
   }
+  if (mode === "magic" && !currentSettings().imageModel.trim()) {
+    throw new Error("No image generation model configured");
+  }
   const instruction =
     mode === "shape"
       ? '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle"} 中最接近的一种。不确定返回 {"none":true}。'
-      : `识别手绘图示，从以下本地教学图示选择最接近的一项，仅返回 {"resourceId":"清单中的id"}；不匹配返回 {"none":true}。清单：${JSON.stringify(
-          teachingResources
-            .filter((item) => item.asset)
-            .map(({ id, title }) => ({ id, title })),
-        )}`;
+      : '描述这幅手绘中可辨认的主体、数量、姿态和构图，仅返回 {"description":"简短准确的中文描述"}。例如手画一只狗应描述为狗及其姿态，不局限于教学素材。不能辨认时返回 {"none":true}，不要猜测。';
   const result = parseJSON(
     await chat([visualMessage(instruction, await capture())], signal),
   ) as Record<string, unknown>;
@@ -78,12 +92,14 @@ export const recognizeInkContent = async (
   }
   if (
     mode === "magic" &&
-    typeof result?.resourceId === "string" &&
-    teachingResources.some(
-      (item) => item.asset && item.id === result.resourceId,
-    )
+    typeof result?.description === "string" &&
+    result.description.trim().length > 0 &&
+    result.description.length <= 800
   ) {
-    return { kind: "magic", resourceId: result.resourceId };
+    return {
+      kind: "magic",
+      prompt: `将以下手绘主体绘制成精美、清晰的手绘插画，保留主体数量、姿态和构图，白色背景，无文字、无边框、无水印：${result.description.trim()}`,
+    };
   }
   throw new Error("No recognized ink object");
 };

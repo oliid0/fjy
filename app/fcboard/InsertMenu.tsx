@@ -116,7 +116,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       );
       if ((object?.id || "") !== previousSelection.current) {
         previousSelection.current = object?.id || "";
-        if (object && state.activeTool.type !== "lasso") {
+        if (object && ["selection", "custom"].includes(state.activeTool.type)) {
           setDraft(object);
           setForm(object.kind);
         } else {
@@ -147,7 +147,20 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     }
     const object = configureInsertion(base, args);
     await renderInsertion(api, object);
-    api.setActiveTool({ type: "selection" });
+    if (kind === "fourline") {
+      setForm(null);
+      api.updateScene({ appState: { selectedElementIds: {} } });
+      if (classroomCommands.has("document.tool")) {
+        await classroomCommands.execute({
+          name: "document.tool",
+          args: { tool: "freedraw" },
+        });
+      } else {
+        api.setActiveTool({ type: "freedraw" });
+      }
+    } else {
+      api.setActiveTool({ type: "selection" });
+    }
     return { id: object.id, kind };
   };
   const open = async (kind: unknown) => {

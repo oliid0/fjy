@@ -45,7 +45,6 @@ export const getLassoSelectedElementIds = (input: {
   intersectedElements: Set<ExcalidrawElement["id"]>;
   enclosedElements: Set<ExcalidrawElement["id"]>;
   simplifyDistance?: number;
-  looseBounds?: number;
 }): {
   selectedElementIds: string[];
 } => {
@@ -73,23 +72,6 @@ export const getLassoSelectedElementIds = (input: {
     // bounding box as it is much faster than checking intersection against
     // the element's shape
     const elementBounds = getElementBounds(element, elementsMap);
-    if (input.looseBounds !== undefined && lassoPath.length > 1) {
-      const padding = input.looseBounds;
-      if (
-        doBoundsIntersect(
-          [
-            lassoBounds[0] - padding,
-            lassoBounds[1] - padding,
-            lassoBounds[2] + padding,
-            lassoBounds[3] + padding,
-          ],
-          elementBounds,
-        )
-      ) {
-        intersectedElements.add(element.id);
-      }
-      continue;
-    }
 
     if (
       doBoundsIntersect(lassoBounds, elementBounds) &&

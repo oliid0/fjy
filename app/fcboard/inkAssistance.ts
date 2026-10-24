@@ -9,6 +9,8 @@ import { pointFrom } from "@excalidraw/math";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
+import { insertGeneratedImage } from "./imageGeneration";
+
 import { boardContext } from "./ai";
 import { classroomCommands } from "./commands";
 import { currentSettings } from "./settings";
@@ -150,17 +152,10 @@ export const observeInkAssistance = (
         }
         const [left, top, right, bottom] = getCommonBounds(source);
         if (result.kind === "magic") {
-          await classroomCommands.execute({
-            name: "resources.use",
-            args: {
-              id: result.resourceId,
-              x: left,
-              y: top,
-              size: Math.max(40, right - left, bottom - top),
-              replaceIds: source.map((element) => element.id),
-              sourceSignature: signature,
-              signal: request.signal,
-            },
+          await insertGeneratedImage(api, result.prompt, request.signal, {
+            bounds: { left, top, right, bottom },
+            replaceIds: source.map((element) => element.id),
+            sourceSignature: signature,
           });
           return;
         }

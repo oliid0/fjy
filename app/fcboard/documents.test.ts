@@ -1,5 +1,7 @@
 import { factoryInkPath } from "@excalidraw/element/factoryInk";
 
+import { selectDocumentLasso } from "./documents";
+
 import { eraseDocumentInk, hitStroke, htmlText, shapeInk } from "./documents";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
@@ -119,4 +121,37 @@ describe("document ink and classroom tools", () => {
     expect(projectilePoint(12, 16, 9.81, flight)[1]).toBeCloseTo(0);
     expect(projectilePoint(12, 16, 9.81, flight)[0]).toBeCloseTo(12 * flight);
   });
+});
+
+it("selects sparse segments crossing the actual lasso but excludes its empty bounding-box corner", () => {
+  const stroke = (id: string, points: [number, number][]) => ({
+    id,
+    points,
+    color: "#000000",
+    width: 2,
+  });
+  const strokes = [
+    stroke("outside", [
+      [265, 265],
+      [285, 285],
+    ]),
+    stroke("inside", [
+      [120, 120],
+      [140, 140],
+    ]),
+    stroke("crossing", [
+      [0, 180],
+      [500, 180],
+    ]),
+  ];
+  expect(
+    new Set(
+      selectDocumentLasso(strokes, [
+        [100, 100],
+        [300, 100],
+        [100, 300],
+        [100, 100],
+      ]),
+    ),
+  ).toEqual(new Set(["inside", "crossing"]));
 });

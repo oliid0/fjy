@@ -78,16 +78,87 @@ for (const viewport of [
       page.getByRole("button", { name: "绘制函数", exact: true }),
     ).toHaveCount(0);
     await selectMenu(page, "AI 与语音设置");
-    await expect(
-      page.getByRole("dialog", { name: "AI 与语音设置" }),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "白板设置" })).toBeVisible();
     const panelBounds = (await page.locator(".fc-panel").boundingBox())!;
-    expect(panelBounds.y).toBeGreaterThanOrEqual(0);
-    expect(panelBounds.y + panelBounds.height).toBeLessThanOrEqual(bounds.y);
+    expect(
+      Math.abs(panelBounds.x + panelBounds.width / 2 - viewport.width / 2),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(panelBounds.y + panelBounds.height / 2 - viewport.height / 2),
+    ).toBeLessThanOrEqual(2);
+    expect(panelBounds.y).toBeGreaterThanOrEqual(12);
+    expect(panelBounds.x).toBeGreaterThanOrEqual(12);
+    if (viewport.width >= viewport.height) {
+      expect(panelBounds.width).toBeGreaterThan(panelBounds.height);
+    }
+    const navBounds = (await page
+      .getByRole("navigation", { name: "设置导航" })
+      .boundingBox())!;
+    const contentBounds = (await page
+      .locator(".fc-settings-content")
+      .boundingBox())!;
+    expect(navBounds.x + navBounds.width).toBeLessThanOrEqual(
+      contentBounds.x + 1,
+    );
+    await page
+      .getByRole("button", { name: "画笔", exact: true })
+      .last()
+      .click();
+    await expect(
+      page.getByRole("slider", { name: "笔锋变化率", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("navigation", { name: "设置导航" }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath(`settings-${viewport.width}.png`),
+    });
     await page.getByRole("button", { name: "关闭工具浮层" }).click();
     await toolbar.evaluate((element) => {
       element.scrollLeft = 0;
     });
+    const pen = toolbar.getByRole("button", { name: "画笔", exact: true });
+    await pen.click();
+    await pen.click();
+    await expect(
+      page.getByRole("dialog", { name: "画笔与对象属性" }),
+    ).toBeVisible();
+    const penBounds = (await page
+      .getByRole("dialog", { name: "画笔与对象属性" })
+      .boundingBox())!;
+    const penTrigger = (await pen.boundingBox())!;
+    expect(penBounds.y).toBeGreaterThanOrEqual(0);
+    expect(penBounds.y + penBounds.height).toBeLessThanOrEqual(bounds.y + 4);
+    expect(
+      Math.abs(
+        penBounds.x + penBounds.width / 2 - penTrigger.x - penTrigger.width / 2,
+      ),
+    ).toBeLessThanOrEqual(penBounds.width / 2 + 12);
+    await page.keyboard.press("Escape");
+    await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    await page.getByRole("button", { name: "表格", exact: true }).click();
+    const table = page.getByRole("dialog", { name: "表格", exact: true });
+    await expect(table.locator(".fc-table-picker-grid")).toBeVisible();
+    const tableBounds = (await table.boundingBox())!;
+    const insertBounds = (await toolbar
+      .getByRole("button", { name: "插入", exact: true })
+      .boundingBox())!;
+    expect(tableBounds.y).toBeGreaterThanOrEqual(0);
+    expect(tableBounds.y + tableBounds.height).toBeLessThanOrEqual(
+      bounds.y + 4,
+    );
+    expect(
+      Math.abs(
+        tableBounds.x +
+          tableBounds.width / 2 -
+          insertBounds.x -
+          insertBounds.width / 2,
+      ),
+    ).toBeLessThanOrEqual(tableBounds.width / 2 + 12);
+    await page.screenshot({
+      path: testInfo.outputPath(`table-picker-${viewport.width}.png`),
+    });
+    await table.press("Escape");
     await toolbar.getByTestId("main-menu-trigger").click();
     await expect(page.getByTestId("dropdown-menu")).toBeVisible();
     const menu = (await page.getByTestId("dropdown-menu").boundingBox())!;
@@ -310,4 +381,54 @@ test("screenshot summary sends a real board image and returns to an editable can
   await page.screenshot({
     path: testInfo.outputPath("summary-then-writing.png"),
   });
+});
+
+test("inserting four-line writing paper immediately accepts ink on its surface", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "插入", exact: true }).click();
+  await page.getByRole("button", { name: "四线格", exact: true }).click();
+  await expect(page.locator(".fc-insertion-properties")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            (element: {
+              isDeleted?: boolean;
+              customData?: { fcInsertion?: { kind: string } };
+            }) =>
+              !element.isDeleted &&
+              element.customData?.fcInsertion?.kind === "fourline",
+          ).length,
+      ),
+    )
+    .toBe(5);
+  const paper = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("excalidraw") || "[]").find(
+      (element: {
+        type: string;
+        customData?: { fcInsertion?: { kind: string } };
+      }) =>
+        element.type === "rectangle" &&
+        element.customData?.fcInsertion?.kind === "fourline",
+    ),
+  );
+  await page.mouse.move(paper.x + 30, paper.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(paper.x + 50, paper.y + 50, { steps: 10 });
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            (element: { type: string; isDeleted?: boolean }) =>
+              !element.isDeleted && element.type === "freedraw",
+          ).length,
+      ),
+    )
+    .toBe(1);
 });

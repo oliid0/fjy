@@ -135,9 +135,11 @@ export const recognizeDigitalInk = async (
   const result = await engine.recognize({
     strokes,
     language:
-      language !== "auto"
+      kind === "math"
+        ? "en-US"
+        : language !== "auto"
         ? language
-        : kind === "math" || !getLanguage().code.startsWith("zh")
+        : !getLanguage().code.startsWith("zh")
         ? "en-US"
         : "zh-Hani-CN",
   });

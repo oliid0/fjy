@@ -90,7 +90,7 @@ import Collab, {
   isOfflineAtom,
 } from "./collab/Collab";
 import { AppFooter } from "./components/AppFooter";
-import { AppMainMenu } from "./components/AppMainMenu";
+import { AppMainMenu, AppSettingsActions } from "./components/AppMainMenu";
 import { AppWelcomeScreen } from "./components/AppWelcomeScreen";
 import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
@@ -923,7 +923,22 @@ const ExcalidrawWrapper = () => {
           <OverwriteConfirmDialog.Actions.SaveToDisk />
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
-        {excalidrawAPI && <Classroom api={excalidrawAPI} />}
+        {excalidrawAPI && (
+          <Classroom
+            api={excalidrawAPI}
+            renderSettingsActions={(close) => (
+              <AppSettingsActions
+                onClose={close}
+                onCollabDialogOpen={onCollabDialogOpen}
+                isCollaborating={isCollaborating}
+                isCollabEnabled={!isCollabDisabled}
+                theme={appTheme}
+                setTheme={setAppTheme}
+                refresh={() => forceRefresh((prev) => !prev)}
+              />
+            )}
+          />
+        )}
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
         <TTDDialogTrigger />

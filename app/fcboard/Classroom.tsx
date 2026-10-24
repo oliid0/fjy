@@ -37,7 +37,8 @@ import { agentContext, runBoardCommands } from "./agent";
 
 import { LanSession } from "./LanSession";
 import { classroomCommands, directCommand } from "./commands";
-import { DOCUMENT_ACCEPT } from "./documents";
+import { DOCUMENT_ACCEPT, documentStrokeBounds } from "./documents";
+
 import { Teacher, LearningSettings } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
 import { registerCanvasCommands } from "./canvasCommands";
@@ -66,6 +67,9 @@ import { startSystemSpeech, transcribe } from "./speech";
 
 import "./classroom.scss";
 
+import type { ReactNode } from "react";
+
+import type { InkStroke } from "./documents";
 import type { BoardAgentAction } from "./agent";
 import type { Message } from "./ai";
 import type { Plot } from "./math";
@@ -141,10 +145,19 @@ const RecordingPlayer = ({ recording }: { recording: Recording }) => {
   );
 };
 
-export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const Classroom = ({
+  api,
+  renderSettingsActions,
+}: {
+  api: ExcalidrawImperativeAPI;
+  renderSettingsActions?: (close: () => void) => ReactNode;
+}) => {
   useI18n();
   const [panel, setPanel] = useState<Panel | null>(null);
   const [settings, setSettings] = useState(currentSettings);
+  const [settingsPage, setSettingsPage] = useState<"background" | "models">(
+    "background",
+  );
   const [remember, setRemember] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [output, setOutput] = useState("");
@@ -217,7 +230,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     panel === "settings"
       ? "[data-testid='main-menu-trigger']"
       : "[data-teaching-tools], .fc-presentation-toolbar",
-    !!panel && panel !== "plot",
+    !!panel && panel !== "plot" && panel !== "settings",
   );
   const active = records.find((item) => item.id === activeId);
   useEffect(() => registerCanvasCommands(api), [api]);
@@ -341,7 +354,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, [api]);
 
   useEffect(() => {
-    if (!panel) {
+    if (!panel || panel === "settings") {
       return;
     }
     const dismiss = (event: PointerEvent) => {
@@ -693,18 +706,32 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         );
       }
       const origin = insertionPoint(api);
-      const margin = next.surface ? 340 : 245;
       const source = api
         .getSceneElements()
         .filter((element) => sourceIds.includes(element.id));
-      const bounds = source.length ? getCommonBounds(source) : undefined;
+      const visibleDocument = classroomCommands.read("document") as
+        | { selection?: string[]; ink: InkStroke[] }
+        | undefined;
+      const documentBoxes = visibleDocument?.ink
+        .filter((stroke) => visibleDocument.selection?.includes(stroke.id))
+        .map(documentStrokeBounds);
+      const bounds = source.length
+        ? getCommonBounds(source)
+        : documentBoxes?.length
+        ? [
+            Math.min(...documentBoxes.map((box) => box.left)),
+            Math.min(...documentBoxes.map((box) => box.top)),
+            Math.max(...documentBoxes.map((box) => box.right)),
+            Math.max(...documentBoxes.map((box) => box.bottom)),
+          ]
+        : undefined;
       const position =
         replace && existing
           ? existing.position
           : classroomCommands.has("document.plot")
           ? { x: 300, y: 260 }
           : {
-              x: (bounds?.[0] ?? origin.x) + margin,
+              x: (bounds?.[0] ?? origin.x) + (next.surface ? 340 : 245),
               y: (bounds ? bounds[3] + 16 : origin.y) + 245,
             };
       const ids = drawPlot(
@@ -717,6 +744,15 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             ? api.getSceneElements().find((el) => existing.ids.includes(el.id))
                 ?.customData?.fcSelectionSource
             : undefined),
+        quiet,
+        !replace && bounds
+          ? {
+              left: bounds[0],
+              top: bounds[1],
+              right: bounds[2],
+              bottom: bounds[3],
+            }
+          : undefined,
       );
       const stored = api
         .getSceneElements()
@@ -1547,6 +1583,14 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         },
       ),
       classroomCommands.register(
+        "board.settings",
+        "打开白板设置：背景、画笔、触控与识别",
+        () => {
+          setSettingsPage("background");
+          setPanel("settings");
+        },
+      ),
+      classroomCommands.register(
         "panel.open",
         "显示浮层，args.panel=settings|record|files|ai",
         (args) => {
@@ -1554,6 +1598,9 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             !["settings", "record", "files", "ai"].includes(String(args.panel))
           ) {
             throw new Error(t("fcboard.此浮层不存在"));
+          }
+          if (args.panel === "settings") {
+            setSettingsPage("models");
           }
           setPanel(args.panel as Panel);
         },
@@ -1604,7 +1651,6 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       <Teacher api={api} onCommand={execute} />
       <TeachingTools api={api} />
       <Spotlight />
-      <BoardSettings api={api} />
       <TransientMessage
         message={error || status}
         role={error ? "alert" : "status"}
@@ -1633,7 +1679,11 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         <MaterialPanel
           id="fc-panel"
           ref={panelRef}
-          className="fc-panel"
+          className={`fc-panel${
+            panel === "settings" ? " fc-settings-dialog fc-board-settings" : ""
+          }`}
+          centered={panel === "settings"}
+          onDismiss={() => close()}
           style={
             panel === "plot"
               ? {
@@ -1643,11 +1693,15 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   bottom: "auto",
                   maxHeight: `calc(100% - ${plotPlacement.top + 84}px)`,
                 }
+              : panel === "settings"
+              ? undefined
               : panelStyle
           }
           role="dialog"
-          aria-modal="false"
-          aria-label={t(`fcboard.${titles[panel]}`)}
+          aria-modal={panel === "settings"}
+          aria-label={t(
+            `fcboard.${panel === "settings" ? "白板设置" : titles[panel]}`,
+          )}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -1657,8 +1711,16 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         >
           <header>
             <div>
-              <small>{t("fcboard.Fcboard · 方成教育")}</small>
-              <h2>{t(`fcboard.${titles[panel]}`)}</h2>
+              {panel !== "settings" && (
+                <small>{t("fcboard.Fcboard · 方成教育")}</small>
+              )}
+              <h2>
+                {t(
+                  `fcboard.${
+                    panel === "settings" ? "白板设置" : titles[panel]
+                  }`,
+                )}
+              </h2>
             </div>
             <button
               onClick={() => close()}
@@ -1670,6 +1732,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           <div className="fc-panel-body">
             {panel === "settings" && (
               <form
+                className="fc-settings-form"
                 onSubmit={(event) => {
                   event.preventDefault();
                   try {
@@ -1688,7 +1751,14 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   }
                 }}
               >
-                <SettingsNavigation>
+                <SettingsNavigation
+                  initialPage={settingsPage}
+                  hasTools={!!renderSettingsActions}
+                >
+                  <BoardSettings api={api} />
+                  <SettingsSection id="tools">
+                    {renderSettingsActions?.(() => close(false))}
+                  </SettingsSection>
                   <SettingsSection id="teaching">
                     <LearningSettings />
                   </SettingsSection>
@@ -1984,53 +2054,47 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       </select>
                     </label>
                   </SettingsSection>
+                  <div className="fc-settings-actions">
+                    <button className="fc-primary" type="submit">
+                      {t("fcboard.保存设置")}
+                    </button>
+                    <SettingsSection id="models">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            const context = await boardContext(api);
+                            const result = await chat(
+                              [
+                                visualMessage(
+                                  context.image
+                                    ? "确认可以读取这张白板截图，只回复识别到的一小段内容。"
+                                    : "连接测试，请回复连接成功。",
+                                  context.image,
+                                ),
+                              ],
+                              undefined,
+                              settings,
+                            );
+                            setStatus(
+                              context.image
+                                ? t("fcboard.截图识别返回：{{result}}", {
+                                    result: result.slice(0, 160),
+                                  })
+                                : t(
+                                    "fcboard.连接测试返回：{{result}}；在白板书写后可测试截图识别",
+                                    { result: result.slice(0, 160) },
+                                  ),
+                            );
+                          })
+                        }
+                      >
+                        {t("fcboard.测试当前配置")}
+                      </button>
+                    </SettingsSection>
+                  </div>
                 </SettingsNavigation>
-                <p>
-                  {t(
-                    "fcboard.圈选后点击计算、图像或问答才会识别；普通书写不会触发 AI 请求。",
-                  )}
-                </p>
-                <p>
-                  {t(
-                    "fcboard.AI 截图、语音或录制转写会发送至你配置的服务。系统语音是否联网取决于设备语音服务。",
-                  )}
-                </p>
-                <button className="fc-primary" type="submit">
-                  {t("fcboard.保存设置")}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      const context = await boardContext(api);
-                      const result = await chat(
-                        [
-                          visualMessage(
-                            context.image
-                              ? "确认可以读取这张白板截图，只回复识别到的一小段内容。"
-                              : "连接测试，请回复连接成功。",
-                            context.image,
-                          ),
-                        ],
-                        undefined,
-                        settings,
-                      );
-                      setStatus(
-                        context.image
-                          ? t("fcboard.截图识别返回：{{result}}", {
-                              result: result.slice(0, 160),
-                            })
-                          : t(
-                              "fcboard.连接测试返回：{{result}}；在白板书写后可测试截图识别",
-                              { result: result.slice(0, 160) },
-                            ),
-                      );
-                    })
-                  }
-                >
-                  {t("fcboard.测试当前配置")}
-                </button>
               </form>
             )}
             {panel === "ai" && (
@@ -2091,7 +2155,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 {output && (
                   <>
                     <div className="fc-output">{output}</div>
-                    {currentSettings().ttsEndpoint && (
+                    {
                       <div className="fc-actions">
                         <button
                           disabled={busy || listening || recording}
@@ -2105,7 +2169,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                           {t("fcboard.停止朗读")}
                         </button>
                       </div>
-                    )}
+                    }
                     <button
                       onClick={() => {
                         insertText(api, output);
@@ -2246,7 +2310,7 @@ export const Classroom = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 {active ? (
                   <>
                     <RecordingPlayer recording={active} />
-                    {active.summary && currentSettings().ttsEndpoint && (
+                    {active.summary && (
                       <div className="fc-actions">
                         <button
                           disabled={busy || listening || recording}

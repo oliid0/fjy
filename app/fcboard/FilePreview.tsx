@@ -46,8 +46,8 @@ import { useDeviceInkProfile } from "./ink";
 import {
   documentKey,
   documentStrokeBounds,
+  selectDocumentLasso,
   eraseDocumentInk,
-  hitStroke,
   htmlText,
   loadInk,
   OfficeReader,
@@ -64,6 +64,7 @@ import { MaterialPanel } from "./MaterialPanel";
 import { documentStrokeGeometry } from "./documentInk";
 import { recognizeInkContent } from "./inkRecognition";
 import { drawPlot } from "./board";
+import { insertGeneratedImage } from "./imageGeneration";
 
 import type { Viewer } from "@web-ppt/viewer-core";
 import type { Presentation } from "@web-ppt/core";
@@ -1432,20 +1433,14 @@ export const FilePreview = ({
             [],
             signature,
             true,
+            { left, top, right, bottom },
           );
         } else if (result.kind === "magic") {
-          await classroomCommands.execute({
-            name: "resources.use",
-            args: {
-              id: result.resourceId,
-              x: left,
-              y: top,
-              size: Math.max(40, right - left, bottom - top),
-              replaceIds: sourceIds,
-              sourceSignature: signature,
-              sourcePage: page + 1,
-              signal: request.signal,
-            },
+          await insertGeneratedImage(api, result.prompt, request.signal, {
+            bounds: { left, top, right, bottom },
+            replaceIds: sourceIds,
+            sourceSignature: signature,
+            sourcePage: page + 1,
           });
         } else {
           const width = Math.max(1, right - left);
@@ -1825,21 +1820,10 @@ export const FilePreview = ({
               }
               if (draftRef.current && selecting) {
                 const polygon = draftRef.current.points;
-                const left = Math.min(...polygon.map((p) => p[0])) - 12 / zoom;
-                const top = Math.min(...polygon.map((p) => p[1])) - 12 / zoom;
-                const right = Math.max(...polygon.map((p) => p[0])) + 12 / zoom;
-                const bottom =
-                  Math.max(...polygon.map((p) => p[1])) + 12 / zoom;
-                const ids = (inkRef.current[page] || [])
-                  .filter((stroke) =>
-                    polygon.length < 3
-                      ? hitStroke(stroke, polygon[0])
-                      : stroke.points.some(
-                          ([x, y]) =>
-                            x >= left && x <= right && y >= top && y <= bottom,
-                        ),
-                  )
-                  .map((stroke) => stroke.id);
+                const ids = selectDocumentLasso(
+                  inkRef.current[page] || [],
+                  polygon,
+                );
                 selectedInkRef.current = ids;
                 setLasso(polygon);
                 classroomCommands.changed("document");

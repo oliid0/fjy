@@ -391,8 +391,11 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
     ),
     classroomCommands.register(
       "canvas.text",
-      "插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text 可选择跟随原字、手写字体或印刷文本",
+      "插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区",
       async (args) => {
+        if (args.signal instanceof AbortSignal) {
+          args.signal.throwIfAborted();
+        }
         if (
           typeof args.text !== "string" ||
           !args.text.trim() ||
@@ -447,9 +450,18 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             args.text,
             undefined,
             undefined,
-            selectedBoardElements(api),
+            args.placement === "center"
+              ? undefined
+              : selectedBoardElements(api),
             args.presentation as "match" | "handwritten" | "text" | undefined,
-            { mode: args.placement === "inline" ? "inline" : "below" },
+            {
+              mode:
+                args.placement === "center"
+                  ? "center"
+                  : args.placement === "inline"
+                  ? "inline"
+                  : "below",
+            },
           );
         }
       },

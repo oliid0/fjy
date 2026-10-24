@@ -336,34 +336,45 @@ export const insertText = (
     }
     const ink =
       presentation === "handwritten" || (presentation === "match" && inkSource)
-        ? handwritingElements(text, {
-            x: 0,
-            y: 0,
-            height: layout.fontSize * 1.25,
-            color:
-              source?.strokeColor || state.currentItemStrokeColor || "#000000",
-            width:
-              ((inkSource?.strokeWidth ||
-                (((state.currentItemStrokeWidth ||
-                  DEFAULT_ELEMENT_PROPS.strokeWidth) /
-                  DEFAULT_ELEMENT_PROPS.strokeWidth) *
-                  4) /
-                  (window.devicePixelRatio || 1) /
-                  state.zoom.value) *
-                layout.fontSize) /
-              size,
-            opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
-            maxWidth: viewport.right - layout.x,
-            source: styleSource,
-            customData,
-          })
+        ? handwritingElements(
+            placement.mode === "center" ? layout.text : text,
+            {
+              x: 0,
+              y: 0,
+              height: layout.fontSize * 1.25,
+              color:
+                source?.strokeColor ||
+                state.currentItemStrokeColor ||
+                "#000000",
+              width:
+                ((inkSource?.strokeWidth ||
+                  (((state.currentItemStrokeWidth ||
+                    DEFAULT_ELEMENT_PROPS.strokeWidth) /
+                    DEFAULT_ELEMENT_PROPS.strokeWidth) *
+                    4) /
+                    (window.devicePixelRatio || 1) /
+                    state.zoom.value) *
+                  layout.fontSize) /
+                size,
+              opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
+              maxWidth: viewport.right - layout.x,
+              source: styleSource,
+              customData,
+            },
+          )
         : null;
     if (ink) {
       const [left, top, right, bottom] = getCommonBounds(ink);
+      const centered = placement.mode === "center";
       const point = findVisibleContentPosition(
-        layout,
+        centered
+          ? {
+              x: (viewport.left + viewport.right - (right - left)) / 2,
+              y: (viewport.top + viewport.bottom - (bottom - top)) / 2,
+            }
+          : layout,
         { width: right - left, height: bottom - top },
-        { ...viewport, left: layout.x, top: layout.y },
+        centered ? viewport : { ...viewport, left: layout.x, top: layout.y },
         obstacles,
         gap,
       );

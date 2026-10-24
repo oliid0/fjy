@@ -150,6 +150,14 @@ describe("selection-driven classroom controls", () => {
           await vi.advanceTimersByTimeAsync(3000);
         });
         expect(clear).toHaveBeenCalledTimes(2);
+        act(() => deliver("写一个1+1=2"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+        expect(handwritingText(scene)).toContain("1+1=2");
+        expect(scene.every((element) => element.type === "freedraw")).toBe(
+          true,
+        );
         await act(async () => {
           await classroomCommands.execute({ name: "voice.toggle" });
         });

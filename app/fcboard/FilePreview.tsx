@@ -930,6 +930,8 @@ export const FilePreview = ({
           Array.isArray(args.sourceIds) &&
           args.sourceIds.every((id) => typeof id === "string")
             ? args.sourceIds
+            : args.placement === "center"
+            ? []
             : selectedInkRef.current;
         const selected = strokes.filter((stroke) =>
           sourceIds.includes(stroke.id),
@@ -1011,6 +1013,8 @@ export const FilePreview = ({
               ? "replace"
               : args.placement === "inline"
               ? "inline"
+              : args.placement === "center"
+              ? "center"
               : "below",
             bounds: existing ? undefined : bounds,
           },

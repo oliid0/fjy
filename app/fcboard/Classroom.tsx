@@ -989,7 +989,11 @@ export const Classroom = ({
       setPrompt(text);
       const direct = directCommand(text);
       if (direct) {
-        await classroomCommands.execute(direct);
+        await classroomCommands.execute(
+          selection?.signal
+            ? { ...direct, args: { ...direct.args, signal: selection.signal } }
+            : direct,
+        );
         return;
       }
       if (

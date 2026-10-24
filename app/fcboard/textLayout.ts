@@ -9,7 +9,7 @@ import { findVisibleContentPosition } from "./placement";
 import type { ContentRect } from "./placement";
 
 export type TextPlacement = {
-  mode?: "inline" | "below" | "replace";
+  mode?: "inline" | "below" | "replace" | "center";
   bounds?: ContentRect;
   sourceLines?: number;
 };
@@ -28,6 +28,7 @@ export const layoutBoardText = (
   placement: TextPlacement = {},
 ) => {
   const source = placement.bounds;
+  const centered = placement.mode === "center";
   const lineHeight = getLineHeight(fontFamily);
   const fullWidth = viewport.right - viewport.left;
   const fullHeight = viewport.bottom - viewport.top;
@@ -43,7 +44,7 @@ export const layoutBoardText = (
     : preferred;
   const inline = source ? { x: source.right + gap, y: source.top } : preferred;
   const candidates =
-    placement.mode === "replace"
+    placement.mode === "replace" || centered
       ? [preferred]
       : placement.mode === "inline"
       ? [inline, below]
@@ -58,16 +59,22 @@ export const layoutBoardText = (
     for (const origin of candidates) {
       const x = Math.max(viewport.left, Math.min(origin.x, viewport.right));
       const y = Math.max(viewport.top, origin.y);
-      const width = viewport.right - x;
+      const width = centered ? fullWidth / 2 : viewport.right - x;
       if (width < size || y >= viewport.bottom) {
         continue;
       }
       const font = getFontString({ fontFamily, fontSize: size });
       const wrapped = wrapText(text, font, width);
       const metrics = measureText(wrapped, font, lineHeight);
-      const area = { ...viewport, left: x, top: y };
+      const measuredOrigin = centered
+        ? {
+            x: (viewport.left + viewport.right - metrics.width) / 2,
+            y: (viewport.top + viewport.bottom - metrics.height) / 2,
+          }
+        : { x, y };
+      const area = centered ? viewport : { ...viewport, left: x, top: y };
       const position = findVisibleContentPosition(
-        { x, y },
+        measuredOrigin,
         metrics,
         area,
         obstacles,

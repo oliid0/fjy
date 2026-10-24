@@ -4,6 +4,7 @@ import { pointFrom } from "@excalidraw/math";
 import { findContentPosition } from "./placement";
 import {
   contentPosition,
+  contentViewport,
   insertText,
   insertElements,
   drawPlot,
@@ -20,6 +21,50 @@ import { sceneAPI } from "./test/scene";
 const viewport = { left: 16, top: 16, right: 1264, bottom: 604 };
 const overlaps = (a: readonly number[], b: readonly number[]) =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
+it.each([
+  [390, 844, 1],
+  [800, 600, 1],
+  [3080, 1240, 0.5],
+  [3080, 1240, 2],
+])(
+  "writes in an empty visible center and avoids the first writing at %s×%s / %s",
+  (width, height, zoom) => {
+    const api = sceneAPI();
+    vi.spyOn(api, "getAppState").mockReturnValue({
+      ...api.getAppState(),
+      width,
+      height,
+      zoom: { value: zoom as never },
+      scrollX: -100,
+      scrollY: -50,
+    });
+    const viewport = contentViewport(api);
+    const write = () =>
+      insertText(api, "1+1=2", undefined, undefined, undefined, "handwritten", {
+        mode: "center",
+      });
+    const bounds = (ids: string[]) =>
+      getCommonBounds(
+        api.getSceneElements().filter((element) => ids.includes(element.id)),
+      );
+    const first = bounds(write());
+    expect((first[0] + first[2]) / 2).toBeCloseTo(
+      (viewport.left + viewport.right) / 2,
+    );
+    expect((first[1] + first[3]) / 2).toBeCloseTo(
+      (viewport.top + viewport.bottom) / 2,
+    );
+    const second = bounds(write());
+    expect(overlaps(first, second)).toBe(false);
+    for (const box of [first, second]) {
+      expect(box[0]).toBeGreaterThanOrEqual(viewport.left);
+      expect(box[1]).toBeGreaterThanOrEqual(viewport.top);
+      expect(box[2]).toBeLessThanOrEqual(viewport.right);
+      expect(box[3]).toBeLessThanOrEqual(viewport.bottom);
+    }
+  },
+);
 
 it.each([
   [800, 600, 1],

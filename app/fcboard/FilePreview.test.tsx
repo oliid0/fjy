@@ -14,7 +14,11 @@ import { render } from "./test/render";
 import { FilePreview } from "./FilePreview";
 import { classroomCommands } from "./commands";
 import { documentInkElement } from "./documentInk";
-import { documentSourceSignature, loadInk } from "./documents";
+import {
+  documentSourceSignature,
+  documentStrokeBounds,
+  loadInk,
+} from "./documents";
 import * as ocr from "./ocr";
 
 vi.mock("./documents", async (original) => ({
@@ -281,6 +285,65 @@ const currentInk = () =>
       ink: import("./documents").InkStroke[];
     }
   ).ink;
+
+it("centers voice writing on the visible courseware without inheriting a previous selection", async () => {
+  const { draw, update } = await setup();
+  draw();
+  const original = [...currentInk()];
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.select",
+      args: { ids: [original[0].id] },
+    });
+    await classroomCommands.execute({
+      name: "document.text",
+      args: { text: "1+1=2", presentation: "handwritten", placement: "center" },
+    });
+  });
+  const answer = currentInk().find((stroke) => stroke.text === "1+1=2")!;
+  const { viewport } = classroomCommands.read("document.layout") as {
+    viewport: { left: number; top: number; right: number; bottom: number };
+  };
+  const box = documentStrokeBounds(answer);
+  expect((box.left + box.right) / 2).toBeCloseTo(
+    (viewport.left + viewport.right) / 2,
+  );
+  expect((box.top + box.bottom) / 2).toBeCloseTo(
+    (viewport.top + viewport.bottom) / 2,
+  );
+  expect(
+    currentInk().filter((stroke) =>
+      original.some((source) => source.id === stroke.id),
+    ),
+  ).toEqual(original);
+  expect(update).not.toHaveBeenCalled();
+});
+
+it("drops centered writing when voice is stopped during font loading", async () => {
+  await setup();
+  let ready!: () => void;
+  vi.spyOn(Fonts, "loadElementsFonts").mockReturnValue(
+    new Promise((resolve) => {
+      ready = () => resolve([]);
+    }),
+  );
+  const cancel = new AbortController();
+  const pending = classroomCommands.execute({
+    name: "document.text",
+    args: {
+      text: "1+1=2",
+      presentation: "handwritten",
+      placement: "center",
+      signal: cancel.signal,
+    },
+  });
+  await act(async () => {
+    cancel.abort();
+    ready();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+  expect(currentInk()).toEqual([]);
+});
 
 it("keeps release coalesced samples and completes fountain geometry on the visible layer", async () => {
   const { pointer, svg } = await setup(undefined, {

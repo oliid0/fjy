@@ -93,6 +93,19 @@ export const classroomCommands = new CommandRouter();
 
 /** Frequent unambiguous commands remain instant and work without a cloud model. */
 export const directCommand = (text: string): Command | null => {
+  const written = text
+    .trim()
+    .match(/^(?:请|帮我)?(?:写下|写上|写一个|写个|写[：:])\s*([\s\S]+)$/);
+  if (written?.[1].trim()) {
+    return {
+      name: "canvas.text",
+      args: {
+        text: written[1].trim(),
+        presentation: "handwritten",
+        placement: "center",
+      },
+    };
+  }
   const value = text.replace(/[，。！!？?\s]/g, "");
   if (/^(?:帮我)?(?:新建|创建)$/.test(value)) {
     return { name: "board.new" };

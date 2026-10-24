@@ -20,4 +20,15 @@ describe("component commands", () => {
     expect(directCommand("帮我新建白板")?.name).toBe("board.new");
     expect(directCommand("帮我画一条经过这些点的抛物线")).toBeNull();
   });
+  it("preserves literal writing instead of solving or stripping its punctuation", () => {
+    expect(directCommand("写一个1+1=2")).toEqual({
+      name: "canvas.text",
+      args: { text: "1+1=2", presentation: "handwritten", placement: "center" },
+    });
+    expect(directCommand("请写下 Hello, world! 3.14")).toMatchObject({
+      args: { text: "Hello, world! 3.14" },
+    });
+    expect(directCommand("写下")).toBeNull();
+    expect(directCommand("教我写一个函数")).toBeNull();
+  });
 });

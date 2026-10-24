@@ -286,6 +286,65 @@ const currentInk = () =>
     }
   ).ink;
 
+it.each(["document.select", "document.move", "document.erase"])(
+  "rejects stale mixed targets on visible courseware for %s",
+  async (name) => {
+    const { draw, update } = await setup();
+    draw();
+    const original = [...currentInk()];
+    const snapshot = JSON.stringify(original);
+    await act(async () => {
+      await expect(
+        classroomCommands.execute({
+          name,
+          args: { ids: [original[0].id, "missing"], dx: 10, dy: 20 },
+        }),
+      ).rejects.toThrow("missing");
+      await expect(
+        classroomCommands.execute({
+          name,
+          args: { ids: original[0].id, dx: 10, dy: 20 },
+        }),
+      ).rejects.toThrow();
+    });
+    expect(JSON.stringify(currentInk())).toBe(snapshot);
+    expect(update).not.toHaveBeenCalled();
+  },
+);
+
+it("reports object ids and actual movement before erasing only those annotations", async () => {
+  const { draw, update } = await setup();
+  draw();
+  const original = currentInk()[0];
+  await act(async () => {
+    await expect(
+      classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [original.id] },
+      }),
+    ).resolves.toEqual({ ids: [original.id] });
+    await expect(
+      classroomCommands.execute({
+        name: "document.move",
+        args: { ids: [original.id], dx: 10, dy: 20 },
+      }),
+    ).resolves.toEqual({ ids: [original.id], dx: 10, dy: 20 });
+  });
+  expect(currentInk()[0].points).toEqual(
+    original.points.map(([x, y]) => [x + 10, y + 20]),
+  );
+  await act(async () => {
+    await expect(
+      classroomCommands.execute({
+        name: "document.erase",
+        args: { ids: [original.id] },
+      }),
+    ).resolves.toEqual({ ids: [original.id] });
+  });
+  expect(currentInk()).toEqual([]);
+  expect(update).not.toHaveBeenCalled();
+});
+
 it("centers voice writing on the visible courseware without inheriting a previous selection", async () => {
   const { draw, update } = await setup();
   draw();

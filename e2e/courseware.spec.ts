@@ -392,7 +392,7 @@ test("voice draws into the visible PPT and function controls update its transpar
     page.locator(".fc-document-ink text").filter({ hasText: "x+1" }),
   ).toHaveCount(1);
   await page.screenshot({ path: info.outputPath("voice-ppt-function.png") });
-  await page.getByRole("button", { name: "收起工具参数" }).click();
+  await page.getByRole("button", { name: "关闭工具浮层", exact: true }).click();
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("写一个1+1=2"),
   );
@@ -410,6 +410,7 @@ test("voice draws into the visible PPT and function controls update its transpar
   expect(writingBounds.y + writingBounds.height).toBeLessThanOrEqual(
     visible.height,
   );
+  await page.screenshot({ path: info.outputPath("voice-ppt-writing.png") });
   await expect(
     page.getByRole("button", { name: "课件语音指令", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");

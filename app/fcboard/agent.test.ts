@@ -3,8 +3,52 @@ import { t } from "@excalidraw/excalidraw/i18n";
 import { runBoardCommands } from "./agent";
 import { classroomCommands } from "./commands";
 import * as ai from "./ai";
+import { registerCanvasCommands } from "./canvasCommands";
+import { sceneAPI } from "./test/scene";
 
 afterEach(() => vi.restoreAllMocks());
+
+it("recovers from a stale real canvas target using the returned error and latest objects", async () => {
+  const api = sceneAPI();
+  const id = api.getSceneElements()[0].id;
+  const stop = registerCanvasCommands(api);
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockImplementationOnce(async (messages) => {
+      const result = String(messages.at(-1)?.content);
+      expect(result).toContain('"ok":false');
+      expect(result).toContain("missing");
+      expect(result).toContain(id);
+      expect(api.updateScene).not.toHaveBeenCalled();
+      return JSON.stringify({
+        action: "commands",
+        commands: [{ name: "canvas.erase", args: { ids: [id] } }],
+        continue: true,
+      });
+    })
+    .mockResolvedValueOnce('{"action":"done"}');
+  try {
+    await expect(
+      runBoardCommands(
+        {
+          action: "commands",
+          commands: [{ name: "canvas.erase", args: { ids: [id, "missing"] } }],
+          continue: true,
+        },
+        [],
+        undefined,
+        () => true,
+      ),
+    ).resolves.toEqual({ action: "done" });
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(String(chat.mock.calls[1][0].at(-1)?.content)).toContain(
+      `"ids":["${id}"]`,
+    );
+    expect(api.getSceneElements()).toEqual([]);
+  } finally {
+    stop();
+  }
+});
 
 it("returns real preparation results before requesting a lesson rather than reporting a generic done", async () => {
   const read = vi.fn(() => ({ answer: "0.3" }));

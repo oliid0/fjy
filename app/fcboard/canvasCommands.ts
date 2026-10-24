@@ -19,7 +19,7 @@ import {
   contentViewport,
 } from "./board";
 import { documentStrokeBounds } from "./documents";
-import { classroomCommands } from "./commands";
+import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
 
 import type { InkStroke } from "./documents";
@@ -537,20 +537,13 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           args.ids === undefined
             ? selectedBoardElements(api).map((el) => el.id)
             : args.ids;
-        if (
-          !Array.isArray(ids) ||
-          !ids.length ||
-          ids.length > 3000 ||
-          !ids.every((id) => typeof id === "string")
-        ) {
-          throw new Error(t("fcboard.请先圈选要擦除的内容"));
-        }
-        const selected = new Set(ids);
+        const selected = commandObjectIds(ids, api.getSceneElements());
         api.updateScene({
           elements: api.getSceneElements().filter((el) => !selected.has(el.id)),
           appState: { selectedElementIds: {}, whiteboardSelection: undefined },
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
+        return { ids: [...selected] };
       },
     ),
     classroomCommands.register(
@@ -572,15 +565,10 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
         if (classroomCommands.has("document.select")) {
           return classroomCommands.execute({ name: "document.select", args });
         }
-        if (
-          !Array.isArray(args.ids) ||
-          !args.ids.every((id) => typeof id === "string")
-        ) {
-          throw new Error(t("fcboard.选区格式无效"));
-        }
-        const ids = new Set(args.ids);
+        const ids = commandObjectIds(args.ids, api.getSceneElements(), true);
         api.updateScene({
           appState: {
+            whiteboardSelection: undefined,
             selectedElementIds: Object.fromEntries(
               api
                 .getSceneElements()
@@ -589,6 +577,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
             ),
           },
         });
+        return { ids: [...ids] };
       },
     ),
     classroomCommands.register(
@@ -608,15 +597,13 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
         ) {
           throw new Error(t("fcboard.移动距离无效"));
         }
-        const ids = new Set(
-          Array.isArray(args.ids)
-            ? args.ids
-            : selectedBoardElements(api).map((el) => el.id),
-        );
-        if (!ids.size) {
-          throw new Error(t("fcboard.请先选择对象"));
-        }
         const elements = api.getSceneElements();
+        const ids = commandObjectIds(
+          args.ids === undefined
+            ? selectedBoardElements(api).map((el) => el.id)
+            : args.ids,
+          elements,
+        );
         elements
           .filter((el) => ids.has(el.id))
           .forEach((el) =>
@@ -629,6 +616,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
           elements,
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
+        return { ids: [...ids], dx: args.dx, dy: args.dy };
       },
     ),
     classroomCommands.context("canvas", inspect),

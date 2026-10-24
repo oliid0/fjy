@@ -91,6 +91,36 @@ export class CommandRouter {
 
 export const classroomCommands = new CommandRouter();
 
+/** Validate the entire target set before an agent command changes any object. */
+export const commandObjectIds = (
+  input: unknown,
+  objects: readonly { id: string; isDeleted?: boolean }[],
+  allowEmpty = false,
+) => {
+  if (
+    !Array.isArray(input) ||
+    input.length > 3000 ||
+    !input.every((id) => typeof id === "string" && id.length > 0)
+  ) {
+    throw new Error(t("fcboard.选区格式无效"));
+  }
+  if (!allowEmpty && !input.length) {
+    throw new Error(t("fcboard.请先选择对象"));
+  }
+  const available = new Set(
+    objects.filter((object) => !object.isDeleted).map((object) => object.id),
+  );
+  const missing = input.filter((id) => !available.has(id));
+  if (missing.length) {
+    throw new Error(
+      t("fcboard.对象不存在或已删除：{{ids}}", {
+        ids: missing.slice(0, 10).join(", "),
+      }),
+    );
+  }
+  return new Set<string>(input);
+};
+
 /** Frequent unambiguous commands remain instant and work without a cloud model. */
 export const directCommand = (text: string): Command | null => {
   const written = text

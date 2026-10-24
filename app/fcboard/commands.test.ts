@@ -1,6 +1,15 @@
-import { CommandRouter, directCommand } from "./commands";
+import { CommandRouter, commandObjectIds, directCommand } from "./commands";
 
 describe("component commands", () => {
+  it("rejects deleted targets and permits only an explicit empty selection", () => {
+    const objects = [{ id: "visible" }, { id: "deleted", isDeleted: true }];
+    expect(() => commandObjectIds(["deleted"], objects)).toThrow("deleted");
+    expect(() => commandObjectIds([], objects)).toThrow();
+    expect([...commandObjectIds([], objects, true)]).toEqual([]);
+    expect([...commandObjectIds(["visible", "visible"], objects)]).toEqual([
+      "visible",
+    ]);
+  });
   it("does not remove a replacement command or context during an old cleanup", async () => {
     const router = new CommandRouter();
     const old = router.register("board.new", "new board", () => "old");

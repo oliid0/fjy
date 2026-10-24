@@ -1235,6 +1235,7 @@
     "找不到要修改的文本": "Text to edit not found",
     "请先圈选要擦除的内容": "Circle the content to erase first",
     "选区格式无效": "Invalid selection format",
+    "对象不存在或已删除：{{ids}}": "Objects are missing or deleted: {{ids}}",
     "请先选择对象": "Select an object first",
     "文档引擎启动失败，请重新打开文件": "Document engine failed to start. Open the file again.",
     "课件板书坐标无效": "Invalid annotation coordinates",

@@ -14,6 +14,80 @@ import { sceneAPI } from "./test/scene";
 
 import type { InkStroke } from "./documents";
 
+it.each(["canvas.select", "canvas.move", "canvas.erase"])(
+  "rejects a stale mixed target set atomically for %s",
+  async (name) => {
+    const api = sceneAPI();
+    const original = [...api.getSceneElements()];
+    const mutate = vi.fn();
+    api.mutateElement = mutate;
+    const stop = registerCanvasCommands(api);
+    try {
+      await expect(
+        classroomCommands.execute({
+          name,
+          args: { ids: [original[0].id, "missing"], dx: 10, dy: 20 },
+        }),
+      ).rejects.toThrow("missing");
+      expect(api.getSceneElements()).toEqual(original);
+      expect(api.updateScene).not.toHaveBeenCalled();
+      expect(mutate).not.toHaveBeenCalled();
+      await expect(
+        classroomCommands.execute({
+          name,
+          args: { ids: original[0].id, dx: 10, dy: 20 },
+        }),
+      ).rejects.toThrow();
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+  },
+);
+
+it("returns actual object ids for selection, movement and erasure", async () => {
+  const api = sceneAPI();
+  const object = api.getSceneElements()[0];
+  const initial = { x: object.x, y: object.y };
+  api.mutateElement = vi.fn((element, changes) =>
+    Object.assign(element, changes),
+  );
+  const stop = registerCanvasCommands(api);
+  try {
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.select",
+        args: { ids: [object.id] },
+      }),
+    ).resolves.toEqual({ ids: [object.id] });
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.move",
+        args: { ids: [object.id], dx: 10, dy: 20 },
+      }),
+    ).resolves.toEqual({ ids: [object.id], dx: 10, dy: 20 });
+    expect(api.getSceneElements()[0]).toMatchObject({
+      x: initial.x + 10,
+      y: initial.y + 20,
+    });
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.erase",
+        args: { ids: [object.id] },
+      }),
+    ).resolves.toEqual({ ids: [object.id] });
+    expect(api.getSceneElements()).toEqual([]);
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.erase",
+        args: { ids: [object.id] },
+      }),
+    ).rejects.toThrow(object.id);
+  } finally {
+    stop();
+  }
+});
+
 it("exposes the original pen modes to AI and validates the complete style request before changing the pen", async () => {
   const api = {
     getAppState: () => ({ currentItemStrokeWidth: 2 }),

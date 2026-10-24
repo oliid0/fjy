@@ -55,7 +55,7 @@ import type {
 
 import { TransientMessage } from "./TransientMessage";
 
-import { classroomCommands } from "./commands";
+import { classroomCommands, commandObjectIds } from "./commands";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
 
@@ -661,16 +661,10 @@ export const FilePreview = ({
         (args) => {
           const ids =
             args.ids === undefined ? selectedInkRef.current : args.ids;
-          if (
-            !Array.isArray(ids) ||
-            !ids.length ||
-            !ids.every((id) => typeof id === "string")
-          ) {
-            throw new Error(
-              t("fcboard.请先圈选要擦除的板书；原课件内容不会被擦除"),
-            );
-          }
-          const chosen = new Set(ids);
+          const chosen = commandObjectIds(
+            ids,
+            inkRef.current[pageRef.current] || [],
+          );
           commitInk({
             ...inkRef.current,
             [pageRef.current]: (inkRef.current[pageRef.current] || []).filter(
@@ -679,23 +673,24 @@ export const FilePreview = ({
           });
           selectedInkRef.current = [];
           setLasso([]);
+          return { ids: [...chosen] };
         },
       ),
       classroomCommands.register(
         "document.select",
         "选择指定课件板书，args.ids 为已存在板书id数组",
         (args) => {
-          if (
-            !Array.isArray(args.ids) ||
-            !args.ids.every((id) => typeof id === "string")
-          ) {
-            throw new Error(t("fcboard.板书选区无效"));
-          }
-          const ids = new Set(args.ids);
+          const ids = commandObjectIds(
+            args.ids,
+            inkRef.current[pageRef.current] || [],
+            true,
+          );
           selectedInkRef.current = (inkRef.current[pageRef.current] || [])
             .filter((stroke) => ids.has(stroke.id))
             .map((stroke) => stroke.id);
+          setLasso([]);
           classroomCommands.changed("document");
+          return { ids: [...ids] };
         },
       ),
       classroomCommands.register(
@@ -1091,12 +1086,10 @@ export const FilePreview = ({
         ) {
           throw new Error(t("fcboard.移动距离无效"));
         }
-        const ids = new Set(
-          Array.isArray(args.ids) ? args.ids : selectedInkRef.current,
+        const ids = commandObjectIds(
+          args.ids === undefined ? selectedInkRef.current : args.ids,
+          inkRef.current[pageRef.current] || [],
         );
-        if (!ids.size) {
-          throw new Error(t("fcboard.请先圈选板书"));
-        }
         commitInk({
           ...inkRef.current,
           [pageRef.current]: (inkRef.current[pageRef.current] || []).map(
@@ -1110,6 +1103,7 @@ export const FilePreview = ({
                 : stroke,
           ),
         });
+        return { ids: [...ids], dx: args.dx, dy: args.dy };
       }),
       classroomCommands.register(
         "document.close",

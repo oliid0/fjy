@@ -9,6 +9,13 @@ import { finishFactoryInk } from "@excalidraw/element/factoryInk";
 import factoryEraser from "@excalidraw/excalidraw/components/FactoryEraser.png?url";
 import { pointFrom } from "@excalidraw/math";
 import {
+  circleRegion,
+  regionPath,
+  regionHandleAt,
+  resizeRegion,
+  regionCorners,
+} from "@excalidraw/excalidraw/lasso/region";
+import {
   CloseIcon,
   chevronLeftIcon,
   chevronRight,
@@ -23,7 +30,11 @@ import {
   gridIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { Capacitor } from "@capacitor/core";
-import { FONT_FAMILY, getFontFamilyString } from "@excalidraw/common";
+import {
+  FONT_FAMILY,
+  getFontFamilyString,
+  DRAGGING_THRESHOLD,
+} from "@excalidraw/common";
 import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import { Fonts } from "@excalidraw/excalidraw/fonts";
 import {
@@ -32,6 +43,10 @@ import {
 } from "@excalidraw/excalidraw/eraser/stroke";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type {
+  RegionBounds,
+  RegionHandle,
+} from "@excalidraw/excalidraw/lasso/region";
 import type {
   AppState,
   ExcalidrawImperativeAPI,
@@ -46,7 +61,9 @@ import { useDeviceInkProfile } from "./ink";
 import {
   documentKey,
   documentStrokeBounds,
-  selectDocumentLasso,
+  hitStroke,
+  selectDocumentRegion,
+  moveDocumentStroke,
   eraseDocumentInk,
   htmlText,
   loadInk,
@@ -200,6 +217,15 @@ export const FilePreview = ({
   const [selecting, setSelecting] = useState(false);
   const selectedInkRef = useRef<string[]>([]);
   const [lasso, setLasso] = useState<[number, number][]>([]);
+  const selectionGesture = useRef<{
+    before: [number, number][];
+    ids: string[];
+    bounds?: RegionBounds;
+    handle: RegionHandle | null;
+    origin: [number, number];
+    extent: RegionBounds;
+    started: boolean;
+  } | null>(null);
   const past = useRef<Record<number, InkStroke[][]>>({});
   const future = useRef<Record<number, InkStroke[][]>>({});
   const animationBefore = useRef(new Map<string, InkStroke[]>());
@@ -1061,22 +1087,11 @@ export const FilePreview = ({
           [pageRef.current]: (inkRef.current[pageRef.current] || []).map(
             (stroke) =>
               ids.has(stroke.id)
-                ? {
-                    ...stroke,
-                    anchor: stroke.anchor
-                      ? {
-                          x: stroke.anchor.x + (args.dx as number),
-                          y: stroke.anchor.y + (args.dy as number),
-                        }
-                      : undefined,
-                    points: stroke.points.map(
-                      ([x, y]) =>
-                        [x + (args.dx as number), y + (args.dy as number)] as [
-                          number,
-                          number,
-                        ],
-                    ),
-                  }
+                ? moveDocumentStroke(
+                    stroke,
+                    args.dx as number,
+                    args.dy as number,
+                  )
                 : stroke,
           ),
         });
@@ -1103,6 +1118,7 @@ export const FilePreview = ({
         text: currentTextRef.current,
         ink: inkRef.current[pageRef.current] || [],
         selection: selectedInkRef.current,
+        selectionInProgress: !!activePointer.current,
         region: lasso,
         viewport: {
           left: stage.current?.getBoundingClientRect().left || 0,
@@ -1569,6 +1585,18 @@ export const FilePreview = ({
         false,
       );
     }
+    if (selectionGesture.current) {
+      if (selectionGesture.current.handle === "move") {
+        commitInk(
+          { ...inkRef.current, [gesturePage.current]: gestureBefore.current },
+          false,
+        );
+      }
+      selectedInkRef.current = selectionGesture.current.ids;
+      setLasso(selectionGesture.current.before);
+      selectionGesture.current = null;
+      classroomCommands.changed("document");
+    }
     erasing.current = null;
     draftRef.current = null;
     setDraft(null);
@@ -1651,6 +1679,52 @@ export const FilePreview = ({
       ((sample.clientX - rect.left) / rect.width) * 1000,
       ((sample.clientY - rect.top) / rect.width) * 1000 + scroll,
     ]);
+    const selection = selectionGesture.current;
+    if (selection?.bounds && selection.handle) {
+      const [x, y] = samples.at(-1)!;
+      const area = visibleDocumentArea(
+        stage.current,
+        size,
+        zoomRef.current,
+        scroll,
+      );
+      if (selection.handle === "move") {
+        const dx = x - selection.origin[0];
+        const dy = y - selection.origin[1];
+        setLasso(selection.before.map(([px, py]) => [px + dx, py + dy]));
+        const ids = new Set(selection.ids);
+        if (!dx && !dy && inkRef.current[page] === gestureBefore.current) {
+          return true;
+        }
+        commitInk(
+          {
+            ...inkRef.current,
+            [page]:
+              !dx && !dy
+                ? gestureBefore.current
+                : gestureBefore.current.map((stroke) =>
+                    ids.has(stroke.id)
+                      ? moveDocumentStroke(stroke, dx, dy)
+                      : stroke,
+                  ),
+          },
+          false,
+        );
+      } else {
+        setLasso(
+          regionPath(
+            resizeRegion(
+              selection.bounds,
+              selection.handle,
+              { x, y },
+              area.viewport,
+              area.scale,
+            ),
+          ),
+        );
+      }
+      return true;
+    }
     let from = 0;
     if (!erasing.current) {
       from = events.findIndex(eraseContact);
@@ -1664,6 +1738,25 @@ export const FilePreview = ({
       samples.slice(from).forEach(removeAt);
       setEraserPreview({ ...erasing.current, position: samples.at(-1)! });
     } else if (draftRef.current) {
+      if (selection && !selection.started) {
+        const bounds = selection.extent;
+        for (const [x, y] of samples) {
+          bounds.left = Math.min(bounds.left, x);
+          bounds.right = Math.max(bounds.right, x);
+          bounds.top = Math.min(bounds.top, y);
+          bounds.bottom = Math.max(bounds.bottom, y);
+        }
+        if (
+          (Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top) *
+            rect.width) /
+            1000 >=
+          DRAGGING_THRESHOLD
+        ) {
+          selection.started = true;
+          selectedInkRef.current = [];
+          setLasso([]);
+        }
+      }
       const stroke = {
         ...draftRef.current,
         points: [...draftRef.current.points, ...samples],
@@ -1680,6 +1773,15 @@ export const FilePreview = ({
     return true;
   };
   const paths = [...(ink[page] || []), ...(draft ? [draft] : [])];
+  const regionBounds =
+    lasso.length === 4
+      ? {
+          left: lasso[0][0],
+          top: lasso[0][1],
+          right: lasso[2][0],
+          bottom: lasso[2][1],
+        }
+      : undefined;
   return (
     <section
       ref={dialog}
@@ -1794,6 +1896,44 @@ export const FilePreview = ({
                 removeAt(position);
                 setEraserPreview({ ...erasing.current!, position });
               } else {
+                if (selecting) {
+                  const origin = point(event);
+                  const bounds =
+                    lasso.length === 4
+                      ? {
+                          left: lasso[0][0],
+                          top: lasso[0][1],
+                          right: lasso[2][0],
+                          bottom: lasso[2][1],
+                        }
+                      : undefined;
+                  const handle = bounds
+                    ? regionHandleAt(
+                        bounds,
+                        { x: origin[0], y: origin[1] },
+                        ((event.pointerType === "touch" ? 16 : 10) * 1000) /
+                          event.currentTarget.getBoundingClientRect().width,
+                      )
+                    : null;
+                  selectionGesture.current = {
+                    before: lasso,
+                    ids: selectedInkRef.current,
+                    bounds,
+                    handle,
+                    origin,
+                    extent: {
+                      left: origin[0],
+                      right: origin[0],
+                      top: origin[1],
+                      bottom: origin[1],
+                    },
+                    started: false,
+                  };
+                  classroomCommands.changed("document");
+                  if (handle) {
+                    return;
+                  }
+                }
                 const style = whiteboardInkStyle(
                   api.getAppState(),
                   event,
@@ -1823,26 +1963,78 @@ export const FilePreview = ({
               if (!updateInkGesture(event)) {
                 return;
               }
-              if (draftRef.current && selecting) {
-                const polygon = draftRef.current.points;
-                const ids = selectDocumentLasso(
-                  inkRef.current[page] || [],
-                  polygon,
+              let inspectPlot = false;
+              if (selecting && selectionGesture.current) {
+                const area = visibleDocumentArea(
+                  stage.current,
+                  size,
+                  zoomRef.current,
+                  scroll,
                 );
-                selectedInkRef.current = ids;
-                setLasso(polygon);
-                classroomCommands.changed("document");
+                const selection = selectionGesture.current;
+                const end = point(event);
+                const bounds = draftRef.current
+                  ? circleRegion(
+                      draftRef.current.points,
+                      area.viewport,
+                      area.scale,
+                    )
+                  : selection.bounds && selection.handle
+                  ? selection.handle === "move"
+                    ? {
+                        left:
+                          selection.bounds.left + end[0] - selection.origin[0],
+                        right:
+                          selection.bounds.right + end[0] - selection.origin[0],
+                        top:
+                          selection.bounds.top + end[1] - selection.origin[1],
+                        bottom:
+                          selection.bounds.bottom +
+                          end[1] -
+                          selection.origin[1],
+                      }
+                    : resizeRegion(
+                        selection.bounds,
+                        selection.handle,
+                        { x: end[0], y: end[1] },
+                        area.viewport,
+                        area.scale,
+                      )
+                  : undefined;
+                selectedInkRef.current =
+                  selection.handle === "move"
+                    ? selection.ids
+                    : bounds
+                    ? selectDocumentRegion(inkRef.current[page] || [], bounds)
+                    : selection.ids;
+                setLasso(bounds ? regionPath(bounds) : selection.before);
+                // A deliberate plot tap keeps the existing parameter editor.
+                // Ordinary taps and circle gestures never enter object editing.
                 if (
-                  polygon.length < 3 &&
-                  ids.some((id) =>
-                    (inkRef.current[page] || []).some(
-                      (stroke) => stroke.id === id && stroke.plot,
-                    ),
-                  ) &&
+                  !bounds &&
+                  !selection.handle &&
                   classroomCommands.has("math.inspect")
                 ) {
-                  void classroomCommands.execute({ name: "math.inspect" });
+                  const plot = gestureBefore.current.find(
+                    (stroke) =>
+                      stroke.plot && hitStroke(stroke, selection.origin),
+                  )?.plot;
+                  if (plot) {
+                    selectedInkRef.current = gestureBefore.current
+                      .filter((stroke) => stroke.plot?.id === plot.id)
+                      .map((stroke) => stroke.id);
+                    inspectPlot = true;
+                  }
                 }
+                if (
+                  selectionGesture.current.handle === "move" &&
+                  gestureBefore.current !== inkRef.current[page]
+                ) {
+                  (past.current[page] ||= []).push(gestureBefore.current);
+                  future.current[page] = [];
+                  refreshHistory((value) => value + 1);
+                }
+                selectionGesture.current = null;
               } else if (draftRef.current) {
                 const stroke = {
                   ...draftRef.current,
@@ -1861,12 +2053,18 @@ export const FilePreview = ({
                 refreshHistory((value) => value + 1);
               }
               activePointer.current = null;
+              if (selecting) {
+                classroomCommands.changed("document");
+              }
               erasing.current = null;
               draftRef.current = null;
               setDraft(null);
               setEraserPreview(null);
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+              if (inspectPlot) {
+                void classroomCommands.execute({ name: "math.inspect" });
               }
             }}
             onPointerCancel={(event) => {
@@ -1880,14 +2078,33 @@ export const FilePreview = ({
               }
             }}
           >
-            {lasso.length > 2 && (
-              <polygon
-                points={lasso.map((point) => point.join(",")).join(" ")}
-                fill="#245bd610"
+            {regionBounds && (
+              <g
+                data-document-region
+                pointerEvents="none"
+                fill="none"
                 stroke="#245bd6"
-                strokeWidth="1.5"
-                strokeDasharray="6 6"
-              />
+              >
+                <rect
+                  x={regionBounds.left}
+                  y={regionBounds.top}
+                  width={regionBounds.right - regionBounds.left}
+                  height={regionBounds.bottom - regionBounds.top}
+                  strokeWidth="1.5"
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="4 4"
+                />
+                <path
+                  d={regionCorners(regionBounds, (size.width * zoom) / 1000)
+                    .map(
+                      (points) =>
+                        `M${points.map((point) => point.join(",")).join(" L")}`,
+                    )
+                    .join(" ")}
+                  strokeWidth="3"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
             )}
             {paths.map((stroke) =>
               stroke.image ? (
@@ -2127,7 +2344,7 @@ export const FilePreview = ({
               aria-label={t("fcboard.圈选课件板书")}
               aria-pressed={selecting}
               onClick={() => {
-                setSelecting(!selecting);
+                setSelecting(true);
                 setErase(false);
               }}
             >

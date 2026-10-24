@@ -442,3 +442,96 @@ it("duplicates selected courseware ink as one undoable action with independent I
   expect(currentInk()).toEqual(after);
   expect(update).not.toHaveBeenCalled();
 });
+
+it("shares one adjustable region in courseware and cancels a border drag without splitting ink", async () => {
+  vi.mocked(loadInk).mockResolvedValue({
+    0: [
+      {
+        id: "first",
+        points: [
+          [100, 100],
+          [140, 140],
+        ],
+        color: "#000",
+        width: 2,
+      },
+      {
+        id: "second",
+        points: [
+          [300, 100],
+          [340, 140],
+        ],
+        color: "#000",
+        width: 2,
+      },
+    ],
+  });
+  const { pointer, svg } = await setup();
+  await act(() =>
+    classroomCommands.execute({
+      name: "document.tool",
+      args: { tool: "selection" },
+    }),
+  );
+  const context = () =>
+    classroomCommands.read("document") as {
+      ink: { id: string; points: [number, number][] }[];
+      selection: string[];
+      region: [number, number][];
+      selectionInProgress: boolean;
+    };
+  pointer("pointerdown", 80, 80);
+  pointer("pointermove", 160, 160);
+  expect(context().selection).toEqual([]);
+  pointer("pointerup", 160, 160);
+  expect(context().selection).toEqual(["first"]);
+  expect(context().region).toEqual([
+    [68, 68],
+    [172, 68],
+    [172, 172],
+    [68, 172],
+  ]);
+  expect(svg.querySelectorAll("[data-document-region]")).toHaveLength(1);
+  pointer("pointerdown", 172, 172);
+  expect(context().selectionInProgress).toBe(true);
+  pointer("pointermove", 350, 180);
+  expect(context().selection).toEqual(["first"]);
+  pointer("pointerup", 370, 190);
+  expect(context().selection).toEqual(["first", "second"]);
+  expect(context().region[2]).toEqual([370, 190]);
+  pointer("pointerdown", 220, 68);
+  pointer("pointermove", 260, 98);
+  expect(context().ink[0].points[0]).toEqual([140, 130]);
+  pointer("pointercancel", 260, 98);
+  expect(context().ink[0].points[0]).toEqual([100, 100]);
+  expect(context().region[0]).toEqual([68, 68]);
+  expect(context().ink.map((stroke) => stroke.id)).toEqual(["first", "second"]);
+  pointer("pointerdown", 220, 68);
+  pointer("pointerup", 260, 98);
+  expect(context().region[0]).toEqual([108, 98]);
+  expect(context().ink[0].points[0]).toEqual([140, 130]);
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.撤销板书") }));
+  expect(context().ink[0].points[0]).toEqual([100, 100]);
+  expect(context().ink).toHaveLength(2);
+});
+
+it("starts a new courseware region from its interior and retains it on a tap-sized gesture", async () => {
+  const { pointer } = await setup();
+  await act(() =>
+    classroomCommands.execute({
+      name: "document.tool",
+      args: { tool: "selection" },
+    }),
+  );
+  const context = () =>
+    classroomCommands.read("document") as { region: [number, number][] };
+  pointer("pointerdown", 80, 80);
+  pointer("pointerup", 240, 240);
+  expect(context().region[0]).toEqual([68, 68]);
+  pointer("pointerdown", 140, 140);
+  pointer("pointerup", 300, 300);
+  expect(context().region[0]).toEqual([128, 128]);
+  pointer("pointerdown", 600, 400);
+  pointer("pointerup", 601, 401);
+  expect(context().region[0]).toEqual([128, 128]);
+});

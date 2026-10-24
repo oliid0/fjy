@@ -44,9 +44,10 @@ type Target = {
   left: number;
   top: number;
   region?: Region;
-  document?: { crop: Region };
+  document?: { crop: Region; hasObjects: boolean };
 };
 type DocumentContext = {
+  selectionInProgress?: boolean;
   name: string;
   page: number;
   ink: InkStroke[];
@@ -101,7 +102,7 @@ export const SelectionActions = ({
       const state = api.getAppState();
       const selection = state.whiteboardSelection;
       const region =
-        state.activeTool.type === "lasso" &&
+        ["selection", "lasso"].includes(state.activeTool.type) &&
         selection?.elementIds.length ===
           Object.keys(state.selectedElementIds).length &&
         selection.elementIds.every((id) => state.selectedElementIds[id])
@@ -112,7 +113,11 @@ export const SelectionActions = ({
         | undefined;
       if (doc) {
         const points = doc.region || [];
-        if (points.length < 2 || !doc.viewport?.width) {
+        if (
+          doc.selectionInProgress ||
+          points.length < 2 ||
+          !doc.viewport?.width
+        ) {
           controller.current?.abort();
           previous = "";
           setTarget(undefined);
@@ -147,10 +152,10 @@ export const SelectionActions = ({
           setError("");
         }
         const box = {
-          left: Math.min(...points.map((p) => p[0])) - 12,
-          top: Math.min(...points.map((p) => p[1])) - 12,
-          right: Math.max(...points.map((p) => p[0])) + 12,
-          bottom: Math.max(...points.map((p) => p[1])) + 12,
+          left: Math.min(...points.map((p) => p[0])),
+          top: Math.min(...points.map((p) => p[1])),
+          right: Math.max(...points.map((p) => p[0])),
+          bottom: Math.max(...points.map((p) => p[1])),
         };
         const viewport = doc.viewport;
         const crop = {
@@ -197,6 +202,7 @@ export const SelectionActions = ({
                 ),
                 document: {
                   crop,
+                  hasObjects: !!selected.length,
                 },
               },
         );
@@ -611,7 +617,7 @@ export const SelectionActions = ({
       >
         <ButtonBase
           aria-label={t("labels.copy")}
-          disabled={pending}
+          disabled={pending || target.document?.hasObjects === false}
           onClick={() => {
             controller.current?.abort();
             void classroomCommands
@@ -633,6 +639,7 @@ export const SelectionActions = ({
         </ButtonBase>
         <ButtonBase
           aria-label={t("labels.delete")}
+          disabled={target.document?.hasObjects === false}
           onClick={() => {
             controller.current?.abort();
             void classroomCommands

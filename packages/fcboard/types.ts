@@ -56,6 +56,7 @@ import type Library from "./data/library";
 import type { ContextMenuItems } from "./components/ContextMenu";
 import type { SnapLine } from "./snapping";
 import type { ImportedDataState } from "./data/types";
+import type { RegionHandle } from "./lasso/region";
 
 import type { Language } from "./i18n";
 import type { isOverScrollBars } from "./scene/scrollbars";
@@ -881,6 +882,12 @@ export type AppClassProperties = {
 };
 
 export type PointerDownState = Readonly<{
+  regionSelection: {
+    selection: AppState["whiteboardSelection"];
+    selectedElementIds: AppState["selectedElementIds"];
+    selectedGroupIds: AppState["selectedGroupIds"];
+    handle: RegionHandle | null;
+  };
   // The first position at which pointerDown happened
   origin: Readonly<{ x: number; y: number }>;
   // Same as "origin" but snapped to the grid, if grid is on
@@ -934,6 +941,7 @@ export type PointerDownState = Readonly<{
   };
   // We need to have these in the state so that we can unsubscribe them
   eventListeners: {
+    onCancel?: () => void;
     // It's defined on the initial pointer down event
     onMove: null | ReturnType<typeof throttleRAF>;
     // It's defined on the initial pointer down event

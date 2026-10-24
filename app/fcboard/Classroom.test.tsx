@@ -466,7 +466,7 @@ describe("selection-driven classroom controls", () => {
       );
       expect(crop).toHaveBeenCalledWith(
         "data:image/png;base64,page",
-        { left: 0.068, right: 0.232, top: 0.036, bottom: 0.244 },
+        { left: 0.08, right: 0.22, top: 0.06, bottom: 0.22 },
         expect.any(AbortSignal),
       );
       expect(recognize).toHaveBeenCalledTimes(1);

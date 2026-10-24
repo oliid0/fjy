@@ -41,9 +41,13 @@ test("displayed handwriting can be dragged and lasso-selected at its visible ben
     );
   await expect.poll(async () => (await strokes()).length).toBe(1);
   await page.keyboard.press("v");
-  await page.mouse.move(200, 350);
+  await page.mouse.move(180, 340);
   await page.mouse.down();
-  await page.mouse.move(240, 350, { steps: 4 });
+  await page.mouse.move(220, 360, { steps: 4 });
+  await page.mouse.up();
+  await page.mouse.move(200, 328);
+  await page.mouse.down();
+  await page.mouse.move(240, 328, { steps: 4 });
   await page.mouse.up();
   await expect.poll(async () => (await strokes())[0].x).toBe(140);
   await page.getByTestId("button-undo").click();
@@ -526,4 +530,48 @@ test("chalkboard background and white writing remain literal in a dark interface
   await page.screenshot({
     path: info.outputPath("dark-interface-chalkboard.png"),
   });
+});
+
+test("circle selection resizes one region and keeps copy, deletion and undo on complete objects", async ({
+  page,
+}, info) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  for (const x of [120, 320]) {
+    await page.mouse.move(x, 120);
+    await page.mouse.down();
+    await page.mouse.move(x + 30, 150, { steps: 4 });
+    await page.mouse.up();
+  }
+  const strokes = () =>
+    page.evaluate(() =>
+      JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        (element: { type: string; isDeleted?: boolean }) =>
+          element.type === "freedraw" && !element.isDeleted,
+      ),
+    );
+  await expect.poll(async () => (await strokes()).length).toBe(2);
+  const select = page.getByRole("button", { name: "选择", exact: true });
+  await select.click();
+  await select.click();
+  await page.mouse.move(90, 90);
+  await page.mouse.down();
+  await page.mouse.move(180, 180, { steps: 6 });
+  await page.mouse.up();
+  const actions = page.getByRole("toolbar", { name: "选区操作" });
+  await expect(actions).toBeVisible();
+  await page.mouse.click(135, 135, { button: "right" });
+  await expect(page.locator(".context-menu")).toHaveCount(0);
+  await expect(actions).toBeVisible();
+  await page.mouse.move(192, 192);
+  await page.mouse.down();
+  await page.mouse.move(380, 200, { steps: 6 });
+  await page.mouse.up();
+  await page.screenshot({ path: info.outputPath("one-adjustable-region.png") });
+  await actions.getByRole("button", { name: "复制", exact: true }).click();
+  await expect.poll(async () => (await strokes()).length).toBe(4);
+  await actions.getByRole("button", { name: "删除", exact: true }).click();
+  await expect.poll(async () => (await strokes()).length).toBe(2);
+  await page.getByTestId("button-undo").click();
+  await expect.poll(async () => (await strokes()).length).toBe(4);
 });

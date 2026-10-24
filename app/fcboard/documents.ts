@@ -6,6 +6,7 @@ import { FONT_FAMILY, getFontString } from "@excalidraw/common";
 import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import { getElementLineSegments } from "@excalidraw/element";
 import { getLassoSelectedElementIds } from "@excalidraw/excalidraw/lasso/utils";
+import { regionPath } from "@excalidraw/excalidraw/lasso/region";
 import { pointFrom } from "@excalidraw/math";
 import { measureText } from "@excalidraw/element/textMeasurements";
 
@@ -14,6 +15,7 @@ import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 import type { FontFamilyValues } from "@excalidraw/element/types";
 import type { FactoryInkData } from "@excalidraw/element/factoryInk";
+import type { RegionBounds } from "@excalidraw/excalidraw/lasso/region";
 
 import {
   documentInkElement,
@@ -265,6 +267,46 @@ export const selectDocumentLasso = (
     enclosedElements: new Set(),
     intersectedElements: new Set(),
   }).selectedElementIds;
+};
+
+export const selectDocumentRegion = (
+  strokes: InkStroke[],
+  bounds: RegionBounds,
+) => selectDocumentLasso(strokes, regionPath(bounds));
+
+export const moveDocumentStroke = (
+  stroke: InkStroke,
+  dx: number,
+  dy: number,
+): InkStroke => {
+  const moved = (point: { x: number; y: number }) => ({
+    x: point.x + dx,
+    y: point.y + dy,
+  });
+  return {
+    ...stroke,
+    points: stroke.points.map(([x, y]) => [x + dx, y + dy]),
+    anchor: stroke.anchor ? moved(stroke.anchor) : undefined,
+    widget: stroke.widget
+      ? { ...stroke.widget, origin: moved(stroke.widget.origin) }
+      : undefined,
+    insertion: stroke.insertion
+      ? { ...stroke.insertion, origin: moved(stroke.insertion.origin) }
+      : undefined,
+    plot: stroke.plot
+      ? {
+          ...stroke.plot,
+          position: moved(stroke.plot.position),
+          origin: moved(stroke.plot.origin),
+        }
+      : undefined,
+    fcInk: stroke.fcInk?.rainbow
+      ? {
+          ...stroke.fcInk,
+          rainbow: { ...stroke.fcInk.rainbow, x: stroke.fcInk.rainbow.x + dx },
+        }
+      : stroke.fcInk,
+  };
 };
 
 export const hitStroke = (

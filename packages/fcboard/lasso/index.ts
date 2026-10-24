@@ -17,7 +17,12 @@ import { selectGroupsForSelectedElements } from "@excalidraw/element";
 
 import { getContainerElement } from "@excalidraw/element";
 
-import { arrayToMap, easeOut, isShallowEqual } from "@excalidraw/common";
+import {
+  arrayToMap,
+  easeOut,
+  isShallowEqual,
+  DRAGGING_THRESHOLD,
+} from "@excalidraw/common";
 
 import type {
   ExcalidrawElement,
@@ -30,6 +35,9 @@ import { type AnimationFrameHandler } from "../animation-frame-handler";
 import { AnimatedTrail } from "../animated-trail";
 
 import { getLassoBounds, getLassoSelectedElementIds } from "./utils";
+import { circleRegion, regionPath } from "./region";
+
+import type { RegionBounds } from "./region";
 
 import type App from "../components/App";
 import type { AppState } from "../types";
@@ -47,6 +55,8 @@ export class LassoTrail extends AnimatedTrail {
     null;
   private canvasTranslate: CanvasTranslate | null = null;
   private keepPreviousSelection: boolean = false;
+  private regionExtent?: RegionBounds;
+  private regionStarted = false;
 
   constructor(animationFrameHandler: AnimationFrameHandler, app: App) {
     super(animationFrameHandler, app, {
@@ -79,9 +89,15 @@ export class LassoTrail extends AnimatedTrail {
     this.intersectedElements.clear();
     this.enclosedElements.clear();
 
-    this.keepPreviousSelection = keepPreviousSelection;
+    this.keepPreviousSelection =
+      !this.app.props.UIOptions.unifiedToolbar && keepPreviousSelection;
+    this.regionExtent = { left: x, right: x, top: y, bottom: y };
+    this.regionStarted = false;
 
-    if (!this.keepPreviousSelection) {
+    if (
+      !this.keepPreviousSelection &&
+      !this.app.props.UIOptions.unifiedToolbar
+    ) {
       this.app.setState({
         whiteboardSelection: undefined,
         selectedElementIds: {},
@@ -138,15 +154,18 @@ export class LassoTrail extends AnimatedTrail {
         }
       }
 
-      const nextSelection = selectGroupsForSelectedElements(
-        {
-          editingGroupId: prevState.editingGroupId,
-          selectedElementIds: nextSelectedElementIds,
-        },
-        this.app.scene.getNonDeletedElements(),
-        prevState,
-        this.app,
-      );
+      const nextSelection =
+        bounds && this.app.props.UIOptions.unifiedToolbar
+          ? { selectedElementIds: nextSelectedElementIds, selectedGroupIds: {} }
+          : selectGroupsForSelectedElements(
+              {
+                editingGroupId: prevState.editingGroupId,
+                selectedElementIds: nextSelectedElementIds,
+              },
+              this.app.scene.getNonDeletedElements(),
+              prevState,
+              this.app,
+            );
 
       const selectedIds = [...Object.keys(nextSelection.selectedElementIds)];
       const selectedGroupIds = [...Object.keys(nextSelection.selectedGroupIds)];
@@ -158,6 +177,7 @@ export class LassoTrail extends AnimatedTrail {
             : undefined,
         selectedElementIds: nextSelection.selectedElementIds,
         selectedGroupIds: nextSelection.selectedGroupIds,
+        editingGroupId: bounds ? null : prevState.editingGroupId,
         selectedLinearElement:
           !bounds &&
           selectedIds.length === 1 &&
@@ -177,9 +197,77 @@ export class LassoTrail extends AnimatedTrail {
   addPointToPath = (x: number, y: number, keepPreviousSelection = false) => {
     super.addPointToPath(x, y);
 
-    this.keepPreviousSelection = keepPreviousSelection;
+    if (
+      this.app.props.UIOptions.unifiedToolbar &&
+      this.regionExtent &&
+      !this.regionStarted
+    ) {
+      const bounds = this.regionExtent;
+      bounds.left = Math.min(bounds.left, x);
+      bounds.right = Math.max(bounds.right, x);
+      bounds.top = Math.min(bounds.top, y);
+      bounds.bottom = Math.max(bounds.bottom, y);
+      if (
+        Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top) *
+          this.app.state.zoom.value >=
+        DRAGGING_THRESHOLD
+      ) {
+        this.regionStarted = true;
+        this.app.setState({
+          whiteboardSelection: undefined,
+          selectedElementIds: {},
+          selectedGroupIds: {},
+          selectedLinearElement: null,
+        });
+      }
+    } else if (!this.app.props.UIOptions.unifiedToolbar) {
+      this.keepPreviousSelection = keepPreviousSelection;
+      this.updateSelection();
+    }
+  };
 
-    this.updateSelection();
+  getViewport = (): RegionBounds => {
+    const { scrollX, scrollY, zoom, width, height } = this.app.state;
+    return {
+      left: -scrollX,
+      top: -scrollY,
+      right: width / zoom.value - scrollX,
+      bottom: height / zoom.value - scrollY,
+    };
+  };
+
+  selectRegion = (bounds: RegionBounds) => {
+    const path = regionPath(bounds);
+    const elementsMap = this.app.scene.getNonDeletedElementsMap();
+    const { selectedElementIds } = getLassoSelectedElementIds({
+      lassoPath: path,
+      elements: this.app.visibleElements,
+      elementsMap,
+      elementsSegments: new Map(
+        this.app.visibleElements.map((element) => [
+          element.id,
+          getElementLineSegments(element, elementsMap),
+        ]),
+      ),
+      intersectedElements: new Set(),
+      enclosedElements: new Set(),
+    });
+    this.selectElementsFromIds(selectedElementIds, bounds, path);
+  };
+
+  finishPath = () => {
+    const path = super.getCurrentTrail()?.originalPoints;
+    if (path && this.app.props.UIOptions.unifiedToolbar) {
+      const bounds = circleRegion(
+        path,
+        this.getViewport(),
+        this.app.state.zoom.value,
+      );
+      if (bounds) {
+        this.selectRegion(bounds);
+      }
+    }
+    this.endPath();
   };
 
   private updateSelection = () => {

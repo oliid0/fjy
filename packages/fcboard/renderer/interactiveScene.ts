@@ -87,6 +87,8 @@ import {
 
 import { getClientColor, renderRemoteCursors } from "../clients";
 
+import { regionCorners } from "../lasso/region";
+
 import {
   bootstrapCanvas,
   fillCircle,
@@ -1719,7 +1721,7 @@ const _renderInteractiveScene = ({
 
     const selection = appState.whiteboardSelection;
     const region =
-      appState.activeTool.type === "lasso" &&
+      ["selection", "lasso"].includes(appState.activeTool.type) &&
       selection?.elementIds.length ===
         Object.keys(appState.selectedElementIds).length &&
       selection.elementIds.every((id) => appState.selectedElementIds[id])
@@ -1848,37 +1850,31 @@ const _renderInteractiveScene = ({
         renderSelectionBorder(context, appState, selection),
       );
     }
-    if (region && selection?.path?.length) {
+    if (region) {
       context.save();
       context.translate(appState.scrollX, appState.scrollY);
-      context.lineWidth = 1 / appState.zoom.value;
+      context.lineWidth = 1.5 / appState.zoom.value;
       context.strokeStyle = selectionColor;
-      context.setLineDash([5 / appState.zoom.value, 4 / appState.zoom.value]);
-      context.beginPath();
-      selection.path.forEach(([x, y], index) => {
-        if (index) {
-          context.lineTo(x, y);
-        } else {
-          context.moveTo(x, y);
-        }
-      });
-      context.closePath();
-      context.stroke();
+      context.setLineDash([4 / appState.zoom.value, 4 / appState.zoom.value]);
+      context.strokeRect(
+        region.left,
+        region.top,
+        region.right - region.left,
+        region.bottom - region.top,
+      );
+      context.setLineDash([]);
+      context.lineWidth = 3 / appState.zoom.value;
+      for (const [start, corner, end] of regionCorners(
+        region,
+        appState.zoom.value,
+      )) {
+        context.beginPath();
+        context.moveTo(start[0], start[1]);
+        context.lineTo(corner[0], corner[1]);
+        context.lineTo(end[0], end[1]);
+        context.stroke();
+      }
       context.restore();
-    } else if (region && selectedElements.length) {
-      renderSelectionBorder(context, appState, {
-        angle: 0 as Radians,
-        x1: region.left,
-        y1: region.top,
-        x2: region.right,
-        y2: region.bottom,
-        cx: (region.left + region.right) / 2,
-        cy: (region.top + region.bottom) / 2,
-        selectionColors: [selectionColor],
-        dashed: true,
-        activeEmbeddable: false,
-        padding: 0,
-      });
     }
     // Paint resize transformHandles
     context.save();

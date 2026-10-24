@@ -29,6 +29,8 @@ import { getShortcutKey } from "../shortcut";
 
 import { useStylesPanelMode } from "../components/App";
 
+import { regionPath } from "../lasso/region";
+
 import { register } from "./register";
 
 export const actionDuplicateSelection = register({
@@ -92,6 +94,23 @@ export const actionDuplicateSelection = register({
       }
     }
 
+    const selectionState = getSelectionStateForElements(
+      duplicatedElements,
+      getNonDeletedElements(elementsWithDuplicates),
+      appState,
+    );
+    const region =
+      app.props.UIOptions.unifiedToolbar && appState.whiteboardSelection;
+    const offset = DEFAULT_GRID_SIZE / 2;
+    const bounds = region
+      ? {
+          left: region.bounds.left + offset,
+          top: region.bounds.top + offset,
+          right: region.bounds.right + offset,
+          bottom: region.bounds.bottom + offset,
+        }
+      : undefined;
+
     return {
       elements: syncMovedIndices(
         elementsWithDuplicates,
@@ -99,11 +118,16 @@ export const actionDuplicateSelection = register({
       ),
       appState: {
         ...appState,
-        ...getSelectionStateForElements(
-          duplicatedElements,
-          getNonDeletedElements(elementsWithDuplicates),
-          appState,
-        ),
+        ...selectionState,
+        ...(bounds
+          ? {
+              whiteboardSelection: {
+                bounds,
+                path: regionPath(bounds),
+                elementIds: Object.keys(selectionState.selectedElementIds),
+              },
+            }
+          : {}),
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };

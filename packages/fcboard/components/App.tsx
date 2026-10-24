@@ -429,6 +429,7 @@ import { isOverScrollBars } from "../scene/scrollbars";
 import { isMaybeMermaidDefinition } from "../mermaid";
 
 import { LassoTrail } from "../lasso";
+import { regionHandleAt, regionPath, resizeRegion } from "../lasso/region";
 
 import { EraserTrail } from "../eraser";
 import { eraseStroke, isPalmContact, pointerSamples } from "../eraser/stroke";
@@ -2767,10 +2768,63 @@ class App extends React.Component<AppProps, AppState> {
 
       this.setState((prevAppState) => {
         const actionAppState = actionResult.appState || {};
+        let regionState: Partial<AppState> = {};
+        if (
+          this.props.UIOptions.unifiedToolbar &&
+          actionAppState.selectedElementIds
+        ) {
+          const selectedElementIds = actionAppState.selectedElementIds;
+          const ids = Object.keys(selectedElementIds).filter(
+            (id) => selectedElementIds[id],
+          );
+          const selection =
+            actionAppState.whiteboardSelection ||
+            prevAppState.whiteboardSelection;
+          let whiteboardSelection: AppState["whiteboardSelection"];
+          if (
+            isSelectionLikeTool(
+              (actionAppState.activeTool || prevAppState.activeTool).type,
+            ) &&
+            ids.length
+          ) {
+            if (
+              selection?.elementIds.length === ids.length &&
+              selection.elementIds.every((id) => selectedElementIds[id])
+            ) {
+              whiteboardSelection = selection;
+            } else {
+              const elements = this.scene.getSelectedElements({
+                selectedElementIds,
+              });
+              if (elements.length) {
+                const [left, top, right, bottom] = getCommonBounds(elements);
+                const padding = 12 / prevAppState.zoom.value;
+                const bounds = {
+                  left: left - padding,
+                  top: top - padding,
+                  right: right + padding,
+                  bottom: bottom + padding,
+                };
+                whiteboardSelection = {
+                  bounds,
+                  path: regionPath(bounds),
+                  elementIds: ids,
+                };
+              }
+            }
+          }
+          regionState = {
+            whiteboardSelection,
+            selectedLinearElement: null,
+            editingGroupId: null,
+            selectedGroupIds: {},
+          };
+        }
 
         return {
           ...prevAppState,
           ...actionAppState,
+          ...regionState,
           // NOTE this will prevent opening context menu using an action
           // or programmatically from the host, so it will need to be
           // rewritten later
@@ -3552,7 +3606,9 @@ class App extends React.Component<AppProps, AppState> {
   private onTouchStart = (event: TouchEvent) => {
     if (
       this.props.UIOptions.unifiedToolbar &&
-      ["freedraw", "eraser"].includes(this.state.activeTool.type)
+      ["freedraw", "eraser", "selection", "lasso"].includes(
+        this.state.activeTool.type,
+      )
     ) {
       // Repeated pen contacts are handwriting, including dots, never a text double tap.
       return;
@@ -5500,6 +5556,9 @@ class App extends React.Component<AppProps, AppState> {
     },
     keepSelection = false,
   ) => {
+    if (this.isRegionSelectionTool() && this.state.cursorButton === "down") {
+      this.maybeCleanupAfterMissingPointerUp(null);
+    }
     if (!this.isToolSupported(tool.type)) {
       console.warn(
         `"${tool.type}" tool is disabled via "UIOptions.canvasActions.tools.${tool.type}"`,
@@ -5551,6 +5610,7 @@ class App extends React.Component<AppProps, AppState> {
           ...(keepSelection
             ? {}
             : {
+                whiteboardSelection: undefined,
                 selectedElementIds: makeNextSelectedElementIds({}, prevState),
                 selectedGroupIds: makeNextSelectedElementIds({}, prevState),
                 editingGroupId: null,
@@ -6202,6 +6262,9 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasDoubleClick = (
     event: React.MouseEvent<HTMLCanvasElement>,
   ) => {
+    if (this.isRegionSelectionTool()) {
+      return;
+    }
     // case: double-clicking with arrow/line tool selected would both create
     // text and enter multiElement mode
     if (this.state.multiElement) {
@@ -7640,7 +7703,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerDown = (
     event: React.PointerEvent<HTMLElement>,
   ) => {
-    if (this.state.whiteboardSelection) {
+    if (this.state.whiteboardSelection && !this.isRegionSelectionTool()) {
       this.setState({ whiteboardSelection: undefined });
     }
     if (this.stopInkErasure) {
@@ -7936,10 +7999,7 @@ class App extends React.Component<AppProps, AppState> {
     this.clearSelectionIfNotUsingSelection();
 
     if (
-      !(
-        this.props.UIOptions.unifiedToolbar &&
-        this.state.activeTool.type === "lasso"
-      ) &&
+      !this.isRegionSelectionTool() &&
       this.handleSelectionOnPointerDown(event, pointerDownState)
     ) {
       return;
@@ -7957,19 +8017,29 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
-    if (this.state.activeTool.type === "lasso") {
+    if (
+      this.state.activeTool.type === "lasso" ||
+      this.isRegionSelectionTool()
+    ) {
       const region =
         this.props.UIOptions.unifiedToolbar &&
         this.state.whiteboardSelection?.bounds;
-      const insideRegion =
-        region &&
-        pointerDownState.origin.x >= region.left &&
-        pointerDownState.origin.x <= region.right &&
-        pointerDownState.origin.y >= region.top &&
-        pointerDownState.origin.y <= region.bottom;
+      const handle = region
+        ? regionHandleAt(
+            region,
+            pointerDownState.origin,
+            (event.pointerType === "touch" ? 16 : 10) / this.state.zoom.value,
+          )
+        : null;
       if (this.props.UIOptions.unifiedToolbar) {
+        pointerDownState.regionSelection.handle = handle;
         pointerDownState.hit.hasHitCommonBoundingBoxOfSelectedElements =
-          !!insideRegion;
+          handle === "move";
+        this.setState({
+          selectedLinearElement: null,
+          editingGroupId: null,
+          selectedGroupIds: {},
+        });
       }
       const hitSelectedElement =
         pointerDownState.hit.element &&
@@ -7977,7 +8047,7 @@ class App extends React.Component<AppProps, AppState> {
 
       if (
         this.props.UIOptions.unifiedToolbar
-          ? !insideRegion
+          ? !handle
           : !pointerDownState.hit.hasHitCommonBoundingBoxOfSelectedElements &&
             !pointerDownState.resize.handleType &&
             !hitSelectedElement
@@ -8149,6 +8219,21 @@ class App extends React.Component<AppProps, AppState> {
     const onPointerUp =
       this.onPointerUpFromPointerDownHandler(pointerDownState);
 
+    // Region gestures own their full lifecycle, including capture loss and blur.
+    // These are cancellations, never synthetic successful releases.
+    if (this.isRegionSelectionTool()) {
+      const cancel = () => onPointerUp(event.nativeEvent);
+      const target = event.currentTarget;
+      window.addEventListener("pointercancel", cancel);
+      window.addEventListener("blur", cancel);
+      target.addEventListener("lostpointercapture", cancel);
+      pointerDownState.eventListeners.onCancel = () => {
+        window.removeEventListener("pointercancel", cancel);
+        window.removeEventListener("blur", cancel);
+        target.removeEventListener("lostpointercapture", cancel);
+      };
+    }
+
     const onKeyDown = this.onKeyDownFromPointerDownHandler(pointerDownState);
     const onKeyUp = this.onKeyUpFromPointerDownHandler(pointerDownState);
 
@@ -8171,6 +8256,13 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerUp = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
+    if (
+      this.isRegionSelectionTool() &&
+      event.button === POINTER_BUTTON.SECONDARY
+    ) {
+      this.setState({ cursorButton: "up" });
+      this.savePointer(event.clientX, event.clientY, "up");
+    }
     if (getFeatureFlag("COMPLEX_BINDINGS")) {
       this.resetDelayedBindMode();
     }
@@ -8424,6 +8516,12 @@ class App extends React.Component<AppProps, AppState> {
     const isElbowArrowOnly = selectedElements.findIndex(isElbowArrow) === 0;
 
     return {
+      regionSelection: {
+        selection: this.state.whiteboardSelection,
+        selectedElementIds: this.state.selectedElementIds,
+        selectedGroupIds: this.state.selectedGroupIds,
+        handle: null,
+      },
       origin,
       withCmdOrCtrl: event[KEYS.CTRL_OR_CMD],
       originInGrid: tupleToCoors(
@@ -8535,6 +8633,10 @@ class App extends React.Component<AppProps, AppState> {
       });
     }
   };
+
+  private isRegionSelectionTool = () =>
+    !!this.props.UIOptions.unifiedToolbar &&
+    isSelectionLikeTool(this.state.activeTool.type);
 
   /**
    * @returns whether the pointer event has been completely handled
@@ -9748,7 +9850,7 @@ class App extends React.Component<AppProps, AppState> {
     pointerDownState: PointerDownState,
   ) {
     const pendingSamples: PointerEvent[] = [];
-    const initialRegion = this.state.whiteboardSelection;
+    const initialRegion = pointerDownState.regionSelection.selection;
     const throttled = withBatchedUpdatesThrottled((event: PointerEvent) => {
       const samples = pendingSamples.splice(0);
       if (this.state.openDialog?.name === "elementLinkSelector") {
@@ -9756,14 +9858,31 @@ class App extends React.Component<AppProps, AppState> {
       }
       const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
 
-      // A new circle captures a region; dragging an existing region moves its
-      // contents together without entering individual object editing.
-      if (
-        this.props.UIOptions.unifiedToolbar &&
-        this.state.activeTool.type === "lasso"
-      ) {
+      if (this.isRegionSelectionTool()) {
         if (this.lassoTrail.hasCurrentTrail) {
-          this.lassoTrail.addPointToPath(pointerCoords.x, pointerCoords.y);
+          for (const sample of samples.length ? samples : [event]) {
+            const point = viewportCoordsToSceneCoords(sample, this.state);
+            this.lassoTrail.addPointToPath(point.x, point.y);
+          }
+        } else if (
+          initialRegion &&
+          pointerDownState.regionSelection.handle &&
+          pointerDownState.regionSelection.handle !== "move"
+        ) {
+          const bounds = resizeRegion(
+            initialRegion.bounds,
+            pointerDownState.regionSelection.handle,
+            pointerCoords,
+            this.lassoTrail.getViewport(),
+            this.state.zoom.value,
+          );
+          this.setState({
+            whiteboardSelection: {
+              ...initialRegion,
+              bounds,
+              path: regionPath(bounds),
+            },
+          });
         } else if (
           initialRegion &&
           pointerDownState.hit.hasHitCommonBoundingBoxOfSelectedElements
@@ -10666,7 +10785,10 @@ class App extends React.Component<AppProps, AppState> {
       }
     });
     const move = (event: PointerEvent) => {
-      if (this.state.newElement?.type === "freedraw") {
+      if (
+        this.state.newElement?.type === "freedraw" ||
+        this.isRegionSelectionTool()
+      ) {
         pendingSamples.push(...pointerSamples(event));
       }
       throttled(event);
@@ -10715,11 +10837,20 @@ class App extends React.Component<AppProps, AppState> {
   private onPointerUpFromPointerDownHandler(
     pointerDownState: PointerDownState,
   ): (event: PointerEvent) => void {
+    let finished = false;
+    const regionGesture = this.isRegionSelectionTool();
     return withBatchedUpdates((childEvent: PointerEvent) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
       const elementsMap = this.scene.getNonDeletedElementsMap();
 
       this.removePointer(childEvent);
       pointerDownState.drag.blockDragging = false;
+      if (regionGesture && childEvent.type === "pointerup") {
+        pointerDownState.eventListeners.onMove?.(childEvent);
+      }
       if (pointerDownState.eventListeners.onMove) {
         pointerDownState.eventListeners.onMove.flush();
       }
@@ -10748,7 +10879,33 @@ class App extends React.Component<AppProps, AppState> {
       }));
 
       // just in case, tool changes mid drag, always clean up
-      this.lassoTrail.endPath();
+      const completedRegion =
+        regionGesture &&
+        this.isRegionSelectionTool() &&
+        childEvent.type === "pointerup";
+      if (completedRegion) {
+        if (this.lassoTrail.hasCurrentTrail) {
+          const point = viewportCoordsToSceneCoords(childEvent, this.state);
+          this.lassoTrail.addPointToPath(point.x, point.y);
+          this.lassoTrail.finishPath();
+        } else if (
+          pointerDownState.regionSelection.handle &&
+          pointerDownState.regionSelection.handle !== "move" &&
+          pointerDownState.regionSelection.selection
+        ) {
+          this.lassoTrail.selectRegion(
+            resizeRegion(
+              pointerDownState.regionSelection.selection.bounds,
+              pointerDownState.regionSelection.handle,
+              viewportCoordsToSceneCoords(childEvent, this.state),
+              this.lassoTrail.getViewport(),
+              this.state.zoom.value,
+            ),
+          );
+        }
+      } else {
+        this.lassoTrail.endPath();
+      }
       this.previousPointerMoveCoords = null;
 
       SnapCache.setReferenceSnapPoints(null);
@@ -10756,11 +10913,48 @@ class App extends React.Component<AppProps, AppState> {
 
       this.savePointer(childEvent.clientX, childEvent.clientY, "up");
 
-      if (this.props.UIOptions.unifiedToolbar && activeTool.type === "lasso") {
-        if (pointerDownState.drag.hasOccurred) {
+      if (regionGesture) {
+        pointerDownState.eventListeners.onCancel?.();
+        this.missingPointerEventCleanupEmitter.clear();
+        for (const [type, listener] of [
+          [EVENT.POINTER_MOVE, pointerDownState.eventListeners.onMove],
+          [EVENT.POINTER_UP, pointerDownState.eventListeners.onUp],
+          [EVENT.KEYDOWN, pointerDownState.eventListeners.onKeyDown],
+          [EVENT.KEYUP, pointerDownState.eventListeners.onKeyUp],
+        ] as const) {
+          if (listener) {
+            window.removeEventListener(type, listener as EventListener);
+          }
+        }
+        if (!completedRegion) {
+          if (pointerDownState.drag.hasOccurred) {
+            for (const element of this.scene.getSelectedElements(this.state)) {
+              const original = pointerDownState.originalElements.get(
+                element.id,
+              );
+              if (original) {
+                const { id, updated, version, versionNonce, ...attributes } =
+                  original;
+                this.scene.mutateElement(element, attributes);
+              }
+            }
+          }
+          this.setState({
+            whiteboardSelection: pointerDownState.regionSelection.selection,
+            selectedElementIds:
+              pointerDownState.regionSelection.selectedElementIds,
+            selectedGroupIds: pointerDownState.regionSelection.selectedGroupIds,
+          });
+        } else if (pointerDownState.drag.hasOccurred) {
           this.store.scheduleCapture();
         }
         this.setState({ selectedElementsAreBeingDragged: false });
+        this.props.onPointerUp?.(activeTool, pointerDownState);
+        this.onPointerUpEmitter.trigger(
+          activeTool,
+          pointerDownState,
+          childEvent,
+        );
         return;
       }
 
@@ -12394,6 +12588,27 @@ class App extends React.Component<AppProps, AppState> {
     event: React.MouseEvent<HTMLElement | HTMLCanvasElement>,
   ) => {
     event.preventDefault();
+
+    if (this.props.UIOptions.unifiedToolbar && !this.state.viewModeEnabled) {
+      // A long press shares the region actions, never drills into a group or
+      // exposes legacy ungroup / point-edit actions.
+      if (!this.state.whiteboardSelection) {
+        const point = viewportCoordsToSceneCoords(event, this.state);
+        const element = this.getElementAtPosition(point.x, point.y);
+        if (element) {
+          const [left, top, right, bottom] = getCommonBounds([element]);
+          this.setActiveTool({ type: "lasso" }, true);
+          const padding = 12 / this.state.zoom.value;
+          this.lassoTrail.selectRegion({
+            left: left - padding,
+            top: top - padding,
+            right: right + padding,
+            bottom: bottom + padding,
+          });
+        }
+      }
+      return;
+    }
 
     if (
       (("pointerType" in event.nativeEvent &&

@@ -310,13 +310,16 @@ export const WhiteboardTools = ({
         className="fc-board-tool"
         icon={<FactoryIcon name="select" />}
         aria-label={t("fcboard.选择")}
-        title={t("fcboard.选择 / 圈选：再次点击切换框选与套索")}
+        title={t("fcboard.选择")}
         showAriaLabel
         selected={["selection", "lasso"].includes(activeTool.type)}
         onClick={() =>
-          app.setActiveTool({
-            type: activeTool.type === "lasso" ? "selection" : "lasso",
-          })
+          app.setActiveTool(
+            {
+              type: "lasso",
+            },
+            ["selection", "lasso"].includes(activeTool.type),
+          )
         }
       />
       <ToolButton

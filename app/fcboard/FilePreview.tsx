@@ -765,6 +765,11 @@ export const FilePreview = ({
           setInkOn(true);
           setErase(args.tool === "eraser");
           setSelecting(args.tool === "selection");
+          if (args.tool !== "selection") {
+            selectedInkRef.current = [];
+            setLasso([]);
+            classroomCommands.changed("document");
+          }
         },
       ),
       classroomCommands.register(

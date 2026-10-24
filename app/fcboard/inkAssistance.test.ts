@@ -3,7 +3,10 @@ import { newFreeDrawElement } from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type {
+  DataURL,
+  ExcalidrawImperativeAPI,
+} from "@excalidraw/excalidraw/types";
 
 import { observeInkAssistance } from "./inkAssistance";
 import { saveSettings, defaults } from "./settings";
@@ -61,7 +64,8 @@ const setup = (
   vi.spyOn(ai, "boardContext").mockResolvedValue({
     elements: [ink],
     text: "",
-    image: undefined,
+    image:
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==" as DataURL,
   });
   saveSettings(
     { ...defaults, model: "mock-vision", apiKey: "mock-key" },
@@ -412,6 +416,38 @@ it("turns a drawn dog into a generated hand-drawn image at its original location
     expect(generated.id).not.toBe(ink.id);
     expect(api.addFiles).toHaveBeenCalledTimes(1);
     expect(api.updateScene).toHaveBeenCalledTimes(1);
+  } finally {
+    stop();
+  }
+});
+
+it("keeps a magic sketch and sends no recognition request when its capture is unavailable", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("magic");
+  saveSettings(
+    {
+      ...defaults,
+      apiKey: "test-only",
+      model: "recognizer",
+      imageModel: "illustrator",
+    },
+    false,
+  );
+  vi.mocked(ai.boardContext).mockResolvedValue({
+    elements: [ink],
+    text: "",
+    image: undefined,
+  });
+  vi.spyOn(ai, "chat").mockResolvedValue('{"description":"猜测的图示"}');
+  const stop = observeInkAssistance(api, () => {}, vi.fn());
+  try {
+    draw();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(ai.chat).not.toHaveBeenCalled();
+    expect(api.getSceneElements()).toEqual([ink]);
+    expect(api.addFiles).not.toHaveBeenCalled();
   } finally {
     stop();
   }

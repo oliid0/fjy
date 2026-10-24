@@ -17,6 +17,7 @@ import type { CSSProperties } from "react";
 export type ToolButtonSize = "small" | "medium";
 
 type ToolButtonBaseProps = {
+  [attribute: `data-${string}`]: string | number | boolean | undefined;
   icon?: React.ReactNode;
   "aria-label": string;
   "aria-keyshortcuts"?: string;
@@ -75,6 +76,9 @@ export const ToolButton = React.forwardRef(
     const innerRef = React.useRef(null);
     React.useImperativeHandle(ref, () => innerRef.current);
     const sizeCn = `ToolIcon_size_${size}`;
+    const dataAttributes = Object.fromEntries(
+      Object.entries(props).filter(([name]) => name.startsWith("data-")),
+    );
 
     const [isLoading, setIsLoading] = useState(false);
 
@@ -128,6 +132,7 @@ export const ToolButton = React.forwardRef(
         | "submit";
       return (
         <button
+          {...dataAttributes}
           className={clsx(
             "ToolIcon_type_button",
             sizeCn,
@@ -286,6 +291,7 @@ export const ToolButton = React.forwardRef(
         }}
       >
         <input
+          {...dataAttributes}
           className={`ToolIcon_type_radio ${sizeCn}`}
           type="radio"
           name={props.name}

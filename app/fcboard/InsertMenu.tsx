@@ -149,13 +149,13 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     await renderInsertion(api, object);
     if (kind === "fourline") {
       setForm(null);
-      api.updateScene({ appState: { selectedElementIds: {} } });
       if (classroomCommands.has("document.tool")) {
         await classroomCommands.execute({
           name: "document.tool",
           args: { tool: "freedraw" },
         });
       } else {
+        api.updateScene({ appState: { selectedElementIds: {} } });
         api.setActiveTool({ type: "freedraw" });
       }
     } else {

@@ -25,35 +25,57 @@ export const useAnchoredPanel = (
       const anchor = Array.from(
         document.querySelectorAll<HTMLElement>(selector),
       ).find((el) => el.getBoundingClientRect().height);
-      const parent = panel.offsetParent?.getBoundingClientRect();
-      if (!anchor || !parent) {
+      const parent =
+        getComputedStyle(panel).position === "fixed"
+          ? {
+              left: 0,
+              top: 0,
+              bottom: innerHeight,
+              width: innerWidth,
+              height: innerHeight,
+            }
+          : panel.offsetParent?.getBoundingClientRect();
+      if (!parent || !parent.width || !parent.height) {
         return;
       }
-      const rect = anchor.getBoundingClientRect();
+      const rect = anchor?.getBoundingClientRect();
       // Native toolbar targets are 48 dp tall; their measured height resolves
       // the shared CSS clamp and the WebView's actual density without guessing DPR.
-      const unit = rect.height / 48 || 1;
+      const unit = (rect?.height || 48) / 48;
       const gap = 16 * unit;
       const toolbar = anchor
-        .closest("[role='toolbar'], .fc-presentation-toolbar")
+        ?.closest("[role='toolbar'], .fc-presentation-toolbar")
         ?.getBoundingClientRect();
       const availableHeight = Math.max(
         112,
-        (toolbar?.top ?? rect.top) - parent.top - gap,
+        (toolbar?.top ?? rect?.top ?? parent.bottom) - parent.top - gap,
       );
-      const placement = placePanel(
-        {
-          left: rect.left - parent.left,
-          right: rect.right - parent.left,
-          top: rect.top - parent.top,
-          bottom: rect.bottom - parent.top,
-        },
-        { width: parent.width, height: parent.height },
-        panel.getBoundingClientRect().width,
-        Math.min(panel.scrollHeight, availableHeight - 12),
-        "above",
-        gap,
-      );
+      const placement = rect
+        ? placePanel(
+            {
+              left: rect.left - parent.left,
+              right: rect.right - parent.left,
+              top: rect.top - parent.top,
+              bottom: rect.bottom - parent.top,
+            },
+            { width: parent.width, height: parent.height },
+            panel.getBoundingClientRect().width,
+            Math.min(panel.scrollHeight, availableHeight - 12),
+            "above",
+            gap,
+          )
+        : {
+            left: Math.max(
+              12,
+              (parent.width - panel.getBoundingClientRect().width) / 2,
+            ),
+            top: Math.max(
+              12,
+              (parent.height -
+                Math.min(panel.scrollHeight, availableHeight - 12)) /
+                2,
+            ),
+          };
       const next = {
         left: placement.left,
         top: placement.top,

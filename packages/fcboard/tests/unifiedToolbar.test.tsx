@@ -25,6 +25,9 @@ describe("unified bottom toolbar", () => {
     ).toBeInTheDocument();
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(within(toolbar).queryByTestId("toolbar-rectangle")).toBeNull();
+    expect(
+      within(toolbar).getByRole("button", { name: t("fcboard.插入") }),
+    ).toHaveAttribute("data-board-insert");
     fireEvent.click(
       within(toolbar).getByRole("button", { name: t("fcboard.插入") }),
     );

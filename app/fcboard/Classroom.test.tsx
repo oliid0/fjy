@@ -138,6 +138,30 @@ describe("selection-driven classroom controls", () => {
     expect(scene).toHaveLength(0);
   });
 
+  it("inserts four-line paper and enables writing in visible courseware without touching the hidden board", async () => {
+    const tool = vi.fn();
+    const insert = vi.fn();
+    const release = [
+      classroomCommands.register("document.draw", "@internal", () => {}),
+      classroomCommands.register("document.insertion", "@internal", insert),
+      classroomCommands.register("document.tool", "@internal", tool),
+    ];
+    try {
+      render(<Classroom api={api} />);
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "insert.object",
+          args: { kind: "fourline" },
+        });
+      });
+      expect(insert).toHaveBeenCalledTimes(1);
+      expect(tool).toHaveBeenCalledWith({ tool: "freedraw" });
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      release.forEach((dispose) => dispose());
+    }
+  });
+
   it("handles consecutive recording commands without waiting for a new render", async () => {
     vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({

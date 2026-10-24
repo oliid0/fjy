@@ -1,3 +1,5 @@
+import { t } from "@excalidraw/excalidraw/i18n";
+
 import { chat, parseJSON, visualMessage } from "./ai";
 import { recognizeHandwriting } from "./ocr";
 import { localMathResult, recognizeMath } from "./mathRecognition";
@@ -66,14 +68,21 @@ export const recognizeInkContent = async (
     return { ...(await recognizeMath(text, mode, signal)), text };
   }
   if (mode === "magic" && !currentSettings().imageModel.trim()) {
-    throw new Error("No image generation model configured");
+    throw new Error(
+      t("fcboard.函数可直接绘制；生成插图请先在设置中填写图像生成模型 ID"),
+    );
+  }
+  const image = await capture();
+  signal.throwIfAborted();
+  if (!image.startsWith("data:image/")) {
+    throw new Error(t("fcboard.未识别到内容，请重新圈选"));
   }
   const instruction =
     mode === "shape"
       ? '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle"} 中最接近的一种。不确定返回 {"none":true}。'
-      : '描述这幅手绘中可辨认的主体、数量、姿态和构图，仅返回 {"description":"简短准确的中文描述"}。例如手画一只狗应描述为狗及其姿态，不局限于教学素材。不能辨认时返回 {"none":true}，不要猜测。';
+      : '描述这幅手绘中可辨认的主体、数量、姿态和构图，仅返回 {"description":"简短准确的中文描述"}。不局限于教学素材。不能辨认时返回 {"none":true}，不要猜测。';
   const result = parseJSON(
-    await chat([visualMessage(instruction, await capture())], signal),
+    await chat([visualMessage(instruction, image)], signal),
   ) as Record<string, unknown>;
   signal.throwIfAborted();
   if (

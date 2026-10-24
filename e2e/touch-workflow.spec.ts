@@ -568,7 +568,7 @@ test("circle selection resizes one region and keeps copy, deletion and undo on c
   await page.mouse.move(380, 200, { steps: 6 });
   await page.mouse.up();
   await page.screenshot({ path: info.outputPath("one-adjustable-region.png") });
-  await actions.getByRole("button", { name: "复制", exact: true }).click();
+  await actions.getByRole("button", { name: "拷贝", exact: true }).click();
   await expect.poll(async () => (await strokes()).length).toBe(4);
   await actions.getByRole("button", { name: "删除", exact: true }).click();
   await expect.poll(async () => (await strokes()).length).toBe(2);

@@ -8515,12 +8515,34 @@ class App extends React.Component<AppProps, AppState> {
     const [minX, minY, maxX, maxY] = getCommonBounds(selectedElements);
     const isElbowArrowOnly = selectedElements.findIndex(isElbowArrow) === 0;
 
+    const affectedElements = this.isRegionSelectionTool()
+      ? this.scene.getSelectedElements({
+          selectedElementIds: this.state.selectedElementIds,
+          includeBoundTextElement: true,
+          includeElementsInFrames: true,
+        })
+      : [];
+    const affectedIds = new Set(affectedElements.map((element) => element.id));
+    for (const element of affectedElements) {
+      element.boundElements?.forEach((bound) => affectedIds.add(bound.id));
+      if (isArrowElement(element)) {
+        if (element.startBinding) {
+          affectedIds.add(element.startBinding.elementId);
+        }
+        if (element.endBinding) {
+          affectedIds.add(element.endBinding.elementId);
+        }
+      }
+    }
+
     return {
       regionSelection: {
         selection: this.state.whiteboardSelection,
         selectedElementIds: this.state.selectedElementIds,
         selectedGroupIds: this.state.selectedGroupIds,
         handle: null,
+        affectedElementIds: [...affectedIds],
+        changedVersions: new Map(),
       },
       origin,
       withCmdOrCtrl: event[KEYS.CTRL_OR_CMD],
@@ -9891,6 +9913,12 @@ class App extends React.Component<AppProps, AppState> {
             x: pointerCoords.x - pointerDownState.origin.x,
             y: pointerCoords.y - pointerDownState.origin.y,
           };
+          const versions = new Map(
+            pointerDownState.regionSelection.affectedElementIds.map((id) => [
+              id,
+              this.scene.getNonDeletedElement(id)?.version,
+            ]),
+          );
           dragSelectedElements(
             pointerDownState,
             this.scene.getSelectedElements(this.state),
@@ -9899,6 +9927,12 @@ class App extends React.Component<AppProps, AppState> {
             { x: 0, y: 0 },
             null,
           );
+          for (const [id, before] of versions) {
+            const version = this.scene.getNonDeletedElement(id)?.version;
+            if (version !== undefined && version !== before) {
+              pointerDownState.regionSelection.changedVersions.set(id, version);
+            }
+          }
           pointerDownState.drag.hasOccurred = true;
           const bounds = initialRegion.bounds;
           this.setState({
@@ -10928,11 +10962,11 @@ class App extends React.Component<AppProps, AppState> {
         }
         if (!completedRegion) {
           if (pointerDownState.drag.hasOccurred) {
-            for (const element of this.scene.getSelectedElements(this.state)) {
-              const original = pointerDownState.originalElements.get(
-                element.id,
-              );
-              if (original) {
+            for (const [id, version] of pointerDownState.regionSelection
+              .changedVersions) {
+              const element = this.scene.getNonDeletedElement(id);
+              const original = pointerDownState.originalElements.get(id);
+              if (element?.version === version && original) {
                 const { id, updated, version, versionNonce, ...attributes } =
                   original;
                 this.scene.mutateElement(element, attributes);

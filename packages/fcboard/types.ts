@@ -887,6 +887,8 @@ export type PointerDownState = Readonly<{
     selectedElementIds: AppState["selectedElementIds"];
     selectedGroupIds: AppState["selectedGroupIds"];
     handle: RegionHandle | null;
+    affectedElementIds: string[];
+    changedVersions: Map<string, number>;
   };
   // The first position at which pointerDown happened
   origin: Readonly<{ x: number; y: number }>;

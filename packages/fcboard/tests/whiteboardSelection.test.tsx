@@ -342,3 +342,107 @@ it("keeps duplicated contents in one translated region and clears it when deleti
   expect(h.state.whiteboardSelection).toBeUndefined();
   expect(h.elements.filter((element) => !element.isDeleted)).toHaveLength(2);
 });
+
+it("restores frame contents as well as the selected frame when a region drag is cancelled", async () => {
+  const { container } = await render(
+    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+  );
+  h.state.width = 1600;
+  h.state.height = 900;
+  const frame = API.createElement({
+    type: "frame",
+    x: 100,
+    y: 100,
+    width: 200,
+    height: 200,
+  });
+  const child = API.createElement({
+    type: "rectangle",
+    x: 150,
+    y: 150,
+    width: 40,
+    height: 40,
+    frameId: frame.id,
+  });
+  API.updateScene({ elements: [child, frame] });
+  act(() => {
+    h.app.setActiveTool({ type: "lasso" });
+    h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(320, 320);
+    h.app.lassoTrail.finishPath();
+  });
+  const canvas = container.querySelector("canvas.interactive")!;
+  expect(h.state.selectedElementIds).toEqual({ [frame.id]: true });
+  regionPointer(canvas, "pointerdown", 200, 68);
+  regionPointer(canvas, "pointermove", 240, 98);
+  expect(h.elements.find((element) => element.id === child.id)?.x).toBe(190);
+  regionPointer(canvas, "pointercancel", 240, 98);
+  expect(h.elements.find((element) => element.id === child.id)?.x).toBe(150);
+  expect(h.elements.find((element) => element.id === frame.id)?.x).toBe(100);
+});
+
+it("restores a container's bound label and attached arrow without reverting unrelated objects", async () => {
+  const { container } = await render(
+    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+  );
+  h.state.width = 1600;
+  h.state.height = 900;
+  const box = API.createElement({
+    type: "rectangle",
+    id: "box",
+    x: 100,
+    y: 100,
+    width: 100,
+    height: 100,
+    boundElements: [
+      { id: "label", type: "text" },
+      { id: "attached", type: "arrow" },
+    ],
+  });
+  const label = API.createElement({
+    type: "text",
+    id: "label",
+    x: 110,
+    y: 130,
+    text: "abc",
+    containerId: box.id,
+  });
+  const arrow = API.createElement({
+    type: "arrow",
+    id: "attached",
+    x: 210,
+    y: 150,
+    width: 200,
+    height: 0,
+    points: [pointFrom(0, 0), pointFrom(200, 0)],
+    startBinding: { elementId: box.id, fixedPoint: [1.1, 0.5], mode: "orbit" },
+  });
+  const outside = API.createElement({ type: "rectangle", x: 600, y: 400 });
+  API.updateScene({ elements: [box, label, arrow, outside] });
+  const originalArrow = {
+    x: arrow.x,
+    y: arrow.y,
+    points: arrow.points.map(([x, y]) => [x, y]),
+  };
+  act(() => {
+    h.app.setActiveTool({ type: "lasso" });
+    h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(170, 220);
+    h.app.lassoTrail.finishPath();
+  });
+  expect(h.state.selectedElementIds).toEqual({ [box.id]: true });
+  const canvas = container.querySelector("canvas.interactive")!;
+  regionPointer(canvas, "pointerdown", 125, 68);
+  regionPointer(canvas, "pointermove", 165, 98);
+  expect(label.x).toBe(150);
+  expect({ x: arrow.x, y: arrow.y, points: arrow.points }).not.toEqual(
+    originalArrow,
+  );
+  act(() => h.app.scene.mutateElement(outside, { strokeColor: "#ff0000" }));
+  regionPointer(canvas, "pointercancel", 165, 98);
+  expect(label.x).toBe(110);
+  expect({ x: arrow.x, y: arrow.y, points: arrow.points }).toEqual(
+    originalArrow,
+  );
+  expect(outside.strokeColor).toBe("#ff0000");
+});

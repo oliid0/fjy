@@ -1,3 +1,5 @@
+import List from "@mui/material/List";
+import ListItemButton from "@mui/material/ListItemButton";
 import { t, useI18n, getLanguage } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
@@ -15,7 +17,6 @@ import catalogue from "./factory-resources.json";
 import { classroomCommands } from "./commands";
 import { insertionPoint, insertElements } from "./board";
 import { Classroom } from "./native";
-import { useAnchoredPanel } from "./floating";
 import { selectionSignature } from "./selection";
 import { documentSourceSignature } from "./documents";
 import {
@@ -60,7 +61,7 @@ export const TeachingResources = ({
   useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState("数学");
   const [web, setWeb] = useState<{ url: string; title: string }>();
   const webState = useRef<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
@@ -70,7 +71,6 @@ export const TeachingResources = ({
   const [generating, setGenerating] = useState(false);
   const generation = useRef<AbortController | undefined>(undefined);
   const panel = useRef<HTMLElement>(null);
-  const style = useAnchoredPanel(panel, "[data-board-insert]", open);
   const native = Capacitor.isNativePlatform();
   useEffect(() => {
     let alive = true;
@@ -323,7 +323,13 @@ export const TeachingResources = ({
         "打开原白板教学资源库，可用 args.query 搜索，args.category 筛选数学/物理/化学/生物/地理与天气",
         (args) => {
           setQuery(typeof args.query === "string" ? args.query : "");
-          setCategory(typeof args.category === "string" ? args.category : "");
+          setCategory(
+            typeof args.category === "string"
+              ? args.category
+              : args.query
+              ? ""
+              : "数学",
+          );
           setError("");
           setOpen(true);
         },
@@ -427,9 +433,10 @@ export const TeachingResources = ({
         <MaterialPanel
           ref={panel}
           className="fc-resource-library fc-surface"
+          centered
+          onDismiss={() => setOpen(false)}
           role="dialog"
           aria-label={t("fcboard.教学资源")}
-          style={style}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -446,105 +453,125 @@ export const TeachingResources = ({
               {t("fcboard.关闭")}
             </button>
           </header>
-          <label>
-            {t("fcboard.搜索资源")}
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-          <label>
-            {t("fcboard.学科")}
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
+          <div className="fc-resource-layout">
+            <List
+              component="nav"
+              className="fc-resource-subjects"
+              aria-label={t("fcboard.学科")}
             >
-              <option value="">{t("fcboard.全部学科")}</option>
-              {generated.length > 0 && (
-                <option value="generated">{t("fcboard.我的资源")}</option>
-              )}
-              {Array.from(
-                new Set(teachingResources.map((item) => item.category)),
-              ).map((name) => (
-                <option key={name} value={name}>
-                  {subjectNames[name] ? t(subjectNames[name]) : name}
-                </option>
+              {[
+                ["", t("fcboard.全部学科")],
+                ...Array.from(
+                  new Set(teachingResources.map((item) => item.category)),
+                ).map((name) => [
+                  name,
+                  subjectNames[name] ? t(subjectNames[name]) : name,
+                ]),
+                ...(generated.length
+                  ? [["generated", t("fcboard.我的资源")]]
+                  : []),
+              ].map(([id, title]) => (
+                <ListItemButton
+                  key={id}
+                  component="button"
+                  selected={category === id}
+                  aria-current={category === id ? "page" : undefined}
+                  onClick={() => setCategory(id)}
+                >
+                  {title}
+                </ListItemButton>
               ))}
-            </select>
-          </label>
-          <div className="fc-resource-generation">
-            <button
-              disabled={busy || !query.trim()}
-              onClick={() =>
-                void generate(query).catch((failure) => {
-                  if (failure?.name !== "AbortError") {
-                    setError(String(failure));
-                  }
-                })
-              }
-            >
-              {generating
-                ? t("fcboard.正在生成教学资源…")
-                : t("fcboard.AI 生成教学资源")}
-            </button>
-            {generating && (
-              <button onClick={() => generation.current?.abort()}>
-                {t("fcboard.取消识别")}
-              </button>
-            )}
-          </div>
-          <TransientMessage message={error} role="alert" />
-          {busy && <p role="status">{t("fcboard.正在打开资源…")}</p>}
-          {!items.length && !savedItems.length && (
-            <p role="status">{t("fcboard.没有符合条件的资源")}</p>
-          )}
-          {savedItems.length > 0 && (
-            <section aria-label={t("fcboard.我的资源")}>
-              <strong>{t("fcboard.我的资源")}</strong>
-              <div className="fc-resource-grid">
-                {savedItems.map((item) => (
-                  <div key={item.id} className="fc-generated-resource">
-                    <button disabled={busy} onClick={() => void run(item.id)}>
-                      {item.title}
-                    </button>
-                    <button
-                      disabled={busy}
-                      aria-label={t("fcboard.删除资源 {{name}}", {
-                        name: item.title,
-                      })}
-                      onClick={() =>
-                        void deleteGeneratedResource(item.id)
-                          .then(setGenerated)
-                          .catch((failure) => setError(String(failure)))
+            </List>
+            <div className="fc-resource-content">
+              <label>
+                {t("fcboard.搜索资源")}
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <div className="fc-resource-generation">
+                <button
+                  disabled={busy || !query.trim()}
+                  onClick={() =>
+                    void generate(query).catch((failure) => {
+                      if (failure?.name !== "AbortError") {
+                        setError(String(failure));
                       }
-                    >
-                      ×
-                    </button>
+                    })
+                  }
+                >
+                  {generating
+                    ? t("fcboard.正在生成教学资源…")
+                    : t("fcboard.AI 生成教学资源")}
+                </button>
+                {generating && (
+                  <button onClick={() => generation.current?.abort()}>
+                    {t("fcboard.取消识别")}
+                  </button>
+                )}
+              </div>
+              <TransientMessage message={error} role="alert" />
+              {busy && <p role="status">{t("fcboard.正在打开资源…")}</p>}
+              {!items.length && !savedItems.length && (
+                <p role="status">{t("fcboard.没有符合条件的资源")}</p>
+              )}
+              {savedItems.length > 0 && (
+                <section aria-label={t("fcboard.我的资源")}>
+                  <strong>{t("fcboard.我的资源")}</strong>
+                  <div className="fc-resource-grid">
+                    {savedItems.map((item) => (
+                      <div key={item.id} className="fc-generated-resource">
+                        <button
+                          disabled={busy}
+                          onClick={() => void run(item.id)}
+                        >
+                          {item.title}
+                        </button>
+                        <button
+                          disabled={busy}
+                          aria-label={t("fcboard.删除资源 {{name}}", {
+                            name: item.title,
+                          })}
+                          onClick={() =>
+                            void deleteGeneratedResource(item.id)
+                              .then(setGenerated)
+                              .catch((failure) => setError(String(failure)))
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
+                </section>
+              )}
+              <div className="fc-resource-grid">
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    disabled={busy}
+                    onClick={() => void run(item.id)}
+                  >
+                    {(item.cover || item.asset) && (
+                      <img
+                        src={item.cover || item.asset}
+                        alt=""
+                        loading="lazy"
+                      />
+                    )}
+                    <span>{resourceTitle(item)}</span>
+                    <small>
+                      {item.category === "网络资源"
+                        ? t("fcboard.网页")
+                        : item.url
+                        ? t("fcboard.在线实验")
+                        : t("fcboard.插入图示")}
+                    </small>
+                  </button>
                 ))}
               </div>
-            </section>
-          )}
-          <div className="fc-resource-grid">
-            {items.map((item) => (
-              <button
-                key={item.id}
-                disabled={busy}
-                onClick={() => void run(item.id)}
-              >
-                {(item.cover || item.asset) && (
-                  <img src={item.cover || item.asset} alt="" loading="lazy" />
-                )}
-                <span>{resourceTitle(item)}</span>
-                <small>
-                  {item.category === "网络资源"
-                    ? t("fcboard.网页")
-                    : item.url
-                    ? t("fcboard.在线实验")
-                    : t("fcboard.插入图示")}
-                </small>
-              </button>
-            ))}
+            </div>
           </div>
         </MaterialPanel>
       )}

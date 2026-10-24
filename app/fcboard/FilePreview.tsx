@@ -1,3 +1,4 @@
+import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
 import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Popper from "@mui/material/Popper";
@@ -1857,6 +1858,7 @@ export const FilePreview = ({
           </div>
           <svg
             className="fc-document-ink"
+            onContextMenu={(event) => event.preventDefault()}
             aria-label={t("fcboard.课件透明板书")}
             data-ink-enabled={inkOn}
             style={{
@@ -2230,7 +2232,7 @@ export const FilePreview = ({
           {chevronLeftIcon}
           <span>{t("fcboard.上页")}</span>
         </button>
-        <select
+        <MaterialSelect
           aria-label={t("fcboard.课件页码")}
           value={page}
           disabled={loading}
@@ -2248,7 +2250,7 @@ export const FilePreview = ({
                 : ""}
             </option>
           ))}
-        </select>
+        </MaterialSelect>
         <button
           aria-label={t("fcboard.下一页")}
           disabled={loading || (page >= pages.length - 1 && !pendingAnimation)}

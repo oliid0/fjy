@@ -113,7 +113,33 @@ for (const viewport of [
     await page.screenshot({
       path: testInfo.outputPath(`settings-${viewport.width}.png`),
     });
-    await page.getByRole("button", { name: "关闭工具浮层" }).click();
+    await page.getByRole("button", { name: "手写与插入", exact: true }).click();
+    const recognition = page.getByRole("combobox", {
+      name: "手写识别",
+      exact: true,
+    });
+    await recognition.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.getByRole("listbox").press("Escape");
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(
+      page.getByRole("dialog", { name: "白板设置", exact: true }),
+    ).toBeVisible();
+    await recognition.click();
+    await page
+      .locator(".MuiMenu-root .MuiBackdrop-root")
+      .click({ position: { x: 4, y: 4 } });
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await page.getByRole("button", { name: "模型与连接", exact: true }).click();
+    const endpoint = page.getByRole("textbox", {
+      name: "AI 接口地址",
+      exact: true,
+    });
+    await endpoint.focus();
+    await endpoint.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "白板设置", exact: true }),
+    ).toBeHidden();
     await toolbar.evaluate((element) => {
       element.scrollLeft = 0;
     });
@@ -159,6 +185,61 @@ for (const viewport of [
       path: testInfo.outputPath(`table-picker-${viewport.width}.png`),
     });
     await table.press("Escape");
+    await toolbar
+      .getByRole("button", { name: "教学工具", exact: true })
+      .click();
+    const tools = page.getByRole("dialog", { name: "教学工具", exact: true });
+    await expect(tools.getByText("更多工具", { exact: true })).toHaveCount(0);
+    await expect(
+      tools.getByRole("button", { name: "语音指令", exact: true }),
+    ).toBeVisible();
+    const toolsBounds = (await tools.boundingBox())!;
+    if (viewport.width >= viewport.height) {
+      expect(toolsBounds.width).toBeGreaterThan(toolsBounds.height);
+    }
+    const columns = await tools
+      .locator(".fc-tools-grid")
+      .last()
+      .evaluate(
+        (element) =>
+          getComputedStyle(element).gridTemplateColumns.split(" ").length,
+      );
+    expect(columns).toBeGreaterThan(3);
+    await page.screenshot({
+      path: testInfo.outputPath(`tools-${viewport.width}.png`),
+    });
+    await tools.press("Escape");
+    await expect(tools).toBeHidden();
+    await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    await page.getByRole("button", { name: "教学资源", exact: true }).click();
+    const resources = page.getByRole("dialog", {
+      name: "教学资源",
+      exact: true,
+    });
+    await expect(
+      resources.getByRole("navigation", { name: "学科", exact: true }),
+    ).toBeVisible();
+    const resourceBounds = (await resources.boundingBox())!;
+    expect(
+      Math.abs(
+        resourceBounds.x + resourceBounds.width / 2 - viewport.width / 2,
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(
+        resourceBounds.y + resourceBounds.height / 2 - viewport.height / 2,
+      ),
+    ).toBeLessThanOrEqual(2);
+    if (viewport.width >= viewport.height) {
+      expect(resourceBounds.width).toBeGreaterThan(resourceBounds.height);
+    }
+    await page.screenshot({
+      path: testInfo.outputPath(`resources-${viewport.width}.png`),
+    });
+    await page
+      .getByRole("button", { name: "关闭教学资源", exact: true })
+      .click();
+    await expect(resources).toBeHidden();
     await toolbar.getByTestId("main-menu-trigger").click();
     await expect(page.getByTestId("dropdown-menu")).toBeVisible();
     const menu = (await page.getByTestId("dropdown-menu").boundingBox())!;

@@ -1,3 +1,4 @@
+import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
 import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
 
@@ -48,7 +49,8 @@ export const LearningSettings = () => {
     <>
       <label>
         {t("fcboard.讲解方式")}
-        <select
+        <MaterialSelect
+          aria-label={t("fcboard.讲解方式")}
           value={value.lens || "standard"}
           onChange={(event) =>
             update({ ...value, lens: event.target.value as Lens })
@@ -61,7 +63,7 @@ export const LearningSettings = () => {
           <option value="captions">{t("fcboard.字幕优先 · 无需声音")}</option>
           <option value="reading">{t("fcboard.易读文字 · 同步高亮")}</option>
           <option value="focus">{t("fcboard.短步骤 · 每步停顿")}</option>
-        </select>
+        </MaterialSelect>
       </label>
       <label>
         {t("fcboard.讲课速度")}

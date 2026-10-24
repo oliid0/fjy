@@ -8331,6 +8331,9 @@ class App extends React.Component<AppProps, AppState> {
   private maybeOpenContextMenuAfterPointerDownOnTouchDevices = (
     event: React.PointerEvent<HTMLElement>,
   ): void => {
+    if (this.props.UIOptions.unifiedToolbar) {
+      return;
+    }
     // deal with opening context menu on touch devices
     if (event.pointerType === "touch") {
       invalidateContextMenu = false;
@@ -12623,24 +12626,7 @@ class App extends React.Component<AppProps, AppState> {
   ) => {
     event.preventDefault();
 
-    if (this.props.UIOptions.unifiedToolbar && !this.state.viewModeEnabled) {
-      // A long press shares the region actions, never drills into a group or
-      // exposes legacy ungroup / point-edit actions.
-      if (!this.state.whiteboardSelection) {
-        const point = viewportCoordsToSceneCoords(event, this.state);
-        const element = this.getElementAtPosition(point.x, point.y);
-        if (element) {
-          const [left, top, right, bottom] = getCommonBounds([element]);
-          this.setActiveTool({ type: "lasso" }, true);
-          const padding = 12 / this.state.zoom.value;
-          this.lassoTrail.selectRegion({
-            left: left - padding,
-            top: top - padding,
-            right: right + padding,
-            bottom: bottom + padding,
-          });
-        }
-      }
+    if (this.props.UIOptions.unifiedToolbar) {
       return;
     }
 

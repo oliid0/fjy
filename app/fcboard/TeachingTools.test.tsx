@@ -103,9 +103,7 @@ it("does not advertise unavailable device actions to the AI", async () => {
   render(<TeachingTools api={emptyApi()} />);
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.教学工具") }));
   await waitFor(() =>
-    expect(screen.getByRole("status")).toHaveTextContent(
-      t("fcboard.当前设备未提供出厂工具，可继续使用白板教具。"),
-    ),
+    expect(screen.queryByRole("status")).not.toBeInTheDocument(),
   );
   expect(classroomCommands.has("tools.factory")).toBe(false);
   expect(
@@ -115,22 +113,33 @@ it("does not advertise unavailable device actions to the AI", async () => {
   ).toBeEnabled();
 });
 
-it("uses one native transfer entry when the factory transfer application is available", async () => {
+it("uses one internal transfer entry even when a factory transfer application is available", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.getFactoryTools).mockResolvedValue({
     available: ["transfer"],
   });
-  render(<TeachingTools api={emptyApi()} />);
-  await waitFor(() =>
-    expect(classroomCommands.has("tools.factory")).toBe(true),
-  );
+  const invoke = vi.fn();
+  const release = classroomCommands.register("ui.invoke", "@internal", invoke);
+  const view = render(<TeachingTools api={emptyApi()} />);
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.教学工具") }));
+  await waitFor(() =>
+    expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+  );
   expect(
-    screen.getByRole("button", {
+    screen.queryByRole("button", {
       name: t("fcboard.打开{{name}}", { name: t("fcboard.快传") }),
     }),
-  ).toBeEnabled();
-  expect(screen.queryByRole("button", { name: t("fcboard.快传") })).toBeNull();
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.快传") }));
+  await waitFor(() =>
+    expect(invoke).toHaveBeenCalledWith({
+      command: "files.open",
+      origin: "tools",
+    }),
+  );
+  expect(classroomCommands.has("tools.factory")).toBe(false);
+  view.unmount();
+  release();
 });
 
 it.each([

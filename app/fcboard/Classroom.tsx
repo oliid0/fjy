@@ -1,3 +1,4 @@
+import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
 import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -1808,7 +1809,8 @@ export const Classroom = ({
                   <SettingsSection id="recognition">
                     <label>
                       {t("fcboard.手写识别")}
-                      <select
+                      <MaterialSelect
+                        aria-label={t("fcboard.手写识别")}
                         value={settings.ocr}
                         onChange={(event) =>
                           setSettings({
@@ -1826,11 +1828,12 @@ export const Classroom = ({
                         <option value="cloud">
                           {t("fcboard.云端视觉识别")}
                         </option>
-                      </select>
+                      </MaterialSelect>
                     </label>
                     <label>
                       {t("fcboard.手写语言")}
-                      <select
+                      <MaterialSelect
+                        aria-label={t("fcboard.手写语言")}
                         value={settings.inkLanguage}
                         onChange={(event) =>
                           setSettings({
@@ -1845,7 +1848,7 @@ export const Classroom = ({
                         </option>
                         <option value="zh-Hani-CN">中文</option>
                         <option value="en-US">English</option>
-                      </select>
+                      </MaterialSelect>
                     </label>
                     {settings.ocr !== "local" && (
                       <label>
@@ -1892,7 +1895,8 @@ export const Classroom = ({
                   <SettingsSection id="voice">
                     <label>
                       {t("fcboard.语音服务")}
-                      <select
+                      <MaterialSelect
+                        aria-label={t("fcboard.语音服务")}
                         value={settings.speech}
                         onChange={(event) =>
                           setSettings({
@@ -1910,7 +1914,7 @@ export const Classroom = ({
                         <option value="custom">
                           {t("fcboard.自定义语音转写接口")}
                         </option>
-                      </select>
+                      </MaterialSelect>
                     </label>
                     {settings.speech === "local" && (
                       <p>
@@ -2034,7 +2038,8 @@ export const Classroom = ({
                   <SettingsSection id="recognition">
                     <label>
                       {t("fcboard.白板回答样式")}
-                      <select
+                      <MaterialSelect
+                        aria-label={t("fcboard.白板回答样式")}
                         value={settings.answerStyle}
                         onChange={(event) =>
                           setSettings({
@@ -2051,7 +2056,7 @@ export const Classroom = ({
                           {t("fcboard.手写字体")}
                         </option>
                         <option value="text">{t("fcboard.印刷文本")}</option>
-                      </select>
+                      </MaterialSelect>
                     </label>
                   </SettingsSection>
                   <div className="fc-settings-actions">
@@ -2255,7 +2260,8 @@ export const Classroom = ({
               <>
                 <label>
                   {t("fcboard.录制模式")}
-                  <select
+                  <MaterialSelect
+                    aria-label={t("fcboard.录制模式")}
                     disabled={recording}
                     value={mode}
                     onChange={(event) =>
@@ -2272,7 +2278,7 @@ export const Classroom = ({
                     <option value="combined">
                       {t("fcboard.麦克风 + 摄像头 + 屏幕（白板）")}
                     </option>
-                  </select>
+                  </MaterialSelect>
                 </label>
                 <p>
                   {t(
@@ -2294,7 +2300,8 @@ export const Classroom = ({
                 </button>
                 <label>
                   {t("fcboard.本机录制资料")}
-                  <select
+                  <MaterialSelect
+                    aria-label={t("fcboard.本机录制资料")}
                     value={activeId}
                     onChange={(event) => setActiveId(event.target.value)}
                   >
@@ -2305,7 +2312,7 @@ export const Classroom = ({
                         {timestamp(item.duration)}
                       </option>
                     ))}
-                  </select>
+                  </MaterialSelect>
                 </label>
                 {active ? (
                   <>

@@ -1,3 +1,4 @@
+import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
 import { useI18n, languages } from "@excalidraw/excalidraw/i18n";
 import React from "react";
 
@@ -11,7 +12,7 @@ export const LanguageList = ({ style }: { style?: React.CSSProperties }) => {
   const setLangCode = useSetAtom(appLangCodeAtom);
 
   return (
-    <select
+    <MaterialSelect
       className="dropdown-select dropdown-select__language"
       onChange={({ target }) => setLangCode(target.value)}
       value={preference}
@@ -24,6 +25,6 @@ export const LanguageList = ({ style }: { style?: React.CSSProperties }) => {
           {lang.label}
         </option>
       ))}
-    </select>
+    </MaterialSelect>
   );
 };

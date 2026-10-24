@@ -16,11 +16,9 @@ export const selectMenu = async (page: Page, label: string) => {
     ].includes(label)
   ) {
     await page.locator("[data-teaching-tools]").click();
-    if (["语音指令", "截屏"].includes(label)) {
-      await page.getByText("更多工具", { exact: true }).click();
-    }
     const names: Record<string, string> = {
       提问与讲解: "AI 问答",
+      课堂录制: "录制",
       总结白板: "AI 总结",
       "课件 / 局域网快传": "快传",
     };

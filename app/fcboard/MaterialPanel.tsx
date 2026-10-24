@@ -1,6 +1,6 @@
 import Paper from "@mui/material/Paper";
 import Dialog from "@mui/material/Dialog";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 import type { ComponentPropsWithoutRef } from "react";
 
@@ -11,8 +11,15 @@ export const MaterialPanel = forwardRef<
     centered?: boolean;
     onDismiss?: () => void;
   }
->(({ centered, onDismiss, children, ...props }, ref) =>
-  centered ? (
+>(({ centered, onDismiss, children, ...props }, ref) => {
+  const panel = useRef<HTMLElement>(null);
+  useImperativeHandle(ref, () => panel.current!);
+  useEffect(() => {
+    if (!centered && props.role === "dialog") {
+      panel.current?.focus({ preventScroll: true });
+    }
+  }, [centered, props.role]);
+  return centered ? (
     <Dialog
       open
       disablePortal
@@ -23,7 +30,7 @@ export const MaterialPanel = forwardRef<
         paper: {
           component: "section",
           ...props,
-          ref,
+          ref: panel,
           sx: {
             color: "var(--fc-ink)",
             backgroundColor: "var(--fc-surface)",
@@ -38,7 +45,8 @@ export const MaterialPanel = forwardRef<
   ) : (
     <Paper
       component="section"
-      ref={ref}
+      ref={panel}
+      tabIndex={props.role === "dialog" ? -1 : undefined}
       elevation={8}
       {...props}
       sx={{
@@ -46,9 +54,10 @@ export const MaterialPanel = forwardRef<
         backgroundColor: "var(--fc-surface)",
         backgroundImage: "none",
         fontFamily: "inherit",
+        "&:focus": { outline: "none" },
       }}
     >
       {children}
     </Paper>
-  ),
-);
+  );
+});

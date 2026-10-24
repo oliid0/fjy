@@ -76,9 +76,7 @@ it("retains the selected subject when the query is empty and keeps source IDs st
   await act(async () => {
     await classroomCommands.execute({ name: "resources.open" });
   });
-  fireEvent.change(screen.getByRole("combobox", { name: t("fcboard.学科") }), {
-    target: { value: "数学" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.数学") }));
   expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(
     teachingResources.filter((item) => item.category === "数学").length,
   );

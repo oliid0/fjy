@@ -1,4 +1,4 @@
-import { t, defaultLang } from "@excalidraw/excalidraw/i18n";
+import { t, defaultLang, languages } from "@excalidraw/excalidraw/i18n";
 import {
   screen,
   fireEvent,
@@ -35,9 +35,14 @@ describe("Test LanguageList", () => {
       ).toBeNull();
     }
 
-    fireEvent.change(document.querySelector(".dropdown-select__language")!, {
-      target: { value: "de-DE" },
-    });
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
+    );
+    fireEvent.click(
+      screen.getByRole("option", {
+        name: languages.find((lang) => lang.code === "de-DE")!.label,
+      }),
+    );
     // switching to german, `thin` label should no longer exist
     await waitFor(() => expect(screen.queryByTitle(/thin/i)).toBeNull());
     fireEvent.keyDown(
@@ -52,9 +57,10 @@ describe("Test LanguageList", () => {
     await screen.findByRole("dialog", { name: t("fcboard.白板设置") });
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.工具箱") }));
     // reset language
-    fireEvent.change(document.querySelector(".dropdown-select__language")!, {
-      target: { value: defaultLang.code },
-    });
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: defaultLang.label }));
     fireEvent.keyDown(
       screen.getByRole("dialog", { name: t("fcboard.白板设置") }),
       { key: "Escape" },

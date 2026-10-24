@@ -212,6 +212,37 @@ it("keeps the visible region and existing objects intact when double-clicked or 
   ]);
 });
 
+it.each([false, true])(
+  "suppresses canvas context menus without selecting objects (view mode: %s)",
+  async (viewModeEnabled) => {
+    const { container } = await render(
+      <Excalidraw
+        UIOptions={{ unifiedToolbar: true }}
+        viewModeEnabled={viewModeEnabled}
+      />,
+    );
+    const element = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 40,
+      height: 40,
+    });
+    API.updateScene({ elements: [element] });
+    const canvas = container.querySelector("canvas.interactive")!;
+    for (const [clientX, clientY] of [
+      [120, 120],
+      [500, 500],
+    ]) {
+      expect(fireEvent.contextMenu(canvas, { clientX, clientY })).toBe(false);
+      expect(h.state.contextMenu).toBeNull();
+      expect(h.state.whiteboardSelection).toBeUndefined();
+      expect(h.state.selectedElementIds).toEqual({});
+    }
+    expect(h.elements).toEqual([element]);
+  },
+);
+
 it("resizes only the selected region, selects its new contents on release and removes drag listeners", async () => {
   const { canvas, first, second } = await selectedRegion();
   regionPointer(canvas, "pointerdown", 172, 172);

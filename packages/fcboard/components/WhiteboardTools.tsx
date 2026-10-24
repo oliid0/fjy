@@ -10,6 +10,8 @@ import { t, useI18n } from "../i18n";
 import { useUIAppState } from "../context/ui-appState";
 import { useTunnels } from "../context/tunnels";
 
+import { MaterialSelect } from "./MaterialSelect";
+
 import { useExcalidrawContainer } from "./App";
 import { ToolButton } from "./ToolButton";
 import { FactoryIcon } from "./FactoryIcon";
@@ -230,7 +232,8 @@ export const WhiteboardTools = ({
                 <summary>{t("fcboard.触控与橡皮设置")}</summary>
                 <label>
                   {t("fcboard.擦除方式")}
-                  <select
+                  <MaterialSelect
+                    aria-label={t("fcboard.擦除方式")}
                     value={state.eraserMode || "stroke"}
                     onChange={(event) =>
                       props.setAppState({
@@ -240,7 +243,7 @@ export const WhiteboardTools = ({
                   >
                     <option value="stroke">{t("fcboard.局部擦除笔迹")}</option>
                     <option value="object">{t("fcboard.整个对象擦除")}</option>
-                  </select>
+                  </MaterialSelect>
                 </label>
                 <label>
                   {t("fcboard.橡皮大小（屏幕像素）")}

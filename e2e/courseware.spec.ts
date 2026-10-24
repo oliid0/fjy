@@ -314,28 +314,23 @@ test("voice draws into the visible PPT and function controls update its transpar
       "fcboard-settings",
       JSON.stringify({ speech: "system", autoMath: false }),
     );
-    Object.assign(window, { fcTestSpeech: "帮我画个立方体" });
     class Recognition {
       onresult?: (event: unknown) => void;
-      start() {
-        setTimeout(
-          () =>
-            this.onresult?.({
-              resultIndex: 0,
-              results: [
-                {
-                  isFinal: true,
-                  0: {
-                    transcript: (window as unknown as { fcTestSpeech: string })
-                      .fcTestSpeech,
-                  },
-                },
-              ],
-            }),
-          300,
-        );
+      emit(text: string) {
+        this.onresult?.({
+          resultIndex: 0,
+          results: [{ isFinal: true, 0: { transcript: text } }],
+        });
       }
-      stop() {}
+      start() {
+        Reflect.set(window, "fcTestSpeechNext", (text: string) =>
+          this.emit(text),
+        );
+        setTimeout(() => this.emit("帮我画个立方体"), 300);
+      }
+      stop() {
+        Reflect.deleteProperty(window, "fcTestSpeechNext");
+      }
     }
     Object.assign(window, { SpeechRecognition: Recognition });
   });
@@ -349,10 +344,12 @@ test("voice draws into the visible PPT and function controls update its transpar
     .poll(() => page.locator(".fc-document-ink path").count())
     .toBeGreaterThan(3);
   await page.getByRole("button", { name: "收起工具参数" }).click();
+  await expect(
+    page.getByRole("button", { name: "课件语音指令", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await page.evaluate(() =>
-    Object.assign(window, { fcTestSpeech: "画y=a*x+1的函数图像" }),
+    Reflect.get(window, "fcTestSpeechNext")("画y=a*x+1的函数图像"),
   );
-  await page.getByRole("button", { name: "课件语音指令", exact: true }).click();
   const slider = page.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
   await slider.focus();
@@ -368,4 +365,8 @@ test("voice draws into the visible PPT and function controls update its transpar
     page.locator(".fc-document-ink text").filter({ hasText: "x+1" }),
   ).toHaveCount(1);
   await page.screenshot({ path: info.outputPath("voice-ppt-function.png") });
+  await page.getByRole("button", { name: "课件语音指令", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "课件语音指令", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
 });

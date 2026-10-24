@@ -16,9 +16,14 @@ import {
   insertionPoint,
   insertText,
   validateShapes,
+  contentViewport,
 } from "./board";
+import { documentStrokeBounds } from "./documents";
 import { classroomCommands } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
+
+import type { InkStroke } from "./documents";
+import type { ContentRect } from "./placement";
 
 const actions = new Set<ActionName>([
   "undo",
@@ -77,7 +82,110 @@ const actions = new Set<ActionName>([
 ]);
 export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
   const animations = new Set<LessonCanvas>();
+  const inspect = () => {
+    const document = classroomCommands.read("document") as
+      | {
+          id?: string;
+          name?: string;
+          page?: number;
+          tool?: string;
+          pen?: {
+            color: string;
+            penWidth: number;
+            fontSize: number;
+            opacity: number;
+          };
+          selection?: string[];
+          ink?: InkStroke[];
+        }
+      | undefined;
+    if (document) {
+      const layout = classroomCommands.read("document.layout") as
+        | { scale: number; viewport: ContentRect }
+        | undefined;
+      const ink = document.ink || [];
+      return {
+        target: {
+          kind: "document",
+          id: document.id,
+          name: document.name,
+          page: document.page,
+        },
+        coordinates: "document",
+        viewport: layout?.viewport,
+        scale: layout?.scale,
+        revision: classroomCommands.revision,
+        tool: document.tool,
+        styles: document.pen,
+        fonts: FONT_FAMILY,
+        selection: document.selection || [],
+        total: ink.length,
+        truncated: ink.length > 300,
+        elements: ink.slice(-300).map((stroke) => {
+          const bounds = documentStrokeBounds(stroke);
+          return {
+            id: stroke.id,
+            type: stroke.text ? "text" : stroke.image ? "image" : "freedraw",
+            bounds: [bounds.left, bounds.top, bounds.right, bounds.bottom],
+            text: stroke.text,
+            color: stroke.color,
+            width: stroke.width,
+            fontSize: stroke.fontSize,
+            fontFamily: stroke.fontFamily,
+            opacity: stroke.opacity,
+            tutorId: stroke.commandId,
+          };
+        }),
+      };
+    }
+    const state = api.getAppState();
+    const elements = api
+      .getSceneElements()
+      .filter((element) => !element.isDeleted);
+    return {
+      target: {
+        kind: "whiteboard",
+        id:
+          (classroomCommands.read("boards") as { active?: string } | undefined)
+            ?.active || api.id,
+      },
+      coordinates: "scene",
+      viewport: contentViewport(api),
+      scale: state.zoom.value,
+      revision: classroomCommands.revision,
+      tool: state.activeTool?.type,
+      styles: {
+        color: state.currentItemStrokeColor,
+        background: state.currentItemBackgroundColor,
+        width: state.currentItemStrokeWidth,
+        fontSize: state.currentItemFontSize,
+        fontFamily: state.currentItemFontFamily,
+        opacity: state.currentItemOpacity,
+        textAlign: state.currentItemTextAlign,
+      },
+      fonts: FONT_FAMILY,
+      selection: selectedBoardElements(api).map((element) => element.id),
+      total: elements.length,
+      truncated: elements.length > 300,
+      elements: elements.slice(-300).map((element) => ({
+        id: element.id,
+        type: element.type,
+        bounds: getCommonBounds([element]),
+        text: element.type === "text" ? element.text : undefined,
+        color: element.strokeColor,
+        fontSize: element.type === "text" ? element.fontSize : undefined,
+        fontFamily: element.type === "text" ? element.fontFamily : undefined,
+        opacity: element.opacity,
+        tutorId: element.customData?.fcTutorId,
+      })),
+    };
+  };
   const registrations = [
+    classroomCommands.register(
+      "canvas.inspect",
+      "读取当前可见白板或课件层的真实对象、选区、画笔、可书写视口和缩放；bounds 顺序为左上右下，坐标使用返回的 coordinates；操作前读取，操作后再次检查结果，不使用背后白板对象",
+      inspect,
+    ),
     classroomCommands.register(
       "canvas.toolbar",
       "显示或隐藏原白板工具栏，args.visible 必须是布尔值；隐藏会收起工具属性和菜单",
@@ -511,34 +619,7 @@ export const registerCanvasCommands = (api: ExcalidrawImperativeAPI) => {
         });
       },
     ),
-    classroomCommands.context("canvas", () => ({
-      tool: api.getAppState().activeTool.type,
-      styles: {
-        color: api.getAppState().currentItemStrokeColor,
-        background: api.getAppState().currentItemBackgroundColor,
-        width: api.getAppState().currentItemStrokeWidth,
-        fontSize: api.getAppState().currentItemFontSize,
-        fontFamily: api.getAppState().currentItemFontFamily,
-        opacity: api.getAppState().currentItemOpacity,
-        textAlign: api.getAppState().currentItemTextAlign,
-      },
-      fonts: FONT_FAMILY,
-      selection: selectedBoardElements(api).map((el) => el.id),
-      elements: api
-        .getSceneElements()
-        .slice(-300)
-        .map((el) => ({
-          id: el.id,
-          type: el.type,
-          bounds: getCommonBounds([el]),
-          text: el.type === "text" ? el.text : undefined,
-          color: el.strokeColor,
-          fontSize: el.type === "text" ? el.fontSize : undefined,
-          fontFamily: el.type === "text" ? el.fontFamily : undefined,
-          opacity: el.opacity,
-          tutorId: el.customData?.fcTutorId,
-        })),
-    })),
+    classroomCommands.context("canvas", inspect),
     classroomCommands.onInvalidate(() => {
       animations.forEach((animation) => animation.cancel());
       animations.clear();

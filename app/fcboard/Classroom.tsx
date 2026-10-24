@@ -286,19 +286,34 @@ export const Classroom = ({
       return target ? `${target.id}:${target.page}` : "";
     };
     let previous = documentKey();
+    let scheduled = false;
+    let disposed = false;
     const reset = () => {
       voiceTurns.current?.reset();
       assistantGeneration.current++;
     };
     const unwatch = classroomCommands.watch("document", () => {
-      const next = documentKey();
-      if (next !== previous) {
-        previous = next;
-        reset();
+      if (scheduled) {
+        return;
       }
+      scheduled = true;
+      // React may replace the same page's command/context registrations when
+      // ink or pen settings change. Only a settled target change ends the turn.
+      queueMicrotask(() => {
+        scheduled = false;
+        if (disposed) {
+          return;
+        }
+        const next = documentKey();
+        if (next !== previous) {
+          previous = next;
+          reset();
+        }
+      });
     });
     const release = classroomCommands.onInvalidate(reset);
     return () => {
+      disposed = true;
       unwatch();
       release();
     };
@@ -822,10 +837,11 @@ export const Classroom = ({
             image: string;
           })
         : undefined;
-      const context =
-        whole && capturedContext.current
-          ? capturedContext.current
-          : await boardContext(api, whole);
+      const context = document
+        ? { elements: [], text: document.text, image: document.image }
+        : whole && capturedContext.current
+        ? capturedContext.current
+        : await boardContext(api, whole);
       if (!document && !context.elements.length) {
         throw new Error(t("fcboard.白板还没有内容"));
       }
@@ -935,11 +951,18 @@ export const Classroom = ({
         await solveMath();
         return;
       }
-      const context =
-        selection?.context ||
-        (whole && capturedContext.current
-          ? capturedContext.current
-          : await boardContext(api, whole));
+      const document = classroomCommands.has("document.snapshot")
+        ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
+            text: string;
+            image?: string;
+          })
+        : undefined;
+      const context = document
+        ? { elements: [], text: document.text, image: document.image }
+        : selection?.context ||
+          (whole && capturedContext.current
+            ? capturedContext.current
+            : await boardContext(api, whole));
       const messages: Message[] = [
         {
           role: "system",
@@ -1435,8 +1458,15 @@ export const Classroom = ({
         "canvas.capture",
         "截取当前整板用于提问",
         async () => {
-          const context = await boardContext(api, true);
-          if (!context.elements.length) {
+          const context = classroomCommands.has("document.snapshot")
+            ? {
+                elements: [],
+                ...((await classroomCommands.execute({
+                  name: "document.snapshot",
+                })) as { text: string; image?: string }),
+              }
+            : await boardContext(api, true);
+          if (!context.elements.length && !context.image && !context.text) {
             throw new Error(t("fcboard.请先在白板书写内容"));
           }
           setCapture(context.image);

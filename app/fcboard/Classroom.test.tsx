@@ -177,7 +177,7 @@ describe("selection-driven classroom controls", () => {
     },
   );
 
-  it("drops old-page voice commands while keeping capture available for the new page", async () => {
+  it("keeps a turn through same-page context updates and drops it when the actual page changes", async () => {
     saveSettings({ ...defaults, speech: "local" }, false);
     let deliver!: (text: string) => void;
     const cancel = vi.fn().mockResolvedValue(undefined);
@@ -208,18 +208,35 @@ describe("selection-driven classroom controls", () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
       act(() => {
+        release[1]();
+        release[1] = classroomCommands.context("document", () => ({
+          id: "course",
+          page,
+          ink: [],
+          pen: { color: "#123456" },
+        }));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(clear).toHaveBeenCalledTimes(1);
+      act(() => deliver("清空白板"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      act(() => {
         page = 2;
         classroomCommands.changed("document");
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3000);
       });
-      expect(clear).not.toHaveBeenCalled();
+      expect(clear).toHaveBeenCalledTimes(1);
       act(() => deliver("清空白板"));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3000);
       });
-      expect(clear).toHaveBeenCalledTimes(1);
+      expect(clear).toHaveBeenCalledTimes(2);
       expect(cancel).not.toHaveBeenCalled();
     } finally {
       view.unmount();
@@ -286,8 +303,9 @@ describe("selection-driven classroom controls", () => {
       await act(async () => {
         await classroomCommands.execute({ name: "voice.toggle" });
       });
+      const onTranscript = deliver;
       for (let index = 0; index < 2; index++) {
-        act(() => deliver("清空白板"));
+        act(() => onTranscript("清空白板"));
         await act(async () => {
           await vi.advanceTimersByTimeAsync(3000);
         });
@@ -310,6 +328,109 @@ describe("selection-driven classroom controls", () => {
       vi.useRealTimers();
     }
   });
+
+  it.each(["question", "summary", "lesson"] as const)(
+    "uses only the visible courseware for %s and never captures the hidden board",
+    async (operation) => {
+      selectText("hidden board secret");
+      const capture = vi
+        .spyOn(ai, "boardContext")
+        .mockRejectedValue(new Error("hidden board capture"));
+      const chat = vi.spyOn(ai, "chat").mockResolvedValue(
+        operation === "lesson"
+          ? JSON.stringify({
+              title: "visible lesson",
+              steps: [
+                {
+                  say: "",
+                  commands: [
+                    {
+                      type: "draw_rectangle",
+                      id: "visible",
+                      x: 10,
+                      y: 10,
+                      width: 40,
+                      height: 30,
+                      duration: 0,
+                    },
+                  ],
+                },
+              ],
+              quiz: [],
+            })
+          : operation === "question"
+          ? JSON.stringify({ action: "text", text: "visible answer" })
+          : "visible summary",
+      );
+      vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+      const draw = vi.fn();
+      const text = vi.fn();
+      const stops = [
+        classroomCommands.context("document", () => ({
+          id: "course",
+          name: "visible.pdf",
+          page: 2,
+          ink: [],
+          text: "visible courseware",
+        })),
+        classroomCommands.register("document.snapshot", "@internal", () => ({
+          name: "visible.pdf",
+          page: 2,
+          text: "visible courseware",
+          image: "data:image/png;base64,visible",
+        })),
+        classroomCommands.register("document.draw", "@internal", draw),
+        classroomCommands.register("document.text", "@internal", text),
+      ];
+      const view = render(<Classroom api={api} />);
+      try {
+        if (operation === "question") {
+          await act(async () => {
+            await classroomCommands.execute({ name: "assistant.open" });
+          });
+          fireEvent.change(
+            screen.getByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
+            { target: { value: "给我一个学习建议" } },
+          );
+          fireEvent.click(
+            screen.getByRole("button", { name: t("fcboard.发送问题") }),
+          );
+          await waitFor(() => expect(text).toHaveBeenCalled());
+        } else {
+          await act(async () => {
+            await classroomCommands.execute(
+              operation === "summary"
+                ? { name: "canvas.summary" }
+                : { name: "lesson.ask", args: { prompt: "讲解这张课件" } },
+            );
+          });
+          await waitFor(() =>
+            expect(operation === "lesson" ? draw : text).toHaveBeenCalled(),
+          );
+        }
+        expect(capture).not.toHaveBeenCalled();
+        expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
+          "visible courseware",
+        );
+        expect(JSON.stringify(chat.mock.calls[0][0])).not.toContain(
+          "hidden board secret",
+        );
+        expect(api.updateScene).not.toHaveBeenCalled();
+      } finally {
+        view.unmount();
+        stops.forEach((stop) => stop());
+      }
+    },
+  );
 
   it("does not apply an older AI component response after a newer command", async () => {
     let finish!: (value: string) => void;

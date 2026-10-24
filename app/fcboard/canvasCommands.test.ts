@@ -10,6 +10,8 @@ import { drawPlot, selectedPlot } from "./board";
 import { defaultPlot } from "./math";
 import { shapeInk } from "./documents";
 
+import { sceneAPI } from "./test/scene";
+
 import type { InkStroke } from "./documents";
 
 it("exposes the original pen modes to AI and validates the complete style request before changing the pen", async () => {
@@ -113,6 +115,94 @@ it("routes text, shapes, selection and plots into the visible document instead o
     expect(api.updateScene).not.toHaveBeenCalled();
   } finally {
     stops.forEach((cleanup) => cleanup());
+    stop();
+  }
+});
+
+it("inspects only the visible document with its actual coordinate space and pen settings", async () => {
+  const api = {
+    getSceneElements: vi.fn(() => {
+      throw new Error("hidden board");
+    }),
+    getAppState: vi.fn(() => {
+      throw new Error("hidden board");
+    }),
+  } as unknown as ExcalidrawImperativeAPI;
+  const pen = { color: "#123456", penWidth: 3, fontSize: 18, opacity: 80 };
+  const stops = [
+    classroomCommands.context("document", () => ({
+      id: "course",
+      name: "lesson.pdf",
+      page: 2,
+      tool: "freedraw",
+      pen,
+      selection: ["ink"],
+      ink: [
+        {
+          id: "ink",
+          color: "#123456",
+          width: 3,
+          points: [
+            [100, 120],
+            [150, 160],
+          ],
+        },
+      ],
+    })),
+    classroomCommands.context("document.layout", () => ({
+      scale: 2,
+      viewport: { left: 10, top: 20, right: 990, bottom: 480 },
+    })),
+    registerCanvasCommands(api),
+  ];
+  try {
+    const state = (await classroomCommands.execute({
+      name: "canvas.inspect",
+    })) as { elements: { id: string }[] };
+    expect(state).toMatchObject({
+      target: { kind: "document", id: "course", page: 2 },
+      coordinates: "document",
+      scale: 2,
+      viewport: { left: 10, top: 20, right: 990, bottom: 480 },
+      styles: pen,
+      selection: ["ink"],
+    });
+    expect(state.elements.map((element) => element.id)).toEqual(["ink"]);
+    expect(classroomCommands.read("canvas")).toEqual(state);
+    expect(api.getSceneElements).not.toHaveBeenCalled();
+    expect(api.getAppState).not.toHaveBeenCalled();
+  } finally {
+    stops.forEach((stop) => stop());
+  }
+});
+
+it("reports new whiteboard objects after a real command so an agent can verify its result", async () => {
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  try {
+    const read = async () =>
+      (await classroomCommands.execute({ name: "canvas.inspect" })) as {
+        coordinates: string;
+        elements: { id: string; text?: string; bounds: number[] }[];
+      };
+    const before = await read();
+    const element = before.elements[0];
+    await classroomCommands.execute({
+      name: "canvas.text",
+      args: { text: "verified writing", presentation: "text" },
+    });
+    const after = await read();
+    expect(after.coordinates).toBe("scene");
+    expect(after.elements.find((item) => item.id === element.id)).toEqual(
+      element,
+    );
+    expect(after.elements).toHaveLength(before.elements.length + 1);
+    const written = after.elements.find(
+      (item) => item.text === "verified writing",
+    );
+    expect(written).toBeDefined();
+    expect(written?.bounds.every(Number.isFinite)).toBe(true);
+  } finally {
     stop();
   }
 });

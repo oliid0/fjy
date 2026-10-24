@@ -209,7 +209,6 @@ export const Teacher = ({
       } else {
         controller.generating();
       }
-      const context = await boardContext(api);
       const sources = await searchMaterials(question);
       const document = (
         classroomCommands.has("document.snapshot")
@@ -224,6 +223,9 @@ export const Teacher = ({
             ink?: unknown;
           }
         | undefined;
+      const context = document
+        ? { elements: [], text: document.text, image: document.image }
+        : await boardContext(api);
       if (abort.signal.aborted || revision !== classroomCommands.revision) {
         return;
       }

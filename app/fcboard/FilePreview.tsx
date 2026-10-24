@@ -216,6 +216,14 @@ export const FilePreview = ({
   const [inkOn, setInkOn] = useState(false);
   const [erase, setErase] = useState(false);
   const [selecting, setSelecting] = useState(false);
+  const documentTool = useRef("hand");
+  documentTool.current = !inkOn
+    ? "hand"
+    : selecting
+    ? "lasso"
+    : erase
+    ? "eraser"
+    : "freedraw";
   const selectedInkRef = useRef<string[]>([]);
   const [lasso, setLasso] = useState<[number, number][]>([]);
   const selectionGesture = useRef<{
@@ -1117,6 +1125,7 @@ export const FilePreview = ({
         page: pageRef.current + 1,
         pages: pages.length,
         zoom: zoomRef.current,
+        tool: documentTool.current,
         pen: pen.current,
         text: currentTextRef.current,
         ink: inkRef.current[pageRef.current] || [],

@@ -171,12 +171,37 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
     );
   });
   let imageSent = false;
+  let requests = 0;
+  let calculationObserved = false;
   await page.route(
     "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
     async (route) => {
-      imageSent = JSON.stringify(route.request().postDataJSON()).includes(
-        "data:image/png;base64,",
-      );
+      const body = route.request().postDataJSON();
+      imageSent ||= JSON.stringify(body).includes("data:image/png;base64,");
+      requests++;
+      if (requests === 1) {
+        await route.fulfill({
+          json: {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    action: "commands",
+                    commands: [
+                      { name: "canvas.inspect" },
+                      { name: "math.evaluate", args: { expression: "3-1" } },
+                    ],
+                  }),
+                },
+              },
+            ],
+          },
+        });
+        return;
+      }
+      calculationObserved =
+        typeof body.messages?.at(-1)?.content === "string" &&
+        body.messages.at(-1).content.includes('"answer":"2"');
       await route.fulfill({
         json: {
           choices: [
@@ -268,6 +293,8 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
     )
     .toBe(true);
   expect(imageSent).toBe(true);
+  expect(requests).toBe(2);
+  expect(calculationObserved).toBe(true);
   await page.screenshot({ path: info.outputPath("live-teacher-quiz.png") });
 });
 

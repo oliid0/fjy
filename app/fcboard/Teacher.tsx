@@ -14,12 +14,15 @@ import { TransientMessage } from "./TransientMessage";
 import { useAnchoredPanel } from "./floating";
 
 import { boardContext, chat, parseJSON, visualMessage } from "./ai";
+import { agentContext, runBoardCommands } from "./agent";
 import { classroomCommands } from "./commands";
 import { LESSON_FORMAT, validateLesson } from "./lesson";
 import { searchMaterials } from "./materials";
 import { lessonSessions, saveLessonSession, TeachingEngine } from "./teaching";
 
 import type { Lens, TeachingSession } from "./teaching";
+import type { Message } from "./ai";
+import type { BoardAgentAction } from "./agent";
 
 const preferences = () => {
   try {
@@ -238,60 +241,86 @@ export const Teacher = ({
             ink: document.ink,
           }
         : undefined;
-      const result = await chat(
-        [
-          {
-            role: "system",
-            content: `你是方成教育的现场教师。${LESSON_FORMAT}\n${
-              document
-                ? "当前在课件透明板书层，坐标相对课件左上角，范围0..900宽、0..480高。优先用圈线和箭头解释现有课件，板书简短并避开原文；不可擦除原课件。"
-                : ""
-            }\n${
-              branch
-                ? "这是对当前讲解的追问：围绕学生圈中的位置解答，换例子、分解推理或纠正误解，只写2到4个短步骤，quiz 留空。不要重新开始整节课。"
-                : "先观察学生已写的步骤，循序渐进地引导，结束给2道理解测验；先问学生关键一步，不直接跳到答案。"
-            }\n教学模式=${lens}。${
-              lens === "audio"
-                ? "每个图形和方向都在 say 中完整描述，避免只说看这里。"
-                : lens === "reading"
-                ? "句子短，术语分开解释，避免大段文字。"
-                : lens === "focus"
-                ? "每步只讲一个概念，say 少于80字。"
-                : "语音、字幕和绘图互相配合。"
-            } 不推断学生残障或能力。${
-              controller.state.attempts > controller.state.correct ||
-              controller.state.interruptions > 1
-                ? "学生已经反复提问或答错，改用具体类比，降低步幅。"
-                : ""
-            }`,
-          },
-          visualMessage(
-            `${question}\n白板文字：${context.text}\n选中对象：${JSON.stringify(
-              context.elements.map((el) => ({
-                id: el.id,
-                type: el.type,
-                x: el.x,
-                y: el.y,
-                text: el.type === "text" ? el.text : undefined,
-              })),
-            )}\n当前课件：${JSON.stringify(
-              documentText,
-            )}\n用户资料原文与页码（仅引用这里真实存在的来源）：${JSON.stringify(
-              sources,
-            )}\n正在讲解的步骤：${JSON.stringify(
-              controller.state.lesson?.steps[controller.state.step],
-            )}`,
-            document?.image || context.image,
-          ),
-        ],
-        abort.signal,
-        undefined,
-        { maxTokens: 8192 },
-      );
+      const messages: Message[] = [
+        {
+          role: "system",
+          content: `你是方成教育的现场教师。${LESSON_FORMAT}\n如需先观察或准备工具，返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}],"continue":true}，系统执行后返回真实结果和最新状态，你再决定下一步。可用 canvas.inspect 读取当前可见画布，math.evaluate 本地核算而不写板，其余工具按需要使用；不得编造结果、对象id或能力。准备完成返回 {"action":"lesson","lesson":上述课程JSON}，也可直接返回课程JSON。讲解准备阶段禁止递归调用 lesson.ask、lesson.teach 或另开 assistant.open；只有用户明确要求才删除、清空、录制或退出。已注册工具：\n${classroomCommands.describe()}\n${
+            document
+              ? "当前在课件透明板书层，坐标相对课件左上角，范围0..900宽、0..480高。优先用圈线和箭头解释现有课件，板书简短并避开原文；不可擦除原课件。"
+              : ""
+          }\n${
+            branch
+              ? "这是对当前讲解的追问：围绕学生圈中的位置解答，换例子、分解推理或纠正误解，只写2到4个短步骤，quiz 留空。不要重新开始整节课。"
+              : "先观察学生已写的步骤，循序渐进地引导，结束给2道理解测验；先问学生关键一步，不直接跳到答案。"
+          }\n教学模式=${lens}。${
+            lens === "audio"
+              ? "每个图形和方向都在 say 中完整描述，避免只说看这里。"
+              : lens === "reading"
+              ? "句子短，术语分开解释，避免大段文字。"
+              : lens === "focus"
+              ? "每步只讲一个概念，say 少于80字。"
+              : "语音、字幕和绘图互相配合。"
+          } 不推断学生残障或能力。${
+            controller.state.attempts > controller.state.correct ||
+            controller.state.interruptions > 1
+              ? "学生已经反复提问或答错，改用具体类比，降低步幅。"
+              : ""
+          }`,
+        },
+        visualMessage(
+          `${question}\n白板文字：${context.text}\n选中对象：${JSON.stringify(
+            context.elements.map((el) => ({
+              id: el.id,
+              type: el.type,
+              x: el.x,
+              y: el.y,
+              text: el.type === "text" ? el.text : undefined,
+            })),
+          )}\n当前课件：${JSON.stringify(
+            documentText,
+          )}\n用户资料原文与页码（仅引用这里真实存在的来源）：${JSON.stringify(
+            sources,
+          )}\n当前工具与画布状态：${agentContext(
+            classroomCommands.snapshot(),
+          )}\n正在讲解的步骤：${JSON.stringify(
+            controller.state.lesson?.steps[controller.state.step],
+          )}`,
+          document?.image || context.image,
+        ),
+      ];
+      const result = await chat(messages, abort.signal, undefined, {
+        maxTokens: 8192,
+      });
       if (abort.signal.aborted || revision !== classroomCommands.revision) {
         return;
       }
-      const lesson = validateLesson(parseJSON(result));
+      let response = parseJSON(result) as BoardAgentAction;
+      if (response?.action === "commands") {
+        response = await runBoardCommands(
+          response,
+          messages,
+          abort.signal,
+          () =>
+            request.current === abort &&
+            revision === classroomCommands.revision,
+          {
+            completion:
+              '准备完成后返回 {"action":"lesson","lesson":课程JSON}；仍需工具时继续返回 commands。课程必须遵循原系统提示的步骤 / 绘图 / 语音格式，禁止用 done 或聊天文本代替课程。',
+            exclude: ["lesson.ask", "lesson.teach", "assistant.open"],
+            maxTokens: 8192,
+          },
+        );
+      }
+      if (
+        abort.signal.aborted ||
+        revision !== classroomCommands.revision ||
+        request.current !== abort
+      ) {
+        return;
+      }
+      const lesson = validateLesson(
+        response?.action === "lesson" ? response.lesson : response,
+      );
       setAsking(false);
       setPrompt("");
       if (branch) {

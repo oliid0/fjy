@@ -6,6 +6,59 @@ import * as ai from "./ai";
 
 afterEach(() => vi.restoreAllMocks());
 
+it("returns real preparation results before requesting a lesson rather than reporting a generic done", async () => {
+  const read = vi.fn(() => ({ answer: "0.3" }));
+  const stop = classroomCommands.register("test.evaluate", "evaluate", read);
+  const lesson = {
+    action: "lesson",
+    lesson: { title: "decimals", steps: [], quiz: [] },
+  };
+  const chat = vi.spyOn(ai, "chat").mockResolvedValue(JSON.stringify(lesson));
+  try {
+    expect(
+      await runBoardCommands(
+        { action: "commands", commands: [{ name: "test.evaluate" }] },
+        [],
+        undefined,
+        () => true,
+        { completion: "Return a lesson from the verified results." },
+      ),
+    ).toEqual(lesson);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(chat.mock.calls[0][0].at(-1)?.content).toContain("0.3");
+    expect(chat.mock.calls[0][0].at(-1)?.content).toContain("Return a lesson");
+  } finally {
+    stop();
+  }
+});
+
+it("rejects a recursive teaching batch before any of its tools run", async () => {
+  const read = vi.fn();
+  const teach = vi.fn();
+  const stops = [
+    classroomCommands.register("test.read", "read", read),
+    classroomCommands.register("lesson.ask", "teach", teach),
+  ];
+  try {
+    await expect(
+      runBoardCommands(
+        {
+          action: "commands",
+          commands: [{ name: "test.read" }, { name: "lesson.ask" }],
+        },
+        [],
+        undefined,
+        () => true,
+        { completion: "Return a lesson.", exclude: ["lesson.ask"] },
+      ),
+    ).rejects.toThrow();
+    expect(read).not.toHaveBeenCalled();
+    expect(teach).not.toHaveBeenCalled();
+  } finally {
+    stops.forEach((stop) => stop());
+  }
+});
+
 it("observes real control results before choosing the next tool", async () => {
   const read = vi.fn(() => ({
     controls: [{ selector: "[data-fc-control=3]", label: "质量", value: "1" }],

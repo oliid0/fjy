@@ -432,6 +432,123 @@ describe("selection-driven classroom controls", () => {
     },
   );
 
+  it("provides cancellable local mathematics to the agent without inserting an answer", async () => {
+    const view = render(<Classroom api={api} />);
+    try {
+      await expect(
+        classroomCommands.execute({
+          name: "math.evaluate",
+          args: { expression: "0.1+0.2" },
+        }),
+      ).resolves.toEqual({ expression: "0.1+0.2", answer: "0.3" });
+      await expect(
+        classroomCommands.execute({
+          name: "math.evaluate",
+          args: { expression: "import(1)" },
+        }),
+      ).rejects.toThrow();
+      const cancel = new AbortController();
+      cancel.abort();
+      await expect(
+        classroomCommands.execute({
+          name: "math.evaluate",
+          args: { expression: "1+1", signal: cancel.signal },
+        }),
+      ).rejects.toMatchObject({ name: "AbortError" });
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it("prepares a lesson using visible canvas tools and local math before drawing the validated lesson", async () => {
+    const capture = vi
+      .spyOn(ai, "boardContext")
+      .mockRejectedValue(new Error("hidden board"));
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          action: "commands",
+          commands: [
+            { name: "canvas.inspect" },
+            { name: "math.evaluate", args: { expression: "0.1+0.2" } },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          action: "lesson",
+          lesson: {
+            title: "小数加法",
+            steps: [
+              {
+                say: "",
+                commands: [
+                  {
+                    type: "write_text",
+                    id: "decimal",
+                    text: "0.1+0.2=0.3",
+                    x: 10,
+                    y: 10,
+                    duration: 0,
+                  },
+                ],
+              },
+            ],
+            quiz: [],
+          },
+        }),
+      );
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const draw = vi.fn();
+    const stops = [
+      classroomCommands.context("document", () => ({
+        id: "course",
+        name: "decimals.pdf",
+        page: 2,
+        ink: [],
+        text: "小数加法",
+      })),
+      classroomCommands.register("document.snapshot", "@internal", () => ({
+        name: "decimals.pdf",
+        page: 2,
+        text: "小数加法",
+        image: "data:image/png;base64,visible",
+      })),
+      classroomCommands.register("document.draw", "@internal", draw),
+    ];
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "lesson.ask",
+          args: { prompt: "讲解小数加法，先核算0.1+0.2" },
+        });
+      });
+      await waitFor(() => expect(draw).toHaveBeenCalled());
+      expect(chat).toHaveBeenCalledTimes(2);
+      const observed = String(chat.mock.calls[1][0].at(-1)?.content);
+      expect(observed).toContain('"answer":"0.3"');
+      expect(observed).toContain('"kind":"document"');
+      expect(observed).toContain("课程JSON");
+      expect(capture).not.toHaveBeenCalled();
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      stops.forEach((stop) => stop());
+    }
+  });
+
   it("does not apply an older AI component response after a newer command", async () => {
     let finish!: (value: string) => void;
     vi.spyOn(ai, "chat").mockImplementation(

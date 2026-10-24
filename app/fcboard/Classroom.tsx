@@ -1481,6 +1481,22 @@ export const Classroom = ({
         () => drawAxes(api),
       ),
       classroomCommands.register(
+        "math.evaluate",
+        "只在本地验证并计算 args.expression，返回 expression / answer，不插入或改写白板；不支持或无结果时返回真实错误，可用于讲解前核算",
+        async (args) => {
+          if (typeof args.expression !== "string") {
+            throw new Error(t("fcboard.该算式没有可用结果"));
+          }
+          return {
+            expression: args.expression,
+            answer: await calculateAsync(
+              args.expression,
+              args.signal instanceof AbortSignal ? args.signal : undefined,
+            ),
+          };
+        },
+      ),
+      classroomCommands.register(
         "math.calculate",
         "计算算式，args.expression 可省略以识别圈选；结果写在板上",
         async (args) =>

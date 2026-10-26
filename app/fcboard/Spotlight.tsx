@@ -28,7 +28,7 @@ export const Spotlight = () => {
           (typeof args.radius === "number" &&
             (args.radius < 48 || args.radius > 600))
         ) {
-          throw new Error(t("fcboard.聚光灯参数无效"));
+          throw new Error(t("fcboard.invalid_spotlight_parameters"));
         }
         setState((previous) => ({
           open: args.open !== false,
@@ -62,7 +62,7 @@ export const Spotlight = () => {
     <div
       className="fc-spotlight"
       role="region"
-      aria-label={t("fcboard.聚光灯")}
+      aria-label={t("fcboard.spotlight")}
       style={{
         position: "fixed",
         inset: 0,
@@ -114,7 +114,7 @@ export const Spotlight = () => {
         }}
       >
         <input
-          aria-label={t("fcboard.光圈大小")}
+          aria-label={t("fcboard.spotlight_size")}
           type="range"
           min="48"
           max="600"
@@ -129,7 +129,7 @@ export const Spotlight = () => {
         <button
           onClick={() => setState((previous) => ({ ...previous, open: false }))}
         >
-          {t("fcboard.关闭聚光灯")}
+          {t("fcboard.close_spotlight")}
         </button>
       </div>
     </div>

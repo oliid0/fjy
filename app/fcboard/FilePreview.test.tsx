@@ -1,6 +1,11 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
-import { t } from "@excalidraw/excalidraw/i18n";
+import {
+  defaultLang,
+  languages,
+  setLanguage,
+  t,
+} from "@excalidraw/excalidraw/i18n";
 import { factoryBrushWidths } from "@excalidraw/element/factoryBrush";
 
 import { Fonts } from "@excalidraw/excalidraw/fonts";
@@ -20,6 +25,24 @@ import {
   loadInk,
 } from "./documents";
 import * as ocr from "./ocr";
+import * as ai from "./ai";
+import { languageStudy } from "./test/language";
+import { LanguagePanel, readLanguageCard } from "./LanguagePanel";
+import { registerCanvasCommands } from "./canvasCommands";
+import { animateSolid } from "./solidAnimation";
+import { updateQuestionAnswer } from "./questionAnswer";
+import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
+import { interactiveResource } from "./test/interactiveResource";
+import { LessonCanvas, validateLesson } from "./lesson";
+import {
+  insertionDefaults,
+  renderInsertion,
+  readInsertions,
+} from "./insertObjects";
+import {
+  documentWritingParts,
+  insertionWritingTargets,
+} from "./insertionWriting";
 
 vi.mock("./documents", async (original) => ({
   ...(await original<typeof import("./documents")>()),
@@ -87,10 +110,10 @@ const setup = async (
   const view = render(<FilePreview api={api} file={file} onClose={() => {}} />);
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: t("fcboard.板书开关") }),
+      screen.getByRole("button", { name: t("fcboard.toggle_annotations") }),
     ).toBeEnabled(),
   );
-  const svg = screen.getByLabelText(t("fcboard.课件透明板书"));
+  const svg = screen.getByLabelText(t("fcboard.document_annotations"));
   const captures = new Set<number>();
   Object.assign(svg, {
     setPointerCapture: (id: number) => captures.add(id),
@@ -108,7 +131,9 @@ const setup = async (
     y: 0,
     toJSON: () => ({}),
   });
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.板书开关") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.toggle_annotations") }),
+  );
   const pointer = (
     type: string,
     x: number,
@@ -143,6 +168,480 @@ const setup = async (
   };
   return { ...view, api, update, svg, pointer, draw };
 };
+
+it("applies assistant configuration to the next visible courseware stroke and exposes its actual settings", async () => {
+  const { api, draw, unmount } = await setup(undefined, {
+    currentItemPenMode: "brush",
+  });
+  const stop = registerCanvasCommands(api);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.configure",
+        args: {
+          brushVariation: 7,
+          palmEraser: false,
+          palmThreshold: 44,
+          eraserSize: 80,
+        },
+      });
+    });
+    draw();
+    const document = classroomCommands.read("document") as {
+      ink: import("./documents").InkStroke[];
+    };
+    expect(document.ink).toHaveLength(1);
+    expect(document.ink[0].fcInk).toMatchObject({ pen: "brush", variation: 7 });
+    expect(
+      await classroomCommands.execute({ name: "canvas.inspect" }),
+    ).toMatchObject({
+      configuration: {
+        pen: { brushVariation: 7 },
+        eraser: { palm: false, palmThreshold: 44, size: 80 },
+        background: { available: false },
+      },
+    });
+  } finally {
+    stop();
+    unmount();
+  }
+});
+
+it("translates courseware ink on the visible page, opens and hides its card, and undoes the whole conversion", async () => {
+  await setLanguage(languages.find((language) => language.code === "zh-CN")!);
+  vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(languageStudy.term);
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(JSON.stringify(languageStudy));
+  const { api, draw, svg, unmount } = await setup("language");
+  const panel = render(<LanguagePanel api={api} />);
+  const read = () =>
+    (
+      classroomCommands.read("document") as {
+        ink: import("./documents").InkStroke[];
+      }
+    ).ink;
+  try {
+    draw();
+    const source = read()[0];
+    await waitFor(
+      () =>
+        expect(read().find((stroke) => stroke.text)?.originalText).toBe(
+          languageStudy.translation,
+        ),
+      { timeout: 2000 },
+    );
+    const original = read().find((stroke) => stroke.id === source.id)!;
+    expect(original.points).toEqual(source.points);
+    const translation = read().find((stroke) => stroke.text)!;
+    expect(translation.points[0][1]).toBeGreaterThan(
+      documentStrokeBounds(source).bottom,
+    );
+    expect(translation.fontSize).toBeLessThanOrEqual(40);
+    expect(api.getSceneElements()).toHaveLength(0);
+    expect(readLanguageCard(api, source.id)?.study).toEqual(languageStudy);
+    fireEvent.doubleClick(svg.querySelector(`[data-language="${source.id}"]`)!);
+    await screen.findByRole("dialog", { name: t("fcboard.language_study") });
+    fireEvent.doubleClick(screen.getByRole("dialog"));
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.language_study") }),
+    ).toBeNull();
+    expect(chat).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toEqual([source]);
+    expect(readLanguageCard(api, source.id)).toBeUndefined();
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.redo" });
+    });
+    expect(readLanguageCard(api, source.id)?.study).toEqual(languageStudy);
+  } finally {
+    panel.unmount();
+    unmount();
+    await setLanguage(defaultLang);
+  }
+});
+
+it.each(["mindmap", "fourline"] as const)(
+  "types ordinary handwriting into the visible %s with atomic undo and redo",
+  async (kind) => {
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockResolvedValue("Hello");
+    const { api, pointer, update } = await setup();
+    await act(async () => {
+      await renderInsertion(api, insertionDefaults(kind, { x: 60, y: 60 }));
+    });
+    const read = () =>
+      (
+        classroomCommands.read("document") as {
+          ink: import("./documents").InkStroke[];
+        }
+      ).ink;
+    const target = insertionWritingTargets(documentWritingParts(read()))[0];
+    const before = read().map((stroke) => stroke.id);
+    pointer("pointerdown", target.x + 12, target.y + 12);
+    pointer("pointermove", target.x + 32, target.y + 24);
+    pointer("pointerup", target.x + 48, target.y + 28);
+    const written = read().find((stroke) => !before.includes(stroke.id))!.id;
+    await waitFor(
+      () => expect(read().some((stroke) => stroke.text === "Hello")).toBe(true),
+      { timeout: 2000 },
+    );
+    expect(recognize.mock.calls[0][5]).toHaveLength(1);
+    expect(recognize.mock.calls[0][6]).toBe(
+      kind === "fourline" ? "en-US" : undefined,
+    );
+    expect(read().some((stroke) => stroke.id === written)).toBe(false);
+    expect(
+      readInsertions(api)[0][kind === "fourline" ? "text" : "outline"],
+    ).toContain("Hello");
+    expect(update).not.toHaveBeenCalled();
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read().some((stroke) => stroke.id === written)).toBe(true);
+    expect(read().some((stroke) => stroke.text === "Hello")).toBe(false);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.redo" });
+    });
+    expect(read().some((stroke) => stroke.text === "Hello")).toBe(true);
+    expect(read().some((stroke) => stroke.id === written)).toBe(false);
+  },
+);
+
+it("does not commit late handwriting into a removed courseware writing surface", async () => {
+  let finish!: (text: string) => void;
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const { api, pointer } = await setup();
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("fourline", { x: 60, y: 60 }));
+  });
+  const read = () =>
+    (
+      classroomCommands.read("document") as {
+        ink: import("./documents").InkStroke[];
+      }
+    ).ink;
+  const target = insertionWritingTargets(documentWritingParts(read()))[0];
+  const parts = read().map((stroke) => stroke.id);
+  pointer("pointerdown", target.x + 12, target.y + 12);
+  pointer("pointerup", target.x + 48, target.y + 28);
+  await waitFor(() => expect(recognize).toHaveBeenCalledTimes(1), {
+    timeout: 2000,
+  });
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.erase",
+      args: { ids: parts },
+    });
+  });
+  await act(async () => finish("Late text"));
+  expect(read()).toHaveLength(1);
+  expect(read()[0].text).toBeUndefined();
+});
+
+it("embeds an interactive lesson on the visible document with one undo and redo", async () => {
+  const { api } = await setup();
+  let ids: string[] = [];
+  await act(async () => {
+    ({ ids } = (await classroomCommands.execute({
+      name: "document.resource",
+      args: { resource: interactiveResource },
+    })) as { ids: string[] });
+  });
+  const frame = screen.getByTitle(interactiveResource.title);
+  expect(frame).toHaveAttribute("sandbox", "allow-scripts");
+  expect(frame.closest("foreignObject")).toBeTruthy();
+  const current = () =>
+    (
+      classroomCommands.read("document") as {
+        ink: import("./documents").InkStroke[];
+      }
+    ).ink;
+  const bounds = documentStrokeBounds(current()[0]);
+  expect(bounds.right).toBeGreaterThan(bounds.left + 100);
+  expect(current()[0].id).toBe(ids[0]);
+  expect(api.getSceneElements()).toEqual([]);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(screen.queryByTitle(interactiveResource.title)).toBeNull();
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  expect(screen.getByTitle(interactiveResource.title)).toBeInTheDocument();
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.move",
+      args: { ids, dx: 10, dy: 20 },
+    });
+  });
+  expect(documentStrokeBounds(current()[0]).left).toBe(bounds.left + 10);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.erase", args: { ids } });
+  });
+  expect(screen.queryByTitle(interactiveResource.title)).toBeNull();
+});
+
+it("folds and restores a courseware answer without changing the hidden whiteboard", async () => {
+  const { api, draw } = await setup();
+  draw();
+  const anchor = (
+    classroomCommands.read("document") as { ink: { id: string }[] }
+  ).ink[0].id;
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.strokes",
+      args: {
+        strokes: [
+          [
+            [400, 300],
+            [420, 320],
+          ],
+        ],
+      },
+    });
+  });
+  const answer = (
+    classroomCommands.read("document") as { ink: { id: string }[] }
+  ).ink[1];
+  await act(async () => {
+    await updateQuestionAnswer(api, anchor, [answer.id]);
+  });
+  await act(async () => {
+    await updateQuestionAnswer(api, anchor);
+  });
+  expect(
+    (classroomCommands.read("document") as { ink: { id: string }[] }).ink.map(
+      (stroke) => stroke.id,
+    ),
+  ).toEqual([anchor]);
+  await act(async () => {
+    await updateQuestionAnswer(api, anchor);
+  });
+  expect(
+    (classroomCommands.read("document") as { ink: unknown[] }).ink[1],
+  ).toEqual(answer);
+  expect(api.updateScene).not.toHaveBeenCalled();
+});
+
+it("commits a question's trajectories to the visible courseware as one undo step", async () => {
+  const { api, draw } = await setup();
+  draw();
+  const before = (
+    classroomCommands.read("document") as { ink: { id: string }[] }
+  ).ink;
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.strokes",
+      args: {
+        strokes: [
+          [
+            [400, 300],
+            [420, 320],
+          ],
+          [
+            [430, 300],
+            [430, 330],
+          ],
+        ],
+      },
+    });
+  });
+  const after = classroomCommands.read("document") as {
+    ink: { id: string }[];
+    selection: string[];
+  };
+  expect(after.ink).toHaveLength(before.length + 2);
+  expect(after.selection).toEqual(
+    after.ink.slice(-2).map((stroke) => stroke.id),
+  );
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(
+    (classroomCommands.read("document") as { ink: unknown[] }).ink,
+  ).toEqual(before);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  expect(
+    (classroomCommands.read("document") as { ink: unknown[] }).ink,
+  ).toEqual(after.ink);
+  expect(api.updateScene).not.toHaveBeenCalled();
+});
+
+it("persists mixed dictated question writing only on courseware and undoes the whole question", async () => {
+  const { api } = await setup();
+  const current = () =>
+    (
+      classroomCommands.read("document") as {
+        ink: import("./documents").InkStroke[];
+      }
+    ).ink;
+  let ids: string[] = [];
+  await act(async () => {
+    const result = (await classroomCommands.execute({
+      name: "document.strokes",
+      args: {
+        strokes: [
+          [
+            [200, 200],
+            [230, 230],
+          ],
+        ],
+        text: "牛顿第二定律",
+        bounds: { left: 180, top: 180, right: 780, bottom: 380 },
+        select: false,
+      },
+    })) as { ids: string[] };
+    ids = result.ids;
+  });
+  expect(current()).toHaveLength(2);
+  const text = current().find((stroke) => stroke.text)!;
+  expect(text).toMatchObject({
+    originalText: "牛顿第二定律",
+    fontFamily: 5,
+    questionInput: true,
+  });
+  const bounds = documentStrokeBounds(text);
+  expect(bounds.left).toBeGreaterThanOrEqual(180);
+  expect(bounds.top).toBeGreaterThanOrEqual(230);
+  expect(bounds.right).toBeLessThanOrEqual(780);
+  expect(bounds.bottom).toBeLessThanOrEqual(380);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(current()).toHaveLength(0);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  expect(current().map((stroke) => stroke.id)).toEqual(ids);
+  expect(api.updateScene).not.toHaveBeenCalled();
+});
+
+it("discards dictated question writing when its courseware closes during font loading", async () => {
+  const { api, unmount } = await setup();
+  let finish!: () => void;
+  const fonts = vi.spyOn(Fonts, "loadElementsFonts").mockImplementation(
+    () =>
+      new Promise<FontFace[]>((resolve) => {
+        finish = () => resolve([]);
+      }),
+  );
+  const pending = classroomCommands.execute({
+    name: "document.strokes",
+    args: {
+      strokes: [],
+      text: "牛顿定律",
+      bounds: { left: 180, top: 180, right: 780, bottom: 380 },
+    },
+  });
+  const rejected = expect(pending).rejects.toMatchObject({
+    name: "AbortError",
+  });
+  await waitFor(() => expect(fonts).toHaveBeenCalled());
+  unmount();
+  finish();
+  await rejected;
+  expect(api.updateScene).not.toHaveBeenCalled();
+});
+
+it("unfolds a complete courseware solid with one undo step and keeps unrelated writing", async () => {
+  const { api, draw } = await setup();
+  draw();
+  const unrelated = (
+    classroomCommands.read("document") as { ink: { id: string }[] }
+  ).ink[0].id;
+  await act(async () => {
+    renderWidget(api, {
+      id: "solid",
+      kind: "cube",
+      params: widgetDefaults(),
+      position: { x: 300, y: 100 },
+    });
+  });
+  const original = readWidgets(api)[0];
+  await act(async () => {
+    await animateSolid(
+      api,
+      original,
+      {
+        ...original,
+        params: {
+          ...original.params,
+          solid: { ...original.params.solid, unfold: 1 },
+        },
+      },
+      new AbortController().signal,
+      0,
+    );
+  });
+  expect(readWidgets(api)[0].params.solid.unfold).toBe(1);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(readWidgets(api)[0].params.solid.unfold).toBe(0);
+  expect(
+    (classroomCommands.read("document") as { ink: { id: string }[] }).ink.some(
+      (stroke) => stroke.id === unrelated,
+    ),
+  ).toBe(true);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  expect(readWidgets(api)[0].params.solid.unfold).toBe(1);
+});
+
+it("cancels a courseware solid animation without a history entry or stale frames", async () => {
+  const { api } = await setup();
+  await act(async () => {
+    renderWidget(api, {
+      id: "solid",
+      kind: "cylinder",
+      params: widgetDefaults(),
+      position: { x: 300, y: 100 },
+    });
+  });
+  const original = readWidgets(api)[0];
+  const controller = new AbortController();
+  vi.useFakeTimers();
+  let pending!: Promise<unknown>;
+  await act(async () => {
+    pending = animateSolid(
+      api,
+      original,
+      {
+        ...original,
+        params: {
+          ...original.params,
+          solid: { ...original.params.solid, unfold: 1 },
+        },
+      },
+      controller.signal,
+      160,
+    ).catch((error) => error);
+    await vi.advanceTimersByTimeAsync(80);
+  });
+  expect(readWidgets(api)[0].params.solid.unfold).toBeGreaterThan(0);
+  await act(async () => {
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  expect(((await pending) as DOMException).name).toBe("AbortError");
+  expect(readWidgets(api)[0].params.solid.unfold).toBe(0);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(readWidgets(api)).toHaveLength(0);
+});
 
 it("retains coalesced pressure samples, renders quadratics and restores a cancelled barrel erasure", async () => {
   const { draw, svg, pointer, update } = await setup();
@@ -285,6 +784,140 @@ const currentInk = () =>
       ink: import("./documents").InkStroke[];
     }
   ).ink;
+
+it.each(["F=ma", "牛顿第二定律"])(
+  "writes %s into visible courseware with one undo for the whole result",
+  async (text) => {
+    const { api, draw, update } = await setup();
+    draw();
+    const source = [...currentInk()];
+    const hidden = vi.spyOn(api, "getSceneElements").mockImplementation(() => {
+      throw new Error("Hidden board must not be read");
+    });
+    const renderer = new LessonCanvas(api, {
+      sourceIds: source.map((stroke) => stroke.id),
+    });
+    await act(async () => {
+      await renderer.command(
+        validateLesson({
+          steps: [
+            {
+              commands: [
+                { type: "write_text", id: "explanation", text, duration: 0 },
+              ],
+            },
+          ],
+        }).steps[0].commands[0],
+      );
+    });
+    const written = currentInk().filter(
+      (stroke) => stroke.lesson === renderer.id,
+    );
+    expect(written.length).toBeGreaterThan(0);
+    if (text === "F=ma") {
+      expect(
+        written.every(
+          (stroke) => stroke.fcInk?.pen === "hard" && stroke.points.length > 1,
+        ),
+      ).toBe(true);
+    } else {
+      expect(written[0].fontFamily).toBe(5);
+    }
+    const area = classroomCommands.read("document.layout") as {
+      viewport: { left: number; top: number; right: number; bottom: number };
+    };
+    for (const stroke of written) {
+      const bounds = documentStrokeBounds(stroke);
+      expect(bounds.left).toBeGreaterThanOrEqual(area.viewport.left - 1e-6);
+      expect(bounds.right).toBeLessThanOrEqual(area.viewport.right + 1e-6);
+      expect(bounds.bottom).toBeLessThanOrEqual(area.viewport.bottom + 1e-6);
+    }
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()).toEqual(source);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.redo" });
+    });
+    expect(
+      currentInk().filter((stroke) => stroke.lesson === renderer.id),
+    ).toEqual(written);
+    expect(hidden).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  },
+);
+
+it("preserves unrelated handwriting added while a lesson word is paused when undoing that word", async () => {
+  const { api, draw, pointer } = await setup();
+  draw();
+  const source = [...currentInk()];
+  const renderer = new LessonCanvas(api, {
+    sourceIds: source.map((stroke) => stroke.id),
+  });
+  vi.useFakeTimers();
+  const pending = renderer.command(
+    validateLesson({
+      steps: [
+        {
+          commands: [
+            { type: "write_text", id: "word", text: "F=ma", duration: 1 },
+          ],
+        },
+      ],
+    }).steps[0].commands[0],
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(160);
+  });
+  renderer.pause();
+  pointer("pointerdown", 700, 100);
+  pointer("pointermove", 740, 130);
+  pointer("pointerup", 760, 140);
+  const manual = currentInk().filter((stroke) => !stroke.lesson);
+  expect(manual.length).toBeGreaterThan(source.length);
+  renderer.resume();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1200);
+    await pending;
+  });
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(currentInk()).toEqual(manual);
+});
+
+it("does not send generated lesson strokes inside a writing surface back through handwriting recognition", async () => {
+  const { api } = await setup();
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("Should not run");
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("fourline", { x: 60, y: 60 }));
+  });
+  const target = insertionWritingTargets(documentWritingParts(currentInk()))[0];
+  const shape = documentInkElement({
+    id: "generated-lesson",
+    color: "#000000",
+    width: 2,
+    points: [
+      [target.x + 12, target.y + 12],
+      [target.x + 32, target.y + 24],
+    ],
+    fcInk: { version: 2, pen: "hard", unit: 1 },
+  });
+  vi.useFakeTimers();
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.draw",
+      args: { shape, lesson: "teacher", progress: 1 },
+    });
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(800);
+  });
+  expect(recognize).not.toHaveBeenCalled();
+  expect(currentInk().some((stroke) => stroke.id === shape.id)).toBe(true);
+});
 
 it.each(["document.select", "document.move", "document.erase"])(
   "rejects stale mixed targets on visible courseware for %s",
@@ -632,7 +1265,9 @@ it("shares one adjustable region in courseware and cancels a border drag without
   pointer("pointerup", 260, 98);
   expect(context().region[0]).toEqual([108, 98]);
   expect(context().ink[0].points[0]).toEqual([140, 130]);
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.撤销板书") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.undo_annotation") }),
+  );
   expect(context().ink[0].points[0]).toEqual([100, 100]);
   expect(context().ink).toHaveLength(2);
   expect(context().region).toEqual([]);

@@ -36,7 +36,7 @@ export const TableSizePicker = ({
   return (
     <div className="fc-table-picker">
       <output aria-live="polite">
-        {t("fcboard.表格尺寸", { rows, columns })}
+        {t("fcboard.rows_rows_columns_columns", { rows, columns })}
       </output>
       <div
         className="fc-table-picker-grid"
@@ -86,7 +86,10 @@ export const TableSizePicker = ({
               type="button"
               disabled={disabled}
               key={index}
-              aria-label={t("fcboard.表格尺寸", { rows: row, columns: column })}
+              aria-label={t("fcboard.rows_rows_columns_columns", {
+                rows: row,
+                columns: column,
+              })}
               aria-pressed={row <= rows && column <= columns}
               onClick={(event) => {
                 if (event.detail === 0) {

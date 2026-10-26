@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { finishFactoryInk } from "@excalidraw/element/factoryInk";
 import throttle from "lodash.throttle";
 import React, { useContext } from "react";
+
 import { flushSync } from "react-dom";
 import rough from "roughjs/bin/rough";
 
@@ -438,6 +439,8 @@ import { getShortcutKey } from "../shortcut";
 
 import { tryParseSpreadsheet } from "../charts";
 
+import { InteractiveResourceFrame } from "./InteractiveResourceFrame";
+
 import factoryEraser from "./FactoryEraser.png?url";
 
 import ConvertElementTypePopup, {
@@ -707,6 +710,12 @@ class App extends React.Component<AppProps, AppState> {
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
   private stopInkErasure: (() => void) | null = null;
   private parallelInk = new Map<number, (cancelled: boolean) => void>();
+  private singleTouchStroke: {
+    pointerId: number;
+    length: number;
+    x: number;
+    y: number;
+  } | null = null;
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
 
   onChangeEmitter = new Emitter<
@@ -1769,9 +1778,16 @@ class App extends React.Component<AppProps, AppState> {
                     padding: `${el.strokeWidth}px`,
                   }}
                 >
-                  {(isEmbeddableElement(el)
-                    ? this.props.renderEmbeddable?.(el, this.state)
-                    : null) ?? (
+                  {(el.customData?.fcInteractiveResource ? (
+                    <InteractiveResourceFrame
+                      resource={el.customData.fcInteractiveResource}
+                      objectId={el.id}
+                      surface="whiteboard"
+                      iframeRef={(ref) => this.cacheEmbeddableRef(el, ref)}
+                    />
+                  ) : isEmbeddableElement(el) ? (
+                    this.props.renderEmbeddable?.(el, this.state)
+                  ) : null) ?? (
                     <iframe
                       ref={(ref) => this.cacheEmbeddableRef(el, ref)}
                       className="excalidraw__embeddable"
@@ -4595,7 +4611,7 @@ class App extends React.Component<AppProps, AppState> {
   public updateScene = withBatchedUpdates(
     <K extends keyof AppState>(sceneData: {
       elements?: SceneData["elements"];
-      appState?: Pick<AppState, K> | null;
+      appState?: Partial<Pick<AppState, K>> | null;
       collaborators?: SceneData["collaborators"];
       /**
        *  Controls which updates should be captured by the `Store`. Captured updates are emmitted and listened to by other components, such as `History` for undo / redo purposes.
@@ -6262,6 +6278,18 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasDoubleClick = (
     event: React.MouseEvent<HTMLCanvasElement>,
   ) => {
+    if (["selection", "lasso"].includes(this.state.activeTool.type)) {
+      const { x, y } = viewportCoordsToSceneCoords(event, this.state);
+      const object = this.getElementAtPosition(x, y);
+      const widget = object?.customData?.fcWidget;
+      if (
+        object?.customData?.fcLanguage ||
+        (widget && ["cube", "cylinder"].includes(widget.kind))
+      ) {
+        this.props.onObjectDoubleClick?.(object!);
+        return;
+      }
+    }
     if (this.isRegionSelectionTool()) {
       return;
     }
@@ -6281,6 +6309,33 @@ class App extends React.Component<AppProps, AppState> {
       event,
       this.state,
     );
+
+    const composite = this.getElementAtPosition(sceneX, sceneY);
+    if (
+      composite?.groupIds.length &&
+      (composite.customData?.fcWidget ||
+        composite.customData?.fcPlot ||
+        composite.customData?.fcInsertion ||
+        composite.customData?.fcLanguage ||
+        composite.customData?.fcAxes)
+    ) {
+      // Factory objects are edited by their object controls. Entering the
+      // generic group/point editor would expose their internal paths as parts.
+      this.setState((previous) => ({
+        ...selectGroupsForSelectedElements(
+          {
+            editingGroupId: null,
+            selectedElementIds: { [composite.id]: true },
+          },
+          this.scene.getNonDeletedElements(),
+          previous,
+          this,
+        ),
+        selectedLinearElement: null,
+      }));
+      this.props.onObjectDoubleClick?.(composite);
+      return;
+    }
 
     if (selectedElements.length === 1 && isLinearElement(selectedElements[0])) {
       const selectedLinearElement: ExcalidrawLinearElement =
@@ -6647,7 +6702,9 @@ class App extends React.Component<AppProps, AppState> {
       gesture.lastCenter = center;
 
       const scaleFactor =
-        this.state.activeTool.type === "freedraw" && this.state.penMode
+        this.state.activeTool.type === "freedraw" &&
+        this.state.penMode &&
+        !this.props.UIOptions.unifiedToolbar
           ? 1
           : distance / gesture.initialDistance;
 
@@ -7265,6 +7322,14 @@ class App extends React.Component<AppProps, AppState> {
     );
     const target = event.currentTarget || this.interactiveCanvas!;
     const tool = this.state.activeTool;
+    if (event.pointerType === "touch" && this.state.multiStroke === false) {
+      this.singleTouchStroke = {
+        pointerId: event.pointerId,
+        length: 0,
+        x: event.clientX,
+        y: event.clientY,
+      };
+    }
     let samples: PointerEvent[] = [];
     let finished = false;
     const append = withBatchedUpdatesThrottled(() => {
@@ -7305,7 +7370,20 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
       next.preventDefault();
-      samples.push(...pointerSamples(next));
+      const incoming = pointerSamples(next);
+      const contact = this.singleTouchStroke;
+      if (contact?.pointerId === next.pointerId) {
+        for (const sample of incoming) {
+          contact.length += Math.hypot(
+            sample.clientX - contact.x,
+            sample.clientY - contact.y,
+          );
+          contact.x = sample.clientX;
+          contact.y = sample.clientY;
+        }
+        gesture.pointers.set(event.pointerId, { x: contact.x, y: contact.y });
+      }
+      samples.push(...incoming);
       append();
     };
     const finish = (cancelled: boolean, lastEvent?: PointerEvent) => {
@@ -7322,6 +7400,9 @@ class App extends React.Component<AppProps, AppState> {
       target.removeEventListener("lostpointercapture", cancel);
       unsubscribe();
       this.parallelInk.delete(event.pointerId);
+      if (this.singleTouchStroke?.pointerId === event.pointerId) {
+        this.singleTouchStroke = null;
+      }
       if (cancelled) {
         this.scene.replaceAllElements(
           this.scene
@@ -7747,12 +7828,28 @@ class App extends React.Component<AppProps, AppState> {
         event.button === 0 &&
         !isHoldingSpace
       ) {
-        if (this.state.multiStroke === false && this.parallelInk.size) {
+        const singleTouch =
+          this.state.multiStroke === false && event.pointerType === "touch";
+        const contact = this.singleTouchStroke;
+        // HTool.vnTouchMove commits single-contact writing at 40 screen pixels.
+        // Before that, HCanvas clears the provisional stroke when a second
+        // finger starts its two/more-contact transform. Multi-write stays ink.
+        const pinch =
+          singleTouch &&
+          (contact ? contact.length < 40 : gesture.pointers.size > 0);
+        if (pinch && contact) {
+          this.parallelInk.get(contact.pointerId)?.(true);
+        } else if (this.state.multiStroke === false && this.parallelInk.size) {
           event.preventDefault();
           return;
         }
-        this.beginParallelInk(event);
-        return;
+        if (!pinch) {
+          if (singleTouch) {
+            this.updateGestureOnPointerDown(event);
+          }
+          this.beginParallelInk(event);
+          return;
+        }
       }
     }
     // If Ctrl is not held, ensure isBindingEnabled reflects the user preference.

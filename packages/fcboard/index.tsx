@@ -80,6 +80,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     generateLinkForSelection,
     onPointerDown,
     onPointerUp,
+    onObjectDoubleClick,
     onScrollChange,
     onDuplicate,
     children,
@@ -186,6 +187,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           generateLinkForSelection={generateLinkForSelection}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
+          onObjectDoubleClick={onObjectDoubleClick}
           onScrollChange={onScrollChange}
           onDuplicate={onDuplicate}
           validateEmbeddable={validateEmbeddable}

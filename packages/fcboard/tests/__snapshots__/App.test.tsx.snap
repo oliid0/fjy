@@ -5,14 +5,14 @@ exports[`Test <App/> > should show error modal when using brave and measureText 
   data-testid="brave-measure-text-error"
 >
   <p>
-    浏览器阻止了文字测量，请在浏览器隐私设置中允许当前应用使用画布后重试。
+    Your browser blocked text measurement. Allow canvas access in the privacy settings for this app, then try again.
   </p>
   <a
     href="http://www.fcjyboard.com/"
     rel="noopener noreferrer"
     target="_blank"
   >
-    方成教育官网
+    Fcboard website
   </a>
 </div>
 `;

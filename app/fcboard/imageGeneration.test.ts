@@ -29,7 +29,9 @@ it("requires the image model before sending any request", async () => {
       new AbortController().signal,
     ),
   ).rejects.toThrow(
-    t("fcboard.函数可直接绘制；生成插图请先在设置中填写图像生成模型 ID"),
+    t(
+      "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
+    ),
   );
   expect(fetcher).not.toHaveBeenCalled();
 });

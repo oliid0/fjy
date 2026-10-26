@@ -364,11 +364,14 @@ export const Export = () => {
 };
 Export.displayName = "Export";
 
-export const Socials = () => (
-  <DropdownMenuItemLink href="http://www.fcjyboard.com/">
-    方成教育官网
-  </DropdownMenuItemLink>
-);
+export const Socials = () => {
+  const { t } = useI18n();
+  return (
+    <DropdownMenuItemLink href="http://www.fcjyboard.com/">
+      {t("fcboard.fcboard_website")}
+    </DropdownMenuItemLink>
+  );
+};
 Socials.displayName = "Socials";
 
 export const LiveCollaborationTrigger = ({

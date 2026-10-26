@@ -95,10 +95,31 @@ describe("one audible teacher", () => {
     } as Response);
     const narrator = createNarrator();
     await expect(narrator.speak("讲解")).rejects.toThrow(
-      t("fcboard.播报接口未返回有效音频"),
+      t("fcboard.the_voice_service_returned_invalid_audio"),
     );
     await narrator.finished;
     expect(players).toHaveLength(0);
+    narrator.stop();
+  });
+  it("ignores replaced audio's late end and error events while the next response is playing", async () => {
+    const narrator = createNarrator();
+    await narrator.speak("first response");
+    const end = players[0].onended;
+    const error = players[0].onerror;
+    await narrator.speak("new response");
+    let finished = false;
+    void narrator.finished.then(() => {
+      finished = true;
+    });
+    const pauses = pause.mock.calls.length;
+    end?.();
+    error?.();
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    expect(pause).toHaveBeenCalledTimes(pauses);
+    players[1].onended?.();
+    await narrator.finished;
+    expect(finished).toBe(true);
     narrator.stop();
   });
   const android = () => {
@@ -123,6 +144,28 @@ describe("one audible teacher", () => {
       id: vi.mocked(OfflineTts.synthesize).mock.calls[0][0].id,
     });
     narrator.stop();
+  });
+  it("ignores a finished native chunk's delayed events after the next chunk starts", async () => {
+    android();
+    const narrator = createNarrator();
+    await narrator.speak("A complete sentence for the classroom. ".repeat(8));
+    const end = players[0].onended;
+    const error = players[0].onerror;
+    end?.();
+    await vi.waitFor(() => expect(players).toHaveLength(2));
+    let finished = false;
+    void narrator.finished.then(() => {
+      finished = true;
+    });
+    const pauses = pause.mock.calls.length;
+    end?.();
+    error?.();
+    await Promise.resolve();
+    expect(players).toHaveLength(2);
+    expect(pause).toHaveBeenCalledTimes(pauses);
+    expect(finished).toBe(false);
+    narrator.stop();
+    await narrator.finished;
   });
   it("does not play a cancelled native result after the board or lesson changes", async () => {
     android();
@@ -175,7 +218,7 @@ describe("one audible teacher", () => {
     await narrator.speak("再次讲解");
     players[0].onerror?.();
     await expect(narrator.finished).rejects.toThrow(
-      t("fcboard.播报接口未返回有效音频"),
+      t("fcboard.the_voice_service_returned_invalid_audio"),
     );
     narrator.stop();
   });

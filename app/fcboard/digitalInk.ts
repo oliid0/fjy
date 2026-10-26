@@ -129,6 +129,7 @@ export const recognizeDigitalInk = async (
   strokes: InkInput,
   signal: AbortSignal,
   kind: "text" | "math",
+  languageHint?: "en-US",
 ) => {
   signal.throwIfAborted();
   const language = currentSettings().inkLanguage;
@@ -137,6 +138,8 @@ export const recognizeDigitalInk = async (
     language:
       kind === "math"
         ? "en-US"
+        : languageHint
+        ? languageHint
         : language !== "auto"
         ? language
         : !getLanguage().code.startsWith("zh")

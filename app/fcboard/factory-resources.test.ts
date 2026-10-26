@@ -7,7 +7,14 @@ it("ships every referenced local resource and retains native subjects and online
   const ids = catalogue.items.map((item) => item.id);
   expect(new Set(ids).size).toBe(ids.length);
   expect(new Set(catalogue.items.map((item) => item.category))).toEqual(
-    new Set(["数学", "物理", "化学", "生物", "地理与天气", "网络资源"]),
+    new Set([
+      "math",
+      "physics",
+      "chemistry",
+      "biology",
+      "geography_weather",
+      "web",
+    ]),
   );
   for (const item of catalogue.items) {
     for (const asset of [

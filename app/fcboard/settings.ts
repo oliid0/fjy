@@ -2,7 +2,7 @@ import { t } from "@excalidraw/excalidraw/i18n";
 import { Capacitor } from "@capacitor/core";
 export const BRAND = {
   name: "Fcboard",
-  company: "方成教育",
+  company: "Fangcheng Education",
   website: "http://www.fcjyboard.com/",
 };
 
@@ -15,7 +15,8 @@ export type Settings = {
   ocr: "auto" | "local" | "cloud";
   inkLanguage: "auto" | "zh-Hani-CN" | "en-US";
   apiKey: string;
-  speech: "local" | "system" | "custom";
+  speech: "cloud" | "local" | "system" | "custom";
+  speechResource: string;
   speechEndpoint: string;
   speechKey: string;
   speechModel: string;
@@ -31,11 +32,12 @@ export const defaults: Settings = {
   model: "doubao-seed-2-0-mini-260428",
   ocrModel: "",
   textModel: "",
-  imageModel: "",
+  imageModel: "doubao-seedream-5-0-flash-260915",
   ocr: "auto",
   inkLanguage: "auto",
   apiKey: "",
   speech: "system",
+  speechResource: "volc.seedasr.sauc.duration",
   speechEndpoint: "",
   speechKey: "",
   speechModel: "whisper-1",
@@ -51,12 +53,16 @@ export const loadSettings = (): Settings => {
     const saved = JSON.parse(localStorage.getItem("fcboard-settings") || "{}");
     return {
       ...defaults,
-      speech: Capacitor.isNativePlatform() ? "local" : defaults.speech,
+      speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
       ...saved,
       model: saved.model?.trim() || defaults.model,
+      imageModel: saved.imageModel?.trim() || defaults.imageModel,
     };
   } catch {
-    return { ...defaults };
+    return {
+      ...defaults,
+      speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
+    };
   }
 };
 
@@ -106,10 +112,12 @@ export const validateEndpoint = (value: string) => {
         (octets[0] === 192 && octets[1] === 168) ||
         (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)));
   if (url.protocol !== "https:" && !(url.protocol === "http:" && local)) {
-    throw new Error(t("fcboard.请使用 HTTPS 接口或局域网 HTTP 接口"));
+    throw new Error(
+      t("fcboard.use_an_https_endpoint_or_a_local_network_http_endpoint"),
+    );
   }
   if (url.username || url.password) {
-    throw new Error(t("fcboard.请将密钥填入密钥栏"));
+    throw new Error(t("fcboard.enter_the_key_in_the_api_key_field"));
   }
   return url.href;
 };

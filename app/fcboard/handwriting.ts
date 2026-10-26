@@ -59,6 +59,18 @@ export const inkLineHeight = (
   );
 };
 
+const normalizedHandwriting = (text: string) =>
+  text.replace(/−/g, "-").replace(/×/g, "x");
+export const supportsHandwriting = (text: string) => {
+  const value = normalizedHandwriting(text);
+  return (
+    value.length <= 1200 &&
+    Array.from(value).every(
+      (character) => /\s/.test(character) || !!glyphs[character],
+    )
+  );
+};
+
 /** Single-stroke glyphs become ordinary factory ink, including local erasure and editable grouping. */
 export const handwritingElements = (
   text: string,
@@ -83,15 +95,12 @@ export const handwritingElements = (
       options.maxWidth,
     ].every(Number.isFinite)
   ) {
-    throw new Error(t("fcboard.书写区域无效，请重新圈选包含有效笔迹的区域"));
+    throw new Error(
+      t("fcboard.invalid_writing_area_circle_an_area_containing_writing_again"),
+    );
   }
-  const value = text.replace(/−/g, "-").replace(/×/g, "x");
-  if (
-    value.length > 1200 ||
-    Array.from(value).some(
-      (character) => !/\s/.test(character) && !glyphs[character],
-    )
-  ) {
+  const value = normalizedHandwriting(text);
+  if (!supportsHandwriting(value)) {
     return null;
   }
   const source = options.source?.find(

@@ -6,7 +6,10 @@ import {
 } from "./recording";
 
 describe("recording lifecycle", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
   it("saves and reloads playable blobs and timestamped transcripts", async () => {
     await saveRecordings([
       {
@@ -73,4 +76,68 @@ describe("recording lifecycle", () => {
     expect(stop).toHaveBeenCalledTimes(1);
     expect(ended).toHaveBeenCalledTimes(1);
   });
+  it.each([false, true])(
+    "preserves one media session and excludes paused time (stop while paused: %s)",
+    async (stopWhilePaused) => {
+      let now = 0;
+      vi.spyOn(Date, "now").mockImplementation(() => now);
+      const release = vi.fn();
+      vi.stubGlobal("navigator", {
+        mediaDevices: {
+          getUserMedia: vi
+            .fn()
+            .mockResolvedValue({ getTracks: () => [{ stop: release }] }),
+        },
+      });
+      const instances: FakeRecorder[] = [];
+      class FakeRecorder {
+        static isTypeSupported() {
+          return true;
+        }
+        state = "inactive";
+        mimeType = "audio/webm";
+        ondataavailable?: (event: { data: Blob }) => void;
+        onstop?: () => void;
+        constructor() {
+          instances.push(this);
+        }
+        start() {
+          this.state = "recording";
+        }
+        pause() {
+          this.state = "paused";
+        }
+        resume() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+          this.ondataavailable?.({
+            data: new Blob(["one continuous recording"]),
+          });
+          this.onstop?.();
+        }
+      }
+      vi.stubGlobal("MediaRecorder", FakeRecorder);
+      const recorder = new BoardRecorder();
+      const ended = vi.fn();
+      await recorder.start("audio", ended);
+      now = 2000;
+      recorder.pause();
+      expect(instances[0].state).toBe("paused");
+      expect(release).not.toHaveBeenCalled();
+      now = 12000;
+      if (!stopWhilePaused) {
+        recorder.resume();
+        expect(instances[0].state).toBe("recording");
+      }
+      now = 15000;
+      const result = await recorder.stop();
+      expect(result.duration).toBe(stopWhilePaused ? 2 : 5);
+      expect(result.blob.size).toBe(24);
+      expect(instances).toHaveLength(1);
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(ended).toHaveBeenCalledTimes(1);
+    },
+  );
 });

@@ -159,7 +159,7 @@ export class SceneSync {
       !packet.files ||
       typeof packet.files !== "object"
     ) {
-      throw new Error(t("fcboard.同步数据无效"));
+      throw new Error(t("fcboard.invalid_sync_data"));
     }
     if (!replace) {
       this.flush();

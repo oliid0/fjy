@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t } from "@excalidraw/excalidraw/i18n";
 
 import { chat, parseJSON, visualMessage } from "./ai";
 import { recognizeHandwriting } from "./ocr";
@@ -6,6 +6,9 @@ import { localMathResult, recognizeMath } from "./mathRecognition";
 import { prepareCalculation } from "./math";
 import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
+import { explainLanguage } from "./languageStudy";
+
+import type { LanguageStudy } from "./languageStudy";
 
 import type { InkInput } from "./digitalInk";
 import type { MathResult } from "./mathRecognition";
@@ -15,19 +18,55 @@ export type InkAssistMode =
   | "shape"
   | "magic"
   | "function"
+  | "language"
   | "calculation";
 export const inkAssistMode = (value: unknown): InkAssistMode | undefined =>
-  ["text", "shape", "magic", "function", "calculation"].includes(String(value))
+  ["text", "shape", "magic", "function", "calculation", "language"].includes(
+    String(value),
+  )
     ? (value as InkAssistMode)
     : undefined;
 export type InkRecognitionResult =
   | { kind: "text"; text: string }
   | {
+      kind: "language";
+      text: string;
+      study: LanguageStudy;
+      targetLanguage: string;
+    }
+  | {
       kind: "shape";
       shape: "rectangle" | "ellipse" | "line" | "arrow" | "triangle";
     }
-  | { kind: "magic"; prompt: string }
+  | { kind: "magic"; prompt: string; image: string }
   | (MathResult & { text: string });
+
+/** Start math recognition early, but preserve the existing whole-expression pause. */
+export const settleInkRecognition = async (
+  mode: InkAssistMode,
+  since: number,
+  signal: AbortSignal,
+) => {
+  signal.throwIfAborted();
+  const remaining =
+    mode === "function" || mode === "calculation"
+      ? 700 - (Date.now() - since)
+      : 0;
+  if (remaining <= 0) {
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Handwriting changed", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, remaining);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+};
 
 /** Both visible surfaces submit raw ink first and receive validated objects, never a rendered math image. */
 export const recognizeInkContent = async (
@@ -35,14 +74,21 @@ export const recognizeInkContent = async (
   capture: () => Promise<string>,
   strokes: InkInput,
   signal: AbortSignal,
+  languageHint?: "en-US",
 ): Promise<InkRecognitionResult> => {
-  if (mode === "text" || mode === "function" || mode === "calculation") {
+  if (
+    mode === "text" ||
+    mode === "language" ||
+    mode === "function" ||
+    mode === "calculation"
+  ) {
+    const targetLanguage = getLanguage().code;
     const text = await recognizeHandwriting(
       capture,
       signal,
       () => {},
-      mode === "text" ? "text" : "math",
-      mode === "text"
+      mode === "text" || mode === "language" ? "text" : "math",
+      mode === "text" || mode === "language"
         ? undefined
         : (candidate) => {
             try {
@@ -57,6 +103,10 @@ export const recognizeInkContent = async (
             }
           },
       strokes,
+      ...(languageHint ||
+      (mode === "language" && currentSettings().inkLanguage === "auto")
+        ? ([languageHint || "en-US"] as const)
+        : []),
     );
     signal.throwIfAborted();
     if (!text.trim() || text.length > 4000) {
@@ -65,22 +115,38 @@ export const recognizeInkContent = async (
     if (mode === "text") {
       return { kind: "text", text };
     }
+    if (mode === "language") {
+      const study = await explainLanguage(text, signal, targetLanguage);
+      signal.throwIfAborted();
+      if (targetLanguage !== getLanguage().code) {
+        throw new DOMException("Language changed", "AbortError");
+      }
+      return { kind: "language", text, study, targetLanguage };
+    }
     return { ...(await recognizeMath(text, mode, signal)), text };
   }
   if (mode === "magic" && !currentSettings().imageModel.trim()) {
     throw new Error(
-      t("fcboard.函数可直接绘制；生成插图请先在设置中填写图像生成模型 ID"),
+      t(
+        "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
+      ),
     );
   }
   const image = await capture();
   signal.throwIfAborted();
   if (!image.startsWith("data:image/")) {
-    throw new Error(t("fcboard.未识别到内容，请重新圈选"));
+    throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
+  }
+  if (mode === "magic") {
+    return {
+      kind: "magic",
+      image,
+      prompt:
+        "将参考手绘中可辨认的主体绘制成精美、清晰的手绘插画。保留主体数量、姿态和构图，白色背景，无文字、无边框。",
+    };
   }
   const instruction =
-    mode === "shape"
-      ? '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle"} 中最接近的一种。不确定返回 {"none":true}。'
-      : '描述这幅手绘中可辨认的主体、数量、姿态和构图，仅返回 {"description":"简短准确的中文描述"}。不局限于教学素材。不能辨认时返回 {"none":true}，不要猜测。';
+    '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle"} 中最接近的一种。不确定返回 {"none":true}。';
   const result = parseJSON(
     await chat([visualMessage(instruction, image)], signal),
   ) as Record<string, unknown>;
@@ -97,17 +163,6 @@ export const recognizeInkContent = async (
         InkRecognitionResult,
         { kind: "shape" }
       >["shape"],
-    };
-  }
-  if (
-    mode === "magic" &&
-    typeof result?.description === "string" &&
-    result.description.trim().length > 0 &&
-    result.description.length <= 800
-  ) {
-    return {
-      kind: "magic",
-      prompt: `将以下手绘主体绘制成精美、清晰的手绘插画，保留主体数量、姿态和构图，白色背景，无文字、无边框、无水印：${result.description.trim()}`,
     };
   }
   throw new Error("No recognized ink object");

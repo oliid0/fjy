@@ -18,6 +18,9 @@ public class OfflineTtsTest {
         // Fail readably before entering JNI if bytecode erasure breaks the callback ABI.
         assertEquals(Integer.class, OfflineTtsEngine.SynthesisCallback.class.getMethod("invoke", float[].class).getReturnType());
         android.content.Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        java.util.List<String> assets = java.util.Arrays.asList(context.getAssets().list("tts/melo"));
+        assertTrue("Missing compact bundled voice", assets.contains("model.int8.onnx"));
+        assertFalse("Obsolete full-size voice must not be packaged too", assets.contains("model.onnx"));
         File output = new File(context.getCacheDir(), "tts-instrumentation.wav");
         try (OfflineTtsEngine engine = new OfflineTtsEngine(context)) {
             for (String text : new String[]{"牛顿定律。", "Hello world."}) {

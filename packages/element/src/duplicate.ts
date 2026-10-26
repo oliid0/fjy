@@ -87,6 +87,22 @@ export const duplicateElement = <TElement extends ExcalidrawElement>(
       return groupIdMapForOperation.get(groupId)!;
     },
   );
+  const insertion = copy.customData?.fcInsertion;
+  const language = copy.customData?.fcLanguage;
+  const languageId = language && groupIdMapForOperation.get(language.group);
+  if (languageId) {
+    copy.customData = {
+      ...copy.customData,
+      fcLanguage: { ...language, group: languageId },
+    };
+  }
+  const insertionId = insertion && groupIdMapForOperation.get(insertion.id);
+  if (insertionId) {
+    copy.customData = {
+      ...copy.customData,
+      fcInsertion: { ...insertion, id: insertionId },
+    };
+  }
   return copy;
 };
 

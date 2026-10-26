@@ -7,14 +7,15 @@ import { t } from "@excalidraw/excalidraw/i18n";
 import type { ReactNode } from "react";
 
 const sections = {
-  background: "背景",
-  pen: "画笔",
-  touch: "触控与橡皮设置",
-  models: "模型与连接",
-  recognition: "手写与插入",
-  voice: "语音与播报",
-  teaching: "教学偏好",
-  tools: "工具箱",
+  background: "background",
+  language: "language",
+  pen: "pen",
+  touch: "touch_and_eraser_settings",
+  models: "models_and_connection",
+  recognition: "handwriting_and_insertion",
+  voice: "speech_and_narration",
+  teaching: "teaching_preferences",
+  tools: "toolbox",
 } as const;
 export type SettingsPage = keyof typeof sections;
 const current = createContext<SettingsPage>("background");
@@ -35,7 +36,7 @@ export const SettingsNavigation = ({
         <List
           component="nav"
           className="fc-settings-navigation"
-          aria-label={t("fcboard.设置导航")}
+          aria-label={t("fcboard.settings_navigation")}
         >
           {(Object.keys(sections) as SettingsPage[])
             .filter((id) => id !== "tools" || hasTools)

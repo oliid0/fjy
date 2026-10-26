@@ -1,5 +1,11 @@
 import { t } from "@excalidraw/excalidraw/i18n";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import { pointFrom } from "@excalidraw/math";
 import { API } from "@excalidraw/excalidraw/tests/helpers/api";
@@ -11,6 +17,7 @@ import type {
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { render } from "./test/render";
+import { writeQuestion } from "./test/question";
 
 import { Classroom } from "./Classroom";
 import { SelectionActions } from "./SelectionActions";
@@ -18,12 +25,17 @@ import * as ai from "./ai";
 import * as ocr from "./ocr";
 import * as speech from "./speech";
 import * as localSpeech from "./localSpeech";
+import * as cloudSpeech from "./cloudSpeech";
 import { classroomCommands } from "./commands";
-import { BoardRecorder } from "./recording";
+import { BoardRecorder, loadRecordings, saveRecordings } from "./recording";
 import { currentSettings, defaults, saveSettings } from "./settings";
 import { handwritingText } from "./handwriting";
 import { insertionDefaults, renderInsertion } from "./insertObjects";
 import { documentSourceSignature } from "./documents";
+import { validateQuestionInk } from "./questionInk";
+
+import { readWidgets } from "./widgets";
+import { lessonSessions } from "./teaching";
 
 import type { InkStroke } from "./documents";
 
@@ -48,6 +60,8 @@ describe("selection-driven classroom controls", () => {
     selected = { [scene[0].id]: true };
   };
   beforeEach(() => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:recording");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     scene = [];
     selected = {};
     change = new Set();
@@ -98,19 +112,287 @@ describe("selection-driven classroom controls", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["local", "system"] as const)(
+  it.each(["1+1=", "1+1"])(
+    "answers a handwritten %s locally beside its ink while preserving the previous selection",
+    async (expression) => {
+      selectText("previous selection");
+      const original = scene[0];
+      vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(expression);
+      const chat = vi.spyOn(ai, "chat");
+      render(<Classroom api={api} />);
+      await act(async () => {
+        await classroomCommands.execute({ name: "assistant.open" });
+      });
+      writeQuestion();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.send_question") }),
+      );
+      await waitFor(() =>
+        expect(handwritingText(scene)).toContain(
+          expression.endsWith("=") ? "2" : "= 2",
+        ),
+      );
+      expect(chat).not.toHaveBeenCalled();
+      expect(selected).toEqual({ [original.id]: true });
+      const answer = scene.find((element) => element.customData?.fcWrittenText);
+      expect(answer!.x).toBeGreaterThan(500);
+      expect(answer!.y).toBeGreaterThanOrEqual(300);
+      expect(scene.find((element) => element.id === original.id)).toBe(
+        original,
+      );
+    },
+  );
+
+  it("summarizes the entire current board in a centered dialog and toggles summary full screen without writing the scene", async () => {
+    selectText("selected topic");
+    const read = vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: scene,
+      text: "whole board",
+      image: undefined,
+    });
+    vi.spyOn(ai, "chat").mockResolvedValue("完整白板总结");
+    render(<Classroom api={api} />);
+    await act(async () => {
+      await classroomCommands.execute({ name: "canvas.summary" });
+    });
+    expect(read).toHaveBeenCalledWith(api, true);
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.ai_summary") }),
+    ).toHaveAttribute("aria-modal", "true");
+    expect(api.updateScene).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: t("fcboard.view_summary_full_screen"),
+      }),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: t("fcboard.exit_full_screen_summary"),
+      }),
+    ).toHaveTextContent("完整白板总结");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: t("fcboard.exit_full_screen_summary"),
+      }),
+    );
+    expect(
+      screen.queryByRole("button", {
+        name: t("fcboard.exit_full_screen_summary"),
+      }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: t("fcboard.view_summary_full_screen"),
+      }),
+    ).toBeVisible();
+  });
+
+  it("discards a handwritten question's pending answer if its actual ink changes", async () => {
+    vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(
+      "这个题目的答案是什么？",
+    );
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [],
+      text: "question",
+      image: undefined,
+    });
+    let finish!: (value: string) => void;
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    render(<Classroom api={api} />);
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
+    writeQuestion();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.send_question") }),
+    );
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
+    act(() => {
+      scene = scene.map((element) => ({
+        ...element,
+        x: element.x + 10,
+        version: element.version + 1,
+      }));
+      change.forEach((notify) => notify());
+    });
+    expect(chat.mock.calls[0][1]?.aborted).toBe(true);
+    await act(async () =>
+      finish(JSON.stringify({ action: "text", text: "stale answer" })),
+    );
+    expect(
+      scene.some(
+        (element) =>
+          element.customData?.fcWrittenText || element.type === "text",
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["cube", "front", 11],
+    ["cylinder", "side", 3],
+  ] as const)(
+    "colors, unfolds, copies and deletes the complete %s through one selection row",
+    async (kind, face, nets) => {
+      api.setActiveTool = vi.fn();
+      vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
+        matches: query.includes("prefers-reduced-motion"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        x: 300,
+        y: 350,
+        left: 300,
+        top: 350,
+        right: 344,
+        bottom: 392,
+        width: 44,
+        height: 42,
+        toJSON: () => ({}),
+      });
+      render(<Classroom api={api} />);
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "tools.insert",
+          args: { kind },
+        });
+      });
+      const original = readWidgets(api)[0].id;
+      const row = () =>
+        within(
+          screen.getByRole("toolbar", { name: t("fcboard.selection_actions") }),
+        );
+      expect(
+        screen.queryByRole("slider", { name: t("fcboard.rotation") }),
+      ).toBeNull();
+      fireEvent.click(
+        row().getByRole("button", { name: t("fcboard.face_colors") }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "#ef4444" }));
+      await waitFor(() =>
+        expect(readWidgets(api)[0].params.solid.colors[face]).toBe("#ef4444"),
+      );
+      fireEvent.keyDown(
+        screen.getByRole("dialog", { name: t("fcboard.face_colors") }),
+        { key: "Escape" },
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("dialog", { name: t("fcboard.face_colors") }),
+        ).toBeNull(),
+      );
+      fireEvent.click(
+        row().getByRole("button", { name: t("fcboard.unfold_shape") }),
+      );
+      await waitFor(() =>
+        expect(readWidgets(api)[0].params.solid.unfold).toBe(1),
+      );
+      fireEvent.click(
+        row().getByRole("button", { name: t("fcboard.unfolding_nets") }),
+      );
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: t("fcboard.net_index", { index: nets }),
+        }),
+      );
+      await waitFor(() =>
+        expect(readWidgets(api)[0].params.solid.net).toBe(nets - 1),
+      );
+      expect(readWidgets(api)[0].params.solid.colors[face]).toBe("#ef4444");
+      expect(screen.getAllByRole("button", { name: "AI" })).toHaveLength(1);
+      fireEvent.click(row().getByRole("button", { name: t("labels.copy") }));
+      await waitFor(() => expect(readWidgets(api)).toHaveLength(2));
+      const clone = readWidgets(api).find((widget) => widget.id !== original)!;
+      expect(clone.params.solid.colors[face]).toBe("#ef4444");
+      fireEvent.click(row().getByRole("button", { name: t("labels.delete") }));
+      await waitFor(() =>
+        expect(readWidgets(api).map((widget) => widget.id)).toEqual([original]),
+      );
+      expect(
+        scene.some((element) => element.customData?.fcWidget?.id === clone.id),
+      ).toBe(false);
+    },
+  );
+
+  it.each(["sphere", "cone", "frustum", "prism", "pyramid"] as const)(
+    "keeps %s as one factory-colored object with only its compact shape actions",
+    async (kind) => {
+      api.setActiveTool = vi.fn();
+      const state = api.getAppState;
+      vi.spyOn(api, "getAppState").mockImplementation(() => ({
+        ...state(),
+        currentItemStrokeColor: "#dc2626",
+      }));
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        left: 100,
+        top: 100,
+        right: 140,
+        bottom: 140,
+        width: 40,
+        height: 40,
+        x: 100,
+        y: 100,
+        toJSON: () => ({}),
+      });
+      render(<Classroom api={api} />);
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "tools.insert",
+          args: { kind },
+        });
+      });
+      expect(scene.length).toBeGreaterThan(1);
+      expect(scene.every((element) => element.strokeColor === "#dc2626")).toBe(
+        true,
+      );
+      expect(new Set(scene.map((element) => element.groupIds[0])).size).toBe(1);
+      const row = within(
+        screen.getByRole("toolbar", { name: t("fcboard.selection_actions") }),
+      );
+      expect(
+        row.queryByRole("button", { name: t("fcboard.unfold_shape") }),
+      ).toBeNull();
+      fireEvent.click(
+        row.getByRole("button", { name: t("fcboard.shape_color") }),
+      );
+      fireEvent.click(
+        within(
+          screen.getByRole("dialog", { name: t("fcboard.shape_color") }),
+        ).getByRole("button", { name: "#17243c" }),
+      );
+      await waitFor(() =>
+        expect(
+          scene.every((element) => element.strokeColor === "#17243c"),
+        ).toBe(true),
+      );
+      expect(
+        screen.queryByRole("button", { name: t("fcboard.close_tool_panel") }),
+      ).toBeNull();
+    },
+  );
+
+  it.each(["local", "cloud", "system"] as const)(
     "keeps %s voice listening across consecutive turns until explicitly stopped",
     async (provider) => {
       saveSettings({ ...defaults, speech: provider }, false);
       let deliver!: (text: string) => void;
       const stop = vi.fn();
       const cancel = vi.fn().mockResolvedValue(undefined);
-      const local = vi
-        .spyOn(localSpeech, "startLocalSpeech")
-        .mockImplementation(async (onLine) => {
-          deliver = (text) => onLine({ time: 0, text });
-          return { stop: vi.fn().mockResolvedValue(undefined), cancel };
-        });
+      const local = (
+        provider === "cloud"
+          ? vi.spyOn(cloudSpeech, "startCloudSpeech")
+          : vi.spyOn(localSpeech, "startLocalSpeech")
+      ).mockImplementation(async (onLine) => {
+        deliver = (text) => onLine({ time: 0, text });
+        return { stop: vi.fn().mockResolvedValue(undefined), cancel };
+      });
       const system = vi
         .spyOn(speech, "startSystemSpeech")
         .mockImplementation(async (onText) => {
@@ -167,7 +449,7 @@ describe("selection-driven classroom controls", () => {
         });
         expect(clear).toHaveBeenCalledTimes(2);
         expect(cloud).not.toHaveBeenCalled();
-        if (provider === "local") {
+        if (provider !== "system") {
           expect(local).toHaveBeenCalledTimes(1);
           expect(cancel).toHaveBeenCalledTimes(1);
           expect(system).not.toHaveBeenCalled();
@@ -187,6 +469,157 @@ describe("selection-driven classroom controls", () => {
       }
     },
   );
+
+  it("keeps the assistant speaking until real audio ends and voice.speak completes only then", async () => {
+    saveSettings(
+      {
+        ...currentSettings(),
+        speech: "local",
+        ttsEndpoint: "https://voice.example.test/speech",
+      },
+      false,
+    );
+    const capture = {
+      stop: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.spyOn(localSpeech, "startLocalSpeech").mockResolvedValue(capture);
+    const players: {
+      onended?: () => void;
+      pause: () => void;
+      play: () => Promise<void>;
+    }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        blob: async () => new Blob(["wav"], { type: "audio/wav" }),
+      }),
+    );
+    vi.stubGlobal(
+      "Audio",
+      class {
+        pause = vi.fn();
+        play = vi.fn().mockResolvedValue(undefined);
+        constructor() {
+          players.push(this);
+        }
+      },
+    );
+    const view = render(<Classroom api={api} />);
+    let finished = false;
+    let task!: Promise<unknown>;
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      await act(async () => {
+        task = classroomCommands
+          .execute({ name: "voice.speak", args: { text: "Actual reply" } })
+          .then(() => {
+            finished = true;
+          });
+      });
+      expect(players).toHaveLength(1);
+      expect(finished).toBe(false);
+      expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
+        "data-state",
+        "speaking",
+      );
+      await act(async () => {
+        players[0].onended?.();
+        await task;
+      });
+      expect(finished).toBe(true);
+      expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
+        "data-state",
+        "listening",
+      );
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(capture.cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("interrupts an uncooperative model immediately, keeps listening, and lets the next spoken command write without an old answer", async () => {
+    saveSettings({ ...currentSettings(), speech: "cloud" }, false);
+    let deliver!: (text: string) => void;
+    const capture = {
+      stop: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.spyOn(cloudSpeech, "startCloudSpeech").mockImplementation(
+      async (onLine) => {
+        deliver = (text) => onLine({ time: 0, text });
+        return capture;
+      },
+    );
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [],
+      text: "",
+      image: undefined,
+    });
+    let reply!: (value: string) => void;
+    const chat = vi.spyOn(ai, "chat").mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          reply = resolve;
+        }),
+    );
+    const view = render(<Classroom api={api} />);
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      act(() => deliver("重力是什么？"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(chat).toHaveBeenCalledTimes(1);
+      const signal = chat.mock.calls[0][1]!;
+      expect(signal.aborted).toBe(false);
+      expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
+        "data-state",
+        "thinking",
+      );
+      act(() => deliver("停止"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(signal.aborted).toBe(true);
+      expect(capture.cancel).not.toHaveBeenCalled();
+      expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
+        "data-state",
+        "listening",
+      );
+      act(() => deliver("写一个2"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(handwritingText(scene)).toEqual(["2"]);
+      await act(async () => {
+        reply(JSON.stringify({ action: "text", text: "Old answer" }));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(handwritingText(scene)).toEqual(["2"]);
+      expect(chat).toHaveBeenCalledTimes(1);
+      expect(classroomCommands.read("classroom")).toMatchObject({
+        listening: true,
+      });
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(capture.cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
 
   it("keeps a turn through same-page context updates and drops it when the actual page changes", async () => {
     saveSettings({ ...defaults, speech: "local" }, false);
@@ -284,61 +717,106 @@ describe("selection-driven classroom controls", () => {
     view.unmount();
   });
 
-  it("shares recording transcription across multiple commands without restarting or stopping the microphone", async () => {
-    saveSettings({ ...defaults, speech: "local" }, false);
-    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
-    let deliver!: (text: string) => void;
-    const stop = vi.fn().mockResolvedValue(undefined);
-    const cancel = vi.fn().mockResolvedValue(undefined);
-    const start = vi
-      .spyOn(localSpeech, "startLocalSpeech")
-      .mockImplementation(async (onLine) => {
+  it.each(["local", "cloud"] as const)(
+    "shares %s recording transcription across multiple commands without restarting or stopping the microphone",
+    async (provider) => {
+      saveSettings({ ...defaults, speech: provider }, false);
+      vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+      const shared = {} as MediaStream;
+      vi.spyOn(BoardRecorder.prototype, "audioStream", "get").mockReturnValue(
+        shared,
+      );
+      let deliver!: (text: string) => void;
+      let fail!: (message: string) => void;
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const start = (
+        provider === "cloud"
+          ? vi.spyOn(cloudSpeech, "startCloudSpeech")
+          : vi.spyOn(localSpeech, "startLocalSpeech")
+      ).mockImplementation(async (onLine, onError) => {
         deliver = (text) => onLine({ time: 0, text });
+        fail = onError;
         return { stop, cancel };
       });
-    const view = render(<Classroom api={api} />);
-    const clear = vi.fn();
-    const release = classroomCommands.register(
-      "canvas.clear",
-      "@internal",
-      clear,
-    );
-    await act(async () => {
-      await classroomCommands.execute({
-        name: "record.start",
-        args: { mode: "audio" },
-      });
-    });
-    vi.useFakeTimers();
-    try {
+      const view = render(<Classroom api={api} />);
+      const clear = vi.fn();
+      const release = classroomCommands.register(
+        "canvas.clear",
+        "@internal",
+        clear,
+      );
       await act(async () => {
-        await classroomCommands.execute({ name: "voice.toggle" });
+        await classroomCommands.execute({
+          name: "record.start",
+          args: { mode: "audio" },
+        });
       });
-      const onTranscript = deliver;
-      for (let index = 0; index < 2; index++) {
-        act(() => onTranscript("清空白板"));
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          await classroomCommands.execute({ name: "voice.toggle" });
+        });
+        const onTranscript = deliver;
+        for (let index = 0; index < 2; index++) {
+          act(() => onTranscript("清空白板"));
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(3000);
+          });
+        }
+        expect(clear).toHaveBeenCalledTimes(2);
+        await act(async () => {
+          await classroomCommands.execute({ name: "voice.toggle" });
+        });
+        act(() => deliver("清空白板"));
         await act(async () => {
           await vi.advanceTimersByTimeAsync(3000);
         });
+        expect(clear).toHaveBeenCalledTimes(2);
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(start.mock.calls[0][2]).toBe(shared);
+        expect(stop).not.toHaveBeenCalled();
+        expect(cancel).not.toHaveBeenCalled();
+        if (provider === "cloud") {
+          const fallback = vi
+            .spyOn(speech, "startSystemSpeech")
+            .mockImplementation(async (onText) => {
+              deliver = onText;
+              return vi.fn();
+            });
+          await act(async () => {
+            fail("provider disconnected");
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+          expect(fallback).toHaveBeenCalledTimes(1);
+          await act(async () => {
+            await classroomCommands.execute({ name: "voice.toggle" });
+          });
+          act(() => deliver("清空白板"));
+          await act(async () => {
+            await vi.advanceTimersByTimeAsync(3000);
+          });
+          expect(clear).toHaveBeenCalledTimes(3);
+        } else {
+          act(() => fail("provider disconnected"));
+          await act(async () => {
+            await expect(
+              classroomCommands.execute({ name: "voice.toggle" }),
+            ).rejects.toThrow(
+              t(
+                "fcboard.live_transcription_is_disconnected_finish_recording_before_restarting_voice_commands",
+              ),
+            );
+          });
+        }
+      } finally {
+        view.unmount();
+        release();
+        vi.useRealTimers();
       }
-      expect(clear).toHaveBeenCalledTimes(2);
-      await act(async () => {
-        await classroomCommands.execute({ name: "voice.toggle" });
-      });
-      act(() => deliver("清空白板"));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3000);
-      });
-      expect(clear).toHaveBeenCalledTimes(2);
-      expect(start).toHaveBeenCalledTimes(1);
-      expect(stop).not.toHaveBeenCalled();
-      expect(cancel).not.toHaveBeenCalled();
-    } finally {
-      view.unmount();
-      release();
-      vi.useRealTimers();
-    }
-  });
+    },
+  );
 
   it.each(["question", "summary", "lesson"] as const)(
     "uses only the visible courseware for %s and never captures the hidden board",
@@ -385,14 +863,30 @@ describe("selection-driven classroom controls", () => {
       }));
       const draw = vi.fn();
       const text = vi.fn();
+      let visibleInk: InkStroke[] = [];
       const stops = [
         classroomCommands.context("document", () => ({
           id: "course",
           name: "visible.pdf",
           page: 2,
-          ink: [],
+          ink: visibleInk,
           text: "visible courseware",
+          viewport: { left: 0, top: 0, scroll: 0 },
         })),
+        classroomCommands.context("document.layout", () => ({
+          scale: 1,
+          viewport: { left: 16, top: 16, right: 1200, bottom: 700 },
+          obstacles: [],
+        })),
+        classroomCommands.register("document.strokes", "@internal", (args) => {
+          visibleInk = validateQuestionInk(args.strokes).map((points) => ({
+            id: crypto.randomUUID(),
+            points,
+            color: "#000000",
+            width: 2,
+          }));
+          return { ids: visibleInk.map((stroke) => stroke.id) };
+        }),
         classroomCommands.register("document.snapshot", "@internal", () => ({
           name: "visible.pdf",
           page: 2,
@@ -408,12 +902,12 @@ describe("selection-driven classroom controls", () => {
           await act(async () => {
             await classroomCommands.execute({ name: "assistant.open" });
           });
-          fireEvent.change(
-            screen.getByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
-            { target: { value: "给我一个学习建议" } },
+          vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(
+            "给我一个学习建议",
           );
+          writeQuestion();
           fireEvent.click(
-            screen.getByRole("button", { name: t("fcboard.发送问题") }),
+            screen.getByRole("button", { name: t("fcboard.send_question") }),
           );
           await waitFor(() => expect(text).toHaveBeenCalled());
         } else {
@@ -424,9 +918,14 @@ describe("selection-driven classroom controls", () => {
                 : { name: "lesson.ask", args: { prompt: "讲解这张课件" } },
             );
           });
-          await waitFor(() =>
-            expect(operation === "lesson" ? draw : text).toHaveBeenCalled(),
-          );
+          if (operation === "summary") {
+            expect(
+              screen.getByRole("dialog", { name: t("fcboard.ai_summary") }),
+            ).toHaveTextContent("visible summary");
+            expect(text).not.toHaveBeenCalled();
+          } else {
+            await waitFor(() => expect(draw).toHaveBeenCalled());
+          }
         }
         expect(capture).not.toHaveBeenCalled();
         expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
@@ -621,6 +1120,13 @@ describe("selection-driven classroom controls", () => {
             steps: [
               {
                 say: "",
+                tools: [
+                  {
+                    name: "math.evaluate",
+                    args: { expression: "0.1+0.2" },
+                    expect: [{ path: "answer", equals: "0.3" }],
+                  },
+                ],
                 commands: [
                   {
                     type: "write_text",
@@ -636,7 +1142,8 @@ describe("selection-driven classroom controls", () => {
             quiz: [],
           },
         }),
-      );
+      )
+      .mockResolvedValue('{"action":"keep"}');
     vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
       matches: false,
       media: query,
@@ -656,6 +1163,10 @@ describe("selection-driven classroom controls", () => {
         ink: [],
         text: "小数加法",
       })),
+      classroomCommands.context("document.layout", () => ({
+        scale: 1,
+        viewport: { left: 16, top: 16, right: 984, bottom: 584 },
+      })),
       classroomCommands.register("document.snapshot", "@internal", () => ({
         name: "decimals.pdf",
         page: 2,
@@ -673,11 +1184,27 @@ describe("selection-driven classroom controls", () => {
         });
       });
       await waitFor(() => expect(draw).toHaveBeenCalled());
-      expect(chat).toHaveBeenCalledTimes(2);
+      expect(chat).toHaveBeenCalledTimes(3);
       const observed = String(chat.mock.calls[1][0].at(-1)?.content);
       expect(observed).toContain('"answer":"0.3"');
       expect(observed).toContain('"kind":"document"');
       expect(observed).toContain("课程JSON");
+      expect(String(chat.mock.calls[2][0].at(-1)?.content)).toContain(
+        '"answer":"0.3"',
+      );
+      expect(String(chat.mock.calls[0][0][0].content)).toContain(
+        "Each step may also include tools",
+      );
+      expect(classroomCommands.read("teacher")).toMatchObject({
+        toolResults: [
+          { name: "math.evaluate", ok: true, result: { answer: "0.3" } },
+        ],
+      });
+      const saved = (await lessonSessions()).find(
+        (session) => session.lesson.title === "小数加法",
+      )!;
+      expect(saved.toolIndex).toBe(1);
+      expect(saved.canvas.document).toEqual({ name: "decimals.pdf", page: 2 });
       expect(capture).not.toHaveBeenCalled();
       expect(api.updateScene).not.toHaveBeenCalled();
     } finally {
@@ -698,27 +1225,21 @@ describe("selection-driven classroom controls", () => {
     await act(async () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
-    fireEvent.change(
-      screen.getByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
-      {
-        target: { value: "插入一个矩形" },
-      },
-    );
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockResolvedValue("插入一个矩形");
+    writeQuestion();
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.发送问题") }),
+      screen.getByRole("button", { name: t("fcboard.send_question") }),
     );
     await waitFor(() => expect(ai.chat).toHaveBeenCalledTimes(1));
     await act(async () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
-    fireEvent.change(
-      screen.getByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
-      {
-        target: { value: "清空当前白板" },
-      },
-    );
+    recognize.mockResolvedValue("清空当前白板");
+    writeQuestion();
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.发送问题") }),
+      screen.getByRole("button", { name: t("fcboard.send_question") }),
     );
     await act(async () => {
       finish(
@@ -731,29 +1252,32 @@ describe("selection-driven classroom controls", () => {
     expect(scene).toHaveLength(0);
   });
 
-  it("inserts four-line paper and enables writing in visible courseware without touching the hidden board", async () => {
-    const tool = vi.fn();
-    const insert = vi.fn();
-    const release = [
-      classroomCommands.register("document.draw", "@internal", () => {}),
-      classroomCommands.register("document.insertion", "@internal", insert),
-      classroomCommands.register("document.tool", "@internal", tool),
-    ];
-    try {
-      render(<Classroom api={api} />);
-      await act(async () => {
-        await classroomCommands.execute({
-          name: "insert.object",
-          args: { kind: "fourline" },
+  it.each(["fourline", "mindmap"] as const)(
+    "inserts %s and enables writing in visible courseware without touching the hidden board",
+    async (kind) => {
+      const tool = vi.fn();
+      const insert = vi.fn();
+      const release = [
+        classroomCommands.register("document.draw", "@internal", () => {}),
+        classroomCommands.register("document.insertion", "@internal", insert),
+        classroomCommands.register("document.tool", "@internal", tool),
+      ];
+      try {
+        render(<Classroom api={api} />);
+        await act(async () => {
+          await classroomCommands.execute({
+            name: "insert.object",
+            args: { kind },
+          });
         });
-      });
-      expect(insert).toHaveBeenCalledTimes(1);
-      expect(tool).toHaveBeenCalledWith({ tool: "freedraw" });
-      expect(api.updateScene).not.toHaveBeenCalled();
-    } finally {
-      release.forEach((dispose) => dispose());
-    }
-  });
+        expect(insert).toHaveBeenCalledTimes(1);
+        expect(tool).toHaveBeenCalledWith({ tool: "freedraw" });
+        expect(api.updateScene).not.toHaveBeenCalled();
+      } finally {
+        release.forEach((dispose) => dispose());
+      }
+    },
+  );
 
   it("handles consecutive recording commands without waiting for a new render", async () => {
     vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
@@ -772,6 +1296,187 @@ describe("selection-driven classroom controls", () => {
     expect(BoardRecorder.prototype.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("stops media promptly, drains final speech and persists the video, transcript and AI summary together", async () => {
+    await saveRecordings([]);
+    saveSettings(
+      { ...defaults, apiKey: "test", speech: "local", autoSummary: true },
+      false,
+    );
+    const order: string[] = [];
+    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(BoardRecorder.prototype, "stop").mockImplementation(async () => {
+      order.push("media");
+      return {
+        blob: new Blob(["video"], { type: "video/webm" }),
+        duration: 12,
+      };
+    });
+    vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      async (onLine) => ({
+        stop: async () => {
+          order.push("speech");
+          onLine({ time: 10, text: "F=ma" });
+        },
+        cancel: vi.fn(),
+      }),
+    );
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValue("Force equals mass times acceleration.");
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "record.start",
+          args: { mode: "screen" },
+        });
+        await classroomCommands.execute({ name: "record.stop" });
+      });
+      expect(order).toEqual(["media", "speech"]);
+      const saved = await loadRecordings();
+      expect(saved).toHaveLength(1);
+      expect(saved[0].blob.size).toBe(5);
+      expect(saved[0].transcript).toContainEqual(
+        expect.objectContaining({ text: "F=ma" }),
+      );
+      expect(saved[0].summary).toBe("Force equals mass times acceleration.");
+      expect(JSON.stringify(chat.mock.calls[0][0])).toContain("F=ma");
+      expect(
+        screen.getByRole("button", { name: t("buttons.saveAs") }),
+      ).toBeEnabled();
+    } finally {
+      view.unmount();
+      await saveRecordings([]);
+    }
+  });
+
+  it("keeps recording behind the board with pause, resume, restore and stop in its floating controls", async () => {
+    await saveRecordings([]);
+    saveSettings({ ...defaults, speech: "local", autoSummary: false }, false);
+    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+    const pause = vi
+      .spyOn(BoardRecorder.prototype, "pause")
+      .mockImplementation(() => {});
+    const resume = vi
+      .spyOn(BoardRecorder.prototype, "resume")
+      .mockImplementation(() => {});
+    const stop = vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({
+      blob: new Blob(["media"], { type: "audio/webm" }),
+      duration: 2,
+    });
+    const drain = vi.fn().mockResolvedValue(undefined);
+    const speech = vi.spyOn(localSpeech, "startLocalSpeech").mockResolvedValue({
+      stop: drain,
+      cancel: vi.fn().mockResolvedValue(undefined),
+    });
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "record.open" });
+        await classroomCommands.execute({
+          name: "record.start",
+          args: { mode: "audio" },
+        });
+      });
+      expect(
+        screen.queryByRole("dialog", { name: t("fcboard.recording") }),
+      ).toBeNull();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.recording_pause") }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: t("fcboard.recording_resume") }),
+        ).toBeEnabled(),
+      );
+      expect(pause).toHaveBeenCalledTimes(1);
+      expect(drain).toHaveBeenCalledTimes(1);
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.recording_resume") }),
+      );
+      await waitFor(() => expect(speech).toHaveBeenCalledTimes(2));
+      expect(resume).toHaveBeenCalledTimes(1);
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: t("fcboard.restore_recording_window"),
+        }),
+      );
+      expect(
+        screen.getByRole("dialog", { name: t("fcboard.recording") }),
+      ).toBeVisible();
+      expect(stop).not.toHaveBeenCalled();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.minimize_recording") }),
+      );
+      expect(
+        screen.queryByRole("dialog", { name: t("fcboard.recording") }),
+      ).toBeNull();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.stop_recording") }),
+      );
+      await waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+      await waitFor(() =>
+        expect(
+          screen.getByRole("dialog", { name: t("fcboard.recording") }),
+        ).toBeVisible(),
+      );
+    } finally {
+      view.unmount();
+      await saveRecordings([]);
+    }
+  });
+
+  it("waits for a paused transcription tail when stopped, without losing the final line", async () => {
+    await saveRecordings([]);
+    saveSettings({ ...defaults, speech: "local", autoSummary: false }, false);
+    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(BoardRecorder.prototype, "pause").mockImplementation(() => {});
+    const stop = vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({
+      blob: new Blob(["media"], { type: "audio/webm" }),
+      duration: 2,
+    });
+    let finish!: () => void;
+    vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      async (onLine) => ({
+        stop: () =>
+          new Promise<void>((resolve) => {
+            finish = () => {
+              onLine({ time: 1, text: "Final words before pause" });
+              resolve();
+            };
+          }),
+        cancel: vi.fn().mockResolvedValue(undefined),
+      }),
+    );
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "record.start",
+          args: { mode: "audio" },
+        });
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.recording_pause") }),
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.stop_recording") }),
+      );
+      await waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+      expect(await loadRecordings()).toHaveLength(0);
+      await act(async () => finish());
+      await waitFor(async () =>
+        expect((await loadRecordings())[0]?.transcript).toContainEqual(
+          expect.objectContaining({ text: "Final words before pause" }),
+        ),
+      );
+      expect(stop).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      await saveRecordings([]);
+    }
+  });
+
   it("tests unsaved configuration and displays the actual model reply", async () => {
     saveSettings({ ...defaults, apiKey: "test", model: "saved-model" }, false);
     vi.spyOn(ai, "boardContext").mockResolvedValue({
@@ -788,22 +1493,25 @@ describe("selection-driven classroom controls", () => {
       });
     });
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.模型与连接") }),
+      screen.getByRole("button", { name: t("fcboard.models_and_connection") }),
     );
     fireEvent.change(
-      screen.getByPlaceholderText(t("fcboard.填写支持视觉的模型 ID")),
+      screen.getByPlaceholderText(t("fcboard.enter_a_vision_model_id")),
       {
         target: { value: "unsaved-model" },
       },
     );
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.测试当前配置") }),
+      screen.getByRole("button", { name: t("fcboard.test_current_settings") }),
     );
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent(
-        t("fcboard.连接测试返回：{{result}}；在白板书写后可测试截图识别", {
-          result: "连接成功",
-        }),
+        t(
+          "fcboard.connection_test_result_result_write_on_the_board_to_test_image_recognition",
+          {
+            result: "连接成功",
+          },
+        ),
       ),
     );
     expect(ai.chat).toHaveBeenCalledWith(
@@ -876,13 +1584,13 @@ describe("selection-driven classroom controls", () => {
     expect(chat).not.toHaveBeenCalled();
     expect(recognize).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("toolbar", { name: t("fcboard.选区操作") }),
+      screen.getByRole("toolbar", { name: t("fcboard.selection_actions") }),
     ).toBeVisible();
     expect(screen.getAllByRole("button", { name: "AI" })).toHaveLength(1);
-    for (const label of ["计算", "图像", "问答"]) {
+    for (const label of ["calculate", "image", "questions"]) {
       expect(
         screen.queryByRole("button", {
-          name: t(`fcboard.${label}` as "fcboard.计算"),
+          name: t(`fcboard.${label}` as "fcboard.calculate"),
         }),
       ).toBeNull();
     }
@@ -1085,10 +1793,10 @@ describe("selection-driven classroom controls", () => {
     const recognize = vi.spyOn(ocr, "recognizeHandwriting");
     render(<Classroom api={api} />);
     expect(
-      screen.getByRole("toolbar", { name: t("fcboard.选区操作") }),
+      screen.getByRole("toolbar", { name: t("fcboard.selection_actions") }),
     ).toBeVisible();
     expect(
-      screen.queryByRole("dialog", { name: t("fcboard.表格") }),
+      screen.queryByRole("dialog", { name: t("fcboard.table") }),
     ).toBeNull();
     expect(recognize).not.toHaveBeenCalled();
   });
@@ -1161,27 +1869,18 @@ describe("selection-driven classroom controls", () => {
     ).toHaveLength(1);
   });
 
-  it("explains a selected foreign word on the canvas with one explicit request", async () => {
+  it("keeps a selected foreign word in ordinary AI question flow", async () => {
     selectText("bonjour");
-    const chat = vi.spyOn(ai, "chat").mockResolvedValue(
-      JSON.stringify({
-        language: "fr",
-        term: "bonjour",
-        pronunciation: "/bɔ̃.ʒuʁ/",
-        syllables: "bon·jour",
-        meanings: [{ partOfSpeech: "interjection", definition: "hello" }],
-        usage: "A daytime greeting.",
-        grammar: "bon + jour",
-        examples: [{ text: "Bonjour, Marie !", translation: "Hello, Marie!" }],
-      }),
-    );
+    const chat = vi.spyOn(ai, "chat").mockResolvedValue("A French greeting.");
     render(<Classroom api={api} />);
     expect(chat).not.toHaveBeenCalled();
+    expect(classroomCommands.has("language.explain")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "AI" }));
     await waitFor(() => expect(scene).toHaveLength(2));
     expect(scene[0].type === "text" && scene[0].text).toBe("bonjour");
-    expect(scene[1].type === "text" && scene[1].text).toContain("bon·jour");
-    expect(scene[1].type === "text" && scene[1].text).toContain("interjection");
+    expect(scene[1].type === "text" && scene[1].text).toBe(
+      "A French greeting.",
+    );
     expect(chat).toHaveBeenCalledTimes(1);
   });
 
@@ -1386,9 +2085,10 @@ describe("selection-driven classroom controls", () => {
       scene.some((el) => el.type === "text" && el.text.includes("合外力")),
     ).toBe(true);
     expect(scene.find((el) => el.id === ink.id)).toBe(ink);
-    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(String(chat.mock.calls[1][0].at(-1)?.content)).toContain(ink.id);
     expect(
-      screen.queryByRole("textbox", { name: t("fcboard.向 AI 教师提问") }),
+      screen.queryByRole("textbox", { name: t("fcboard.ask_the_ai_teacher") }),
     ).toBeNull();
   });
 
@@ -1411,7 +2111,9 @@ describe("selection-driven classroom controls", () => {
     );
     try {
       expect(screen.getAllByRole("button", { name: "AI" })).toHaveLength(1);
-      fireEvent.click(screen.getByRole("button", { name: t("fcboard.搜索") }));
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.search") }),
+      );
       await waitFor(() =>
         expect(open).toHaveBeenCalledWith({
           url: "https://www.google.com/search?q=Newton%20laws",
@@ -1444,7 +2146,7 @@ describe("selection-driven classroom controls", () => {
     ).toBe(true);
     fireEvent.change(
       screen.getByRole("slider", {
-        name: t("fcboard.调节 {{key}}", { key: "a" }),
+        name: t("fcboard.adjust_key", { key: "a" }),
       }),
       {
         target: { value: "2" },
@@ -1456,8 +2158,15 @@ describe("selection-driven classroom controls", () => {
     expect(scene.some((el) => original.some((old) => old.id === el.id))).toBe(
       false,
     );
+    const selection = vi.mocked(api.updateScene).mock.calls.at(-1)![0]
+      .appState!;
+    const group = scene.find((element) => element.customData?.fcPlot)!
+      .groupIds[0];
+    expect(selection.selectedGroupIds).toEqual({ [group]: true });
+    expect(selection.editingGroupId).toBeNull();
+    expect(selection.selectedLinearElement).toBeNull();
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.关闭工具浮层") }),
+      screen.getByRole("button", { name: t("fcboard.close_tool_panel") }),
     );
     await act(async () => {
       selected = {};
@@ -1467,7 +2176,7 @@ describe("selection-driven classroom controls", () => {
     });
     expect(
       screen.getByRole("slider", {
-        name: t("fcboard.调节 {{key}}", { key: "a" }),
+        name: t("fcboard.adjust_key", { key: "a" }),
       }),
     ).toHaveValue("2");
   });

@@ -375,7 +375,7 @@
     "headingMain": "Teḍra-d tuccḍa. Eɛreḍ <button>asali n usebter tikkelt-nniḍen.</button>",
     "clearCanvasMessage": "Ma yella tulsa n usali ur tefri ara ugur, eɛreḍ <button>asfaḍ n teɣzut n usuneɣ.</button>",
     "clearCanvasCaveat": " Ayagi ad d-iglu s usṛuḥu n umahil ",
-    "trackedToSentry": "Tuccḍa akked umesmagi {{eventId}} tettwasekles deg unagraw-nneɣ.",
+    "trackedToSentry": "",
     "openIssueMessage": "Nḥuder aṭas akken ur nseddu ara talɣut n usayes-inek (m) di tuccḍa. Ma yella asayes-inek (m) mačči d amaẓlay, ttxil-k (m) xemmem ad ḍefreḍ <button>afecku n weḍfar n yibugen.</button> Ma ulac uɣilif seddu talɣut ukessar-agi s wenɣal akked usenṭeḍ di Fcboard issue.",
     "sceneContent": "Agbur n usayes:"
   },

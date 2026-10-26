@@ -1,27 +1,56 @@
-import { isDictionaryWord, parseLanguageStudy } from "./languageStudy";
+import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
+import { languageStudy } from "./test/language";
 
-it("keeps automatic word lookup separate from equations, questions and lesson titles", () => {
-  expect(isDictionaryWord("bonjour")).toBe(true);
-  expect(isDictionaryWord("Straße")).toBe(true);
-  expect(isDictionaryWord("l'école")).toBe(true);
-  for (const text of [
-    "1+1=",
-    "Newton's laws",
-    "Why?",
-    "牛顿定律",
-    "私は学生です。",
-    "",
-  ]) {
-    expect(isDictionaryWord(text)).toBe(false);
-  }
-});
-
-it("rejects incomplete language output before it can become board content", () => {
+it("requires a bounded complete translation and learning data before writing", () => {
+  expect(parseLanguageStudy(JSON.stringify(languageStudy))).toEqual(
+    languageStudy,
+  );
   for (const value of [
     null,
     { term: "hello" },
-    { language: "en", term: "hello", meanings: [], examples: [] },
+    { ...languageStudy, translation: "" },
+    { ...languageStudy, grammar: "" },
+    { ...languageStudy, usage: "" },
+    { ...languageStudy, term: "a".repeat(1801) },
+    { ...languageStudy, meanings: [] },
   ]) {
     expect(() => parseLanguageStudy(JSON.stringify(value))).toThrow();
   }
+});
+
+it("keeps moved and scaled source ink valid but rejects erased or edited trajectories", () => {
+  const strokes = [
+    [
+      [10, 20],
+      [20, 40],
+    ],
+    [
+      [30, 20],
+      [40, 35],
+    ],
+  ];
+  const signature = languageInkSignature(strokes);
+  expect(
+    languageInkSignature(
+      strokes
+        .map((stroke) => stroke.map(([x, y]) => [x * 2 + 100, y * 3 - 50]))
+        .reverse(),
+    ),
+  ).toBe(signature);
+  expect(languageInkSignature(strokes.slice(0, 1))).not.toBe(signature);
+  expect(
+    languageInkSignature([
+      [
+        [10, 20],
+        [20, 38],
+      ],
+      strokes[1],
+    ]),
+  ).not.toBe(signature);
+  expect(languageInkSignature([[[NaN, 0]]])).toBe("");
+  expect(
+    languageInkSignature([
+      Array.from({ length: 150000 }, (_, i) => [i, i % 50]),
+    ]),
+  ).not.toBe("");
 });

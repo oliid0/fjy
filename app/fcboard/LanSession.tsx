@@ -22,12 +22,16 @@ import type { ScenePacket } from "./sceneSync";
 const failureMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 const networkStatus = () => ({
-  离开协作: t("fcboard.离开协作"),
-  已开启: t("fcboard.已开启"),
-  "正在加入…": t("fcboard.正在加入…"),
-  实时同步中: t("fcboard.实时同步中"),
-  "连接中断，正在重连…": t("fcboard.连接中断，正在重连…"),
-  "协作已结束，本机保留板书": t("fcboard.协作已结束，本机保留板书"),
+  leave_collaboration: t("fcboard.leave_collaboration"),
+  started: t("fcboard.started"),
+  joining: t("fcboard.joining"),
+  syncing_live: t("fcboard.syncing_live"),
+  connection_interrupted_reconnecting: t(
+    "fcboard.connection_interrupted_reconnecting",
+  ),
+  collaboration_ended_this_device_keeps_its_board_content: t(
+    "fcboard.collaboration_ended_this_device_keeps_its_board_content",
+  ),
 });
 const statusText = (value: string) =>
   (networkStatus() as Record<string, string>)[value] || value;
@@ -59,7 +63,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     clearTimeout(retry.current);
     sync.current?.dispose();
     sync.current = null;
-    socket.current?.close(1000, "离开协作");
+    socket.current?.close(1000, "leave_collaboration");
     socket.current = null;
     if (hosted.current) {
       await Network.stopCollaboration();
@@ -77,7 +81,9 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const start = async () => {
     if (!native) {
       throw new Error(
-        t("fcboard.请在安卓大屏开启协作，再用其他设备扫描二维码加入"),
+        t(
+          "fcboard.start_collaboration_on_the_android_board_then_scan_the_qr_code_on_another_device",
+        ),
       );
     }
     if (classroomCommands.has("document.close")) {
@@ -99,7 +105,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       });
       hosted.current = true;
       setSharing(true);
-      setConnection("已开启");
+      setConnection("started");
       setUrls(result.urls);
       controller.start();
       controller.flush(true);
@@ -196,7 +202,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       started = true;
-      setConnection("正在加入…");
+      setConnection("joining");
       try {
         const key = `fcboard-lan-${location.host}-${token}`;
         const existing = sessionStorage.getItem(key);
@@ -208,7 +214,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         } else {
           await classroomCommands.execute({
             name: "board.new",
-            args: { name: t("fcboard.协作白板") },
+            args: { name: t("fcboard.shared_board") },
           });
         }
         const current = classroomCommands.read("boards") as { active: string };
@@ -225,7 +231,11 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           api,
           async (packet) => {
             if (socket.current?.readyState !== WebSocket.OPEN) {
-              throw new Error(t("fcboard.连接中断，重连后会自动补同步"));
+              throw new Error(
+                t(
+                  "fcboard.connection_interrupted_changes_will_sync_after_reconnection",
+                ),
+              );
             }
             socket.current.send(JSON.stringify(packet));
           },
@@ -269,7 +279,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               if (packet.kind === "initial") {
                 controller.flush(true);
                 attempts = 0;
-                setConnection("实时同步中");
+                setConnection("syncing_live");
               }
             } catch (error) {
               setError(failureMessage(error));
@@ -284,17 +294,20 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               joined.current = false;
               controller.dispose();
               setSharing(false);
-              setConnection(event.reason || "协作已结束，本机保留板书");
+              setConnection(
+                "collaboration_ended_this_device_keeps_its_board_content",
+              );
               classroomCommands.changed("network");
               return;
             }
-            setConnection("连接中断，正在重连…");
+            setConnection("connection_interrupted_reconnecting");
             retry.current = setTimeout(
               connect,
               Math.min(10000, 500 * 2 ** Math.min(attempts++, 5)),
             );
           };
-          transport.onerror = () => setConnection("连接中断，正在重连…");
+          transport.onerror = () =>
+            setConnection("connection_interrupted_reconnecting");
         };
         connect();
       } catch (error) {
@@ -331,7 +344,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         "打开白板实时协作浮层，args.panel=collab",
         (args) => {
           if (args.panel !== undefined && args.panel !== "collab") {
-            throw new Error(t("fcboard.此浮层不存在"));
+            throw new Error(t("fcboard.this_panel_does_not_exist"));
           }
           setPanel("collab");
           setError("");
@@ -363,7 +376,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           className="fc-network-panel fc-surface"
           style={panelStyle}
           role="dialog"
-          aria-label={t("fcboard.实时协作")}
+          aria-label={t("fcboard.live_collaboration")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -373,9 +386,9 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           }}
         >
           <header>
-            <strong>{t("fcboard.实时协作")}</strong>
+            <strong>{t("fcboard.live_collaboration")}</strong>
             <button
-              aria-label={t("fcboard.关闭网络浮层")}
+              aria-label={t("fcboard.close_network_panel")}
               onClick={() => {
                 setPanel(null);
                 setError("");
@@ -392,7 +405,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   <p role="status">
                     {statusText(connection)}
                     {native
-                      ? ` · ${t("fcboard.{{count}} 台设备", { count: peers })}`
+                      ? ` · ${t("fcboard.count_devices", { count: peers })}`
                       : ""}
                   </p>
                   {urls.map((url) => (
@@ -403,26 +416,28 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   ))}
                   <button disabled={busy} onClick={() => void run(leave)}>
                     {hosted.current
-                      ? t("fcboard.结束协作")
-                      : t("fcboard.离开协作")}
+                      ? t("fcboard.end_collaboration")
+                      : t("fcboard.leave_collaboration")}
                   </button>
                 </>
               ) : native ? (
                 <>
                   <p>
                     {t(
-                      "fcboard.同一局域网扫码加入，书写、图片与撤销实时同步。",
+                      "fcboard.scan_on_the_same_network_to_join_writing_images_and_undo_sync_live",
                     )}
                   </p>
                   <button disabled={busy} onClick={() => void run(start)}>
-                    {busy ? t("fcboard.正在开启…") : t("fcboard.开启协作")}
+                    {busy
+                      ? t("fcboard.starting")
+                      : t("fcboard.start_collaboration")}
                   </button>
                 </>
               ) : (
                 <p>
                   {connection ||
                     t(
-                      "fcboard.请用此设备扫描安卓大屏的协作二维码，直接加入白板。",
+                      "fcboard.scan_the_android_board_s_collaboration_qr_code_with_this_device_to_join",
                     )}
                 </p>
               )}
@@ -433,8 +448,8 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       {sharing &&
         !panel &&
         connection &&
-        connection !== "已开启" &&
-        connection !== "实时同步中" && (
+        connection !== "started" &&
+        connection !== "syncing_live" && (
           <TransientMessage
             className="fc-notice"
             message={statusText(connection)}

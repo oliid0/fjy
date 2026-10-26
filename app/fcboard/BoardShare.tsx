@@ -94,7 +94,7 @@ export const BoardShare = () => {
     }
     const timer = setTimeout(() => {
       setUrls([]);
-      setStatus(t("fcboard.分享已到期，可重新生成二维码"));
+      setStatus(t("fcboard.sharing_expired_generate_a_new_qr_code"));
     }, 600000);
     return () => clearTimeout(timer);
   }, [urls]);
@@ -120,7 +120,7 @@ export const BoardShare = () => {
     setStatus("");
     try {
       if (!selected.length || selected.length > 20) {
-        throw new Error(t("fcboard.请选择 1 至 20 页"));
+        throw new Error(t("fcboard.select_1_to_20_pages"));
       }
       const images: string[] = [];
       const files: File[] = [];
@@ -163,26 +163,35 @@ export const BoardShare = () => {
         }
         setUrls(result.urls);
         setStatus(
-          t("fcboard.扫码下载所选页面，十分钟后失效；关闭窗口即结束分享"),
+          t(
+            "fcboard.scan_to_download_the_selected_pages_expires_in_ten_minutes_or_when_this_window_closes",
+          ),
         );
       } else if (method === "mail") {
         if (native) {
           await Classroom.sharePages({ pages: images });
         } else if (navigator.canShare?.({ files })) {
-          await navigator.share({ files, title: t("fcboard.Fcboard 白板") });
+          await navigator.share({
+            files,
+            title: t("fcboard.fcboard_whiteboard"),
+          });
         } else {
           throw new Error(
-            t("fcboard.当前浏览器不支持附件分享，请下载页面后在邮件中添加附件"),
+            t(
+              "fcboard.this_browser_cannot_share_attachments_download_the_pages_and_attach_them_to_your_email",
+            ),
           );
         }
         if (current !== generation.current) {
           return;
         }
         setStatus(
-          t("fcboard.已打开系统邮件 / 分享窗口，请选择收件应用并确认发送"),
+          t(
+            "fcboard.choose_an_app_in_the_system_share_window_and_confirm_sending",
+          ),
         );
       } else {
-        setStatus(t("fcboard.所选页面已导出为 PNG"));
+        setStatus(t("fcboard.selected_pages_exported_as_png"));
       }
     } catch (failure) {
       if (current === generation.current) {
@@ -203,7 +212,7 @@ export const BoardShare = () => {
       className="fc-board-picker fc-surface"
       style={style}
       role="dialog"
-      aria-label={t("fcboard.分享白板")}
+      aria-label={t("fcboard.share_board")}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
@@ -212,14 +221,19 @@ export const BoardShare = () => {
       }}
     >
       <header>
-        <strong>{mail ? t("fcboard.邮件发送") : t("fcboard.分享白板")}</strong>
-        <button aria-label={t("fcboard.关闭分享")} onClick={() => void close()}>
-          {t("fcboard.关闭")}
+        <strong>
+          {mail ? t("fcboard.mail_sent") : t("fcboard.share_board")}
+        </strong>
+        <button
+          aria-label={t("fcboard.close_sharing")}
+          onClick={() => void close()}
+        >
+          {t("fcboard.close")}
         </button>
       </header>
       <TransientMessage message={error} role="alert" />
       <fieldset disabled={busy}>
-        <legend>{t("fcboard.选择页面")}</legend>
+        <legend>{t("fcboard.select_pages")}</legend>
         {pages.map((page, index) => (
           <label key={page.id} className="fc-share-page">
             <input
@@ -233,11 +247,11 @@ export const BoardShare = () => {
                 )
               }
             />
-            {t("fcboard.第 {{page}} 页", { page: index + 1 })} · {page.name}
+            {t("fcboard.page_page", { page: index + 1 })} · {page.name}
           </label>
         ))}
       </fieldset>
-      {busy && <p role="status">{t("fcboard.正在准备页面…")}</p>}
+      {busy && <p role="status">{t("fcboard.preparing_pages")}</p>}
       <TransientMessage message={status} />
       {urls.map((url) => (
         <div key={url} className="fc-share-code">
@@ -253,7 +267,7 @@ export const BoardShare = () => {
             disabled={busy || !selected.length}
             onClick={() => void share("mail")}
           >
-            {t("fcboard.打开邮件 / 分享窗口")}
+            {t("fcboard.open_email_share_window")}
           </button>
         )}
         {native && !mail && (
@@ -261,20 +275,20 @@ export const BoardShare = () => {
             disabled={busy || !selected.length}
             onClick={() => void share("qr")}
           >
-            {t("fcboard.生成分享二维码")}
+            {t("fcboard.generate_sharing_qr_code")}
           </button>
         )}
         <button
           disabled={busy || !selected.length}
           onClick={() => void share("download")}
         >
-          {t("fcboard.下载选中页面")}
+          {t("fcboard.download_selected_pages")}
         </button>
       </footer>
       {!native && (
         <p>
           {t(
-            "fcboard.Android 大屏支持同一局域网扫码下载；此处可直接导出页面。",
+            "fcboard.android_displays_support_qr_downloads_on_the_same_network_you_can_export_pages_here",
           )}
         </p>
       )}

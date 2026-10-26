@@ -9,31 +9,42 @@ import { t } from "@excalidraw/excalidraw/i18n";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 
-import { project3D } from "./math";
+import { factorySolidOutlines } from "./factorySolidOutlines";
 import { classroomCommands } from "./commands";
-import { contentPosition, revealNewContent } from "./board";
+import { contentPosition, contentViewport, revealNewContent } from "./board";
+import { findVisibleContentPosition } from "./placement";
 import { configureSolid, solidDefaults, solidShapes } from "./solids";
 
 import type { InkStroke } from "./documents";
 import type { SolidSettings } from "./solids";
+import type { ContentRect } from "./placement";
 
 export const teachingTools = {
-  ruler: "直尺",
-  protractor: "量角器",
-  dice: "骰子",
-  timer: "计时器",
-  picker: "随机抽取",
-  cube: "立方体",
-  sphere: "球体",
-  cylinder: "圆柱",
-  cone: "圆锥",
-  prism: "棱柱",
-  pyramid: "棱锥",
-  frustum: "圆台",
-  pendulum: "单摆",
-  projectile: "抛体运动",
+  ruler: "ruler",
+  protractor: "protractor",
+  dice: "dice",
+  timer: "timer",
+  picker: "random_picker",
+  cube: "cube",
+  sphere: "sphere",
+  cylinder: "cylinder",
+  cone: "cone",
+  prism: "prism",
+  pyramid: "pyramid",
+  frustum: "frustum",
+  pendulum: "pendulum",
+  projectile: "projectile_motion",
 } as const;
 export type WidgetKind = keyof typeof teachingTools;
+export const solidWidgetKinds = new Set<WidgetKind>([
+  "cube",
+  "sphere",
+  "cylinder",
+  "cone",
+  "prism",
+  "pyramid",
+  "frustum",
+]);
 export type WidgetParams = {
   running: boolean;
   started: number;
@@ -104,14 +115,16 @@ export const configureWidget = (
         value < limits[key][0] ||
         value > limits[key][1]
       ) {
-        throw new Error(t("fcboard.教学工具参数 {{key}} 超出范围", { key }));
+        throw new Error(
+          t("fcboard.teaching_tool_parameter_key_is_out_of_range", { key }),
+        );
       }
       next[key] = value;
     }
   }
   if (changes.running !== undefined) {
     if (typeof changes.running !== "boolean") {
-      throw new Error(t("fcboard.播放状态无效"));
+      throw new Error(t("fcboard.invalid_playback_state"));
     }
     next.running = changes.running;
   }
@@ -121,7 +134,7 @@ export const configureWidget = (
         typeof changes[key] !== "string" ||
         (changes[key] as string).length > (key === "names" ? 5000 : 120)
       ) {
-        throw new Error(t("fcboard.抽取内容过长"));
+        throw new Error(t("fcboard.selection_content_is_too_long"));
       }
       next[key] = changes[key] as string;
     }
@@ -275,10 +288,10 @@ export const widgetShapes = (
         4,
         84,
         remaining <= 0
-          ? t("fcboard.时间到")
+          ? t("fcboard.time_is_up")
           : params.running
-          ? t("fcboard.计时中")
-          : t("fcboard.计时器"),
+          ? t("fcboard.running")
+          : t("fcboard.timer"),
         16,
       ),
     );
@@ -373,98 +386,21 @@ export const widgetShapes = (
       ),
     );
   } else {
-    const rotate = (x: number, y: number, z: number) => {
-      const angle = (params.rotation / 180) * Math.PI;
-      const point = project3D(
-        x * Math.cos(angle) - y * Math.sin(angle),
-        x * Math.sin(angle) + y * Math.cos(angle),
-        z,
-      );
-      return [point[0] * params.size + 140, point[1] * params.size + 130];
-    };
-    const path = (vertices: number[][]) => {
-      const points = vertices.map(([x, y, z]) => rotate(x, y, z));
-      const first = points[0];
-      result.push(
-        line(
-          first[0],
-          first[1],
-          points.map((p) => [p[0] - first[0], p[1] - first[1]]),
-        ),
-      );
-    };
-    const ring = (radius: number, height: number) =>
-      Array.from({ length: 65 }, (_, index) => [
-        Math.cos((index / 64) * 2 * Math.PI) * radius,
-        Math.sin((index / 64) * 2 * Math.PI) * radius,
-        height,
-      ]);
-    if (kind === "cube") {
-      result.push(
-        ...solidShapes(
-          kind,
-          params.solid || solidDefaults(),
-          params.size,
-          params.rotation,
-        ),
-      );
-    } else if (kind === "sphere") {
-      for (let lat = -2; lat <= 2; lat++) {
-        const angle = (lat * Math.PI) / 6;
-        path(ring(90 * Math.cos(angle), 90 * Math.sin(angle)));
-      }
-      for (let lng = 0; lng < 6; lng++) {
-        path(
-          Array.from({ length: 65 }, (_, index) => {
-            const t = (index / 64) * 2 * Math.PI;
-            const p = (lng / 6) * Math.PI;
-            return [
-              90 * Math.cos(t) * Math.cos(p),
-              90 * Math.cos(t) * Math.sin(p),
-              90 * Math.sin(t),
-            ];
-          }),
-        );
-      }
-    } else if (kind === "cylinder") {
-      result.push(
-        ...solidShapes(
-          kind,
-          params.solid || solidDefaults(),
-          params.size,
-          params.rotation,
-        ),
-      );
-    } else if (kind === "cone" || kind === "frustum") {
-      const top = kind === "cone" ? 0 : kind === "frustum" ? 40 : 75;
-      path(ring(75, -65));
-      if (top) {
-        path(ring(top, 65));
-      }
-      for (const angle of [0, Math.PI]) {
-        path([
-          [75 * Math.cos(angle), 75 * Math.sin(angle), -65],
-          [top * Math.cos(angle), top * Math.sin(angle), 65],
-        ]);
-      }
-    } else {
-      const vertices = Array.from({ length: 6 }, (_, index) => [
-        Math.cos((index / 6) * 2 * Math.PI) * 85,
-        Math.sin((index / 6) * 2 * Math.PI) * 85,
-        -60,
-      ]);
-      path([...vertices, vertices[0]]);
-      const top =
-        kind === "pyramid"
-          ? [[0, 0, 85]]
-          : vertices.map(([x, y]) => [x, y, 85]);
-      if (top.length > 1) {
-        path([...top, top[0]]);
-      }
-      vertices.forEach((vertex, index) =>
-        path([vertex, top[kind === "pyramid" ? 0 : index]]),
-      );
-    }
+    result.push(
+      ...(kind === "cube" || kind === "cylinder"
+        ? solidShapes(
+            kind,
+            params.solid || solidDefaults(),
+            params.size,
+            params.rotation,
+          )
+        : factorySolidOutlines(
+            kind,
+            params.solid || solidDefaults(),
+            params.size,
+            params.rotation,
+          )),
+    );
   }
   return result;
 };
@@ -529,9 +465,98 @@ export const renderWidget = (
   api: ExcalidrawImperativeAPI,
   widget: Widget,
   remember = true,
+  transaction: { before?: readonly InkStroke[]; preview?: boolean } = {},
 ) => {
-  const existing = api.getSceneElements();
+  const document = classroomCommands.read("document") as
+    | { ink: InkStroke[]; pen?: { color: string } }
+    | undefined;
+  const existing = document ? [] : api.getSceneElements();
+  const isSolid = solidWidgetKinds.has(widget.kind);
+  const found = document
+    ? document.ink.some((stroke) => stroke.widget?.id === widget.id)
+    : existing.some(
+        (element) => element.customData?.fcWidget?.id === widget.id,
+      );
+  if (isSolid) {
+    const layout = document
+      ? (classroomCommands.read("document.layout") as
+          | { viewport: ContentRect; obstacles: ContentRect[] }
+          | undefined)
+      : undefined;
+    if (document && !layout) {
+      throw new DOMException(
+        "Document viewport unavailable",
+        "InvalidStateError",
+      );
+    }
+    const viewport = layout?.viewport || contentViewport(api);
+    widget = {
+      ...widget,
+      params: { ...widget.params, solid: { ...widget.params.solid, fit: 1 } },
+    };
+    const [left, top, right, bottom] = getCommonBounds(
+      convertToExcalidrawElements(widgetShapes(widget)),
+    );
+    const fit = Math.min(
+      1,
+      (viewport.right - viewport.left) / (right - left),
+      (viewport.bottom - viewport.top) / (bottom - top),
+    );
+    if (!Number.isFinite(fit) || fit < 0.001) {
+      throw new Error(
+        t(
+          "fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing",
+        ),
+      );
+    }
+    widget.params.solid.fit = fit;
+    const bounds = getCommonBounds(
+      convertToExcalidrawElements(widgetShapes(widget)),
+    );
+    const width = bounds[2] - bounds[0];
+    const height = bounds[3] - bounds[1];
+    let point = {
+      x: Math.max(
+        viewport.left,
+        Math.min(viewport.right - width, widget.position.x + bounds[0]),
+      ),
+      y: Math.max(
+        viewport.top,
+        Math.min(viewport.bottom - height, widget.position.y + bounds[1]),
+      ),
+    };
+    if (!found) {
+      const obstacles =
+        layout?.obstacles ||
+        existing
+          .filter((element) => !element.isDeleted)
+          .map((element) => {
+            const [left, top, right, bottom] = getCommonBounds([element]);
+            return { left, top, right, bottom };
+          });
+      const position = findVisibleContentPosition(
+        point,
+        { width, height },
+        viewport,
+        obstacles,
+        8,
+      );
+      if (!position) {
+        throw new Error(
+          t(
+            "fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing",
+          ),
+        );
+      }
+      point = position;
+    }
+    widget = {
+      ...widget,
+      position: { x: point.x - bounds[0], y: point.y - bounds[1] },
+    };
+  }
   if (
+    !isSolid &&
     !classroomCommands.has("document.widget") &&
     !existing.some((element) => element.customData?.fcWidget?.id === widget.id)
   ) {
@@ -547,7 +572,9 @@ export const renderWidget = (
   }
   const elements = convertToExcalidrawElements(
     widgetShapes(widget).map((shape, index) => ({
-      strokeColor: api.getAppState().currentItemStrokeColor,
+      strokeColor: document
+        ? document.pen?.color
+        : api.getAppState().currentItemStrokeColor,
       ...shape,
       id: `${widget.id}-${index}`,
       x: widget.position.x + (shape.x || 0),
@@ -573,7 +600,7 @@ export const renderWidget = (
   if (classroomCommands.has("document.widget")) {
     void classroomCommands.execute({
       name: "document.widget",
-      args: { widget, shapes: elements, remember },
+      args: { widget, shapes: elements, remember, before: transaction.before },
     });
     return elements;
   }
@@ -582,9 +609,33 @@ export const renderWidget = (
       ...existing.filter((el) => el.customData?.fcWidget?.id !== widget.id),
       ...elements,
     ],
-    captureUpdate: remember
+    captureUpdate: transaction.preview
+      ? CaptureUpdateAction.EVENTUALLY
+      : remember
       ? CaptureUpdateAction.IMMEDIATELY
       : CaptureUpdateAction.NEVER,
+    ...(existing.some(
+      (element) =>
+        element.customData?.fcWidget?.id === widget.id &&
+        api.getAppState().selectedElementIds[element.id],
+    )
+      ? {
+          appState: {
+            selectedElementIds: Object.fromEntries([
+              ...Object.entries(api.getAppState().selectedElementIds).filter(
+                ([id, selected]) =>
+                  selected &&
+                  !existing.some(
+                    (element) =>
+                      element.id === id &&
+                      element.customData?.fcWidget?.id === widget.id,
+                  ),
+              ),
+              ...elements.map((element) => [element.id, true] as const),
+            ]),
+          },
+        }
+      : {}),
   });
   if (
     !existing.some((element) => element.customData?.fcWidget?.id === widget.id)

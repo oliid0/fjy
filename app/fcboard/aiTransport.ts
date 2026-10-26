@@ -21,16 +21,22 @@ export const readAIResult = (data: string, responses: boolean): string => {
   try {
     value = JSON.parse(data);
   } catch {
-    throw new Error(t("fcboard.AI 接口未返回有效 JSON，请检查接口地址"));
+    throw new Error(
+      t("fcboard.the_ai_endpoint_returned_invalid_json_check_its_address"),
+    );
   }
   if (value.error || value.status === "failed") {
-    throw new Error(value.error?.message || t("fcboard.AI 请求失败"));
+    throw new Error(value.error?.message || t("fcboard.ai_request_failed"));
   }
   if (
     value.status === "incomplete" ||
     value.choices?.[0]?.finish_reason === "length"
   ) {
-    throw new Error(t("fcboard.AI 回复超过长度限制，请缩小问题范围后重试"));
+    throw new Error(
+      t(
+        "fcboard.the_ai_reply_reached_its_length_limit_narrow_your_question_and_try_again",
+      ),
+    );
   }
   const result = responses
     ? value.output
@@ -44,7 +50,11 @@ export const readAIResult = (data: string, responses: boolean): string => {
         .join("\n")
     : textContent(value.choices?.[0]?.message?.content);
   if (!result?.trim()) {
-    throw new Error(t("fcboard.AI 返回了空内容，请确认模型支持所请求的功能"));
+    throw new Error(
+      t(
+        "fcboard.ai_returned_no_content_check_that_the_model_supports_this_task",
+      ),
+    );
   }
   return result;
 };
@@ -64,7 +74,9 @@ export class AIStream {
   push(chunk: string) {
     this.pending += chunk;
     if (this.pending.length > 4_000_000) {
-      throw new Error(t("fcboard.AI 回复过大，请缩小问题范围"));
+      throw new Error(
+        t("fcboard.the_ai_reply_is_too_large_narrow_your_question"),
+      );
     }
     let match;
     while ((match = /\r\n|\r(?!$)|\n/.exec(this.pending))) {
@@ -92,7 +104,9 @@ export class AIStream {
     try {
       packet = JSON.parse(data);
     } catch {
-      throw new Error(t("fcboard.AI 接口未返回有效 JSON，请检查接口地址"));
+      throw new Error(
+        t("fcboard.the_ai_endpoint_returned_invalid_json_check_its_address"),
+      );
     }
     if (
       packet.error ||
@@ -103,17 +117,23 @@ export class AIStream {
         packet.error?.message ||
           packet.response?.error?.message ||
           packet.message ||
-          t("fcboard.AI 请求失败"),
+          t("fcboard.ai_request_failed"),
       );
     }
     if (
       packet.type === "response.incomplete" ||
       packet.choices?.[0]?.finish_reason === "length"
     ) {
-      throw new Error(t("fcboard.AI 回复超过长度限制，请缩小问题范围后重试"));
+      throw new Error(
+        t(
+          "fcboard.the_ai_reply_reached_its_length_limit_narrow_your_question_and_try_again",
+        ),
+      );
     }
     if (packet.choices?.[0]?.finish_reason === "content_filter") {
-      throw new Error(t("fcboard.AI 未能完成回答，请调整问题后重试"));
+      throw new Error(
+        t("fcboard.ai_could_not_finish_the_answer_rephrase_and_try_again"),
+      );
     }
     if (this.completed) {
       return;
@@ -129,7 +149,9 @@ export class AIStream {
     if (typeof delta === "string" && delta) {
       this.text += delta;
       if (this.text.length > 4_000_000) {
-        throw new Error(t("fcboard.AI 回复过大，请缩小问题范围"));
+        throw new Error(
+          t("fcboard.the_ai_reply_is_too_large_narrow_your_question"),
+        );
       }
       this.onDelta(delta);
     }
@@ -153,10 +175,18 @@ export class AIStream {
     }
     this.frame();
     if (!this.completed) {
-      throw new Error(t("fcboard.AI 连接中断，未写入不完整回答，请重试"));
+      throw new Error(
+        t(
+          "fcboard.ai_connection_interrupted_the_incomplete_answer_was_not_inserted_please_try_again",
+        ),
+      );
     }
     if (!this.text.trim()) {
-      throw new Error(t("fcboard.AI 返回了空内容，请确认模型支持所请求的功能"));
+      throw new Error(
+        t(
+          "fcboard.ai_returned_no_content_check_that_the_model_supports_this_task",
+        ),
+      );
     }
     return this.text;
   }
@@ -245,7 +275,9 @@ export const postAI = async (
   } catch {
     signal.throwIfAborted();
     throw new Error(
-      t("fcboard.无法连接 AI 接口，请检查网络、接口地址及浏览器跨域配置"),
+      t(
+        "fcboard.cannot_connect_to_ai_check_your_network_endpoint_and_browser_cors_settings",
+      ),
     );
   }
   const stream =

@@ -22,6 +22,64 @@ const viewport = { left: 16, top: 16, right: 1264, bottom: 604 };
 const overlaps = (a: readonly number[], b: readonly number[]) =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
+it("matches Chinese answer font size to measured handwriting instead of applying ink-glyph scaling twice", () => {
+  const api = sceneAPI();
+  const source = newFreeDrawElement({
+    type: "freedraw",
+    x: 200,
+    y: 180,
+    points: [pointFrom(0, 0), pointFrom(60, 40)],
+    strokeColor: "#dc2626",
+    simulatePressure: true,
+  });
+  api.updateScene({ elements: [source] });
+  const ids = insertText(
+    api,
+    "牛顿第一定律",
+    undefined,
+    undefined,
+    [source],
+    "match",
+  );
+  const answer = api
+    .getSceneElements()
+    .find((element) => ids.includes(element.id));
+  expect(answer).toMatchObject({
+    type: "text",
+    fontSize: 40,
+    strokeColor: "#dc2626",
+  });
+  expect(answer!.y).toBeGreaterThanOrEqual(220);
+});
+
+it("keeps answer text legible near an edge by using nearby empty space before shrinking", () => {
+  const api = sceneAPI();
+  const ids = insertElements(api, [
+    { type: "text", text: "Question", fontSize: 40, x: 1400, y: 720 },
+  ]);
+  const source = api
+    .getSceneElements()
+    .filter((element) => ids.includes(element.id));
+  const answer = insertText(
+    api,
+    "Answer with several lines of explanation to show near the question.",
+    undefined,
+    undefined,
+    source,
+    "text",
+  );
+  const result = api
+    .getSceneElements()
+    .filter((element) => answer.includes(element.id));
+  expect(result[0]).toMatchObject({ type: "text", fontSize: 40 });
+  const bounds = getCommonBounds(result);
+  const viewport = contentViewport(api);
+  expect(bounds[0]).toBeGreaterThanOrEqual(viewport.left);
+  expect(bounds[2]).toBeLessThanOrEqual(viewport.right);
+  expect(bounds[3]).toBeLessThanOrEqual(viewport.bottom);
+  expect(overlaps(bounds, getCommonBounds(source))).toBe(false);
+});
+
 it.each([
   [390, 844, 1],
   [800, 600, 1],
@@ -232,7 +290,7 @@ it.each([0.5, 1, 2])(
     expect(right).toBeLessThanOrEqual(300 + (3080 - 16) / zoom);
     expect(bottom).toBeLessThanOrEqual(100 + (1240 - 84) / zoom);
     expect(answer[0].type === "text" && answer[0].fontSize).toBeLessThanOrEqual(
-      32 / zoom / 1.25,
+      32 / zoom,
     );
     expect(answer[0].type === "text" && answer[0].text).toContain("\n");
   },

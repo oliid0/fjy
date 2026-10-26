@@ -33,14 +33,14 @@ export const formulaSvg = (latex: string, color = "#245bd6") => {
       latex,
     )
   ) {
-    throw new Error(t("fcboard.公式包含不支持的内容"));
+    throw new Error(t("fcboard.the_formula_contains_unsupported_content"));
   }
   const node = document.convert(latex.replace(/^\$\$?|\$\$?$/g, ""), {
     display: true,
   });
   const svg = adaptor.tags(node, "svg")[0];
   if (!svg) {
-    throw new Error(t("fcboard.公式未生成图形"));
+    throw new Error(t("fcboard.the_formula_did_not_generate_a_drawing"));
   }
   const box = String(adaptor.getAttribute(svg, "viewBox"))
     .split(/\s+/)
@@ -51,7 +51,7 @@ export const formulaSvg = (latex: string, color = "#245bd6") => {
     box[2] <= 0 ||
     box[3] <= 0
   ) {
-    throw new Error(t("fcboard.公式尺寸无效"));
+    throw new Error(t("fcboard.invalid_formula_size"));
   }
   const width = Math.max(16, (box[2] / 1000) * 32);
   const height = Math.max(16, (box[3] / 1000) * 32);

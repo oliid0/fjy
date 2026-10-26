@@ -7,7 +7,7 @@ export type FactoryInkData = {
   variation?: number;
   tip?: "fine" | "thick";
   finished?: boolean;
-  assist?: "text" | "shape" | "magic" | "function" | "calculation";
+  assist?: "text" | "shape" | "magic" | "function" | "calculation" | "language";
   centerline?: boolean;
   brushWidths?: number[];
   brushAngle?: number;

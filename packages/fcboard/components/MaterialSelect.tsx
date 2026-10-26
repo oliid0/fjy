@@ -71,7 +71,12 @@ export const MaterialSelect = ({
               border: "1px solid var(--fc-border, #dce3ec)",
               borderRadius: "6px",
               fontFamily: "inherit",
-              "& .MuiMenuItem-root": { minHeight: 36, fontSize: 14 },
+              "& .MuiMenuItem-root": {
+                minHeight: 36,
+                fontSize: 14,
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+              },
               "& .Mui-selected, & .Mui-selected:hover": {
                 color: "#fff",
                 backgroundColor: "var(--fc-blue, #0b6ff3)",

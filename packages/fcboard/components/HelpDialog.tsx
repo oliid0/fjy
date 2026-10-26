@@ -25,7 +25,7 @@ const Header = () => (
       rel="noopener noreferrer"
     >
       <div className="HelpDialog__link-icon">{ExternalLinkIcon}</div>
-      方成教育官网
+      {t("fcboard.fcboard_website")}
     </a>
   </div>
 );

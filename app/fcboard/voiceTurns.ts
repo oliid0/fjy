@@ -3,18 +3,26 @@ export const createVoiceTurns = (
   execute: (text: string, signal: AbortSignal) => Promise<void>,
   onError: (failure: unknown) => void,
   delay = 3000,
+  options: {
+    interrupt?: boolean;
+    immediate?: (text: string) => boolean;
+    onInterruption?: () => void;
+  } = {},
 ) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let fragments: string[] = [];
   let stopped = false;
   let queued = Promise.resolve();
   const requests = new Set<AbortController>();
-  const reset = () => {
-    clearTimeout(timer);
-    fragments = [];
+  const cancelRequests = () => {
     requests.forEach((request) => request.abort());
     requests.clear();
     queued = Promise.resolve();
+  };
+  const reset = () => {
+    clearTimeout(timer);
+    fragments = [];
+    cancelRequests();
   };
   const flush = () => {
     clearTimeout(timer);
@@ -39,13 +47,32 @@ export const createVoiceTurns = (
       .finally(() => requests.delete(request));
   };
   return {
+    activity() {
+      if (!stopped && fragments.length) {
+        clearTimeout(timer);
+        timer = setTimeout(flush, delay);
+      }
+    },
     push(text: string) {
       if (stopped || !text.trim()) {
         return;
       }
+      const immediate = options.immediate?.(text.trim());
+      if (immediate) {
+        reset();
+      } else if (options.interrupt && !fragments.length) {
+        cancelRequests();
+      }
+      if (immediate || (options.interrupt && !fragments.length)) {
+        options.onInterruption?.();
+      }
       fragments.push(text.trim());
       clearTimeout(timer);
-      timer = setTimeout(flush, delay);
+      if (immediate) {
+        flush();
+      } else {
+        timer = setTimeout(flush, delay);
+      }
     },
     reset,
     stop() {

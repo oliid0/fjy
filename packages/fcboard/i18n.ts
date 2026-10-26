@@ -22,10 +22,15 @@ export const languages: Language[] = [
   defaultLang,
   ...[
     { code: "ar-SA", label: "العربية", rtl: true },
+    { code: "az-AZ", label: "Azərbaycanca" },
     { code: "bg-BG", label: "Български" },
+    { code: "bn-BD", label: "বাংলা (বাংলাদেশ)" },
+    { code: "bn-IN", label: "বাংলা (ভারত)" },
     { code: "ca-ES", label: "Català" },
     { code: "cs-CZ", label: "Česky" },
+    { code: "da-DK", label: "Dansk" },
     { code: "de-DE", label: "Deutsch" },
+    { code: "de-CH", label: "Deutsch (Schweiz)" },
     { code: "el-GR", label: "Ελληνικά" },
     { code: "es-ES", label: "Español" },
     { code: "eu-ES", label: "Euskara" },
@@ -40,7 +45,9 @@ export const languages: Language[] = [
     { code: "it-IT", label: "Italiano" },
     { code: "ja-JP", label: "日本語" },
     { code: "kab-KAB", label: "Taqbaylit" },
+    { code: "kaa", label: "Qaraqalpaqsha" },
     { code: "kk-KZ", label: "Қазақ тілі" },
+    { code: "km-KH", label: "ខ្មែរ" },
     { code: "ko-KR", label: "한국어" },
     { code: "ku-TR", label: "Kurdî" },
     { code: "lt-LT", label: "Lietuvių" },
@@ -56,12 +63,17 @@ export const languages: Language[] = [
     { code: "pt-PT", label: "Português" },
     { code: "ro-RO", label: "Română" },
     { code: "ru-RU", label: "Русский" },
+    { code: "si-LK", label: "සිංහල" },
     { code: "sk-SK", label: "Slovenčina" },
     { code: "sv-SE", label: "Svenska" },
     { code: "sl-SI", label: "Slovenščina" },
+    { code: "ta-IN", label: "தமிழ்" },
+    { code: "th-TH", label: "ไทย" },
     { code: "tr-TR", label: "Türkçe" },
     { code: "uk-UA", label: "Українська" },
+    { code: "uz-UZ", label: "Oʻzbekcha" },
     { code: "zh-CN", label: "简体中文" },
+    { code: "zh-HK", label: "繁體中文（香港）" },
     { code: "zh-TW", label: "繁體中文" },
     { code: "vi-VN", label: "Tiếng Việt" },
     { code: "mr-IN", label: "मराठी" },
@@ -88,23 +100,31 @@ if (isDevEnv()) {
 
 let currentLang: Language = defaultLang;
 let currentLangData = {};
+let languageRevision = 0;
 
 export const setLanguage = async (lang: Language) => {
+  const revision = ++languageRevision;
   currentLang = lang;
   document.documentElement.dir = currentLang.rtl ? "rtl" : "ltr";
   document.documentElement.lang = currentLang.code;
 
-  if (lang.code.startsWith(TEST_LANG_CODE)) {
-    currentLangData = {};
-  } else {
+  let nextLangData = {};
+  if (!lang.code.startsWith(TEST_LANG_CODE)) {
     try {
-      currentLangData = await import(`./locales/${currentLang.code}.json`);
+      nextLangData = await import(`./locales/${lang.code}.json`);
     } catch (error: any) {
+      if (revision !== languageRevision) {
+        return;
+      }
       console.error(`Failed to load language ${lang.code}:`, error.message);
-      currentLangData = fallbackLangData;
+      nextLangData = fallbackLangData;
     }
   }
 
+  if (revision !== languageRevision) {
+    return;
+  }
+  currentLangData = nextLangData;
   editorJotaiStore.set(editorLangCodeAtom, lang.code);
 };
 
@@ -152,9 +172,13 @@ export const t = (
   }
 
   if (replacement) {
-    for (const key in replacement) {
-      translation = translation.replace(`{{${key}}}`, String(replacement[key]));
-    }
+    translation = translation.replace(
+      /\{\{([^{}]+)\}\}/g,
+      (placeholder: string, key: string) =>
+        Object.prototype.hasOwnProperty.call(replacement, key)
+          ? String(replacement[key])
+          : placeholder,
+    );
   }
   return translation;
 };

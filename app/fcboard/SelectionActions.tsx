@@ -24,18 +24,18 @@ import { recognizeHandwriting, warmHandwriting } from "./ocr";
 import { selectionMathIntent, selectionAIAction } from "./intent";
 import { drawAxes, insertText } from "./board";
 import { currentSettings } from "./settings";
+import { documentStrokeBounds } from "./documents";
+import { readWidgets, solidWidgetKinds } from "./widgets";
+import { SolidActions } from "./SolidActions";
 import { boardInk, clipInk } from "./digitalInk";
 import { recognizeMath } from "./mathRecognition";
-import {
-  explainLanguage,
-  isDictionaryWord,
-  languageStudyText,
-} from "./languageStudy";
+import { updateQuestionAnswer } from "./questionAnswer";
 
 import type { Plot } from "./math";
 import type { InkStroke } from "./documents";
+import type { Widget } from "./widgets";
 
-type Action = "auto" | "search" | "language";
+type Action = "auto" | "search";
 type Region = { left: number; top: number; right: number; bottom: number };
 type Target = {
   source: readonly ExcalidrawElement[];
@@ -45,6 +45,8 @@ type Target = {
   top: number;
   region?: Region;
   document?: { crop: Region; hasObjects: boolean };
+  solid?: Widget;
+  answer?: { anchor: string; collapsed: boolean };
 };
 type DocumentContext = {
   selectionInProgress?: boolean;
@@ -101,7 +103,7 @@ export const SelectionActions = ({
     const refresh = () => {
       const state = api.getAppState();
       const selection = state.whiteboardSelection;
-      const region =
+      let region =
         ["selection", "lasso"].includes(state.activeTool.type) &&
         selection?.elementIds.length ===
           Object.keys(state.selectedElementIds).length &&
@@ -112,7 +114,38 @@ export const SelectionActions = ({
         | DocumentContext
         | undefined;
       if (doc) {
-        const points = doc.region || [];
+        const selected = doc.ink.filter((stroke) =>
+          doc.selection.includes(stroke.id),
+        );
+        const answerAnchor = selected.find(
+          (stroke) =>
+            stroke.questionAnswer?.ids.length &&
+            stroke.questionAnswer.owner === stroke.id,
+        );
+        const owner = selected[0]?.widget;
+        const solid =
+          owner &&
+          solidWidgetKinds.has(owner.kind) &&
+          selected.every((stroke) => stroke.widget?.id === owner.id)
+            ? readWidgets(api).find((widget) => widget.id === owner.id)
+            : undefined;
+        const boxes = solid
+          ? doc.ink
+              .filter((stroke) => stroke.widget?.id === solid.id)
+              .map(documentStrokeBounds)
+          : [];
+        const points = boxes.length
+          ? [
+              [
+                Math.min(...boxes.map((box) => box.left)),
+                Math.min(...boxes.map((box) => box.top)),
+              ],
+              [
+                Math.max(...boxes.map((box) => box.right)),
+                Math.max(...boxes.map((box) => box.bottom)),
+              ],
+            ]
+          : doc.region || [];
         if (
           doc.selectionInProgress ||
           points.length < 2 ||
@@ -124,9 +157,6 @@ export const SelectionActions = ({
           setPending(false);
           return;
         }
-        const selected = doc.ink.filter((stroke) =>
-          doc.selection.includes(stroke.id),
-        );
         const canSearch =
           !selected.length ||
           selected.some(
@@ -177,6 +207,13 @@ export const SelectionActions = ({
                 source: [],
                 signature,
                 canSearch,
+                solid,
+                answer: answerAnchor
+                  ? {
+                      anchor: answerAnchor.id,
+                      collapsed: !!answerAnchor.questionAnswer?.folded,
+                    }
+                  : undefined,
                 ...selectionToolbarPosition(
                   {
                     left: viewport.left + (box.left * viewport.width) / 1000,
@@ -198,7 +235,9 @@ export const SelectionActions = ({
                     ),
                   },
                   1,
-                  canSearch ? 4 : 3,
+                  (canSearch ? 4 : 3) +
+                    (solid ? 6 : 0) +
+                    (answerAnchor ? 1 : 0),
                 ),
                 document: {
                   crop,
@@ -208,7 +247,20 @@ export const SelectionActions = ({
         );
         return;
       }
-      const source = selectedBoardElements(api);
+      let source = selectedBoardElements(api);
+      const owner = source[0]?.customData?.fcWidget;
+      const solid =
+        owner &&
+        solidWidgetKinds.has(owner.kind) &&
+        source.every((element) => element.customData?.fcWidget?.id === owner.id)
+          ? readWidgets(api).find((widget) => widget.id === owner.id)
+          : undefined;
+      if (solid) {
+        source = api
+          .getSceneElements()
+          .filter((element) => element.customData?.fcWidget?.id === solid.id);
+        region = undefined;
+      }
       const signature =
         !classroomCommands.read("document") &&
         !state.toolbarHidden &&
@@ -244,6 +296,11 @@ export const SelectionActions = ({
       );
       const offsetLeft = state.offsetLeft || 0;
       const offsetTop = state.offsetTop || 0;
+      const answerAnchor = source.find(
+        (element) =>
+          element.customData?.fcQuestionAnswer?.ids.length &&
+          element.customData.fcQuestionAnswer.owner === element.id,
+      );
       const position = selectionToolbarPosition(
         {
           left: (left + state.scrollX) * state.zoom.value + offsetLeft,
@@ -258,14 +315,28 @@ export const SelectionActions = ({
           bottom: offsetTop + state.height - 68 * unit,
         },
         unit,
-        canSearch ? 4 : 3,
+        (canSearch ? 4 : 3) + (solid ? 6 : 0) + (answerAnchor ? 1 : 0),
       );
       setTarget((old) =>
         old?.signature === signature &&
         old.left === position.left &&
         old.top === position.top
           ? old
-          : { source, signature, canSearch, ...position, region },
+          : {
+              source,
+              signature,
+              canSearch,
+              ...position,
+              region,
+              solid,
+              answer: answerAnchor
+                ? {
+                    anchor: answerAnchor.id,
+                    collapsed:
+                      !!answerAnchor.customData?.fcQuestionAnswer.folded,
+                  }
+                : undefined,
+            },
       );
     };
     const stop = api.onChange(refresh);
@@ -338,7 +409,7 @@ export const SelectionActions = ({
       let context: Awaited<ReturnType<typeof boardContext>> | undefined;
       const capture = async () => {
         if (!context) {
-          setMessage(t("fcboard.正在提取选区…"));
+          setMessage(t("fcboard.capturing_selection"));
           if (snapshot.document) {
             const page = (await classroomCommands.execute({
               name: "document.snapshot",
@@ -363,12 +434,14 @@ export const SelectionActions = ({
         }
         signal.throwIfAborted();
         if (!context.image) {
-          throw new Error(t("fcboard.选区没有可识别的内容"));
+          throw new Error(
+            t("fcboard.the_selection_has_no_recognizable_content"),
+          );
         }
         return context.image;
       };
       const visualAnswer = async () => {
-        setMessage(t("fcboard.正在理解图示…"));
+        setMessage(t("fcboard.reading_diagram"));
         let preview = "";
         const answer = await chat(
           [
@@ -494,7 +567,9 @@ export const SelectionActions = ({
         }
         signal.throwIfAborted();
         if (!text.trim() || text.trim() === "NONE") {
-          throw new Error(t("fcboard.未识别到内容，请重新圈选"));
+          throw new Error(
+            t("fcboard.no_content_recognized_select_the_area_again"),
+          );
         }
         cache.current = { signature: snapshot.signature, text };
       }
@@ -512,14 +587,6 @@ export const SelectionActions = ({
             }${encodeURIComponent(text.trim())}`,
           },
         });
-      } else if (
-        operation === "language" ||
-        (operation === "question" && isDictionaryWord(text))
-      ) {
-        setMessage(t("fcboard.正在解析词句…"));
-        const study = await explainLanguage(text.trim(), signal);
-        signal.throwIfAborted();
-        await write(languageStudyText(study));
       } else if (operation === "calculate") {
         const result = await recognizeMath(text, "calculation", signal);
         signal.throwIfAborted();
@@ -541,11 +608,11 @@ export const SelectionActions = ({
           text.trim(),
         )
       ) {
-        setMessage(t("fcboard.正在执行白板指令…"));
+        setMessage(t("fcboard.performing_board_action"));
         context ||= { elements: snapshot.source, text, image: undefined };
         await onRequest(text, context, signal);
       } else {
-        setMessage(t("fcboard.正在回答…"));
+        setMessage(t("fcboard.answering"));
         const settings = currentSettings();
         let preview = "";
         const answer = await chat(
@@ -588,18 +655,6 @@ export const SelectionActions = ({
       }
     }
   };
-  useEffect(() =>
-    classroomCommands.register(
-      "language.explain",
-      "解析圈中的任意语言词句：词性、发音、音节、释义、语法、用法与例句，结果写在选区旁；先圈选内容再调用",
-      () => {
-        if (!target || pending) {
-          throw new Error(t("fcboard.请先圈选要学习的词句"));
-        }
-        return act("language", true);
-      },
-    ),
-  );
   if (!target) {
     return null;
   }
@@ -612,9 +667,42 @@ export const SelectionActions = ({
       <Paper
         component="div"
         role="toolbar"
-        aria-label={t("fcboard.选区操作")}
+        aria-label={t("fcboard.selection_actions")}
         elevation={0}
       >
+        {target.solid && (
+          <SolidActions
+            key={target.solid.id}
+            widget={target.solid}
+            disabled={pending}
+            onError={setError}
+          />
+        )}
+        {target.answer && (
+          <ButtonBase
+            aria-label={t(
+              target.answer.collapsed
+                ? "fcboard.expand_answer"
+                : "fcboard.collapse_answer",
+            )}
+            onClick={() =>
+              void updateQuestionAnswer(api, target.answer!.anchor).catch(
+                (failure) => setError(String(failure)),
+              )
+            }
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            >
+              <path
+                d={target.answer.collapsed ? "M9 5l7 7-7 7" : "M5 9l7 7 7-7"}
+              />
+            </svg>
+          </ButtonBase>
+        )}
         <ButtonBase
           aria-label={t("labels.copy")}
           disabled={pending || target.document?.hasObjects === false}
@@ -622,8 +710,10 @@ export const SelectionActions = ({
             controller.current?.abort();
             void classroomCommands
               .execute({
-                name: "canvas.action",
-                args: { action: "duplicateSelection" },
+                name: target.solid ? "tools.duplicate" : "canvas.action",
+                args: target.solid
+                  ? { id: target.solid.id }
+                  : { action: "duplicateSelection" },
               })
               .catch((failure) => setError(String(failure)));
           }}
@@ -643,7 +733,11 @@ export const SelectionActions = ({
           onClick={() => {
             controller.current?.abort();
             void classroomCommands
-              .execute({ name: "canvas.erase" })
+              .execute(
+                target.solid
+                  ? { name: "tools.delete", args: { id: target.solid.id } }
+                  : { name: "canvas.erase" },
+              )
               .catch((failure) => setError(String(failure)));
           }}
         >
@@ -658,7 +752,7 @@ export const SelectionActions = ({
         </ButtonBase>
         {target.canSearch && (
           <ButtonBase
-            aria-label={t("fcboard.搜索")}
+            aria-label={t("fcboard.search")}
             disabled={pending}
             onClick={() => void act("search")}
           >
@@ -674,7 +768,7 @@ export const SelectionActions = ({
           </ButtonBase>
         )}
         <ButtonBase
-          aria-label={pending ? t("fcboard.取消识别") : "AI"}
+          aria-label={pending ? t("fcboard.cancel_recognition") : "AI"}
           aria-busy={pending}
           onClick={() => {
             if (pending) {

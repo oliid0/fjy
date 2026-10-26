@@ -17,7 +17,7 @@ describe("local mathematical voice commands", () => {
     ]) {
       expect(selectionRequest(text)).toBe(true);
     }
-    for (const text of ["课堂笔记", "画布", t("fcboard.画笔"), "牛顿定律"]) {
+    for (const text of ["课堂笔记", "画布", t("fcboard.pen"), "牛顿定律"]) {
       expect(selectionRequest(text)).toBe(false);
     }
   });

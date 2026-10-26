@@ -33,6 +33,35 @@ describe("explicit handwriting actions", () => {
     saveSettings({ ...defaults, apiKey: "test-key" }, false);
   });
   afterEach(() => vi.useRealTimers());
+  it("passes the alphabet surface's English context to bundled Digital Ink without rasterizing", async () => {
+    backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["Hello"]);
+    saveSettings(
+      { ...defaults, ocr: "local", inkLanguage: "zh-Hani-CN" },
+      false,
+    );
+    const capture = vi.fn();
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [10, 20],
+        [30, 40],
+      ],
+    ];
+    expect(
+      await recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "text",
+        undefined,
+        strokes,
+        "en-US",
+      ),
+    ).toBe("Hello");
+    expect(backend.native.mock.calls[0][3]).toBe("en-US");
+    expect(capture).not.toHaveBeenCalled();
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
   it("starts specialized cloud OCR and local OCR together, with bounded output", async () => {
     backend.cloud.mockResolvedValue("1+1=");
     backend.local.mockResolvedValue("1+1=");

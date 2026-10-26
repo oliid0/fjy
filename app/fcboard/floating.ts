@@ -41,7 +41,7 @@ export const useAnchoredPanel = (
       const rect = anchor?.getBoundingClientRect();
       // Native toolbar targets are 48 dp tall; their measured height resolves
       // the shared CSS clamp and the WebView's actual density without guessing DPR.
-      const unit = (rect?.height || 48) / 48;
+      const unit = Math.min(1, (rect?.height || 48) / 48);
       const gap = 16 * unit;
       const toolbar = anchor
         ?.closest("[role='toolbar'], .fc-presentation-toolbar")

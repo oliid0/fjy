@@ -12,7 +12,10 @@ const engine = registerPlugin<{
     pcm: string;
     sampleRate: number;
   }): Promise<{ lines: TranscriptLine[] }>;
-  stop(options: { session: string }): Promise<{ lines: TranscriptLine[] }>;
+  stop(options: {
+    session: string;
+    discard?: boolean;
+  }): Promise<{ lines: TranscriptLine[] }>;
 }>("FcboardLocalSpeech");
 
 let preparation: Promise<void> | undefined;
@@ -47,32 +50,52 @@ export const encodePCM = (samples: Float32Array) => {
   return btoa(binary);
 };
 
-/** A caller may pass its recording stream, so Android never opens two microphones. */
-export const startLocalSpeech = async (
+export type PCMSpeechTransport = {
+  start(): Promise<{ session: string }>;
+  push(options: {
+    session: string;
+    pcm: string;
+    sampleRate: number;
+  }): Promise<{ lines: TranscriptLine[]; activity?: boolean }>;
+  stop(options: {
+    session: string;
+    discard?: boolean;
+  }): Promise<{ lines: TranscriptLine[] }>;
+};
+
+/** Shared capture keeps streaming ASR and recording on the same microphone. */
+export const startPCMSpeech = async (
+  transport: PCMSpeechTransport,
   onLine: (line: TranscriptLine) => void,
   onError: (message: string) => void,
   stream?: MediaStream,
+  cloud = false,
+  onActivity?: () => void,
 ): Promise<LocalSpeechHandle> => {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(
       t(
-        "fcboard.内置离线中文识别请使用安卓版；浏览器可在设置选择系统或自定义语音",
+        "fcboard.offline_chinese_recognition_requires_android_in_a_browser_choose_system_or_custom_speech_in",
       ),
     );
   }
   if (!window.AudioContext || !window.AudioWorkletNode) {
     throw new Error(
-      t("fcboard.当前 WebView 不支持离线语音采集，请更新安卓系统 WebView"),
+      t(
+        "fcboard.this_webview_cannot_capture_offline_speech_update_android_system_webview",
+      ),
     );
   }
   // Resume in the initiating click, before model loading can consume activation.
-  const context = new AudioContext();
+  const context = new AudioContext(cloud ? { sampleRate: 16000 } : undefined);
   const resumed = context.resume();
   void resumed.catch(() => {});
   let session: string;
   try {
-    await prepareLocalSpeech();
-    session = (await engine.start()).session;
+    if (!cloud) {
+      await prepareLocalSpeech();
+    }
+    session = (await transport.start()).session;
   } catch (error) {
     await context.close().catch(() => {});
     throw error;
@@ -124,7 +147,10 @@ export const startLocalSpeech = async (
       ended = true;
       await pending;
       try {
-        deliver((await engine.stop({ session })).lines);
+        deliver(
+          (await transport.stop({ session, ...(cloud ? { discard } : {}) }))
+            .lines,
+        );
       } finally {
         await cleanup();
       }
@@ -138,7 +164,9 @@ export const startLocalSpeech = async (
     await context.audioWorklet.addModule(
       `${import.meta.env.BASE_URL}fc-pcm-worklet.js`,
     );
-    node = new AudioWorkletNode(context, "fcboard-pcm");
+    node = new AudioWorkletNode(context, "fcboard-pcm", {
+      processorOptions: { blockDuration: cloud ? 0.1 : 0.5 },
+    });
     source = context.createMediaStreamSource(media);
     node.port.onmessage = ({
       data,
@@ -156,7 +184,11 @@ export const startLocalSpeech = async (
       }
       clearTimeout(captureTimeout);
       if (++queued > 20) {
-        onError(t("fcboard.设备语音处理速度不足，已停止识别；录制不受影响"));
+        onError(
+          t(
+            "fcboard.speech_recognition_stopped_because_processing_could_not_keep_up_recording_continues",
+          ),
+        );
         void finish(true).catch(() => {});
         return;
       }
@@ -164,10 +196,15 @@ export const startLocalSpeech = async (
       pending = pending
         .then(async () => {
           if (!cancelled) {
-            deliver(
-              (await engine.push({ session, pcm, sampleRate: data.sampleRate }))
-                .lines,
-            );
+            const response = await transport.push({
+              session,
+              pcm,
+              sampleRate: data.sampleRate,
+            });
+            deliver(response.lines);
+            if (!cancelled && response.activity) {
+              onActivity?.();
+            }
           }
         })
         .catch((error) => {
@@ -182,7 +219,9 @@ export const startLocalSpeech = async (
     node.connect(context.destination);
     captureTimeout = setTimeout(() => {
       onError(
-        t("fcboard.麦克风未提供音频，请检查权限与输入设备后重新开启语音"),
+        t(
+          "fcboard.the_microphone_did_not_provide_audio_check_permissions_and_the_input_device_then_start_again",
+        ),
       );
       void finish(true).catch(() => {});
     }, 12000);
@@ -194,7 +233,11 @@ export const startLocalSpeech = async (
           resumeTimeout = setTimeout(
             () =>
               reject(
-                new Error(t("fcboard.音频采集未启动，请点击语音按钮重试")),
+                new Error(
+                  t(
+                    "fcboard.audio_capture_did_not_start_click_the_voice_button_to_try_again",
+                  ),
+                ),
               ),
             8000,
           );
@@ -205,17 +248,26 @@ export const startLocalSpeech = async (
     }
     return { stop: () => finish(false), cancel: () => finish(true) };
   } catch (error) {
-    await engine.stop({ session }).catch(() => {});
+    await transport.stop({ session }).catch(() => {});
     await cleanup();
     throw error;
   }
 };
 
+export const startLocalSpeech = (
+  onLine: (line: TranscriptLine) => void,
+  onError: (message: string) => void,
+  stream?: MediaStream,
+  onActivity?: () => void,
+) => startPCMSpeech(engine, onLine, onError, stream, false, onActivity);
+
 export const transcribeLocalRecording = async (
   blob: Blob,
 ): Promise<TranscriptLine[]> => {
   if (!Capacitor.isNativePlatform()) {
-    throw new Error(t("fcboard.内置离线转写请使用安卓版"));
+    throw new Error(
+      t("fcboard.offline_transcription_requires_the_android_app"),
+    );
   }
   const audio = new AudioContext();
   let session: string | undefined;
@@ -223,7 +275,9 @@ export const transcribeLocalRecording = async (
     const buffer = await audio.decodeAudioData(await blobToArrayBuffer(blob));
     if (buffer.duration > 1800) {
       throw new Error(
-        t("fcboard.超过 30 分钟的资料请使用录制时的实时文稿或自定义转写接口"),
+        t(
+          "fcboard.for_recordings_over_30_minutes_use_the_live_transcript_or_a_custom_transcription_service",
+        ),
       );
     }
     await prepareLocalSpeech();
@@ -257,7 +311,9 @@ export const transcribeLocalRecording = async (
   } catch (error) {
     if (error instanceof DOMException) {
       throw new Error(
-        t("fcboard.此设备无法解析该录制的音轨，请使用实时文稿或自定义转写接口"),
+        t(
+          "fcboard.this_device_cannot_decode_the_recording_s_audio_use_the_live_transcript_or_a_custom",
+        ),
       );
     }
     throw error;

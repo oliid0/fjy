@@ -19,10 +19,11 @@ import { TransientMessage } from "./TransientMessage";
 
 import { MaterialPanel } from "./MaterialPanel";
 
-import { insertionPoint, selectedPlot } from "./board";
+import { insertionPoint, selectedPlot, objectSelection } from "./board";
 import { useAnchoredPanel, placePanel } from "./floating";
 import { classroomCommands } from "./commands";
 import { Classroom } from "./native";
+import { animateSolid } from "./solidAnimation";
 import {
   configureWidget,
   readWidgets,
@@ -31,18 +32,19 @@ import {
   widgetDefaults,
   widgetShapes,
   widgetTime,
+  solidWidgetKinds,
 } from "./widgets";
 
 import type { Widget, WidgetKind } from "./widgets";
 import type { FactoryTool } from "./native";
 
 const factoryTools = {
-  transfer: { label: "快传", icon: <FactoryIcon name="transfer" /> },
-  split: { label: "分屏", icon: <FactoryIcon name="split" /> },
-  vote: { label: "投票", icon: <FactoryIcon name="vote" /> },
-  calculator: { label: "计算器", icon: <FactoryIcon name="calculator" /> },
-  spotlight: { label: "聚光灯", icon: <FactoryIcon name="spotlight" /> },
-  timer: { label: "计时器", icon: <FactoryIcon name="timer" /> },
+  transfer: { label: "file_transfer", icon: <FactoryIcon name="transfer" /> },
+  split: { label: "split_screen", icon: <FactoryIcon name="split" /> },
+  vote: { label: "vote", icon: <FactoryIcon name="vote" /> },
+  calculator: { label: "calculator", icon: <FactoryIcon name="calculator" /> },
+  spotlight: { label: "spotlight", icon: <FactoryIcon name="spotlight" /> },
+  timer: { label: "timer", icon: <FactoryIcon name="timer" /> },
 } as const;
 
 const parameters: Partial<Record<WidgetKind, (keyof typeof ranges)[]>> = {
@@ -66,13 +68,13 @@ const ranges = {
   vy: [1, 50, 0.5],
 };
 const labels = {
-  rotation: "旋转",
-  size: "大小",
-  length: "摆长 L（m）",
-  gravity: "重力 g（m/s²）",
-  angle: "初始角度 θ（°）",
-  vx: "水平速度（m/s）",
-  vy: "竖直速度（m/s）",
+  rotation: "rotation",
+  size: "size",
+  length: "length_l_m",
+  gravity: "gravity_g_m_s",
+  angle: "initial_angle",
+  vx: "horizontal_speed_m_s",
+  vy: "vertical_speed_m_s",
 } as const;
 
 export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
@@ -90,6 +92,14 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   );
   const [factoryPending, setFactoryPending] = useState<FactoryTool>();
   const factoryBusy = useRef(false);
+  const animations = useRef(new Map<string, AbortController>());
+  useEffect(() => {
+    const active = animations.current;
+    return () => {
+      active.forEach((controller) => controller.abort());
+      active.clear();
+    };
+  }, []);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
       return;
@@ -108,7 +118,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       .catch((failure) => {
         if (!disposed) {
           setError(
-            t("fcboard.无法读取大屏工具：{{error}}", {
+            t("fcboard.could_not_read_board_tools_error", {
               error: String(failure),
             }),
           );
@@ -250,27 +260,115 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     window.addEventListener("pointerdown", dismiss);
     return () => window.removeEventListener("pointerdown", dismiss);
   }, [open]);
-  const change = (changes: Record<string, unknown>, id?: string) => {
-    const widget = id
-      ? readWidgets(api).find((item) => item.id === id)
-      : selectedRef.current;
+  const change = async (changes: Record<string, unknown>, id?: string) => {
+    const targetId = id || selectedRef.current?.id;
+    if (targetId) {
+      animations.current.get(targetId)?.abort();
+    }
+    let widget = readWidgets(api).find((item) => item.id === targetId);
     if (!widget) {
-      throw new Error(t("fcboard.请先选择一个教学工具"));
+      throw new Error(t("fcboard.select_a_teaching_tool_first"));
+    }
+    if (changes.solid && !solidWidgetKinds.has(widget.kind)) {
+      throw new Error(
+        t("fcboard.teaching_tool_parameter_key_is_out_of_range", {
+          key: "solid",
+        }),
+      );
     }
     const next = { ...widget, params: configureWidget(widget.params, changes) };
-    renderWidget(api, next);
-    selectedRef.current = next;
-    setSelected(next);
+    if (
+      !["cube", "cylinder"].includes(widget.kind) &&
+      (next.params.solid.unfold !== widget.params.solid.unfold ||
+        next.params.solid.net !== widget.params.solid.net ||
+        JSON.stringify(next.params.solid.colors) !==
+          JSON.stringify(widget.params.solid.colors))
+    ) {
+      throw new Error(
+        t("fcboard.teaching_tool_parameter_key_is_out_of_range", {
+          key: "solid",
+        }),
+      );
+    }
+    let ids: string[];
+    if (
+      changes.solid &&
+      (widget.params.solid.unfold !== next.params.solid.unfold ||
+        (widget.params.solid.net !== next.params.solid.net &&
+          widget.params.solid.unfold > 0))
+    ) {
+      const rollback = widget;
+      const document = classroomCommands.read("document") as
+        | { ink: import("./documents").InkStroke[] }
+        | undefined;
+      const before = document?.ink.filter(
+        (stroke) => stroke.widget?.id === widget!.id,
+      );
+      const controller = new AbortController();
+      const signal =
+        changes.signal instanceof AbortSignal ? changes.signal : undefined;
+      const abort = () => controller.abort();
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) {
+        controller.abort();
+      }
+      animations.current.set(widget.id, controller);
+      const duration = matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? 0
+        : 600;
+      try {
+        if (
+          widget.params.solid.net !== next.params.solid.net &&
+          widget.params.solid.unfold > 0
+        ) {
+          await animateSolid(
+            api,
+            widget,
+            {
+              ...widget,
+              params: {
+                ...widget.params,
+                solid: { ...widget.params.solid, unfold: 0 },
+              },
+            },
+            controller.signal,
+            duration,
+            { remember: false },
+          );
+          widget = readWidgets(api).find((item) => item.id === targetId)!;
+        }
+        ids = (
+          await animateSolid(api, widget, next, controller.signal, duration, {
+            before,
+            rollback,
+          })
+        ).ids;
+      } finally {
+        signal?.removeEventListener("abort", abort);
+        if (animations.current.get(targetId!) === controller) {
+          animations.current.delete(targetId!);
+        }
+      }
+    } else {
+      if (changes.signal instanceof AbortSignal) {
+        changes.signal.throwIfAborted();
+      }
+      ids = renderWidget(api, next).map((element) => element.id);
+    }
+    const actual = readWidgets(api).find((item) => item.id === targetId);
+    selectedRef.current = actual || null;
+    setSelected(actual || null);
+    return { ids };
   };
   const play = (enabled?: boolean, id?: string) => {
     const widget = id
       ? readWidgets(api).find((item) => item.id === id)
       : selectedRef.current;
     if (!widget || !["timer", "pendulum", "projectile"].includes(widget.kind)) {
-      throw new Error(t("fcboard.请选择计时器或动态实验"));
+      throw new Error(t("fcboard.select_a_timer_or_animated_experiment"));
     }
     const running = enabled === undefined ? !widget.params.running : enabled;
-    change(
+    return change(
       { running, elapsed: widgetTime(widget.params), started: Date.now() },
       widget.id,
     );
@@ -280,7 +378,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       ? readWidgets(api).find((item) => item.id === id)
       : selectedRef.current;
     if (!widget || !["dice", "picker"].includes(widget.kind)) {
-      throw new Error(t("fcboard.请选择骰子或随机抽取工具"));
+      throw new Error(t("fcboard.select_dice_or_random_picker"));
     }
     const choices =
       widget.kind === "dice"
@@ -290,11 +388,11 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             .map((name) => name.trim())
             .filter(Boolean);
     if (!choices.length) {
-      throw new Error(t("fcboard.请先输入抽取名单"));
+      throw new Error(t("fcboard.enter_the_names_first"));
     }
     const values = new Uint32Array(1);
     crypto.getRandomValues(values);
-    change({ choice: choices[values[0] % choices.length] }, widget.id);
+    return change({ choice: choices[values[0] % choices.length] }, widget.id);
   };
   const insert = (kind: WidgetKind) => {
     const widget: Widget = {
@@ -305,6 +403,15 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         ? { x: 60, y: 60 }
         : insertionPoint(api),
     };
+    if (solidWidgetKinds.has(kind)) {
+      const document = classroomCommands.read("document") as
+        | { pen?: { color: string } }
+        | undefined;
+      widget.params.solid.stroke =
+        document?.pen?.color ||
+        api.getAppState().currentItemStrokeColor ||
+        "#17243c";
+    }
     const elements = renderWidget(api, widget);
     if (classroomCommands.has("document.select")) {
       void classroomCommands.execute({
@@ -313,11 +420,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       });
     } else {
       api.updateScene({
-        appState: {
-          selectedElementIds: Object.fromEntries(
-            elements.map((el) => [el.id, true]),
-          ),
-        },
+        appState: objectSelection(elements),
       });
     }
     api.setActiveTool({ type: "selection" });
@@ -341,16 +444,79 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         `插入原生教学工具，args.kind=${Object.keys(teachingTools).join("|")}`,
         (args) => {
           if (!(String(args.kind) in teachingTools)) {
-            throw new Error(t("fcboard.教学工具不存在"));
+            throw new Error(t("fcboard.this_teaching_tool_is_unavailable"));
           }
           insert(args.kind as WidgetKind);
         },
       ),
       classroomCommands.register(
         "tools.configure",
-        "修改选中教学工具或args.id指定工具；参数 args.rotation,size,length,gravity,angle,vx,vy,duration(秒),names(逗号分隔)",
+        "修改选中教学工具或args.id指定工具；参数 args.rotation,size,length,gravity,angle,vx,vy,duration(秒),names；图形可带solid:{stroke:十六进制颜色,border:boolean}；仅立方体/圆柱另支持solid:{unfold:0|1,net:从0开始的网格索引,colors:{面id:十六进制颜色}}；展开/合起有动画，颜色绑定物理面",
         (args) =>
           change(args, typeof args.id === "string" ? args.id : undefined),
+      ),
+      classroomCommands.register(
+        "tools.delete",
+        "删除args.id指定的整个教学对象，包含全部面和边",
+        async (args) => {
+          const id =
+            typeof args.id === "string" ? args.id : selectedRef.current?.id;
+          if (id) {
+            animations.current.get(id)?.abort();
+          }
+          if (!id || !readWidgets(api).some((widget) => widget.id === id)) {
+            throw new Error(t("fcboard.select_a_teaching_tool_first"));
+          }
+          const document = classroomCommands.read("document") as
+            | { ink: { id: string; widget?: Widget }[] }
+            | undefined;
+          const ids = document
+            ? document.ink
+                .filter((stroke) => stroke.widget?.id === id)
+                .map((stroke) => stroke.id)
+            : api
+                .getSceneElements()
+                .filter((element) => element.customData?.fcWidget?.id === id)
+                .map((element) => element.id);
+          return classroomCommands.execute({
+            name: "canvas.erase",
+            args: { ids },
+          });
+        },
+      ),
+      classroomCommands.register(
+        "tools.duplicate",
+        "复制args.id指定的整个教学对象及逐面颜色，保留原对象",
+        async (args) => {
+          const id =
+            typeof args.id === "string" ? args.id : selectedRef.current?.id;
+          if (id) {
+            animations.current.get(id)?.abort();
+          }
+          const widget = readWidgets(api).find((item) => item.id === id);
+          if (!widget) {
+            throw new Error(t("fcboard.select_a_teaching_tool_first"));
+          }
+          const clone = {
+            ...widget,
+            id: crypto.randomUUID(),
+            params: configureWidget(widgetDefaults(), widget.params),
+            position: { x: widget.position.x + 24, y: widget.position.y + 24 },
+          };
+          const elements = renderWidget(api, clone);
+          const ids = elements.map((element) => element.id);
+          if (classroomCommands.has("document.select")) {
+            await classroomCommands.execute({
+              name: "document.select",
+              args: { ids },
+            });
+          } else {
+            api.updateScene({
+              appState: objectSelection(elements),
+            });
+          }
+          return { id: clone.id, ids };
+        },
       ),
       classroomCommands.register(
         "tools.play",
@@ -383,10 +549,14 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               async (args) => {
                 const tool = args.tool as FactoryTool;
                 if (!factory.includes(tool)) {
-                  throw new Error(t("fcboard.当前设备没有这项大屏工具"));
+                  throw new Error(
+                    t("fcboard.this_tool_is_not_installed_on_this_display"),
+                  );
                 }
                 if (factoryBusy.current) {
-                  throw new Error(t("fcboard.正在打开大屏工具，请稍候"));
+                  throw new Error(
+                    t("fcboard.opening_the_display_tool_please_wait"),
+                  );
                 }
                 factoryBusy.current = true;
                 setFactoryPending(tool);
@@ -409,10 +579,16 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     ];
     return () => registrations.forEach((stop) => stop());
   });
-  const attempt = (operation: () => void) => {
+  const attempt = (operation: () => unknown | Promise<unknown>) => {
     try {
       setError("");
-      operation();
+      void Promise.resolve(operation()).catch((failure) => {
+        if (
+          !(failure instanceof DOMException && failure.name === "AbortError")
+        ) {
+          setError(String(failure));
+        }
+      });
     } catch (failure) {
       setError(String(failure));
     }
@@ -420,7 +596,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   const widgetButton = ([kind, name]: [WidgetKind, string]) => (
     <ButtonBase
       key={kind}
-      aria-label={t("fcboard.插入{{name}}", {
+      aria-label={t("fcboard.insert_name", {
         name: t(`fcboard.${teachingTools[kind]}`),
       })}
       onClick={() => attempt(() => insert(kind))}
@@ -498,15 +674,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     </ButtonBase>
   );
   const entries = Object.entries(teachingTools) as [WidgetKind, string][];
-  const solids = new Set<WidgetKind>([
-    "cube",
-    "sphere",
-    "cylinder",
-    "cone",
-    "prism",
-    "pyramid",
-    "frustum",
-  ]);
+  const solids = solidWidgetKinds;
   return (
     <>
       <ToolbarExtras placement="shapes">
@@ -516,8 +684,8 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         <div className="fc-toolbar-extras">
           <button
             data-teaching-tools
-            aria-label={t("fcboard.教学工具")}
-            title={t("fcboard.教学工具")}
+            aria-label={t("fcboard.teaching_tools")}
+            title={t("fcboard.teaching_tools")}
             aria-expanded={open}
             onClick={() => {
               if (classroomCommands.has("panel.close")) {
@@ -527,7 +695,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             }}
           >
             <FactoryIcon name="toolbox" />
-            <span>{t("fcboard.工具箱")}</span>
+            <span>{t("fcboard.toolbox")}</span>
           </button>
         </div>
       </ToolbarExtras>
@@ -537,7 +705,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           className="fc-tools-picker fc-surface"
           style={pickerStyle}
           role="dialog"
-          aria-label={t("fcboard.教学工具")}
+          aria-label={t("fcboard.teaching_tools")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -546,23 +714,23 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           }}
         >
           <header>
-            <strong>{t("fcboard.教学工具")}</strong>
+            <strong>{t("fcboard.teaching_tools")}</strong>
             <button
-              aria-label={t("fcboard.关闭教学工具")}
+              aria-label={t("fcboard.close_teaching_tools")}
               onClick={() => setOpen(false)}
             >
               {CloseIcon}
             </button>
           </header>
           {factoryLoading && (
-            <p role="status">{t("fcboard.正在读取大屏工具…")}</p>
+            <p role="status">{t("fcboard.loading_display_tools")}</p>
           )}
           {factory.some((tool) => tool !== "transfer") && (
             <>
               <div
                 className="fc-tools-grid fc-factory-tools"
                 role="group"
-                aria-label={t("fcboard.大屏工具")}
+                aria-label={t("fcboard.display_tools")}
               >
                 {factory
                   .filter((tool) => tool !== "transfer")
@@ -570,7 +738,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     <ButtonBase
                       key={tool}
                       type="button"
-                      aria-label={t("fcboard.打开{{name}}", {
+                      aria-label={t("fcboard.open_name", {
                         name: t(`fcboard.${factoryTools[tool].label}`),
                       })}
                       disabled={!!factoryPending}
@@ -584,7 +752,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       {factoryTools[tool].icon}
                       <span>
                         {factoryPending === tool
-                          ? t("fcboard.正在打开…")
+                          ? t("fcboard.opening")
                           : t(`fcboard.${factoryTools[tool].label}`)}
                       </span>
                     </ButtonBase>
@@ -602,16 +770,16 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               .map(widgetButton)}
             {(
               [
-                [t("fcboard.AI 总结"), "canvas.summary", TextIcon],
-                [t("fcboard.课堂录制"), "record.open", microphoneIcon],
+                [t("fcboard.ai_summary"), "canvas.summary", TextIcon],
+                [t("fcboard.recording"), "record.open", microphoneIcon],
                 [
-                  t("fcboard.快传"),
+                  t("fcboard.file_transfer"),
                   "files.open",
                   <FactoryIcon name="transfer" />,
                 ],
-                [t("fcboard.AI 问答"), "assistant.open", questionCircle],
+                [t("fcboard.ai_questions"), "assistant.open", questionCircle],
                 [
-                  t("fcboard.聚光灯"),
+                  t("fcboard.spotlight"),
                   "tools.spotlight",
                   <FactoryIcon name="spotlight" />,
                 ],
@@ -625,9 +793,9 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               .map(actionButton)}
             {(
               [
-                [t("fcboard.语音指令"), "voice.toggle", microphoneIcon],
+                [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
                 [
-                  t("fcboard.截屏"),
+                  t("fcboard.capture"),
                   "canvas.capture",
                   <FactoryIcon name="select" />,
                 ],
@@ -639,6 +807,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       {!open &&
         !lassoActive &&
         selected &&
+        !solidWidgetKinds.has(selected.kind) &&
         !["ruler", "protractor"].includes(selected.kind) && (
           <MaterialPanel
             className="fc-widget-panel fc-surface"
@@ -650,7 +819,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               maxHeight: `calc(100% - ${widgetPlacement.top + 92}px)`,
             }}
             role="dialog"
-            aria-label={t("fcboard.{{name}}参数", {
+            aria-label={t("fcboard.name_controls", {
               name: t(`fcboard.${teachingTools[selected.kind]}`),
             })}
             onKeyDown={(event) => event.stopPropagation()}
@@ -658,7 +827,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             <header>
               <strong>{t(`fcboard.${teachingTools[selected.kind]}`)}</strong>
               <button
-                aria-label={t("fcboard.收起工具参数")}
+                aria-label={t("fcboard.close_tool_controls")}
                 onClick={() => {
                   if (classroomCommands.has("document.select")) {
                     void classroomCommands.execute({
@@ -698,9 +867,9 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               })}
               {selected.kind === "timer" && (
                 <label>
-                  {t("fcboard.时长（分钟）")}
+                  {t("fcboard.duration_minutes")}
                   <input
-                    aria-label={t("fcboard.倒计时时长（分钟）")}
+                    aria-label={t("fcboard.countdown_duration_minutes")}
                     type="number"
                     min="0.1"
                     max="120"
@@ -723,8 +892,8 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   <button
                     aria-label={
                       selected.params.running
-                        ? t("fcboard.暂停工具")
-                        : t("fcboard.播放工具")
+                        ? t("fcboard.pause_tool")
+                        : t("fcboard.play_tool")
                     }
                     onClick={() => attempt(() => play())}
                   >
@@ -735,31 +904,31 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       attempt(() => change({ elapsed: 0, started: Date.now() }))
                     }
                   >
-                    {t("fcboard.重置")}
+                    {t("fcboard.reset")}
                   </button>
                 </div>
               )}
               {selected.kind === "pendulum" && (
-                <small>{t("fcboard.小角度单摆模型")}</small>
+                <small>{t("fcboard.small_angle_pendulum_model")}</small>
               )}
               {selected.kind === "picker" && (
                 <label>
-                  {t("fcboard.名单")}
+                  {t("fcboard.names")}
                   <textarea
-                    aria-label={t("fcboard.抽取名单")}
+                    aria-label={t("fcboard.picker_names")}
                     value={selected.params.names}
                     onChange={(event) =>
                       attempt(() => change({ names: event.target.value }))
                     }
-                    placeholder={t("fcboard.用逗号或换行分开")}
+                    placeholder={t("fcboard.separate_with_commas_or_new_lines")}
                   />
                 </label>
               )}
               {["dice", "picker"].includes(selected.kind) && (
                 <button onClick={() => attempt(() => random())}>
                   {selected.kind === "dice"
-                    ? t("fcboard.掷一下")
-                    : t("fcboard.抽一个")}
+                    ? t("fcboard.roll_dice")
+                    : t("fcboard.pick_one")}
                 </button>
               )}
             </div>

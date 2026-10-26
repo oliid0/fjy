@@ -1,6 +1,7 @@
 import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n, getLanguage } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
+import CircularProgress from "@mui/material/CircularProgress";
 
 import {
   CloseIcon,
@@ -10,15 +11,18 @@ import {
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { TransientMessage } from "./TransientMessage";
+import { InkQuestion } from "./InkQuestion";
 
 import { useAnchoredPanel } from "./floating";
 
 import { boardContext, chat, parseJSON, visualMessage } from "./ai";
 import { agentContext, runBoardCommands } from "./agent";
 import { classroomCommands } from "./commands";
-import { LESSON_FORMAT, validateLesson } from "./lesson";
+import { LESSON_FORMAT, LESSON_TOOLS_FORMAT, validateLesson } from "./lesson";
 import { searchMaterials } from "./materials";
 import { lessonSessions, saveLessonSession, TeachingEngine } from "./teaching";
+import { questionPosition } from "./questionInk";
+import { observeLesson } from "./lessonObserver";
 
 import type { Lens, TeachingSession } from "./teaching";
 import type { Message } from "./ai";
@@ -51,25 +55,31 @@ export const LearningSettings = () => {
   return (
     <>
       <label>
-        {t("fcboard.讲解方式")}
+        {t("fcboard.teaching_mode")}
         <MaterialSelect
-          aria-label={t("fcboard.讲解方式")}
+          aria-label={t("fcboard.teaching_mode")}
           value={value.lens || "standard"}
           onChange={(event) =>
             update({ ...value, lens: event.target.value as Lens })
           }
         >
-          <option value="standard">{t("fcboard.图文与语音")}</option>
+          <option value="standard">{t("fcboard.visuals_and_voice")}</option>
           <option value="audio">
-            {t("fcboard.语音描述图形 · 适合低视力")}
+            {t("fcboard.describe_visuals_aloud_low_vision")}
           </option>
-          <option value="captions">{t("fcboard.字幕优先 · 无需声音")}</option>
-          <option value="reading">{t("fcboard.易读文字 · 同步高亮")}</option>
-          <option value="focus">{t("fcboard.短步骤 · 每步停顿")}</option>
+          <option value="captions">
+            {t("fcboard.captions_first_no_audio_needed")}
+          </option>
+          <option value="reading">
+            {t("fcboard.easy_reading_synchronized_highlight")}
+          </option>
+          <option value="focus">
+            {t("fcboard.short_steps_pause_after_each_step")}
+          </option>
         </MaterialSelect>
       </label>
       <label>
-        {t("fcboard.讲课速度")}
+        {t("fcboard.teaching_speed")}
         <input
           type="range"
           min="0.5"
@@ -90,27 +100,32 @@ export const Teacher = ({
   onCommand,
 }: {
   api: ExcalidrawImperativeAPI;
-  onCommand: (text: string) => Promise<void>;
+  onCommand: (
+    text: string,
+    signal: AbortSignal,
+    sourceIds?: string[],
+  ) => Promise<void>;
 }) => {
   useI18n();
   const engine = useRef<TeachingEngine | null>(null);
   if (!engine.current) {
-    engine.current = new TeachingEngine(api);
+    engine.current = new TeachingEngine(api, observeLesson);
   }
   const controller = engine.current;
   const [state, setState] = useState(controller.state);
   const [asking, setAsking] = useState(false);
-  const [prompt, setPrompt] = useState("");
+  const [questionId, setQuestionId] = useState(0);
+  const [questionPlacement, setQuestionPlacement] =
+    useState<ReturnType<typeof questionPosition>>();
   const [error, setError] = useState("");
   const request = useRef<AbortController | null>(null);
-  const input = useRef<HTMLInputElement>(null);
   const session = useRef<string>("");
   const active = state.mode !== "idle";
   const surface = useRef<HTMLElement>(null);
   const floatingStyle = useAnchoredPanel(
     surface,
     "[data-testid='main-menu-trigger']",
-    active || asking || !!error,
+    active || !!error,
   );
 
   useEffect(() => {
@@ -119,8 +134,9 @@ export const Teacher = ({
       controller.configure(saved.speed || 1, saved.lens || "standard");
     };
     configure();
-    let timer: ReturnType<typeof setTimeout>;
-    let write: Promise<unknown> = Promise.resolve();
+    let alive = true;
+    let savedProgress = "";
+    let savedPlan = controller.state.lesson;
     const stop = controller.subscribe((next) => {
       setState(next);
       if (!next.lesson || !controller.canvas) {
@@ -134,20 +150,39 @@ export const Teacher = ({
         board: snapshot?.active || "",
         lesson: next.lesson,
         step: next.step,
+        toolIndex: next.toolIndex,
         correct: next.correct,
         attempts: next.attempts,
         updated: Date.now(),
         canvas: controller.canvas,
       };
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        write = write
-          .catch(() => {})
-          .then(() => saveLessonSession(value))
-          .catch(() =>
-            setError(t("fcboard.讲解记录保存失败，白板内容仍在当前板上")),
+      const progress = JSON.stringify([
+        value.id,
+        value.board,
+        value.step,
+        value.toolIndex,
+        value.correct,
+        value.attempts,
+        value.canvas.id,
+        next.mode === "complete",
+      ]);
+      if (progress === savedProgress && next.lesson === savedPlan) {
+        return;
+      }
+      savedProgress = progress;
+      savedPlan = next.lesson;
+      void saveLessonSession(value).catch(() => {
+        if (savedProgress === progress && savedPlan === next.lesson) {
+          savedProgress = "";
+        }
+        if (alive) {
+          setError(
+            t(
+              "fcboard.could_not_save_the_lesson_record_your_board_content_is_preserved",
+            ),
           );
-      }, 400);
+        }
+      });
     });
     const invalidate = classroomCommands.onInvalidate(() => {
       request.current?.abort();
@@ -161,20 +196,21 @@ export const Teacher = ({
     });
     window.addEventListener("fcboard-teaching-settings", configure);
     return () => {
+      alive = false;
+      stop();
       request.current?.abort();
       controller.cancel();
-      clearTimeout(timer);
-      stop();
       invalidate();
       pointer();
       window.removeEventListener("fcboard-teaching-settings", configure);
     };
   }, [api, controller]);
   useEffect(() => {
-    if (asking) {
-      input.current?.focus();
+    if (error) {
+      const timer = setTimeout(() => setError(""), 4500);
+      return () => clearTimeout(timer);
     }
-  }, [asking]);
+  }, [error]);
 
   const fail = (failure: unknown) => {
     if (failure instanceof DOMException && failure.name === "AbortError") {
@@ -185,16 +221,20 @@ export const Teacher = ({
       controller.pause();
     } else {
       controller.cancel();
-      setAsking(true);
     }
   };
   const teach = async (
     question: string,
     branch: boolean,
     signal?: AbortSignal,
+    sourceIds?: string[],
   ) => {
     if (!question.trim()) {
-      throw new Error(t("fcboard.请说出想学的内容，或选中题目后提问"));
+      throw new Error(
+        t(
+          "fcboard.say_what_you_want_to_learn_or_select_a_question_to_ask_about_it",
+        ),
+      );
     }
     request.current?.abort();
     const abort = new AbortController();
@@ -228,7 +268,35 @@ export const Teacher = ({
         | undefined;
       const context = document
         ? { elements: [], text: document.text, image: document.image }
-        : await boardContext(api);
+        : await boardContext(
+            api,
+            false,
+            sourceIds?.length
+              ? api
+                  .getSceneElements()
+                  .filter((element) => sourceIds.includes(element.id))
+              : undefined,
+          );
+      const pageSource = document
+        ? (classroomCommands.read("document") as
+            | { selection?: string[]; ink?: { id: string; lesson?: string }[] }
+            | undefined)
+        : undefined;
+      const writingSourceIds =
+        sourceIds ||
+        (document
+          ? pageSource?.selection?.length
+            ? pageSource.selection
+            : pageSource?.ink
+                ?.filter((stroke) => !stroke.lesson)
+                .map((stroke) => stroke.id)
+          : context.elements
+              .filter(
+                (element) =>
+                  (element.type === "text" || element.type === "freedraw") &&
+                  !element.customData?.fcLessonId,
+              )
+              .map((element) => element.id));
       if (abort.signal.aborted || revision !== classroomCommands.revision) {
         return;
       }
@@ -244,7 +312,9 @@ export const Teacher = ({
       const messages: Message[] = [
         {
           role: "system",
-          content: `你是方成教育的现场教师。${LESSON_FORMAT}\n如需先观察或准备工具，返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}],"continue":true}，系统执行后返回真实结果和最新状态，你再决定下一步。可用 canvas.inspect 读取当前可见画布，math.evaluate 本地核算而不写板，其余工具按需要使用；不得编造结果、对象id或能力。准备完成返回 {"action":"lesson","lesson":上述课程JSON}，也可直接返回课程JSON。讲解准备阶段禁止递归调用 lesson.ask、lesson.teach 或另开 assistant.open；只有用户明确要求才删除、清空、录制或退出。已注册工具：\n${classroomCommands.describe()}\n${
+          content: `你是方成教育的现场教师。默认用当前界面语言 ${
+            getLanguage().code
+          } 讲述和板书，用户明确要求的语言优先。${LESSON_FORMAT}\n${LESSON_TOOLS_FORMAT}\n如需先观察或准备工具，返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}],"continue":true}，系统执行后返回真实结果和最新状态，你再决定下一步。可用 canvas.inspect 读取当前可见画布，math.evaluate 本地核算而不写板，其余工具按需要使用；不得编造结果、对象id或能力。准备完成返回 {"action":"lesson","lesson":上述课程JSON}，也可直接返回课程JSON。讲解准备阶段禁止递归调用 lesson.ask、lesson.teach 或另开 assistant.open；只有用户明确要求才删除、清空、录制或退出。已注册工具：\n${classroomCommands.describe()}\n${
             document
               ? "当前在课件透明板书层，坐标相对课件左上角，范围0..900宽、0..480高。优先用圈线和箭头解释现有课件，板书简短并避开原文；不可擦除原课件。"
               : ""
@@ -321,13 +391,15 @@ export const Teacher = ({
       const lesson = validateLesson(
         response?.action === "lesson" ? response.lesson : response,
       );
+      lesson.instruction = question;
       setAsking(false);
-      setPrompt("");
       if (branch) {
-        void controller.branch(lesson).catch(fail);
+        void controller.branch(lesson, writingSourceIds).catch(fail);
       } else {
         session.current = crypto.randomUUID();
-        void controller.start(lesson).catch(fail);
+        void controller
+          .start(lesson, 0, undefined, undefined, writingSourceIds)
+          .catch(fail);
       }
     } finally {
       signal?.removeEventListener("abort", cancel);
@@ -344,9 +416,12 @@ export const Teacher = ({
     const registrations = [
       classroomCommands.register(
         "assistant.open",
-        "打开输入框，可提出问题或操作所有当前组件",
+        "在当前可见画布空白位置打开手写提问框；支持手写或语音录入，发送后经原命令路由处理",
         () => {
+          const placement = questionPosition(api);
           controller.pause();
+          setQuestionPlacement(placement);
+          setQuestionId((value) => value + 1);
           setAsking(true);
         },
       ),
@@ -361,7 +436,7 @@ export const Teacher = ({
               String(args.lens),
             )
           ) {
-            throw new Error(t("fcboard.讲解方式无效"));
+            throw new Error(t("fcboard.invalid_teaching_mode"));
           }
           if (
             args.speed !== undefined &&
@@ -370,7 +445,7 @@ export const Teacher = ({
               args.speed < 0.5 ||
               args.speed > 2)
           ) {
-            throw new Error(t("fcboard.讲课速度超出范围"));
+            throw new Error(t("fcboard.teaching_speed_out_of_range"));
           }
           const next = {
             lens: (args.lens || saved.lens || "standard") as Lens,
@@ -388,6 +463,10 @@ export const Teacher = ({
             String(args.prompt || "请讲解当前选中的题目"),
             false,
             args.signal instanceof AbortSignal ? args.signal : undefined,
+            Array.isArray(args.sourceIds) &&
+              args.sourceIds.every((id) => typeof id === "string")
+              ? args.sourceIds
+              : undefined,
           ),
       ),
       classroomCommands.register(
@@ -398,6 +477,10 @@ export const Teacher = ({
             String(args.prompt || "请讲解我圈出的内容"),
             !!controller.state.lesson && controller.state.mode !== "complete",
             args.signal instanceof AbortSignal ? args.signal : undefined,
+            Array.isArray(args.sourceIds) &&
+              args.sourceIds.every((id) => typeof id === "string")
+              ? args.sourceIds
+              : undefined,
           ),
       ),
       classroomCommands.register(
@@ -442,7 +525,7 @@ export const Teacher = ({
             (item) => !args.id || item.id === args.id,
           );
           if (!saved) {
-            throw new Error(t("fcboard.还没有保存的课程"));
+            throw new Error(t("fcboard.no_saved_lessons_yet"));
           }
           if (
             saved.board &&
@@ -500,6 +583,11 @@ export const Teacher = ({
           : undefined,
         correct: state.correct,
         attempts: state.attempts,
+        tool: state.tool,
+        toolError: state.toolError || undefined,
+        toolResults: state.toolResults,
+        toolIndex: state.toolIndex,
+        observing: state.observing,
       })),
     ];
     return () => registrations.forEach((stop) => stop());
@@ -507,12 +595,21 @@ export const Teacher = ({
 
   return (
     <>
-      {(active || asking || error) && (
+      {asking && questionPlacement && (
+        <InkQuestion
+          key={questionId}
+          api={api}
+          placement={questionPlacement}
+          onSubmit={onCommand}
+          onClose={() => setAsking(false)}
+        />
+      )}
+      {(active || error) && (
         <section
           ref={surface}
           style={floatingStyle}
           className={`fc-teacher fc-surface fc-lens-${state.lens}`}
-          aria-label={t("fcboard.AI 教师")}
+          aria-label={t("fcboard.ai_teacher")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -522,18 +619,25 @@ export const Teacher = ({
         >
           {active && (
             <div className="fc-teacher-heading">
+              {(state.tool || state.observing) &&
+                ["teaching", "question"].includes(state.mode) && (
+                  <CircularProgress
+                    size={14}
+                    aria-label={t("fcboard.processing")}
+                  />
+                )}
               <small>
-                {state.lesson?.title || t("fcboard.正在备课")}
+                {state.lesson?.title || t("fcboard.preparing_lesson")}
                 {state.lesson &&
                   ` · ${state.step + 1}/${state.lesson.steps.length}`}
               </small>
               <button
                 aria-label={
                   state.mode === "complete"
-                    ? t("fcboard.重播讲解")
+                    ? t("fcboard.replay_lesson")
                     : ["teaching", "question"].includes(state.mode)
-                    ? t("fcboard.暂停讲解")
-                    : t("fcboard.继续讲解")
+                    ? t("fcboard.pause_lesson")
+                    : t("fcboard.resume_lesson")
                 }
                 disabled={state.mode === "generating" || state.mode === "quiz"}
                 onClick={() =>
@@ -551,7 +655,7 @@ export const Teacher = ({
                   : playerPlayIcon}
               </button>
               <button
-                aria-label={t("fcboard.结束讲解")}
+                aria-label={t("fcboard.end_lesson")}
                 onClick={() => {
                   request.current?.abort();
                   controller.cancel();
@@ -561,7 +665,7 @@ export const Teacher = ({
               </button>
             </div>
           )}
-          <TransientMessage message={error} role="alert" />
+          <TransientMessage message={error || state.toolError} role="alert" />
           {active && (
             <div className="fc-live-caption" role="status" aria-live="polite">
               {state.lens === "reading" && state.spoken > 0 ? (
@@ -570,7 +674,7 @@ export const Teacher = ({
                   {state.caption.slice(state.spoken)}
                 </>
               ) : state.mode === "generating" ? (
-                t("fcboard.正在阅读白板，准备讲解…")
+                t("fcboard.reading_the_board_and_preparing_your_lesson")
               ) : (
                 state.caption
               )}
@@ -602,53 +706,10 @@ export const Teacher = ({
           {state.feedback && <p role="status">{state.feedback}</p>}
           {state.audioError && (
             <small title={state.audioError}>
-              {t("fcboard.字幕讲解中 · 语音播报暂不可用")}
+              {t(
+                "fcboard.teaching_with_captions_voice_playback_is_unavailable",
+              )}
             </small>
-          )}
-          {asking && (
-            <form
-              className="fc-teacher-question"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const question = prompt;
-                setAsking(false);
-                setPrompt("");
-                void onCommand(question).catch(fail);
-              }}
-            >
-              <input
-                ref={input}
-                aria-label={t("fcboard.向 AI 教师提问")}
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder={t("fcboard.讲讲我圈的这一步，或换个例子…")}
-                required
-              />
-              <button
-                aria-label={t("fcboard.发送问题")}
-                disabled={!prompt.trim() || state.mode === "generating"}
-              >
-                {playerPlayIcon}
-              </button>
-              <button
-                type="button"
-                aria-label={t("fcboard.收起提问")}
-                onClick={() => setAsking(false)}
-              >
-                {CloseIcon}
-              </button>
-            </form>
-          )}
-          {error && (
-            <button
-              aria-label={t("fcboard.关闭教师提示")}
-              onClick={() => {
-                setError("");
-                setAsking(false);
-              }}
-            >
-              {CloseIcon}
-            </button>
           )}
         </section>
       )}

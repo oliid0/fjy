@@ -1,13 +1,17 @@
 import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n, languages } from "@excalidraw/excalidraw/i18n";
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCommonBounds } from "@excalidraw/element";
 import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type {
+  ExcalidrawImperativeAPI,
+  UIOptions,
+} from "@excalidraw/excalidraw/types";
 
 import { QRCode } from "../share/QRCode";
+import { LanguageList } from "../app-language/LanguageList";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -27,6 +31,7 @@ import {
   insertionPoint,
   insertText,
   selectedPlot,
+  objectSelection,
 } from "./board";
 import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
@@ -47,14 +52,19 @@ import {
 import { Teacher, LearningSettings } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
 import { registerCanvasCommands } from "./canvasCommands";
-import { localMathIntent } from "./intent";
+import { localMathIntent, selectionMathIntent } from "./intent";
 import { defaultPlot, plotExpression } from "./math";
 import { mathNotation } from "./mathNotation";
 import { calculateAsync } from "./mathComputation";
 import { validatedPlot } from "./mathRecognition";
 import { Classroom as NativeClassroom } from "./native";
 import { createNarrator } from "./narration";
-import { startLocalSpeech } from "./localSpeech";
+import { startRealtimeSpeech } from "./realtimeSpeech";
+import { VoiceOrb } from "./VoiceOrb";
+import { RecordingPanel } from "./RecordingPanel";
+import { SummaryText } from "./SummaryText";
+import { RecordingWidget } from "./RecordingWidget";
+
 import {
   BoardRecorder,
   loadRecordings,
@@ -64,6 +74,7 @@ import {
 import { currentSettings, saveSettings, validateEndpoint } from "./settings";
 import { selectionSignature } from "./selection";
 import { SelectionActions } from "./SelectionActions";
+import { LanguagePanel } from "./LanguagePanel";
 import { Spotlight } from "./Spotlight";
 import { BoardSettings } from "./BoardSettings";
 import { recognizeHandwriting } from "./ocr";
@@ -86,81 +97,30 @@ import type { TranscriptLine } from "./speech";
 import type { LocalSpeechHandle } from "./localSpeech";
 import type { Settings } from "./settings";
 import type { VoiceTurns } from "./voiceTurns";
+import type { RecordingPhase } from "./RecordingPanel";
 
-type Panel = "ai" | "plot" | "record" | "files" | "settings";
+type Panel = "ai" | "plot" | "record" | "files" | "settings" | "summary";
 const titles = {
-  ai: "AI 助教",
-  plot: "函数参数",
-  record: "课堂录制",
-  files: "课件 / 局域网快传",
-  settings: "AI 与语音设置",
+  ai: "ai_assistant",
+  plot: "function_controls",
+  record: "recording",
+  files: "files_transfer",
+  settings: "ai_and_speech_settings",
+  summary: "ai_summary",
 } as const;
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const RecordingPlayer = ({ recording }: { recording: Recording }) => {
-  const [url, setUrl] = useState("");
-  const player = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const value = URL.createObjectURL(recording.blob);
-    setUrl(value);
-    return () => URL.revokeObjectURL(value);
-  }, [recording.blob]);
-  return (
-    <>
-      <h3>{t("fcboard.AI 总结")}</h3>
-      <div className="fc-output">
-        {recording.summary || t("fcboard.暂无总结，可在下方生成。")}
-      </div>
-      <video
-        ref={player}
-        controls
-        src={url}
-        aria-label={t("fcboard.录制回放")}
-        className={recording.mode === "audio" ? "fc-audio" : ""}
-      />
-      <a
-        href={url}
-        download={`Fcboard-${recording.id}.${
-          recording.blob.type.includes("mp4") ? "mp4" : "webm"
-        }`}
-      >
-        {t("fcboard.下载录制")}
-      </a>
-      <h3>{t("fcboard.时间轴文稿")}</h3>
-      {recording.transcript.length ? (
-        recording.transcript.map((line, index) => (
-          <button
-            className="fc-transcript"
-            key={index}
-            onClick={() => {
-              if (player.current) {
-                player.current.currentTime = line.time;
-                void player.current.play().catch(() => {});
-              }
-            }}
-          >
-            <time>{timestamp(line.time)}</time>
-            <span>{line.text}</span>
-          </button>
-        ))
-      ) : (
-        <p>
-          {t("fcboard.暂无文稿。可配置自定义语音接口后转写，也可手动补充。")}
-        </p>
-      )}
-    </>
-  );
-};
-
 export const Classroom = ({
   api,
+  inkProfile,
   renderSettingsActions,
 }: {
   api: ExcalidrawImperativeAPI;
+  inkProfile?: UIOptions["inkProfile"];
   renderSettingsActions?: (close: () => void) => ReactNode;
 }) => {
-  useI18n();
+  const { langCode } = useI18n();
   const [panel, setPanel] = useState<Panel | null>(null);
   const [settings, setSettings] = useState(currentSettings);
   const [settingsPage, setSettingsPage] = useState<"background" | "models">(
@@ -180,7 +140,7 @@ export const Classroom = ({
         () => {},
         (failure) => setError(errorMessage(failure)),
       ),
-    [api],
+    [api, langCode],
   );
   const [plotPlacement, setPlotPlacement] = useState({ left: 16, top: 16 });
   const [capture, setCapture] = useState<string>();
@@ -200,6 +160,11 @@ export const Classroom = ({
     ((text: string, signal: AbortSignal) => Promise<void>) | null
   >(null);
   const voiceGeneration = useRef(0);
+  const [voiceState, setVoiceState] = useState<
+    "listening" | "thinking" | "speaking"
+  >("listening");
+  const voicePlayback = useRef(0);
+  const activeVoice = useRef<AbortSignal | undefined>(undefined);
   const recordingVoiceCommand = useRef(false);
   const narrator = useRef<ReturnType<typeof createNarrator> | null>(null);
   if (!narrator.current) {
@@ -212,12 +177,29 @@ export const Classroom = ({
   const recorder = useRef<BoardRecorder | null>(null);
   const recordMode = useRef<RecordingMode>("audio");
   const stoppingRecording = useRef(false);
+  const [recordPhase, setRecordPhase] = useState<RecordingPhase>("idle");
+  const [recordingPaused, setRecordingPaused] = useState(false);
+  const recordPausedAt = useRef<number | undefined>(undefined);
+  const recordPausedMs = useRef(0);
+  const recordSpeechGeneration = useRef(0);
+  const recordControlBusy = useRef(false);
+  const [recordControlPending, setRecordControlPending] = useState(false);
+  const recordSpeechTask = useRef<Promise<void> | undefined>(undefined);
+  const recordControlTask = useRef<Promise<void> | undefined>(undefined);
+  const recordElapsed = () =>
+    Math.max(
+      0,
+      ((recordPausedAt.current ?? Date.now()) -
+        recordStarted.current -
+        recordPausedMs.current) /
+        1000,
+    );
   const transcript = useRef<TranscriptLine[]>([]);
   const recordStarted = useRef(0);
   const [records, setRecords] = useState<Recording[]>([]);
   const recordsRef = useRef<Recording[]>([]);
+  const recordingsReady = useRef<Promise<void> | undefined>(undefined);
   const [activeId, setActiveId] = useState("");
-  const [manualTranscript, setManualTranscript] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [preview, setPreview] = useState<File | null>(null);
@@ -244,7 +226,12 @@ export const Classroom = ({
     !!panel && panel !== "plot" && panel !== "settings",
   );
   const active = records.find((item) => item.id === activeId);
-  useEffect(() => registerCanvasCommands(api), [api]);
+  const inkProfileRef = useRef(inkProfile);
+  inkProfileRef.current = inkProfile;
+  useEffect(
+    () => registerCanvasCommands(api, () => inkProfileRef.current),
+    [api],
+  );
   const showPreview = useCallback((file: File) => {
     recentFiles.current.set(file.name, file);
     if (recentFiles.current.size > 5) {
@@ -265,7 +252,7 @@ export const Classroom = ({
       try {
         const response = await fetch(Capacitor.convertFileSrc(file.path));
         if (!response.ok) {
-          throw new Error(t("fcboard.无法读取接收的课件"));
+          throw new Error(t("fcboard.could_not_read_received_files"));
         }
         const blob = await response.blob();
         const next = new File([blob], file.name, { type: blob.type });
@@ -278,6 +265,9 @@ export const Classroom = ({
   );
   const invalidateVoice = useCallback(() => {
     voiceGeneration.current++;
+    voicePlayback.current++;
+    activeVoice.current = undefined;
+    narrator.current?.stop();
     voiceTurns.current?.stop();
     voiceTurns.current = null;
     assistantGeneration.current++;
@@ -296,6 +286,10 @@ export const Classroom = ({
     const reset = () => {
       voiceTurns.current?.reset();
       assistantGeneration.current++;
+      voicePlayback.current++;
+      activeVoice.current = undefined;
+      narrator.current?.stop();
+      setVoiceState("listening");
     };
     const unwatch = classroomCommands.watch("document", () => {
       if (scheduled) {
@@ -432,19 +426,29 @@ export const Classroom = ({
       await saveRecordings(next);
     } catch {
       setError(
-        t("fcboard.设备存储不足或不可用，录制尚未保存；请立即下载保留。"),
+        t(
+          "fcboard.storage_is_full_or_unavailable_download_the_recording_now_to_keep_it",
+        ),
       );
     }
   }, []);
 
   useEffect(() => {
-    void loadRecordings()
+    let alive = true;
+    recordingsReady.current = loadRecordings()
       .then((items) => {
+        if (!alive) {
+          return;
+        }
         setRecords(items);
         recordsRef.current = items;
         setActiveId(items[0]?.id || "");
       })
-      .catch(() => setError(t("fcboard.无法读取本地录制资料")));
+      .catch(() => {
+        if (alive) {
+          setError(t("fcboard.could_not_read_local_recordings"));
+        }
+      });
     if (Capacitor.isNativePlatform()) {
       void NativeClassroom.listUploads()
         .then(({ files }) => {
@@ -454,6 +458,7 @@ export const Classroom = ({
         .catch((failure) => setError(errorMessage(failure)));
     }
     return () => {
+      alive = false;
       invalidateVoice();
       narrator.current?.stop();
       stopSpeech.current?.();
@@ -485,7 +490,7 @@ export const Classroom = ({
       if (previewRef.current || openingUpload.current) {
         incoming.current.push(file);
         setStatus(
-          t("fcboard.{{name}} 已接收，关闭当前课件后自动上屏", {
+          t("fcboard.name_received_close_the_current_document_to_open_it", {
             name: file.name,
           }),
         );
@@ -506,7 +511,7 @@ export const Classroom = ({
       return;
     }
     const timer = setInterval(
-      () => setElapsed(Math.floor((Date.now() - recordStarted.current) / 1000)),
+      () => setElapsed(Math.floor(recordElapsed())),
       1000,
     );
     const prevent = (event: BeforeUnloadEvent) => {
@@ -569,7 +574,7 @@ export const Classroom = ({
     setPanel(null);
     returnFocus.current?.focus();
   };
-  const run = useCallback(async (operation: () => Promise<void>) => {
+  const run = useCallback(async (operation: () => Promise<unknown>) => {
     if (actionBusy.current) {
       return;
     }
@@ -594,7 +599,9 @@ export const Classroom = ({
       ? selected
       : all.filter((el) => !el.customData?.fcGenerated);
     if (!source.length) {
-      throw new Error(t("fcboard.请先书写内容，或框选需要识别的区域"));
+      throw new Error(
+        t("fcboard.write_something_or_circle_the_area_to_recognize_first"),
+      );
     }
     const text = source
       .filter((el) => el.type === "text")
@@ -618,7 +625,13 @@ export const Classroom = ({
   }, [api]);
 
   const solveMath = useCallback(
-    async (input?: string, automatic = false) => {
+    async (
+      input?: string,
+      automatic = false,
+      sourceIds?: string[],
+      signal?: AbortSignal,
+      sourceText?: string,
+    ) => {
       const revision = classroomCommands.revision;
       const generation = assistantGeneration.current;
       if (classroomCommands.has("document.snapshot")) {
@@ -636,7 +649,9 @@ export const Classroom = ({
               }
             | undefined;
           const ink = document?.ink || [];
-          const chosen = document?.selection?.length
+          const chosen = sourceIds?.length
+            ? ink.filter((stroke) => sourceIds.includes(stroke.id))
+            : document?.selection?.length
             ? ink.filter((stroke) => document.selection!.includes(stroke.id))
             : ink;
           return {
@@ -653,7 +668,9 @@ export const Classroom = ({
         };
         const source = readSource();
         const sourceCurrent = () =>
-          !!input || source.signature === readSource().signature;
+          !signal?.aborted &&
+          ((!sourceIds?.length && !!input) ||
+            source.signature === readSource().signature);
         const region = source.document?.region;
         const strokes =
           source.chosen.length &&
@@ -712,7 +729,7 @@ export const Classroom = ({
           return { cancelled: true };
         }
         if (expression === "NONE") {
-          throw new Error(t("fcboard.未发现待计算算式"));
+          throw new Error(t("fcboard.no_expression_found_to_calculate"));
         }
         const answer = await calculateAsync(expression);
         if (
@@ -722,34 +739,44 @@ export const Classroom = ({
         ) {
           return { cancelled: true };
         }
-        const inline = !input && strokes.length > 0;
+        const inline = (!input || !!sourceIds?.length) && strokes.length > 0;
         await classroomCommands.execute({
           name: "canvas.text",
           args: inline
             ? {
                 text: `${
-                  /=\s*$/.test(expression) || /^[xyz] =/.test(answer)
+                  /=\s*$/.test(sourceText || expression) ||
+                  /^[xyz] =/.test(answer)
                     ? ""
                     : "= "
                 }${answer}`,
+                signal,
                 presentation: "match",
                 placement: "inline",
                 sourceIds: source.chosen.map((stroke) => stroke.id),
                 sourceSignature: documentSourceSignature(source.chosen),
                 sourceLines: expression.trim().split("\n").length,
               }
-            : { text: `${mathNotation(expression)} = ${answer}` },
+            : { text: `${mathNotation(expression)} = ${answer}`, signal },
         });
         return { expression: mathNotation(expression), answer };
       }
       const elements = api.getSceneElements();
-      const selected = automatic ? [] : selectedBoardElements(api);
+      const selected = sourceIds?.length
+        ? elements.filter((element) => sourceIds.includes(element.id))
+        : automatic
+        ? []
+        : selectedBoardElements(api);
+      if (sourceIds?.length && selected.length !== sourceIds.length) {
+        throw new DOMException("Question changed", "AbortError");
+      }
       const source = selected.length
         ? selected
         : elements.filter((el) => !el.customData?.fcGenerated);
       const signature = selectionSignature(source);
       const expression = input || (await recognize());
       if (
+        signal?.aborted ||
         revision !== classroomCommands.revision ||
         generation !== assistantGeneration.current
       ) {
@@ -769,16 +796,18 @@ export const Classroom = ({
       }
       if (expression === "NONE") {
         if (!automatic) {
-          throw new Error(t("fcboard.未发现待计算算式"));
+          throw new Error(t("fcboard.no_expression_found_to_calculate"));
         }
         return;
       }
       const answer = await calculateAsync(expression);
       if (
+        signal?.aborted ||
         revision !== classroomCommands.revision ||
         generation !== assistantGeneration.current ||
-        selectionSignature(selectedBoardElements(api)) !==
-          selectionSignature(selected) ||
+        (!sourceIds?.length &&
+          selectionSignature(selectedBoardElements(api)) !==
+            selectionSignature(selected)) ||
         selectionSignature(
           api
             .getSceneElements()
@@ -805,7 +834,11 @@ export const Classroom = ({
       const lastSource = source[source.length - 1];
       insertText(
         api,
-        answer,
+        sourceIds?.length &&
+          !/=\s*$/.test(sourceText || input || "") &&
+          !/^[xyz] =/.test(answer)
+          ? `= ${answer}`
+          : answer,
         position,
         lastSource
           ? {
@@ -814,7 +847,7 @@ export const Classroom = ({
             }
           : undefined,
         source,
-        currentSettings().answerStyle,
+        sourceIds?.length ? "handwritten" : currentSettings().answerStyle,
         { mode: "inline", sourceLines: expression.split("\n").length },
       );
       setOutput(`${expression} = ${answer}`);
@@ -841,7 +874,7 @@ export const Classroom = ({
       ) {
         plotRef.current = null;
         throw new Error(
-          t("fcboard.图像已被移动到历史或擦除，请重新插入函数图像"),
+          t("fcboard.this_plot_was_removed_insert_it_again_to_edit_it"),
         );
       }
       const origin = insertionPoint(api);
@@ -852,7 +885,11 @@ export const Classroom = ({
         | { selection?: string[]; ink: InkStroke[] }
         | undefined;
       const documentBoxes = visibleDocument?.ink
-        .filter((stroke) => visibleDocument.selection?.includes(stroke.id))
+        .filter((stroke) =>
+          sourceIds.length
+            ? sourceIds.includes(stroke.id)
+            : visibleDocument.selection?.includes(stroke.id),
+        )
         .map(documentStrokeBounds);
       const bounds = source.length
         ? getCommonBounds(source)
@@ -906,9 +943,11 @@ export const Classroom = ({
           api.setActiveTool({ type: "selection" });
         }
         api.updateScene({
-          appState: {
-            selectedElementIds: Object.fromEntries(ids.map((id) => [id, true])),
-          },
+          appState: objectSelection(
+            api
+              .getSceneElements()
+              .filter((element) => ids.includes(element.id)),
+          ),
         });
       }
       setPlot(next);
@@ -916,62 +955,55 @@ export const Classroom = ({
     [api],
   );
 
-  const summarize = useCallback(
-    async (whole = false) => {
-      const revision = classroomCommands.revision;
-      const generation = assistantGeneration.current;
-      const document = classroomCommands.has("document.snapshot")
-        ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
-            text: string;
-            image: string;
-          })
-        : undefined;
-      const context = document
-        ? { elements: [], text: document.text, image: document.image }
-        : whole && capturedContext.current
-        ? capturedContext.current
-        : await boardContext(api, whole);
-      if (!document && !context.elements.length) {
-        throw new Error(t("fcboard.白板还没有内容"));
-      }
-      let preview = "";
-      const result = await chat(
-        [
-          visualMessage(
-            `你是方成教育助教。根据当前课件或白板内容总结本节知识、推导过程、结论与待解决问题。看不清的内容明确说明，不编造。\n识别到的文字：${
-              document?.text || context.text
-            }`,
-            document?.image || context.image,
-          ),
-        ],
-        undefined,
-        currentSettings(),
-        {
-          onDelta: (delta) => {
-            if (
-              revision === classroomCommands.revision &&
-              generation === assistantGeneration.current
-            ) {
-              preview += delta;
-              setOutput(preview);
-            }
-          },
+  const summarize = useCallback(async () => {
+    const revision = classroomCommands.revision;
+    const generation = assistantGeneration.current;
+    const document = classroomCommands.has("document.snapshot")
+      ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
+          text: string;
+          image: string;
+        })
+      : undefined;
+    const context = document
+      ? { elements: [], text: document.text, image: document.image }
+      : await boardContext(api, true);
+    if (!document && !context.elements.length) {
+      throw new Error(t("fcboard.the_board_is_empty"));
+    }
+    let preview = "";
+    setOutput("");
+    setPanel("summary");
+    const result = await chat(
+      [
+        visualMessage(
+          `你是方成教育助教。根据当前课件或白板内容总结本节知识、推导过程、结论与待解决问题。看不清的内容明确说明，不编造。\n识别到的文字：${
+            document?.text || context.text
+          }`,
+          document?.image || context.image,
+        ),
+      ],
+      undefined,
+      currentSettings(),
+      {
+        onDelta: (delta) => {
+          if (
+            revision === classroomCommands.revision &&
+            generation === assistantGeneration.current
+          ) {
+            preview += delta;
+            setOutput(preview);
+          }
         },
-      );
-      if (
-        revision !== classroomCommands.revision ||
-        generation !== assistantGeneration.current
-      ) {
-        return;
-      }
-      setOutput(result);
-      await classroomCommands.execute({
-        name: "canvas.text",
-        args: { text: result },
-      });
-    },
-    [api],
-  );
+      },
+    );
+    if (
+      revision !== classroomCommands.revision ||
+      generation !== assistantGeneration.current
+    ) {
+      return;
+    }
+    setOutput(result);
+  }, [api]);
 
   const execute = useCallback(
     async (
@@ -980,6 +1012,7 @@ export const Classroom = ({
       selection?: {
         context?: Awaited<ReturnType<typeof boardContext>>;
         signal: AbortSignal;
+        sourceIds?: string[];
       },
     ) => {
       if (selection?.signal.aborted) {
@@ -1003,7 +1036,11 @@ export const Classroom = ({
       ) {
         await classroomCommands.execute({
           name: "lesson.ask",
-          args: { prompt: text, signal: selection?.signal },
+          args: {
+            prompt: text,
+            signal: selection?.signal,
+            sourceIds: selection?.sourceIds,
+          },
         });
         return;
       }
@@ -1020,24 +1057,38 @@ export const Classroom = ({
         return;
       }
       if (/^(?:请|帮我|麻烦)?(?:总结|小结|概括)/.test(text)) {
-        await summarize(whole || /整|全部|这一板/.test(text));
+        await summarize();
         return;
       }
       const localIntent =
         /改|调|删|擦|移|设|关闭|暂停|放大|缩小|清空|保存|丢弃|切换/.test(text)
           ? null
+          : selection?.sourceIds?.length
+          ? selectionMathIntent(text)
           : localMathIntent(text);
       if (localIntent?.action === "plot") {
-        createPlot({
-          ...plot,
-          expression: localIntent.expression,
-          surface: localIntent.surface,
-        });
+        createPlot(
+          {
+            ...plot,
+            expression: localIntent.expression,
+            surface: localIntent.surface,
+          },
+          false,
+          undefined,
+          false,
+          selection?.sourceIds,
+        );
         setPanel("plot");
         return;
       }
       if (localIntent?.action === "calculate") {
-        await solveMath(localIntent.expression);
+        await solveMath(
+          localIntent.expression,
+          false,
+          selection?.sourceIds,
+          selection?.signal,
+          text,
+        );
         return;
       }
       if (/^(?:帮我)?(?:计算|求值)(?:一下)?[，。!！\s]*$/.test(text)) {
@@ -1077,7 +1128,7 @@ export const Classroom = ({
         return;
       }
       if (!response || typeof response !== "object") {
-        throw new Error(t("fcboard.AI 指令格式无效，请重试"));
+        throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
       }
       let action = response as BoardAgentAction;
       if (action.action === "commands") {
@@ -1088,6 +1139,7 @@ export const Classroom = ({
           () =>
             revision === classroomCommands.revision &&
             generation === assistantGeneration.current,
+          { textSourceIds: selection?.sourceIds },
         );
       }
       if (action.action === "done") {
@@ -1099,13 +1151,19 @@ export const Classroom = ({
           expression: plotExpression(action.expression),
           surface: !!action.surface,
         };
-        createPlot(next);
+        createPlot(next, false, undefined, false, selection?.sourceIds);
         setPanel("plot");
       } else if (
         action.action === "calculate" &&
         typeof action.expression === "string"
       ) {
-        await solveMath(action.expression);
+        await solveMath(
+          action.expression,
+          false,
+          selection?.sourceIds,
+          selection?.signal,
+          text,
+        );
       } else if (action.action === "shapes") {
         await classroomCommands.execute({
           name: "canvas.shapes",
@@ -1117,26 +1175,85 @@ export const Classroom = ({
           name: "canvas.text",
           args: {
             text: action.text,
+            ...(selection?.sourceIds?.length
+              ? { sourceIds: selection.sourceIds, presentation: "handwritten" }
+              : {}),
             ...(selection ? { signal: selection.signal } : {}),
           },
         });
+        return action.text;
       } else {
-        throw new Error(t("fcboard.AI 返回了无法执行的操作，请重新描述"));
+        throw new Error(
+          t(
+            "fcboard.ai_returned_an_unavailable_action_please_rephrase_your_request",
+          ),
+        );
       }
     },
     [api, plot, summarize, solveMath, createPlot],
   );
 
+  const speakVoice = async (text: string, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
+    const playback = ++voicePlayback.current;
+    const stop = () => {
+      if (playback === voicePlayback.current) {
+        narrator.current?.stop();
+      }
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+    setVoiceState("speaking");
+    try {
+      const starting = narrator.current!.speak(text);
+      const finished = narrator.current!.finished;
+      await starting;
+      await finished;
+      signal?.throwIfAborted();
+    } finally {
+      signal?.removeEventListener("abort", stop);
+      if (playback === voicePlayback.current) {
+        setVoiceState(
+          activeVoice.current && !activeVoice.current.aborted
+            ? "thinking"
+            : "listening",
+        );
+      }
+    }
+  };
+  const interruptVoice = async () => {
+    assistantGeneration.current++;
+    voicePlayback.current++;
+    activeVoice.current = undefined;
+    narrator.current?.stop();
+    setVoiceState("listening");
+    if (classroomCommands.has("lesson.pause")) {
+      await classroomCommands.execute({ name: "lesson.pause" });
+    }
+    return { listening: !!voiceTurns.current, interrupted: true };
+  };
   voiceExecute.current = async (text, signal) => {
-    setStatus(t("fcboard.正在理解指令…"));
+    activeVoice.current = signal;
+    setVoiceState("thinking");
+    setStatus(t("fcboard.understanding_your_request"));
     const result = execute(text, false, { signal });
     const generation = assistantGeneration.current;
     try {
-      await result;
+      const reply = await result;
+      if (
+        reply &&
+        !signal.aborted &&
+        generation === assistantGeneration.current
+      ) {
+        await speakVoice(reply, signal);
+      }
     } finally {
+      if (activeVoice.current === signal) {
+        activeVoice.current = undefined;
+        setVoiceState("listening");
+      }
       if (!signal.aborted && generation === assistantGeneration.current) {
         setStatus((previous) =>
-          previous === t("fcboard.正在理解指令…") ? "" : previous,
+          previous === t("fcboard.understanding_your_request") ? "" : previous,
         );
       }
     }
@@ -1148,8 +1265,22 @@ export const Classroom = ({
         await voiceExecute.current?.(text, signal);
       },
       (failure) => setError(errorMessage(failure)),
+      3000,
+      {
+        interrupt: true,
+        immediate: (text) =>
+          ["voice.interrupt", "lesson.pause", "lesson.stop"].includes(
+            directCommand(text)?.name || "",
+          ),
+        onInterruption: () => {
+          void interruptVoice().catch((failure) =>
+            setError(errorMessage(failure)),
+          );
+        },
+      },
     );
     voiceTurns.current = turns;
+    setVoiceState("listening");
     setListening(true);
     return turns;
   };
@@ -1159,7 +1290,14 @@ export const Classroom = ({
       await classroomCommands.execute({ name: "lesson.pause" });
     }
     narrator.current?.stop();
-    if (recording && currentSettings().speech === "local") {
+    if (recording && ["local", "cloud"].includes(currentSettings().speech)) {
+      if (!recordingVoiceCommand.current && !localSpeech.current) {
+        throw new Error(
+          t(
+            "fcboard.live_transcription_is_disconnected_finish_recording_before_restarting_voice_commands",
+          ),
+        );
+      }
       recordingVoiceCommand.current = !recordingVoiceCommand.current;
       if (recordingVoiceCommand.current) {
         beginVoiceTurns();
@@ -1169,8 +1307,10 @@ export const Classroom = ({
       setListening(recordingVoiceCommand.current);
       setStatus(
         recordingVoiceCommand.current
-          ? t("fcboard.录制继续，请说出下一条白板指令")
-          : t("fcboard.已结束指令监听，录制与文稿继续"),
+          ? t("fcboard.recording_continues_say_your_next_board_command")
+          : t(
+              "fcboard.command_listening_stopped_recording_and_transcription_continue",
+            ),
       );
       return;
     }
@@ -1197,14 +1337,23 @@ export const Classroom = ({
       return;
     }
     if (recording) {
-      throw new Error(t("fcboard.录制中请使用文字指令，避免与录音争用麦克风"));
+      throw new Error(
+        t(
+          "fcboard.use_text_commands_while_recording_to_keep_the_microphone_available",
+        ),
+      );
     }
-    if (currentSettings().speech === "local") {
+    if (["local", "cloud"].includes(currentSettings().speech)) {
       const generation = ++voiceGeneration.current;
       const turns = beginVoiceTurns();
-      setStatus(t("fcboard.正在准备内置中文语音…"));
+      const cloud = currentSettings().speech === "cloud";
+      setStatus(
+        cloud
+          ? t("fcboard.connecting_to_doubao_speech")
+          : t("fcboard.preparing_offline_chinese_speech"),
+      );
       try {
-        const handle = await startLocalSpeech(
+        const handle = await startRealtimeSpeech(
           (line) => {
             if (generation === voiceGeneration.current) {
               turns.push(line.text);
@@ -1218,13 +1367,21 @@ export const Classroom = ({
               setError(message);
             }
           },
+          undefined,
+          () => {
+            if (generation === voiceGeneration.current) {
+              turns.activity();
+            }
+          },
         );
         if (generation !== voiceGeneration.current) {
           await handle.cancel();
           return;
         }
         localSpeech.current = handle;
-        setStatus(t("fcboard.正在听，停顿后执行指令；也可再次点击结束语音"));
+        setStatus(
+          t("fcboard.listening_pause_to_run_your_command_or_tap_again_to_stop"),
+        );
       } catch (failure) {
         if (generation === voiceGeneration.current) {
           invalidateVoice();
@@ -1272,16 +1429,18 @@ export const Classroom = ({
       recordingVoice.onerror = () => {
         stream.getTracks().forEach((track) => track.stop());
         setListening(false);
-        setError(t("fcboard.语音录入失败，请重试"));
+        setError(t("fcboard.speech_input_failed_please_try_again"));
       };
       voiceRecorder.current = recordingVoice;
       recordingVoice.start();
       setListening(true);
-      setStatus(t("fcboard.正在听，请说出指令后再次点击语音按钮"));
+      setStatus(
+        t("fcboard.listening_say_your_command_then_tap_the_microphone_again"),
+      );
     } else {
       const generation = ++voiceGeneration.current;
       const turns = beginVoiceTurns();
-      setStatus(t("fcboard.正在听，请说出指令…"));
+      setStatus(t("fcboard.listening_for_your_command"));
       try {
         const stop = await startSystemSpeech(
           (text) => {
@@ -1321,8 +1480,9 @@ export const Classroom = ({
     chat([
       {
         role: "system",
-        content:
-          "你是方成教育课堂记录助手。仅根据提供的有时间戳文稿，用用户提问的语言总结主题、核心知识、结论、行动事项及待解决问题。保留重要时间点，不编造。",
+        content: `Summarize this meeting or class using only its timestamped transcript. Include the topic, key ideas, conclusions, action items and open questions where supported. Keep important timestamps and acknowledge unclear speech. Do not invent facts. Respond in ${
+          document.documentElement.lang || "en"
+        }.`,
       },
       {
         role: "user",
@@ -1332,9 +1492,127 @@ export const Classroom = ({
       },
     ]);
 
+  const startRecordingSpeech = async (instance: BoardRecorder) => {
+    const speechGeneration = ++recordSpeechGeneration.current;
+    if (["local", "cloud"].includes(currentSettings().speech)) {
+      try {
+        let offset = 0;
+        const handle = await startRealtimeSpeech(
+          (line) => {
+            if (speechGeneration !== recordSpeechGeneration.current) {
+              return;
+            }
+            transcript.current.push({ ...line, time: line.time + offset });
+            if (recordingVoiceCommand.current) {
+              voiceTurns.current?.push(line.text);
+            }
+          },
+          (message) => {
+            if (speechGeneration !== recordSpeechGeneration.current) {
+              return;
+            }
+            localSpeech.current = null;
+            recordingVoiceCommand.current = false;
+            invalidateVoice();
+            setListening(false);
+            setError(
+              t(
+                "fcboard.recording_continues_live_transcription_is_unavailable_error",
+                {
+                  error: message,
+                },
+              ),
+            );
+          },
+          instance.audioStream,
+          () => {
+            if (recordingVoiceCommand.current) {
+              voiceTurns.current?.activity();
+            }
+          },
+        );
+        if (
+          recorder.current !== instance ||
+          stoppingRecording.current ||
+          recordPausedAt.current !== undefined ||
+          speechGeneration !== recordSpeechGeneration.current
+        ) {
+          await handle.cancel();
+          return;
+        }
+        localSpeech.current = handle;
+        offset = recordElapsed();
+      } catch (failure) {
+        if (
+          recorder.current !== instance ||
+          speechGeneration !== recordSpeechGeneration.current
+        ) {
+          return;
+        }
+        setError(
+          t(
+            "fcboard.recording_continues_live_transcription_is_unavailable_error",
+            {
+              error: errorMessage(failure),
+            },
+          ),
+        );
+      }
+    } else if (currentSettings().speech === "system") {
+      try {
+        const stop = await startSystemSpeech(
+          (text) => {
+            if (speechGeneration !== recordSpeechGeneration.current) {
+              return;
+            }
+            transcript.current.push({
+              time: recordElapsed(),
+              text,
+            });
+          },
+          (message) => {
+            if (speechGeneration !== recordSpeechGeneration.current) {
+              return;
+            }
+            setError(
+              t(
+                "fcboard.recording_continues_live_transcription_is_unavailable_error_use_a_custom_service_to_transcribe",
+                { error: message },
+              ),
+            );
+          },
+          true,
+        );
+        if (
+          recorder.current !== instance ||
+          stoppingRecording.current ||
+          recordPausedAt.current !== undefined ||
+          speechGeneration !== recordSpeechGeneration.current
+        ) {
+          stop();
+          return;
+        }
+        stopSpeech.current = stop;
+      } catch (failure) {
+        if (speechGeneration !== recordSpeechGeneration.current) {
+          return;
+        }
+        setError(
+          t(
+            "fcboard.recording_continues_live_transcription_is_unavailable_error_transcribe_after_recording",
+            {
+              error: errorMessage(failure),
+            },
+          ),
+        );
+      }
+    }
+  };
+
   const startRecording = async (selectedMode: RecordingMode = mode) => {
+    await recordingsReady.current;
     if (recorder.current) {
-      throw new Error(t("fcboard.当前录制正在进行或保存中"));
+      throw new Error(t("fcboard.a_recording_is_running_or_being_saved"));
     }
     narrator.current?.stop();
     if (
@@ -1343,12 +1621,13 @@ export const Classroom = ({
         stopSpeech.current ||
         voiceRecorder.current?.state === "recording")
     ) {
-      throw new Error(t("fcboard.请先结束语音指令再开始录制"));
+      throw new Error(t("fcboard.stop_voice_input_before_recording"));
     }
     transcript.current = [];
     setElapsed(0);
     const instance = new BoardRecorder();
     recorder.current = instance;
+    setRecordPhase("starting");
     try {
       await instance.start(selectedMode, () => {
         setRecording(false);
@@ -1361,66 +1640,24 @@ export const Classroom = ({
     } catch (failure) {
       instance.dispose();
       recorder.current = null;
+      setRecordPhase("idle");
       throw failure;
     }
     recordMode.current = selectedMode;
     setMode(selectedMode);
     recordStarted.current = Date.now();
+    recordPausedAt.current = undefined;
+    recordPausedMs.current = 0;
+    setRecordingPaused(false);
+    setRecordPhase("recording");
+    setPanel(null);
     setRecording(true);
     setStatus(
-      t("fcboard.录制中，可关闭浮层继续书写；屏幕模式录制当前白板画面"),
+      t(
+        "fcboard.recording_close_this_panel_to_keep_writing_screen_mode_records_the_current_board",
+      ),
     );
-    if (currentSettings().speech === "local") {
-      try {
-        let offset = 0;
-        localSpeech.current = await startLocalSpeech(
-          (line) => {
-            transcript.current.push({ ...line, time: line.time + offset });
-            if (recordingVoiceCommand.current) {
-              voiceTurns.current?.push(line.text);
-            }
-          },
-          (message) =>
-            setError(
-              t("fcboard.录制继续，离线文稿暂不可用：{{error}}", {
-                error: message,
-              }),
-            ),
-          instance.audioStream,
-        );
-        offset = (Date.now() - recordStarted.current) / 1000;
-      } catch (failure) {
-        setError(
-          t("fcboard.录制继续，离线文稿暂不可用：{{error}}", {
-            error: errorMessage(failure),
-          }),
-        );
-      }
-    } else if (currentSettings().speech === "system") {
-      try {
-        stopSpeech.current = await startSystemSpeech(
-          (text) =>
-            transcript.current.push({
-              time: (Date.now() - recordStarted.current) / 1000,
-              text,
-            }),
-          (message) =>
-            setError(
-              t(
-                "fcboard.录制继续，实时文稿不可用：{{error}}。可在录制后使用自定义接口转写。",
-                { error: message },
-              ),
-            ),
-          true,
-        );
-      } catch (failure) {
-        setError(
-          t("fcboard.录制继续，实时文稿不可用：{{error}}。可在录制后转写。", {
-            error: errorMessage(failure),
-          }),
-        );
-      }
-    }
+    await (recordSpeechTask.current = startRecordingSpeech(instance));
   };
 
   const stopRecording = async () => {
@@ -1428,23 +1665,33 @@ export const Classroom = ({
       return;
     }
     stoppingRecording.current = true;
+    setRecordPhase("stopping");
+    setPanel("record");
     try {
       recordingVoiceCommand.current = false;
       invalidateVoice();
       setListening(false);
+      const stopped = recorder.current!.stop();
+      // Stop media now, then drain the remaining ASR frames before persisting text.
+      void stopped.catch(() => {});
+      await recordControlTask.current?.catch(recordingFailure);
       try {
         await localSpeech.current?.stop();
       } catch (failure) {
         setError(
-          t("fcboard.录制继续保存；文稿收尾失败：{{error}}", {
-            error: errorMessage(failure),
-          }),
+          t(
+            "fcboard.the_recording_is_being_saved_could_not_finish_the_transcript_error",
+            {
+              error: errorMessage(failure),
+            },
+          ),
         );
       }
       localSpeech.current = null;
+      recordSpeechGeneration.current++;
       stopSpeech.current?.();
       stopSpeech.current = null;
-      const result = await recorder.current!.stop();
+      const result = await stopped;
       recorder.current = null;
       setRecording(false);
       let item: Recording = {
@@ -1458,7 +1705,7 @@ export const Classroom = ({
       await persistRecords([item, ...recordsRef.current]);
       setActiveId(item.id);
       setPanel("record");
-      setStatus(t("fcboard.录制已保存到本机"));
+      setStatus(t("fcboard.recording_saved_to_this_device"));
       if (currentSettings().speech === "custom") {
         try {
           item = { ...item, transcript: await transcribe(item.blob) };
@@ -1469,13 +1716,14 @@ export const Classroom = ({
           );
         } catch (failure) {
           setError(
-            t("fcboard.录制已保存；{{error}}", {
+            t("fcboard.recording_saved_error", {
               error: errorMessage(failure),
             }),
           );
         }
       }
       if (currentSettings().autoSummary && item.transcript.length) {
+        setRecordPhase("summarizing");
         try {
           const summary = await summaryFor(item);
           await persistRecords(
@@ -1485,14 +1733,117 @@ export const Classroom = ({
           );
         } catch (failure) {
           setError(
-            t("fcboard.录制与文稿已保存；{{error}}", {
+            t("fcboard.recording_and_transcript_saved_error", {
               error: errorMessage(failure),
             }),
           );
         }
       }
+    } catch (failure) {
+      recorder.current?.dispose();
+      recorder.current = null;
+      setRecording(false);
+      throw failure;
     } finally {
       stoppingRecording.current = false;
+      setRecordingPaused(false);
+      setRecordPhase("ready");
+    }
+  };
+
+  const toggleRecordingPause = () => {
+    const instance = recorder.current;
+    if (!instance || stoppingRecording.current || recordControlBusy.current) {
+      return;
+    }
+    recordControlBusy.current = true;
+    setRecordControlPending(true);
+    const operation = async () => {
+      try {
+        if (recordPausedAt.current === undefined) {
+          instance.pause();
+          recordPausedAt.current = Date.now();
+          setRecordingPaused(true);
+          setRecordPhase("paused");
+          recordingVoiceCommand.current = false;
+          invalidateVoice();
+          setListening(false);
+          const handle = localSpeech.current;
+          localSpeech.current = null;
+          try {
+            await handle?.stop();
+          } finally {
+            recordSpeechGeneration.current++;
+            await recordSpeechTask.current;
+            stopSpeech.current?.();
+            stopSpeech.current = null;
+          }
+        } else {
+          instance.resume();
+          recordPausedMs.current += Date.now() - recordPausedAt.current;
+          recordPausedAt.current = undefined;
+          setRecordingPaused(false);
+          setRecordPhase("recording");
+          await (recordSpeechTask.current = startRecordingSpeech(instance));
+        }
+      } finally {
+        recordControlBusy.current = false;
+        setRecordControlPending(false);
+      }
+    };
+    return (recordControlTask.current = operation());
+  };
+  const recordingFailure = (failure: unknown) =>
+    setError(errorMessage(failure));
+  const updateRecordingNotes = (value: string) => {
+    if (!active) {
+      return;
+    }
+    const lines = value
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => {
+        const match = line.match(/^(\d+):(\d{2})\s+(.+)$/);
+        return {
+          time: match ? Number(match[1]) * 60 + Number(match[2]) : 0,
+          text: match ? match[3] : line,
+        };
+      });
+    void persistRecords(
+      recordsRef.current.map((item) =>
+        item.id === active.id
+          ? { ...item, transcript: lines, summary: "" }
+          : item,
+      ),
+    );
+  };
+  const regenerateRecording = async (transcription: boolean) => {
+    if (!active) {
+      return;
+    }
+    let updated = active;
+    if (transcription) {
+      updated = {
+        ...active,
+        transcript: await transcribe(active.blob),
+        summary: "",
+      };
+      await persistRecords(
+        recordsRef.current.map((item) =>
+          item.id === active.id ? updated : item,
+        ),
+      );
+    }
+    if (
+      updated.transcript.length &&
+      (!transcription || currentSettings().autoSummary)
+    ) {
+      const summary = await summaryFor(updated);
+      await persistRecords(
+        recordsRef.current.map((item) =>
+          item.id === updated.id ? { ...item, summary } : item,
+        ),
+      );
     }
   };
 
@@ -1504,13 +1855,17 @@ export const Classroom = ({
         async () => {
           if (!Capacitor.isNativePlatform()) {
             throw new Error(
-              t("fcboard.退出应用需要 Android 安装版；网页可关闭当前标签页"),
+              t(
+                "fcboard.close_this_browser_tab_to_exit_app_exit_is_available_on_android",
+              ),
             );
           }
           const confirmed = await openConfirmModal({
-            title: t("fcboard.退出白板"),
-            description: t("fcboard.将保存当前白板并结束正在进行的录制。"),
-            actionLabel: t("fcboard.保存并退出"),
+            title: t("fcboard.exit_board"),
+            description: t(
+              "fcboard.save_the_current_board_and_end_any_recording_in_progress",
+            ),
+            actionLabel: t("fcboard.save_and_exit"),
             color: "warning",
           });
           if (!confirmed) {
@@ -1534,7 +1889,7 @@ export const Classroom = ({
             typeof args.command !== "string" ||
             args.command === "ui.invoke"
           ) {
-            throw new Error(t("fcboard.菜单操作无效"));
+            throw new Error(t("fcboard.invalid_menu_action"));
           }
           await classroomCommands.execute({
             name: args.command,
@@ -1542,6 +1897,31 @@ export const Classroom = ({
           });
         });
       }),
+      classroomCommands.register(
+        "voice.speak",
+        "Read args.text aloud using the configured narration service. Use after checking tool results; do not claim an action succeeded without evidence.",
+        async (args) => {
+          if (
+            typeof args.text !== "string" ||
+            !args.text.trim() ||
+            args.text.length > 12000
+          ) {
+            throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
+          }
+          const signal =
+            args.signal instanceof AbortSignal ? args.signal : undefined;
+          signal?.throwIfAborted();
+          await speakVoice(args.text, signal);
+        },
+      ),
+      classroomCommands.register(
+        "voice.interrupt",
+        "Stop the current assistant response and pause the lesson, preserving board contents and keeping the microphone open.",
+        async () => {
+          voiceTurns.current?.reset();
+          return interruptVoice();
+        },
+      ),
       classroomCommands.register(
         "voice.toggle",
         "开始或结束语音指令",
@@ -1560,7 +1940,7 @@ export const Classroom = ({
               }
             : await boardContext(api, true);
           if (!context.elements.length && !context.image && !context.text) {
-            throw new Error(t("fcboard.请先在白板书写内容"));
+            throw new Error(t("fcboard.write_on_the_board_first"));
           }
           setCapture(context.image);
           capturedContext.current = context;
@@ -1578,7 +1958,9 @@ export const Classroom = ({
         "只在本地验证并计算 args.expression，返回 expression / answer，不插入或改写白板；不支持或无结果时返回真实错误，可用于讲解前核算",
         async (args) => {
           if (typeof args.expression !== "string") {
-            throw new Error(t("fcboard.该算式没有可用结果"));
+            throw new Error(
+              t("fcboard.this_expression_has_no_available_result"),
+            );
           }
           return {
             expression: args.expression,
@@ -1641,7 +2023,7 @@ export const Classroom = ({
         (args) => {
           const existing = selectedPlot(api);
           if (!existing) {
-            throw new Error(t("fcboard.请先选择函数图像"));
+            throw new Error(t("fcboard.select_a_plot_first"));
           }
           const next = { ...existing.plot };
           for (const key of ["x", "y", "z", "a", "b", "c", "range"] as const) {
@@ -1650,7 +2032,7 @@ export const Classroom = ({
                 typeof args[key] !== "number" ||
                 !Number.isFinite(args[key])
               ) {
-                throw new Error(t("fcboard.函数参数无效"));
+                throw new Error(t("fcboard.invalid_function_parameters"));
               }
               next[key] = args[key] as number;
             }
@@ -1667,15 +2049,15 @@ export const Classroom = ({
       ),
       classroomCommands.register(
         "canvas.summary",
-        "总结圈选或白板；args.whole=true 总结整板",
-        async (args) => summarize(!!args.whole),
+        "总结当前整个可见白板或课件，在居中浮层显示并自动换行，不改写板书",
+        async () => summarize(),
       ),
       classroomCommands.register(
         "record.start",
         "开始录制，args.mode=audio|camera|screen|combined；录制时仍可使用白板",
         async (args) => {
           if (recorder.current) {
-            throw new Error(t("fcboard.当前已在录制"));
+            throw new Error(t("fcboard.recording_is_already_running"));
           }
           const selectedMode =
             typeof args.mode === "string" &&
@@ -1690,9 +2072,33 @@ export const Classroom = ({
         "停止并保存录制与文稿",
         async () => {
           if (!recorder.current) {
-            throw new Error(t("fcboard.当前未录制"));
+            throw new Error(t("fcboard.recording_not_started"));
           }
           await stopRecording();
+        },
+      ),
+      classroomCommands.register(
+        "record.pause",
+        "Pause the current recording and transcription without ending the session",
+        () => {
+          if (!recorder.current) {
+            throw new Error(t("fcboard.recording_not_started"));
+          }
+          return recordPausedAt.current === undefined
+            ? toggleRecordingPause()
+            : undefined;
+        },
+      ),
+      classroomCommands.register(
+        "record.resume",
+        "Resume the paused recording and live transcription",
+        () => {
+          if (!recorder.current) {
+            throw new Error(t("fcboard.recording_not_started"));
+          }
+          return recordPausedAt.current !== undefined
+            ? toggleRecordingPause()
+            : undefined;
         },
       ),
       classroomCommands.register(
@@ -1710,7 +2116,9 @@ export const Classroom = ({
         "开启或关闭本机局域网上屏，args.enabled=false关闭",
         async (args) => {
           if (!Capacitor.isNativePlatform()) {
-            throw new Error(t("fcboard.局域网接收服务需要安卓安装版"));
+            throw new Error(
+              t("fcboard.lan_file_receiving_requires_the_android_app"),
+            );
           }
           if (args.enabled === false) {
             await NativeClassroom.stopReceiver();
@@ -1743,7 +2151,9 @@ export const Classroom = ({
           );
           if (!file) {
             throw new Error(
-              t("fcboard.未找到课件，请先在本机课件中重新打开原文件"),
+              t(
+                "fcboard.file_not_found_open_the_original_file_again_from_local_files",
+              ),
             );
           }
           await openUpload(file);
@@ -1764,7 +2174,7 @@ export const Classroom = ({
           if (
             !["settings", "record", "files", "ai"].includes(String(args.panel))
           ) {
-            throw new Error(t("fcboard.此浮层不存在"));
+            throw new Error(t("fcboard.this_panel_does_not_exist"));
           }
           if (args.panel === "settings") {
             setSettingsPage("models");
@@ -1777,6 +2187,9 @@ export const Classroom = ({
       ),
       classroomCommands.context("classroom", () => ({
         recording,
+        recordingPaused,
+        recordingPhase: recordPhase,
+        listening,
         recordingMode: mode,
         panel,
         files: [
@@ -1795,6 +2208,7 @@ export const Classroom = ({
 
   return (
     <div className="fc-classroom">
+      <LanguagePanel api={api} />
       <SelectionActions
         api={api}
         onPlot={(value, signature) =>
@@ -1806,16 +2220,21 @@ export const Classroom = ({
             selectedBoardElements(api).map((element) => element.id),
           )
         }
-        onRequest={(text, context, signal) =>
-          execute(text, false, { context, signal })
-        }
+        onRequest={async (text, context, signal) => {
+          await execute(text, false, { context, signal });
+        }}
       />
       <BoardSwitcher api={api} />
       <BoardShare />
       <InsertMenu api={api} />
       <TeachingResources api={api} />
       <LanSession api={api} />
-      <Teacher api={api} onCommand={execute} />
+      <Teacher
+        api={api}
+        onCommand={async (text, signal, sourceIds) => {
+          await execute(text, false, { signal, sourceIds });
+        }}
+      />
       <TeachingTools api={api} />
       <Spotlight />
       <TransientMessage
@@ -1823,24 +2242,31 @@ export const Classroom = ({
         role={error ? "alert" : "status"}
         className={`fc-notice ${error ? "fc-error" : ""}`}
       />
-      {(recording || listening) && (
-        <div className="fc-notice fc-recording-controls" role="toolbar">
-          <span>
-            {recording
-              ? t("fcboard.正在录制 {{time}}", { time: timestamp(elapsed) })
-              : t("fcboard.正在聆听…")}
-          </span>
-          {recording && (
-            <button disabled={busy} onClick={() => void run(stopRecording)}>
-              {t("fcboard.停止录制")}
-            </button>
-          )}
-          {listening && (
-            <button onClick={() => void run(toggleVoice)}>
-              {t("fcboard.结束语音")}
-            </button>
-          )}
-        </div>
+      {listening && (
+        <VoiceOrb
+          state={voiceState}
+          onStop={() => {
+            void toggleVoice().catch((failure) =>
+              setError(errorMessage(failure)),
+            );
+          }}
+        />
+      )}
+      {recording && (
+        <RecordingWidget
+          hidden={panel === "record"}
+          paused={recordingPaused}
+          elapsed={elapsed}
+          disabled={["stopping", "summarizing"].includes(recordPhase)}
+          pauseDisabled={recordControlPending}
+          onPause={() => {
+            void toggleRecordingPause()?.catch(recordingFailure);
+          }}
+          onStop={() => {
+            void stopRecording().catch(recordingFailure);
+          }}
+          onRestore={() => setPanel("record")}
+        />
       )}
       {panel && (
         <MaterialPanel
@@ -1848,8 +2274,14 @@ export const Classroom = ({
           ref={panelRef}
           className={`fc-panel${
             panel === "settings" ? " fc-settings-dialog fc-board-settings" : ""
+          }${
+            panel === "record" || panel === "summary"
+              ? ` fc-centered-content-dialog${
+                  panel === "record" ? " fc-recording-dialog" : ""
+                }`
+              : ""
           }`}
-          centered={panel === "settings"}
+          centered={["settings", "record", "summary"].includes(panel)}
           onDismiss={() => close()}
           style={
             panel === "plot"
@@ -1860,14 +2292,16 @@ export const Classroom = ({
                   bottom: "auto",
                   maxHeight: `calc(100% - ${plotPlacement.top + 84}px)`,
                 }
-              : panel === "settings"
+              : ["settings", "record", "summary"].includes(panel)
               ? undefined
               : panelStyle
           }
           role="dialog"
-          aria-modal={panel === "settings"}
+          aria-modal={["settings", "record", "summary"].includes(panel)}
           aria-label={t(
-            `fcboard.${panel === "settings" ? "白板设置" : titles[panel]}`,
+            `fcboard.${
+              panel === "settings" ? "whiteboard_settings" : titles[panel]
+            }`,
           )}
           onKeyDown={(event) => {
             event.stopPropagation();
@@ -1878,25 +2312,41 @@ export const Classroom = ({
         >
           <header>
             <div>
-              {panel !== "settings" && (
-                <small>{t("fcboard.Fcboard · 方成教育")}</small>
-              )}
+              {panel !== "settings" && <small>{t("fcboard.fcboard")}</small>}
               <h2>
                 {t(
                   `fcboard.${
-                    panel === "settings" ? "白板设置" : titles[panel]
+                    panel === "settings" ? "whiteboard_settings" : titles[panel]
                   }`,
                 )}
               </h2>
             </div>
             <button
               onClick={() => close()}
-              aria-label={t("fcboard.关闭工具浮层")}
+              aria-label={t(
+                panel === "record"
+                  ? "fcboard.minimize_recording"
+                  : "fcboard.close_tool_panel",
+              )}
             >
-              ×
+              {panel === "record" ? "−" : "×"}
             </button>
           </header>
           <div className="fc-panel-body">
+            {panel === "summary" && (
+              <div
+                className="fc-board-summary"
+                role="status"
+                aria-live="polite"
+              >
+                <SummaryText
+                  value={output}
+                  placeholder={t(
+                    "fcboard.reading_the_board_and_preparing_your_lesson",
+                  )}
+                />
+              </div>
+            )}
             {panel === "settings" && (
               <form
                 className="fc-settings-form"
@@ -1911,7 +2361,7 @@ export const Classroom = ({
                       validateEndpoint(settings.ttsEndpoint);
                     }
                     saveSettings(settings, remember);
-                    setStatus(t("fcboard.设置已保存"));
+                    setStatus(t("fcboard.settings_saved"));
                     setError("");
                   } catch (failure) {
                     setError(errorMessage(failure));
@@ -1922,7 +2372,13 @@ export const Classroom = ({
                   initialPage={settingsPage}
                   hasTools={!!renderSettingsActions}
                 >
-                  <BoardSettings api={api} />
+                  <BoardSettings api={api} device={inkProfile} />
+                  <SettingsSection id="language">
+                    <label>
+                      {t("labels.language")}
+                      <LanguageList />
+                    </label>
+                  </SettingsSection>
                   <SettingsSection id="tools">
                     {renderSettingsActions?.(() => close(false))}
                   </SettingsSection>
@@ -1931,7 +2387,7 @@ export const Classroom = ({
                   </SettingsSection>
                   <SettingsSection id="models">
                     <label>
-                      {t("fcboard.AI 接口地址")}
+                      {t("fcboard.ai_endpoint")}
                       <input
                         type="url"
                         required
@@ -1945,7 +2401,7 @@ export const Classroom = ({
                       />
                     </label>
                     <label>
-                      {t("fcboard.模型 ID / 火山方舟接入点 ID")}
+                      {t("fcboard.model_id_volcengine_endpoint_id")}
                       <input
                         value={settings.model}
                         onChange={(event) =>
@@ -1954,11 +2410,11 @@ export const Classroom = ({
                             model: event.target.value,
                           })
                         }
-                        placeholder={t("fcboard.填写支持视觉的模型 ID")}
+                        placeholder={t("fcboard.enter_a_vision_model_id")}
                       />
                     </label>
                     <label>
-                      {t("fcboard.API 密钥")}
+                      {t("fcboard.api_key")}
                       <input
                         type="password"
                         autoComplete="off"
@@ -1974,9 +2430,9 @@ export const Classroom = ({
                   </SettingsSection>
                   <SettingsSection id="recognition">
                     <label>
-                      {t("fcboard.手写识别")}
+                      {t("fcboard.handwriting_recognition")}
                       <MaterialSelect
-                        aria-label={t("fcboard.手写识别")}
+                        aria-label={t("fcboard.handwriting_recognition")}
                         value={settings.ocr}
                         onChange={(event) =>
                           setSettings({
@@ -1986,20 +2442,22 @@ export const Classroom = ({
                         }
                       >
                         <option value="auto">
-                          {t("fcboard.轨迹优先 · 可配置识别兜底")}
+                          {t("fcboard.digital_ink_first_configurable_fallback")}
                         </option>
                         <option value="local">
-                          {t("fcboard.本地轨迹（Android）/ 截图识别（Web）")}
+                          {t(
+                            "fcboard.offline_digital_ink_android_image_ocr_web",
+                          )}
                         </option>
                         <option value="cloud">
-                          {t("fcboard.云端视觉识别")}
+                          {t("fcboard.cloud_vision_recognition")}
                         </option>
                       </MaterialSelect>
                     </label>
                     <label>
-                      {t("fcboard.手写语言")}
+                      {t("fcboard.handwriting_language")}
                       <MaterialSelect
-                        aria-label={t("fcboard.手写语言")}
+                        aria-label={t("fcboard.handwriting_language")}
                         value={settings.inkLanguage}
                         onChange={(event) =>
                           setSettings({
@@ -2010,15 +2468,21 @@ export const Classroom = ({
                         }
                       >
                         <option value="auto">
-                          {t("fcboard.跟随界面语言")}
+                          {t("fcboard.follow_interface_language")}
                         </option>
-                        <option value="zh-Hani-CN">中文</option>
+                        <option value="zh-Hani-CN">
+                          {
+                            languages.find(
+                              (language) => language.code === "zh-CN",
+                            )?.label
+                          }
+                        </option>
                         <option value="en-US">English</option>
                       </MaterialSelect>
                     </label>
                     {settings.ocr !== "local" && (
                       <label>
-                        {t("fcboard.识别模型 ID（留空使用主模型）")}
+                        {t("fcboard.ocr_model_id_blank_to_use_the_main_model")}
                         <input
                           value={settings.ocrModel}
                           onChange={(event) =>
@@ -2033,7 +2497,9 @@ export const Classroom = ({
                   </SettingsSection>
                   <SettingsSection id="models">
                     <label>
-                      {t("fcboard.快速问答模型 ID（留空使用主模型）")}
+                      {t(
+                        "fcboard.fast_answer_model_id_blank_to_use_the_main_model",
+                      )}
                       <input
                         value={settings.textModel}
                         onChange={(event) =>
@@ -2045,10 +2511,12 @@ export const Classroom = ({
                       />
                     </label>
                     <label>
-                      {t("fcboard.图像生成模型 ID")}
+                      {t("fcboard.image_generation_model_id")}
                       <input
                         value={settings.imageModel}
-                        placeholder={t("fcboard.填写已开通的 Seedream 模型 ID")}
+                        placeholder={t(
+                          "fcboard.enter_an_enabled_seedream_model_id",
+                        )}
                         onChange={(event) =>
                           setSettings({
                             ...settings,
@@ -2060,9 +2528,9 @@ export const Classroom = ({
                   </SettingsSection>
                   <SettingsSection id="voice">
                     <label>
-                      {t("fcboard.语音服务")}
+                      {t("fcboard.speech_service")}
                       <MaterialSelect
-                        aria-label={t("fcboard.语音服务")}
+                        aria-label={t("fcboard.speech_service")}
                         value={settings.speech}
                         onChange={(event) =>
                           setSettings({
@@ -2071,28 +2539,86 @@ export const Classroom = ({
                           })
                         }
                       >
+                        <option
+                          value="cloud"
+                          disabled={!Capacitor.isNativePlatform()}
+                        >
+                          {t(
+                            "fcboard.doubao_cloud_streaming_speech_recommended",
+                          )}
+                        </option>
                         <option value="local">
-                          {t("fcboard.内置离线中文语音（安卓版）")}
+                          {t("fcboard.built_in_offline_chinese_speech_android")}
                         </option>
                         <option value="system">
-                          {t("fcboard.安卓 / 浏览器系统语音识别")}
+                          {t("fcboard.android_browser_speech_recognition")}
                         </option>
                         <option value="custom">
-                          {t("fcboard.自定义语音转写接口")}
+                          {t("fcboard.custom_speech_transcription_service")}
                         </option>
                       </MaterialSelect>
                     </label>
+                    {settings.speech === "cloud" && (
+                      <>
+                        <label>
+                          {t("fcboard.speech_api_key")}
+                          <input
+                            type="password"
+                            autoComplete="off"
+                            required
+                            value={settings.speechKey}
+                            onChange={(event) =>
+                              setSettings({
+                                ...settings,
+                                speechKey: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          {t("fcboard.speech_resource_id")}
+                          <MaterialSelect
+                            aria-label={t("fcboard.speech_resource_id")}
+                            value={settings.speechResource}
+                            onChange={(event) =>
+                              setSettings({
+                                ...settings,
+                                speechResource: event.target.value,
+                              })
+                            }
+                          >
+                            <option value="volc.seedasr.sauc.duration">
+                              Seed ASR 2.0 · duration
+                            </option>
+                            <option value="volc.seedasr.sauc.concurrent">
+                              Seed ASR 2.0 · concurrent
+                            </option>
+                            <option value="volc.bigasr.sauc.duration">
+                              Big ASR 1.0 · duration
+                            </option>
+                            <option value="volc.bigasr.sauc.concurrent">
+                              Big ASR 1.0 · concurrent
+                            </option>
+                          </MaterialSelect>
+                        </label>
+                        <p>
+                          {t(
+                            "fcboard.use_an_api_key_from_the_doubao_speech_console_separate_from_the_ark_model_key_listening",
+                          )}
+                        </p>
+                      </>
+                    )}
                     {settings.speech === "local" && (
                       <p>
                         {t(
-                          "fcboard.中文模型随安卓版安装，识别在本机完成，不依赖系统语音服务。录制文稿与录音共用同一麦克风。",
+                          "fcboard.the_chinese_model_is_bundled_with_android_recognition_runs_locally_and_shares_the_recording",
                         )}
                       </p>
                     )}
                     {settings.speech === "custom" && (
                       <>
                         <label>
-                          {t("fcboard.音频转写接口")}
+                          {t("fcboard.transcription_endpoint")}
                           <input
                             type="url"
                             required
@@ -2107,7 +2633,7 @@ export const Classroom = ({
                           />
                         </label>
                         <label>
-                          {t("fcboard.转写模型")}
+                          {t("fcboard.transcription_model")}
                           <input
                             value={settings.speechModel}
                             onChange={(event) =>
@@ -2119,7 +2645,7 @@ export const Classroom = ({
                           />
                         </label>
                         <label>
-                          {t("fcboard.语音 API 密钥")}
+                          {t("fcboard.speech_api_key")}
                           <input
                             type="password"
                             autoComplete="off"
@@ -2134,15 +2660,15 @@ export const Classroom = ({
                         </label>
                         <p>
                           {t(
-                            "fcboard.接口需支持 multipart 音频上传与 text / segments（start、text）响应。浏览器版需接口允许跨域访问。",
+                            "fcboard.the_endpoint_must_accept_multipart_audio_and_return_text_or_segments_start_text_browser_access",
                           )}
                         </p>
                       </>
                     )}
-                    <section aria-label={t("fcboard.语音播报（可选）")}>
-                      <h3>{t("fcboard.语音播报（可选）")}</h3>
+                    <section aria-label={t("fcboard.spoken_playback_optional")}>
+                      <h3>{t("fcboard.spoken_playback_optional")}</h3>
                       <label>
-                        {t("fcboard.自定义播报接口（可选）")}
+                        {t("fcboard.custom_speech_endpoint_optional")}
                         <input
                           type="url"
                           value={settings.ttsEndpoint}
@@ -2156,7 +2682,7 @@ export const Classroom = ({
                         />
                       </label>
                       <label>
-                        {t("fcboard.播报服务密钥")}
+                        {t("fcboard.speech_playback_key")}
                         <input
                           type="password"
                           autoComplete="off"
@@ -2171,7 +2697,7 @@ export const Classroom = ({
                       </label>
                       <p>
                         {t(
-                          "fcboard.安卓版留空使用内置离线中英文播报；浏览器使用系统声音。填写接口可替换播报引擎。",
+                          "fcboard.on_android_leave_empty_for_bundled_offline_chinese_english_narration_browsers_use_system_voices",
                         )}
                       </p>
                     </section>
@@ -2183,7 +2709,9 @@ export const Classroom = ({
                         checked={remember}
                         onChange={(event) => setRemember(event.target.checked)}
                       />
-                      {t("fcboard.在本机记住密钥（共享教学设备建议关闭）")}
+                      {t(
+                        "fcboard.remember_keys_on_this_device_avoid_on_shared_displays",
+                      )}
                     </label>
                   </SettingsSection>
                   <SettingsSection id="teaching">
@@ -2198,14 +2726,14 @@ export const Classroom = ({
                           })
                         }
                       />
-                      {t("fcboard.录制文稿完成后自动生成 AI 总结")}
+                      {t("fcboard.summarize_the_transcript_after_recording")}
                     </label>
                   </SettingsSection>
                   <SettingsSection id="recognition">
                     <label>
-                      {t("fcboard.白板回答样式")}
+                      {t("fcboard.board_answer_style")}
                       <MaterialSelect
-                        aria-label={t("fcboard.白板回答样式")}
+                        aria-label={t("fcboard.board_answer_style")}
                         value={settings.answerStyle}
                         onChange={(event) =>
                           setSettings({
@@ -2216,18 +2744,22 @@ export const Classroom = ({
                         }
                       >
                         <option value="match">
-                          {t("fcboard.跟随选区颜色、字号与字体")}
+                          {t(
+                            "fcboard.match_the_selection_colour_size_and_font",
+                          )}
                         </option>
                         <option value="handwritten">
-                          {t("fcboard.手写字体")}
+                          {t("fcboard.handwriting")}
                         </option>
-                        <option value="text">{t("fcboard.印刷文本")}</option>
+                        <option value="text">
+                          {t("fcboard.printed_text")}
+                        </option>
                       </MaterialSelect>
                     </label>
                   </SettingsSection>
                   <div className="fc-settings-actions">
                     <button className="fc-primary" type="submit">
-                      {t("fcboard.保存设置")}
+                      {t("fcboard.save_settings")}
                     </button>
                     <SettingsSection id="models">
                       <button
@@ -2250,18 +2782,18 @@ export const Classroom = ({
                             );
                             setStatus(
                               context.image
-                                ? t("fcboard.截图识别返回：{{result}}", {
+                                ? t("fcboard.image_recognition_result_result", {
                                     result: result.slice(0, 160),
                                   })
                                 : t(
-                                    "fcboard.连接测试返回：{{result}}；在白板书写后可测试截图识别",
+                                    "fcboard.connection_test_result_result_write_on_the_board_to_test_image_recognition",
                                     { result: result.slice(0, 160) },
                                   ),
                             );
                           })
                         }
                       >
-                        {t("fcboard.测试当前配置")}
+                        {t("fcboard.test_current_settings")}
                       </button>
                     </SettingsSection>
                   </div>
@@ -2274,7 +2806,7 @@ export const Classroom = ({
                   <img
                     className="fc-capture"
                     src={capture}
-                    alt={t("fcboard.白板截图")}
+                    alt={t("fcboard.board_capture")}
                   />
                 )}
                 <label className="fc-check">
@@ -2287,7 +2819,9 @@ export const Classroom = ({
                       setWholeBoard(event.target.checked);
                     }}
                   />
-                  {t("fcboard.分析整个白板（关闭时优先使用框选区域）")}
+                  {t(
+                    "fcboard.analyze_the_whole_board_otherwise_prefer_the_selection",
+                  )}
                 </label>
                 <form
                   onSubmit={(event) => {
@@ -2296,12 +2830,12 @@ export const Classroom = ({
                   }}
                 >
                   <label>
-                    {t("fcboard.对助教说")}
+                    {t("fcboard.ask_the_assistant")}
                     <textarea
                       value={prompt}
                       onChange={(event) => setPrompt(event.target.value)}
                       placeholder={t(
-                        "fcboard.帮我画个立方体 / 画 y=x+1 / 总结这一板",
+                        "fcboard.draw_a_cube_plot_y_x_1_summarize_this_board",
                       )}
                       required
                     />
@@ -2310,17 +2844,17 @@ export const Classroom = ({
                     disabled={busy || !prompt.trim()}
                     className="fc-primary"
                   >
-                    {t("fcboard.执行指令")}
+                    {t("fcboard.run_command")}
                   </button>
                 </form>
                 <div className="fc-actions">
                   <button
                     disabled={busy}
                     onClick={() => {
-                      void run(() => summarize(wholeBoard));
+                      void run(summarize);
                     }}
                   >
-                    {t("fcboard.总结选区 / 白板")}
+                    {t("fcboard.summarize_selection_board")}
                   </button>
                 </div>
                 {output && (
@@ -2334,20 +2868,20 @@ export const Classroom = ({
                             void run(() => narrator.current!.speak(output));
                           }}
                         >
-                          {t("fcboard.朗读回答")}
+                          {t("fcboard.read_answer_aloud")}
                         </button>
                         <button onClick={() => narrator.current?.stop()}>
-                          {t("fcboard.停止朗读")}
+                          {t("fcboard.stop_playback")}
                         </button>
                       </div>
                     }
                     <button
                       onClick={() => {
                         insertText(api, output);
-                        setStatus(t("fcboard.内容已写入白板"));
+                        setStatus(t("fcboard.content_added_to_the_board"));
                       }}
                     >
-                      {t("fcboard.将内容写入白板")}
+                      {t("fcboard.write_to_board")}
                     </button>
                   </>
                 )}
@@ -2361,7 +2895,7 @@ export const Classroom = ({
                   </strong>
                 </p>
                 <label>
-                  {t("fcboard.坐标范围 ±")}
+                  {t("fcboard.coordinate_range")}
                   <input
                     type="number"
                     min="0.1"
@@ -2382,7 +2916,7 @@ export const Classroom = ({
                 </label>
                 <p>
                   {t(
-                    "fcboard.x、y 控制采样区间的平移，z 控制输出偏移；a、b、c 可用于表达式。拖动后更新当前图像。",
+                    "fcboard.x_and_y_shift_the_sampled_domain_z_shifts_the_output_expressions_can_use_a_b_and_c_changes",
                   )}
                 </p>
                 {(["x", "y", "z", "a", "b", "c"] as const)
@@ -2397,7 +2931,7 @@ export const Classroom = ({
                     <label className="fc-slider" key={key}>
                       {key} = {plot[key].toFixed(1)}
                       <input
-                        aria-label={t("fcboard.调节 {{key}}", { key })}
+                        aria-label={t("fcboard.adjust_key", { key })}
                         type="range"
                         min="-10"
                         max="10"
@@ -2423,190 +2957,52 @@ export const Classroom = ({
               </>
             )}
             {panel === "record" && (
-              <>
-                <label>
-                  {t("fcboard.录制模式")}
-                  <MaterialSelect
-                    aria-label={t("fcboard.录制模式")}
-                    disabled={recording}
-                    value={mode}
-                    onChange={(event) =>
-                      setMode(event.target.value as RecordingMode)
-                    }
-                  >
-                    <option value="audio">{t("fcboard.仅麦克风")}</option>
-                    <option value="camera">
-                      {t("fcboard.麦克风 + 摄像头")}
-                    </option>
-                    <option value="screen">
-                      {t("fcboard.麦克风 + 屏幕（白板）")}
-                    </option>
-                    <option value="combined">
-                      {t("fcboard.麦克风 + 摄像头 + 屏幕（白板）")}
-                    </option>
-                  </MaterialSelect>
-                </label>
-                <p>
-                  {t(
-                    "fcboard.录制时可关闭此浮层继续使用白板。屏幕模式采集白板画面，组合模式将摄像头叠放在右下角。",
-                  )}
-                </p>
-                <button
-                  className={recording ? "fc-stop" : "fc-primary"}
-                  disabled={busy}
-                  onClick={() => {
-                    void run(recording ? stopRecording : startRecording);
-                  }}
-                >
-                  {recording
-                    ? t("fcboard.停止并保存 {{time}}", {
-                        time: timestamp(elapsed),
-                      })
-                    : t("fcboard.开始录制")}
-                </button>
-                <label>
-                  {t("fcboard.本机录制资料")}
-                  <MaterialSelect
-                    aria-label={t("fcboard.本机录制资料")}
-                    value={activeId}
-                    onChange={(event) => setActiveId(event.target.value)}
-                  >
-                    <option value="">{t("fcboard.选择录制")}</option>
-                    {records.map((item) => (
-                      <option value={item.id} key={item.id}>
-                        {new Date(item.created).toLocaleString()} ·{" "}
-                        {timestamp(item.duration)}
-                      </option>
-                    ))}
-                  </MaterialSelect>
-                </label>
-                {active ? (
-                  <>
-                    <RecordingPlayer recording={active} />
-                    {active.summary && (
-                      <div className="fc-actions">
-                        <button
-                          disabled={busy || listening || recording}
-                          onClick={() => {
-                            void run(() =>
-                              narrator.current!.speak(active.summary),
-                            );
-                          }}
-                        >
-                          {t("fcboard.朗读总结")}
-                        </button>
-                        <button onClick={() => narrator.current?.stop()}>
-                          {t("fcboard.停止朗读")}
-                        </button>
-                      </div>
-                    )}
-                    <div className="fc-actions">
-                      <button
-                        disabled={busy}
-                        onClick={() => {
-                          void run(async () => {
-                            const lines = await transcribe(active.blob);
-                            const updated = {
-                              ...active,
-                              transcript: lines,
-                              summary: "",
-                            };
-                            await persistRecords(
-                              recordsRef.current.map((item) =>
-                                item.id === active.id ? updated : item,
-                              ),
-                            );
-                            if (currentSettings().autoSummary && lines.length) {
-                              const summary = await summaryFor(updated);
-                              await persistRecords(
-                                recordsRef.current.map((item) =>
-                                  item.id === active.id
-                                    ? { ...item, summary }
-                                    : item,
-                                ),
-                              );
-                            }
-                          });
-                        }}
-                      >
-                        {t("fcboard.转写 / 重新转写")}
-                      </button>
-                      <button
-                        disabled={busy || !active.transcript.length}
-                        onClick={() => {
-                          void run(async () => {
-                            const summary = await summaryFor(active);
-                            await persistRecords(
-                              recordsRef.current.map((item) =>
-                                item.id === active.id
-                                  ? { ...item, summary }
-                                  : item,
-                              ),
-                            );
-                          });
-                        }}
-                      >
-                        {t("fcboard.生成 AI 总结")}
-                      </button>
-                      <button
-                        disabled={busy}
-                        onClick={() => {
-                          void persistRecords(
-                            recordsRef.current.filter(
-                              (item) => item.id !== active.id,
-                            ),
-                          );
-                          setActiveId("");
-                        }}
-                      >
-                        {t("fcboard.删除此录制")}
-                      </button>
-                    </div>
-                    <label>
-                      {t("fcboard.补充文稿（每行一段，可用 00:30 文字）")}
-                      <textarea
-                        value={manualTranscript}
-                        onChange={(event) =>
-                          setManualTranscript(event.target.value)
-                        }
-                      />
-                    </label>
-                    <button
-                      disabled={!manualTranscript.trim()}
-                      onClick={() => {
-                        const lines = manualTranscript
-                          .split("\n")
-                          .filter((line) => line.trim())
-                          .map((line) => {
-                            const match = line.match(/^(\d+):(\d{2})\s+(.+)$/);
-                            return {
-                              time: match
-                                ? Number(match[1]) * 60 + Number(match[2])
-                                : 0,
-                              text: match ? match[3] : line,
-                            };
-                          });
-                        void persistRecords(
-                          recordsRef.current.map((item) =>
-                            item.id === active.id
-                              ? { ...item, transcript: lines, summary: "" }
-                              : item,
-                          ),
-                        );
-                        setManualTranscript("");
-                      }}
-                    >
-                      {t("fcboard.保存补充文稿")}
-                    </button>
-                  </>
-                ) : (
-                  <p>
-                    {t(
-                      "fcboard.尚未选择录制资料。录制会保存在当前设备，可回放和下载。",
-                    )}
-                  </p>
-                )}
-              </>
+              <RecordingPanel
+                phase={recordPhase}
+                recording={recording}
+                paused={recordingPaused}
+                elapsed={elapsed}
+                mode={mode}
+                onMode={setMode}
+                records={records}
+                activeId={activeId}
+                onSelect={setActiveId}
+                transcript={transcript.current}
+                busy={busy}
+                controlBusy={recordControlPending}
+                onStart={() => {
+                  void run(startRecording);
+                }}
+                onStop={() => {
+                  void stopRecording().catch(recordingFailure);
+                }}
+                onPause={() => {
+                  void toggleRecordingPause()?.catch(recordingFailure);
+                }}
+                onTranscribe={() => {
+                  void run(() => regenerateRecording(true));
+                }}
+                onSummary={() => {
+                  void run(() => regenerateRecording(false));
+                }}
+                onDelete={() => {
+                  if (active) {
+                    void persistRecords(
+                      recordsRef.current.filter(
+                        (item) => item.id !== active.id,
+                      ),
+                    );
+                    setActiveId("");
+                  }
+                }}
+                onNotes={updateRecordingNotes}
+                onRead={() => {
+                  if (active) {
+                    void run(() => narrator.current!.speak(active.summary));
+                  }
+                }}
+                onStopRead={() => narrator.current?.stop()}
+              />
             )}
             {panel === "files" && (
               <>
@@ -2629,12 +3025,12 @@ export const Classroom = ({
                   className="fc-primary"
                   onClick={() => uploadInput.current?.click()}
                 >
-                  {t("fcboard.打开本机课件 / 文件")}
+                  {t("fcboard.open_local_courseware_file")}
                 </button>
-                <h3>{t("fcboard.局域网快传")}</h3>
+                <h3>{t("fcboard.local_file_transfer")}</h3>
                 <p>
                   {t(
-                    "fcboard.安卓大屏与手机连接同一局域网，开启后使用手机浏览器打开接收地址。关闭后地址立即失效。",
+                    "fcboard.connect_the_display_and_phone_to_the_same_network_open_the_receiving_address_on_your_phone",
                   )}
                 </p>
                 <button
@@ -2652,13 +3048,13 @@ export const Classroom = ({
                   }}
                 >
                   {urls.length
-                    ? t("fcboard.关闭局域网接收")
-                    : t("fcboard.开启局域网接收")}
+                    ? t("fcboard.stop_receiving_files")
+                    : t("fcboard.receive_files_over_lan")}
                 </button>
                 {!Capacitor.isNativePlatform() && (
                   <p>
                     {t(
-                      "fcboard.局域网接收服务在安卓安装版提供；浏览器版可打开本机文件。",
+                      "fcboard.local_receiving_is_available_in_the_android_app_the_browser_can_open_local_files",
                     )}
                   </p>
                 )}
@@ -2674,13 +3070,19 @@ export const Classroom = ({
                       onClick={() => {
                         void navigator.clipboard
                           .writeText(url)
-                          .then(() => setStatus(t("fcboard.接收地址已复制")))
+                          .then(() =>
+                            setStatus(t("fcboard.receiving_address_copied")),
+                          )
                           .catch(() =>
-                            setError(t("fcboard.复制失败，请手动抄写接收地址")),
+                            setError(
+                              t(
+                                "fcboard.could_not_copy_copy_the_receiving_address_manually",
+                              ),
+                            ),
                           );
                       }}
                     >
-                      {t("fcboard.复制")}
+                      {t("fcboard.copy")}
                     </button>
                   </div>
                 ))}
@@ -2696,7 +3098,7 @@ export const Classroom = ({
                           void run(() => openUpload(file));
                         }}
                       >
-                        {t("fcboard.打开预览")}
+                        {t("fcboard.preview_file")}
                       </button>
                       <button
                         disabled={busy}
@@ -2708,14 +3110,14 @@ export const Classroom = ({
                           });
                         }}
                       >
-                        {t("fcboard.删除")}
+                        {t("fcboard.delete")}
                       </button>
                     </div>
                   ))
                 ) : (
                   <p>
                     {t(
-                      "fcboard.还没有收到文件。手机选中文件即上传上屏，支持 PPT / PPTX、PDF、Word、Excel 和图片。",
+                      "fcboard.no_files_received_yet_upload_from_your_phone_ppt_pptx_pdf_word_excel_and_images_are_supported",
                     )}
                   </p>
                 )}

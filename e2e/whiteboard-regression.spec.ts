@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
+import { dictateQuestion } from "./question";
 
 import type { Page } from "@playwright/test";
 
@@ -208,18 +209,21 @@ test("AI style commands update selected text and the next insertion through orig
   } else {
     await selectMenu(page, "提问与讲解");
   }
-  await page
-    .getByRole("textbox", { name: "向 AI 教师提问" })
-    .fill("把选中的字设为40号红色居中，再写已统一样式");
-  await page.getByRole("button", { name: "发送问题" }).click();
+  await dictateQuestion(page, "把选中的字设为40号红色居中，再写已统一样式");
   await expect
     .poll(() =>
       page.evaluate(() => {
         const text = JSON.parse(
           localStorage.getItem("excalidraw") || "[]",
         ).filter(
-          (element: { type: string; isDeleted?: boolean }) =>
-            element.type === "text" && !element.isDeleted,
+          (element: {
+            type: string;
+            isDeleted?: boolean;
+            customData?: { fcQuestionInput?: boolean };
+          }) =>
+            element.type === "text" &&
+            !element.isDeleted &&
+            !element.customData?.fcQuestionInput,
         );
         return (
           text.length === 2 &&

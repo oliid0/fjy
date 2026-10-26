@@ -35,7 +35,7 @@
   *::after {
     box-sizing: border-box;
   }
-  button,
+  button:not(.MuiButtonBase-root),
   input,
   textarea,
   select {
@@ -46,7 +46,7 @@
   a {
     touch-action: manipulation;
   }
-  button {
+  button:not(.MuiButtonBase-root) {
     min-height: 48px;
     border: 1px solid var(--fc-border);
     border-radius: 10px;
@@ -54,10 +54,10 @@
     background: var(--fc-surface);
     cursor: pointer;
   }
-  button:hover {
+  button:not(.MuiButtonBase-root):hover {
     border-color: var(--fc-blue);
   }
-  button:disabled {
+  button:not(.MuiButtonBase-root):disabled {
     cursor: default;
     opacity: 0.5;
   }
@@ -139,10 +139,11 @@
     --icon-fill-color: #333;
     position: absolute;
     z-index: 10;
-    inset: auto 0 calc(4 * var(--fc-unit) + env(safe-area-inset-bottom));
+    inset: auto env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, max-content) minmax(0, 1fr);
-    align-items: center;
+    align-items: end;
     gap: calc(4 * var(--fc-unit));
     max-width: 100%;
     box-sizing: border-box;
@@ -373,8 +374,8 @@
     );
   }
   .fc-factory-menu {
-    width: calc(99 * var(--fc-unit));
-    min-width: 0;
+    width: max-content;
+    min-width: calc(99 * var(--fc-unit));
     max-width: calc(100vw - 24px);
     .dropdown-menu-container {
       padding: calc(7 * var(--fc-unit)) calc(5 * var(--fc-unit));
@@ -422,19 +423,28 @@
     }
     .MuiMenuItem-root {
       width: 100%;
+      height: auto;
       min-height: calc(36 * var(--fc-unit));
-      padding: 0 calc(5 * var(--fc-unit)) 0 calc(8 * var(--fc-unit));
+      padding: calc(6 * var(--fc-unit)) calc(5 * var(--fc-unit))
+        calc(6 * var(--fc-unit)) calc(8 * var(--fc-unit));
       gap: calc(12 * var(--fc-unit));
       border: 0;
       font: 400 calc(11 * var(--fc-unit)) / 1.4 system-ui;
       color: inherit;
       text-align: start;
       background: transparent;
+      white-space: normal;
+      overflow-wrap: anywhere;
       > svg {
         width: 12px;
         height: 12px;
         flex: none;
       }
+    }
+    .dropdown-menu-item__text {
+      min-width: 0;
+      white-space: normal;
+      overflow: visible;
     }
     &.fc-material-submenu {
       width: min(calc(240 * var(--fc-unit)), calc(100vw - 24px));
@@ -453,6 +463,7 @@
   }
 
   .fc-eraser-settings label,
+  .fc-eraser-mode,
   .fc-pen-mode {
     display: flex;
     gap: 8px;
@@ -554,7 +565,8 @@
       cursor: pointer;
       padding-block: calc(3 * var(--fc-unit));
     }
-    &[open] label {
+    &[open] label,
+    &[open] .fc-eraser-mode {
       margin: calc(8 * var(--fc-unit)) 0;
       font-size: calc(11 * var(--fc-unit));
       input[type="range"] {
@@ -575,7 +587,7 @@
       justify-content: center;
       gap: 0;
       box-sizing: border-box;
-      width: calc(56 * var(--fc-unit));
+      width: max-content;
       min-width: calc(56 * var(--fc-unit));
       height: calc(48 * var(--fc-unit));
       min-height: calc(48 * var(--fc-unit));
@@ -642,17 +654,17 @@
       margin: 0;
     }
     .main-menu-trigger {
-      width: calc(52 * var(--fc-unit));
+      width: max-content;
       min-width: calc(52 * var(--fc-unit));
       &::after {
-        content: "菜单";
+        content: attr(aria-label);
       }
     }
     [data-testid="button-undo"]::after {
-      content: "撤销";
+      content: attr(aria-label);
     }
     [data-testid="button-redo"]::after {
-      content: "重做";
+      content: attr(aria-label);
     }
     .fc-toolbar-extras {
       border: 0;
@@ -689,22 +701,75 @@
       }
     }
   }
-  @media (max-width: 700px) {
-    .fc-toolbar-leading .fc-board-controls {
-      display: none;
-    }
-    .fc-toolbar-trailing > :not(.fc-toolbar-visibility) {
-      display: none;
-    }
+  @media (max-width: 1000px) {
     .fc-unified-toolbar {
-      grid-template-columns: calc(46 * var(--fc-unit)) minmax(0, 1fr) calc(
-          64 * var(--fc-unit)
-        );
+      grid-template-columns: minmax(0, 1fr) max-content;
+      row-gap: calc(2 * var(--fc-unit));
+    }
+    .fc-drawing-tools {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+      padding-inline: calc(3 * var(--fc-unit));
+      overflow: visible;
+    }
+    .fc-toolbar-leading,
+    .fc-toolbar-trailing {
+      grid-row: 2;
+    }
+    .fc-toolbar-trailing {
+      grid-column: 2;
+    }
+    .fc-toolbar-reversed {
+      grid-template-columns: max-content minmax(0, 1fr);
+      .fc-toolbar-leading {
+        grid-column: 2;
+      }
+      .fc-toolbar-trailing {
+        grid-column: 1;
+      }
+    }
+    .fc-toolbar-collapsed {
+      grid-template-columns: minmax(0, 1fr) max-content;
+      .fc-toolbar-trailing {
+        grid-row: 1;
+        grid-column: 2;
+      }
+    }
+    .fc-toolbar-collapsed.fc-toolbar-reversed {
+      grid-template-columns: max-content minmax(0, 1fr);
+      .fc-toolbar-trailing {
+        grid-column: 1;
+      }
     }
   }
-  @media (min-width: 701px) and (max-width: 900px) {
-    .fc-toolbar-leading .fc-board-controls {
-      display: none;
+  @media (max-width: 600px) {
+    .fc-drawing-tools {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: calc(2 * var(--fc-unit));
+      .fc-toolbar-extras,
+      .undo-redo-buttons {
+        display: contents;
+      }
+    }
+    .fc-unified-toolbar .fc-drawing-tools {
+      .ToolIcon,
+      .fc-toolbar-extras button,
+      .undo-redo-buttons button {
+        width: 100%;
+        min-width: 0;
+        height: auto;
+        .ToolIcon__label,
+        .fc-tool-label,
+        > span,
+        &::after {
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+      }
     }
   }
   .fc-editor-properties {
@@ -806,6 +871,441 @@
 }
 .fc-recording-controls {
   bottom: calc(130px + env(safe-area-inset-bottom));
+}
+.fc-classroom .fc-centered-content-dialog.fc-recording-dialog {
+  width: min(960px, calc(100dvw - 32px));
+  height: min(580px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  border-radius: 12px;
+  > header {
+    padding: 10px 16px;
+    h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    small {
+      display: none;
+    }
+  }
+  > .fc-panel-body {
+    padding: 0;
+    overflow: hidden;
+    flex: 1;
+    display: flex;
+  }
+  .MuiButton-root {
+    min-height: 32px;
+    font-size: 13px;
+    text-transform: none;
+    padding: 5px 10px;
+    border-radius: 6px;
+  }
+  .MuiIconButton-root {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 7px;
+  }
+  svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+}
+.fc-recording-workspace {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.fc-recordings-list {
+  width: 170px;
+  flex: none;
+  border-inline-end: 1px solid var(--fc-border);
+  overflow-y: auto;
+  padding: 10px 6px;
+  > button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  .MuiListItemButton-root {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: start;
+  }
+  .Mui-selected {
+    background: #0b6ff310;
+    color: #0b6ff3;
+  }
+  small {
+    display: block;
+    font-variant-numeric: tabular-nums;
+  }
+}
+.fc-recording-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.fc-recording-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--fc-border);
+  min-height: 60px;
+  > strong {
+    font-size: 13px;
+  }
+  .fc-actions {
+    margin: 0;
+    gap: 4px;
+  }
+}
+.fc-recording-commandbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-inline-start: auto;
+}
+.fc-recording-clock {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.fc-recording-indicator,
+.fc-recording-clock i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  flex: none;
+}
+.fc-recording-indicator[data-paused="true"],
+.fc-recording-clock[data-paused="true"] i {
+  background: #d97706;
+}
+.fc-recording-empty {
+  margin: auto;
+  max-width: 380px;
+  padding: 24px;
+  text-align: center;
+  color: #687388;
+  > svg {
+    width: 40px;
+    height: 40px;
+  }
+  small {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+.fc-recording-panes {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.4fr) minmax(0, 0.6fr);
+  flex: 1;
+  min-height: 0;
+  &.is-live {
+    grid-template-columns: 1fr;
+  }
+  > section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+}
+.fc-recording-transcript-pane {
+  border-inline-end: 1px solid var(--fc-border);
+}
+.fc-recording-pane-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 48px;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--fc-border);
+  > strong {
+    margin-inline-end: auto;
+    font-size: 13px;
+  }
+}
+.fc-recording-lines,
+.fc-recording-summary-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+}
+.fc-recording-lines .MuiButton-root.fc-recording-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 4px;
+  text-align: start;
+  color: inherit;
+  font: 400 15px/1.6 system-ui;
+  text-transform: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  > time {
+    flex: none;
+    color: #778295;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    padding-top: 3px;
+  }
+  > span {
+    min-width: 0;
+  }
+  &:disabled {
+    color: inherit;
+  }
+}
+.fc-recording-empty-text {
+  color: #687388;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.fc-classroom .fc-recording-summary-content .fc-summary-text {
+  font-size: 16px;
+  line-height: 1.65;
+  padding: 0;
+}
+.fc-classroom .fc-recording-playback {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--fc-border);
+  > video {
+    display: block;
+    width: min(320px, 70%);
+    max-height: 140px;
+    margin: 0;
+  }
+  > video.is-audio {
+    height: 40px;
+  }
+  > a {
+    font-size: 12px;
+  }
+}
+.fc-recording-main .fc-recording-mobile-tabs {
+  display: none;
+}
+.fc-recording-notes {
+  padding: 12px;
+  border-top: 1px solid var(--fc-border);
+  .MuiInputBase-root {
+    font-size: 14px;
+  }
+}
+.fc-recording-widget {
+  position: fixed;
+  z-index: 38;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 5px 8px;
+  border: 1px solid #dce3ec;
+  border-radius: 32px;
+  background: #fff;
+  color: #17243c;
+  .MuiIconButton-root {
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+  }
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+  .fc-recording-drag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    font: 500 13px/1.2 system-ui;
+    font-variant-numeric: tabular-nums;
+  }
+}
+@media (max-width: 700px) {
+  .fc-recording-workspace {
+    flex-direction: column;
+  }
+  .fc-recordings-list {
+    width: auto;
+    max-height: 72px;
+    display: flex;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--fc-border);
+    padding: 4px;
+    overflow: auto;
+    > button {
+      width: auto;
+      flex: none;
+      margin: 0;
+    }
+    .MuiList-root {
+      display: flex;
+    }
+    .MuiListItemButton-root {
+      width: 120px;
+      flex: none;
+      padding: 4px 8px;
+    }
+  }
+  .fc-recording-panes {
+    display: flex;
+    > section {
+      flex: 1;
+    }
+    > section[data-active="false"] {
+      display: none;
+    }
+  }
+  .fc-recording-main .fc-recording-mobile-tabs {
+    display: flex;
+    flex: none;
+  }
+  .fc-recording-topbar {
+    padding: 8px;
+    .MuiToggleButtonGroup-root {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+    .MuiToggleButton-root {
+      flex: 1;
+      min-width: 70px;
+      padding: 6px;
+      font-size: 11px;
+    }
+  }
+}
+.fc-recording-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  overflow-wrap: anywhere;
+}
+.fc-live-transcript {
+  max-height: 8em;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.fc-recording-share {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 16px 24px;
+  .ShareDialog__active__qrcode {
+    width: 176px;
+    height: 176px;
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+  }
+  overflow: auto;
+  .fc-recording-share-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+  }
+  .fc-recording-share-links > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  a {
+    overflow-wrap: anywhere;
+  }
+}
+.fc-voice-orb {
+  right: max(24px, env(safe-area-inset-right));
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: radial-gradient(
+    circle at 28% 24%,
+    #a2f8ef,
+    #52adff 38%,
+    #7064ee 72%,
+    #a780ee
+  );
+  box-shadow: 0 5px 22px #5361d64d, inset 0 0 12px #ffffff80;
+  isolation: isolate;
+  .fc-voice-orb-water {
+    position: absolute;
+    inset: -32%;
+    border: 9px solid #ffffff45;
+    border-radius: 42%;
+    animation: fc-voice-water 5s linear infinite;
+  }
+  .fc-voice-orb-core {
+    position: absolute;
+    inset: 20%;
+    border-radius: 50%;
+    background: radial-gradient(
+      ellipse at 30% 30%,
+      #ffffffb3,
+      #b1e9ff52 55%,
+      transparent 75%
+    );
+    animation: fc-voice-pulse 2.4s ease-in-out infinite alternate;
+  }
+  &[data-state="thinking"] .fc-voice-orb-water {
+    animation-duration: 1.6s;
+  }
+  &[data-state="speaking"] .fc-voice-orb-core {
+    animation-duration: 0.45s;
+  }
+  &:focus-visible {
+    outline: 3px solid var(--fc-blue);
+    outline-offset: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fc-voice-orb-water,
+    .fc-voice-orb-core {
+      animation: none;
+    }
+  }
+}
+@keyframes fc-voice-water {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes fc-voice-pulse {
+  to {
+    transform: scale(1.3);
+    opacity: 0.6;
+  }
 }
 .fc-output {
   white-space: pre-wrap;
@@ -1337,19 +1837,124 @@
   overflow-wrap: anywhere;
   padding: 4px 0;
 }
-.fc-teacher-question {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 8px;
+.fc-ink-question {
+  position: fixed;
+  z-index: 35;
+  overflow: hidden;
+  border: 1px solid #8994a580;
+  border-radius: 22px;
+  color: #333;
+  outline: none;
+  > svg {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    user-select: none;
+  }
+  .fc-ink-question-hint {
+    fill: #8a8a8a;
+    font-size: 14px;
+    pointer-events: none;
+  }
+  .fc-ink-question-words {
+    position: absolute;
+    inset: 12px 180px 12px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+    max-height: 4em;
+    font-family: Excalifont, sans-serif;
+    font-size: 18px;
+  }
+  > [role="alert"] {
+    position: absolute;
+    left: 12px;
+    bottom: 4px;
+    max-width: calc(100% - 180px);
+    font-size: 12px;
+    padding: 0 12px;
+  }
+  footer {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    flex: none;
+    height: 40px;
+    padding: 0 6px;
+    opacity: 0.6;
+    button {
+      min-width: 36px;
+      min-height: 36px;
+      padding: 8px;
+      background: transparent;
+      border: 0;
+    }
+    button[aria-pressed="true"] {
+      color: #1976d2;
+      background: #e8f2ff;
+    }
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
 }
-.fc-teacher-question input {
-  flex: 1;
-  min-width: 0;
+.fc-classroom .fc-centered-content-dialog {
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: min(760px, calc(100dvw - 32px));
+  max-width: none;
+  max-height: min(560px, calc(100dvh - 32px));
+  margin: 16px;
+  .fc-panel-body {
+    overflow-y: auto;
+  }
+  .fc-board-summary {
+    font-size: 18px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
-.fc-teacher-question button {
-  flex: none;
-  padding: 10px;
+.fc-classroom button.fc-summary-text {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  border: 0;
+  padding: 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 18px/1.7 system-ui, "Microsoft YaHei", sans-serif;
+  &:disabled {
+    opacity: 0.65;
+  }
+}
+.fc-classroom .fc-summary-fullscreen {
+  position: relative;
+  inset: auto;
+  transform: none;
+  margin: 0;
+  border-radius: 0;
+  width: 100dvw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  overflow: auto;
+  button.fc-summary-text {
+    min-height: 100%;
+    padding: clamp(16px, 4vw, 64px);
+    font-size: 20px;
+  }
 }
 .fc-quiz {
   display: grid;
@@ -1471,7 +2076,7 @@
 .fc-resource-subjects {
   flex: 0 0 240px;
   overflow-y: auto;
-  border-right: 1px solid var(--fc-border);
+  border-inline-end: 1px solid var(--fc-border);
   background: #f8fafc;
   .MuiListItemButton-root {
     width: 100%;
@@ -1489,6 +2094,7 @@
 .fc-resource-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   padding: 0 12px 12px;
 }
@@ -1524,8 +2130,8 @@
   inset: auto;
   transform: none;
   animation: none;
-  width: min(960px, calc(100vw - 32px));
-  height: min(600px, calc(100dvh - 48px));
+  width: min(672px, calc(100vw - 32px));
+  height: min(420px, calc(100dvh - 48px));
   max-height: calc(100dvh - 48px);
   margin: 24px 16px;
   overflow: hidden;
@@ -1553,13 +2159,15 @@
   }
   .fc-settings-layout {
     display: grid;
-    grid-template-columns: 176px minmax(0, 1fr);
+    grid-template-columns: 136px minmax(0, 1fr);
     height: 100%;
   }
   .fc-settings-navigation {
+    min-width: 0;
+    min-height: 0;
     overflow-y: auto;
     background: #f7f8fa;
-    border-right: 1px solid var(--fc-border);
+    border-inline-end: 1px solid var(--fc-border);
     padding: 12px 8px;
     .MuiListItemButton-root {
       padding: 6px 12px;
@@ -1572,24 +2180,27 @@
     }
     .MuiListItemText-primary {
       font-size: 14px;
+      overflow-wrap: anywhere;
     }
   }
   .fc-settings-content {
     min-width: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 20px 28px;
+    padding: 12px 18px;
     h3 {
       margin: 0 0 16px;
       font-size: 16px;
     }
   }
   .fc-settings-fields {
-    label:not(.fc-check) {
+    overflow-wrap: anywhere;
+    label:not(.fc-check),
+    .fc-settings-choice {
       display: grid;
-      grid-template-columns: minmax(130px, 0.8fr) minmax(0, 1fr);
+      grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1fr);
       align-items: center;
-      column-gap: 24px;
+      column-gap: 12px;
       margin: 0;
       padding: 12px 0;
       min-height: 48px;
@@ -1667,7 +2278,8 @@
         font-size: 12px;
       }
     }
-    .fc-settings-fields label:not(.fc-check) {
+    .fc-settings-fields label:not(.fc-check),
+    .fc-settings-fields .fc-settings-choice {
       grid-template-columns: minmax(0, 1fr);
       row-gap: 8px;
       > output {
@@ -1783,11 +2395,11 @@
 }
 .fc-tools-grid button {
   flex-direction: column;
-  gap: calc(2 * var(--fc-unit));
+  gap: 0;
   min-width: 0;
-  min-height: 64px;
-  padding: 6px 4px;
-  font: 400 calc(12 * var(--fc-unit)) / 16px system-ui;
+  min-height: calc(48 * var(--fc-unit));
+  padding: calc(3 * var(--fc-unit)) 4px;
+  font: 400 calc(10 * var(--fc-unit)) / calc(16 * var(--fc-unit)) system-ui;
   border: 0;
   background: transparent;
   color: var(--fc-ink);
@@ -1798,8 +2410,9 @@
 }
 .fc-tools-grid button svg,
 .fc-factory-tools button svg {
-  width: clamp(24px, 1.8vw, 32px);
-  height: clamp(24px, 1.8vw, 32px);
+  width: calc(24 * var(--fc-unit));
+  height: calc(24 * var(--fc-unit));
+  flex-shrink: 0;
   padding: calc(2 * var(--fc-unit));
   box-sizing: border-box;
   pointer-events: none;
@@ -1839,7 +2452,23 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .fc-resource-subjects {
-    flex-basis: 110px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex: none;
+    max-height: 120px;
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--fc-border);
+    padding: 4px;
+    .MuiListItemButton-root {
+      min-width: 0;
+      min-height: 36px;
+      padding: 6px;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+  }
+  .fc-resource-layout {
+    flex-direction: column;
   }
   .fc-tools-grid {
     grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
@@ -1903,6 +2532,10 @@
         width: calc(18 * var(--fc-unit, 1px));
         height: calc(18 * var(--fc-unit, 1px));
       }
+    }
+    > button[aria-pressed="true"] {
+      background: #0b6ff3;
+      color: #fff;
     }
   }
   > [role="status"],

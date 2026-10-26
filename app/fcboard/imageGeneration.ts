@@ -23,6 +23,7 @@ export const insertGeneratedImage = async (
     replaceIds?: string[];
     sourceSignature?: string;
     sourcePage?: number;
+    referenceImage?: string;
   } = {},
 ) => {
   const revision = classroomCommands.revision;
@@ -30,12 +31,16 @@ export const insertGeneratedImage = async (
   const settings = currentSettings();
   if (!settings.apiKey || !settings.imageModel.trim()) {
     throw new Error(
-      t("fcboard.函数可直接绘制；生成插图请先在设置中填写图像生成模型 ID"),
+      t(
+        "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
+      ),
     );
   }
   const endpoint = validateEndpoint(settings.endpoint);
   if (!/\/(chat\/completions|responses)\/?$/.test(endpoint)) {
-    throw new Error(t("fcboard.图像生成需要兼容方舟 /api/v3 接口地址"));
+    throw new Error(
+      t("fcboard.image_generation_requires_an_ark_compatible_api_v3_endpoint"),
+    );
   }
   const url = endpoint.replace(
     /\/(chat\/completions|responses)\/?$/,
@@ -49,7 +54,13 @@ export const insertGeneratedImage = async (
     model: settings.imageModel.trim(),
     prompt,
     response_format: "b64_json",
-    size: "2048x2048",
+    size: /^doubao-seedream-5-0-(flash|pro)-/.test(settings.imageModel)
+      ? "1.5K"
+      : "2048x2048",
+    ...(/^doubao-seedream-5-0-/.test(settings.imageModel)
+      ? { output_format: "png" }
+      : {}),
+    ...(placement.referenceImage ? { image: placement.referenceImage } : {}),
     watermark: false,
   };
   signal.throwIfAborted();
@@ -81,9 +92,11 @@ export const insertGeneratedImage = async (
   }
   if (status < 200 || status >= 300) {
     throw new Error(
-      t("fcboard.图像生成失败 ({{status}})：{{message}}", {
+      t("fcboard.image_generation_failed_status_message", {
         status,
-        message: data?.error?.message || t("fcboard.请检查图像模型与权限"),
+        message:
+          data?.error?.message ||
+          t("fcboard.check_the_image_model_and_permissions"),
       }),
     );
   }
@@ -93,7 +106,7 @@ export const insertGeneratedImage = async (
     !encoded.length ||
     encoded.length > 30_000_000
   ) {
-    throw new Error(t("fcboard.图像服务未返回有效图片"));
+    throw new Error(t("fcboard.the_image_service_returned_no_valid_image"));
   }
   const mimeType = encoded.startsWith("/9j/")
     ? "image/jpeg"
@@ -103,7 +116,9 @@ export const insertGeneratedImage = async (
     ? "image/png"
     : undefined;
   if (!mimeType) {
-    throw new Error(t("fcboard.图像服务返回了不支持的图片格式"));
+    throw new Error(
+      t("fcboard.the_image_service_returned_an_unsupported_format"),
+    );
   }
   const dataURL = `data:${mimeType};base64,${encoded}` as DataURL;
   const image = new Image();

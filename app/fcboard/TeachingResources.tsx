@@ -4,6 +4,7 @@ import { t, useI18n, getLanguage } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
+import { factoryResources as sourceResourceNames } from "@excalidraw/excalidraw/locales/zh-CN.json";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { FileId } from "@excalidraw/element/types";
@@ -41,16 +42,18 @@ export const teachingResources: TeachingResource[] = catalogue.items;
 export const resourceTitle = (item: TeachingResource) =>
   t(`factoryResources.${item.titleKey}` as TranslationKeys);
 const resourceMatches = (item: TeachingResource, query: string) =>
-  [item.title, resourceTitle(item)].some((name) =>
-    name.toLowerCase().includes(query.toLowerCase()),
-  );
+  [
+    item.title,
+    resourceTitle(item),
+    (sourceResourceNames as Record<string, string>)[item.titleKey],
+  ].some((name) => name?.toLowerCase().includes(query.toLowerCase()));
 const subjectNames: Record<string, TranslationKeys> = {
-  数学: "fcboard.数学",
-  物理: "fcboard.物理",
-  化学: "fcboard.化学",
-  生物: "fcboard.生物",
-  地理与天气: "fcboard.地理与天气",
-  网络资源: "fcboard.网络资源",
+  math: "fcboard.mathematics",
+  physics: "fcboard.physics",
+  chemistry: "fcboard.chemistry",
+  biology: "fcboard.biology",
+  geography_weather: "fcboard.geography_and_weather",
+  web: "fcboard.online_resources",
 };
 
 export const TeachingResources = ({
@@ -61,7 +64,7 @@ export const TeachingResources = ({
   useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("数学");
+  const [category, setCategory] = useState("math");
   const [web, setWeb] = useState<{ url: string; title: string }>();
   const webState = useRef<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
@@ -94,28 +97,55 @@ export const TeachingResources = ({
       invalidate();
     };
   }, []);
-  const generate = async (prompt: string) => {
+  const generate = async (prompt: string, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
     if (pending.current) {
-      throw new Error(t("fcboard.正在处理…"));
+      throw new Error(t("fcboard.processing"));
     }
     pending.current = true;
     const controller = new AbortController();
+    const cancel = () => controller.abort();
+    signal?.addEventListener("abort", cancel, { once: true });
     generation.current = controller;
     setBusy(true);
     setGenerating(true);
     setError("");
+    const target = JSON.stringify([
+      (classroomCommands.read("boards") as { active?: string } | undefined)
+        ?.active,
+      (
+        classroomCommands.read("document") as
+          | { id: string; page: number }
+          | undefined
+      )?.id,
+      (classroomCommands.read("document") as { page: number } | undefined)
+        ?.page,
+    ]);
     try {
       const item = await generateTeachingResource(prompt, controller.signal);
       controller.signal.throwIfAborted();
       setGenerated(await generatedResources());
       controller.signal.throwIfAborted();
-      await classroomCommands.execute({
-        name: "canvas.shapes",
-        args: { shapes: item.shapes },
-      });
+      if (
+        JSON.stringify([
+          (classroomCommands.read("boards") as { active?: string } | undefined)
+            ?.active,
+          (classroomCommands.read("document") as { id: string } | undefined)
+            ?.id,
+          (classroomCommands.read("document") as { page: number } | undefined)
+            ?.page,
+        ]) !== target
+      ) {
+        throw new DOMException("Visible surface changed", "AbortError");
+      }
+      const inserted = (await classroomCommands.execute({
+        name: "canvas.resource",
+        args: { resource: item, signal: controller.signal },
+      })) as { ids: string[] };
       setOpen(false);
-      return { id: item.id, title: item.title };
+      return { id: item.id, title: item.title, ids: inserted.ids };
     } finally {
+      signal?.removeEventListener("abort", cancel);
       pending.current = false;
       if (generation.current === controller) {
         generation.current = undefined;
@@ -124,9 +154,9 @@ export const TeachingResources = ({
       }
     }
   };
-  const openWeb = async (url: unknown, title = t("fcboard.网页")) => {
+  const openWeb = async (url: unknown, title = t("fcboard.website")) => {
     if (typeof url !== "string") {
-      throw new Error(t("fcboard.缺少网页地址"));
+      throw new Error(t("fcboard.enter_a_website_address"));
     }
     const parsed = new URL(url);
     if (
@@ -134,7 +164,9 @@ export const TeachingResources = ({
       parsed.username ||
       parsed.password
     ) {
-      throw new Error(t("fcboard.请输入完整的 http 或 https 网页地址"));
+      throw new Error(
+        t("fcboard.enter_a_complete_http_or_https_website_address"),
+      );
     }
     if (native) {
       await Classroom.openWebResource({
@@ -180,16 +212,18 @@ export const TeachingResources = ({
     const saved = (await generatedResources()).find((item) => item.id === id);
     assertVisibleTarget();
     if (saved) {
-      await classroomCommands.execute({
-        name: "canvas.shapes",
-        args: { shapes: saved.shapes },
-      });
+      const inserted = (await classroomCommands.execute({
+        name: "canvas.resource",
+        args: { resource: saved, signal: args.signal },
+      })) as { ids: string[] };
       setOpen(false);
-      return { inserted: saved.id };
+      return { inserted: saved.id, ids: inserted.ids };
     }
     const resource = teachingResources.find((item) => item.id === id);
     if (!resource) {
-      throw new Error(t("fcboard.教学资源不存在，请先读取资源清单"));
+      throw new Error(
+        t("fcboard.resource_not_found_load_the_resource_list_first"),
+      );
     }
     if (resource.url) {
       const url = new URL(resource.url);
@@ -207,18 +241,21 @@ export const TeachingResources = ({
       return openWeb(url.href, resourceTitle(resource));
     }
     if (!resource.asset) {
-      throw new Error(t("fcboard.资源文件缺失"));
+      throw new Error(t("fcboard.resource_file_missing"));
     }
     const response = await fetch(resource.asset);
     if (!response.ok) {
-      throw new Error(t("fcboard.无法读取教学资源，请检查安装文件"));
+      throw new Error(
+        t("fcboard.could_not_read_teaching_resources_check_the_installation"),
+      );
     }
     const blob = await response.blob();
     const dataURL = await getDataURL(blob);
     const image = new Image();
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
-      image.onerror = () => reject(new Error(t("fcboard.教学图示读取失败")));
+      image.onerror = () =>
+        reject(new Error(t("fcboard.could_not_load_teaching_image")));
       image.src = dataURL;
     });
     const size =
@@ -315,12 +352,16 @@ export const TeachingResources = ({
     const stops = [
       classroomCommands.register(
         "resources.generate",
-        "按 args.prompt 生成新的可编辑教学图示，保存到我的资源并插入当前白板，保留已有题目和对象",
-        (args) => generate(typeof args.prompt === "string" ? args.prompt : ""),
+        "Generate a scientifically grounded interactive HTML teaching experiment from args.prompt, save it to My resources and embed its iframe in the visible whiteboard or courseware. Preserve existing content.",
+        (args) =>
+          generate(
+            typeof args.prompt === "string" ? args.prompt : "",
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.register(
         "resources.open",
-        "打开原白板教学资源库，可用 args.query 搜索，args.category 筛选数学/物理/化学/生物/地理与天气",
+        "Open teaching resources. args.query searches names; args.category is math|physics|chemistry|biology|geography_weather|web.",
         (args) => {
           setQuery(typeof args.query === "string" ? args.query : "");
           setCategory(
@@ -328,7 +369,7 @@ export const TeachingResources = ({
               ? args.category
               : args.query
               ? ""
-              : "数学",
+              : "math",
           );
           setError("");
           setOpen(true);
@@ -360,9 +401,9 @@ export const TeachingResources = ({
             .slice(0, 40)
             .map((item) => ({
               id: item.id,
-              title: item.title,
+              title: "titleKey" in item ? resourceTitle(item) : item.title,
               category: item.category,
-              kind: "shapes" in item ? "diagram" : item.url ? "web" : "image",
+              kind: "html" in item ? "interactive" : item.url ? "web" : "image",
             })),
       ),
       classroomCommands.register(
@@ -436,7 +477,7 @@ export const TeachingResources = ({
           centered
           onDismiss={() => setOpen(false)}
           role="dialog"
-          aria-label={t("fcboard.教学资源")}
+          aria-label={t("fcboard.teaching_resources")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -445,22 +486,22 @@ export const TeachingResources = ({
           }}
         >
           <header>
-            <strong>{t("fcboard.教学资源")}</strong>
+            <strong>{t("fcboard.teaching_resources")}</strong>
             <button
               onClick={() => setOpen(false)}
-              aria-label={t("fcboard.关闭教学资源")}
+              aria-label={t("fcboard.close_teaching_resources")}
             >
-              {t("fcboard.关闭")}
+              {t("fcboard.close")}
             </button>
           </header>
           <div className="fc-resource-layout">
             <List
               component="nav"
               className="fc-resource-subjects"
-              aria-label={t("fcboard.学科")}
+              aria-label={t("fcboard.subject")}
             >
               {[
-                ["", t("fcboard.全部学科")],
+                ["", t("fcboard.all_subjects")],
                 ...Array.from(
                   new Set(teachingResources.map((item) => item.category)),
                 ).map((name) => [
@@ -468,7 +509,7 @@ export const TeachingResources = ({
                   subjectNames[name] ? t(subjectNames[name]) : name,
                 ]),
                 ...(generated.length
-                  ? [["generated", t("fcboard.我的资源")]]
+                  ? [["generated", t("fcboard.my_resources")]]
                   : []),
               ].map(([id, title]) => (
                 <ListItemButton
@@ -484,7 +525,7 @@ export const TeachingResources = ({
             </List>
             <div className="fc-resource-content">
               <label>
-                {t("fcboard.搜索资源")}
+                {t("fcboard.search_resources")}
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -502,23 +543,23 @@ export const TeachingResources = ({
                   }
                 >
                   {generating
-                    ? t("fcboard.正在生成教学资源…")
-                    : t("fcboard.AI 生成教学资源")}
+                    ? t("fcboard.generating_teaching_resource")
+                    : t("fcboard.generate_teaching_resource_with_ai")}
                 </button>
                 {generating && (
                   <button onClick={() => generation.current?.abort()}>
-                    {t("fcboard.取消识别")}
+                    {t("fcboard.cancel_recognition")}
                   </button>
                 )}
               </div>
               <TransientMessage message={error} role="alert" />
-              {busy && <p role="status">{t("fcboard.正在打开资源…")}</p>}
+              {busy && <p role="status">{t("fcboard.opening_resource")}</p>}
               {!items.length && !savedItems.length && (
-                <p role="status">{t("fcboard.没有符合条件的资源")}</p>
+                <p role="status">{t("fcboard.no_matching_resources")}</p>
               )}
               {savedItems.length > 0 && (
-                <section aria-label={t("fcboard.我的资源")}>
-                  <strong>{t("fcboard.我的资源")}</strong>
+                <section aria-label={t("fcboard.my_resources")}>
+                  <strong>{t("fcboard.my_resources")}</strong>
                   <div className="fc-resource-grid">
                     {savedItems.map((item) => (
                       <div key={item.id} className="fc-generated-resource">
@@ -530,7 +571,7 @@ export const TeachingResources = ({
                         </button>
                         <button
                           disabled={busy}
-                          aria-label={t("fcboard.删除资源 {{name}}", {
+                          aria-label={t("fcboard.delete_resource_name", {
                             name: item.title,
                           })}
                           onClick={() =>
@@ -562,11 +603,11 @@ export const TeachingResources = ({
                     )}
                     <span>{resourceTitle(item)}</span>
                     <small>
-                      {item.category === "网络资源"
-                        ? t("fcboard.网页")
+                      {item.category === "web"
+                        ? t("fcboard.website")
                         : item.url
-                        ? t("fcboard.在线实验")
-                        : t("fcboard.插入图示")}
+                        ? t("fcboard.online_experiment")
+                        : t("fcboard.insert_diagram")}
                     </small>
                   </button>
                 ))}
@@ -584,7 +625,7 @@ export const TeachingResources = ({
           <header>
             <strong>{web.title}</strong>
             <a href={web.url} target="_blank" rel="noreferrer">
-              {t("fcboard.浏览器打开")}
+              {t("fcboard.open_in_browser")}
             </a>
             <button
               onClick={() => {
@@ -592,7 +633,7 @@ export const TeachingResources = ({
                 webState.current = {};
               }}
             >
-              {t("fcboard.关闭网页")}
+              {t("fcboard.close_website")}
             </button>
           </header>
           <iframe
@@ -603,7 +644,7 @@ export const TeachingResources = ({
           />
           <p>
             {t(
-              "fcboard.网页由资源提供方加载；若禁止嵌入，请使用“浏览器打开”。",
+              "fcboard.this_page_is_loaded_by_its_provider_if_embedding_is_blocked_choose_open_in_browser",
             )}
           </p>
         </MaterialPanel>

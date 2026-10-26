@@ -21,7 +21,9 @@ export const normalizeExpression = (text: string) =>
 
 export const compileExpression = (expression: string) => {
   if (!expression || expression.length > 500) {
-    throw new Error(t("fcboard.请输入 500 字以内的数学表达式"));
+    throw new Error(
+      t("fcboard.enter_a_mathematical_expression_of_up_to_500_characters"),
+    );
   }
   const node = math.parse(mathNotation(expression));
   let count = 0;
@@ -37,13 +39,19 @@ export const compileExpression = (expression: string) => {
         "ParenthesisNode",
       ].includes(child.type)
     ) {
-      throw new Error(t("fcboard.该表达式包含不支持的操作"));
+      throw new Error(
+        t("fcboard.this_expression_contains_unsupported_operations"),
+      );
     }
     if (
       child.type === "FunctionNode" &&
       !allowedFunctions.has((child as import("mathjs").FunctionNode).fn.name)
     ) {
-      throw new Error(t("fcboard.该函数不支持数值绘图，请使用计算功能"));
+      throw new Error(
+        t(
+          "fcboard.this_function_cannot_be_plotted_numerically_use_calculate_instead",
+        ),
+      );
     }
     if (
       child.type === "SymbolNode" &&
@@ -52,7 +60,7 @@ export const compileExpression = (expression: string) => {
       ) &&
       !allowedFunctions.has((child as import("mathjs").SymbolNode).name)
     ) {
-      throw new Error(t("fcboard.未知变量；支持 x、y、z、a、b、c"));
+      throw new Error(t("fcboard.unknown_variable_supported_x_y_z_a_b_c"));
     }
   });
   return node.compile();
@@ -110,7 +118,7 @@ export const samplePlot = (plot: Plot): number[][][] => {
     }
   };
   if (!Number.isFinite(plot.range) || plot.range <= 0 || plot.range > 1000) {
-    throw new Error(t("fcboard.坐标范围必须在 0 到 1000 之间"));
+    throw new Error(t("fcboard.coordinate_range_must_be_between_0_and_1000"));
   }
   for (let grid = 0; grid < (plot.surface ? 22 : 1); grid++) {
     let line: number[][] = [];
@@ -162,7 +170,7 @@ export const samplePlot = (plot: Plot): number[][][] => {
     flush();
   }
   if (!lines.length && !plot.relation) {
-    throw new Error(t("fcboard.当前范围内没有可绘制的实数图像"));
+    throw new Error(t("fcboard.no_real_valued_plot_in_this_range"));
   }
   return lines;
 };

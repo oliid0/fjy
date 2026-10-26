@@ -59,7 +59,7 @@ const BoardThumbnail = ({ board }: { board: Board }) => {
     <img
       className="fc-board-thumbnail"
       src={source}
-      alt={t("fcboard.{{name}}预览", { name: board.name })}
+      alt={t("fcboard.preview_of_name", { name: board.name })}
     />
   ) : null;
 };
@@ -109,13 +109,13 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return;
       }
       started = true;
-      void controller
-        .initialize()
-        .catch((failure) =>
-          setError(
-            t("fcboard.白板保存不可用：{{error}}", { error: String(failure) }),
-          ),
-        );
+      void controller.initialize().catch((failure) =>
+        setError(
+          t("fcboard.board_saving_unavailable_error", {
+            error: String(failure),
+          }),
+        ),
+      );
     };
     const unsubscribe = controller.subscribe(() => {
       classroomCommands.changed("boards");
@@ -157,7 +157,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               index + 1 === args.index,
           );
           if (!board) {
-            throw new Error(t("fcboard.找不到这块白板"));
+            throw new Error(t("fcboard.board_not_found"));
           }
           await leavePresentation();
           await controller.switch(board.id);
@@ -270,7 +270,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       <ToolbarExtras placement="navigation">
         <div className="fc-toolbar-extras fc-board-controls">
           <button
-            aria-label={t("fcboard.上一块白板")}
+            aria-label={t("fcboard.previous_board")}
             disabled={
               busy ||
               value.boards.findIndex((board) => board.id === value.active) <= 0
@@ -292,8 +292,8 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
 
           <button
             data-board-switcher
-            aria-label={t("fcboard.切换白板")}
-            title={t("fcboard.切换白板")}
+            aria-label={t("fcboard.switch_board")}
+            title={t("fcboard.switch_board")}
             aria-expanded={open}
             onClick={() => {
               if (book.current) {
@@ -309,7 +309,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             </span>
           </button>
           <button
-            aria-label={t("fcboard.下一块白板")}
+            aria-label={t("fcboard.next_board")}
             disabled={
               busy ||
               !value.active ||
@@ -331,8 +331,8 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             <FactoryIcon name="next" />
           </button>
           <button
-            aria-label={t("fcboard.新建白板")}
-            title={t("fcboard.新建白板")}
+            aria-label={t("fcboard.new_board")}
+            title={t("fcboard.new_board")}
             disabled={busy || !value.active}
             onClick={() => {
               void run(async () => {
@@ -351,7 +351,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           className="fc-board-picker fc-surface"
           style={panelStyle}
           role="dialog"
-          aria-label={t("fcboard.我的白板")}
+          aria-label={t("fcboard.my_boards")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -360,9 +360,9 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           }}
         >
           <header>
-            <strong>{t("fcboard.白板")}</strong>
+            <strong>{t("fcboard.board")}</strong>
             <button
-              aria-label={t("fcboard.关闭白板列表")}
+              aria-label={t("fcboard.close_board_list")}
               onClick={() => {
                 setOpen(false);
                 setError("");
@@ -383,7 +383,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 <button
                   className="fc-board-select"
                   disabled={busy}
-                  aria-label={t("fcboard.切换到 {{name}}", {
+                  aria-label={t("fcboard.switch_to_name", {
                     name: board.name,
                   })}
                   aria-pressed={board.id === value.active}
@@ -404,12 +404,12 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       .join(" · ")
                       .slice(0, 90) ||
                       (board.elements.length
-                        ? t("fcboard.手写与图形")
-                        : t("fcboard.空白"))}
+                        ? t("fcboard.ink_and_shapes")
+                        : t("fcboard.empty"))}
                   </span>
                 </button>
                 <input
-                  aria-label={t("fcboard.白板 {{page}} 名称", {
+                  aria-label={t("fcboard.board_page_name", {
                     page: index + 1,
                   })}
                   defaultValue={board.name}
@@ -428,8 +428,8 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   }}
                 />
                 <button
-                  aria-label={t("fcboard.丢弃 {{name}}", { name: board.name })}
-                  title={t("fcboard.丢弃")}
+                  aria-label={t("fcboard.discard_name", { name: board.name })}
+                  title={t("fcboard.discard")}
                   disabled={busy}
                   onClick={() => {
                     void run(() => book.current!.discard(board.id));
@@ -448,7 +448,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               }}
             >
               {save}
-              <span>{t("fcboard.保存副本")}</span>
+              <span>{t("fcboard.save_a_copy")}</span>
             </button>
           </footer>
         </MaterialPanel>

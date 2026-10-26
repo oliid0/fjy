@@ -1,4 +1,7 @@
 import { t } from "@excalidraw/excalidraw/i18n";
+import { Fonts } from "@excalidraw/excalidraw/fonts/Fonts";
+import { getCommonBounds } from "@excalidraw/element";
+import { getNormalizedZoom } from "@excalidraw/excalidraw/scene";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -11,8 +14,177 @@ import { defaultPlot } from "./math";
 import { shapeInk } from "./documents";
 
 import { sceneAPI } from "./test/scene";
+import { interactiveResource } from "./test/interactiveResource";
 
 import type { InkStroke } from "./documents";
+
+it.each([0.5, 1, 2])(
+  "keeps a dictated CJK question inside its physical writing frame at zoom %s",
+  async (zoom) => {
+    const api = sceneAPI();
+    const original = api.getAppState();
+    api.getAppState = () => ({
+      ...original,
+      zoom: { value: getNormalizedZoom(zoom) },
+    });
+    const stop = registerCanvasCommands(api);
+    try {
+      const result = (await classroomCommands.execute({
+        name: "canvas.ink",
+        args: {
+          strokes: [],
+          text: "请讲解牛顿第二定律",
+          bounds: {
+            left: 400 / zoom,
+            top: 200 / zoom,
+            right: 1000 / zoom,
+            bottom: 344 / zoom,
+          },
+          select: false,
+        },
+      })) as { ids: string[] };
+      const question = api
+        .getSceneElements()
+        .filter((item) => result.ids.includes(item.id));
+      expect(question).toHaveLength(1);
+      const text = question[0];
+      expect(text.type).toBe("text");
+      if (text.type !== "text") {
+        throw new Error("Expected editable question text");
+      }
+      expect(text.fontSize * zoom).toBeCloseTo(24);
+      const [left, top, right, bottom] = getCommonBounds(question).map(
+        (point) => point * zoom,
+      );
+      expect(left).toBeGreaterThanOrEqual(400);
+      expect(top).toBeGreaterThanOrEqual(200);
+      expect(right).toBeLessThanOrEqual(1000);
+      expect(bottom).toBeLessThanOrEqual(344);
+    } finally {
+      stop();
+    }
+  },
+);
+
+it.each(["abort", "board", "document", "edit"])(
+  "does not commit dictated question writing after %s during font loading",
+  async (change) => {
+    const api = sceneAPI();
+    const original = [...api.getSceneElements()];
+    const stop = registerCanvasCommands(api);
+    let board = "first";
+    const unboard = classroomCommands.context("boards", () => ({
+      active: board,
+    }));
+    const controller = new AbortController();
+    let finish!: () => void;
+    const fonts = vi.spyOn(Fonts, "loadElementsFonts").mockImplementation(
+      () =>
+        new Promise<FontFace[]>((resolve) => {
+          finish = () => resolve([]);
+        }),
+    );
+    let document = () => {};
+    try {
+      const operation = classroomCommands.execute({
+        name: "canvas.ink",
+        args: {
+          strokes: [],
+          text: "牛顿定律",
+          bounds: { left: 200, top: 200, right: 800, bottom: 344 },
+          replaceIds: [original[0].id],
+          signal: controller.signal,
+        },
+      });
+      const rejected = expect(operation).rejects.toMatchObject({
+        name: "AbortError",
+      });
+      await vi.waitFor(() => expect(fonts).toHaveBeenCalled());
+      if (change === "abort") {
+        controller.abort();
+      }
+      if (change === "board") {
+        board = "second";
+      }
+      if (change === "document") {
+        document = classroomCommands.register(
+          "document.draw",
+          "@internal",
+          vi.fn(),
+        );
+      }
+      if (change === "edit") {
+        api.updateScene({
+          elements: original.map((element) => ({
+            ...element,
+            version: element.version + 1,
+          })),
+        });
+      }
+      const before = [...api.getSceneElements()];
+      const writes = vi.mocked(api.updateScene).mock.calls.length;
+      finish();
+      await rejected;
+      expect(api.getSceneElements()).toEqual(before);
+      expect(api.updateScene).toHaveBeenCalledTimes(writes);
+    } finally {
+      fonts.mockRestore();
+      document();
+      unboard();
+      stop();
+    }
+  },
+);
+
+it("inserts an interactive lesson as one visible object and routes it to courseware when open", async () => {
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  try {
+    const result = (await classroomCommands.execute({
+      name: "canvas.resource",
+      args: { resource: interactiveResource },
+    })) as { ids: string[] };
+    const element = api
+      .getSceneElements()
+      .find((element) => element.id === result.ids[0])!;
+    expect(element.type).toBe("iframe");
+    expect(element.customData?.fcInteractiveResource.title).toBe(
+      interactiveResource.title,
+    );
+    expect(element.x).toBeGreaterThanOrEqual(16);
+    expect(element.x + element.width).toBeLessThanOrEqual(1584);
+    expect(element.y + element.height).toBeLessThanOrEqual(816);
+    const insert = vi.fn().mockReturnValue({ ids: ["document-lesson"] });
+    const release = classroomCommands.register(
+      "document.resource",
+      "@internal",
+      insert,
+    );
+    try {
+      await expect(
+        classroomCommands.execute({
+          name: "canvas.resource",
+          args: { resource: interactiveResource },
+        }),
+      ).resolves.toEqual({ ids: ["document-lesson"] });
+      expect(api.getSceneElements()).toHaveLength(2);
+      expect(insert).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+    }
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.resource",
+        args: { resource: interactiveResource, signal: controller.signal },
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(api.getSceneElements()).toHaveLength(2);
+  } finally {
+    stop();
+  }
+});
 
 it.each(["canvas.select", "canvas.move", "canvas.erase"])(
   "rejects a stale mixed target set atomically for %s",
@@ -101,13 +273,13 @@ it("exposes the original pen modes to AI and validates the complete style reques
         name: "canvas.style",
         args: { pen: "missing" },
       }),
-    ).rejects.toThrow(t("fcboard.笔型不存在"));
+    ).rejects.toThrow(t("fcboard.unknown_pen_type"));
     await expect(
       classroomCommands.execute({
         name: "canvas.style",
         args: { pen: "rainbow", color: "invalid" },
       }),
-    ).rejects.toThrow(t("fcboard.颜色无效"));
+    ).rejects.toThrow(t("fcboard.invalid_color"));
     expect(api.updateScene).not.toHaveBeenCalled();
     expect(api.executeAction).not.toHaveBeenCalled();
     await classroomCommands.execute({
@@ -119,6 +291,16 @@ it("exposes the original pen modes to AI and validates the complete style reques
         currentItemPenMode: "rainbow",
         currentItemStrokeWidth: 2,
         whiteboardPenWidths: { hard: 2 },
+      }),
+    });
+    await classroomCommands.execute({
+      name: "canvas.style",
+      args: { pen: "language" },
+    });
+    expect(api.updateScene).toHaveBeenLastCalledWith({
+      appState: expect.objectContaining({
+        currentItemPenMode: "hard",
+        currentItemInkAssist: "language",
       }),
     });
   } finally {

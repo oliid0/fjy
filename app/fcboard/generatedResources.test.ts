@@ -1,5 +1,6 @@
 import * as ai from "./ai";
 import { defaults, saveSettings } from "./settings";
+import { interactiveResource } from "./test/interactiveResource";
 import {
   generateTeachingResource,
   generatedResources,
@@ -13,39 +14,25 @@ afterEach(async () => {
   }
 });
 
-it("saves a generated editable diagram for reuse and removes only the chosen resource", async () => {
+it("saves an interactive HTML lesson for reuse and removes only the chosen resource", async () => {
   saveSettings({ ...defaults, apiKey: "test-key" }, false);
-  vi.spyOn(ai, "chat").mockResolvedValue(
-    JSON.stringify({
-      title: "Force diagram",
-      shapes: [
-        {
-          type: "arrow",
-          x: 20,
-          y: 30,
-          width: 100,
-          height: 0,
-          strokeColor: "#245bd6",
-        },
-      ],
-    }),
-  );
+  vi.spyOn(ai, "chat").mockResolvedValue(JSON.stringify(interactiveResource));
   const item = await generateTeachingResource(
     "Newton's second law",
     new AbortController().signal,
   );
-  expect(item.shapes[0].type).toBe("arrow");
-  expect(item.shapes[0].strokeColor).toBe("#245bd6");
+  expect(item.html).toContain('id="force"');
+  expect(item.html).toContain("Content-Security-Policy");
   expect(await generatedResources()).toContainEqual(item);
   await deleteGeneratedResource(item.id);
   expect(await generatedResources()).not.toContainEqual(item);
 });
 
-it("does not save executable or cancelled model output", async () => {
+it("rejects a static poster and cancelled model output without saving", async () => {
   const chat = vi.spyOn(ai, "chat").mockResolvedValue(
     JSON.stringify({
       title: "Invalid",
-      shapes: [{ type: "iframe", x: 0, y: 0, width: 100, height: 100 }],
+      html: "<h1>A static poster</h1>",
     }),
   );
   await expect(
@@ -55,10 +42,7 @@ it("does not save executable or cancelled model output", async () => {
   const controller = new AbortController();
   chat.mockImplementation(async () => {
     controller.abort();
-    return JSON.stringify({
-      title: "Late",
-      shapes: [{ type: "rectangle", x: 0, y: 0, width: 100, height: 100 }],
-    });
+    return JSON.stringify(interactiveResource);
   });
   await expect(
     generateTeachingResource("diagram", controller.signal),

@@ -13,10 +13,13 @@ const flatten = (object = {}, result = {}, extraKey = "") => {
 };
 
 const locales = files.filter(
-  (file) => file !== "README.md" && file !== "percentages.json",
+  (file) => file.endsWith(".json") && file !== "percentages.json",
 );
 
 const percentages = {};
+const referenceKeys = Object.keys(
+  flatten(require("../packages/fcboard/locales/en.json")),
+);
 
 for (let index = 0; index < locales.length; index++) {
   const currentLocale = locales[index];
@@ -24,9 +27,12 @@ for (let index = 0; index < locales.length; index++) {
     require(`${__dirname}/../packages/fcboard/locales/${currentLocale}`),
   );
 
-  const allKeys = Object.keys(data);
-  const translatedKeys = allKeys.filter((item) => data[item] !== "");
-  const percentage = Math.floor((100 * translatedKeys.length) / allKeys.length);
+  const translatedKeys = referenceKeys.filter(
+    (key) => typeof data[key] === "string" && data[key].trim() !== "",
+  );
+  const percentage = Math.floor(
+    (100 * translatedKeys.length) / referenceKeys.length,
+  );
   percentages[currentLocale.replace(".json", "")] = percentage;
 }
 

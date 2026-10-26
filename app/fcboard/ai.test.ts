@@ -24,7 +24,9 @@ describe("AI configuration and transport", () => {
       "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
     );
     await expect(chat([{ role: "user", content: "hello" }])).rejects.toThrow(
-      t("fcboard.请先在 AI 设置中填写 API 密钥和支持视觉的模型 ID / 接入点 ID"),
+      t(
+        "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
+      ),
     );
   });
   it("keeps keys in the session unless explicitly remembered", () => {
@@ -178,7 +180,9 @@ describe("AI configuration and transport", () => {
       apiKey: "test",
     });
     const result = expect(request).rejects.toThrow(
-      t("fcboard.AI 请求超时，请检查网络或稍后重试"),
+      t(
+        "fcboard.ai_request_timed_out_check_your_connection_or_try_again_later",
+      ),
     );
     await vi.advanceTimersByTimeAsync(90000);
     await result;

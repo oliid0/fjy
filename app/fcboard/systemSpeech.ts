@@ -51,7 +51,9 @@ export const startAndroidSpeech = async (
     // The bundled model is Chinese, not an unspecified replacement for other languages.
     if (!language.toLowerCase().startsWith("zh")) {
       throw new Error(
-        t("fcboard.当前语言的系统语音不可用，请配置自定义语音接口"),
+        t(
+          "fcboard.system_speech_is_unavailable_for_this_language_configure_a_custom_speech_service",
+        ),
       );
     }
     const { startLocalSpeech } = await import("./localSpeech");
@@ -102,7 +104,9 @@ export const startAndroidSpeech = async (
     return stop;
   }
   if ((await provider.requestPermissions()).speechRecognition !== "granted") {
-    throw new Error(t("fcboard.请允许麦克风与语音识别权限"));
+    throw new Error(
+      t("fcboard.allow_microphone_and_speech_recognition_access"),
+    );
   }
   const listen = () => {
     if (stopped) {
@@ -122,7 +126,7 @@ export const startAndroidSpeech = async (
             await provider.stop();
             await fallback();
           } else {
-            onError(t("fcboard.未识别到语音，请重试"));
+            onError(t("fcboard.no_speech_recognized_please_try_again"));
           }
         }
         if (continuous && !stopped) {
@@ -135,7 +139,7 @@ export const startAndroidSpeech = async (
         }
         if (error?.code === "cancelled") {
           stopped = true;
-          onError(t("fcboard.语音识别已结束，请重新开启"));
+          onError(t("fcboard.speech_recognition_ended_start_listening_again"));
           return;
         }
         // A quiet interval is normal during continuous transcription, not a provider failure.
@@ -150,12 +154,12 @@ export const startAndroidSpeech = async (
               report(failure);
             }
           } else {
-            onError(t("fcboard.未识别到语音，请重试"));
+            onError(t("fcboard.no_speech_recognized_please_try_again"));
           }
           return;
         }
         if (error?.code === "permission" || error?.code === "speech-9") {
-          onError(t("fcboard.请允许麦克风与语音识别权限"));
+          onError(t("fcboard.allow_microphone_and_speech_recognition_access"));
           return;
         }
         try {

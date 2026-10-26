@@ -43,7 +43,7 @@ export const layoutBoardText = (
       }
     : preferred;
   const inline = source ? { x: source.right + gap, y: source.top } : preferred;
-  const candidates =
+  const candidates: { x: number; y: number; nearby?: boolean }[] =
     placement.mode === "replace" || centered
       ? [preferred]
       : placement.mode === "inline"
@@ -51,6 +51,12 @@ export const layoutBoardText = (
       : source
       ? [below]
       : [preferred];
+  // If the question touches an edge, keep the original writing size and try
+  // nearby space before shrinking it into the remaining narrow strip.
+  if (source && placement.mode !== "replace" && !centered) {
+    candidates.push({ x: viewport.left, y: source.bottom + gap });
+    candidates.push({ x: source.left, y: source.top, nearby: true });
+  }
   for (let attempt = 0; attempt < 48; attempt++) {
     const size = fontSize * 0.9 ** attempt;
     if (size < Math.min(fontSize, (gap * 6) / 16)) {
@@ -58,9 +64,14 @@ export const layoutBoardText = (
     }
     for (const origin of candidates) {
       const x = Math.max(viewport.left, Math.min(origin.x, viewport.right));
+      const nearby = origin.nearby;
       const y = Math.max(viewport.top, origin.y);
-      const width = centered ? fullWidth / 2 : viewport.right - x;
-      if (width < size || y >= viewport.bottom) {
+      const width = centered
+        ? fullWidth / 2
+        : nearby
+        ? fullWidth * 0.6
+        : viewport.right - x;
+      if (width < size || (!nearby && y >= viewport.bottom)) {
         continue;
       }
       const font = getFontString({ fontFamily, fontSize: size });
@@ -72,7 +83,8 @@ export const layoutBoardText = (
             y: (viewport.top + viewport.bottom - metrics.height) / 2,
           }
         : { x, y };
-      const area = centered ? viewport : { ...viewport, left: x, top: y };
+      const area =
+        centered || nearby ? viewport : { ...viewport, left: x, top: y };
       const position = findVisibleContentPosition(
         measuredOrigin,
         metrics,

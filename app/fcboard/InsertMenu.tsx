@@ -26,14 +26,14 @@ import type { FactoryInsertion } from "./native";
 import type { InsertKind, InsertObject } from "./insertObjects";
 
 const names = {
-  website: "网页",
-  mindmap: "思维导图",
-  table: "表格",
-  fourline: "四线格",
-  document: "文档",
-  media: "多媒体",
-  signal: "信号源",
-  resources: "教学资源",
+  website: "website",
+  mindmap: "mind_map",
+  table: "table",
+  fourline: "four_line_grid",
+  document: "document",
+  media: "media",
+  signal: "signal",
+  resources: "teaching_resources",
 } as const;
 type MenuKind = keyof typeof names;
 
@@ -68,7 +68,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       .catch((failure) => {
         if (!disposed) {
           setError(
-            t("fcboard.无法读取插入应用：{{error}}", {
+            t("fcboard.could_not_read_insertion_apps_error", {
               error: String(failure),
             }),
           );
@@ -147,7 +147,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     }
     const object = configureInsertion(base, args);
     await renderInsertion(api, object);
-    if (kind === "fourline") {
+    if (kind === "fourline" || kind === "mindmap") {
       setForm(null);
       if (classroomCommands.has("document.tool")) {
         await classroomCommands.execute({
@@ -155,7 +155,9 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           args: { tool: "freedraw" },
         });
       } else {
-        api.updateScene({ appState: { selectedElementIds: {} } });
+        api.updateScene({
+          appState: { selectedElementIds: {}, selectedGroupIds: {} },
+        });
         api.setActiveTool({ type: "freedraw" });
       }
     } else {
@@ -165,13 +167,13 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   };
   const open = async (kind: unknown) => {
     if (typeof kind !== "string" || !(kind in names)) {
-      throw new Error(t("fcboard.插入类型不存在"));
+      throw new Error(t("fcboard.this_insertion_type_is_unavailable"));
     }
     setError("");
     if (kind === "resources") {
       return classroomCommands.execute({ name: "resources.open" });
     }
-    if (kind === "fourline") {
+    if (kind === "fourline" || kind === "mindmap") {
       return create(kind, {});
     }
     if (kind === "document" || kind === "media" || kind === "signal") {
@@ -179,7 +181,9 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         return Classroom.openFactoryInsertion({ insertion: kind });
       }
       if (kind === "signal") {
-        throw new Error(t("fcboard.当前设备未安装信号源应用"));
+        throw new Error(
+          t("fcboard.the_signal_app_is_not_installed_on_this_display"),
+        );
       }
       return classroomCommands.execute({ name: "files.open" });
     }
@@ -204,24 +208,26 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       ),
       classroomCommands.register(
         "insert.object",
-        "直接插入可编辑对象，args.kind=table|mindmap|fourline；表格可带rows,columns,cells(逐行字符串数组)，思维导图带outline(每行一个节点，每两空格表示一层)，width,height可选",
+        "Insert an editable object: args.kind=table|mindmap|fourline. Tables accept rows, columns and cells (row-major strings); mind maps accept outline (one node per line, two-space indentation); four-line paper accepts text. width and height are optional.",
         async (args) => {
           if (!["table", "mindmap", "fourline"].includes(String(args.kind))) {
-            throw new Error(t("fcboard.此插入对象不存在"));
+            throw new Error(t("fcboard.this_object_is_unavailable"));
           }
           return create(args.kind as InsertKind, args);
         },
       ),
       classroomCommands.register(
         "insert.configure",
-        "修改原插入对象，可带args.id，否则修改选中对象；支持rows,columns,cells,outline,width,height，保留已编辑文字",
+        "Update an existing insertion by args.id or current selection. Accepts rows, columns, cells, outline, text, width and height; preserves existing text when omitted. Use text to edit four-line paper and outline to edit mind-map labels.",
         async (args) => {
           const object =
             typeof args.id === "string"
               ? readInsertions(api).find((object) => object.id === args.id)
               : selectedRef.current;
           if (!object) {
-            throw new Error(t("fcboard.请先选择表格、思维导图或四线格"));
+            throw new Error(
+              t("fcboard.select_a_table_mind_map_or_four_line_grid_first"),
+            );
           }
           await renderInsertion(api, configureInsertion(object, args));
         },
@@ -264,7 +270,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             }
             title={
               kind === "signal" && !available.includes("signal")
-                ? t("fcboard.当前设备未提供信号源应用")
+                ? t("fcboard.no_signal_app_is_available_on_this_display")
                 : t(`fcboard.${names[kind]}`)
             }
             onClick={() =>
@@ -303,7 +309,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           <header>
             <strong>{t(`fcboard.${names[form]}`)}</strong>
             <button onClick={() => setForm(null)}>
-              {t("fcboard.关闭")}
+              {t("fcboard.close")}
               {t(`fcboard.${names[form]}`)}
             </button>
           </header>
@@ -326,7 +332,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           >
             {form === "website" ? (
               <label>
-                {t("fcboard.网页地址")}
+                {t("fcboard.website_address")}
                 <input
                   type="url"
                   required
@@ -364,9 +370,9 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                     />
                     {selected?.id === draft.id && (
                       <details>
-                        <summary>{t("fcboard.应用修改")}</summary>
+                        <summary>{t("fcboard.apply_changes")}</summary>
                         <label>
-                          {t("fcboard.行数")}
+                          {t("fcboard.rows")}
                           <input
                             type="number"
                             min="1"
@@ -383,7 +389,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                           />
                         </label>
                         <label>
-                          {t("fcboard.列数")}
+                          {t("fcboard.columns")}
                           <input
                             type="number"
                             min="1"
@@ -402,7 +408,9 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                           />
                         </label>
                         <label>
-                          {t("fcboard.单元格内容（每行一行，列以 Tab 分隔）")}
+                          {t(
+                            "fcboard.cells_one_row_per_line_columns_separated_by_tabs",
+                          )}
                           <textarea
                             value={Array.from(
                               { length: draft.rows },
@@ -437,7 +445,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 )}
                 {form === "mindmap" && (
                   <label>
-                    {t("fcboard.导图大纲（每两空格缩进一层）")}
+                    {t("fcboard.outline_indent_each_level_by_two_spaces")}
                     <textarea
                       value={draft.outline}
                       onChange={(event) =>
@@ -453,7 +461,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   (form !== "table" || selected?.id === draft.id) && (
                     <>
                       <label>
-                        {t("fcboard.宽度")}
+                        {t("fcboard.width")}
                         <input
                           type="number"
                           min="80"
@@ -468,7 +476,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                         />
                       </label>
                       <label>
-                        {t("fcboard.高度")}
+                        {t("fcboard.height")}
                         <input
                           type="number"
                           min="40"
@@ -488,12 +496,12 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             )}
             <button type="submit" disabled={busy}>
               {busy
-                ? t("fcboard.正在应用…")
+                ? t("fcboard.applying")
                 : form === "website"
-                ? t("fcboard.打开网页")
+                ? t("fcboard.open_website")
                 : selected?.id === draft.id
-                ? t("fcboard.应用修改")
-                : t("fcboard.插入白板")}
+                ? t("fcboard.apply_changes")
+                : t("fcboard.insert_into_board")}
             </button>
           </form>
         </MaterialPanel>

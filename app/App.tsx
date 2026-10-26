@@ -72,6 +72,7 @@ import type { ResolutionType } from "@excalidraw/common/utility-types";
 import type { ResolvablePromise } from "@excalidraw/common/utils";
 
 import CustomStats from "./CustomStats";
+import { classroomCommands } from "./fcboard/commands";
 import {
   Provider,
   useAtom,
@@ -864,12 +865,36 @@ const ExcalidrawWrapper = () => {
         initialData={initialStatePromiseRef.current.promise}
         isCollaborating={isCollaborating}
         onPointerUpdate={collabAPI?.onPointerUpdate}
+        onObjectDoubleClick={(element) => {
+          if (element.customData?.fcLanguage) {
+            void classroomCommands
+              .execute({ name: "language.card", args: { id: element.id } })
+              .catch(() => {});
+            return;
+          }
+          const widget = element.customData?.fcWidget;
+          if (widget && ["cube", "cylinder"].includes(widget.kind)) {
+            void classroomCommands
+              .execute({
+                name: "tools.configure",
+                args: {
+                  id: widget.id,
+                  solid: { unfold: widget.params.solid.unfold >= 0.5 ? 0 : 1 },
+                },
+              })
+              .catch((failure) =>
+                setErrorMessage(
+                  failure instanceof Error ? failure.message : String(failure),
+                ),
+              );
+          }
+        }}
         UIOptions={{
           unifiedToolbar: true,
           inkProfile,
           library: false,
           canvasActions: {
-            toggleTheme: true,
+            toggleTheme: false,
             export: {
               onExportToBackend,
             },
@@ -926,6 +951,7 @@ const ExcalidrawWrapper = () => {
         {excalidrawAPI && (
           <Classroom
             api={excalidrawAPI}
+            inkProfile={inkProfile}
             renderSettingsActions={(close) => (
               <AppSettingsActions
                 onClose={close}

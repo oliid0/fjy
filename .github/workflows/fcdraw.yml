@@ -32,6 +32,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm test:other
       - run: pnpm test
+      - name: Verify model replacement and integrity rules
+        run: python3 -m unittest discover -s scripts -p test_tts_models.py
       - name: Verify optional IndexTTS adapter
         run: python -m unittest discover -s services/index-tts -p 'test_*.py'
 
@@ -88,11 +90,6 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug testDebugUnitTest lintDebug --no-daemon
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Android-APK
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
       - name: Install browser for layout and interaction checks
         run: pnpm exec playwright install --with-deps chromium
       - name: Verify production whiteboard interactions
@@ -114,6 +111,28 @@ jobs:
           target: default
           disable-animations: true
           script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Android-APK-arm64-v8a
+          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Android-APK-armeabi-v7a
+          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Android-APK-x86
+          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Android-APK-x86_64
+          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
+          if-no-files-found: error
+      - name: Report packaged models and native library sizes
+        run: python3 scripts/apk-size-report.py >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

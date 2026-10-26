@@ -1,6 +1,10 @@
+import { useContext } from "react";
+
 import { useEditorInterface } from "../App";
 
 import { Ellipsify } from "../Ellipsify";
+
+import { DropdownMenuContentPropsContext } from "./common";
 
 import type { JSX } from "react";
 
@@ -18,11 +22,12 @@ const MenuItemContent = ({
   badge?: React.ReactNode;
 }) => {
   const editorInterface = useEditorInterface();
+  const { material } = useContext(DropdownMenuContentPropsContext);
   return (
     <>
       {icon && <div className="dropdown-menu-item__icon">{icon}</div>}
       <div style={textStyle} className="dropdown-menu-item__text">
-        <Ellipsify>{children}</Ellipsify>
+        {material ? <span>{children}</span> : <Ellipsify>{children}</Ellipsify>}
       </div>
       {badge && <div className="dropdown-menu-item__badge">{badge}</div>}
       {shortcut && editorInterface.formFactor !== "phone" && (

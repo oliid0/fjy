@@ -1159,7 +1159,7 @@ export const ShapesSwitcher = ({
               name="editor-current-shape"
               title={`${capitalizeString(label)} — ${shortcut}${
                 UIOptions.unifiedToolbar && propertiesAvailable
-                  ? " · 长按设置"
+                  ? ` · ${t("fcboard.hold_for_settings")}`
                   : ""
               }`}
               keyBindingLabel={keybindingLabel}

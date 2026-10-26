@@ -44,7 +44,9 @@ export const startSystemSpeech = async (
     constructors.SpeechRecognition || constructors.webkitSpeechRecognition;
   if (!Constructor) {
     throw new Error(
-      t("fcboard.此浏览器不支持系统语音识别，请在设置中使用自定义转写接口"),
+      t(
+        "fcboard.system_speech_recognition_is_unavailable_use_a_custom_transcription_service_in_settings",
+      ),
     );
   }
   const speech = new Constructor();
@@ -64,7 +66,7 @@ export const startSystemSpeech = async (
   speech.onerror = ({ error }) => {
     if (error !== "aborted" && error !== "no-speech") {
       stopped = true;
-      onError(t("fcboard.语音识别失败：{{error}}", { error }));
+      onError(t("fcboard.speech_recognition_failed_error", { error }));
     }
   };
   speech.onend = () => {
@@ -72,10 +74,10 @@ export const startSystemSpeech = async (
       try {
         speech.start();
       } catch {
-        onError(t("fcboard.语音识别已结束，请重新开启"));
+        onError(t("fcboard.speech_recognition_ended_start_listening_again"));
       }
     } else if (!stopped && !received) {
-      onError(t("fcboard.未识别到语音，请重试"));
+      onError(t("fcboard.no_speech_recognized_please_try_again"));
     }
   };
   speech.start();
@@ -92,7 +94,9 @@ export const transcribe = async (blob: Blob): Promise<TranscriptLine[]> => {
     return transcribeLocalRecording(blob);
   }
   if (!settings.speechEndpoint) {
-    throw new Error(t("fcboard.请配置兼容音频转写的自定义接口"));
+    throw new Error(
+      t("fcboard.configure_a_compatible_audio_transcription_endpoint"),
+    );
   }
   const form = new FormData();
   form.append(
@@ -115,7 +119,7 @@ export const transcribe = async (blob: Blob): Promise<TranscriptLine[]> => {
   if (!response.ok) {
     throw new Error(
       data?.error?.message ||
-        t("fcboard.转写失败 ({{status}})", { status: response.status }),
+        t("fcboard.transcription_failed_status", { status: response.status }),
     );
   }
   if (Array.isArray(data.segments) && data.segments.length) {
@@ -138,5 +142,7 @@ export const transcribe = async (blob: Blob): Promise<TranscriptLine[]> => {
   if (typeof data.text === "string" && data.text.trim()) {
     return [{ time: 0, text: data.text }];
   }
-  throw new Error(t("fcboard.转写服务没有返回有效文稿"));
+  throw new Error(
+    t("fcboard.the_transcription_service_returned_no_valid_transcript"),
+  );
 };

@@ -20,7 +20,9 @@ export const prepareCalculation = (input: string) => {
     expression.length > 500 ||
     !/^[\w\s+\-*/^%().,!;=[\]]+$/.test(expression)
   ) {
-    throw new Error("fcboard.无法识别算式，请检查输入或使用 AI 识别手写");
+    throw new Error(
+      "fcboard.could_not_recognize_the_expression_check_your_input_or_recognize_the_handwriting",
+    );
   }
   if (expression.includes("=")) {
     if (!/\b[xyz]\b/.test(expression)) {
@@ -59,7 +61,9 @@ export const prepareCalculation = (input: string) => {
         "ArrayNode",
       ].includes(child.type)
     ) {
-      throw new Error("fcboard.该表达式包含不支持的操作");
+      throw new Error(
+        "fcboard.this_expression_contains_unsupported_operations",
+      );
     }
     if (child.type === "SymbolNode") {
       const name = (child as import("mathjs").SymbolNode).name;
@@ -69,14 +73,16 @@ export const prepareCalculation = (input: string) => {
           name,
         )
       ) {
-        throw new Error("fcboard.该算式没有可用结果");
+        throw new Error("fcboard.this_expression_has_no_available_result");
       }
     }
     if (
       child.type === "FunctionNode" &&
       !functions.has((child as import("mathjs").FunctionNode).fn.name)
     ) {
-      throw new Error("fcboard.该表达式包含不支持的操作");
+      throw new Error(
+        "fcboard.this_expression_contains_unsupported_operations",
+      );
     }
     if (
       child.type === "FunctionNode" &&
@@ -87,7 +93,9 @@ export const prepareCalculation = (input: string) => {
       const args = (child as import("mathjs").FunctionNode).args;
       const bound = args[3]?.toString() || "";
       if (/^[\d.e+-]+$/i.test(bound) && Math.abs(Number(bound)) > 1000) {
-        throw new Error("fcboard.该表达式包含不支持的操作");
+        throw new Error(
+          "fcboard.this_expression_contains_unsupported_operations",
+        );
       }
     }
     if (
@@ -100,14 +108,18 @@ export const prepareCalculation = (input: string) => {
           "",
         ).length > 50)
     ) {
-      throw new Error("fcboard.该表达式包含不支持的操作");
+      throw new Error(
+        "fcboard.this_expression_contains_unsupported_operations",
+      );
     }
     if (child.type === "ConstantNode") {
       const exponent = String(
         (child as import("mathjs").ConstantNode).value,
       ).match(/e([+-]?\d+)$/i);
       if (exponent && Math.abs(Number(exponent[1])) > 1000) {
-        throw new Error("fcboard.该表达式包含不支持的操作");
+        throw new Error(
+          "fcboard.this_expression_contains_unsupported_operations",
+        );
       }
     }
     if (child.type === "OperatorNode" || child.type === "FunctionNode") {
@@ -130,7 +142,9 @@ export const prepareCalculation = (input: string) => {
           !Number.isFinite(literal) ||
           Math.abs(literal) > (name === "pow" ? 1000 : 200)
         ) {
-          throw new Error("fcboard.该表达式包含不支持的操作");
+          throw new Error(
+            "fcboard.this_expression_contains_unsupported_operations",
+          );
         }
       }
     }
@@ -175,7 +189,7 @@ export const calculateLocal = (input: string): string => {
           [variable.toString()]: [Math.min(left, right), Math.max(left, right)],
         })
       ) {
-        throw new Error("fcboard.该算式没有可用结果");
+        throw new Error("fcboard.this_expression_has_no_available_result");
       }
     }
     const result = nerdamer(expression).toString();
@@ -187,7 +201,7 @@ export const calculateLocal = (input: string): string => {
         result,
       )
     ) {
-      throw new Error("fcboard.该算式没有可用结果");
+      throw new Error("fcboard.this_expression_has_no_available_result");
     }
     if (
       fn.fn.name === "integrate" &&
@@ -196,7 +210,7 @@ export const calculateLocal = (input: string): string => {
         `diff(${result},${fn.args[1].toString()})-(${fn.args[0].toString()})`,
       ).toString() !== "0"
     ) {
-      throw new Error("fcboard.该算式没有可用结果");
+      throw new Error("fcboard.this_expression_has_no_available_result");
     }
     return expression.startsWith("integrate(") ? `${result} + C` : result;
   }
@@ -208,7 +222,7 @@ export const calculateLocal = (input: string): string => {
     result.length > 4000 ||
     /NaN|Infinity|undefined/.test(result)
   ) {
-    throw new Error("fcboard.该算式没有可用结果");
+    throw new Error("fcboard.this_expression_has_no_available_result");
   }
   return result;
 };

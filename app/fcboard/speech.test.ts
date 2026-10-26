@@ -56,7 +56,7 @@ describe("Android system speech", () => {
       speechRecognition: "denied",
     });
     await expect(startSystemSpeech(vi.fn(), vi.fn())).rejects.toThrow(
-      t("fcboard.请允许麦克风与语音识别权限"),
+      t("fcboard.allow_microphone_and_speech_recognition_access"),
     );
   });
   it("executes only one final offline command and ignores text after cancellation", async () => {
@@ -138,7 +138,9 @@ describe("Android system speech", () => {
       await Promise.resolve();
     }
     expect(offline.start).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalledWith(t("fcboard.语音识别已结束，请重新开启"));
+    expect(error).toHaveBeenCalledWith(
+      t("fcboard.speech_recognition_ended_start_listening_again"),
+    );
     stop();
   });
   it("passes the selected interface language to Android rather than forcing Chinese", async () => {

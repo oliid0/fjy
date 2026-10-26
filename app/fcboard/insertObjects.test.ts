@@ -25,7 +25,7 @@ it("keeps edited table cells in their row when adding a column and uses one scen
       .getSceneElements()
       .map((element) =>
         element.type === "text" && element.text === "95"
-          ? { ...element, text: "96" }
+          ? { ...element, text: "96", originalText: "96" }
           : element,
       ),
   });
@@ -64,7 +64,7 @@ it("makes a nested mind map with editable labels and preserves a label edit", as
       .getSceneElements()
       .map((element) =>
         element.type === "text" && element.text === "惯性"
-          ? { ...element, text: "惯性与质量" }
+          ? { ...element, text: "惯性与质量", originalText: "惯性与质量" }
           : element,
       ),
   });

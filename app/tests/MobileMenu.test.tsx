@@ -36,19 +36,29 @@ describe("Test MobileMenu", () => {
     expect(
       document.querySelector(".fc-material-menu.MuiPaper-root"),
     ).not.toBeNull();
-    fireEvent.click(screen.getByRole("menuitem", { name: t("fcboard.设置") }));
-    await screen.findByRole("dialog", { name: t("fcboard.白板设置") });
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: t("fcboard.settings") }),
+    );
+    await screen.findByRole("dialog", {
+      name: t("fcboard.whiteboard_settings"),
+    });
     expect(screen.queryByTestId("dropdown-menu")).toBeNull();
-    const nav = screen.getByRole("navigation", { name: t("fcboard.设置导航") });
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.工具箱") }));
+    const nav = screen.getByRole("navigation", {
+      name: t("fcboard.settings_navigation"),
+    });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
     expect(screen.getByTestId("image-export-button")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.背景") }));
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.background") }),
+    );
     expect(screen.queryByTestId("image-export-button")).toBeNull();
     expect(
-      screen.getByRole("navigation", { name: t("fcboard.设置导航") }),
+      screen.getByRole("navigation", {
+        name: t("fcboard.settings_navigation"),
+      }),
     ).toBe(nav);
     const pattern = screen.getByRole("button", {
-      name: t("fcboard.背景图案 {{number}}", { number: 4 }),
+      name: t("fcboard.background_pattern_number", { number: 4 }),
     });
     fireEvent.click(pattern);
     expect(h.state.whiteboardBackground?.pattern).toBe(4);
@@ -57,33 +67,33 @@ describe("Test MobileMenu", () => {
       13,
     );
     fireEvent.keyDown(
-      screen.getByRole("dialog", { name: t("fcboard.白板设置") }),
+      screen.getByRole("dialog", { name: t("fcboard.whiteboard_settings") }),
       { key: "Escape" },
     );
     expect(
-      screen.queryByRole("dialog", { name: t("fcboard.白板设置") }),
+      screen.queryByRole("dialog", { name: t("fcboard.whiteboard_settings") }),
     ).toBeNull();
   });
 
   it("keeps a blank board and the same toolbar before and after choosing a drawing tool", async () => {
     const toolbar = screen.getByRole("toolbar", {
-      name: t("fcboard.白板工具栏"),
+      name: t("fcboard.whiteboard_toolbar"),
     });
     expect(document.querySelector(".welcome-screen-center")).toBeNull();
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(toolbar.querySelector(".undo-redo-buttons")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.插入") }));
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.图形") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.insert") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
     expect(
       screen
-        .getByRole("dialog", { name: t("fcboard.插入与工具") })
+        .getByRole("dialog", { name: t("fcboard.insert_tools") })
         .querySelector(".zoom-actions"),
     ).toBeNull();
     UI.clickTool("rectangle");
     expect(h.state.activeTool.type).toBe("rectangle");
-    expect(screen.getByRole("toolbar", { name: t("fcboard.白板工具栏") })).toBe(
-      toolbar,
-    );
+    expect(
+      screen.getByRole("toolbar", { name: t("fcboard.whiteboard_toolbar") }),
+    ).toBe(toolbar);
     expect(document.querySelector(".welcome-screen-center")).toBeNull();
   });
 });

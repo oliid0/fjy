@@ -27,16 +27,17 @@ import rainbowSelected from "./factory-pen-icons/rainbow-selected.svg?url";
 import type { ExcalidrawImperativeAPI, UIAppState } from "../types";
 
 const pens = [
-  ["hard", "画笔", hard, hardSelected],
-  ["brush", "钢笔", brush, brushSelected],
-  ["highlighter", "荧光笔", highlighter, highlighterSelected],
-  ["dashed", "虚线笔", dashed, dashedSelected],
-  ["text", "文字笔", text, textSelected],
-  ["shape", "图形笔", shape, shapeSelected],
-  ["magic", "魔术笔", magic, magicSelected],
-  ["rainbow", "彩虹笔", rainbow, rainbowSelected],
-  ["function", "函数笔", shape, shapeSelected],
-  ["calculation", "算式笔", text, textSelected],
+  ["hard", "pen", hard, hardSelected],
+  ["brush", "fountain", brush, brushSelected],
+  ["highlighter", "highlighter", highlighter, highlighterSelected],
+  ["dashed", "dashed_pen", dashed, dashedSelected],
+  ["text", "text_pen", text, textSelected],
+  ["shape", "shape_pen", shape, shapeSelected],
+  ["magic", "magic_pen", magic, magicSelected],
+  ["rainbow", "rainbow_pen", rainbow, rainbowSelected],
+  ["function", "function_pen", shape, shapeSelected],
+  ["calculation", "calculation_pen", text, textSelected],
+  ["language", "language_pen", text, textSelected],
 ] as const;
 const colors = [
   "#000000",
@@ -80,7 +81,7 @@ const PenPreview = ({
     <svg
       viewBox="0 0 187 26"
       role="img"
-      aria-label={t("fcboard.当前画笔预览")}
+      aria-label={t("fcboard.current_pen_preview")}
       style={{ color: state.currentItemStrokeColor }}
     >
       <defs>
@@ -174,7 +175,7 @@ export const FactoryPenSettings = ({
       <div
         className="fc-pen-tip-tabs"
         role="group"
-        aria-label={t("fcboard.笔尖")}
+        aria-label={t("fcboard.pen_tip")}
       >
         {(["fine", "thick"] as const).map((tip) => (
           <button
@@ -185,12 +186,16 @@ export const FactoryPenSettings = ({
               app.api.updateScene({ appState: switchWhiteboardTip(state, tip) })
             }
           >
-            {t(tip === "fine" ? "fcboard.细笔" : "fcboard.粗笔")}
+            {t(tip === "fine" ? "fcboard.fine_pen" : "fcboard.thick_pen")}
           </button>
         ))}
       </div>
-      <div className="fc-pen-heading">{t("fcboard.画笔")}</div>
-      <div role="group" aria-label={t("fcboard.笔型")} className="fc-pen-types">
+      <div className="fc-pen-heading">{t("fcboard.pen")}</div>
+      <div
+        role="group"
+        aria-label={t("fcboard.pen_type")}
+        className="fc-pen-types"
+      >
         {pens.map(([mode, label, normal, selected]) => (
           <button
             key={mode}
@@ -198,12 +203,20 @@ export const FactoryPenSettings = ({
             aria-label={t(`fcboard.${label}`)}
             aria-pressed={active === mode}
             title={
-              ["text", "shape", "magic", "function", "calculation"].includes(
-                mode,
-              )
-                ? t("fcboard.{{name}}：停笔后识别，原笔迹在识别完成前保留", {
-                    name: t(`fcboard.${label}`),
-                  })
+              [
+                "text",
+                "shape",
+                "magic",
+                "function",
+                "calculation",
+                "language",
+              ].includes(mode)
+                ? t(
+                    "fcboard.name_recognized_after_writing_pauses_original_ink_is_kept_until_recognition_finishes",
+                    {
+                      name: t(`fcboard.${label}`),
+                    },
+                  )
                 : t(`fcboard.${label}`)
             }
             onClick={() => {
@@ -212,7 +225,8 @@ export const FactoryPenSettings = ({
                 mode === "shape" ||
                 mode === "magic" ||
                 mode === "function" ||
-                mode === "calculation"
+                mode === "calculation" ||
+                mode === "language"
               ) {
                 app.api.updateScene({
                   appState: {
@@ -237,9 +251,9 @@ export const FactoryPenSettings = ({
         ))}
       </div>
       <label className="fc-pen-mode">
-        <span>{t("fcboard.粗细")}</span>
+        <span>{t("fcboard.thickness")}</span>
         <input
-          aria-label={t("fcboard.书写粗细")}
+          aria-label={t("fcboard.pen_thickness")}
           type="range"
           min="2"
           max={app.props.UIOptions.inkProfile?.penWidthMax ?? 40}
@@ -257,17 +271,17 @@ export const FactoryPenSettings = ({
         />
         <output>{Math.round(thickness * 100) / 100}</output>
       </label>
-      <div className="fc-pen-heading">{t("fcboard.颜色")}</div>
+      <div className="fc-pen-heading">{t("fcboard.colour")}</div>
       <div
         className="fc-pen-colors"
         role="group"
-        aria-label={t("fcboard.画笔颜色")}
+        aria-label={t("fcboard.pen_colour")}
       >
         {colors.map((color) => (
           <button
             key={color}
             type="button"
-            aria-label={t("fcboard.画笔颜色 {{color}}", { color })}
+            aria-label={t("fcboard.pen_colour_color", { color })}
             aria-pressed={state.currentItemStrokeColor.toLowerCase() === color}
             onClick={() => {
               app.api.updateScene({
@@ -279,10 +293,13 @@ export const FactoryPenSettings = ({
             <span style={{ background: color }} />
           </button>
         ))}
-        <label title={t("fcboard.自定义颜色")} className="fc-pen-custom-color">
+        <label
+          title={t("fcboard.custom_colour")}
+          className="fc-pen-custom-color"
+        >
           <input
             type="color"
-            aria-label={t("fcboard.自定义画笔颜色")}
+            aria-label={t("fcboard.custom_pen_colour")}
             value={state.currentItemStrokeColor}
             onChange={(event) =>
               app.api.updateScene({
@@ -292,7 +309,7 @@ export const FactoryPenSettings = ({
           />
         </label>
       </div>
-      <div className="fc-pen-heading">{t("fcboard.预览")}</div>
+      <div className="fc-pen-heading">{t("fcboard.preview")}</div>
       <PenPreview state={state} thickness={thickness} />
     </div>
   );

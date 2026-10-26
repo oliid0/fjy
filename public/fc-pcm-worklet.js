@@ -1,9 +1,11 @@
 /* global sampleRate */
-// Audio runs off the UI thread; send half-second mono blocks to the offline engine.
+// Audio runs off the UI thread; cloud capture uses 100 ms, offline uses 500 ms.
 class FcboardPCM extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
-    this.buffer = new Float32Array(Math.round(sampleRate / 2));
+    const duration =
+      options?.processorOptions?.blockDuration === 0.1 ? 0.1 : 0.5;
+    this.buffer = new Float32Array(Math.round(sampleRate * duration));
     this.offset = 0;
     this.port.onmessage = ({ data }) => {
       if (data === "flush") {

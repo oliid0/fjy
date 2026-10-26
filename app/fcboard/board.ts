@@ -3,7 +3,7 @@ import {
   CaptureUpdateAction,
   convertToExcalidrawElements,
 } from "@excalidraw/excalidraw";
-import { getCommonBounds } from "@excalidraw/element";
+import { getCommonBounds, newElementWith } from "@excalidraw/element";
 import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@excalidraw/common";
 import { pointFrom } from "@excalidraw/math";
 
@@ -15,7 +15,12 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 import { project3D, samplePlot, sampleInequality } from "./math";
 import { classroomCommands } from "./commands";
 import { currentSettings } from "./settings";
-import { handwritingElements, inkLineHeight, inkLines } from "./handwriting";
+import {
+  handwritingElements,
+  inkLineHeight,
+  inkLines,
+  supportsHandwriting,
+} from "./handwriting";
 import { findContentPosition, findVisibleContentPosition } from "./placement";
 import { layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
@@ -132,7 +137,9 @@ export const answerPosition = (
 ) => {
   const bounds = boundsOverride || getCommonBounds(source);
   if (!bounds.every(Number.isFinite)) {
-    throw new Error(t("fcboard.选区缺少有效边界，请重新圈选笔迹"));
+    throw new Error(
+      t("fcboard.selection_bounds_are_invalid_circle_the_writing_again"),
+    );
   }
   const row = boundsOverride ? undefined : inkLines(source).at(-1);
   const state = api.getAppState();
@@ -234,6 +241,22 @@ export const insertElements = (
   return elements.map((el) => el.id);
 };
 
+/** Programmatic selection must publish groups too, or the editor draws every part's box. */
+export const objectSelection = (elements: readonly ExcalidrawElement[]) => ({
+  selectedElementIds: Object.fromEntries(
+    elements.map((element) => [element.id, true as const]),
+  ),
+  selectedGroupIds: Object.fromEntries(
+    elements.flatMap((element) => {
+      const group = element.groupIds.at(-1);
+      return group ? [[group, true]] : [];
+    }),
+  ),
+  editingGroupId: null,
+  selectedLinearElement: null,
+  whiteboardSelection: undefined,
+});
+
 export const insertText = (
   api: ExcalidrawImperativeAPI,
   text: string,
@@ -241,7 +264,10 @@ export const insertText = (
   customData?: Record<string, unknown>,
   styleSource?: readonly ExcalidrawElement[],
   presentation: Settings["answerStyle"] = currentSettings().answerStyle,
-  placement: TextPlacement = {},
+  placement: TextPlacement & {
+    groupId?: string;
+    sourceUpdates?: readonly { id: string; data: Record<string, unknown> }[];
+  } = {},
 ) => {
   const state = api.getAppState();
   const viewport = contentViewport(api);
@@ -281,11 +307,17 @@ export const insertText = (
     ? { x: bounds.left, y: bounds.bottom + gap }
     : { x: viewport.left, y: viewport.top };
   if (![position.x, position.y].every(Number.isFinite)) {
-    throw new Error(t("fcboard.选区缺少有效边界，请重新圈选笔迹"));
+    throw new Error(
+      t("fcboard.selection_bounds_are_invalid_circle_the_writing_again"),
+    );
   }
   const textSource = styleSource?.find((element) => element.type === "text");
   const inkSource = styleSource?.find((element) => element.type === "freedraw");
   const source = textSource || inkSource;
+  const inkOutput =
+    (presentation === "handwritten" ||
+      (presentation === "match" && !!inkSource)) &&
+    supportsHandwriting(text);
   const size =
     textSource?.type === "text"
       ? textSource.fontSize
@@ -295,7 +327,7 @@ export const insertText = (
           bounds && placement.sourceLines
             ? (bounds.bottom - bounds.top) / placement.sourceLines
             : Infinity,
-        ) / 1.25
+        ) / (inkOutput ? 1.25 : 1)
       : (state.currentItemFontSize || 24) / state.zoom.value;
   const fontFamily =
     presentation === "handwritten"
@@ -404,13 +436,35 @@ export const insertText = (
     break;
   }
   if (!elements) {
-    throw new Error(t("fcboard.当前可见区域没有足够空间，请留出书写区域"));
+    throw new Error(
+      t(
+        "fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing",
+      ),
+    );
   }
   api.updateScene({
     elements: [
-      ...api.getSceneElements().filter((element) => !excluded.has(element.id)),
+      ...api
+        .getSceneElements()
+        .filter((element) => !excluded.has(element.id))
+        .map((element) => {
+          const update = placement.sourceUpdates?.find(
+            (item) => item.id === element.id,
+          );
+          return update
+            ? newElementWith(element, {
+                customData: { ...element.customData, ...update.data },
+                groupIds: placement.groupId
+                  ? [...element.groupIds, placement.groupId]
+                  : element.groupIds,
+              })
+            : element;
+        }),
       ...elements.map((element) => ({
         ...element,
+        groupIds: placement.groupId
+          ? [...element.groupIds, placement.groupId]
+          : element.groupIds,
         customData: { ...element.customData, fcGenerated: true },
       })),
     ],
@@ -529,56 +583,6 @@ export const drawAxes = async (
     api.getSceneElements().filter((element) => ids.includes(element.id)),
   );
   return ids;
-};
-
-export const insertCube = (api: ExcalidrawImperativeAPI) => {
-  const origin = insertionPoint(api, { width: 200, height: 195 });
-  const vertices = [
-    [0, 50],
-    [140, 50],
-    [140, 190],
-    [0, 190],
-    [55, 0],
-    [195, 0],
-    [195, 140],
-    [55, 140],
-  ];
-  const edges = [
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [3, 0],
-    [4, 5],
-    [5, 6],
-    [6, 7],
-    [7, 4],
-    [0, 4],
-    [1, 5],
-    [2, 6],
-    [3, 7],
-  ];
-  return insertElements(
-    api,
-    edges.map(([a, b]) => ({
-      type: "line",
-      x: origin.x + vertices[a][0],
-      y: origin.y + vertices[a][1],
-      points: [
-        pointFrom(0, 0),
-        pointFrom(
-          vertices[b][0] - vertices[a][0],
-          vertices[b][1] - vertices[a][1],
-        ),
-      ],
-      roughness: 0,
-      strokeWidth: 2,
-      strokeStyle: [6, 7, 11].includes(
-        edges.findIndex((edge) => edge[0] === a && edge[1] === b),
-      )
-        ? "dashed"
-        : "solid",
-    })),
-  );
 };
 
 export const drawPlot = (
@@ -849,7 +853,7 @@ export const selectedPlot = (api: ExcalidrawImperativeAPI) => {
 
 export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
   if (!Array.isArray(value) || !value.length || value.length > 160) {
-    throw new Error(t("fcboard.AI 图形数据无效"));
+    throw new Error(t("fcboard.invalid_ai_shape_data"));
   }
   return value.map((shape) => {
     if (
@@ -862,14 +866,14 @@ export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
       Math.abs(shape.x) > 3000 ||
       Math.abs(shape.y) > 3000
     ) {
-      throw new Error(t("fcboard.AI 返回了无效图形坐标"));
+      throw new Error(t("fcboard.ai_returned_invalid_shape_coordinates"));
     }
     if (
       shape.strokeColor !== undefined &&
       (typeof shape.strokeColor !== "string" ||
         !/^#[a-f0-9]{3}(?:[a-f0-9]{3})?$/i.test(shape.strokeColor))
     ) {
-      throw new Error(t("fcboard.颜色无效"));
+      throw new Error(t("fcboard.invalid_color"));
     }
     const base = {
       type: shape.type,
@@ -881,7 +885,7 @@ export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
     };
     if (shape.type === "text") {
       if (typeof shape.text !== "string" || shape.text.length > 4000) {
-        throw new Error(t("fcboard.AI 返回了无效文本"));
+        throw new Error(t("fcboard.ai_returned_invalid_text"));
       }
       return {
         ...base,
@@ -897,7 +901,7 @@ export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
       Math.abs(shape.width) > 2000 ||
       Math.abs(shape.height) > 2000
     ) {
-      throw new Error(t("fcboard.AI 图形尺寸无效"));
+      throw new Error(t("fcboard.invalid_ai_shape_size"));
     }
     return { ...base, width: shape.width, height: shape.height };
   });

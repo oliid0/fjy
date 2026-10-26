@@ -951,8 +951,12 @@ export class AppStateDelta implements DeltaContainer<AppState> {
     delta: Partial<ObservedAppState>,
   ): Partial<ObservedElementsAppState> {
     // WARN: Do not remove the type-casts as they here to ensure proper type checks
-    const { name, viewBackgroundColor, ...elementsProps } =
-      delta as ObservedAppState;
+    const {
+      name,
+      viewBackgroundColor,
+      whiteboardBackground,
+      ...elementsProps
+    } = delta as ObservedAppState;
 
     return elementsProps as SubtypeOf<
       typeof elementsProps,

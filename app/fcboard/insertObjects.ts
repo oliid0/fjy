@@ -11,7 +11,11 @@ import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { classroomCommands } from "./commands";
-import { contentPosition, revealNewContent } from "./board";
+import { contentPosition, revealNewContent, objectSelection } from "./board";
+import {
+  insertionWritingTargets,
+  insertionWritingText,
+} from "./insertionWriting";
 
 import type { InkStroke } from "./documents";
 
@@ -24,6 +28,8 @@ export type InsertObject = {
   columns: number;
   cells: string[];
   outline: string;
+  text?: string;
+  textColors?: string[];
   width: number;
   height: number;
 };
@@ -49,7 +55,9 @@ export const configureInsertion = (
         value > max ||
         ((key === "rows" || key === "columns") && !Number.isInteger(value))
       ) {
-        throw new Error(t("fcboard.插入对象参数 {{key}} 超出范围", { key }));
+        throw new Error(
+          t("fcboard.insertion_parameter_key_is_out_of_range", { key }),
+        );
       }
       next[key] = value;
     }
@@ -62,22 +70,42 @@ export const configureInsertion = (
         (value) => typeof value === "string" && value.length <= 1000,
       )
     ) {
-      throw new Error(t("fcboard.表格内容无效"));
+      throw new Error(t("fcboard.invalid_table_content"));
     }
     next.cells = args.cells;
   }
   if (args.outline !== undefined) {
     if (
       typeof args.outline !== "string" ||
-      !args.outline.trim() ||
+      (!args.outline.trim() && object.kind !== "mindmap") ||
       args.outline.length > 8000 ||
       args.outline.split("\n").length > 40
     ) {
       throw new Error(
-        t("fcboard.思维导图大纲无效，请使用最多 40 行的缩进大纲"),
+        t(
+          "fcboard.invalid_mind_map_outline_use_an_indented_outline_of_up_to_40_lines",
+        ),
       );
     }
     next.outline = args.outline;
+  }
+  if (args.text !== undefined) {
+    if (typeof args.text !== "string" || args.text.length > 4000) {
+      throw new Error(t("fcboard.invalid_insertion_data"));
+    }
+    next.text = args.text;
+  }
+  if (args.textColors !== undefined) {
+    if (
+      !Array.isArray(args.textColors) ||
+      args.textColors.length > 144 ||
+      !args.textColors.every(
+        (color) => typeof color === "string" && color.length <= 64,
+      )
+    ) {
+      throw new Error(t("fcboard.invalid_insertion_data"));
+    }
+    next.textColors = [...args.textColors];
   }
   if (next.kind === "table") {
     next.width = Math.max(next.width, next.columns * 48);
@@ -107,12 +135,7 @@ export const insertionDefaults = (
   rows: 3,
   columns: 3,
   cells: [],
-  outline: [
-    t("fcboard.中心主题"),
-    ...(["分支一", "分支二", "分支三"] as const).map(
-      (label) => `  ${t(`fcboard.${label}`)}`,
-    ),
-  ].join("\n"),
+  outline: kind === "mindmap" ? "\n  \n  \n  " : t("fcboard.main_topic"),
   width: 360,
   height: kind === "table" ? 180 : 144,
 });
@@ -135,8 +158,33 @@ const line = (
 
 export const insertionShapes = (object: InsertObject): InsertShape[] => {
   const { width, height } = object;
+  const label = (
+    text: string,
+    index: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: string,
+  ) => {
+    const target = insertionWritingTargets([
+      {
+        id: object.id,
+        x,
+        y,
+        width,
+        height,
+        angle: 0,
+        rectangle: true,
+        insertion: { ...object, origin: { x, y }, textIndex: index },
+        groupIds: [object.id],
+      },
+    ])[0];
+    const shape = target && insertionWritingText(target, text, color, []);
+    return shape ? [{ ...shape, insertionText: index }] : [];
+  };
   if (object.kind === "fourline") {
-    // HAlphabetObject draws four lines at fifths, inside a blue rounded panel.
+    // HAlphabetObject draws four lines at fifths inside its green rounded panel.
     return [
       {
         type: "rectangle",
@@ -149,6 +197,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
         strokeColor: "transparent",
         roughness: 0,
         roundness: { type: 3 },
+        insertionText: 0,
       },
       ...Array.from({ length: 4 }, (_, index) =>
         line(
@@ -159,6 +208,15 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
           "#8aedd2",
           78,
         ),
+      ),
+      ...label(
+        object.text || "",
+        0,
+        0,
+        0,
+        width,
+        height,
+        object.textColors?.[0] || "#333333",
       ),
     ];
   }
@@ -219,7 +277,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
     }
     return shapes;
   }
-  const rows = object.outline.split("\n").filter((row) => row.trim());
+  const rows = object.outline.split("\n");
   const nodes: {
     depth: number;
     parent: number;
@@ -283,18 +341,17 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
         fillStyle: "solid",
         backgroundColor: "#36b48e",
         strokeColor: "#36b48e",
-      },
-      {
-        type: "text",
-        x: node.x + 8,
-        y: node.y + 10,
-        width: 124,
-        text: node.text,
-        fontSize: 20,
-        fontFamily: 2,
-        strokeColor: "#ffffff",
         insertionText: index,
       },
+      ...label(
+        node.text,
+        index,
+        node.x,
+        node.y,
+        140,
+        48,
+        object.textColors?.[index] || "#ffffff",
+      ),
     );
   });
   return shapes;
@@ -312,6 +369,8 @@ export const readInsertions = (
         y: stroke.anchor?.y ?? stroke.points[0][1],
         type: stroke.text ? "text" : "line",
         text: stroke.text || "",
+        originalText: stroke.originalText,
+        strokeColor: stroke.color,
         customData: { fcInsertion: stroke.insertion },
       }))
     : api.getSceneElements();
@@ -340,8 +399,19 @@ export const readInsertions = (
           y: data.position.y + element.y - data.origin.y,
         },
         cells: [...object.cells],
+        textColors: Array.from(
+          {
+            length:
+              object.kind === "mindmap"
+                ? object.outline.split("\n").length
+                : object.kind === "table"
+                ? object.rows * object.columns
+                : 1,
+          },
+          (_, index) => object.textColors?.[index] || "",
+        ),
       };
-      const outline = object.outline.split("\n").filter((row) => row.trim());
+      const outline = object.outline.split("\n");
       for (const item of elements) {
         const meta = item.customData?.fcInsertion;
         if (
@@ -352,13 +422,17 @@ export const readInsertions = (
           continue;
         }
         if (object.kind === "table") {
-          object.cells[meta.textIndex] = item.text;
+          object.cells[meta.textIndex] = item.originalText || item.text;
         }
         if (object.kind === "mindmap") {
           outline[meta.textIndex] = `${
             outline[meta.textIndex]?.match(/^\s*/)?.[0] || ""
-          }${item.text}`;
+          }${item.originalText || item.text}`;
         }
+        if (object.kind === "fourline") {
+          object.text = item.originalText || item.text;
+        }
+        object.textColors![meta.textIndex] = item.strokeColor;
       }
       object.outline = outline.join("\n");
       ids.add(data.id);
@@ -434,11 +508,7 @@ export const renderInsertion = async (
       ),
       ...elements,
     ],
-    appState: {
-      selectedElementIds: Object.fromEntries(
-        elements.map((element) => [element.id, true]),
-      ),
-    },
+    appState: objectSelection(elements),
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
   });
   revealNewContent(api, elements, context);

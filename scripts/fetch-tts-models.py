@@ -2,7 +2,6 @@
 import hashlib
 import json
 from pathlib import Path
-import tarfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,26 +31,20 @@ def main():
     target = ROOT / "android/app/src/main/assets/tts/melo"
     target.mkdir(parents=True, exist_ok=True)
     (target.parent / "Sherpa-LICENSE.txt").write_bytes((ROOT / "scripts/tts-Sherpa-LICENSE.txt").read_bytes())
-    files = manifest["files"]
-    if all((target / item["name"]).is_file() and verified((target / item["name"]).read_bytes(), item) for item in files):
-        return
-    archive = ROOT / "node_modules/.cache/fcboard-tts/melo.tar.bz2"
-    download(manifest["archive"], archive)
-    with tarfile.open(archive) as bundle:
-        for item in files:
-            # Extract only pinned regular files; never follow archive links or paths.
-            member = bundle.getmember("vits-melo-tts-zh_en/" + item["name"])
-            if not member.isfile():
-                raise ValueError("Invalid TTS model archive member")
-            with bundle.extractfile(member) as source:
-                data = source.read()
-            if not verified(data, item):
-                raise ValueError("TTS model checksum mismatch: " + item["name"])
-            output = target / item["name"]
-            pending = output.with_suffix(output.suffix + ".pending")
-            pending.write_bytes(data)
-            pending.replace(output)
-            print("Verified", item["name"], len(data), "bytes", flush=True)
+    for item in manifest["files"]:
+        if Path(item["name"]).name != item["name"]:
+            raise ValueError("Invalid TTS asset name")
+        download(item, target / item["name"])
+    # Remove the former managed weight only after every replacement is verified.
+    # Never delete a user-supplied or unrecognized file to make an APK smaller.
+    for item in manifest.get("obsolete", []):
+        if Path(item["name"]).name != item["name"]:
+            raise ValueError("Invalid obsolete TTS asset name")
+        old = target / item["name"]
+        if old.is_file():
+            if not verified(old.read_bytes(), item):
+                raise ValueError("Unrecognized obsolete TTS asset: " + old.name)
+            old.unlink()
 
 
 if __name__ == "__main__":

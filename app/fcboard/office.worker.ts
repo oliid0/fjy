@@ -21,14 +21,14 @@ self.onmessage = async (event: MessageEvent) => {
       });
       if (document.isPasswordEncrypted()) {
         if (!password) {
-          throw new Error("文件已加密，请使用未加密的课件");
+          throw new Error("OFFICE_DOCUMENT_ENCRYPTED");
         }
         document.decrypt(password);
       }
       self.postMessage({ id, value: document.listViews() });
     } else if (type === "render") {
       if (!document) {
-        throw new Error("课件尚未打开");
+        throw new Error("OFFICE_DOCUMENT_NOT_OPEN");
       }
       self.postMessage({ id, value: document.render(page).html });
     } else if (type === "close") {

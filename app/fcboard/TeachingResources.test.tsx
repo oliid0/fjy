@@ -1,4 +1,5 @@
 import { t, languages, setLanguage } from "@excalidraw/excalidraw/i18n";
+import { factoryResources as sourceResourceNames } from "@excalidraw/excalidraw/locales/zh-CN.json";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -9,11 +10,48 @@ import { TeachingResources, teachingResources } from "./TeachingResources";
 import * as ai from "./ai";
 import { deleteGeneratedResource } from "./generatedResources";
 import * as resourceStorage from "./generatedResources";
+import { interactiveResource } from "./test/interactiveResource";
 
 const api = {} as ExcalidrawImperativeAPI;
 
 afterEach(async () => {
   await setLanguage(languages.find((lang) => lang.code === "en")!);
+});
+
+it("keeps the factory resource searchable by its original name when the interface is English", async () => {
+  render(<TeachingResources api={api} />);
+  const query = sourceResourceNames.teach_res_math_concept_number_compare;
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "resources.open",
+      args: { query },
+    });
+  });
+  expect(
+    screen.getByRole("button", {
+      name: (name) =>
+        name.startsWith(
+          t("factoryResources.teach_res_math_concept_number_compare"),
+        ),
+    }),
+  ).toBeVisible();
+  let result: unknown;
+  await act(async () => {
+    result = await classroomCommands.execute({
+      name: "resources.list",
+      args: { query },
+    });
+  });
+  expect(result).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: teachingResources.find(
+          (item) => item.titleKey === "teach_res_math_concept_number_compare",
+        )!.id,
+        category: "math",
+      }),
+    ]),
+  );
 });
 
 it("discards a resource if the visible courseware closes while its catalogue is loading", async () => {
@@ -55,7 +93,7 @@ it("uses original translated resource names for searching, display and the exper
     await classroomCommands.execute({ name: "resources.open" });
   });
   fireEvent.change(
-    screen.getByRole("textbox", { name: t("fcboard.搜索资源") }),
+    screen.getByRole("textbox", { name: t("fcboard.search_resources") }),
     { target: { value: "Zahlenvergleich" } },
   );
   const resource = screen.getByRole("button", { name: /Zahlenvergleich/ });
@@ -76,23 +114,22 @@ it("retains the selected subject when the query is empty and keeps source IDs st
   await act(async () => {
     await classroomCommands.execute({ name: "resources.open" });
   });
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.数学") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.mathematics") }),
+  );
   expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(
-    teachingResources.filter((item) => item.category === "数学").length,
+    teachingResources.filter((item) => item.category === "math").length,
   );
   expect(screen.getByRole("button", { name: /Number Compare/ })).toBeVisible();
 });
 
-it("generates, discovers and reuses a saved diagram through the same canvas insertion command", async () => {
-  const chat = vi.spyOn(ai, "chat").mockResolvedValue(
-    JSON.stringify({
-      title: "Force diagram",
-      shapes: [{ type: "arrow", x: 0, y: 0, width: 120, height: 0 }],
-    }),
-  );
-  const insert = vi.fn();
+it("generates, discovers and reuses an interactive lesson through the same canvas insertion command", async () => {
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(JSON.stringify(interactiveResource));
+  const insert = vi.fn().mockReturnValue({ ids: ["actual-lesson-object"] });
   const release = classroomCommands.register(
-    "canvas.shapes",
+    "canvas.resource",
     "@internal",
     insert,
   );
@@ -103,21 +140,26 @@ it("generates, discovers and reuses a saved diagram through the same canvas inse
       const result = (await classroomCommands.execute({
         name: "resources.generate",
         args: { prompt: "force" },
-      })) as { id: string };
+      })) as { id: string; ids: string[] };
       id = result.id;
+      expect(result.ids).toEqual(["actual-lesson-object"]);
     });
     const listed = (await classroomCommands.execute({
       name: "resources.list",
       args: { query: "Force" },
     })) as { id: string; kind: string }[];
     expect(listed).toContainEqual(
-      expect.objectContaining({ id, kind: "diagram" }),
+      expect.objectContaining({ id, kind: "interactive" }),
     );
     await act(async () => {
-      await classroomCommands.execute({ name: "resources.use", args: { id } });
+      await expect(
+        classroomCommands.execute({ name: "resources.use", args: { id } }),
+      ).resolves.toMatchObject({ ids: ["actual-lesson-object"] });
     });
     expect(insert).toHaveBeenCalledTimes(2);
-    expect(insert.mock.calls[0][0]).toEqual(insert.mock.calls[1][0]);
+    expect(insert.mock.calls[0][0].resource).toEqual(
+      insert.mock.calls[1][0].resource,
+    );
   } finally {
     view.unmount();
     release();

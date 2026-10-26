@@ -5,8 +5,21 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { LessonCanvas } from "./lesson";
 import { createNarrator } from "./narration";
+import { mergeLessonContinuation } from "./lessonContinuation";
+import {
+  classroomCommands,
+  executeBoardCommand,
+  isCancellableBoardCommand,
+} from "./commands";
+import {
+  assertLessonToolsAvailable,
+  lessonToolMismatch,
+  lessonToolResumeIndex,
+} from "./lessonTools";
 
-import type { Lesson, Quiz } from "./lesson";
+import type { Lesson, Quiz, LessonCommand } from "./lesson";
+import type { LessonTool, LessonToolResult } from "./lessonTools";
+import type { LessonObserver, LessonObservation } from "./lessonContinuation";
 
 export type Lens = "standard" | "audio" | "captions" | "reading" | "focus";
 export type TeachingState = {
@@ -30,34 +43,51 @@ export type TeachingState = {
   audioError: string;
   speed: number;
   lens: Lens;
+  tool?: { name: string; index: number };
+  toolError: string;
+  toolResults: LessonToolResult[];
+  toolIndex: number;
+  observing: boolean;
 };
 export type TeachingSession = {
   id: string;
   board: string;
   lesson: Lesson;
   step: number;
+  toolIndex?: number;
   correct: number;
   attempts: number;
   updated: number;
   canvas: {
     id: string;
     origin: { x: number; y: number };
+    sourceIds?: string[];
     document?: { name: string; page: number };
   };
 };
 const storage = createStore("fcboard-lessons", "lessons");
-export const lessonSessions = async () =>
-  (await get<TeachingSession[]>("sessions", storage)) || [];
-export const saveLessonSession = async (session: TeachingSession) => {
-  const sessions = await lessonSessions();
-  await set(
-    "sessions",
-    [session, ...sessions.filter((item) => item.id !== session.id)].slice(
-      0,
-      100,
-    ),
-    storage,
-  );
+let writing: Promise<void> = Promise.resolve();
+export const lessonSessions = async () => {
+  await writing.catch(() => {});
+  return (await get<TeachingSession[]>("sessions", storage)) || [];
+};
+export const saveLessonSession = (session: TeachingSession) => {
+  const task = writing
+    .catch(() => {})
+    .then(async () => {
+      const sessions =
+        (await get<TeachingSession[]>("sessions", storage)) || [];
+      await set(
+        "sessions",
+        [session, ...sessions.filter((item) => item.id !== session.id)].slice(
+          0,
+          100,
+        ),
+        storage,
+      );
+    });
+  writing = task;
+  return task;
 };
 
 /** One lesson state, with explicit interruptions and resume; writing never competes with speech. */
@@ -74,18 +104,30 @@ export class TeachingEngine {
     audioError: "",
     speed: 1,
     lens: "standard",
+    toolError: "",
+    toolResults: [],
+    toolIndex: 0,
+    observing: false,
   };
   private listeners = new Set<(state: TeachingState) => void>();
   private generation = 0;
   private branchGeneration = 0;
   private branchActive = false;
+  private target?: string;
+  private toolRequests = new Set<AbortController>();
+  private branchToolRequests = new Set<AbortController>();
+  private observations = new Set<AbortController>();
+  private cancellableRequests = new WeakSet<AbortController>();
   private waiting = new Set<() => void>();
   private answerWaiter?: () => void;
   private renderer?: LessonCanvas;
   private branchRenderer?: LessonCanvas;
   private voice = createNarrator();
   private interjection = createNarrator();
-  constructor(private api: ExcalidrawImperativeAPI) {}
+  constructor(
+    private api: ExcalidrawImperativeAPI,
+    private observer?: LessonObserver,
+  ) {}
   subscribe(listener: (state: TeachingState) => void) {
     this.listeners.add(listener);
     return () => {
@@ -103,6 +145,23 @@ export class TeachingEngine {
     this.pause();
     this.update({ mode: "generating" });
   }
+  private surface() {
+    const document = classroomCommands.read("document") as
+      | { id?: string; name?: string; page?: number }
+      | undefined;
+    return JSON.stringify(
+      document
+        ? ["document", document.id, document.name, document.page]
+        : [
+            "whiteboard",
+            (
+              classroomCommands.read("boards") as
+                | { active?: string }
+                | undefined
+            )?.active || this.api.id,
+          ],
+    );
+  }
   private async gate(generation: number, branch = false) {
     while (
       generation === this.generation &&
@@ -112,7 +171,11 @@ export class TeachingEngine {
       await new Promise<void>((resolve) => this.waiting.add(resolve));
     }
     if (generation !== this.generation) {
-      throw new DOMException("讲解已结束", "AbortError");
+      throw new DOMException("Lesson ended", "AbortError");
+    }
+    if (this.target && this.target !== this.surface()) {
+      this.cancel();
+      throw new DOMException("Visible lesson surface changed", "AbortError");
     }
   }
   pause() {
@@ -123,6 +186,18 @@ export class TeachingEngine {
     this.branchRenderer?.pause();
     this.interjection.pause();
     this.voice.pause();
+    this.observations.forEach((request) => request.abort());
+    this.update({ observing: false });
+    this.toolRequests.forEach((request) => {
+      if (this.cancellableRequests.has(request)) {
+        request.abort();
+      }
+    });
+    this.branchToolRequests.forEach((request) => {
+      if (this.cancellableRequests.has(request)) {
+        request.abort();
+      }
+    });
     if (this.state.mode !== "quiz") {
       this.update({ mode: "paused" });
     }
@@ -150,6 +225,7 @@ export class TeachingEngine {
     this.update({
       mode: this.state.question ? "quiz" : "teaching",
       feedback: "",
+      toolError: "",
     });
     this.renderer?.resume();
     void this.voice
@@ -166,6 +242,13 @@ export class TeachingEngine {
     this.branchRenderer?.cancel();
     this.voice.stop();
     this.interjection.stop();
+    this.toolRequests.forEach((request) => request.abort());
+    this.branchToolRequests.forEach((request) => request.abort());
+    this.observations.forEach((request) => request.abort());
+    this.observations.clear();
+    this.toolRequests.clear();
+    this.branchToolRequests.clear();
+    this.target = undefined;
     this.waiting.forEach((resolve) => resolve());
     this.waiting.clear();
     this.answerWaiter?.();
@@ -177,6 +260,244 @@ export class TeachingEngine {
       question: undefined,
       caption: "",
       feedback: "",
+      tool: undefined,
+      toolError: "",
+      toolResults: [],
+      toolIndex: 0,
+      observing: false,
+    });
+  }
+  private async tools(
+    tools: readonly LessonTool[] | undefined,
+    generation: number,
+    branchGeneration?: number,
+    start = 0,
+  ) {
+    const branch = branchGeneration !== undefined;
+    const current = () =>
+      generation === this.generation &&
+      (!branch || branchGeneration === this.branchGeneration);
+    const check = () => {
+      if (!current()) {
+        throw new DOMException("Lesson tool ended", "AbortError");
+      }
+      if (this.target && this.target !== this.surface()) {
+        this.cancel();
+        throw new DOMException("Visible lesson surface changed", "AbortError");
+      }
+    };
+    const gate = async () => {
+      await this.gate(generation, branch);
+      check();
+    };
+    const results: LessonToolResult[] = [];
+    const requests = branch ? this.branchToolRequests : this.toolRequests;
+    for (const [index, tool] of (tools || []).entries()) {
+      if (index < start) {
+        continue;
+      }
+      const slot = results.length;
+      let complete = false;
+      while (!complete) {
+        await gate();
+        const request = new AbortController();
+        requests.add(request);
+        if (isCancellableBoardCommand(tool.name)) {
+          this.cancellableRequests.add(request);
+        }
+        this.update({ tool: { name: tool.name, index }, toolError: "" });
+        let result: unknown;
+        let mismatch: ReturnType<typeof lessonToolMismatch>;
+        try {
+          assertLessonToolsAvailable([tool]);
+          result = await executeBoardCommand(tool, request.signal);
+          check();
+          mismatch = lessonToolMismatch(tool, result);
+          if (mismatch) {
+            throw new Error(t("fcboard.invalid_lesson_content"));
+          }
+          results[slot] = {
+            name: tool.name,
+            ok: true,
+            result: result === undefined ? null : result,
+          };
+          this.update({
+            toolResults: [...results],
+            ...(!branch
+              ? { toolIndex: Math.max(this.state.toolIndex, index + 1) }
+              : {}),
+          });
+          await gate();
+          complete = true;
+        } catch (failure) {
+          if (!current()) {
+            throw new DOMException("Lesson tool ended", "AbortError");
+          }
+          if (
+            request.signal.aborted &&
+            failure instanceof DOMException &&
+            failure.name === "AbortError"
+          ) {
+            await gate();
+            continue;
+          }
+          const error =
+            failure instanceof Error ? failure.message : String(failure);
+          results[slot] = {
+            name: tool.name,
+            ok: false,
+            result: result === undefined ? null : result,
+            error: mismatch
+              ? `LESSON_RESULT_MISMATCH: ${mismatch.path}`
+              : error,
+          };
+          this.update({
+            tool: undefined,
+            toolError: error,
+            toolResults: [...results],
+          });
+          if (this.observer && !branch) {
+            return false;
+          }
+          this.pause();
+          await gate();
+        } finally {
+          requests.delete(request);
+        }
+      }
+    }
+    check();
+    this.update({ tool: undefined, toolResults: [...results] });
+    return true;
+  }
+  private async readyStep(lesson: Lesson, index: number, generation: number) {
+    let refinements = 0;
+    let recheck = true;
+    while (true) {
+      await this.gate(generation);
+      const tools = lesson.steps[index].tools || [];
+      const complete = await this.tools(
+        tools,
+        generation,
+        undefined,
+        recheck
+          ? lessonToolResumeIndex(tools, this.state.toolIndex)
+          : this.state.toolIndex,
+      );
+      await this.gate(generation);
+      if (!this.observer) {
+        return lesson;
+      }
+      const request = new AbortController();
+      this.observations.add(request);
+      this.update({ observing: true });
+      try {
+        const input = {
+          lesson,
+          step: index,
+          toolIndex: this.state.toolIndex,
+          results: this.state.toolResults,
+          correct: this.state.correct,
+          attempts: this.state.attempts,
+          error: complete ? undefined : this.state.toolError,
+        };
+        const tail = await this.observe(input, request.signal);
+        request.signal.throwIfAborted();
+        await this.gate(generation);
+        request.signal.throwIfAborted();
+        if (!tail) {
+          if (!complete) {
+            throw new Error(
+              this.state.toolError || t("fcboard.invalid_lesson_content"),
+            );
+          }
+          this.update({ observing: false, toolError: "" });
+          return lesson;
+        }
+        const revised = mergeLessonContinuation(input, tail);
+        revised.steps
+          .slice(index)
+          .forEach((step) => assertLessonToolsAvailable(step.tools || []));
+        lesson = revised;
+        this.update({ lesson, observing: false, toolError: "" });
+        if ((lesson.steps[index].tools?.length || 0) <= this.state.toolIndex) {
+          return lesson;
+        }
+        if (++refinements >= 3) {
+          throw new Error(
+            t(
+              "fcboard.observation_limit_reached_completed_work_is_preserved_describe_the_next_step_to_continue",
+            ),
+          );
+        }
+        recheck = false;
+      } catch (failure) {
+        if (generation !== this.generation) {
+          throw new DOMException("Lesson ended", "AbortError");
+        }
+        if (request.signal.aborted) {
+          refinements = 0;
+          recheck = true;
+          await this.gate(generation);
+          continue;
+        }
+        if (
+          failure instanceof DOMException &&
+          failure.name === "AbortError" &&
+          ++refinements < 3
+        ) {
+          recheck = false;
+          continue;
+        }
+        this.update({
+          observing: false,
+          toolError:
+            failure instanceof Error ? failure.message : String(failure),
+        });
+        this.pause();
+        await this.gate(generation);
+        refinements = 0;
+        recheck = true;
+      } finally {
+        this.observations.delete(request);
+        if (generation === this.generation) {
+          this.update({ observing: false });
+        }
+      }
+    }
+  }
+  private observe(input: LessonObservation, signal: AbortSignal) {
+    // The same abort boundary as executeBoardCommand: an uncooperative provider
+    // may finish late, but cannot retain playback ownership or apply its result.
+    return new Promise<Lesson | undefined>((resolve, reject) => {
+      const abort = () => {
+        signal.removeEventListener("abort", abort);
+        reject(new DOMException("Lesson observation cancelled", "AbortError"));
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) {
+        abort();
+        return;
+      }
+      Promise.resolve()
+        .then(() => {
+          signal.throwIfAborted();
+          return this.observer!(input, signal);
+        })
+        .then(
+          (result) => {
+            signal.removeEventListener("abort", abort);
+            if (signal.aborted) {
+              abort();
+            } else {
+              resolve(result);
+            }
+          },
+          (failure) => {
+            signal.removeEventListener("abort", abort);
+            reject(failure);
+          },
+        );
     });
   }
   private async say(text: string, voice: ReturnType<typeof createNarrator>) {
@@ -220,12 +541,55 @@ export class TeachingEngine {
       await read();
     }
   }
+  private async prepare(
+    renderer: LessonCanvas,
+    commands: readonly LessonCommand[],
+    generation: number,
+    branchGeneration?: number,
+  ) {
+    while (true) {
+      await this.gate(generation, branchGeneration !== undefined);
+      if (
+        branchGeneration !== undefined &&
+        branchGeneration !== this.branchGeneration
+      ) {
+        throw new DOMException("Question replaced", "AbortError");
+      }
+      try {
+        await renderer.prepareStep(commands);
+        if (
+          generation !== this.generation ||
+          (branchGeneration !== undefined &&
+            branchGeneration !== this.branchGeneration)
+        ) {
+          throw new DOMException("Lesson ended", "AbortError");
+        }
+        this.update({ toolError: "" });
+        return;
+      } catch (error) {
+        if (
+          generation !== this.generation ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          throw error;
+        }
+        this.update({
+          toolError: error instanceof Error ? error.message : String(error),
+        });
+        this.pause();
+      }
+    }
+  }
   get canvas() {
+    const target = this.renderer?.target;
     return this.renderer
       ? {
           id: this.renderer.id,
           origin: this.renderer.origin,
-          document: this.renderer.target,
+          sourceIds: this.renderer.sourceIds,
+          document: target
+            ? { name: target.name, page: target.page }
+            : undefined,
         }
       : undefined;
   }
@@ -233,11 +597,30 @@ export class TeachingEngine {
     lesson: Lesson,
     start = 0,
     saved?: TeachingSession["canvas"],
-    progress?: Pick<TeachingSession, "correct" | "attempts">,
+    progress?: Pick<TeachingSession, "correct" | "attempts" | "toolIndex">,
+    sourceIds?: readonly string[],
   ) {
+    if (
+      !Number.isInteger(start) ||
+      start < 0 ||
+      start > lesson.steps.length ||
+      (progress?.toolIndex !== undefined &&
+        (!Number.isInteger(progress.toolIndex) ||
+          progress.toolIndex < 0 ||
+          progress.toolIndex > (lesson.steps[start]?.tools?.length || 0)))
+    ) {
+      throw new Error(t("fcboard.invalid_lesson_content"));
+    }
+    lesson.steps.forEach((step) =>
+      assertLessonToolsAvailable(step.tools || []),
+    );
     this.cancel();
+    this.target = this.surface();
     const generation = this.generation;
-    this.renderer = new LessonCanvas(this.api, saved);
+    this.renderer = new LessonCanvas(this.api, {
+      ...saved,
+      sourceIds: sourceIds || saved?.sourceIds,
+    });
     this.update({
       mode: "teaching",
       lesson,
@@ -249,8 +632,19 @@ export class TeachingEngine {
     });
     for (let index = start; index < lesson.steps.length; index++) {
       await this.gate(generation);
+      this.update({
+        step: index,
+        caption: "",
+        spoken: 0,
+        toolResults: [],
+        toolError: "",
+        toolIndex: index === start ? progress?.toolIndex || 0 : 0,
+      });
+      lesson = await this.readyStep(lesson, index, generation);
       const step = lesson.steps[index];
-      this.update({ step: index, caption: step.say, spoken: 0 });
+      await this.prepare(this.renderer!, step.commands, generation);
+      await this.gate(generation);
+      this.update({ caption: step.say });
       const drawing = async () => {
         for (const command of step.commands) {
           await this.gate(generation);
@@ -285,8 +679,11 @@ export class TeachingEngine {
     this.update({
       mode: "complete",
       caption: this.state.attempts
-        ? `这一课完成了：答对 ${this.state.correct} 题，尝试 ${this.state.attempts} 次。可以继续提问或在板上试一试。`
-        : "这一课完成了。可以继续提问，或在白板上试一试。",
+        ? t("fcboard.lesson_complete_with_results", {
+            correct: this.state.correct,
+            attempts: this.state.attempts,
+          })
+        : t("fcboard.lesson_complete"),
       question: undefined,
     });
   }
@@ -306,7 +703,7 @@ export class TeachingEngine {
       this.answerWaiter = resolve;
     });
     if (generation !== this.generation) {
-      throw new DOMException("讲解已结束", "AbortError");
+      throw new DOMException("Lesson ended", "AbortError");
     }
   }
   answer(index: number) {
@@ -318,14 +715,16 @@ export class TeachingEngine {
       index < 0 ||
       index >= question.choices.length
     ) {
-      throw new Error(t("fcboard.当前没有这道测验选项"));
+      throw new Error(t("fcboard.this_quiz_choice_is_unavailable"));
     }
     const correct = index === question.answer;
     this.voice.stop();
     this.update({
       attempts: this.state.attempts + 1,
       correct: this.state.correct + (correct ? 1 : 0),
-      feedback: `${correct ? "答对了。" : "再想一想。"}${question.explanation}`,
+      feedback: t(correct ? "fcboard.quiz_correct" : "fcboard.quiz_try_again", {
+        explanation: question.explanation,
+      }),
       speed: correct ? this.state.speed : Math.max(0.6, this.state.speed * 0.9),
     });
     if (correct) {
@@ -342,17 +741,29 @@ export class TeachingEngine {
       interruptions: this.state.interruptions + 1,
     });
   }
-  async branch(lesson: Lesson) {
+  async branch(lesson: Lesson, sourceIds?: readonly string[]) {
+    lesson.steps.forEach((step) =>
+      assertLessonToolsAvailable(step.tools || []),
+    );
     if (this.state.mode !== "question") {
       this.interrupt();
     }
     this.interjection.stop();
     this.branchRenderer?.cancel();
+    this.branchToolRequests.forEach((request) => request.abort());
     const generation = ++this.branchGeneration;
+    const mainGeneration = this.generation;
     this.branchActive = true;
-    const renderer = new LessonCanvas(this.api);
+    const renderer = new LessonCanvas(this.api, { sourceIds });
     this.branchRenderer = renderer;
     for (const step of lesson.steps) {
+      if (generation !== this.branchGeneration) {
+        return;
+      }
+      this.update({ caption: "", spoken: 0, toolResults: [], toolError: "" });
+      await this.tools(step.tools, mainGeneration, generation);
+      await this.prepare(renderer, step.commands, mainGeneration, generation);
+      await this.gate(mainGeneration, true);
       if (generation !== this.branchGeneration) {
         return;
       }

@@ -2,6 +2,8 @@ import React from "react";
 import Popper from "@mui/material/Popper";
 import Paper from "@mui/material/Paper";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 import { CaptureUpdateAction } from "@excalidraw/element";
 
@@ -9,8 +11,6 @@ import { t, useI18n } from "../i18n";
 
 import { useUIAppState } from "../context/ui-appState";
 import { useTunnels } from "../context/tunnels";
-
-import { MaterialSelect } from "./MaterialSelect";
 
 import { useExcalidrawContainer } from "./App";
 import { ToolButton } from "./ToolButton";
@@ -81,7 +81,7 @@ export const WhiteboardTools = ({
         type="button"
         className="fc-board-tool"
         icon={<FactoryIcon name="pen" />}
-        aria-label={t("fcboard.画笔")}
+        aria-label={t("fcboard.pen")}
         showAriaLabel
         selected={activeTool.type === "freedraw"}
         onLongPress={(anchor) => {
@@ -102,7 +102,7 @@ export const WhiteboardTools = ({
         type="button"
         className="fc-board-tool"
         icon={<FactoryIcon name="eraser" />}
-        aria-label={t("fcboard.橡皮")}
+        aria-label={t("fcboard.eraser")}
         showAriaLabel
         selected={activeTool.type === "eraser"}
         onLongPress={(anchor) => {
@@ -143,13 +143,13 @@ export const WhiteboardTools = ({
             <Paper
               className="fc-insert-tools fc-eraser-settings"
               role="dialog"
-              aria-label={t("fcboard.橡皮设置")}
+              aria-label={t("fcboard.eraser_settings")}
             >
               <label className="fc-clear-slider">
-                <span>{t("fcboard.滑动清屏")}</span>
+                <span>{t("fcboard.slide_to_erase")}</span>
                 <input
                   type="range"
-                  aria-label={t("fcboard.滑动清空当前白板")}
+                  aria-label={t("fcboard.slide_to_clear_this_board")}
                   style={
                     {
                       "--fc-cleaning-icon": `url("${cleaningIcon}")`,
@@ -175,11 +175,11 @@ export const WhiteboardTools = ({
               <div
                 className="fc-eraser-presets"
                 role="group"
-                aria-label={t("fcboard.橡皮大小预设")}
+                aria-label={t("fcboard.eraser_sizes")}
               >
                 <button
                   type="button"
-                  aria-label={t("fcboard.整个对象擦除")}
+                  aria-label={t("fcboard.erase_entire_object")}
                   aria-pressed={state.eraserMode === "object"}
                   onClick={() => {
                     props.setAppState({ eraserMode: "object" });
@@ -190,15 +190,15 @@ export const WhiteboardTools = ({
                 </button>
                 {(
                   [
-                    [100, "小"],
-                    [150, "中"],
-                    [200, "大"],
+                    [100, "small_eraser"],
+                    [150, "medium_eraser"],
+                    [200, "large_eraser"],
                   ] as const
                 ).map(([pixels, label]) => (
                   <button
                     key={pixels}
                     type="button"
-                    aria-label={t(`fcboard.${label}橡皮`)}
+                    aria-label={t(`fcboard.${label}`)}
                     aria-pressed={
                       state.eraserMode !== "object" &&
                       Math.abs(
@@ -229,24 +229,38 @@ export const WhiteboardTools = ({
                 ))}
               </div>
               <details className="fc-eraser-advanced">
-                <summary>{t("fcboard.触控与橡皮设置")}</summary>
-                <label>
-                  {t("fcboard.擦除方式")}
-                  <MaterialSelect
-                    aria-label={t("fcboard.擦除方式")}
+                <summary>{t("fcboard.touch_and_eraser_settings")}</summary>
+                <div className="fc-eraser-mode">
+                  <span>{t("fcboard.erase_mode")}</span>
+                  <ToggleButtonGroup
+                    aria-label={t("fcboard.erase_mode")}
                     value={state.eraserMode || "stroke"}
-                    onChange={(event) =>
-                      props.setAppState({
-                        eraserMode: event.target.value as "stroke" | "object",
-                      })
-                    }
+                    exclusive
+                    size="small"
+                    orientation="vertical"
+                    onChange={(_event, value: "stroke" | "object" | null) => {
+                      if (value) {
+                        props.setAppState({ eraserMode: value });
+                        setEraserOpen(false);
+                      }
+                    }}
                   >
-                    <option value="stroke">{t("fcboard.局部擦除笔迹")}</option>
-                    <option value="object">{t("fcboard.整个对象擦除")}</option>
-                  </MaterialSelect>
-                </label>
+                    <ToggleButton
+                      value="stroke"
+                      aria-label={t("fcboard.erase_part_of_a_stroke")}
+                    >
+                      {t("fcboard.erase_part_of_a_stroke")}
+                    </ToggleButton>
+                    <ToggleButton
+                      value="object"
+                      aria-label={t("fcboard.erase_entire_object")}
+                    >
+                      {t("fcboard.erase_entire_object")}
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                </div>
                 <label>
-                  {t("fcboard.橡皮大小（屏幕像素）")}
+                  {t("fcboard.eraser_size_screen_pixels")}
                   <input
                     type="range"
                     min="12"
@@ -277,10 +291,10 @@ export const WhiteboardTools = ({
                       props.setAppState({ palmEraser: event.target.checked })
                     }
                   />
-                  {t("fcboard.手掌 / 手背擦除")}
+                  {t("fcboard.palm_erasing")}
                 </label>
                 <label>
-                  {t("fcboard.大面积触点阈值（屏幕像素）")}
+                  {t("fcboard.palm_threshold_screen_pixels")}
                   <input
                     type="range"
                     min="16"
@@ -312,8 +326,8 @@ export const WhiteboardTools = ({
         type="button"
         className="fc-board-tool"
         icon={<FactoryIcon name="select" />}
-        aria-label={t("fcboard.选择")}
-        title={t("fcboard.选择")}
+        aria-label={t("fcboard.select")}
+        title={t("fcboard.select")}
         showAriaLabel
         selected={["selection", "lasso"].includes(activeTool.type)}
         onClick={() =>
@@ -329,7 +343,7 @@ export const WhiteboardTools = ({
         type="button"
         className="fc-board-tool"
         icon={<FactoryIcon name="insert" />}
-        aria-label={t("fcboard.插入")}
+        aria-label={t("fcboard.insert")}
         data-board-insert
         selected={open}
         showAriaLabel
@@ -363,7 +377,7 @@ export const WhiteboardTools = ({
                 shapesOpen ? " fc-insert-picker-expanded" : ""
               }`}
               role="dialog"
-              aria-label={t("fcboard.插入与工具")}
+              aria-label={t("fcboard.insert_tools")}
             >
               <div
                 className="fc-insert-grid"
@@ -381,7 +395,7 @@ export const WhiteboardTools = ({
                   onClick={() => setShapesOpen(!shapesOpen)}
                 >
                   <FactoryIcon name="shape" />
-                  <span>{t("fcboard.图形")}</span>
+                  <span>{t("fcboard.shape")}</span>
                 </button>
                 <tunnels.ToolbarInsertTunnel.Out />
               </div>

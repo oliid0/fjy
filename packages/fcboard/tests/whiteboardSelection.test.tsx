@@ -311,7 +311,7 @@ it("starts a new region from an interior drag and never edits or splits its obje
 
 it("does not switch the whiteboard selector back to the legacy object editor on repeated clicks", async () => {
   const { getByRole } = await selectedRegion();
-  const select = getByRole("button", { name: t("fcboard.选择") });
+  const select = getByRole("button", { name: t("fcboard.select") });
   fireEvent.click(select);
   fireEvent.click(select);
   expect(h.state.activeTool.type).toBe("lasso");
@@ -477,3 +477,43 @@ it("restores a container's bound label and attached arrow without reverting unre
   );
   expect(outside.strokeColor).toBe("#ff0000");
 });
+
+it.each(["language", "cube", "cylinder"] as const)(
+  "opens a %s object on double click in the original lasso tool without entering its internal paths",
+  async (kind) => {
+    const onObjectDoubleClick = vi.fn();
+    const view = await render(
+      <Excalidraw
+        UIOptions={{ unifiedToolbar: true }}
+        onObjectDoubleClick={onObjectDoubleClick}
+      />,
+    );
+    h.state.width = 1600;
+    h.state.height = 900;
+    const source = {
+      ...API.createElement({
+        type: "rectangle",
+        x: 100,
+        y: 100,
+        width: 80,
+        height: 40,
+        groupIds: ["bilingual"],
+      }),
+      customData:
+        kind === "language"
+          ? { fcLanguage: { group: "bilingual", source: true } }
+          : { fcWidget: { id: "solid", kind } },
+    };
+    API.updateScene({ elements: [source] });
+    act(() => h.app.setActiveTool({ type: "lasso" }));
+    fireEvent.doubleClick(view.container.querySelector("canvas.interactive")!, {
+      clientX: 100,
+      clientY: 120,
+    });
+    expect(onObjectDoubleClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: source.id }),
+    );
+    expect(h.state.editingGroupId).toBeNull();
+    expect(h.state.selectedLinearElement).toBeNull();
+  },
+);

@@ -83,7 +83,7 @@ export class BoardBook {
       this.value = stored;
       this.restore(stored.active);
     } else {
-      const first = this.capture(`${t("fcboard.白板")} 1`);
+      const first = this.capture(`${t("fcboard.board")} 1`);
       this.value = { active: first.id, boards: [first] };
       await this.flush();
     }
@@ -136,7 +136,7 @@ export class BoardBook {
   private restore(id: string) {
     const board = this.value.boards.find((item) => item.id === id);
     if (!board) {
-      throw new Error(t("fcboard.白板不存在"));
+      throw new Error(t("fcboard.board_does_not_exist"));
     }
     this.switching = true;
     const previousState = this.api.getAppState();
@@ -164,7 +164,7 @@ export class BoardBook {
       return;
     }
     if (!this.value.boards.some((board) => board.id === id)) {
-      throw new Error(t("fcboard.白板不存在"));
+      throw new Error(t("fcboard.board_does_not_exist"));
     }
     await this.flush();
     const previous = this.value;
@@ -183,7 +183,7 @@ export class BoardBook {
     const board: Board = {
       ...this.capture(
         name?.trim().slice(0, 80) ||
-          `${t("fcboard.白板")} ${this.value.boards.length + 1}`,
+          `${t("fcboard.board")} ${this.value.boards.length + 1}`,
       ),
       elements: [],
       files: {},
@@ -203,7 +203,7 @@ export class BoardBook {
   async rename(id: string, name: string) {
     const trimmed = name.trim().slice(0, 80);
     if (!trimmed) {
-      throw new Error(t("fcboard.请输入白板名称"));
+      throw new Error(t("fcboard.enter_a_board_name"));
     }
     const previous = this.value;
     this.value = {
@@ -228,7 +228,7 @@ export class BoardBook {
     const previous = this.value;
     const boards = previous.boards.filter((board) => board.id !== id);
     if (boards.length === previous.boards.length) {
-      throw new Error(t("fcboard.白板不存在"));
+      throw new Error(t("fcboard.board_does_not_exist"));
     }
     const active = previous.active === id ? boards[0].id : previous.active;
     this.value = { active, boards };

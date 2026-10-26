@@ -16,6 +16,12 @@ import { classroomCommands } from "./commands";
 import { validatedPlot } from "./mathRecognition";
 import { drawPlot } from "./board";
 import { handwritingText } from "./handwriting";
+import {
+  insertionDefaults,
+  renderInsertion,
+  readInsertions,
+} from "./insertObjects";
+import { sceneAPI } from "./test/scene";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -26,7 +32,7 @@ afterEach(() => {
 });
 
 const setup = (
-  mode: "text" | "shape" | "function" | "calculation" | "magic",
+  mode?: "text" | "shape" | "function" | "calculation" | "magic",
 ) => {
   let scene: readonly ExcalidrawElement[] = [];
   let refresh = () => {};
@@ -74,8 +80,8 @@ const setup = (
   return {
     api,
     ink,
-    draw: () => {
-      scene = [ink];
+    draw: (elements: readonly ExcalidrawElement[] = [ink]) => {
+      scene = elements;
       refresh();
     },
     append: () => {
@@ -88,6 +94,94 @@ const setup = (
     },
   };
 };
+
+it.each(["mindmap", "fourline"] as const)(
+  "recognizes ordinary ink only inside the %s object and preserves neighboring notes",
+  async (kind) => {
+    const base = sceneAPI();
+    await renderInsertion(base, insertionDefaults(kind, { x: 100, y: 100 }));
+    const background = base
+      .getSceneElements()
+      .filter((element) => element.customData?.fcInsertion);
+    const body = background.find((element) => element.type === "rectangle")!;
+    vi.useFakeTimers();
+    const { api, ink, draw } = setup();
+    const handwriting = { ...ink, x: body.x + 12, y: body.y + 12 };
+    const note = {
+      ...ink,
+      id: "neighboring-note",
+      x: body.x - 400,
+      y: body.y - 200,
+    };
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockResolvedValue("Hello");
+    const error = vi.fn();
+    const release = observeInkAssistance(api, vi.fn(), error);
+    try {
+      draw([...background, note, handwriting]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(710);
+      });
+      expect(recognize).toHaveBeenCalledTimes(1);
+      expect(recognize.mock.calls[0][5]).toHaveLength(1);
+      expect(recognize.mock.calls[0][6]).toBe(
+        kind === "fourline" ? "en-US" : undefined,
+      );
+      expect(
+        api.getSceneElements().some((element) => element.id === handwriting.id),
+      ).toBe(false);
+      expect(
+        api.getSceneElements().some((element) => element.id === note.id),
+      ).toBe(true);
+      const text = api
+        .getSceneElements()
+        .find((element) => element.type === "text")!;
+      expect(text.strokeColor).toBe(ink.strokeColor);
+      expect(text.groupIds).toEqual(body.groupIds);
+      expect(
+        readInsertions(api)[0][kind === "fourline" ? "text" : "outline"],
+      ).toContain("Hello");
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      release();
+    }
+  },
+);
+
+it("preserves ordinary handwriting when its target is removed during recognition", async () => {
+  const base = sceneAPI();
+  await renderInsertion(
+    base,
+    insertionDefaults("fourline", { x: 100, y: 100 }),
+  );
+  const background = base
+    .getSceneElements()
+    .filter((element) => element.customData?.fcInsertion);
+  const body = background.find((element) => element.type === "rectangle")!;
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup();
+  const source = { ...ink, x: body.x + 12, y: body.y + 12 };
+  let finish!: (text: string) => void;
+  vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const release = observeInkAssistance(api, vi.fn(), vi.fn());
+  try {
+    draw([...background, source]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(710);
+    });
+    draw([source]);
+    await act(async () => finish("Outdated"));
+    expect(api.getSceneElements()).toEqual([source]);
+  } finally {
+    release();
+  }
+});
 
 it.each(["text", "shape"] as const)(
   "keeps %s pen ink until a validated result is ready",
@@ -176,9 +270,17 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(349);
+    });
+    expect(recognize).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
     });
     expect(recognize.mock.calls[0][3]).toBe("math");
+    expect(api.getSceneElements()).toEqual([ink]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350);
+    });
     expect(
       handwritingText(
         api.getSceneElements().filter((element) => element.id !== ink.id),
@@ -213,6 +315,36 @@ it("never starts automatic conversion on the hidden board while courseware is vi
   } finally {
     stop();
     document();
+  }
+});
+
+it("prefetches math but does not commit a partial expression when another stroke arrives", async () => {
+  vi.useFakeTimers();
+  const { api, draw, append } = setup("calculation");
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("1+1=");
+  const stop = observeInkAssistance(api, vi.fn(), vi.fn());
+  try {
+    draw();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350);
+    });
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    append();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(699);
+    });
+    expect(recognize).toHaveBeenCalledTimes(2);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(api.updateScene).toHaveBeenCalledTimes(1);
+    expect(handwritingText(api.getSceneElements())).toEqual(["2"]);
+  } finally {
+    stop();
   }
 });
 
@@ -402,7 +534,8 @@ it("turns a drawn dog into a generated hand-drawn image at its original location
     expect(fetcher).toHaveBeenCalledTimes(1);
     const request = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(request.model).toBe("illustrator");
-    expect(request.prompt).toContain("一只坐着的小狗");
+    expect(request.image).toMatch(/^data:image\//);
+    expect(ai.chat).not.toHaveBeenCalled();
     expect(request.prompt).toContain("手绘");
     expect(api.getSceneElements()).toHaveLength(1);
     const generated = api.getSceneElements()[0];

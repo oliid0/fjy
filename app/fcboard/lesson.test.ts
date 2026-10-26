@@ -68,7 +68,7 @@ describe("progressive lesson writing", () => {
   });
   it("rejects unknown AI operations before changing a scene", () => {
     expect(() => script([{ type: "eval", text: "alert(1)" }])).toThrow(
-      t("fcboard.不支持的教学命令：{{type}}", { type: "eval" }),
+      t("fcboard.unsupported_lesson_command_type", { type: "eval" }),
     );
     expect(() =>
       script([
@@ -80,7 +80,7 @@ describe("progressive lesson writing", () => {
           ],
         },
       ]),
-    ).toThrow(t("fcboard.教学命令的数值超出范围"));
+    ).toThrow(t("fcboard.lesson_command_value_out_of_range"));
     expect(() =>
       validateLesson({
         steps: [
@@ -89,6 +89,49 @@ describe("progressive lesson writing", () => {
             checkpoint: { question: "?", choices: ["a", "b"], answer: 3 },
           },
         ],
+      }),
+    ).toThrow();
+  });
+  it("rejects executable or recursive lesson tools and permits result checks only on read commands", () => {
+    const invalid = [
+      [{ name: "ui.invoke", args: { script: "alert(1)" } }],
+      [{ name: "lesson.teach", args: { prompt: "again" } }],
+      [{ name: "canvas.ink", args: { points: () => [] } }],
+      [{ name: "canvas.style", args: { width: Infinity } }],
+      [
+        {
+          name: "resources.inspect",
+          expect: [{ path: "constructor.prototype", equals: true }],
+        },
+      ],
+      [
+        {
+          name: "canvas.ink",
+          expect: [{ path: "ids.0", equals: "not-known" }],
+        },
+      ],
+    ];
+    for (const tools of invalid) {
+      expect(() =>
+        validateLesson({ steps: [{ commands: [], tools }] }),
+      ).toThrow();
+    }
+    const tools = [
+      {
+        name: "resources.inspect",
+        args: { id: "actual-lesson" },
+        expect: [{ path: "outputs.0", equals: "5 m/s²" }],
+      },
+    ];
+    expect(
+      validateLesson({ steps: [{ commands: [], tools }] }).steps[0].tools,
+    ).toEqual(tools);
+    expect(() =>
+      validateLesson({
+        steps: Array.from({ length: 4 }, () => ({
+          commands: [],
+          tools: Array.from({ length: 20 }, () => ({ name: "canvas.inspect" })),
+        })),
       }),
     ).toThrow();
   });

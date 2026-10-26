@@ -25,7 +25,7 @@ final class OfflineTtsEngine implements AutoCloseable {
         String assets = "tts/melo/";
         OfflineTtsConfig config = new OfflineTtsConfig();
         OfflineTtsVitsModelConfig vits = config.getModel().getVits();
-        vits.setModel(assets + "model.onnx");
+        vits.setModel(assets + "model.int8.onnx");
         vits.setLexicon(assets + "lexicon.txt");
         vits.setTokens(assets + "tokens.txt");
         config.getModel().setNumThreads(2);

@@ -16,12 +16,12 @@ it("opens a button's settings once on long press and suppresses its following to
   render(
     <ToolButton
       type="button"
-      aria-label={t("fcboard.画笔")}
+      aria-label={t("fcboard.pen")}
       onLongPress={open}
       onClick={click}
     />,
   );
-  const pen = screen.getByRole("button", { name: t("fcboard.画笔") });
+  const pen = screen.getByRole("button", { name: t("fcboard.pen") });
   fireEvent.pointerDown(pen, { button: 0, clientX: 50, clientY: 50 });
   act(() => vi.advanceTimersByTime(450));
   fireEvent.contextMenu(pen);
@@ -46,11 +46,11 @@ it.each(["move", "cancel", "leave", "unmount"])(
     const view = render(
       <ToolButton
         type="button"
-        aria-label={t("fcboard.橡皮")}
+        aria-label={t("fcboard.eraser")}
         onLongPress={open}
       />,
     );
-    const eraser = screen.getByRole("button", { name: t("fcboard.橡皮") });
+    const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
     fireEvent.pointerDown(eraser, { button: 0, clientX: 20, clientY: 20 });
     if (reason === "move") {
       fireEvent.pointerMove(eraser, { clientX: 40, clientY: 20 });

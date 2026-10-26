@@ -6,6 +6,7 @@ import { capitalizeString } from "@excalidraw/common";
 import { Popover } from "radix-ui";
 
 import { trackEvent } from "../analytics";
+import { t } from "../i18n";
 
 import { ToolButton } from "./ToolButton";
 
@@ -80,7 +81,7 @@ export const ToolPopover = ({
           icon={displayedOption.icon}
           checked={isActive}
           name="editor-current-shape"
-          title={`${title} · 长按切换`}
+          title={`${title} · ${t("fcboard.hold_to_switch")}`}
           aria-label={title}
           data-testid={dataTestId}
           label={title}

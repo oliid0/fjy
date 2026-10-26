@@ -58,6 +58,8 @@ export class BoardRecorder {
   private timer?: ReturnType<typeof setInterval>;
   private recorder?: MediaRecorder;
   private started = 0;
+  private pausedAt?: number;
+  private pausedMs = 0;
   private chunks: Blob[] = [];
   private stopPromise?: Promise<Blob>;
   private captureGeneration = 0;
@@ -73,7 +75,7 @@ export class BoardRecorder {
     ) {
       throw new Error(
         t(
-          "fcboard.当前设备不支持录制，请升级系统 WebView 并允许麦克风/摄像头权限",
+          "fcboard.recording_is_unavailable_update_system_webview_and_allow_microphone_camera_access",
         ),
       );
     }
@@ -97,7 +99,9 @@ export class BoardRecorder {
         canvas.height = 1080;
         const context = canvas.getContext("2d");
         if (!context || !canvas.captureStream) {
-          throw new Error(t("fcboard.当前设备不支持白板画面录制"));
+          throw new Error(
+            t("fcboard.board_screen_recording_is_unavailable_on_this_device"),
+          );
         }
         let camera: HTMLVideoElement | undefined;
         let screen: HTMLVideoElement | undefined;
@@ -117,7 +121,7 @@ export class BoardRecorder {
           this.videos.push(screen);
           await screen.play();
           display.getVideoTracks()[0].onended = () => {
-            if (this.recorder?.state === "recording") {
+            if (this.recorder && this.recorder.state !== "inactive") {
               this.recorder.stop();
             }
           };
@@ -136,15 +140,20 @@ export class BoardRecorder {
         }
         // Capture the live whiteboard canvas on Android too (getDisplayMedia is not exposed by Android WebView).
         const paint = () => {
+          if (this.recorder?.state === "paused") {
+            return;
+          }
           context.fillStyle = "#fff";
           context.fillRect(0, 0, canvas.width, canvas.height);
           const canvases = document.querySelectorAll<HTMLCanvasElement>(
             ".excalidraw .excalidraw__canvas",
           );
           const documentOpen = !!document.querySelector(".fc-presentation");
+          const needsFrame =
+            documentOpen || !!document.querySelector(".excalidraw iframe");
           if (
             Capacitor.isNativePlatform() &&
-            documentOpen &&
+            needsFrame &&
             !capturing &&
             Date.now() - capturedAt > 150
           ) {
@@ -167,7 +176,7 @@ export class BoardRecorder {
           const sources =
             screen && screen.readyState >= 2
               ? [screen]
-              : documentOpen && appFrame
+              : needsFrame && appFrame
               ? [appFrame]
               : Array.from(canvases);
           sources.forEach((source) => {
@@ -233,17 +242,25 @@ export class BoardRecorder {
           onStopped();
           blob.size
             ? resolve(blob)
-            : reject(new Error(t("fcboard.录制内容为空，请重试")));
+            : reject(
+                new Error(t("fcboard.the_recording_is_empty_please_try_again")),
+              );
         };
         this.recorder!.onerror = () => {
           this.release();
           onStopped();
-          reject(new Error(t("fcboard.设备录制失败，请检查存储与权限")));
+          reject(
+            new Error(
+              t("fcboard.recording_failed_check_storage_and_permissions"),
+            ),
+          );
         };
       });
       // Keep a handler attached while the user is still recording.
       void this.stopPromise.catch(() => {});
       this.started = Date.now();
+      this.pausedAt = undefined;
+      this.pausedMs = 0;
       this.recorder.start(1000);
     } catch (error) {
       this.release();
@@ -253,9 +270,10 @@ export class BoardRecorder {
 
   async stop() {
     if (!this.recorder || !this.stopPromise) {
-      throw new Error(t("fcboard.没有正在进行的录制"));
+      throw new Error(t("fcboard.no_active_recording"));
     }
-    const duration = (Date.now() - this.started) / 1000;
+    const duration =
+      ((this.pausedAt ?? Date.now()) - this.started - this.pausedMs) / 1000;
     if (this.recorder.state !== "inactive") {
       this.recorder.stop();
     }
@@ -263,10 +281,25 @@ export class BoardRecorder {
   }
 
   dispose() {
-    if (this.recorder?.state === "recording") {
+    if (this.recorder && this.recorder.state !== "inactive") {
       this.recorder.stop();
     }
     this.release();
+  }
+  pause() {
+    if (!this.recorder || this.recorder.state !== "recording") {
+      throw new Error(t("fcboard.no_active_recording"));
+    }
+    this.recorder.pause();
+    this.pausedAt = Date.now();
+  }
+  resume() {
+    if (!this.recorder || this.recorder.state !== "paused") {
+      throw new Error(t("fcboard.no_active_recording"));
+    }
+    this.recorder.resume();
+    this.pausedMs += Date.now() - this.pausedAt!;
+    this.pausedAt = undefined;
   }
   private release() {
     this.captureGeneration++;

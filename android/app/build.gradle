@@ -22,6 +22,16 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Each installation needs only its own native libraries, not four ABIs.
+    // Keep all previously packaged architectures available as separate downloads.
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            universalApk false
+        }
+    }
 }
 
 repositories {
@@ -31,6 +41,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     implementation 'com.google.mlkit:digital-ink-recognition:18.1.0'
     implementation 'ai.moonshine:moonshine-voice:0.1.5'
     implementation files('libs/sherpa-onnx-1.13.8.aar')

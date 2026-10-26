@@ -1,10 +1,16 @@
 import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { InteractiveResourceFrame } from "@excalidraw/excalidraw/components/InteractiveResourceFrame";
+import { validateInteractiveResource } from "@excalidraw/excalidraw/interactiveHtml";
+import { newIframeElement } from "@excalidraw/element";
+import { getLanguage, t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Popper from "@mui/material/Popper";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 import { FactoryPenSettings } from "@excalidraw/excalidraw/components/FactoryPenSettings";
-import { whiteboardInkStyle } from "@excalidraw/excalidraw/whiteboardPen";
+import {
+  switchWhiteboardPen,
+  whiteboardInkStyle,
+} from "@excalidraw/excalidraw/whiteboardPen";
 import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
 import { finishFactoryInk } from "@excalidraw/element/factoryInk";
 import factoryEraser from "@excalidraw/excalidraw/components/FactoryEraser.png?url";
@@ -48,10 +54,7 @@ import type {
   RegionBounds,
   RegionHandle,
 } from "@excalidraw/excalidraw/lasso/region";
-import type {
-  AppState,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -78,11 +81,27 @@ import {
 import { rememberPage } from "./materials";
 import { currentSettings } from "./settings";
 import { layoutBoardText } from "./textLayout";
+import { prepareQuestionWriting } from "./questionWriting";
 import { MaterialPanel } from "./MaterialPanel";
 import { documentStrokeGeometry } from "./documentInk";
-import { recognizeInkContent } from "./inkRecognition";
+import {
+  inkAssistMode,
+  recognizeInkContent,
+  settleInkRecognition,
+} from "./inkRecognition";
+import {
+  documentWritingParts,
+  insertionWritingTargets,
+  insertionWritingAt,
+  insertionWritingText,
+  insertionWritingTextIds,
+} from "./insertionWriting";
 import { drawPlot } from "./board";
 import { insertGeneratedImage } from "./imageGeneration";
+import { changeQuestionAnswer } from "./questionAnswer";
+import { resourcePlacement } from "./resourcePlacement";
+import { canvasConfigurationSnapshot } from "./canvasConfiguration";
+import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
 
 import type { Viewer } from "@web-ppt/viewer-core";
 import type { Presentation } from "@web-ppt/core";
@@ -115,6 +134,8 @@ const StrokePath = ({ stroke }: { stroke: InkStroke }) => {
         </defs>
       )}
       <path
+        data-language={stroke.language ? stroke.id : undefined}
+        data-widget={stroke.widget?.id}
         d={geometry.path}
         fill={geometry.filled ? stroke.color : stroke.fill || "none"}
         stroke={
@@ -190,12 +211,19 @@ export const FilePreview = ({
   onReady?: (error?: string) => void;
   onTools?: () => void;
 }) => {
-  useI18n();
+  const { langCode } = useI18n();
   const inkProfile = useDeviceInkProfile();
+  const deviceProfileRef = useRef(inkProfile);
+  deviceProfileRef.current = inkProfile;
   const [penState, setPenState] = useState(() => api.getAppState());
+  const penStateRef = useRef(penState);
   const [penAnchor, setPenAnchor] = useState<HTMLElement | null>(null);
   useEffect(
-    () => api.onChange((_elements, state) => setPenState(state)),
+    () =>
+      api.onChange((_elements, state) => {
+        penStateRef.current = state;
+        setPenState(state);
+      }),
     [api],
   );
   const host = useRef<HTMLDivElement>(null);
@@ -376,7 +404,13 @@ export const FilePreview = ({
               file.name,
               index,
               instance.text(index),
-            ).catch(() => setNotice(t("fcboard.课件可播放，资料索引保存失败")));
+            ).catch(() =>
+              setNotice(
+                t(
+                  "fcboard.playback_is_available_but_the_resource_index_could_not_be_saved",
+                ),
+              ),
+            );
           }
         } else if (!isImage) {
           const reader = new OfficeReader();
@@ -386,7 +420,7 @@ export const FilePreview = ({
             return;
           }
           if (!views.length) {
-            throw new Error(t("fcboard.文件中没有可显示的页面"));
+            throw new Error(t("fcboard.this_file_has_no_displayable_pages"));
           }
           const firstHtml = await reader.render(views[0].index);
           if (!active) {
@@ -411,7 +445,13 @@ export const FilePreview = ({
               file.name,
               view.index,
               htmlText(rendered),
-            ).catch(() => setNotice(t("fcboard.课件可预览，资料索引保存失败")));
+            ).catch(() =>
+              setNotice(
+                t(
+                  "fcboard.preview_is_available_but_the_resource_index_could_not_be_saved",
+                ),
+              ),
+            );
           }
         } else {
           setPages([{ index: 0, name: "1" }]);
@@ -419,7 +459,9 @@ export const FilePreview = ({
       } catch (failure) {
         if (active) {
           setError(
-            t("fcboard.课件打开失败：{{error}}", { error: String(failure) }),
+            t("fcboard.could_not_open_document_error", {
+              error: String(failure),
+            }),
           );
         }
       } finally {
@@ -454,9 +496,12 @@ export const FilePreview = ({
         .then(() => saveInk(key, inkRef.current))
         .catch((failure) => {
           setNotice(
-            t("fcboard.板书保存失败，请保持课件打开后重试：{{error}}", {
-              error: String(failure),
-            }),
+            t(
+              "fcboard.could_not_save_annotations_keep_the_document_open_and_retry_error",
+              {
+                error: String(failure),
+              },
+            ),
           );
           throw failure;
         });
@@ -483,7 +528,7 @@ export const FilePreview = ({
     (index: number) => {
       const task = (async () => {
         if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
-          throw new Error(t("fcboard.页码超出范围"));
+          throw new Error(t("fcboard.page_number_out_of_range"));
         }
         if (classroomCommands.has("lesson.pause")) {
           await classroomCommands.execute({ name: "lesson.pause" });
@@ -579,8 +624,12 @@ export const FilePreview = ({
         }
         onClose(advance);
       } catch {
-        setNotice(t("fcboard.板书尚未保存，请稍后重试"));
-        throw new Error(t("fcboard.板书尚未保存，课件保持打开"));
+        setNotice(
+          t("fcboard.annotations_have_not_been_saved_please_try_again_shortly"),
+        );
+        throw new Error(
+          t("fcboard.annotations_have_not_been_saved_keep_this_file_open"),
+        );
       }
     },
     [onClose, key, ready],
@@ -615,7 +664,7 @@ export const FilePreview = ({
         (args) => {
           const index = Number(args.page) - 1;
           if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
-            throw new Error(t("fcboard.页码超出范围"));
+            throw new Error(t("fcboard.page_number_out_of_range"));
           }
           return navigate(index);
         },
@@ -633,7 +682,9 @@ export const FilePreview = ({
               ? zoomRef.current - 0.25
               : 1;
           if (!Number.isFinite(value) || value < 0.5 || value > 3) {
-            throw new Error(t("fcboard.课件缩放范围为50%到300%"));
+            throw new Error(
+              t("fcboard.document_zoom_must_be_between_50_and_300"),
+            );
           }
           zoomRef.current = value;
           setZoom(value);
@@ -703,7 +754,7 @@ export const FilePreview = ({
             selectedInkRef.current.includes(stroke.id),
           );
           if (!selected.length) {
-            throw new Error(t("fcboard.请先圈选板书"));
+            throw new Error(t("fcboard.circle_annotations_first"));
           }
           const area = visibleDocumentArea(
             stage.current,
@@ -741,6 +792,12 @@ export const FilePreview = ({
               id: crypto.randomUUID(),
               lesson: undefined,
               commandId: undefined,
+              language: stroke.language
+                ? {
+                    ...stroke.language,
+                    group: duplicateId(stroke.language.group),
+                  }
+                : undefined,
               points: stroke.points.map(([x, y]) => [x + dx, y + dy]),
               anchor: stroke.anchor ? moved(stroke.anchor) : undefined,
               widget: stroke.widget
@@ -790,7 +847,7 @@ export const FilePreview = ({
           ) {
             throw new Error(
               t(
-                "fcboard.课件上可使用笔、橡皮或圈选；也可直接说要插入的文字或图形",
+                "fcboard.use_the_pen_eraser_or_lasso_on_the_document_or_describe_text_or_shapes_to_insert",
               ),
             );
           }
@@ -806,17 +863,27 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.style",
-        "更改板书或圈选板书：args.color 十六进制颜色，width=1..30,fontSize=8..200,opacity=0..100",
+        "更改板书或圈选板书：args.color 十六进制颜色，width=1..30,fontSize=8..200,opacity=0..100,pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language",
         (args) => {
           if (
             !Object.keys(args).length ||
             Object.keys(args).some(
-              (key) => !["color", "width", "fontSize", "opacity"].includes(key),
+              (key) =>
+                !["color", "width", "fontSize", "opacity", "pen"].includes(key),
             )
           ) {
             throw new Error(
-              t("fcboard.课件板书可调整颜色、笔宽、字号与透明度"),
+              t(
+                "fcboard.you_can_adjust_annotation_color_pen_width_text_size_and_opacity",
+              ),
             );
+          }
+          const penMode = (
+            ["hard", "brush", "highlighter", "dashed", "rainbow"] as const
+          ).find((value) => value === args.pen);
+          const assist = inkAssistMode(args.pen);
+          if (args.pen !== undefined && !penMode && !assist) {
+            throw new Error(t("fcboard.unknown_pen_type"));
           }
           for (const [key, min, max] of [
             ["fontSize", 8, 200],
@@ -829,7 +896,7 @@ export const FilePreview = ({
                 (args[key] as number) < min ||
                 (args[key] as number) > max)
             ) {
-              throw new Error(t("fcboard.板书样式超出范围"));
+              throw new Error(t("fcboard.annotation_style_value_out_of_range"));
             }
           }
           if (
@@ -839,14 +906,22 @@ export const FilePreview = ({
               args.width < 1 ||
               args.width > 30)
           ) {
-            throw new Error(t("fcboard.笔画宽度必须在1到30之间"));
+            throw new Error(t("fcboard.ink_width_out_of_range"));
           }
           if (
             args.color !== undefined &&
             (typeof args.color !== "string" ||
               !/^#[a-f0-9]{3}(?:[a-f0-9]{3})?$/i.test(args.color))
           ) {
-            throw new Error(t("fcboard.板书颜色无效"));
+            throw new Error(t("fcboard.invalid_annotation_color"));
+          }
+          if (penMode || assist) {
+            api.updateScene({
+              appState: {
+                ...switchWhiteboardPen(api.getAppState(), penMode || "hard"),
+                currentItemInkAssist: assist,
+              },
+            });
           }
           if (typeof args.color === "string") {
             api.updateScene({
@@ -918,7 +993,7 @@ export const FilePreview = ({
           !args.text.trim() ||
           args.text.length > 10000
         ) {
-          throw new Error(t("fcboard.板书文本为空或过长"));
+          throw new Error(t("fcboard.annotation_text_is_empty_or_too_long"));
         }
         const strokes = inkRef.current[pageRef.current] || [];
         const sourceIds =
@@ -932,6 +1007,19 @@ export const FilePreview = ({
           sourceIds.includes(stroke.id),
         );
         const sourceSignature = documentSourceSignature(selected);
+        const language =
+          args.language === undefined
+            ? undefined
+            : parseLanguageStudy(JSON.stringify(args.language));
+        if (
+          language &&
+          (args.text !== language.translation ||
+            !selected.length ||
+            args.targetLanguage !== getLanguage().code)
+        ) {
+          throw new DOMException("Language source changed", "AbortError");
+        }
+        const languageGroup = language ? crypto.randomUUID() : undefined;
         if (args.sourceSignature && args.sourceSignature !== sourceSignature) {
           throw new DOMException("Document ink changed", "AbortError");
         }
@@ -941,7 +1029,7 @@ export const FilePreview = ({
         const source = selected.find((stroke) => stroke.text) || selected[0];
         const presentation = args.presentation ?? currentSettings().answerStyle;
         if (!["match", "handwritten", "text"].includes(String(presentation))) {
-          throw new Error(t("fcboard.回答样式不存在"));
+          throw new Error(t("fcboard.unknown_answer_style"));
         }
         const fontFamily =
           presentation === "handwritten"
@@ -956,7 +1044,7 @@ export const FilePreview = ({
           ? strokes.find((stroke) => stroke.id === args.id && stroke.text)
           : undefined;
         if (args.id && !existing) {
-          throw new Error(t("fcboard.找不到这段课件板书"));
+          throw new Error(t("fcboard.annotation_not_found"));
         }
         const boxes = selected.map(documentStrokeBounds);
         const bounds = boxes.length
@@ -981,8 +1069,7 @@ export const FilePreview = ({
               args.sourceLines >= 1 &&
               args.sourceLines <= 1000
                 ? args.sourceLines
-                : 1) /
-              1.25
+                : 1)
             : pen.current.fontSize / scale);
         const layout = layoutBoardText(
           args.text,
@@ -1016,7 +1103,9 @@ export const FilePreview = ({
         );
         if (!layout) {
           throw new Error(
-            t("fcboard.当前可见区域没有足够空间，请留出书写区域"),
+            t(
+              "fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing",
+            ),
           );
         }
         const next: InkStroke = existing
@@ -1040,6 +1129,9 @@ export const FilePreview = ({
               fontSize: layout.fontSize,
               fontFamily,
               opacity: source?.opacity ?? pen.current.opacity,
+              ...(languageGroup
+                ? { language: { group: languageGroup, source: false } }
+                : {}),
             };
         const targetPage = pageRef.current;
         await Fonts.loadElementsFonts(
@@ -1056,6 +1148,7 @@ export const FilePreview = ({
         );
         if (
           (args.signal instanceof AbortSignal && args.signal.aborted) ||
+          (language && args.targetLanguage !== getLanguage().code) ||
           targetPage !== pageRef.current ||
           documentSourceSignature(
             (inkRef.current[targetPage] || []).filter((stroke) =>
@@ -1068,9 +1161,30 @@ export const FilePreview = ({
         commitInk({
           ...inkRef.current,
           [targetPage]: [
-            ...(inkRef.current[targetPage] || []).filter(
-              (stroke) => stroke.id !== next.id && !replaceIds.has(stroke.id),
-            ),
+            ...(inkRef.current[targetPage] || [])
+              .filter(
+                (stroke) => stroke.id !== next.id && !replaceIds.has(stroke.id),
+              )
+              .map((stroke) =>
+                language && languageGroup && sourceIds.includes(stroke.id)
+                  ? {
+                      ...stroke,
+                      language: {
+                        group: languageGroup,
+                        source: true,
+                        ...(stroke.id === selected[0].id
+                          ? {
+                              study: language,
+                              targetLanguage: String(args.targetLanguage),
+                              signature: languageInkSignature(
+                                selected.map((item) => item.points),
+                              ),
+                            }
+                          : {}),
+                      },
+                    }
+                  : stroke,
+              ),
             next,
           ],
         });
@@ -1084,7 +1198,7 @@ export const FilePreview = ({
           Math.abs(args.dx) > 10000 ||
           Math.abs(args.dy) > 10000
         ) {
-          throw new Error(t("fcboard.移动距离无效"));
+          throw new Error(t("fcboard.invalid_movement_distance"));
         }
         const ids = commandObjectIds(
           args.ids === undefined ? selectedInkRef.current : args.ids,
@@ -1118,6 +1232,11 @@ export const FilePreview = ({
         })),
       })),
       classroomCommands.context("document", () => ({
+        configuration: canvasConfigurationSnapshot(
+          penStateRef.current,
+          deviceProfileRef.current,
+          true,
+        ),
         id: documentId.current,
         name: file.name,
         page: pageRef.current + 1,
@@ -1181,6 +1300,117 @@ export const FilePreview = ({
           ink: inkRef.current[pageRef.current] || [],
         };
       }),
+      classroomCommands.register("document.answer", "@internal", (args) => {
+        const page = pageRef.current;
+        const items = inkRef.current[page] || [];
+        const anchor = String(args.anchor || "");
+        const next = changeQuestionAnswer(
+          items,
+          anchor,
+          items.find((item) => item.id === anchor)?.questionAnswer,
+          args.ids as string[] | undefined,
+        );
+        commitInk(
+          {
+            ...inkRef.current,
+            [page]: next.items.map((item) =>
+              item.id === anchor
+                ? { ...item, questionAnswer: next.answer }
+                : item,
+            ),
+          },
+          args.ids === undefined,
+        );
+        return {
+          collapsed: !!next.answer.folded,
+          count: next.answer.ids.length,
+        };
+      }),
+      classroomCommands.register(
+        "document.strokes",
+        "@internal",
+        async (args) => {
+          if (args.signal instanceof AbortSignal) {
+            args.signal.throwIfAborted();
+          }
+          const page = pageRef.current;
+          const replaced = commandObjectIds(
+            args.replaceIds ?? [],
+            inkRef.current[page] || [],
+            true,
+          );
+          const signature = () =>
+            documentSourceSignature(
+              (inkRef.current[page] || []).filter((stroke) =>
+                replaced.has(stroke.id),
+              ),
+            );
+          const before = signature();
+          const elements = await prepareQuestionWriting(args, () => {
+            const current = classroomCommands.read("document") as
+              | { id?: string }
+              | undefined;
+            if (
+              current?.id !== documentId.current ||
+              pageRef.current !== page ||
+              before !== signature()
+            ) {
+              throw new DOMException("Question target changed", "AbortError");
+            }
+            const { scale, viewport } = visibleDocumentArea(
+              stage.current,
+              size,
+              zoomRef.current,
+              scroll,
+            );
+            return {
+              scale,
+              viewport,
+              obstacles: (inkRef.current[page] || [])
+                .filter((stroke) => !replaced.has(stroke.id))
+                .map(documentStrokeBounds),
+              fontSize: pen.current.fontSize / scale,
+              color: pen.current.color,
+              width: pen.current.penWidth,
+              opacity: pen.current.opacity,
+            };
+          });
+          if (args.signal instanceof AbortSignal) {
+            args.signal.throwIfAborted();
+          }
+          const current = classroomCommands.read("document") as
+            | { id?: string }
+            | undefined;
+          if (
+            current?.id !== documentId.current ||
+            pageRef.current !== page ||
+            before !== signature()
+          ) {
+            throw new DOMException("Question target changed", "AbortError");
+          }
+          const strokes = elements.map((element) => {
+            if (element.type !== "text" && element.type !== "freedraw") {
+              throw new Error(t("fcboard.invalid_annotation_coordinates"));
+            }
+            return shapeInk(element, "");
+          });
+          commitInk({
+            ...inkRef.current,
+            [page]: [
+              ...(inkRef.current[page] || []).filter(
+                (stroke) => !replaced.has(stroke.id),
+              ),
+              ...strokes,
+            ],
+          });
+          const ids = strokes.map((stroke) => stroke.id);
+          if (args.select !== false) {
+            selectedInkRef.current = ids;
+            classroomCommands.changed("document");
+          }
+          return { ids };
+        },
+      ),
       classroomCommands.register("document.draw", "@internal", (args) => {
         if (
           (args.signal instanceof AbortSignal && args.signal.aborted) ||
@@ -1234,20 +1464,35 @@ export const FilePreview = ({
           commitInk({ ...inkRef.current, [page]: next });
           return;
         }
-        const stroke = shapeInk(
-          args.shape as ExcalidrawElementSkeleton,
-          lesson,
-          typeof args.image === "string" ? args.image : undefined,
+        const shapes = args.shapes === undefined ? [args.shape] : args.shapes;
+        if (!Array.isArray(shapes) || !shapes.length || shapes.length > 20000) {
+          throw new Error(t("fcboard.invalid_lesson_command"));
+        }
+        const strokes = (shapes as ExcalidrawElementSkeleton[]).map((shape) =>
+          shapeInk(
+            shape,
+            lesson,
+            typeof args.image === "string" ? args.image : undefined,
+          ),
         );
-        if (!animationBefore.current.has(stroke.id)) {
-          animationBefore.current.set(stroke.id, inkRef.current[page] || []);
+        const ids = new Set(strokes.map((stroke) => stroke.id));
+        const groupId =
+          typeof args.groupId === "string" ? args.groupId : strokes[0].id;
+        if (!animationBefore.current.has(groupId)) {
+          animationBefore.current.set(groupId, inkRef.current[page] || []);
         }
         if (args.progress === 1) {
-          (past.current[page] ||= []).push(
-            animationBefore.current.get(stroke.id)!,
-          );
+          const before = animationBefore.current.get(groupId)!;
+          const own = (stroke: InkStroke) =>
+            typeof args.commandId === "string"
+              ? stroke.lesson === lesson && stroke.commandId === args.commandId
+              : ids.has(stroke.id);
+          (past.current[page] ||= []).push([
+            ...(inkRef.current[page] || []).filter((stroke) => !own(stroke)),
+            ...before.filter(own),
+          ]);
           future.current[page] = [];
-          animationBefore.current.delete(stroke.id);
+          animationBefore.current.delete(groupId);
           refreshHistory((value) => value + 1);
         }
         commitInk(
@@ -1255,17 +1500,56 @@ export const FilePreview = ({
             ...inkRef.current,
             [page]: [
               ...(inkRef.current[page] || []).filter(
-                (item) => item.id !== stroke.id && !replaceIds.has(item.id),
+                (item) =>
+                  !ids.has(item.id) &&
+                  !replaceIds.has(item.id) &&
+                  !(
+                    typeof args.commandId === "string" &&
+                    item.lesson === lesson &&
+                    item.commandId === args.commandId
+                  ),
               ),
-              stroke,
+              ...strokes,
             ],
           },
           false,
         );
       }),
+      classroomCommands.register("document.resource", "@internal", (args) => {
+        if (args.signal instanceof AbortSignal) {
+          args.signal.throwIfAborted();
+        }
+        const resource = validateInteractiveResource(args.resource);
+        const page = pageRef.current;
+        const current = inkRef.current[page] || [];
+        const { viewport, scale } = visibleDocumentArea(
+          stage.current,
+          size,
+          zoomRef.current,
+          scroll,
+        );
+        const position = resourcePlacement(
+          viewport,
+          current.map(documentStrokeBounds),
+          scale,
+        );
+        const element = newIframeElement({
+          type: "iframe",
+          ...position,
+          strokeWidth: 0,
+          customData: { fcInteractiveResource: resource },
+        });
+        commitInk({
+          ...inkRef.current,
+          [page]: [...current, shapeInk(element, "resource")],
+        });
+        setInkOn(false);
+        setSelecting(false);
+        return { ids: [element.id] };
+      }),
       classroomCommands.register("document.insertion", "@internal", (args) => {
         if (typeof args.id !== "string" || !Array.isArray(args.shapes)) {
-          throw new Error(t("fcboard.插入对象数据无效"));
+          throw new Error(t("fcboard.invalid_insertion_data"));
         }
         const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
           (shape) => shapeInk(shape, "insertion"),
@@ -1285,22 +1569,50 @@ export const FilePreview = ({
       classroomCommands.register("document.widget", "@internal", (args) => {
         const widget = args.widget as { id: string };
         if (!widget?.id || !Array.isArray(args.shapes)) {
-          throw new Error(t("fcboard.教学工具数据无效"));
+          throw new Error(t("fcboard.invalid_teaching_tool_data"));
         }
         const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
           (shape) => shapeInk(shape, "widget"),
         );
+        const page = pageRef.current;
+        const current = inkRef.current[page] || [];
+        const selected = current.some(
+          (stroke) =>
+            stroke.widget?.id === widget.id &&
+            selectedInkRef.current.includes(stroke.id),
+        );
+        const before = args.before as InkStroke[] | undefined;
+        if (before !== undefined) {
+          if (
+            !Array.isArray(before) ||
+            !before.length ||
+            before.some((stroke) => stroke.widget?.id !== widget.id)
+          ) {
+            throw new Error(t("fcboard.invalid_teaching_tool_data"));
+          }
+          const history = (past.current[page] ||= []);
+          history.push([
+            ...current.filter((stroke) => stroke.widget?.id !== widget.id),
+            ...before,
+          ]);
+          if (history.length > 100) {
+            history.shift();
+          }
+          future.current[page] = [];
+          refreshHistory((value) => value + 1);
+        }
+        if (selected) {
+          selectedInkRef.current = strokes.map((stroke) => stroke.id);
+        }
         commitInk(
           {
             ...inkRef.current,
-            [pageRef.current]: [
-              ...(inkRef.current[pageRef.current] || []).filter(
-                (stroke) => stroke.widget?.id !== widget.id,
-              ),
+            [page]: [
+              ...current.filter((stroke) => stroke.widget?.id !== widget.id),
               ...strokes,
             ],
           },
-          args.remember !== false,
+          before === undefined && args.remember !== false,
         );
       }),
       classroomCommands.register("document.plot", "@internal", (args) => {
@@ -1365,6 +1677,7 @@ export const FilePreview = ({
     penState.whiteboardPenTip,
     penState.whiteboardPenTips,
     penState.whiteboardDualPen,
+    langCode,
   ]);
   const previousPenConfiguration = useRef(penConfiguration);
   useEffect(() => {
@@ -1376,36 +1689,47 @@ export const FilePreview = ({
       assistRequest.current?.abort();
     }
   }, [penConfiguration]);
-  const assistMode = (ink[page] || []).reduce<AppState["currentItemInkAssist"]>(
-    (mode, stroke) =>
-      !recognized.current.has(stroke.id) && stroke.fcInk?.assist
-        ? stroke.fcInk.assist
-        : mode,
-    undefined,
-  );
   const drawing = !!draft;
   useEffect(() => {
-    if (
-      !ready ||
-      loading ||
-      !inkOn ||
-      erase ||
-      selecting ||
-      drawing ||
-      !assistMode
-    ) {
+    if (!ready || loading || !inkOn || erase || selecting || drawing) {
       return;
     }
-    const source = (inkRef.current[page] || []).filter(
-      (stroke) =>
-        !recognized.current.has(stroke.id) &&
-        stroke.fcInk?.assist === assistMode,
+    const currentInk = inkRef.current[page] || [];
+    const targets = insertionWritingTargets(documentWritingParts(currentInk));
+    const targetFor = (stroke: InkStroke) =>
+      !stroke.fcInk?.assist || stroke.fcInk.assist === "text"
+        ? insertionWritingAt(targets, stroke.points[0])
+        : undefined;
+    const pending = currentInk.filter((stroke) => {
+      if (
+        stroke.lesson ||
+        stroke.questionInput ||
+        stroke.language ||
+        !stroke.fcInk ||
+        recognized.current.has(stroke.id)
+      ) {
+        return false;
+      }
+      if (stroke.fcInk.assist || targetFor(stroke)) {
+        return true;
+      }
+      recognized.current.add(stroke.id);
+      return false;
+    });
+    const last = pending.at(-1);
+    const target = last ? targetFor(last) : undefined;
+    const assistMode = target ? "text" : last?.fcInk?.assist;
+    const source = pending.filter((stroke) =>
+      target
+        ? targetFor(stroke)?.key === target.key
+        : !targetFor(stroke) && stroke.fcInk?.assist === assistMode,
     );
-    if (!source.length) {
+    if (!source.length || !assistMode) {
       return;
     }
     const signature = documentSourceSignature(source);
-    if (failedRecognition.current.has(signature)) {
+    const requestKey = `${signature}:${target?.stamp || ""}`;
+    if (failedRecognition.current.has(requestKey)) {
       return;
     }
     const request = new AbortController();
@@ -1414,126 +1738,178 @@ export const FilePreview = ({
     const current = () =>
       !request.signal.aborted &&
       pageRef.current === page &&
+      (!target ||
+        insertionWritingTargets(
+          documentWritingParts(inkRef.current[page] || []),
+        ).some(
+          (item) => item.key === target.key && item.stamp === target.stamp,
+        )) &&
       documentSourceSignature(
         (inkRef.current[page] || []).filter((stroke) =>
           sourceIds.includes(stroke.id),
         ),
       ) === signature;
-    const timer = setTimeout(() => {
-      void (async () => {
-        const boxes = source.map(documentStrokeBounds);
-        const left = Math.min(...boxes.map((box) => box.left));
-        const top = Math.min(...boxes.map((box) => box.top));
-        const right = Math.max(...boxes.map((box) => box.right));
-        const bottom = Math.max(...boxes.map((box) => box.bottom));
-        const result = await recognizeInkContent(
-          assistMode,
-          () => inkSnapshot(source, bottom - top + 32, undefined, top - 16),
-          source.map((stroke) => stroke.points),
-          request.signal,
-        );
-        if (!current()) {
-          return;
-        }
-        if (result.kind === "text" || result.kind === "calculation") {
-          const text =
-            result.kind === "text"
-              ? result.text
-              : `${
-                  /=\s*$/.test(result.text) || /^[xyz] =/.test(result.answer)
-                    ? ""
-                    : "= "
-                }${result.answer}`;
-          await classroomCommands.execute({
-            name: "document.text",
-            args: {
-              text,
-              presentation: result.kind === "text" ? "text" : "match",
-              placement: result.kind === "text" ? "replace" : "inline",
-              sourceIds,
-              sourceSignature: signature,
-              sourceLines: result.text.split("\n").length,
-              signal: request.signal,
-            },
-          });
-        } else if (result.kind === "function") {
-          drawPlot(
-            api,
-            result.plot,
-            { x: right + 240, y: top + 230 },
-            [],
-            signature,
-            true,
-            { left, top, right, bottom },
+    const since = Date.now();
+    const timer = setTimeout(
+      () => {
+        void (async () => {
+          const boxes = source.map(documentStrokeBounds);
+          const left = Math.min(...boxes.map((box) => box.left));
+          const top = Math.min(...boxes.map((box) => box.top));
+          const right = Math.max(...boxes.map((box) => box.right));
+          const bottom = Math.max(...boxes.map((box) => box.bottom));
+          const result = await recognizeInkContent(
+            assistMode,
+            () => inkSnapshot(source, bottom - top + 32, undefined, top - 16),
+            source.map((stroke) => stroke.points),
+            request.signal,
+            target?.insertion.kind === "fourline" ? "en-US" : undefined,
           );
-        } else if (result.kind === "magic") {
-          await insertGeneratedImage(api, result.prompt, request.signal, {
-            bounds: { left, top, right, bottom },
-            replaceIds: sourceIds,
-            sourceSignature: signature,
-            sourcePage: page + 1,
-          });
-        } else {
-          const width = Math.max(1, right - left);
-          const height = Math.max(1, bottom - top);
-          const first = source[0].points[0];
-          const last = source.at(-1)!.points.at(-1)!;
-          const shape: ExcalidrawElementSkeleton =
-            result.shape === "triangle"
-              ? {
-                  type: "line",
-                  x: left + width / 2,
-                  y: top,
-                  points: [
-                    pointFrom(0, 0),
-                    pointFrom(width / 2, height),
-                    pointFrom(-width / 2, height),
-                    pointFrom(0, 0),
-                  ],
-                }
-              : result.shape === "line" || result.shape === "arrow"
-              ? {
-                  type: result.shape,
-                  x: first[0],
-                  y: first[1],
-                  points: [
-                    pointFrom(0, 0),
-                    pointFrom(last[0] - first[0], last[1] - first[1]),
-                  ],
-                }
-              : { type: result.shape, x: left, y: top, width, height };
-          const stroke = shapeInk(
-            {
-              ...shape,
-              id: crypto.randomUUID(),
-              strokeWidth: source[0].width,
-              strokeColor: source[0].color,
-              opacity: source[0].opacity ?? 100,
-            },
-            "recognized",
-          );
-          commitInk({
-            ...inkRef.current,
-            [page]: [
-              ...(inkRef.current[page] || []).filter(
-                (stroke) => !sourceIds.includes(stroke.id),
-              ),
-              stroke,
-            ],
-          });
-        }
-        sourceIds.forEach((id) => recognized.current.add(id));
-      })().catch(() => {
-        if (!request.signal.aborted) {
-          failedRecognition.current.add(signature);
-          if (failedRecognition.current.size > 100) {
-            failedRecognition.current.delete(
-              failedRecognition.current.values().next().value!,
-            );
+          await settleInkRecognition(assistMode, since, request.signal);
+          if (!current()) {
+            return;
           }
-        }
-      });
-    }, 700);
+          if (target && result.kind === "text") {
+            const shape = insertionWritingText(
+              target,
+              result.text,
+              source[0].color,
+              sourceIds,
+            );
+            if (!shape) {
+              return;
+            }
+            const current = inkRef.current[page] || [];
+            const remove = new Set([
+              ...sourceIds,
+              ...insertionWritingTextIds(target, documentWritingParts(current)),
+            ]);
+            sourceIds.forEach((id) => recognized.current.add(id));
+            commitInk({
+              ...inkRef.current,
+              [page]: [
+                ...current.filter((stroke) => !remove.has(stroke.id)),
+                shapeInk(shape, "insertion"),
+              ],
+            });
+          } else if (result.kind === "language") {
+            sourceIds.forEach((id) => recognized.current.add(id));
+            await classroomCommands.execute({
+              name: "document.text",
+              args: {
+                text: result.study.translation,
+                presentation: "handwritten",
+                placement: "below",
+                sourceIds,
+                sourceSignature: signature,
+                sourceLines: result.text.split("\n").length,
+                language: result.study,
+                targetLanguage: result.targetLanguage,
+                signal: request.signal,
+              },
+            });
+          } else if (result.kind === "text" || result.kind === "calculation") {
+            const text =
+              result.kind === "text"
+                ? result.text
+                : `${
+                    /=\s*$/.test(result.text) || /^[xyz] =/.test(result.answer)
+                      ? ""
+                      : "= "
+                  }${result.answer}`;
+            await classroomCommands.execute({
+              name: "document.text",
+              args: {
+                text,
+                presentation: result.kind === "text" ? "text" : "match",
+                placement: result.kind === "text" ? "replace" : "inline",
+                sourceIds,
+                sourceSignature: signature,
+                sourceLines: result.text.split("\n").length,
+                signal: request.signal,
+              },
+            });
+          } else if (result.kind === "function") {
+            drawPlot(
+              api,
+              result.plot,
+              { x: right + 240, y: top + 230 },
+              [],
+              signature,
+              true,
+              { left, top, right, bottom },
+            );
+          } else if (result.kind === "magic") {
+            await insertGeneratedImage(api, result.prompt, request.signal, {
+              referenceImage: result.image,
+              bounds: { left, top, right, bottom },
+              replaceIds: sourceIds,
+              sourceSignature: signature,
+              sourcePage: page + 1,
+            });
+          } else {
+            const width = Math.max(1, right - left);
+            const height = Math.max(1, bottom - top);
+            const first = source[0].points[0];
+            const last = source.at(-1)!.points.at(-1)!;
+            const shape: ExcalidrawElementSkeleton =
+              result.shape === "triangle"
+                ? {
+                    type: "line",
+                    x: left + width / 2,
+                    y: top,
+                    points: [
+                      pointFrom(0, 0),
+                      pointFrom(width / 2, height),
+                      pointFrom(-width / 2, height),
+                      pointFrom(0, 0),
+                    ],
+                  }
+                : result.shape === "line" || result.shape === "arrow"
+                ? {
+                    type: result.shape,
+                    x: first[0],
+                    y: first[1],
+                    points: [
+                      pointFrom(0, 0),
+                      pointFrom(last[0] - first[0], last[1] - first[1]),
+                    ],
+                  }
+                : { type: result.shape, x: left, y: top, width, height };
+            const stroke = shapeInk(
+              {
+                ...shape,
+                id: crypto.randomUUID(),
+                strokeWidth: source[0].width,
+                strokeColor: source[0].color,
+                opacity: source[0].opacity ?? 100,
+              },
+              "recognized",
+            );
+            commitInk({
+              ...inkRef.current,
+              [page]: [
+                ...(inkRef.current[page] || []).filter(
+                  (stroke) => !sourceIds.includes(stroke.id),
+                ),
+                stroke,
+              ],
+            });
+          }
+          sourceIds.forEach((id) => recognized.current.add(id));
+        })().catch(() => {
+          if (!request.signal.aborted) {
+            failedRecognition.current.add(requestKey);
+            if (failedRecognition.current.size > 100) {
+              failedRecognition.current.delete(
+                failedRecognition.current.values().next().value!,
+              );
+            }
+          }
+        });
+      },
+      assistMode === "function" || assistMode === "calculation" ? 350 : 700,
+    );
     return () => {
       clearTimeout(timer);
       request.abort();
@@ -1541,7 +1917,6 @@ export const FilePreview = ({
   }, [
     ink,
     page,
-    assistMode,
     drawing,
     ready,
     loading,
@@ -1552,6 +1927,7 @@ export const FilePreview = ({
     zoom,
     api,
     commitInk,
+    langCode,
   ]);
   useEffect(
     () => classroomCommands.onInvalidate(() => assistRequest.current?.abort()),
@@ -1799,7 +2175,7 @@ export const FilePreview = ({
       className="fc-preview fc-presentation"
       role="dialog"
       aria-modal="false"
-      aria-label={t("fcboard.预览 {{name}}", { name: file.name })}
+      aria-label={t("fcboard.preview_name", { name: file.name })}
       onKeyDown={(event) => {
         event.stopPropagation();
         if ((event.target as HTMLElement).closest("input,select,textarea")) {
@@ -1865,8 +2241,48 @@ export const FilePreview = ({
           </div>
           <svg
             className="fc-document-ink"
+            onDoubleClick={(event) => {
+              const languageId = (event.target as Element)
+                .closest("[data-language]")
+                ?.getAttribute("data-language");
+              if (languageId) {
+                event.preventDefault();
+                event.stopPropagation();
+                void classroomCommands
+                  .execute({ name: "language.card", args: { id: languageId } })
+                  .catch(() => {});
+                return;
+              }
+              const id = (event.target as Element)
+                .closest("[data-widget]")
+                ?.getAttribute("data-widget");
+              const widget = (inkRef.current[pageRef.current] || []).find(
+                (stroke) => stroke.widget?.id === id,
+              )?.widget;
+              if (widget && ["cube", "cylinder"].includes(widget.kind)) {
+                event.preventDefault();
+                event.stopPropagation();
+                void classroomCommands
+                  .execute({
+                    name: "tools.configure",
+                    args: {
+                      id: widget.id,
+                      solid: {
+                        unfold: widget.params.solid.unfold >= 0.5 ? 0 : 1,
+                      },
+                    },
+                  })
+                  .catch((failure) =>
+                    setNotice(
+                      failure instanceof Error
+                        ? failure.message
+                        : String(failure),
+                    ),
+                  );
+              }
+            }}
             onContextMenu={(event) => event.preventDefault()}
-            aria-label={t("fcboard.课件透明板书")}
+            aria-label={t("fcboard.document_annotations")}
             data-ink-enabled={inkOn}
             style={{
               pointerEvents: inkOn && !loading && !error ? "auto" : "none",
@@ -2118,7 +2534,23 @@ export const FilePreview = ({
               </g>
             )}
             {paths.map((stroke) =>
-              stroke.image ? (
+              stroke.resource ? (
+                <foreignObject
+                  key={stroke.id}
+                  x={stroke.points[0][0]}
+                  y={stroke.points[0][1]}
+                  width={stroke.resource.width}
+                  height={stroke.resource.height}
+                  opacity={(stroke.opacity ?? 100) / 100}
+                  style={{ pointerEvents: inkOn ? "none" : "auto" }}
+                >
+                  <InteractiveResourceFrame
+                    resource={stroke.resource}
+                    objectId={stroke.id}
+                    surface="document"
+                  />
+                </foreignObject>
+              ) : stroke.image ? (
                 <image
                   key={stroke.id}
                   x={stroke.points[0][0]}
@@ -2130,6 +2562,7 @@ export const FilePreview = ({
                 />
               ) : stroke.text ? (
                 <text
+                  data-language={stroke.language ? stroke.id : undefined}
                   key={stroke.id}
                   x={stroke.points[0][0]}
                   y={stroke.points[0][1]}
@@ -2200,7 +2633,7 @@ export const FilePreview = ({
             <MaterialPanel
               className="fc-pen-properties fc-document-pen-settings"
               role="dialog"
-              aria-label={t("fcboard.画笔")}
+              aria-label={t("fcboard.pen")}
             >
               <FactoryPenSettings
                 state={penState}
@@ -2214,33 +2647,33 @@ export const FilePreview = ({
       <footer
         className="fc-presentation-toolbar"
         role="toolbar"
-        aria-label={t("fcboard.课件工具栏")}
+        aria-label={t("fcboard.document_toolbar")}
       >
         <button
-          aria-label={t("fcboard.关闭课件")}
-          title={t("fcboard.返回白板")}
+          aria-label={t("fcboard.close_document")}
+          title={t("fcboard.return_to_board")}
           onClick={() => {
             void close().catch(() => {});
           }}
         >
           {CloseIcon}
-          <span>{t("fcboard.白板")}</span>
+          <span>{t("fcboard.board")}</span>
         </button>
         <span className="fc-document-name" title={file.name}>
           {file.name}
         </span>
         <button
-          aria-label={t("fcboard.上一页")}
+          aria-label={t("fcboard.previous_page")}
           disabled={page === 0 || loading}
           onClick={() => {
             void previous().catch((failure) => setError(String(failure)));
           }}
         >
           {chevronLeftIcon}
-          <span>{t("fcboard.上页")}</span>
+          <span>{t("fcboard.previous")}</span>
         </button>
         <MaterialSelect
-          aria-label={t("fcboard.课件页码")}
+          aria-label={t("fcboard.document_page")}
           value={page}
           disabled={loading}
           onChange={(event) => {
@@ -2259,18 +2692,18 @@ export const FilePreview = ({
           ))}
         </MaterialSelect>
         <button
-          aria-label={t("fcboard.下一页")}
+          aria-label={t("fcboard.next_page")}
           disabled={loading || (page >= pages.length - 1 && !pendingAnimation)}
           onClick={() => {
             void next().catch((failure) => setError(String(failure)));
           }}
         >
           {chevronRight}
-          <span>{t("fcboard.下页")}</span>
+          <span>{t("fcboard.next")}</span>
         </button>
         <button
-          aria-label={t("fcboard.板书开关")}
-          title={t("fcboard.在课件上板书")}
+          aria-label={t("fcboard.toggle_annotations")}
+          title={t("fcboard.annotate_document")}
           aria-pressed={inkOn && !erase && !selecting}
           aria-expanded={!!penAnchor}
           disabled={loading || !!error}
@@ -2285,10 +2718,10 @@ export const FilePreview = ({
           }}
         >
           {pencilIcon}
-          <span>{t("fcboard.板书")}</span>
+          <span>{t("fcboard.annotate")}</span>
         </button>
         <button
-          aria-label={t("fcboard.缩小课件")}
+          aria-label={t("fcboard.zoom_out_document")}
           disabled={zoom <= 0.5}
           onClick={() => {
             void classroomCommands.execute({
@@ -2300,7 +2733,7 @@ export const FilePreview = ({
           −
         </button>
         <button
-          aria-label={t("fcboard.重置课件缩放")}
+          aria-label={t("fcboard.reset_document_zoom")}
           onClick={() => {
             void classroomCommands.execute({
               name: "document.zoom",
@@ -2311,7 +2744,7 @@ export const FilePreview = ({
           {Math.round(zoom * 100)}%
         </button>
         <button
-          aria-label={t("fcboard.放大课件")}
+          aria-label={t("fcboard.zoom_in_document")}
           disabled={zoom >= 3}
           onClick={() => {
             void classroomCommands.execute({
@@ -2327,7 +2760,7 @@ export const FilePreview = ({
             {["#dc2626", "#2563eb", "#17243c"].map((value) => (
               <button
                 key={value}
-                aria-label={t("fcboard.笔色 {{color}}", { color: value })}
+                aria-label={t("fcboard.pen_color_color", { color: value })}
                 aria-pressed={color === value && !erase}
                 onClick={() => {
                   api.updateScene({
@@ -2341,7 +2774,7 @@ export const FilePreview = ({
               </button>
             ))}
             <button
-              aria-label={t("fcboard.擦除板书")}
+              aria-label={t("fcboard.erase_annotations")}
               aria-pressed={erase}
               onClick={() => {
                 setErase(!erase);
@@ -2349,10 +2782,10 @@ export const FilePreview = ({
               }}
             >
               {EraserIcon}
-              <span>{t("fcboard.橡皮")}</span>
+              <span>{t("fcboard.eraser")}</span>
             </button>
             <button
-              aria-label={t("fcboard.圈选课件板书")}
+              aria-label={t("fcboard.circle_document_annotations")}
               aria-pressed={selecting}
               onClick={() => {
                 setSelecting(true);
@@ -2360,64 +2793,64 @@ export const FilePreview = ({
               }}
             >
               {SelectionIcon}
-              <span>{t("fcboard.圈选")}</span>
+              <span>{t("fcboard.circle")}</span>
             </button>
             <button
-              aria-label={t("fcboard.撤销板书")}
+              aria-label={t("fcboard.undo_annotation")}
               disabled={!past.current[page]?.length}
               onClick={() => undoInk()}
             >
               {UndoIcon}
-              <span>{t("fcboard.撤销")}</span>
+              <span>{t("fcboard.undo")}</span>
             </button>
             <button
-              aria-label={t("fcboard.重做板书")}
+              aria-label={t("fcboard.redo_annotation")}
               disabled={!future.current[page]?.length}
               onClick={() => undoInk(true)}
             >
               {RedoIcon}
-              <span>{t("fcboard.重做")}</span>
+              <span>{t("fcboard.redo")}</span>
             </button>
           </>
         )}
         <a
           href={url}
           download={file.name}
-          aria-label={t("fcboard.下载原文件")}
-          title={t("fcboard.下载原文件")}
+          aria-label={t("fcboard.download_original_file")}
+          title={t("fcboard.download_original_file")}
         >
           {exportToFileIcon}
-          <span>{t("fcboard.原件")}</span>
+          <span>{t("fcboard.original")}</span>
         </a>
         {onVoice && (
           <button
-            aria-label={t("fcboard.课件语音指令")}
-            title={t("fcboard.对这页说点什么")}
+            aria-label={t("fcboard.document_voice_commands")}
+            title={t("fcboard.give_a_command_about_this_page")}
             aria-pressed={listening}
             onClick={onVoice}
           >
             {microphoneIcon}
-            <span>{t("fcboard.语音")}</span>
+            <span>{t("fcboard.voice")}</span>
           </button>
         )}
         <button
-          aria-label={t("fcboard.课件 AI 教师")}
-          title={t("fcboard.提问或操作课件")}
+          aria-label={t("fcboard.document_ai_teacher")}
+          title={t("fcboard.ask_or_control_this_document")}
           onClick={() => {
             void classroomCommands.execute({ name: "assistant.open" });
           }}
         >
           {MagicIcon}
-          <span>{t("fcboard.助教")}</span>
+          <span>{t("fcboard.assistant")}</span>
         </button>
         {onTools && (
           <button
-            aria-label={t("fcboard.课件教学工具")}
-            title={t("fcboard.教学工具")}
+            aria-label={t("fcboard.document_teaching_tools")}
+            title={t("fcboard.teaching_tools")}
             onClick={onTools}
           >
             {gridIcon}
-            <span>{t("fcboard.教具")}</span>
+            <span>{t("fcboard.teaching_widgets")}</span>
           </button>
         )}
       </footer>

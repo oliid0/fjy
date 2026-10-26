@@ -60,14 +60,14 @@ export const recognizeLocalHandwriting = async (
   signal: AbortSignal,
   progress: (message: string) => void,
 ) => {
-  progress(t("fcboard.正在准备本地手写识别…"));
+  progress(t("fcboard.preparing_local_handwriting_recognition"));
   const task = queue
     .catch(() => {})
     .then(async () => {
       signal.throwIfAborted();
       const instance = await getEngine();
       signal.throwIfAborted();
-      progress(t("fcboard.正在本地识别手写…"));
+      progress(t("fcboard.recognizing_handwriting_locally"));
       const blob = await (await fetch(image, { signal })).blob();
       const [result] = await instance.predict(blob);
       signal.throwIfAborted();
@@ -77,7 +77,7 @@ export const recognizeLocalHandwriting = async (
       if (!items.length) {
         throw new Error(
           t(
-            "fcboard.未能可靠识别选区。请缩小圈选范围，或在设置中选择云端手写识别。",
+            "fcboard.the_selection_could_not_be_read_reliably_select_a_smaller_area_or_choose_cloud_handwriting",
           ),
         );
       }

@@ -31,6 +31,7 @@ export const recognizeHandwriting = async (
   kind: "math" | "text" = "text",
   accept: (text: string) => boolean = (text) => !!text.trim(),
   strokes?: InkInput,
+  languageHint?: "en-US",
 ) => {
   signal.throwIfAborted();
   const settings = currentSettings();
@@ -38,14 +39,19 @@ export const recognizeHandwriting = async (
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
   if (settings.ocr !== "cloud" && hasDigitalInk() && strokes?.length) {
-    progress(t("fcboard.正在本地识别手写…"));
+    progress(t("fcboard.recognizing_handwriting_locally"));
     try {
-      const candidates = await recognizeDigitalInk(strokes, signal, kind);
+      const candidates = await recognizeDigitalInk(
+        strokes,
+        signal,
+        kind,
+        languageHint,
+      );
       const text = candidates[0];
       if (text && accept(text)) {
         return text;
       }
-      throw new Error(t("fcboard.未识别到内容，请重新圈选"));
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     } catch (error) {
       signal.throwIfAborted();
       // Explicit local mode reports the real native failure. Auto can use the
@@ -62,7 +68,9 @@ export const recognizeHandwriting = async (
           {
             role: "system",
             content: `Transcribe only the selected handwriting, without solving, adding or guessing. Preserve line breaks, equals signs and variables. Return an empty string when unreadable.${
-              kind === "math"
+              languageHint === "en-US"
+                ? " The writing surface is for English letters and words."
+                : kind === "math"
                 ? " Use calculable math syntax: ^ for powers, * for multiplication, integrate(expr,x), defint(expr,a,b,x), diff(expr,x), limit(expr,x,a), solve(expr,x). Preserve values and structure; do not calculate the answer."
                 : ""
             }`,
@@ -75,7 +83,7 @@ export const recognizeHandwriting = async (
       )
     ).trim();
     if (!accept(text)) {
-      throw new Error(t("fcboard.未识别到内容，请重新圈选"));
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
     return text;
   };
@@ -86,14 +94,14 @@ export const recognizeHandwriting = async (
       progress,
     );
     if (!accept(text)) {
-      throw new Error(t("fcboard.未识别到内容，请重新圈选"));
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
     return text;
   };
   if (settings.ocr === "local" || !settings.apiKey) {
     return local(signal);
   }
-  progress(t("fcboard.正在识别手写…"));
+  progress(t("fcboard.recognizing_handwriting"));
   if (settings.ocr === "cloud") {
     return cloud(signal);
   }

@@ -45,7 +45,7 @@ it("opens a page attachment composer through the same menu and AI command, witho
   vi.mocked(Classroom.sharePages).mockResolvedValue(undefined);
   const close = await setup();
   fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.打开邮件 / 分享窗口") }),
+    screen.getByRole("button", { name: t("fcboard.open_email_share_window") }),
   );
   await waitFor(() =>
     expect(Classroom.sharePages).toHaveBeenCalledWith({
@@ -54,7 +54,7 @@ it("opens a page attachment composer through the same menu and AI command, witho
   );
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent(
-      t("fcboard.已打开系统邮件 / 分享窗口，请选择收件应用并确认发送"),
+      t("fcboard.choose_an_app_in_the_system_share_window_and_confirm_sending"),
     ),
   );
   expect(screen.queryByText("邮件已发送")).toBeNull();
@@ -71,11 +71,11 @@ it("does not launch the composer when the page chooser closes during export", as
   vi.mocked(Classroom.sharePages).mockClear();
   const close = await setup();
   fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.打开邮件 / 分享窗口") }),
+    screen.getByRole("button", { name: t("fcboard.open_email_share_window") }),
   );
   await act(async () => {
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.关闭分享") }),
+      screen.getByRole("button", { name: t("fcboard.close_sharing") }),
     );
   });
   await act(async () => {

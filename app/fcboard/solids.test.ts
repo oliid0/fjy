@@ -3,6 +3,44 @@ import { getCommonBounds } from "@excalidraw/element";
 import { configureSolid, solidDefaults, solidShapes } from "./solids";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
 import { sceneAPI } from "./test/scene";
+import { contentViewport } from "./board";
+import { factorySolidOutlines } from "./factorySolidOutlines";
+
+it.each([
+  ["sphere", 3, 1, 180, 180],
+  ["cone", 3, 1, 180, 200],
+  ["frustum", 5, 1, 180, 175],
+  ["prism", 2, 1, 180, 200],
+  ["pyramid", 3, 2, 180, 180],
+] as const)(
+  "uses the APK silhouette, hidden paths and ink color for %s",
+  (kind, count, hidden, width, height) => {
+    const shapes = factorySolidOutlines(
+      kind,
+      { ...solidDefaults(), stroke: "#dc2626" },
+      1,
+      0,
+    );
+    expect(shapes).toHaveLength(count);
+    expect(
+      shapes.filter((shape) => shape.strokeStyle === "dashed"),
+    ).toHaveLength(hidden);
+    expect(shapes.every((shape) => shape.strokeColor === "#dc2626")).toBe(true);
+    const points = shapes.flatMap((shape) =>
+      (shape.type === "line" ? shape.points || [] : []).map(([x, y]) => [
+        (shape.x || 0) + x,
+        (shape.y || 0) + y,
+      ]),
+    );
+    expect(
+      Math.max(...points.map(([x]) => x)) - Math.min(...points.map(([x]) => x)),
+    ).toBeCloseTo(width);
+    expect(
+      Math.max(...points.map(([, y]) => y)) -
+        Math.min(...points.map(([, y]) => y)),
+    ).toBeCloseTo(height);
+  },
+);
 
 it("matches the factory cube with twelve edges, three hidden edges and six persistent faces", () => {
   const shapes = solidShapes("cube", solidDefaults());
@@ -98,3 +136,45 @@ it("retains the object and its colors when its border is hidden", () => {
   ).toThrow();
   expect(() => configureSolid(original, { net: 11 })).toThrow();
 });
+
+it.each([
+  [390, 844, 1],
+  [800, 600, 2],
+  [3080, 1240, 0.5],
+])(
+  "keeps all unfolding frames inside %s×%s at zoom %s",
+  (width, height, zoom) => {
+    const api = sceneAPI();
+    vi.spyOn(api, "getAppState").mockReturnValue({
+      ...api.getAppState(),
+      width,
+      height,
+      zoom: { value: zoom as never },
+      scrollX: -100,
+      scrollY: -50,
+    });
+    const widget = {
+      id: "fit",
+      kind: "cube" as const,
+      params: widgetDefaults(),
+      position: { x: 5000, y: 5000 },
+    };
+    renderWidget(api, widget);
+    const viewport = contentViewport(api);
+    for (const unfold of [0.2, 0.5, 0.8, 1, 0]) {
+      const current = readWidgets(api)[0];
+      const elements = renderWidget(api, {
+        ...current,
+        params: {
+          ...current.params,
+          solid: { ...current.params.solid, unfold },
+        },
+      });
+      const [left, top, right, bottom] = getCommonBounds(elements);
+      expect(left).toBeGreaterThanOrEqual(viewport.left - 1e-7);
+      expect(top).toBeGreaterThanOrEqual(viewport.top - 1e-7);
+      expect(right).toBeLessThanOrEqual(viewport.right + 1e-7);
+      expect(bottom).toBeLessThanOrEqual(viewport.bottom + 1e-7);
+    }
+  },
+);

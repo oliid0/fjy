@@ -60,6 +60,10 @@ export class CommandRouter {
   has(name: string) {
     return this.commands.has(name);
   }
+  isPublic(name: string) {
+    const entry = this.commands.get(name);
+    return !!entry && entry.description !== "@internal";
+  }
   snapshot() {
     return Object.fromEntries(
       Array.from(this.contexts, ([name, read]) => [name, read()]),
@@ -72,7 +76,7 @@ export class CommandRouter {
     const entry = this.commands.get(command.name);
     if (!entry) {
       throw new Error(
-        t("fcboard.当前无法执行 {{command}}", { command: command.name }),
+        t("fcboard.command_unavailable_command", { command: command.name }),
       );
     }
     return entry.handler(command.args || {});
@@ -91,6 +95,57 @@ export class CommandRouter {
 
 export const classroomCommands = new CommandRouter();
 
+const cancellable = new Set([
+  "lesson.ask",
+  "lesson.teach",
+  "canvas.text",
+  "canvas.configure",
+  "canvas.ink",
+  "resources.use",
+  "resources.generate",
+  "resources.inspect",
+  "resources.interact",
+  "canvas.resource",
+  "voice.speak",
+  "math.evaluate",
+  "tools.configure",
+]);
+export const isCancellableBoardCommand = (name: string) =>
+  cancellable.has(name);
+
+/** Voice and lesson tools share cancellation and the same component-owned handlers. */
+export const executeBoardCommand = (command: Command, signal?: AbortSignal) => {
+  signal?.throwIfAborted();
+  const routed =
+    signal && isCancellableBoardCommand(command.name)
+      ? { ...command, args: { ...command.args, signal } }
+      : command;
+  if (!signal) {
+    return classroomCommands.execute(routed);
+  }
+  return new Promise<unknown>((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      reject(new DOMException("Board operation cancelled", "AbortError"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    classroomCommands.execute(routed).then(
+      (result) => {
+        signal.removeEventListener("abort", abort);
+        if (signal.aborted) {
+          abort();
+        } else {
+          resolve(result);
+        }
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+};
+
 /** Validate the entire target set before an agent command changes any object. */
 export const commandObjectIds = (
   input: unknown,
@@ -102,10 +157,10 @@ export const commandObjectIds = (
     input.length > 3000 ||
     !input.every((id) => typeof id === "string" && id.length > 0)
   ) {
-    throw new Error(t("fcboard.选区格式无效"));
+    throw new Error(t("fcboard.invalid_selection_format"));
   }
   if (!allowEmpty && !input.length) {
-    throw new Error(t("fcboard.请先选择对象"));
+    throw new Error(t("fcboard.select_an_object_first"));
   }
   const available = new Set(
     objects.filter((object) => !object.isDeleted).map((object) => object.id),
@@ -113,7 +168,7 @@ export const commandObjectIds = (
   const missing = input.filter((id) => !available.has(id));
   if (missing.length) {
     throw new Error(
-      t("fcboard.对象不存在或已删除：{{ids}}", {
+      t("fcboard.objects_are_missing_or_deleted_ids", {
         ids: missing.slice(0, 10).join(", "),
       }),
     );
@@ -123,6 +178,13 @@ export const commandObjectIds = (
 
 /** Frequent unambiguous commands remain instant and work without a cloud model. */
 export const directCommand = (text: string): Command | null => {
+  if (
+    /^(?:(?:please\s+)?(?:stop|cancel|stop talking)|(?:请)?(?:停止|取消|别说了|停下|停一下|等一下))[。.!！?？\s]*$/i.test(
+      text.trim(),
+    )
+  ) {
+    return { name: "voice.interrupt" };
+  }
   const written = text
     .trim()
     .match(/^(?:请|帮我)?(?:写下|写上|写一个|写个|写[：:])\s*([\s\S]+)$/);

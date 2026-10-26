@@ -1,92 +1,144 @@
 import { useEffect, useState } from "react";
 import Slider from "@mui/material/Slider";
 import Switch from "@mui/material/Switch";
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { factoryBackgrounds } from "@excalidraw/excalidraw/whiteboardBackground";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type {
+  ExcalidrawImperativeAPI,
+  UIOptions,
+} from "@excalidraw/excalidraw/types";
 
 import { SettingsSection } from "./SettingsNavigation";
-import { useDeviceInkProfile } from "./ink";
+import {
+  applyCanvasConfiguration,
+  canvasConfigurationPatch,
+} from "./canvasConfiguration";
+import { classroomCommands } from "./commands";
+import { TransientMessage } from "./TransientMessage";
 
-export const BoardSettings = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const BoardSettings = ({
+  api,
+  device,
+}: {
+  api: ExcalidrawImperativeAPI;
+  device?: UIOptions["inkProfile"];
+}) => {
   useI18n();
-  const device = useDeviceInkProfile();
   const [state, setState] = useState(() => api.getAppState());
-  useEffect(() => api.onChange(() => setState(api.getAppState())), [api]);
+  const [document, setDocument] = useState(
+    () => !!classroomCommands.read("document"),
+  );
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const stops = [
+      api.onChange(() => setState(api.getAppState())),
+      classroomCommands.watch("document", () =>
+        setDocument(!!classroomCommands.read("document")),
+      ),
+    ];
+    return () => stops.forEach((stop) => stop());
+  }, [api]);
+  const update = (input: Record<string, unknown>) => {
+    try {
+      applyCanvasConfiguration(
+        api,
+        canvasConfigurationPatch(api, input, device),
+      );
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure));
+    }
+  };
   return (
     <>
       <SettingsSection id="background">
-        <>
-          <label>
-            {t("fcboard.背景")}
-            <input
-              type="color"
-              value={
-                /^#[\da-f]{6}$/i.test(state.viewBackgroundColor)
-                  ? state.viewBackgroundColor
-                  : "#ffffff"
-              }
-              onChange={(event) =>
-                api.executeAction("changeViewBackgroundColor", {
-                  viewBackgroundColor: event.target.value,
-                })
-              }
-            />
-          </label>
-          <div
-            className="fc-background-picker"
-            role="group"
-            aria-label={t("fcboard.背景")}
-          >
-            <button
-              type="button"
-              aria-pressed={!state.whiteboardBackground}
-              onClick={() =>
-                api.updateScene({
-                  appState: {
-                    whiteboardBackground: undefined,
-                    gridModeEnabled: false,
-                  },
-                  captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-                })
-              }
+        {document ? (
+          <p>
+            {t(
+              "fcboard.this_action_is_for_the_board_in_a_document_turn_pages_annotate_circle_undo_or_describe_what_to",
+            )}
+          </p>
+        ) : (
+          <>
+            <label>
+              {t("fcboard.background")}
+              <input
+                type="color"
+                value={
+                  /^#[\da-f]{6}$/i.test(state.viewBackgroundColor)
+                    ? state.viewBackgroundColor
+                    : "#ffffff"
+                }
+                onChange={(event) =>
+                  update({ backgroundColor: event.target.value })
+                }
+              />
+            </label>
+            <div
+              className="fc-background-picker"
+              role="group"
+              aria-label={t("fcboard.background")}
             >
-              {t("fcboard.无背景图案")}
-            </button>
-            {factoryBackgrounds.map((url, index) => (
               <button
                 type="button"
-                key={url}
-                aria-label={t("fcboard.背景图案 {{number}}", {
-                  number: index + 1,
-                })}
-                aria-pressed={state.whiteboardBackground?.pattern === index + 1}
-                onClick={() =>
-                  api.updateScene({
-                    appState: {
-                      whiteboardBackground: {
-                        pattern: index + 1,
-                        width: state.width / state.zoom.value,
-                        height: state.height / state.zoom.value,
-                      },
-                      gridModeEnabled: false,
-                    },
-                    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-                  })
-                }
+                aria-pressed={!state.whiteboardBackground}
+                onClick={() => update({ backgroundPattern: 0 })}
               >
-                <img src={url} alt="" />
+                {t("fcboard.no_background_pattern")}
               </button>
-            ))}
-          </div>
-        </>
+              {factoryBackgrounds.map((url, index) => (
+                <button
+                  type="button"
+                  key={url}
+                  aria-label={t("fcboard.background_pattern_number", {
+                    number: index + 1,
+                  })}
+                  aria-pressed={
+                    state.whiteboardBackground?.pattern === index + 1
+                  }
+                  onClick={() => update({ backgroundPattern: index + 1 })}
+                >
+                  <img src={url} alt="" />
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </SettingsSection>
       <SettingsSection id="pen">
         <>
+          <div className="fc-settings-choice">
+            <span>{t("fcboard.pen_tip")}</span>
+            <ToggleButtonGroup
+              sx={{
+                flexWrap: "wrap",
+                maxWidth: "100%",
+                "& .MuiToggleButton-root": {
+                  minWidth: 0,
+                  textTransform: "none",
+                  overflowWrap: "anywhere",
+                },
+              }}
+              size="small"
+              exclusive
+              value={state.whiteboardPenTip || "fine"}
+              aria-label={t("fcboard.pen_tip")}
+              onChange={(_, tip) => {
+                if (tip) {
+                  update({ tip });
+                }
+              }}
+            >
+              <ToggleButton value="fine">{t("fcboard.fine_pen")}</ToggleButton>
+              <ToggleButton value="thick">
+                {t("fcboard.thick_pen")}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </div>
           <label>
-            {t("fcboard.粗笔接触阈值（px）")}
+            {t("fcboard.thick_pen_contact_threshold_px")}
             <input
               type="number"
               min="1"
@@ -96,39 +148,31 @@ export const BoardSettings = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               }
               onChange={(event) => {
                 const value = event.target.valueAsNumber;
-                if (Number.isFinite(value) && value > 0 && value <= 240) {
-                  api.updateScene({
-                    appState: { whiteboardThickThreshold: value },
-                  });
+                if (Number.isFinite(value) && value >= 1 && value <= 240) {
+                  update({ thickThreshold: value });
                 }
               }}
             />
           </label>
           <label>
-            {t("fcboard.自动识别笔尖")}
+            {t("fcboard.detect_pen_tip_automatically")}
             <Switch
               checked={state.whiteboardDualPen ?? device?.dualPen ?? false}
               disabled={
                 !(state.whiteboardThickThreshold ?? device?.thickThreshold)
               }
-              onChange={(_, value) =>
-                api.updateScene({ appState: { whiteboardDualPen: value } })
-              }
+              onChange={(_, value) => update({ dualPen: value })}
             />
           </label>
           <label>
-            {t("fcboard.笔锋变化率")}
+            {t("fcboard.stroke_width_variation")}
             <Slider
-              aria-label={t("fcboard.笔锋变化率")}
+              aria-label={t("fcboard.stroke_width_variation")}
               min={0}
               max={50}
               valueLabelDisplay="auto"
               value={state.whiteboardBrushVariation ?? 45}
-              onChange={(_, value) =>
-                api.updateScene({
-                  appState: { whiteboardBrushVariation: value as number },
-                })
-              }
+              onChange={(_, value) => update({ brushVariation: value })}
             />
             <output>{state.whiteboardBrushVariation ?? 45}</output>
           </label>
@@ -137,27 +181,21 @@ export const BoardSettings = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       <SettingsSection id="touch">
         <>
           <label>
-            {t("fcboard.手掌 / 手背擦除")}
+            {t("fcboard.palm_erasing")}
             <Switch
               checked={state.palmEraser !== false}
-              onChange={(_, checked) =>
-                api.updateScene({ appState: { palmEraser: checked } })
-              }
+              onChange={(_, checked) => update({ palmEraser: checked })}
             />
           </label>
           <label>
-            {t("fcboard.手背擦除阈值")}
+            {t("fcboard.palm_eraser_threshold")}
             <Slider
-              aria-label={t("fcboard.手背擦除阈值")}
+              aria-label={t("fcboard.palm_eraser_threshold")}
               min={16}
               max={120}
               valueLabelDisplay="auto"
               value={state.palmEraserThreshold ?? device?.palmThreshold ?? 36}
-              onChange={(_, value) =>
-                api.updateScene({
-                  appState: { palmEraserThreshold: value as number },
-                })
-              }
+              onChange={(_, value) => update({ palmThreshold: value })}
             />
             <output>
               {state.palmEraserThreshold ?? device?.palmThreshold ?? 36}px
@@ -165,6 +203,9 @@ export const BoardSettings = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           </label>
         </>
       </SettingsSection>
+      {error && (
+        <TransientMessage role="alert" className="fc-error" message={error} />
+      )}
     </>
   );
 };

@@ -41,31 +41,31 @@ export const AppMainMenu: React.FC<AppMenuProps> = React.memo(() => {
         icon={<FactoryIcon name="qr" />}
         onSelect={() => invoke("board.share")}
       >
-        {t("fcboard.扫码分享")}
+        {t("fcboard.qr_share")}
       </MainMenu.Item>
       <MainMenu.Item
         icon={<FactoryIcon name="mail" />}
         onSelect={() => invoke("board.mail")}
       >
-        {t("fcboard.邮件发送")}
+        {t("fcboard.mail_sent")}
       </MainMenu.Item>
       <MainMenu.Item
         icon={<FactoryIcon name="settings" />}
         onSelect={() => invoke("board.settings")}
       >
-        {t("fcboard.设置")}
+        {t("fcboard.settings")}
       </MainMenu.Item>
       <MainMenu.Item
         icon={<FactoryIcon name="exit" />}
         disabled={!Capacitor.isNativePlatform()}
         title={
           Capacitor.isNativePlatform()
-            ? t("fcboard.保存并退出白板")
-            : t("fcboard.网页可关闭当前标签页")
+            ? t("fcboard.save_and_exit_board")
+            : t("fcboard.close_this_browser_tab_to_exit")
         }
         onSelect={() => invoke("app.exit")}
       >
-        {t("fcboard.退出应用")}
+        {t("fcboard.exit_app")}
       </MainMenu.Item>
     </MainMenu>
   );
@@ -96,7 +96,7 @@ export const AppSettingsActions = (
               })
             }
           >
-            {t("fcboard.实时协作")}
+            {t("fcboard.live_collaboration")}
           </MainMenu.Item>
           <MainMenu.DefaultItems.Export />
           <MainMenu.DefaultItems.SaveAsImage />
@@ -104,7 +104,7 @@ export const AppSettingsActions = (
           <MainMenu.DefaultItems.SearchMenu />
           <MainMenu.DefaultItems.ClearCanvas />
           <MainMenu.ItemLink href="http://www.fcjyboard.com/">
-            {t("fcboard.方成教育官网")}
+            {t("fcboard.fcboard_website")}
           </MainMenu.ItemLink>
           {isDevEnv() && (
             <MainMenu.Item

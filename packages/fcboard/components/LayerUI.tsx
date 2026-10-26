@@ -175,10 +175,67 @@ const LayerUI = ({
   const isCompactStylesPanel = stylesPanelMode === "compact";
   const unifiedToolbar = UIOptions.unifiedToolbar;
   const [showProperties, setShowProperties] = React.useState(false);
-  const [propertiesAnchor, setPropertiesAnchor] = React.useState({
-    left: 12,
-    bottom: 84,
-  });
+  const propertiesTrigger = React.useRef<HTMLElement | null>(null);
+  const [propertiesAnchor, setPropertiesAnchor] =
+    React.useState<React.CSSProperties>({
+      left: 12,
+      bottom: 84,
+    });
+  const positionProperties = React.useCallback(
+    (anchor: HTMLElement) => {
+      const bounds = anchor.getBoundingClientRect();
+      const root = anchor.closest(".excalidraw")!.getBoundingClientRect();
+      const toolbar = anchor
+        .closest(".fc-unified-toolbar")
+        ?.getBoundingClientRect();
+      const unit = Math.min(1, bounds.height / 48);
+      const width = Math.max(
+        0,
+        Math.min(
+          (appState.activeTool.type === "freedraw" ? 215 : 280) * unit,
+          root.width - 24,
+        ),
+      );
+      const top = Math.min(bounds.top, toolbar?.top ?? bounds.top);
+      setPropertiesAnchor({
+        left: Math.max(
+          12,
+          Math.min(
+            (bounds.left + bounds.right - width) / 2 - root.left,
+            root.width - width - 12,
+          ),
+        ),
+        bottom: root.bottom - top + 16 * unit,
+        maxHeight: Math.max(0, top - root.top - 16 * unit - 12),
+        maxWidth: Math.max(0, root.width - 24),
+      });
+    },
+    [appState.activeTool.type],
+  );
+  React.useLayoutEffect(() => {
+    const anchor = propertiesTrigger.current;
+    if (!unifiedToolbar || !showProperties || !anchor) {
+      return;
+    }
+    const update = () => positionProperties(anchor);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(update);
+    observer?.observe(anchor);
+    const toolbar = anchor.closest(".fc-unified-toolbar");
+    if (toolbar) {
+      observer?.observe(toolbar);
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [positionProperties, showProperties, unifiedToolbar]);
   React.useEffect(() => {
     if (!unifiedToolbar || !showProperties) {
       return;
@@ -195,31 +252,14 @@ const LayerUI = ({
       }
     };
     window.addEventListener("pointerdown", outside);
-    window.addEventListener("resize", close);
     return () => {
       unsubscribe();
       window.removeEventListener("pointerdown", outside);
-      window.removeEventListener("resize", close);
     };
   }, [app, showProperties, unifiedToolbar]);
   const openProperties = (anchor: HTMLElement) => {
-    const bounds = anchor.getBoundingClientRect();
-    const root = anchor.closest(".excalidraw")!.getBoundingClientRect();
-    const unit = bounds.height / 48;
-    const width = Math.min(
-      (appState.activeTool.type === "freedraw" ? 215 : 280) * unit,
-      root.width - 24,
-    );
-    setPropertiesAnchor({
-      left: Math.max(
-        12,
-        Math.min(
-          (bounds.left + bounds.right - width) / 2 - root.left,
-          root.width - width - 12,
-        ),
-      ),
-      bottom: root.bottom - bounds.top + 16 * unit,
-    });
+    propertiesTrigger.current = anchor;
+    positionProperties(anchor);
     setShowProperties(true);
   };
   const tunnels = useInitializeTunnels();
@@ -560,7 +600,7 @@ const LayerUI = ({
             appState.activeTool.type === "freedraw" ? " fc-pen-properties" : ""
           }`}
           role="dialog"
-          aria-label={t("fcboard.画笔与对象属性")}
+          aria-label={t("fcboard.pen_and_object_properties")}
           style={propertiesAnchor}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -572,8 +612,8 @@ const LayerUI = ({
           <ToolButton
             type="button"
             icon={CloseIcon}
-            aria-label={t("fcboard.关闭属性")}
-            title={t("fcboard.关闭属性")}
+            aria-label={t("fcboard.close_properties")}
+            title={t("fcboard.close_properties")}
             onClick={() => setShowProperties(false)}
           />
           {appState.activeTool.type === "freedraw" && (
@@ -585,7 +625,7 @@ const LayerUI = ({
           )}
           {appState.activeTool.type === "freedraw" ? (
             <details className="fc-pen-advanced">
-              <summary>{t("fcboard.更多属性")}</summary>
+              <summary>{t("fcboard.more_properties")}</summary>
               {renderSelectedShapeActions()}
             </details>
           ) : (
@@ -599,13 +639,13 @@ const LayerUI = ({
           "fc-toolbar-reversed": appState.toolbarReversed,
         })}
         role="toolbar"
-        aria-label={t("fcboard.白板工具栏")}
+        aria-label={t("fcboard.whiteboard_toolbar")}
       >
         <div className="fc-toolbar-side fc-toolbar-leading">
           <div
             className="fc-toolbar-group"
             role="group"
-            aria-label={t("fcboard.文件与素材")}
+            aria-label={t("fcboard.files_and_resources")}
           >
             {renderTopLeftUI?.(
               editorInterface.formFactor === "phone",
@@ -622,7 +662,7 @@ const LayerUI = ({
           <div
             className="fc-toolbar-group fc-drawing-tools"
             role="group"
-            aria-label={t("fcboard.书写与绘图")}
+            aria-label={t("fcboard.writing_and_drawing")}
           >
             <WhiteboardTools
               setAppState={setAppState}
@@ -643,11 +683,11 @@ const LayerUI = ({
               }
               aria-label={
                 appState.multiStroke !== false
-                  ? t("fcboard.多点书写")
-                  : t("fcboard.单点书写")
+                  ? t("fcboard.multi_touch_writing")
+                  : t("fcboard.single_touch_writing")
               }
               title={t(
-                "fcboard.多点：多人同时书写；单点：仅接收一处笔迹。选择或移动工具可双指缩放",
+                "fcboard.multi_write_together_single_accept_one_contact_pinch_to_zoom_with_select_or_hand",
               )}
               selected={appState.multiStroke !== false}
               onClick={() =>
@@ -656,8 +696,8 @@ const LayerUI = ({
             >
               <span className="ToolIcon__label">
                 {appState.multiStroke !== false
-                  ? t("fcboard.多点")
-                  : t("fcboard.单点")}
+                  ? t("fcboard.multi")
+                  : t("fcboard.single")}
               </span>
             </ToolButton>
           </div>
@@ -671,8 +711,8 @@ const LayerUI = ({
             type="button"
             className="fc-board-tool"
             icon={<FactoryIcon name="cutover" />}
-            aria-label={t("fcboard.切换")}
-            title={t("fcboard.左右切换底栏")}
+            aria-label={t("fcboard.cutover")}
+            title={t("fcboard.swap_toolbar_sides")}
             showAriaLabel
             onClick={() =>
               setAppState({ toolbarReversed: !appState.toolbarReversed })
@@ -683,7 +723,9 @@ const LayerUI = ({
             className="fc-board-tool fc-toolbar-visibility"
             icon={<FactoryIcon name={toolbarHidden ? "show" : "hide"} />}
             aria-label={
-              toolbarHidden ? t("fcboard.显示工具栏") : t("fcboard.隐藏工具栏")
+              toolbarHidden
+                ? t("fcboard.show_toolbar")
+                : t("fcboard.hide_toolbar")
             }
             onClick={() => {
               setShowProperties(false);
@@ -691,7 +733,7 @@ const LayerUI = ({
             }}
           >
             <span className="ToolIcon__label">
-              {toolbarHidden ? t("fcboard.显示") : t("fcboard.隐藏")}
+              {toolbarHidden ? t("fcboard.show") : t("fcboard.hide")}
             </span>
           </ToolButton>
         </div>

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import Popper from "@mui/material/Popper";
 import Paper from "@mui/material/Paper";
 import MenuList from "@mui/material/MenuList";
@@ -37,6 +37,46 @@ export const FactoryMenu = ({
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [pages, setPages] = useState<Page[]>([]);
+  const [placement, setPlacement] = useState<{
+    gap: number;
+    maxHeight?: number;
+  }>({ gap: 16 });
+  useLayoutEffect(() => {
+    const button = anchor || trigger.current;
+    if (!open || !button) {
+      return;
+    }
+    const toolbar = button.closest(".fc-unified-toolbar");
+    const update = () => {
+      const rect = button.getBoundingClientRect();
+      if (!rect.height) {
+        return;
+      }
+      const top = Math.min(
+        rect.top,
+        toolbar?.getBoundingClientRect().top ?? rect.top,
+      );
+      const gap = 16 * Math.min(1, rect.height / 48);
+      setPlacement({
+        gap: rect.top - top + gap,
+        maxHeight: Math.max(0, top - gap - 12),
+      });
+    };
+    update();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(update);
+    observer?.observe(button);
+    if (toolbar) {
+      observer?.observe(toolbar);
+    }
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [anchor, open]);
   const page = pages.at(-1);
   const finish = () => {
     close();
@@ -72,10 +112,7 @@ export const FactoryMenu = ({
               {
                 name: "offset",
                 options: {
-                  offset: [
-                    0,
-                    16 * ((anchor?.getBoundingClientRect().height || 48) / 48),
-                  ],
+                  offset: [0, placement.gap],
                 },
               },
               { name: "preventOverflow", options: { padding: 12 } },
@@ -86,6 +123,7 @@ export const FactoryMenu = ({
                 page ? " fc-material-submenu" : ""
               }`}
               elevation={8}
+              style={{ maxHeight: placement.maxHeight }}
             >
               <DropdownMenuContentPropsContext.Provider
                 value={{
@@ -117,7 +155,7 @@ export const FactoryMenu = ({
                   {page && (
                     <MenuItem
                       onClick={() => setPages(pages.slice(0, -1))}
-                      aria-label={t("fcboard.返回设置")}
+                      aria-label={t("fcboard.back_to_settings")}
                     >
                       <MenuItemContent icon={chevronLeftIcon}>
                         {page.title}

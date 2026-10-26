@@ -16,6 +16,7 @@ import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 import type { FontFamilyValues } from "@excalidraw/element/types";
 import type { FactoryInkData } from "@excalidraw/element/factoryInk";
 import type { RegionBounds } from "@excalidraw/excalidraw/lasso/region";
+import type { InteractiveResource } from "@excalidraw/excalidraw/interactiveHtml";
 
 import {
   documentInkElement,
@@ -26,6 +27,7 @@ import {
 import type { Widget } from "./widgets";
 import type { InsertObject } from "./insertObjects";
 import type { Plot } from "./math";
+import type { LanguageInk } from "./languageStudy";
 
 export const DOCUMENT_ACCEPT =
   ".ppt,.pptx,.pps,.ppsx,.pdf,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.png,.jpg,.jpeg,.webp,.gif";
@@ -49,9 +51,13 @@ export type InkStroke = {
   image?: string;
   imageWidth?: number;
   imageHeight?: number;
+  resource?: InteractiveResource & { width: number; height: number };
   lesson?: string;
   commandId?: string;
   annotation?: boolean;
+  questionInput?: boolean;
+  language?: LanguageInk;
+  questionAnswer?: { owner: string; ids: string[]; folded?: InkStroke[] };
   widget?: Widget & { origin: { x: number; y: number } };
   insertion?: InsertObject & {
     origin: { x: number; y: number };
@@ -80,7 +86,7 @@ export const eraseDocumentInk = (
 ) => {
   let changed = false;
   const next = strokes.flatMap((stroke) => {
-    if (stroke.text || stroke.image || stroke.widget) {
+    if (stroke.text || stroke.image || stroke.widget || stroke.resource) {
       return [stroke];
     }
     const element = documentInkElement(stroke);
@@ -138,10 +144,10 @@ export class OfficeReader {
       this.pending.delete(data.id);
       if (data.error) {
         const message =
-          data.error === "文件已加密，请使用未加密的课件"
-            ? t("fcboard.文件已加密，请使用未加密的课件")
-            : data.error === "课件尚未打开"
-            ? t("fcboard.课件尚未打开")
+          data.error === "OFFICE_DOCUMENT_ENCRYPTED"
+            ? t("fcboard.this_file_is_encrypted_use_an_unencrypted_document")
+            : data.error === "OFFICE_DOCUMENT_NOT_OPEN"
+            ? t("fcboard.no_document_is_open")
             : data.error;
         task?.reject(new Error(message));
       } else {
@@ -150,7 +156,11 @@ export class OfficeReader {
     };
     this.worker.onerror = () => {
       this.pending.forEach((task) =>
-        task.reject(new Error(t("fcboard.文档引擎启动失败，请重新打开文件"))),
+        task.reject(
+          new Error(
+            t("fcboard.document_engine_failed_to_start_open_the_file_again"),
+          ),
+        ),
       );
       this.pending.clear();
     };
@@ -180,7 +190,7 @@ export class OfficeReader {
   close() {
     this.worker.terminate();
     this.pending.forEach((task) =>
-      task.reject(new DOMException("课件已关闭", "AbortError")),
+      task.reject(new DOMException("Document closed", "AbortError")),
     );
     this.pending.clear();
   }
@@ -219,8 +229,16 @@ export const documentStrokeBounds = (stroke: InkStroke) => {
   return {
     left,
     top,
-    right: stroke.image ? left + (stroke.imageWidth || 120) : Math.max(...xs),
-    bottom: stroke.image ? top + (stroke.imageHeight || 40) : Math.max(...ys),
+    right: stroke.resource
+      ? left + stroke.resource.width
+      : stroke.image
+      ? left + (stroke.imageWidth || 120)
+      : Math.max(...xs),
+    bottom: stroke.resource
+      ? top + stroke.resource.height
+      : stroke.image
+      ? top + (stroke.imageHeight || 40)
+      : Math.max(...ys),
   };
 };
 
@@ -230,12 +248,25 @@ export const selectDocumentLasso = (
   path: [number, number][],
 ) => {
   if (path.length < 3) {
-    return strokes
+    const hit = strokes
       .filter((stroke) => path[0] && hitStroke(stroke, path[0]))
+      .map((stroke) => stroke.id);
+    const groups = new Set(
+      strokes
+        .filter((stroke) => hit.includes(stroke.id))
+        .map((stroke) => stroke.language?.group)
+        .filter(Boolean),
+    );
+    return strokes
+      .filter(
+        (stroke) =>
+          hit.includes(stroke.id) ||
+          (stroke.language && groups.has(stroke.language.group)),
+      )
       .map((stroke) => stroke.id);
   }
   const elements = strokes.map((stroke) => {
-    if (!stroke.text && !stroke.image) {
+    if (!stroke.text && !stroke.image && !stroke.resource) {
       return documentInkElement(stroke);
     }
     const bounds = documentStrokeBounds(stroke);
@@ -254,7 +285,7 @@ export const selectDocumentLasso = (
     )[0];
   });
   const elementsMap = new Map(elements.map((element) => [element.id, element]));
-  return getLassoSelectedElementIds({
+  const selected = getLassoSelectedElementIds({
     lassoPath: path.map(([x, y]) => pointFrom(x, y)),
     elements,
     elementsMap,
@@ -267,6 +298,19 @@ export const selectDocumentLasso = (
     enclosedElements: new Set(),
     intersectedElements: new Set(),
   }).selectedElementIds;
+  const groups = new Set(
+    strokes
+      .filter((stroke) => selected.includes(stroke.id))
+      .map((stroke) => stroke.language?.group)
+      .filter(Boolean),
+  );
+  return strokes
+    .filter(
+      (stroke) =>
+        selected.includes(stroke.id) ||
+        (stroke.language && groups.has(stroke.language.group)),
+    )
+    .map((stroke) => stroke.id);
 };
 
 export const selectDocumentRegion = (
@@ -314,7 +358,7 @@ export const hitStroke = (
   point: [number, number],
   radius = 14,
 ) => {
-  if (stroke.text || stroke.image) {
+  if (stroke.text || stroke.image || stroke.resource) {
     const { left: x, top: y, right, bottom } = documentStrokeBounds(stroke);
     return (
       point[0] > x - radius &&
@@ -349,12 +393,14 @@ export const shapeInk = (
   image?: string,
 ): InkStroke => {
   if (!shape.id || !Number.isFinite(shape.x) || !Number.isFinite(shape.y)) {
-    throw new Error(t("fcboard.课件板书坐标无效"));
+    throw new Error(t("fcboard.invalid_annotation_coordinates"));
   }
   const x = shape.x || 0;
   const y = shape.y || 0;
   let points: [number, number][] = [[x, y]];
-  if (shape.type === "line" || shape.type === "arrow") {
+  if (shape.type === "freedraw") {
+    points = shape.points.map(([a, b]) => [x + a, y + b]);
+  } else if (shape.type === "line" || shape.type === "arrow") {
     points = (
       shape.points || [
         [0, 0],
@@ -417,7 +463,16 @@ export const shapeInk = (
     color: shape.strokeColor || "#245bd6",
     lesson,
     commandId: shape.customData?.fcTutorId,
+    ...(shape.type === "freedraw"
+      ? {
+          pressures: [...shape.pressures],
+          simulatePressure: shape.simulatePressure,
+          fcInk: shape.customData?.fcInk,
+        }
+      : {}),
     annotation: !!shape.customData?.fcAnnotation,
+    language: shape.customData?.fcLanguage,
+    ...(shape.customData?.fcQuestionInput ? { questionInput: true } : {}),
     widget: shape.customData?.fcWidget,
     insertion: shape.customData?.fcInsertion,
     plot: shape.customData?.fcPlot,
@@ -429,6 +484,13 @@ export const shapeInk = (
     image: shape.type === "image" ? image : undefined,
     imageWidth: shape.type === "image" ? shape.width : undefined,
     imageHeight: shape.type === "image" ? shape.height : undefined,
+    resource: shape.customData?.fcInteractiveResource
+      ? {
+          ...shape.customData.fcInteractiveResource,
+          width: shape.width,
+          height: shape.height,
+        }
+      : undefined,
   };
 };
 
@@ -443,7 +505,7 @@ export const inkSnapshot = async (
   canvas.height = Math.max(1, Math.min(1600, Math.round(height)));
   const context = canvas.getContext("2d");
   if (!context) {
-    throw new Error(t("fcboard.设备无法生成课件截图"));
+    throw new Error(t("fcboard.this_device_could_not_capture_the_document"));
   }
   context.fillStyle = "#fff";
   context.fillRect(0, 0, canvas.width, canvas.height);
@@ -457,7 +519,8 @@ export const inkSnapshot = async (
     const image = new Image();
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
-      image.onerror = () => reject(new Error(t("fcboard.课件图像读取失败")));
+      image.onerror = () =>
+        reject(new Error(t("fcboard.could_not_read_document_image")));
       image.src = source;
     });
     context.drawImage(image, x, y, width, size);
@@ -478,7 +541,24 @@ export const inkSnapshot = async (
     context.lineWidth = stroke.width;
     context.lineCap = "round";
     context.lineJoin = "round";
-    if (stroke.image) {
+    if (stroke.resource) {
+      // Browser canvas cannot capture an opaque iframe. Preserve its title and extent;
+      // native recording/snapshots capture the actual visible experiment.
+      const bounds = documentStrokeBounds(stroke);
+      context.strokeRect(
+        bounds.left,
+        bounds.top,
+        stroke.resource.width,
+        stroke.resource.height,
+      );
+      context.font = "18px sans-serif";
+      context.fillText(
+        stroke.resource.title,
+        bounds.left + 12,
+        bounds.top + 28,
+        stroke.resource.width - 24,
+      );
+    } else if (stroke.image) {
       await drawImage(
         stroke.image,
         stroke.points[0][0],
@@ -535,7 +615,7 @@ export const inkSnapshot = async (
         (blob) =>
           blob
             ? resolve(blob)
-            : reject(new Error(t("fcboard.课件截图生成失败"))),
+            : reject(new Error(t("fcboard.could_not_capture_document"))),
         "image/png",
       ),
     ),

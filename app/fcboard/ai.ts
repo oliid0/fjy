@@ -57,7 +57,9 @@ export const chat = async (
 ): Promise<string> => {
   if (!settings.apiKey || !settings.model.trim()) {
     throw new Error(
-      t("fcboard.请先在 AI 设置中填写 API 密钥和支持视觉的模型 ID / 接入点 ID"),
+      t(
+        "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
+      ),
     );
   }
   const url = validateEndpoint(settings.endpoint);
@@ -107,7 +109,11 @@ export const chat = async (
   const timer = setTimeout(
     () =>
       controller.abort(
-        new Error(t("fcboard.AI 请求超时，请检查网络或稍后重试")),
+        new Error(
+          t(
+            "fcboard.ai_request_timed_out_check_your_connection_or_try_again_later",
+          ),
+        ),
       ),
     Math.max(1000, Math.min(90000, options.timeoutMs || 90000)),
   );
@@ -134,14 +140,14 @@ export const chat = async (
       );
       controller.signal.throwIfAborted();
       if (response.status < 200 || response.status >= 300) {
-        let detail = t("fcboard.请检查接口、模型与密钥");
+        let detail = t("fcboard.check_the_endpoint_model_and_api_key");
         try {
           detail = JSON.parse(response.data).error?.message || detail;
         } catch {
           /* Non-JSON gateway. */
         }
         throw new Error(
-          t("fcboard.AI 请求失败 ({{status}})：{{detail}}", {
+          t("fcboard.ai_request_failed_status_detail", {
             status: response.status,
             detail,
           }),
@@ -267,7 +273,11 @@ export const cropImage = async (
   const right = Math.max(left, Math.min(1, region.right));
   const bottom = Math.max(top, Math.min(1, region.bottom));
   if (right <= left || bottom <= top) {
-    throw new Error(t("fcboard.选区位于课件显示范围之外，请重新圈选"));
+    throw new Error(
+      t(
+        "fcboard.selection_is_outside_the_visible_document_circle_the_area_again",
+      ),
+    );
   }
   const scale = Math.min(
     1,

@@ -85,7 +85,7 @@ export const createNarrator = () => {
     };
     next.onerror = () => {
       if (!paused && utterance === next) {
-        fail(new Error(t("fcboard.播报接口未返回有效音频")));
+        fail(new Error(t("fcboard.the_voice_service_returned_invalid_audio")));
       }
     };
     window.speechSynthesis.cancel();
@@ -158,10 +158,18 @@ export const createNarrator = () => {
             }
             player = new Audio(Capacitor.convertFileSrc(result.path));
             player.playbackRate = rate;
-            player.onerror = () =>
-              fail(new Error(t("fcboard.播报接口未返回有效音频")));
+            player.onerror = () => {
+              if (controller.signal.aborted || nativeId !== id) {
+                return;
+              }
+              fail(
+                new Error(
+                  t("fcboard.the_voice_service_returned_invalid_audio"),
+                ),
+              );
+            };
             player.onended = () => {
-              if (controller.signal.aborted) {
+              if (controller.signal.aborted || nativeId !== id) {
                 return;
               }
               player = undefined;
@@ -192,7 +200,7 @@ export const createNarrator = () => {
           ) {
             throw new Error(
               t(
-                "fcboard.此设备没有播报引擎，请在设置中连接语音播报；当前可使用字幕讲解",
+                "fcboard.no_speech_engine_is_available_connect_a_voice_service_in_settings_or_teach_with_captions",
               ),
             );
           }
@@ -212,14 +220,16 @@ export const createNarrator = () => {
         });
         if (!response.ok) {
           throw new Error(
-            t("fcboard.语音播报请求失败 ({{status}})", {
+            t("fcboard.voice_playback_request_failed_status", {
               status: response.status,
             }),
           );
         }
         const blob = await response.blob();
         if (!blob.size || !blob.type.startsWith("audio/")) {
-          throw new Error(t("fcboard.播报接口未返回有效音频"));
+          throw new Error(
+            t("fcboard.the_voice_service_returned_invalid_audio"),
+          );
         }
         if (controller.signal.aborted) {
           return;
@@ -229,12 +239,21 @@ export const createNarrator = () => {
 
         player.playbackRate = rate;
         player.onended = () => {
+          if (controller.signal.aborted) {
+            return;
+          }
           offset = words.length;
           boundary?.(offset);
           finish();
         };
-        player.onerror = () =>
-          fail(new Error(t("fcboard.播报接口未返回有效音频")));
+        player.onerror = () => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          fail(
+            new Error(t("fcboard.the_voice_service_returned_invalid_audio")),
+          );
+        };
         if (!paused) {
           await player.play();
         }

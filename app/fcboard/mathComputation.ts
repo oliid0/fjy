@@ -13,7 +13,7 @@ export const calculateAsync = async (
     return calculateLocal(expression);
   }
   if (typeof Worker === "undefined") {
-    throw new Error(t("fcboard.该算式没有可用结果"));
+    throw new Error(t("fcboard.this_expression_has_no_available_result"));
   }
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./math.worker.ts", import.meta.url), {
@@ -33,7 +33,7 @@ export const calculateAsync = async (
       } else if (answer) {
         resolve(answer);
       } else {
-        reject(new Error(t("fcboard.该算式没有可用结果")));
+        reject(new Error(t("fcboard.this_expression_has_no_available_result")));
       }
     };
     const abort = () =>

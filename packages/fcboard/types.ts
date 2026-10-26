@@ -256,6 +256,7 @@ export type ObservedAppState = ObservedStandaloneAppState &
 export type ObservedStandaloneAppState = {
   name: AppState["name"];
   viewBackgroundColor: AppState["viewBackgroundColor"];
+  whiteboardBackground?: AppState["whiteboardBackground"];
 };
 
 export type ObservedElementsAppState = {
@@ -375,6 +376,7 @@ export interface AppState {
   >;
   currentItemInkAssist?:
     | "text"
+    | "language"
     | "shape"
     | "magic"
     | "function"
@@ -691,6 +693,7 @@ export interface ExcalidrawProps {
     activeTool: AppState["activeTool"],
     pointerDownState: PointerDownState,
   ) => void;
+  onObjectDoubleClick?: (element: ExcalidrawElement) => void;
   onScrollChange?: (scrollX: number, scrollY: number, zoom: Zoom) => void;
   onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;

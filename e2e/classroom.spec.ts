@@ -26,7 +26,11 @@ for (const viewport of [
   { width: 1920, height: 1080 },
   { width: 1280, height: 720 },
   { width: 800, height: 600 },
+  { width: 1080, height: 1920 },
+  { width: 800, height: 1280 },
+  { width: 844, height: 390 },
   { width: 390, height: 844 },
+  { width: 320, height: 568 },
 ]) {
   test(`one reachable bottom toolbar at ${viewport.width}x${viewport.height}`, async ({
     page,
@@ -36,9 +40,31 @@ for (const viewport of [
     const toolbar = page.getByRole("toolbar", { name: "白板工具栏" });
     await expect(toolbar).toBeVisible();
     const bounds = (await toolbar.boundingBox())!;
-    expect(bounds.y).toBeGreaterThan(viewport.height - 100);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
-    expect(bounds.height).toBeLessThanOrEqual(80);
+    const maxToolbarHeight =
+      viewport.width <= 600 ? 200 : viewport.width <= 1000 ? 120 : 80;
+    expect(bounds.y).toBeGreaterThanOrEqual(viewport.height - maxToolbarHeight);
+    expect(
+      Math.abs(bounds.y + bounds.height - viewport.height),
+    ).toBeLessThanOrEqual(1);
+    expect(bounds.height).toBeLessThanOrEqual(maxToolbarHeight);
+    const buttons = await toolbar.locator("button").evaluateAll((nodes) =>
+      nodes
+        .filter(
+          (node) =>
+            node.getBoundingClientRect().height &&
+            getComputedStyle(node).visibility !== "hidden",
+        )
+        .map((node) => {
+          const { left, right, top, bottom } = node.getBoundingClientRect();
+          return { left, right, top, bottom };
+        }),
+    );
+    for (const button of buttons) {
+      expect(button.left).toBeGreaterThanOrEqual(bounds.x - 1);
+      expect(button.right).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+      expect(button.top).toBeGreaterThanOrEqual(bounds.y - 1);
+      expect(button.bottom).toBeLessThanOrEqual(viewport.height + 1);
+    }
     await expect(
       page.locator(
         ".fc-dock, .shapes-section-container, .FixedSideContainer_side_top, .layer-ui__wrapper__footer",
@@ -69,17 +95,30 @@ for (const viewport of [
     const groups = await toolbar.locator(":scope > div").evaluateAll((nodes) =>
       nodes.map((node) => {
         const rect = node.getBoundingClientRect();
-        return { left: rect.left, right: rect.right };
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+        };
       }),
     );
-    expect(groups[0].right).toBeLessThanOrEqual(groups[1].left);
-    expect(groups[1].right).toBeLessThanOrEqual(groups[2].left);
+    const separate = (a: typeof groups[number], b: typeof groups[number]) =>
+      a.right <= b.left + 1 ||
+      b.right <= a.left + 1 ||
+      a.bottom <= b.top + 1 ||
+      b.bottom <= a.top + 1;
+    expect(separate(groups[0], groups[1])).toBe(true);
+    expect(separate(groups[1], groups[2])).toBe(true);
+    expect(separate(groups[0], groups[2])).toBe(true);
     await expect(
       page.getByRole("button", { name: "绘制函数", exact: true }),
     ).toHaveCount(0);
     await selectMenu(page, "AI 与语音设置");
     await expect(page.getByRole("dialog", { name: "白板设置" })).toBeVisible();
     const panelBounds = (await page.locator(".fc-panel").boundingBox())!;
+    expect(panelBounds.width).toBeLessThanOrEqual(672);
+    expect(panelBounds.height).toBeLessThanOrEqual(420);
     expect(
       Math.abs(panelBounds.x + panelBounds.width / 2 - viewport.width / 2),
     ).toBeLessThanOrEqual(2);
@@ -97,6 +136,12 @@ for (const viewport of [
     const contentBounds = (await page
       .locator(".fc-settings-content")
       .boundingBox())!;
+    await page.getByRole("button", { name: "语言", exact: true }).click();
+    const language = page.getByRole("combobox", {
+      name: "选择语言",
+      exact: true,
+    });
+    await expect(language).toBeVisible();
     expect(navBounds.x + navBounds.width).toBeLessThanOrEqual(
       contentBounds.x + 1,
     );
@@ -162,6 +207,10 @@ for (const viewport of [
     ).toBeLessThanOrEqual(penBounds.width / 2 + 12);
     await page.keyboard.press("Escape");
     await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    const insertIconWidth = (await page
+      .locator(".fc-insert-grid button svg")
+      .first()
+      .boundingBox())!.width;
     await page.getByRole("button", { name: "表格", exact: true }).click();
     const table = page.getByRole("dialog", { name: "表格", exact: true });
     await expect(table.locator(".fc-table-picker-grid")).toBeVisible();
@@ -194,6 +243,12 @@ for (const viewport of [
       tools.getByRole("button", { name: "语音指令", exact: true }),
     ).toBeVisible();
     const toolsBounds = (await tools.boundingBox())!;
+    expect(
+      await tools
+        .locator(".fc-tools-grid button svg")
+        .first()
+        .evaluate((element) => element.getBoundingClientRect().width),
+    ).toBeCloseTo(insertIconWidth, 1);
     if (viewport.width >= viewport.height) {
       expect(toolsBounds.width).toBeGreaterThan(toolsBounds.height);
     }
@@ -204,7 +259,7 @@ for (const viewport of [
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(" ").length,
       );
-    expect(columns).toBeGreaterThan(3);
+    expect(columns).toBeGreaterThanOrEqual(viewport.width < 360 ? 3 : 4);
     await page.screenshot({
       path: testInfo.outputPath(`tools-${viewport.width}.png`),
     });
@@ -430,17 +485,30 @@ test("screenshot summary sends a real board image and returns to an editable can
   await page
     .getByRole("button", { name: "总结选区 / 白板", exact: true })
     .click();
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
-          (element: { text?: string; isDeleted?: boolean }) =>
-            !element.isDeleted && element.text?.includes("斜率决定变化趋势"),
-        ),
-      ),
-    )
-    .toBe(true);
+  const summary = page.getByRole("dialog", { name: "AI 总结", exact: true });
+  await expect(summary).toContainText("斜率决定变化趋势");
+  const summaryRect = (await summary.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(
+    Math.abs(summaryRect.x + summaryRect.width / 2 - viewport.width / 2),
+  ).toBeLessThan(2);
+  expect(
+    Math.abs(summaryRect.y + summaryRect.height / 2 - viewport.height / 2),
+  ).toBeLessThan(2);
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+          (element: { isDeleted?: boolean }) => !element.isDeleted,
+        ).length,
+    ),
+  ).toBe(1);
   expect(imageSent).toBe(true);
+  await page.getByRole("button", { name: "全屏查看总结", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "退出总结全屏", exact: true }),
+  ).toContainText("斜率决定变化趋势");
+  await page.getByRole("button", { name: "退出总结全屏", exact: true }).click();
   await page.getByRole("button", { name: "关闭工具浮层" }).click();
   await page.mouse.click(100, 500);
   await page.keyboard.press("p");

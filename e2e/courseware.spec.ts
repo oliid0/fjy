@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
+import { dictateQuestion } from "./question";
 
 import type { Page } from "@playwright/test";
 
@@ -30,8 +31,7 @@ const ask = async (page: Page, text: string) => {
   } else {
     await selectMenu(page, "提问与讲解");
   }
-  await page.getByRole("textbox", { name: "向 AI 教师提问" }).fill(text);
-  await page.getByRole("button", { name: "发送问题" }).click();
+  await dictateQuestion(page, text);
 };
 
 for (const name of [
@@ -364,12 +364,14 @@ test("voice draws into the visible PPT and function controls update its transpar
   await page.goto("/");
   await openFile(page, "testPPT.pptx");
   await page.getByRole("button", { name: "课件语音指令", exact: true }).click();
+  await page.getByRole("button", { name: "旋转图形", exact: true }).click();
   await expect(
     page.getByRole("slider", { name: "旋转", exact: true }),
   ).toBeVisible();
   await expect
     .poll(() => page.locator(".fc-document-ink path").count())
     .toBeGreaterThan(3);
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "收起工具参数" }).click();
   await expect(
     page.getByRole("button", { name: "课件语音指令", exact: true }),

@@ -1,4 +1,4 @@
-import { encodePCM, startLocalSpeech } from "./localSpeech";
+import { encodePCM, startLocalSpeech, startPCMSpeech } from "./localSpeech";
 
 const engine = vi.hoisted(() => ({
   prepare: vi.fn(),
@@ -120,5 +120,35 @@ describe("built-in speech audio lifecycle", () => {
     await cancellation;
     expect(onLine).not.toHaveBeenCalled();
     expect(engine.stop).toHaveBeenCalledWith({ session: "session-1" });
+  });
+
+  it("delivers cloud segments while capture stays open and discards on cancellation", async () => {
+    const transport = {
+      start: vi.fn().mockResolvedValue({ session: "cloud" }),
+      push: vi
+        .fn()
+        .mockResolvedValue({ lines: [{ time: 1, text: "画一个圆" }] }),
+      stop: vi.fn().mockResolvedValue({ lines: [] }),
+    };
+    const onLine = vi.fn();
+    const handle = await startPCMSpeech(
+      transport,
+      onLine,
+      vi.fn(),
+      stream,
+      true,
+    );
+    emit({ pcm: new Float32Array(1600), sampleRate: 16000 });
+    await vi.waitFor(() =>
+      expect(onLine.mock.calls[0]?.[0]).toEqual({ time: 1, text: "画一个圆" }),
+    );
+    expect(transport.stop).not.toHaveBeenCalled();
+    await handle.cancel();
+    expect(transport.stop).toHaveBeenCalledWith({
+      session: "cloud",
+      discard: true,
+    });
+    expect(trackStop).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });

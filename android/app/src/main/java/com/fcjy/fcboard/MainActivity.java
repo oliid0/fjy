@@ -8,7 +8,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ClassroomPlugin.class);
+        registerPlugin(RecordingExportPlugin.class);
         registerPlugin(LocalSpeechPlugin.class);
+        registerPlugin(CloudSpeechPlugin.class);
         registerPlugin(OfflineTtsPlugin.class);
         registerPlugin(DigitalInkPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);

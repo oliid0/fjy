@@ -1,12 +1,131 @@
 import { t } from "@excalidraw/excalidraw/i18n";
 
+import type { ResourceControlState } from "@excalidraw/excalidraw/interactiveResourceControls";
+
 import { runBoardCommands } from "./agent";
 import { classroomCommands } from "./commands";
 import * as ai from "./ai";
 import { registerCanvasCommands } from "./canvasCommands";
 import { sceneAPI } from "./test/scene";
+import { resourceFrame } from "./test/resourceFrame";
+import { interactiveResource } from "./test/interactiveResource";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it("ends a cancelled pending tool without waiting for a late third-party response or running later commands", async () => {
+  let deliver!: (value: unknown) => void;
+  const later = vi.fn();
+  const stops = [
+    classroomCommands.register(
+      "test.pending",
+      "pending",
+      () =>
+        new Promise((resolve) => {
+          deliver = resolve;
+        }),
+    ),
+    classroomCommands.register("test.later", "later", later),
+  ];
+  const chat = vi.spyOn(ai, "chat");
+  const controller = new AbortController();
+  try {
+    const finished = runBoardCommands(
+      {
+        action: "commands",
+        continue: true,
+        commands: [{ name: "test.pending" }, { name: "test.later" }],
+      },
+      [],
+      controller.signal,
+      () => true,
+    );
+    controller.abort();
+    await expect(finished).resolves.toEqual({ action: "done" });
+    deliver({ late: true });
+    await Promise.resolve();
+    expect(later).not.toHaveBeenCalled();
+    expect(chat).not.toHaveBeenCalled();
+  } finally {
+    stops.forEach((stop) => stop());
+  }
+});
+
+it("uses an inspected live control id and verifies its actual output before completing a demonstration", async () => {
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  const { ids } = (await classroomCommands.execute({
+    name: "canvas.resource",
+    args: { resource: interactiveResource },
+  })) as { ids: string[] };
+  const resource = api.getSceneElements().find((item) => item.id === ids[0])!
+    .customData!.fcInteractiveResource;
+  const frame = resourceFrame({
+    id: ids[0],
+    surface: "whiteboard",
+    html: resource.html,
+  });
+  frame.loaded();
+  const controller = new AbortController();
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockImplementationOnce(async (messages) => {
+      const content = String(messages.at(-1)?.content);
+      const { results } = JSON.parse(
+        content.slice(content.indexOf("\n") + 1),
+      ) as { results: { ok: boolean; result: ResourceControlState }[] };
+      expect(results[0].ok).toBe(true);
+      const state = results[0].result;
+      expect(state.outputs).toEqual(["2 m/s²"]);
+      const force = state.controls.find((item) => item.type === "range")!;
+      return JSON.stringify({
+        action: "commands",
+        continue: true,
+        commands: [
+          {
+            name: "resources.interact",
+            args: {
+              id: ids[0],
+              version: state.version,
+              control: force.id,
+              action: "set",
+              value: 10,
+            },
+          },
+        ],
+      });
+    })
+    .mockImplementationOnce(async (messages) => {
+      expect(String(messages.at(-1)?.content)).toContain(
+        '"outputs":["5 m/s²"]',
+      );
+      expect(
+        frame.window.document.querySelector("#block")?.getAttribute("x"),
+      ).toBe("150");
+      return '{"action":"done"}';
+    });
+  try {
+    await expect(
+      runBoardCommands(
+        {
+          action: "commands",
+          continue: true,
+          commands: [{ name: "resources.inspect", args: { id: ids[0] } }],
+        },
+        [],
+        controller.signal,
+        () => true,
+      ),
+    ).resolves.toEqual({ action: "done" });
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(frame.post).toHaveBeenCalledTimes(2);
+  } finally {
+    frame.dispose();
+    stop();
+  }
+});
 
 it("recovers from a stale real canvas target using the returned error and latest objects", async () => {
   const api = sceneAPI();
@@ -166,7 +285,11 @@ it("validates the whole batch before editing and keeps legacy single-batch reque
         undefined,
         () => true,
       ),
-    ).rejects.toThrow(t("fcboard.AI 请求了当前不可用的操作，请重新描述"));
+    ).rejects.toThrow(
+      t(
+        "fcboard.ai_requested_an_unavailable_action_please_rephrase_your_request",
+      ),
+    );
     expect(edit).not.toHaveBeenCalled();
     await runBoardCommands(
       { action: "commands", commands: [{ name: "test.edit" }] },
@@ -220,7 +343,9 @@ it("returns a tool failure to the model for correction and bounds repeated obser
     await expect(
       runBoardCommands(action, [], undefined, () => true),
     ).rejects.toThrow(
-      t("fcboard.连续观察达到上限，已完成的内容已保留，可继续描述下一步"),
+      t(
+        "fcboard.observation_limit_reached_completed_work_is_preserved_describe_the_next_step_to_continue",
+      ),
     );
     expect(chat).toHaveBeenCalledTimes(5);
     expect(chat.mock.calls[0][0][1].content).toContain("未找到控件");

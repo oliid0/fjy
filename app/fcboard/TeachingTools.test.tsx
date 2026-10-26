@@ -58,13 +58,15 @@ it("uses the same native tool command for touch and AI, reports failure and rest
   await waitFor(() =>
     expect(classroomCommands.has("tools.factory")).toBe(true),
   );
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.教学工具") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+  );
   const calculator = screen.getByRole("button", {
-    name: t("fcboard.打开{{name}}", { name: t("fcboard.计算器") }),
+    name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
   });
   expect(
     screen.queryByRole("button", {
-      name: t("fcboard.打开{{name}}", { name: t("fcboard.信号源") }),
+      name: t("fcboard.open_name", { name: t("fcboard.signal") }),
     }),
   ).not.toBeInTheDocument();
   fireEvent.click(calculator);
@@ -87,28 +89,30 @@ it("uses the same native tool command for touch and AI, reports failure and rest
     tool: "calculator",
   });
   expect(
-    screen.queryByRole("dialog", { name: t("fcboard.教学工具") }),
+    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
   ).not.toBeInTheDocument();
   await expect(
     classroomCommands.execute({
       name: "tools.factory",
       args: { tool: "signal" },
     }),
-  ).rejects.toThrow(t("fcboard.当前设备没有这项大屏工具"));
+  ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
 });
 
 it("does not advertise unavailable device actions to the AI", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.getFactoryTools).mockResolvedValue({ available: [] });
   render(<TeachingTools api={emptyApi()} />);
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.教学工具") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+  );
   await waitFor(() =>
     expect(screen.queryByRole("status")).not.toBeInTheDocument(),
   );
   expect(classroomCommands.has("tools.factory")).toBe(false);
   expect(
     screen.getByRole("button", {
-      name: t("fcboard.插入{{name}}", { name: t("fcboard.计时器") }),
+      name: t("fcboard.insert_name", { name: t("fcboard.timer") }),
     }),
   ).toBeEnabled();
 });
@@ -121,16 +125,20 @@ it("uses one internal transfer entry even when a factory transfer application is
   const invoke = vi.fn();
   const release = classroomCommands.register("ui.invoke", "@internal", invoke);
   const view = render(<TeachingTools api={emptyApi()} />);
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.教学工具") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+  );
   await waitFor(() =>
     expect(screen.queryByRole("status")).not.toBeInTheDocument(),
   );
   expect(
     screen.queryByRole("button", {
-      name: t("fcboard.打开{{name}}", { name: t("fcboard.快传") }),
+      name: t("fcboard.open_name", { name: t("fcboard.file_transfer") }),
     }),
   ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.快传") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.file_transfer") }),
+  );
   await waitFor(() =>
     expect(invoke).toHaveBeenCalledWith({
       command: "files.open",
@@ -143,10 +151,10 @@ it("uses one internal transfer entry even when a factory transfer application is
 });
 
 it.each([
-  ["AI 总结", "canvas.summary"],
-  ["课堂录制", "record.open"],
-  ["快传", "files.open"],
-  ["AI 问答", "assistant.open"],
+  ["ai_summary", "canvas.summary"],
+  ["recording", "record.open"],
+  ["file_transfer", "files.open"],
+  ["ai_questions", "assistant.open"],
 ] as const)(
   "runs %s from the toolbox through the existing UI command route",
   async (label, command) => {
@@ -160,7 +168,7 @@ it.each([
     const view = render(<TeachingTools api={emptyApi()} />);
     try {
       fireEvent.click(
-        screen.getByRole("button", { name: t("fcboard.教学工具") }),
+        screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
       );
       fireEvent.click(
         screen.getByRole("button", { name: t(`fcboard.${label}`) }),
@@ -169,7 +177,7 @@ it.each([
         expect(invoke).toHaveBeenCalledWith({ command, origin: "tools" }),
       );
       expect(
-        screen.queryByRole("dialog", { name: t("fcboard.教学工具") }),
+        screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
       ).not.toBeInTheDocument();
     } finally {
       view.unmount();
@@ -188,16 +196,18 @@ it("closes the tool picker with the toolbar and allows the AI to show it again",
     return () => {};
   });
   render(<TeachingTools api={api} />);
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.教学工具") }));
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+  );
   expect(
-    screen.getByRole("dialog", { name: t("fcboard.教学工具") }),
+    screen.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
   ).toBeInTheDocument();
   act(() => {
     state.toolbarHidden = true;
     change();
   });
   expect(
-    screen.queryByRole("dialog", { name: t("fcboard.教学工具") }),
+    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
   ).not.toBeInTheDocument();
   await act(async () => {
     await classroomCommands.execute({ name: "tools.open" });
@@ -206,7 +216,7 @@ it("closes the tool picker with the toolbar and allows the AI to show it again",
     appState: { toolbarHidden: false },
   });
   expect(
-    screen.getByRole("dialog", { name: t("fcboard.教学工具") }),
+    screen.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
   ).toBeInTheDocument();
 });
 

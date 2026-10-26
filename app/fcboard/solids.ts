@@ -20,6 +20,7 @@ export type SolidSettings = {
   colors: Record<string, string>;
   stroke: string;
   border: boolean;
+  fit: number;
 };
 export const solidDefaults = (): SolidSettings => ({
   unfold: 0,
@@ -27,6 +28,7 @@ export const solidDefaults = (): SolidSettings => ({
   colors: {},
   stroke: "#17243c",
   border: true,
+  fit: 1,
 });
 const validColor = (value: unknown): value is string =>
   typeof value === "string" &&
@@ -45,6 +47,17 @@ export const configureSolid = (
   }
   const input = changes as Record<string, unknown>;
   const result = { ...base, colors: { ...base.colors } };
+  if (input.fit !== undefined) {
+    if (
+      typeof input.fit !== "number" ||
+      !Number.isFinite(input.fit) ||
+      input.fit < 0.001 ||
+      input.fit > 1
+    ) {
+      throw new Error("Invalid solid display scale");
+    }
+    result.fit = input.fit;
+  }
   if (input.unfold !== undefined) {
     if (
       typeof input.unfold !== "number" ||
@@ -140,7 +153,7 @@ export const solidShapes = (
       Math.max(...points.map((p) => p[1]))) /
       2,
   ];
-  const scale = (kind === "cube" ? 140 : 150) * size;
+  const scale = (kind === "cube" ? 140 : 150) * size * settings.fit;
   const project = (point: Vec3): [number, number] => {
     const p = projectSolid(point, kind, rotation);
     return [140 + (p[0] - center[0]) * scale, 130 + (p[1] - center[1]) * scale];

@@ -62,8 +62,8 @@ export const canvasConfigurationSnapshot = (
         !!threshold && Number.isFinite(threshold) && threshold > 0,
     },
     eraser: {
-      mode: document ? "stroke" : state.eraserMode || "stroke",
-      modes: document ? ["stroke"] : ["stroke", "object"],
+      mode: state.eraserMode || "stroke",
+      modes: ["stroke", "object"],
       size: state.eraserSize ?? device?.eraserSize ?? 60,
       palm: state.palmEraser !== false,
       palmThreshold: state.palmEraserThreshold ?? device?.palmThreshold ?? 36,
@@ -158,8 +158,7 @@ export const canvasConfigurationPatch = (
     classroomCommands.read("document") &&
     ("backgroundColor" in input ||
       "backgroundPattern" in input ||
-      "multiStroke" in input ||
-      input.eraserMode === "object")
+      "multiStroke" in input)
   ) {
     throw documentOnly();
   }

@@ -52,7 +52,7 @@ for (const viewport of [
     await page.goto("/");
     await selectMenu(page, "提问与讲解");
     const frame = (await page
-      .locator(".fc-ink-question svg[role=img]")
+      .getByRole("img", { name: "向 AI 教师提问", exact: true })
       .boundingBox())!;
     await dictateQuestion(page, "物体为什么会下落？");
     const fold = page.getByRole("button", { name: "折叠回答", exact: true });

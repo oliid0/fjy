@@ -208,14 +208,13 @@ it("uses device defaults and refuses hidden-board changes while courseware is vi
       configuration: {
         background: { available: false },
         pen: { thickThreshold: 12, dualPen: true },
-        eraser: { size: 75, palmThreshold: 40, modes: ["stroke"] },
+        eraser: { size: 75, palmThreshold: 40, modes: ["stroke", "object"] },
       },
     });
     for (const args of [
       { backgroundPattern: 3, palmEraser: false },
       { backgroundColor: "#123d32" },
       { multiStroke: true },
-      { eraserMode: "object" },
     ]) {
       await expect(
         classroomCommands.execute({ name: "canvas.configure", args }),
@@ -235,10 +234,14 @@ it("uses device defaults and refuses hidden-board changes while courseware is vi
         "fcboard.this_action_is_for_the_board_in_a_document_turn_pages_annotate_circle_undo_or_describe_what_to",
       ),
     );
-    await configure({ brushVariation: 7, palmEraser: false });
+    await configure({
+      brushVariation: 7,
+      palmEraser: false,
+      eraserMode: "object",
+    });
     expect(readCanvasConfiguration(api, device)).toMatchObject({
       pen: { brushVariation: 7 },
-      eraser: { palm: false },
+      eraser: { palm: false, mode: "object" },
     });
   } finally {
     panel?.unmount();

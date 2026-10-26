@@ -219,7 +219,7 @@ export const registerCanvasCommands = (
     registerResourceCommands(api),
     classroomCommands.register(
       "canvas.configure",
-      "Configure the existing controls. Read canvas.inspect.configuration first. args: backgroundColor=#RRGGBB, backgroundPattern=0 (none) or 1..13; tip=fine|thick; dualPen=boolean (requires thickThreshold or device calibration); thickThreshold=1..240, brushVariation=0..50, palmEraser=boolean, palmThreshold=16..120, eraserMode=stroke|object, eraserSize=12..240; multiStroke and toolbarReversed=boolean. Sizes and thresholds use CSS pixels. Background, multiStroke and object eraser apply only to the whiteboard. Returns actual committed configuration; never changes existing handwriting.",
+      "Configure the existing controls. Read canvas.inspect.configuration first. args: backgroundColor=#RRGGBB, backgroundPattern=0 (none) or 1..13; tip=fine|thick; dualPen=boolean (requires thickThreshold or device calibration); thickThreshold=1..240, brushVariation=0..50, palmEraser=boolean, palmThreshold=16..120, eraserMode=stroke|object, eraserSize=12..240; multiStroke and toolbarReversed=boolean. Sizes and thresholds use CSS pixels. Background and multiStroke apply only to the whiteboard. Returns actual committed configuration; never changes existing handwriting.",
       async ({ signal, ...input }) => {
         if (signal !== undefined && !(signal instanceof AbortSignal)) {
           throw new Error(t("fcboard.invalid_style_parameters"));

@@ -114,6 +114,7 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
     await page.keyboard.press("Escape");
     await page.locator("[data-board-insert]").click();
     await page
+      .getByRole("dialog", { name: labels.insert_tools, exact: true })
       .getByRole("button", { name: labels.teaching_resources, exact: true })
       .click();
     const resources = page.locator(".fc-resource-library");

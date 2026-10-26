@@ -81,3 +81,26 @@ it("refuses to cover a full writing surface or accept malformed trajectories", (
     ],
   ]);
 });
+
+it("uses the compact writing height beside a portrait experiment without overlapping it or the toolbar", () => {
+  const api = sceneAPI();
+  const stops = [
+    classroomCommands.context("document", () => ({
+      viewport: { left: 0, top: 0, scroll: 0 },
+    })),
+    classroomCommands.context("document.layout", () => ({
+      scale: 1,
+      viewport: { left: 16, top: 16, right: 374, bottom: 711 },
+      obstacles: [{ left: 51, top: 124, right: 339, bottom: 586 }],
+    })),
+  ];
+  try {
+    const position = questionPosition(api);
+    expect(position.height).toBeCloseTo(100.8);
+    expect(position.width).toBe(358);
+    expect(position.top).toBeGreaterThanOrEqual(594);
+    expect(position.top + position.height).toBeLessThanOrEqual(711);
+  } finally {
+    stops.forEach((stop) => stop());
+  }
+});

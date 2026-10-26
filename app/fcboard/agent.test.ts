@@ -15,6 +15,82 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each([
+  {
+    style: false,
+    presentation: undefined,
+    expected: { sourceIds: ["question"], presentation: "handwritten" },
+  },
+  {
+    style: false,
+    presentation: "text",
+    expected: { sourceIds: ["question"], presentation: "text" },
+  },
+  { style: true, presentation: undefined, expected: {} },
+])(
+  "preserves explicit text style after tools while ordinary answers retain their question anchor: %j",
+  async ({ style, presentation, expected }) => {
+    const write = vi.fn();
+    const stops = [
+      classroomCommands.register("canvas.text", "write", write),
+      classroomCommands.register("canvas.style", "style", () => ({
+        fontSize: 40,
+        color: "#dc2626",
+      })),
+    ];
+    const chat = vi.spyOn(ai, "chat").mockResolvedValue(
+      JSON.stringify({
+        action: "commands",
+        commands: [
+          {
+            name: "canvas.text",
+            args: {
+              text: "Follow the requested style",
+              ...(presentation ? { presentation } : {}),
+            },
+          },
+        ],
+      }),
+    );
+    try {
+      await runBoardCommands(
+        {
+          action: "commands",
+          continue: style,
+          commands: style
+            ? [
+                {
+                  name: "canvas.style",
+                  args: { fontSize: 40, color: "#dc2626" },
+                },
+              ]
+            : [
+                {
+                  name: "canvas.text",
+                  args: {
+                    text: "Follow the requested style",
+                    ...(presentation ? { presentation } : {}),
+                  },
+                },
+              ],
+        },
+        [],
+        undefined,
+        () => true,
+        { textSourceIds: ["question"] },
+      );
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith({
+        text: "Follow the requested style",
+        ...expected,
+      });
+      expect(chat).toHaveBeenCalledTimes(style ? 1 : 0);
+    } finally {
+      stops.forEach((stop) => stop());
+    }
+  },
+);
+
 it("ends a cancelled pending tool without waiting for a late third-party response or running later commands", async () => {
   let deliver!: (value: unknown) => void;
   const later = vi.fn();

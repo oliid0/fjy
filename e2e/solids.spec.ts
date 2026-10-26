@@ -13,7 +13,9 @@ for (const [kind, width, height, nets, face] of [
     const toolbar = page.getByRole("toolbar", { name: "白板工具栏" });
     await toolbar.getByRole("button", { name: "插入", exact: true }).click();
     await page.getByRole("button", { name: "图形", exact: true }).click();
-    await page.getByRole("button", { name: kind, exact: true }).click();
+    await page
+      .getByRole("button", { name: `插入${kind}`, exact: true })
+      .click();
     const row = page.getByRole("toolbar", { name: "选区操作", exact: true });
     await expect(
       row.getByRole("button", { name: "展开图形", exact: true }),

@@ -173,10 +173,30 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   let imageSent = false;
   let requests = 0;
   let calculationObserved = false;
+  let lessonObserved = false;
   await page.route(
     "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
     async (route) => {
       const body = route.request().postDataJSON();
+      if (
+        String(body.messages[0].content).startsWith(
+          "You are the Fcboard teacher observing a live lesson",
+        )
+      ) {
+        const observation = JSON.parse(String(body.messages.at(-1).content));
+        lessonObserved =
+          observation.remainingSteps[0].commands.some(
+            (command: { text?: string }) => command.text === "x+1=3",
+          ) && observation.state.canvas.target.kind === "whiteboard";
+        await route.fulfill({
+          json: {
+            choices: [
+              { message: { content: JSON.stringify({ action: "keep" }) } },
+            ],
+          },
+        });
+        return;
+      }
       imageSent ||= JSON.stringify(body).includes("data:image/png;base64,");
       requests++;
       if (requests === 1) {
@@ -295,6 +315,7 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   expect(imageSent).toBe(true);
   expect(requests).toBe(2);
   expect(calculationObserved).toBe(true);
+  expect(lessonObserved).toBe(true);
   await page.screenshot({ path: info.outputPath("live-teacher-quiz.png") });
 });
 

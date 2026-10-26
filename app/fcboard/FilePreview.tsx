@@ -6,6 +6,7 @@ import { getLanguage, t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Popper from "@mui/material/Popper";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
+import Slider from "@mui/material/Slider";
 import { FactoryPenSettings } from "@excalidraw/excalidraw/components/FactoryPenSettings";
 import {
   switchWhiteboardPen,
@@ -69,6 +70,7 @@ import {
   selectDocumentRegion,
   moveDocumentStroke,
   eraseDocumentInk,
+  eraseDocumentObjects,
   htmlText,
   loadInk,
   OfficeReader,
@@ -100,7 +102,11 @@ import { drawPlot } from "./board";
 import { insertGeneratedImage } from "./imageGeneration";
 import { changeQuestionAnswer } from "./questionAnswer";
 import { resourcePlacement } from "./resourcePlacement";
-import { canvasConfigurationSnapshot } from "./canvasConfiguration";
+import {
+  applyCanvasConfiguration,
+  canvasConfigurationPatch,
+  canvasConfigurationSnapshot,
+} from "./canvasConfiguration";
 import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
 
 import type { Viewer } from "@web-ppt/viewer-core";
@@ -218,6 +224,7 @@ export const FilePreview = ({
   const [penState, setPenState] = useState(() => api.getAppState());
   const penStateRef = useRef(penState);
   const [penAnchor, setPenAnchor] = useState<HTMLElement | null>(null);
+  const [eraserAnchor, setEraserAnchor] = useState<HTMLElement | null>(null);
   useEffect(
     () =>
       api.onChange((_elements, state) => {
@@ -277,6 +284,7 @@ export const FilePreview = ({
     height: number;
   } | null>(null);
   const erasing = useRef<{
+    mode: "stroke" | "object";
     previous: [number, number];
     width: number;
     height: number;
@@ -1949,13 +1957,9 @@ export const FilePreview = ({
       return;
     }
     const previous = inkRef.current[gesturePage.current] || [];
-    const next = eraseDocumentInk(
-      previous,
-      gesture.previous,
-      position,
-      gesture.width,
-      gesture.height,
-    );
+    const next = (
+      gesture.mode === "object" ? eraseDocumentObjects : eraseDocumentInk
+    )(previous, gesture.previous, position, gesture.width, gesture.height);
     gesture.previous = position;
     if (next !== previous) {
       commitInk({ ...inkRef.current, [gesturePage.current]: next }, false);
@@ -1994,6 +1998,7 @@ export const FilePreview = ({
   useEffect(() => {
     cancelInkGesture();
     setPenAnchor(null);
+    setEraserAnchor(null);
   }, [inkOn, erase, selecting, page, zoom, scroll, cancelInkGesture]);
   useEffect(() => {
     const hide = () => {
@@ -2038,8 +2043,26 @@ export const FilePreview = ({
         api.getAppState().eraserSize ?? inkProfile?.eraserSize ?? 60,
       ),
     );
-    const palm = contact.pointerType === "touch";
+    const palm =
+      api.getAppState().palmEraser !== false &&
+      isPalmContact(
+        contact,
+        api.getAppState().palmEraserThreshold ??
+          inkProfile?.palmThreshold ??
+          36,
+      );
     erasing.current = {
+      mode:
+        erase &&
+        !palm &&
+        !(
+          contact.pointerType === "pen" &&
+          (contact.button === 2 ||
+            contact.button === 5 ||
+            !!(contact.buttons & 34))
+        )
+          ? api.getAppState().eraserMode || "stroke"
+          : "stroke",
       previous: position,
       width: (palm ? Math.max(size, contact.width) : size) * scale,
       height:
@@ -2182,7 +2205,9 @@ export const FilePreview = ({
           return;
         }
         if (event.key === "Escape") {
-          if (penAnchor) {
+          if (eraserAnchor) {
+            setEraserAnchor(null);
+          } else if (penAnchor) {
             setPenAnchor(null);
           } else if (inkOn) {
             setInkOn(false);
@@ -2644,6 +2669,94 @@ export const FilePreview = ({
           </Popper>
         </ClickAwayListener>
       )}
+      {eraserAnchor && (
+        <ClickAwayListener onClickAway={() => setEraserAnchor(null)}>
+          <Popper
+            open
+            anchorEl={eraserAnchor}
+            container={dialog.current}
+            placement="top"
+            sx={{ zIndex: 1300 }}
+            modifiers={[
+              { name: "offset", options: { offset: [0, 12] } },
+              { name: "preventOverflow", options: { padding: 12 } },
+            ]}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                setEraserAnchor(null);
+              }
+            }}
+          >
+            <MaterialPanel
+              className="fc-document-eraser-settings"
+              role="dialog"
+              aria-label={t("fcboard.eraser_settings")}
+            >
+              <label>
+                {t("fcboard.erase_mode")}
+                <MaterialSelect
+                  aria-label={t("fcboard.erase_mode")}
+                  value={penState.eraserMode || "stroke"}
+                  onChange={(event) => {
+                    try {
+                      applyCanvasConfiguration(
+                        api,
+                        canvasConfigurationPatch(
+                          api,
+                          { eraserMode: event.target.value },
+                          inkProfile,
+                        ),
+                      );
+                    } catch (failure) {
+                      setNotice(
+                        failure instanceof Error
+                          ? failure.message
+                          : String(failure),
+                      );
+                    }
+                  }}
+                >
+                  <option value="stroke">
+                    {t("fcboard.erase_part_of_a_stroke")}
+                  </option>
+                  <option value="object">
+                    {t("fcboard.erase_entire_object")}
+                  </option>
+                </MaterialSelect>
+              </label>
+              <label>
+                {t("fcboard.eraser_size_screen_pixels")}
+                <Slider
+                  aria-label={t("fcboard.eraser_size_screen_pixels")}
+                  min={12}
+                  max={240}
+                  value={penState.eraserSize ?? inkProfile?.eraserSize ?? 60}
+                  valueLabelDisplay="auto"
+                  onChange={(_, value) => {
+                    try {
+                      applyCanvasConfiguration(
+                        api,
+                        canvasConfigurationPatch(
+                          api,
+                          { eraserSize: value },
+                          inkProfile,
+                        ),
+                      );
+                    } catch (failure) {
+                      setNotice(
+                        failure instanceof Error
+                          ? failure.message
+                          : String(failure),
+                      );
+                    }
+                  }}
+                />
+              </label>
+            </MaterialPanel>
+          </Popper>
+        </ClickAwayListener>
+      )}
       <footer
         className="fc-presentation-toolbar"
         role="toolbar"
@@ -2776,8 +2889,13 @@ export const FilePreview = ({
             <button
               aria-label={t("fcboard.erase_annotations")}
               aria-pressed={erase}
-              onClick={() => {
-                setErase(!erase);
+              aria-expanded={!!eraserAnchor}
+              onClick={(event) => {
+                if (erase) {
+                  setEraserAnchor(eraserAnchor ? null : event.currentTarget);
+                } else {
+                  setErase(true);
+                }
                 setSelecting(false);
               }}
             >

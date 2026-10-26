@@ -67,6 +67,7 @@ export const runBoardCommands = async (
 ): Promise<BoardAgentAction> => {
   let action = initial;
   let calls = 0;
+  let textStyleConfigured = false;
   const conversation = [...messages];
   for (let round = 0; round < 6 && action.action === "commands"; round++) {
     if (signal?.aborted || !current()) {
@@ -115,6 +116,7 @@ export const runBoardCommands = async (
       try {
         const routed =
           command.name === "canvas.text" &&
+          !textStyleConfigured &&
           options.textSourceIds?.length &&
           !command.args?.id &&
           command.args?.sourceIds === undefined
@@ -123,11 +125,21 @@ export const runBoardCommands = async (
                 args: {
                   ...command.args,
                   sourceIds: options.textSourceIds,
-                  presentation: "handwritten",
+                  presentation: command.args?.presentation ?? "handwritten",
                 },
               }
             : command;
         const result = await executeBoardCommand(routed, signal);
+        if (
+          command.name === "canvas.style" &&
+          ["color", "fontSize", "fontFamily", "textAlign", "opacity"].some(
+            (key) => command.args?.[key] !== undefined,
+          )
+        ) {
+          // An explicit writing style must also apply to the next insertion.
+          // Otherwise the question's older style silently overrides the command.
+          textStyleConfigured = true;
+        }
         results.push({ name: command.name, ok: true, result });
       } catch (failure) {
         if (action.continue !== true && !options.completion) {

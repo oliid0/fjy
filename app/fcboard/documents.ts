@@ -7,7 +7,7 @@ import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import { getElementLineSegments } from "@excalidraw/element";
 import { getLassoSelectedElementIds } from "@excalidraw/excalidraw/lasso/utils";
 import { regionPath } from "@excalidraw/excalidraw/lasso/region";
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom, polygonIncludesPointNonZero } from "@excalidraw/math";
 import { measureText } from "@excalidraw/element/textMeasurements";
 
 import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
@@ -114,6 +114,79 @@ export const eraseDocumentInk = (
     }));
   });
   return changed ? next : strokes;
+};
+
+/** Object erasing shares the board's swept hit geometry, then removes the composite. */
+export const eraseDocumentObjects = (
+  strokes: InkStroke[],
+  from: [number, number],
+  to: [number, number],
+  width: number,
+  height: number,
+) => {
+  const group = (stroke: InkStroke) =>
+    stroke.widget
+      ? `widget:${stroke.widget.id}`
+      : stroke.insertion
+      ? `insertion:${stroke.insertion.id}`
+      : stroke.plot
+      ? `plot:${stroke.plot.id}`
+      : stroke.language
+      ? `language:${stroke.language.group}`
+      : undefined;
+  const hit = new Set<string>();
+  const groups = new Set<string>();
+  for (const stroke of strokes) {
+    let element = documentInkElement(stroke);
+    let inside = false;
+    if (stroke.text || stroke.image || stroke.resource) {
+      const { left, top, right, bottom } = documentStrokeBounds(stroke);
+      inside = [from, to].some(
+        ([x, y]) => x >= left && x <= right && y >= top && y <= bottom,
+      );
+      element = documentInkElement({
+        ...stroke,
+        fcInk: undefined,
+        width: 0,
+        points: [
+          [left, top],
+          [right, top],
+          [right, bottom],
+          [left, bottom],
+          [left, top],
+        ],
+      });
+    } else if (
+      stroke.fill &&
+      stroke.fill !== "transparent" &&
+      stroke.fill !== "none"
+    ) {
+      inside = [from, to].some((point) =>
+        polygonIncludesPointNonZero(point, stroke.points),
+      );
+    }
+    if (
+      inside ||
+      eraseStroke(
+        element,
+        { x: from[0], y: from[1] },
+        { x: to[0], y: to[1] },
+        width,
+        height,
+      )
+    ) {
+      hit.add(stroke.id);
+      const id = group(stroke);
+      if (id) {
+        groups.add(id);
+      }
+    }
+  }
+  return hit.size
+    ? strokes.filter(
+        (stroke) => !hit.has(stroke.id) && !groups.has(group(stroke) || ""),
+      )
+    : strokes;
 };
 const storage = createStore("fcboard-documents", "documents");
 export const documentKey = async (file: File) => {

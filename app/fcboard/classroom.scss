@@ -1701,6 +1701,20 @@
   height: 100%;
   touch-action: none;
 }
+.fc-document-eraser-settings {
+  box-sizing: border-box;
+  width: min(280px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 16px;
+  label {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    margin: 8px 0;
+    font-size: 14px;
+  }
+}
 .fc-preview.fc-presentation > .fc-presentation-toolbar {
   flex: none;
   flex-wrap: nowrap;

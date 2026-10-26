@@ -2,7 +2,13 @@ import { factoryInkPath } from "@excalidraw/element/factoryInk";
 
 import { selectDocumentLasso } from "./documents";
 
-import { eraseDocumentInk, hitStroke, htmlText, shapeInk } from "./documents";
+import {
+  eraseDocumentInk,
+  eraseDocumentObjects,
+  hitStroke,
+  htmlText,
+  shapeInk,
+} from "./documents";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
   configureWidget,
@@ -12,8 +18,80 @@ import {
   widgetShapes,
   widgetTime,
 } from "./widgets";
+import { insertionDefaults } from "./insertObjects";
+
+import type { InkStroke } from "./documents";
 
 describe("document ink and classroom tools", () => {
+  it("removes whole swept objects and composite parts without splitting or changing missed ink", () => {
+    const line = (id: string, y: number): InkStroke => ({
+      id,
+      color: "#000",
+      width: 2,
+      points: [
+        [0, y],
+        [100, y],
+      ],
+    });
+    const widget = {
+      id: "shared",
+      kind: "cube" as const,
+      params: widgetDefaults(),
+      position: { x: 0, y: 0 },
+      origin: { x: 0, y: 0 },
+    };
+    const input: InkStroke[] = [
+      { ...line("face", 0), widget },
+      { ...line("edge", 100), widget },
+      {
+        ...line("unrelated", 200),
+        insertion: {
+          ...insertionDefaults("table", { x: 0, y: 0 }),
+          id: "shared",
+          origin: { x: 0, y: 0 },
+        },
+      },
+    ];
+    const next = eraseDocumentObjects(input, [50, -40], [50, 40], 8, 8);
+    expect(next).toEqual([input[2]]);
+    expect(next[0]).toBe(input[2]);
+    expect(input).toHaveLength(3);
+    expect(eraseDocumentObjects(input, [400, 0], [500, 0], 8, 8)).toBe(input);
+  });
+  it("hits text interiors and fast image crossings but excludes a filled triangle's empty bounding corner", () => {
+    const label = shapeInk(
+      { type: "text", id: "label", x: 10, y: 20, text: "Notes", fontSize: 26 },
+      "lesson",
+    );
+    expect(eraseDocumentObjects([label], [20, 30], [20, 30], 2, 2)).toEqual([]);
+    const image: InkStroke = {
+      id: "image",
+      points: [[200, 0]],
+      color: "#000",
+      width: 1,
+      image: "data:image/png;base64,AA",
+      imageWidth: 100,
+      imageHeight: 100,
+    };
+    expect(eraseDocumentObjects([image], [190, 50], [310, 50], 2, 2)).toEqual(
+      [],
+    );
+    const triangle: InkStroke = {
+      id: "triangle",
+      points: [
+        [0, 0],
+        [100, 0],
+        [0, 100],
+        [0, 0],
+      ],
+      color: "#000",
+      fill: "#f00",
+      width: 1,
+    };
+    const input = [triangle];
+    expect(eraseDocumentObjects(input, [90, 90], [92, 92], 2, 2)).toBe(input);
+    expect(eraseDocumentObjects(input, [20, 20], [21, 21], 2, 2)).toEqual([]);
+  });
   it("uses the board's rendered curves for document export and partial erasure without resmoothing survivors", () => {
     const stroke = {
       id: "curve",

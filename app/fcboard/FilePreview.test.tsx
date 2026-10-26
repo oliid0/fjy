@@ -1142,6 +1142,141 @@ it("commits growing-palm erasure as one undo step and uses the shared eraser siz
   expect(currentInk()).toEqual(erased);
 });
 
+it.each(["pointercancel", "lostpointercapture", "blur", "pointerup"])(
+  "erases a courseware composite in explicit fine-touch object mode and handles %s atomically",
+  async (end) => {
+    const { api, draw, pointer, unmount } = await setup(undefined, {
+      eraserMode: "object",
+      eraserSize: 12,
+    });
+    try {
+      draw();
+      await act(async () => {
+        renderWidget(api, {
+          id: "object-eraser-cube",
+          kind: "cube",
+          params: widgetDefaults(),
+          position: { x: 300, y: 100 },
+        });
+      });
+      const before = currentInk();
+      const part = before.find((stroke) => stroke.widget)!;
+      const at = part.points[0];
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
+      );
+      pointer("pointerdown", at[0], at[1], {
+        pointerType: "touch",
+        width: 4,
+        height: 4,
+      });
+      pointer("pointermove", at[0] + 1, at[1], {
+        pointerType: "touch",
+        width: 4,
+        height: 4,
+      });
+      expect(currentInk().some((stroke) => stroke.widget)).toBe(false);
+      expect(currentInk().some((stroke) => stroke.id === before[0].id)).toBe(
+        true,
+      );
+      if (end === "blur") {
+        fireEvent.blur(window);
+      } else {
+        pointer(end, at[0] + 1, at[1], {
+          pointerType: "touch",
+          width: 4,
+          height: 4,
+        });
+      }
+      if (end !== "pointerup") {
+        expect(currentInk()).toEqual(before);
+      } else {
+        const erased = currentInk();
+        await act(async () => {
+          await classroomCommands.execute({ name: "document.undo" });
+        });
+        expect(currentInk()).toEqual(before);
+        await act(async () => {
+          await classroomCommands.execute({ name: "document.redo" });
+        });
+        expect(currentInk()).toEqual(erased);
+      }
+      expect(api.getAppState().eraserMode).toBe("object");
+    } finally {
+      unmount();
+    }
+  },
+);
+
+it("opens compact eraser properties from the existing entry, updates real mode and closes without requiring a selection", async () => {
+  const { api, unmount } = await setup();
+  try {
+    const entry = screen.getByRole("button", {
+      name: t("fcboard.erase_annotations"),
+    });
+    fireEvent.click(entry);
+    fireEvent.click(entry);
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeVisible();
+    fireEvent.mouseDown(
+      screen.getByRole("combobox", { name: t("fcboard.erase_mode") }),
+    );
+    fireEvent.click(
+      screen.getByRole("option", { name: t("fcboard.erase_entire_object") }),
+    );
+    expect(api.getAppState().eraserMode).toBe("object");
+    fireEvent.change(
+      screen.getByRole("slider", {
+        name: t("fcboard.eraser_size_screen_pixels"),
+      }),
+      { target: { value: "120" } },
+    );
+    expect(api.getAppState().eraserSize).toBe(120);
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
+      { key: "Escape" },
+    );
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeNull();
+    expect(entry).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    unmount();
+  }
+});
+
+it.each(["palm", "barrel"])(
+  "keeps %s erasure local even when the explicit eraser is in object mode",
+  async (contact) => {
+    const { pointer, unmount } = await setup(undefined, {
+      eraserMode: "object",
+      eraserSize: 12,
+    });
+    try {
+      pointer("pointerdown", 100, 100);
+      pointer("pointermove", 500, 100);
+      pointer("pointerup", 500, 100);
+      const before = currentInk();
+      const input =
+        contact === "palm"
+          ? { pointerType: "touch", width: 40, height: 42 }
+          : { pointerType: "pen", button: 5, buttons: 32 };
+      pointer("pointerdown", 300, 100, input);
+      pointer("pointerup", 304, 100, input);
+      expect(currentInk()).toHaveLength(2);
+      expect(currentInk()[0].points.at(-1)![0]).toBeLessThan(300);
+      expect(currentInk()[1].points[0][0]).toBeGreaterThan(304);
+      await act(async () => {
+        await classroomCommands.execute({ name: "document.undo" });
+      });
+      expect(currentInk()).toEqual(before);
+    } finally {
+      unmount();
+    }
+  },
+);
+
 it("keeps writing when palm erasure is disabled and promotes an in-stroke barrel button", async () => {
   const { pointer, svg } = await setup(undefined, { palmEraser: false });
   pointer("pointerdown", 100, 100, {

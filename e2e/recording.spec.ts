@@ -59,13 +59,15 @@ for (const viewport of [
     if (viewport.width > 700) {
       expect(bounds.width).toBeGreaterThan(bounds.height);
     }
-    await dialog.getByRole("button", { name: "麦克风", exact: true }).click();
+    await dialog.getByRole("button", { name: "仅麦克风", exact: true }).click();
     await dialog.getByRole("button", { name: "开始录制", exact: true }).click();
     await expect(dialog).toBeHidden();
     const widget = page.getByRole("toolbar", { name: "录制", exact: true });
     await expect(widget).toBeVisible();
     await page.getByRole("button", { name: "画笔", exact: true }).click();
-    await page.keyboard.press("Escape");
+    if (await page.locator(".fc-editor-properties").isVisible()) {
+      await page.keyboard.press("Escape");
+    }
     await page.mouse.move(90, 130);
     await page.mouse.down();
     await page.mouse.move(180, 190, { steps: 12 });

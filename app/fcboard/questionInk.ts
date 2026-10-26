@@ -69,7 +69,7 @@ export const questionPosition = (api: ExcalidrawImperativeAPI) => {
   for (const ratio of [1, 0.85, 0.7]) {
     const width = Math.min(600 * ratio, viewport.right - viewport.left);
     const height = Math.min(144 * ratio, viewport.bottom - viewport.top);
-    if (width < 180 || height < 120) {
+    if (width < 180 || height < 96) {
       break;
     }
     const point = findVisibleContentPosition(

@@ -112,6 +112,102 @@ describe("selection-driven classroom controls", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it.each([false, true])(
+    "uses one handwriting question route with whole=%s and reads the current surface only on submission",
+    async (whole) => {
+      selectText("selected note");
+      const read = vi.spyOn(ai, "boardContext").mockResolvedValue({
+        elements: scene,
+        text: "Current visible notes",
+        image: undefined,
+      });
+      vi.spyOn(ocr, "warmHandwriting").mockResolvedValue(undefined);
+      vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(
+        "Describe the idea",
+      );
+      const chat = vi
+        .spyOn(ai, "chat")
+        .mockResolvedValue(
+          JSON.stringify({ action: "text", text: "The current idea" }),
+        );
+      render(<Classroom api={api} />);
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "assistant.open",
+          args: { whole },
+        });
+      });
+      expect(
+        screen.getByRole("dialog", { name: t("fcboard.handwritten_question") }),
+      ).toBeVisible();
+      expect(screen.queryByRole("textbox")).toBeNull();
+      expect(
+        screen.queryByRole("dialog", { name: t("fcboard.ai_assistant") }),
+      ).toBeNull();
+      expect(read).not.toHaveBeenCalled();
+      await act(async () => {
+        await classroomCommands.execute({ name: "panel.close" });
+      });
+      expect(
+        screen.queryByRole("dialog", {
+          name: t("fcboard.handwritten_question"),
+        }),
+      ).toBeNull();
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "assistant.open",
+          args: { whole },
+        });
+      });
+      read.mockResolvedValue({
+        elements: scene,
+        text: "Notes changed while writing the question",
+        image: undefined,
+      });
+      writeQuestion();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.send_question") }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: t("fcboard.collapse_answer") }),
+        ).toBeEnabled(),
+      );
+      expect(read).toHaveBeenCalledWith(api, whole);
+      expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
+        "Notes changed while writing the question",
+      );
+      expect(scene.some((element) => element.customData?.fcGenerated)).toBe(
+        true,
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.hide_question_input") }),
+      );
+      await act(async () => {
+        await classroomCommands.execute({ name: "assistant.open" });
+      });
+      expect(screen.queryByRole("textbox")).toBeNull();
+      read.mockClear();
+      writeQuestion();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.send_question") }),
+      );
+      await waitFor(() => expect(read).toHaveBeenCalledWith(api, false));
+    },
+  );
+
+  it("exposes one question command without the legacy capture and AI panel aliases", async () => {
+    render(<Classroom api={api} />);
+    expect(classroomCommands.has("assistant.open")).toBe(true);
+    expect(classroomCommands.has("canvas.capture")).toBe(false);
+    await expect(
+      classroomCommands.execute({ name: "panel.open", args: { panel: "ai" } }),
+    ).rejects.toThrow();
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.handwritten_question") }),
+    ).toBeNull();
+  });
+
   it.each(["1+1=", "1+1"])(
     "answers a handwritten %s locally beside its ink while preserving the previous selection",
     async (expression) => {

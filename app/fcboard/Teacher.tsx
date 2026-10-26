@@ -104,6 +104,7 @@ export const Teacher = ({
     text: string,
     signal: AbortSignal,
     sourceIds?: string[],
+    whole?: boolean,
   ) => Promise<void>;
 }) => {
   useI18n();
@@ -114,6 +115,7 @@ export const Teacher = ({
   const controller = engine.current;
   const [state, setState] = useState(controller.state);
   const [asking, setAsking] = useState(false);
+  const [questionWhole, setQuestionWhole] = useState(false);
   const [questionId, setQuestionId] = useState(0);
   const [questionPlacement, setQuestionPlacement] =
     useState<ReturnType<typeof questionPosition>>();
@@ -416,14 +418,21 @@ export const Teacher = ({
     const registrations = [
       classroomCommands.register(
         "assistant.open",
-        "在当前可见画布空白位置打开手写提问框；支持手写或语音录入，发送后经原命令路由处理",
-        () => {
+        "Open the handwriting question frame on the visible canvas. Optional args.whole=true analyzes the entire visible surface on submission; otherwise preserve the current selection context. Supports handwriting and dictation through the existing command router.",
+        (args) => {
+          if (args.whole !== undefined && typeof args.whole !== "boolean") {
+            throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
+          }
           const placement = questionPosition(api);
           controller.pause();
+          setQuestionWhole(args.whole === true);
           setQuestionPlacement(placement);
           setQuestionId((value) => value + 1);
           setAsking(true);
         },
+      ),
+      classroomCommands.register("assistant.close", "@internal", () =>
+        setAsking(false),
       ),
       classroomCommands.register(
         "lesson.configure",
@@ -600,7 +609,9 @@ export const Teacher = ({
           key={questionId}
           api={api}
           placement={questionPlacement}
-          onSubmit={onCommand}
+          onSubmit={(text, signal, sourceIds) =>
+            onCommand(text, signal, sourceIds, questionWhole)
+          }
           onClose={() => setAsking(false)}
         />
       )}

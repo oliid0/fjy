@@ -99,9 +99,8 @@ import type { Settings } from "./settings";
 import type { VoiceTurns } from "./voiceTurns";
 import type { RecordingPhase } from "./RecordingPanel";
 
-type Panel = "ai" | "plot" | "record" | "files" | "settings" | "summary";
+type Panel = "plot" | "record" | "files" | "settings" | "summary";
 const titles = {
-  ai: "ai_assistant",
   plot: "function_controls",
   record: "recording",
   files: "files_transfer",
@@ -127,12 +126,10 @@ export const Classroom = ({
     "background",
   );
   const [remember, setRemember] = useState(false);
-  const [prompt, setPrompt] = useState("");
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [wholeBoard, setWholeBoard] = useState(false);
   useEffect(
     () =>
       observeInkAssistance(
@@ -143,10 +140,6 @@ export const Classroom = ({
     [api, langCode],
   );
   const [plotPlacement, setPlotPlacement] = useState({ left: 16, top: 16 });
-  const [capture, setCapture] = useState<string>();
-  const capturedContext = useRef<Awaited<
-    ReturnType<typeof boardContext>
-  > | null>(null);
   const [plot, setPlot] = useState<Plot>(defaultPlot);
   const plotRef = useRef<{
     ids: string[];
@@ -568,9 +561,6 @@ export const Classroom = ({
       setStatus("");
     }
     narrator.current?.stop();
-    capturedContext.current = null;
-    setCapture(undefined);
-    setWholeBoard(false);
     setPanel(null);
     returnFocus.current?.focus();
   };
@@ -1019,7 +1009,6 @@ export const Classroom = ({
         return;
       }
       const generation = ++assistantGeneration.current;
-      setPrompt(text);
       const direct = directCommand(text);
       if (direct) {
         await classroomCommands.execute(
@@ -1103,10 +1092,7 @@ export const Classroom = ({
         : undefined;
       const context = document
         ? { elements: [], text: document.text, image: document.image }
-        : selection?.context ||
-          (whole && capturedContext.current
-            ? capturedContext.current
-            : await boardContext(api, whole));
+        : selection?.context || (await boardContext(api, whole));
       const messages: Message[] = [
         {
           role: "system",
@@ -1928,27 +1914,6 @@ export const Classroom = ({
         toggleVoice,
       ),
       classroomCommands.register(
-        "canvas.capture",
-        "截取当前整板用于提问",
-        async () => {
-          const context = classroomCommands.has("document.snapshot")
-            ? {
-                elements: [],
-                ...((await classroomCommands.execute({
-                  name: "document.snapshot",
-                })) as { text: string; image?: string }),
-              }
-            : await boardContext(api, true);
-          if (!context.elements.length && !context.image && !context.text) {
-            throw new Error(t("fcboard.write_on_the_board_first"));
-          }
-          setCapture(context.image);
-          capturedContext.current = context;
-          setWholeBoard(true);
-          setPanel("ai");
-        },
-      ),
-      classroomCommands.register(
         "math.axes",
         "插入可编辑的直角坐标系，只含坐标轴与刻度，不猜测未给出的函数",
         () => drawAxes(api),
@@ -2169,11 +2134,9 @@ export const Classroom = ({
       ),
       classroomCommands.register(
         "panel.open",
-        "显示浮层，args.panel=settings|record|files|ai",
+        "Open settings, recording or files with args.panel=settings|record|files. Use assistant.open for handwriting questions.",
         (args) => {
-          if (
-            !["settings", "record", "files", "ai"].includes(String(args.panel))
-          ) {
+          if (!["settings", "record", "files"].includes(String(args.panel))) {
             throw new Error(t("fcboard.this_panel_does_not_exist"));
           }
           if (args.panel === "settings") {
@@ -2182,8 +2145,13 @@ export const Classroom = ({
           setPanel(args.panel as Panel);
         },
       ),
-      classroomCommands.register("panel.close", "关闭当前工具浮层", () =>
-        close(false),
+      classroomCommands.register(
+        "panel.close",
+        "关闭当前工具浮层",
+        async () => {
+          await classroomCommands.execute({ name: "assistant.close" });
+          close(false);
+        },
       ),
       classroomCommands.context("classroom", () => ({
         recording,
@@ -2231,8 +2199,8 @@ export const Classroom = ({
       <LanSession api={api} />
       <Teacher
         api={api}
-        onCommand={async (text, signal, sourceIds) => {
-          await execute(text, false, { signal, sourceIds });
+        onCommand={async (text, signal, sourceIds, whole = false) => {
+          await execute(text, whole, { signal, sourceIds });
         }}
       />
       <TeachingTools api={api} />
@@ -2799,93 +2767,6 @@ export const Classroom = ({
                   </div>
                 </SettingsNavigation>
               </form>
-            )}
-            {panel === "ai" && (
-              <>
-                {capture && (
-                  <img
-                    className="fc-capture"
-                    src={capture}
-                    alt={t("fcboard.board_capture")}
-                  />
-                )}
-                <label className="fc-check">
-                  <input
-                    type="checkbox"
-                    checked={wholeBoard}
-                    onChange={(event) => {
-                      capturedContext.current = null;
-                      setCapture(undefined);
-                      setWholeBoard(event.target.checked);
-                    }}
-                  />
-                  {t(
-                    "fcboard.analyze_the_whole_board_otherwise_prefer_the_selection",
-                  )}
-                </label>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void run(() => execute(prompt, wholeBoard));
-                  }}
-                >
-                  <label>
-                    {t("fcboard.ask_the_assistant")}
-                    <textarea
-                      value={prompt}
-                      onChange={(event) => setPrompt(event.target.value)}
-                      placeholder={t(
-                        "fcboard.draw_a_cube_plot_y_x_1_summarize_this_board",
-                      )}
-                      required
-                    />
-                  </label>
-                  <button
-                    disabled={busy || !prompt.trim()}
-                    className="fc-primary"
-                  >
-                    {t("fcboard.run_command")}
-                  </button>
-                </form>
-                <div className="fc-actions">
-                  <button
-                    disabled={busy}
-                    onClick={() => {
-                      void run(summarize);
-                    }}
-                  >
-                    {t("fcboard.summarize_selection_board")}
-                  </button>
-                </div>
-                {output && (
-                  <>
-                    <div className="fc-output">{output}</div>
-                    {
-                      <div className="fc-actions">
-                        <button
-                          disabled={busy || listening || recording}
-                          onClick={() => {
-                            void run(() => narrator.current!.speak(output));
-                          }}
-                        >
-                          {t("fcboard.read_answer_aloud")}
-                        </button>
-                        <button onClick={() => narrator.current?.stop()}>
-                          {t("fcboard.stop_playback")}
-                        </button>
-                      </div>
-                    }
-                    <button
-                      onClick={() => {
-                        insertText(api, output);
-                        setStatus(t("fcboard.content_added_to_the_board"));
-                      }}
-                    >
-                      {t("fcboard.write_to_board")}
-                    </button>
-                  </>
-                )}
-              </>
             )}
             {panel === "plot" && (
               <>

@@ -121,3 +121,75 @@ it("keeps its location when restored, reclamps on resize, and allows stop while 
     });
   }
 });
+
+it("keeps the entire fractional CSS footprint inside the viewport after dragging", () => {
+  const view = render(
+    <RecordingWidget
+      paused={false}
+      elapsed={5}
+      disabled={false}
+      pauseDisabled={false}
+      onPause={vi.fn()}
+      onStop={vi.fn()}
+      onRestore={vi.fn()}
+    />,
+  );
+  const panel = screen.getByRole("toolbar");
+  const measure = vi.spyOn(panel, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 240.46875,
+    bottom: 52.25,
+    width: 240.46875,
+    height: 52.25,
+    toJSON: () => ({}),
+  });
+  Object.defineProperties(panel, {
+    offsetWidth: { configurable: true, value: 240 },
+    offsetHeight: { configurable: true, value: 52 },
+  });
+  const grip = panel.querySelector(".fc-recording-drag")!;
+  Object.assign(grip, { setPointerCapture: vi.fn() });
+  try {
+    pointer(grip, "pointerdown", 10, 10);
+    pointer(grip, "pointermove", 5000, 5000);
+    pointer(grip, "pointerup", 5000, 5000);
+    expect(parseFloat(panel.style.left) + 240.46875).toBeLessThanOrEqual(
+      innerWidth - 8,
+    );
+    expect(parseFloat(panel.style.top) + 52.25).toBeLessThanOrEqual(
+      innerHeight - 8,
+    );
+    view.rerender(
+      <RecordingWidget
+        paused
+        elapsed={5}
+        disabled={false}
+        pauseDisabled={false}
+        hidden
+        onPause={vi.fn()}
+        onStop={vi.fn()}
+        onRestore={vi.fn()}
+      />,
+    );
+    view.rerender(
+      <RecordingWidget
+        paused
+        elapsed={5}
+        disabled={false}
+        pauseDisabled={false}
+        onPause={vi.fn()}
+        onStop={vi.fn()}
+        onRestore={vi.fn()}
+      />,
+    );
+    expect(parseFloat(panel.style.left) + 240.46875).toBeLessThanOrEqual(
+      innerWidth - 8,
+    );
+  } finally {
+    measure.mockRestore();
+    view.unmount();
+  }
+});

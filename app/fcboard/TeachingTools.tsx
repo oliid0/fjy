@@ -794,11 +794,6 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             {(
               [
                 [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
-                [
-                  t("fcboard.capture"),
-                  "canvas.capture",
-                  <FactoryIcon name="select" />,
-                ],
               ] as const
             ).map(actionButton)}
           </div>

@@ -170,6 +170,14 @@ it.each([
       fireEvent.click(
         screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
       );
+      if (label === "ai_questions") {
+        expect(
+          screen.getAllByRole("button", { name: t("fcboard.ai_questions") }),
+        ).toHaveLength(1);
+        expect(
+          screen.queryByRole("button", { name: t("fcboard.capture") }),
+        ).toBeNull();
+      }
       fireEvent.click(
         screen.getByRole("button", { name: t(`fcboard.${label}`) }),
       );

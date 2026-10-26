@@ -39,9 +39,11 @@ export const RecordingWidget = ({
     { id: number; x: number; y: number; before: typeof position } | undefined
   >(undefined);
   const bounded = useCallback((point: typeof position) => {
+    const rect = panel.current?.getBoundingClientRect();
     size.current = {
-      width: panel.current?.offsetWidth || size.current.width,
-      height: panel.current?.offsetHeight || size.current.height,
+      width: rect?.width || panel.current?.offsetWidth || size.current.width,
+      height:
+        rect?.height || panel.current?.offsetHeight || size.current.height,
     };
     return {
       x: Math.max(8, Math.min(innerWidth - size.current.width - 8, point.x)),

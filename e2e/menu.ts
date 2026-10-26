@@ -12,7 +12,6 @@ export const selectMenu = async (page: Page, label: string) => {
       "课件 / 局域网快传",
       "总结白板",
       "语音指令",
-      "截屏",
     ].includes(label)
   ) {
     await page.locator("[data-teaching-tools]").click();

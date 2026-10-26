@@ -438,7 +438,7 @@ test("selected handwriting sends its PNG only after tapping calculate", async ({
   ).toHaveCount(0);
 });
 
-test("screenshot summary sends a real board image and returns to an editable canvas", async ({
+test("whole board summary sends a real board image and returns to an editable canvas", async ({
   page,
 }, testInfo) => {
   await page.addInitScript(() => {
@@ -481,10 +481,7 @@ test("screenshot summary sends a real board image and returns to an editable can
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "一次函数：斜率和截距");
-  await selectMenu(page, "截屏");
-  await page
-    .getByRole("button", { name: "总结选区 / 白板", exact: true })
-    .click();
+  await selectMenu(page, "总结白板");
   const summary = page.getByRole("dialog", { name: "AI 总结", exact: true });
   await expect(summary).toContainText("斜率决定变化趋势");
   const summaryRect = (await summary.boundingBox())!;

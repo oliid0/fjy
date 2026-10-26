@@ -84,12 +84,42 @@ jobs:
         run: python3 scripts/fetch-tts-models.py
       - name: Bundle verified offline Digital Ink models
         run: python3 scripts/fetch-ink-models.py
-      - name: Package and verify Android
+      - name: Package Android
         id: android-package
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug testDebugUnitTest lintDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-arm64-v8a
+          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-armeabi-v7a
+          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86
+          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86_64
+          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
+          if-no-files-found: error
+      - name: Report packaged models and native library sizes
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        run: python3 scripts/apk-size-report.py >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify Android unit tests and lint
+        working-directory: android
+        run: ./gradlew testDebugUnitTest lintDebug --no-daemon
       - name: Install browser for layout and interaction checks
         run: pnpm exec playwright install --with-deps chromium
       - name: Verify production whiteboard interactions
@@ -111,28 +141,6 @@ jobs:
           target: default
           disable-animations: true
           script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Android-APK-arm64-v8a
-          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Android-APK-armeabi-v7a
-          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Android-APK-x86
-          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Android-APK-x86_64
-          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
-          if-no-files-found: error
-      - name: Report packaged models and native library sizes
-        run: python3 scripts/apk-size-report.py >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

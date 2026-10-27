@@ -1714,6 +1714,27 @@
     "recording_resume": "Lanjutkan perekaman",
     "minimize_recording": "Meminimalkan perekaman",
     "restore_recording_window": "Pulihkan jendela perekaman",
-    "language_pen": "Bahasa · Pena"
+    "language_pen": "Bahasa · Pena",
+    "attach_selection_image_to_ai": "Sertakan tangkapan layar area pilihan dalam permintaan AI",
+    "compass": "Jangka",
+    "set_square": "Penggaris segitiga",
+    "education_categories": "Kategori pendidikan",
+    "math_experiments": "Eksperimen matematika",
+    "math_concepts": "Konsep matematika",
+    "math_applications": "Penerapan matematika",
+    "select_none": "Batalkan semua pilihan",
+    "mindmap_add_child": "Tambah simpul anak",
+    "mindmap_move_node": "Pindahkan simpul",
+    "mindmap_delete_node": "Hapus simpul dan semua simpul anaknya",
+    "mindmap_clear_node": "Hapus teks simpul",
+    "selected_pages_exported_as_images": "Halaman yang dipilih telah diekspor sebagai gambar",
+    "hard_pen_nib": "Runcingkan ujung goresan pena biasa",
+    "right_triangle": "Segitiga siku-siku",
+    "triangle": "Segitiga",
+    "trapezoid": "Trapesium",
+    "pentagon": "Segi lima",
+    "hexagon": "Segi enam",
+    "star": "Bintang",
+    "hemisphere": "Setengah bola"
   }
 }

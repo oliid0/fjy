@@ -244,6 +244,7 @@ const LayerUI = ({
     const unsubscribe = app.onPointerDownEmitter.on(close);
     const outside = (event: PointerEvent) => {
       if (
+        !propertiesTrigger.current?.contains(event.target as Node) &&
         !(event.target as Element).closest?.(
           ".fc-editor-properties, [data-radix-popper-content-wrapper], [data-prevent-outside-click]",
         )
@@ -258,9 +259,10 @@ const LayerUI = ({
     };
   }, [app, showProperties, unifiedToolbar]);
   const openProperties = (anchor: HTMLElement) => {
+    const toggle = propertiesTrigger.current === anchor;
     propertiesTrigger.current = anchor;
     positionProperties(anchor);
-    setShowProperties(true);
+    setShowProperties((visible) => !toggle || !visible);
   };
   const tunnels = useInitializeTunnels();
 
@@ -609,13 +611,15 @@ const LayerUI = ({
             }
           }}
         >
-          <ToolButton
-            type="button"
-            icon={CloseIcon}
-            aria-label={t("fcboard.close_properties")}
-            title={t("fcboard.close_properties")}
-            onClick={() => setShowProperties(false)}
-          />
+          {appState.activeTool.type !== "freedraw" && (
+            <ToolButton
+              type="button"
+              icon={CloseIcon}
+              aria-label={t("fcboard.close_properties")}
+              title={t("fcboard.close_properties")}
+              onClick={() => setShowProperties(false)}
+            />
+          )}
           {appState.activeTool.type === "freedraw" && (
             <FactoryPenSettings
               app={app}
@@ -623,14 +627,8 @@ const LayerUI = ({
               close={() => setShowProperties(false)}
             />
           )}
-          {appState.activeTool.type === "freedraw" ? (
-            <details className="fc-pen-advanced">
-              <summary>{t("fcboard.more_properties")}</summary>
-              {renderSelectedShapeActions()}
-            </details>
-          ) : (
-            renderSelectedShapeActions()
-          )}
+          {appState.activeTool.type !== "freedraw" &&
+            renderSelectedShapeActions()}
         </div>
       )}
       <div

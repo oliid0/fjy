@@ -22,7 +22,7 @@ const viewport = { left: 16, top: 16, right: 1264, bottom: 604 };
 const overlaps = (a: readonly number[], b: readonly number[]) =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
-it("matches Chinese answer font size to measured handwriting instead of applying ink-glyph scaling twice", () => {
+it("inserts Chinese answers at 90% of measured handwriting without applying ink-glyph scaling twice", () => {
   const api = sceneAPI();
   const source = newFreeDrawElement({
     type: "freedraw",
@@ -46,7 +46,7 @@ it("matches Chinese answer font size to measured handwriting instead of applying
     .find((element) => ids.includes(element.id));
   expect(answer).toMatchObject({
     type: "text",
-    fontSize: 40,
+    fontSize: 36,
     strokeColor: "#dc2626",
   });
   expect(answer!.y).toBeGreaterThanOrEqual(220);
@@ -325,6 +325,46 @@ it("puts a short handwritten calculation result after the equation, with matchin
     ),
   ).toBe(true);
 });
+
+it.each([0.5, 1, 2])(
+  "keeps 207 after the equals sign at 90%% of the handwritten height at zoom %s",
+  (zoom) => {
+    const api = sceneAPI();
+    vi.spyOn(api, "getAppState").mockReturnValue({
+      ...api.getAppState(),
+      width: 1600,
+      height: 900,
+      zoom: { value: zoom as never },
+    });
+    const source = newFreeDrawElement({
+      type: "freedraw",
+      x: 100 / zoom,
+      y: 100 / zoom,
+      points: [pointFrom(0, 0), pointFrom(800 / zoom, 120 / zoom)],
+      strokeColor: "#ffffff",
+      simulatePressure: true,
+    });
+    api.updateScene({ elements: [source] });
+    const ids = insertText(
+      api,
+      "207",
+      undefined,
+      undefined,
+      [source],
+      "match",
+      {
+        mode: "inline",
+      },
+    );
+    const [left, top, right, bottom] = getCommonBounds(
+      api.getSceneElements().filter((element) => ids.includes(element.id)),
+    );
+    expect(left).toBeGreaterThan(900 / zoom);
+    expect(top).toBeCloseTo(100 / zoom);
+    expect(right).toBeLessThanOrEqual(contentViewport(api).right);
+    expect(bottom - top).toBeCloseTo((120 * 0.9) / zoom);
+  },
+);
 
 it("reserves the toolbar and converts viewport limits through the current zoom and scroll", () => {
   const api = sceneAPI();

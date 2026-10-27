@@ -4,6 +4,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { BoardBook } from "./boards";
+import { classroomCommands } from "./commands";
 
 describe("persistent whiteboard book", () => {
   const setup = () => {
@@ -79,6 +80,52 @@ describe("persistent whiteboard book", () => {
     expect(book.value.active).toBe(id);
     expect(api.getSceneElements()).toBe(previous);
     expect(api.resetScene).not.toHaveBeenCalled();
+    book.dispose();
+  });
+  it("identifies only the real originating task when creating, switching and discarding, preserving manual invalidation", async () => {
+    const { book } = setup();
+    await book.initialize();
+    const first = book.value.active;
+    const task = new AbortController();
+    const invalidations = vi.fn();
+    const stop = classroomCommands.onInvalidate(invalidations);
+    try {
+      await book.create("next", task.signal);
+      const next = book.value.active;
+      await book.switch(first, task.signal);
+      await book.discard(first, task.signal);
+      expect(book.value.active).toBe(next);
+      expect(invalidations.mock.calls).toEqual([
+        [task.signal],
+        [task.signal],
+        [task.signal],
+      ]);
+      await book.create("manual");
+      expect(invalidations.mock.lastCall).toEqual([undefined]);
+    } finally {
+      stop();
+      book.dispose();
+    }
+  });
+  it("restores persistence and keeps the visible scene when cancellation arrives during the board save", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const initial = book.value;
+    const elements = api.getSceneElements();
+    const task = new AbortController();
+    save.mockResolvedValueOnce(undefined).mockImplementationOnce(async () => {
+      task.abort();
+    });
+    await expect(book.create("cancelled", task.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(book.value).toBe(initial);
+    expect(save.mock.lastCall?.[0]).toEqual(initial);
+    expect(api.getSceneElements()).toBe(elements);
+    expect(api.resetScene).not.toHaveBeenCalled();
+    await expect(book.discard("missing")).rejects.toThrow();
+    expect(book.value).toBe(initial);
+    expect(book.value.boards).toHaveLength(1);
     book.dispose();
   });
 });

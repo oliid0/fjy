@@ -19,6 +19,15 @@ import {
 import { classroomCommands } from "./commands";
 import { TransientMessage } from "./TransientMessage";
 
+// HDataSet.patternColorList, preserving the original five backgrounds.
+const backgroundColors = [
+  "#212121",
+  "#576269",
+  "#000000",
+  "#253a35",
+  "#60a96c",
+];
+
 export const BoardSettings = ({
   api,
   device,
@@ -77,16 +86,35 @@ export const BoardSettings = ({
               />
             </label>
             <div
+              className="fc-background-colors"
+              role="group"
+              aria-label={t("fcboard.background")}
+            >
+              {backgroundColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  aria-label={`${t("fcboard.background")} ${color}`}
+                  aria-pressed={
+                    state.viewBackgroundColor?.toLowerCase() === color
+                  }
+                  style={{ backgroundColor: color }}
+                  onClick={() => update({ backgroundColor: color })}
+                />
+              ))}
+            </div>
+            <div
               className="fc-background-picker"
               role="group"
               aria-label={t("fcboard.background")}
             >
               <button
                 type="button"
+                aria-label={t("fcboard.no_background_pattern")}
                 aria-pressed={!state.whiteboardBackground}
                 onClick={() => update({ backgroundPattern: 0 })}
               >
-                {t("fcboard.no_background_pattern")}
+                <span aria-hidden="true">∅</span>
               </button>
               {factoryBackgrounds.map((url, index) => (
                 <button
@@ -109,6 +137,17 @@ export const BoardSettings = ({
       </SettingsSection>
       <SettingsSection id="pen">
         <>
+          <label>
+            {t("fcboard.hard_pen_nib")}
+            <Switch
+              checked={
+                device?.hardNibAvailable !== false &&
+                (state.whiteboardHardNib ?? device?.hardNib ?? false)
+              }
+              disabled={device?.hardNibAvailable === false}
+              onChange={(_, checked) => update({ hardNib: checked })}
+            />
+          </label>
           <div className="fc-settings-choice">
             <span>{t("fcboard.pen_tip")}</span>
             <ToggleButtonGroup

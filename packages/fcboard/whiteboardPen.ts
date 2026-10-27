@@ -81,7 +81,10 @@ export const contactPenPreferences = <T extends PenPreferences>(
 /** One calibrated style for the main canvas and courseware's normalized coordinates. */
 export const whiteboardInkStyle = (
   state: PenPreferences &
-    Pick<AppState, "currentItemOpacity" | "whiteboardBrushVariation">,
+    Pick<
+      AppState,
+      "currentItemOpacity" | "whiteboardBrushVariation" | "whiteboardHardNib"
+    >,
   contact: { width: number; height: number; pointerType: string },
   device: UIOptions["inkProfile"] | undefined,
   sceneUnitsPerCssPixel: number,
@@ -94,6 +97,13 @@ export const whiteboardInkStyle = (
     assist: pen.currentItemInkAssist,
     tip: pen.whiteboardPenTip || "fine",
     variation: state.whiteboardBrushVariation ?? 45,
+    ...(mode === "hard"
+      ? {
+          nib:
+            device?.hardNibAvailable !== false &&
+            (state.whiteboardHardNib ?? device?.hardNib ?? false),
+        }
+      : {}),
     unit: ((device?.hardPenWidth ?? 4) / 4) * sceneUnitsPerCssPixel,
   };
   return {
@@ -108,7 +118,9 @@ export const whiteboardInkStyle = (
       mode === "highlighter"
         ? Math.round((state.currentItemOpacity * 110) / 255)
         : state.currentItemOpacity,
-    simulatePressure: contact.pointerType !== "pen",
+    simulatePressure:
+      contact.pointerType !== "pen" &&
+      !(contact.pointerType === "touch" && device?.touchPressure === true),
     strokeStyle: mode === "dashed" ? ("dashed" as const) : ("solid" as const),
     customData: { fcInk },
   };

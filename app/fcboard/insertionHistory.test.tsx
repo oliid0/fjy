@@ -1,6 +1,10 @@
 import { waitFor } from "@testing-library/react";
 import { Excalidraw, CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { act, render } from "@excalidraw/excalidraw/tests/test-utils";
+import {
+  act,
+  fireEvent,
+  render,
+} from "@excalidraw/excalidraw/tests/test-utils";
 import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
 import { newFreeDrawElement } from "@excalidraw/element";
 import { pointFrom } from "@excalidraw/math";
@@ -14,6 +18,110 @@ import {
 } from "./insertObjects";
 import { observeInkAssistance } from "./inkAssistance";
 import * as ocr from "./ocr";
+
+it.each([false, true])(
+  "commits one table stroke and its cell growth in one undo with unified toolbar %s",
+  async (unifiedToolbar) => {
+    let api!: ExcalidrawImperativeAPI;
+    const view = await render(
+      <Excalidraw
+        handleKeyboardGlobally
+        UIOptions={{ unifiedToolbar }}
+        onMount={({ excalidrawAPI }) => {
+          api = excalidrawAPI;
+        }}
+      />,
+    );
+    let release = () => {};
+    try {
+      await act(async () => {
+        await renderInsertion(
+          api,
+          insertionDefaults("table", { x: 100, y: 100 }),
+        );
+        api.setActiveTool({ type: "freedraw" });
+      });
+      const body = api
+        .getSceneElements()
+        .find((element) => element.type === "rectangle")!;
+      release = observeInkAssistance(api, vi.fn(), vi.fn());
+      const canvas = view.container.querySelector("canvas.interactive")!;
+      const pointer = (
+        type: string,
+        x: number,
+        y: number,
+        extra: Record<string, unknown> = {},
+      ) =>
+        fireEvent(
+          canvas,
+          Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+            clientX: x,
+            clientY: y,
+            pointerId: 1,
+            pointerType: "pen",
+            button: 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            pressure: type === "pointerup" ? 0 : 0.6,
+            width: 1,
+            height: 1,
+            ...extra,
+          }),
+        );
+      pointer("pointerdown", body.x + 25, body.y + 25);
+      pointer("pointermove", body.x + 200, body.y + 70);
+      if (unifiedToolbar) {
+        pointer("pointerdown", 800, 400, { pointerId: 2, isPrimary: false });
+        pointer("pointermove", 820, 420, { pointerId: 2, isPrimary: false });
+      }
+      pointer("pointerup", body.x + 250, body.y + 115, {
+        getCoalescedEvents: () => [
+          { clientX: body.x + 240, clientY: body.y + 105, pressure: 0.3 },
+        ],
+      });
+      const ink = api
+        .getSceneElements()
+        .find((element) => element.type === "freedraw")!;
+      expect(readInsertions(api)[0].width).toBe(510);
+      expect(
+        api.getSceneElements().find((element) => element.id === ink.id)
+          ?.customData?.fcInsertion.inkCell,
+      ).toBe(0);
+      expect(ink.type === "freedraw" && ink.points.slice(-2)).toEqual([
+        pointFrom(215, 80),
+        pointFrom(225, 90),
+      ]);
+      expect(ink.type === "freedraw" && ink.pressures.slice(-2)).toEqual([
+        0.3, 0,
+      ]);
+      if (unifiedToolbar) {
+        pointer("pointerup", 850, 450, { pointerId: 2, isPrimary: false });
+        const other = api
+          .getSceneElements()
+          .find(
+            (element) => element.type === "freedraw" && element.id !== ink.id,
+          )!;
+        Keyboard.undo();
+        expect(
+          api.getSceneElements().some((element) => element.id === other.id),
+        ).toBe(false);
+        expect(readInsertions(api)[0].width).toBe(510);
+      }
+      Keyboard.undo();
+      expect(readInsertions(api)[0].width).toBe(360);
+      expect(
+        api.getSceneElements().some((element) => element.id === ink.id),
+      ).toBe(false);
+      Keyboard.redo();
+      expect(readInsertions(api)[0].width).toBe(510);
+      expect(
+        api.getSceneElements().find((element) => element.id === ink.id),
+      ).toMatchObject({ type: "freedraw", points: ink.points });
+    } finally {
+      release();
+      view.unmount();
+    }
+  },
+);
 
 it("undoes a handwriting conversion in the real editor without losing the surface or restarting recognition", async () => {
   let api!: ExcalidrawImperativeAPI;

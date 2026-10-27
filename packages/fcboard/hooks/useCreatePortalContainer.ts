@@ -39,6 +39,10 @@ export const useCreatePortalContainer = (opts?: {
 
     const div = document.createElement("div");
 
+    if (excalidrawContainer?.dataset.excalidrawId) {
+      div.dataset.excalidrawOwner = excalidrawContainer.dataset.excalidrawId;
+    }
+
     container.appendChild(div);
 
     setDiv(div);

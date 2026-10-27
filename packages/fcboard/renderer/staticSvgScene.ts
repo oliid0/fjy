@@ -37,6 +37,7 @@ import {
   factoryInkDashes,
   isFactoryStroke,
 } from "@excalidraw/element/factoryInk";
+import { factoryNibPath } from "@excalidraw/element/factoryNib";
 import {
   rainbowInkCoordinates,
   rainbowInkStops,
@@ -447,6 +448,13 @@ const renderElementToSvg = (
             }
           }
           wrapper.appendChild(path);
+          const nib = factoryNibPath(element);
+          if (nib) {
+            const tip = svgRoot.ownerDocument.createElementNS(SVG_NS, "path");
+            tip.setAttribute("d", nib);
+            tip.setAttribute("fill", path.getAttribute("stroke")!);
+            wrapper.appendChild(tip);
+          }
         } else {
           // background (Drawable)
 

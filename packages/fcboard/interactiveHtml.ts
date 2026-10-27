@@ -24,11 +24,13 @@ export const interactiveHtml = (value: unknown): string => {
   });
   if (
     !document.querySelector("script") ||
-    !document.querySelector("button,input,select") ||
-    !document.querySelector("canvas,svg,output,[role='status']") ||
+    !document.querySelector("canvas,svg") ||
+    document.querySelector("form") ||
     !(document.body.textContent || "").trim()
   ) {
-    throw new Error("An interactive lesson needs controls and a demonstration");
+    throw new Error(
+      "An interactive lesson needs a scripted graphical demonstration",
+    );
   }
   const policy = document.createElement("meta");
   policy.httpEquiv = "Content-Security-Policy";

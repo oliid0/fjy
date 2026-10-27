@@ -2,6 +2,22 @@
 
 本文件记录参考项目的历史实现依据。原出厂 APK 的实际行为、本轮修正和未完成项以 [HWhiteBoard 5.42 对齐记录](apk-alignment.md) 为准，不能将 Excalidraw 原能力等同于原出厂白板全部功能已对齐。
 
+## 2026-10-27 原厂交互与全控件操作
+
+本轮依据 `ss/HWhiteBoard-reference/README.md`、`java/com/paike/zjc/tool/HTool.java`、`layer/SelectCacheLayer.java`、`object/HCurveObject.java`、`object/HBezierObject.java`、`object/HShapeObject.java`、`data/HDataSet.java` 及 IMG_1251–1279。HTool 在移动中按接触宽高转为擦除，SelectCacheLayer 保存真实路径、区域和选后操作；CircleToSearch 的截图矩形方案已替换。原背景色、普通笔尾锋与固件开关来自 HDataSet；图形按 IMG_1254 补为 20 项。代码与单测不证明逐像素一致。
+
+主板活动笔迹由独立 NewElementCanvas 增量绘制，静态层排除活动对象；Canvas / SVG / 擦除共用实际笔迹轮廓。长笔画边界移除展开参数，增加大点集与增量复杂度回归。手背在落点或合并采样尺寸变大时切入擦除；没有目标屏崩溃堆栈或物理时延测量，不将这些修复等同整机验收。
+
+AI 控件依据现有组件与真实 DOM：commands.ts 绑定组件操作，uiControls.ts 仅检查当前编辑器及精确 owner 的弹窗，以稳定 ID / 版本执行真实 click、set、key、drag 并重读状态。SVG 尺规手柄、MUI 选项与分页均有回归，不开放任意选择器或脚本，密钥只返回是否设置。languageCommands.ts 读取当前可见选区的文字 / 原始笔迹 / 栅格，复用现有翻译与插入；课件打开时不读取背后白板。
+
+既有 MessageChannel 扩展至实际 SVG / canvas 图形子节点，返回 CSS 像素边界、分页、控件 ID 和真实输出。新增脚本回归拖动牛顿实验质量块后，由页面自身事件计算数值及位置；生成资源以图形交互为主，form 不被当作教学动画。对象 / 页 / 版本 / 取消检查与 iframe sandbox / CSP 保留。
+
+连续任务只继承当前请求自身的开课件、翻页与换板，用户手动切换仍取消旧任务。录制与指令使用既有音轨及队列，停止保存后恢复监听；工具失败只修复剩余操作，不重放成功步骤。教师规划只读：ui.inspect 可检查控件，web.action / signal.action 仅 action=read 可在规划阶段执行，修改保留在正式步骤。
+
+原生信号源依据 [TvInputManager](https://developer.android.com/reference/android/media/tv/TvInputManager)、[TvView](https://developer.android.com/reference/android/media/tv/TvView)、[TvContract](https://developer.android.com/reference/android/media/tv/TvContract) 使用真实 passthrough 输入及 tune 回调，OEM 外部兜底明确区分。WebView 固定运行时使用真实 ID / 版本，关闭或导航取消等待。版本三击使用 [DEVELOPMENT_SETTINGS_ENABLED](https://developer.android.com/reference/android/provider/Settings.Global#DEVELOPMENT_SETTINGS_ENABLED) 和 [ACTION_APPLICATION_DEVELOPMENT_SETTINGS](https://developer.android.com/reference/android/provider/Settings#ACTION_APPLICATION_DEVELOPMENT_SETTINGS)，写入受实际系统权限控制。PDF 使用真实 [PdfDocument](https://developer.android.com/reference/android/graphics/pdf/PdfDocument)，系统分享附件不等同已发送邮件。
+
+本轮本地不运行构建、开发服务、Gradle 或 Cargo。用户已授权完成实现和本地检查后提交推送，构建与生产页面、Java 测试交 CI；目标教学屏性能 / 触感 / 权限 / 声学效果及生成内容科学正确性仍需实际验收。最新检查与 CI 结果记于 history.md。
+
 ## 语言笔与学习卡片
 
 2026-10-25 通过 GitHub MCP 核对 Read Frog 固定提交 `8dd8e35cc68051a2a0ea7ac64dff57c9f5ff2283` 的 [custom-action-templates.ts](https://github.com/mengxi-ream/read-frog/blob/8dd8e35cc68051a2a0ea7ac64dff57c9f5ff2283/src/utils/constants/custom-action-templates.ts)（文件 SHA `9bd4e6cd75f60e1fffe67ef638d425c68f26346d`）。其词典 / 句子模板将原文、目标语言、语音信息、含义和译文作为结构化字段，卡片按字段呈现；本项目复用已有 `languageStudy` 验证器和笔迹识别链路，没有引入浏览器扩展或第三方页面。

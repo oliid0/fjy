@@ -17,6 +17,8 @@ import type {
 
 import { render } from "./test/render";
 import { FilePreview } from "./FilePreview";
+import { MindMapControls } from "./MindMapControls";
+import { InsertionCandidates } from "./InsertionCandidates";
 import { classroomCommands } from "./commands";
 import { documentInkElement } from "./documentInk";
 import {
@@ -24,6 +26,7 @@ import {
   documentStrokeBounds,
   loadInk,
 } from "./documents";
+import * as documentTools from "./documents";
 import * as ocr from "./ocr";
 import * as ai from "./ai";
 import { languageStudy } from "./test/language";
@@ -169,6 +172,39 @@ const setup = async (
   return { ...view, api, update, svg, pointer, draw };
 };
 
+it("includes the visible live document stroke in snapshots without committing it before lift", async () => {
+  const snapshot = vi
+    .spyOn(documentTools, "inkSnapshot")
+    .mockResolvedValue(
+      "data:image/png;base64,AA==" as Awaited<
+        ReturnType<typeof documentTools.inkSnapshot>
+      >,
+    );
+  const { pointer } = await setup();
+  pointer("pointerdown", 100, 100, { pressure: 0.2 });
+  pointer("pointermove", 180, 140, { pressure: 0.8 });
+  const textOnly = (await classroomCommands.execute({
+    name: "document.snapshot",
+    args: { capture: false },
+  })) as { ink: import("./documents").InkStroke[]; image?: string };
+  expect(textOnly.image).toBeUndefined();
+  expect(textOnly.ink).toHaveLength(1);
+  expect(snapshot).not.toHaveBeenCalled();
+  const result = (await classroomCommands.execute({
+    name: "document.snapshot",
+  })) as { ink: import("./documents").InkStroke[] };
+  expect(result.ink).toHaveLength(1);
+  expect(result.ink[0].points).toEqual([
+    [100, 100],
+    [180, 140],
+  ]);
+  expect(result.ink[0].pressures).toEqual([0.2, 0.8]);
+  expect(snapshot.mock.calls[0][0]).toEqual(result.ink);
+  expect(currentInk()).toEqual([]);
+  pointer("pointercancel", 180, 140);
+  expect(currentInk()).toEqual([]);
+});
+
 it("applies assistant configuration to the next visible courseware stroke and exposes its actual settings", async () => {
   const { api, draw, unmount } = await setup(undefined, {
     currentItemPenMode: "brush",
@@ -311,6 +347,139 @@ it.each(["mindmap", "fourline"] as const)(
   },
 );
 
+it("grows visible table cells around raw handwriting and undoes the stroke and geometry together", async () => {
+  const { api, pointer, update } = await setup();
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+  });
+  pointer("pointerdown", 125, 125);
+  pointer("pointermove", 300, 190);
+  pointer("pointerup", 350, 215);
+  const source = currentInk().find(
+    (stroke) => stroke.insertion?.inkCell === 0,
+  )!;
+  expect(source.points).toEqual([
+    [125, 125],
+    [300, 190],
+    [350, 215],
+  ]);
+  expect(readInsertions(api)[0].columnWidths).toEqual([270, 120, 120]);
+  expect(readInsertions(api)[0].rowHeights).toEqual([135, 60, 60]);
+  expect(recognize).not.toHaveBeenCalled();
+  expect(update).not.toHaveBeenCalled();
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(currentInk().some((stroke) => stroke.id === source.id)).toBe(false);
+  expect(readInsertions(api)[0].width).toBe(360);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  expect(
+    currentInk().find((stroke) => stroke.id === source.id)?.points,
+  ).toEqual(source.points);
+  expect(readInsertions(api)[0].width).toBe(510);
+});
+
+it("selects and drags one courseware mind-map node, undoes once, then accepts handwriting candidates there", async () => {
+  const { api, pointer, update } = await setup();
+  await act(async () => {
+    await renderInsertion(
+      api,
+      insertionDefaults("mindmap", { x: 100, y: 100 }),
+    );
+  });
+  const controls = render(
+    <>
+      <MindMapControls api={api} />
+      <InsertionCandidates />
+    </>,
+  );
+  const targets = () =>
+    insertionWritingTargets(documentWritingParts(currentInk()));
+  const before = targets();
+  const selected = before[1];
+  expect((classroomCommands.read("document") as { tool: string }).tool).toBe(
+    "freedraw",
+  );
+  const chooseNode = vi.spyOn(classroomCommands, "execute");
+  pointer("pointerdown", selected.x + 60, selected.y + 20);
+  pointer("pointerup", selected.x + 60, selected.y + 20);
+  expect(chooseNode).toHaveBeenCalledWith({
+    name: "document.select",
+    args: { ids: [] },
+  });
+  expect(currentInk().some((stroke) => stroke.fcInk)).toBe(false);
+  const move = (target: Element | Window, type: string, x: number, y: number) =>
+    fireEvent(
+      target,
+      Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        pointerId: 50,
+        pointerType: "pen",
+        isPrimary: true,
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }),
+    );
+  move(
+    screen.getByRole("button", { name: t("fcboard.mindmap_move_node") }),
+    "pointerdown",
+    200,
+    200,
+  );
+  move(window, "pointermove", 250, 230);
+  expect(targets()[1]).toMatchObject({
+    x: selected.x + 50,
+    y: selected.y + 30,
+  });
+  expect(targets()[2]).toMatchObject({ x: before[2].x, y: before[2].y });
+  move(window, "pointerup", 270, 240);
+  expect(targets()[1]).toMatchObject({
+    x: selected.x + 70,
+    y: selected.y + 40,
+  });
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(targets()[1]).toMatchObject({ x: selected.x, y: selected.y });
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  const target = targets()[1];
+  vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
+    async (
+      _image,
+      _signal,
+      _progress,
+      _kind,
+      _accept,
+      _strokes,
+      _language,
+      choose,
+    ) => choose!(["Hello", "Hallo"]),
+  );
+  pointer("pointerdown", target.x + 25, target.y + 20);
+  pointer("pointermove", target.x + 45, target.y + 25);
+  pointer("pointerup", target.x + 55, target.y + 25);
+  await screen.findByRole("button", { name: "Hallo" });
+  expect(currentInk().some((stroke) => stroke.fcInk)).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Hallo" }));
+  await waitFor(() =>
+    expect(readInsertions(api)[0].outline.split("\n")[1]).toContain("Hallo"),
+  );
+  expect(update).not.toHaveBeenCalled();
+  await act(async () => {
+    await classroomCommands.execute({ name: "mindmap.dismiss" });
+  });
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.mindmap_move_node") }),
+  ).toBeNull();
+  controls.unmount();
+});
+
 it("does not commit late handwriting into a removed courseware writing surface", async () => {
   let finish!: (text: string) => void;
   const recognize = vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
@@ -359,6 +528,8 @@ it("embeds an interactive lesson on the visible document with one undo and redo"
   const frame = screen.getByTitle(interactiveResource.title);
   expect(frame).toHaveAttribute("sandbox", "allow-scripts");
   expect(frame.closest("foreignObject")).toBeTruthy();
+  expect(frame.closest("foreignObject")).toHaveStyle({ pointerEvents: "auto" });
+  expect(classroomCommands.read("document")).toMatchObject({ tool: "lasso" });
   const current = () =>
     (
       classroomCommands.read("document") as {
@@ -1219,11 +1390,18 @@ it("opens compact eraser properties from the existing entry, updates real mode a
     expect(
       screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
     ).toBeVisible();
-    fireEvent.mouseDown(
-      screen.getByRole("combobox", { name: t("fcboard.erase_mode") }),
-    );
     fireEvent.click(
-      screen.getByRole("option", { name: t("fcboard.erase_entire_object") }),
+      screen.getByRole("button", { name: t("fcboard.erase_entire_object") }),
+    );
+    expect(api.getAppState().eraserMode).toBe("object");
+    fireEvent.keyDown(
+      screen.getByRole("group", { name: t("fcboard.erase_mode") }),
+      { key: "ArrowLeft" },
+    );
+    expect(api.getAppState().eraserMode).toBe("stroke");
+    fireEvent.keyDown(
+      screen.getByRole("group", { name: t("fcboard.erase_mode") }),
+      { key: "ArrowRight" },
     );
     expect(api.getAppState().eraserMode).toBe("object");
     fireEvent.change(
@@ -1333,29 +1511,17 @@ it("duplicates selected courseware ink as one undoable action with independent I
   expect(update).not.toHaveBeenCalled();
 });
 
-it("shares one adjustable region in courseware and cancels a border drag without splitting ink", async () => {
-  vi.mocked(loadInk).mockResolvedValue({
-    0: [
-      {
-        id: "first",
-        points: [
-          [100, 100],
-          [140, 140],
-        ],
-        color: "#000",
-        width: 2,
-      },
-      {
-        id: "second",
-        points: [
-          [300, 100],
-          [340, 140],
-        ],
-        color: "#000",
-        width: 2,
-      },
-    ],
-  });
+it("scales courseware objects at the corner, moves them from the interior and restores cancelled gestures without splitting ink", async () => {
+  const strokes = [100, 300].map((x, index) => ({
+    id: index ? "second" : "first",
+    points: [
+      [x, 100],
+      [x + 40, 140],
+    ] as [number, number][],
+    color: "#000",
+    width: 2,
+  }));
+  vi.mocked(loadInk).mockResolvedValue({ 0: strokes });
   const { pointer, svg } = await setup();
   await act(() =>
     classroomCommands.execute({
@@ -1370,46 +1536,69 @@ it("shares one adjustable region in courseware and cancels a border drag without
       region: [number, number][];
       selectionInProgress: boolean;
     };
-  pointer("pointerdown", 80, 80);
-  pointer("pointermove", 160, 160);
-  expect(context().selection).toEqual([]);
-  pointer("pointerup", 160, 160);
+  const circle = () => {
+    pointer("pointerdown", 80, 80);
+    pointer("pointermove", 160, 80);
+    pointer("pointermove", 160, 160);
+    pointer("pointerup", 80, 160);
+  };
+  circle();
   expect(context().selection).toEqual(["first"]);
   expect(context().region).toEqual([
-    [68, 68],
-    [172, 68],
-    [172, 172],
-    [68, 172],
+    [80, 80],
+    [160, 80],
+    [160, 160],
+    [80, 160],
   ]);
   expect(svg.querySelectorAll("[data-document-region]")).toHaveLength(1);
-  pointer("pointerdown", 172, 172);
+  pointer("pointerdown", 160, 160);
+  pointer("pointermove", 200, 200);
+  expect(context().ink[0].points[0]).toEqual([110, 110]);
+  pointer("pointercancel", 200, 200);
+  expect(context().ink[0].points[0]).toEqual([100, 100]);
+  expect(context().region[2]).toEqual([160, 160]);
+  pointer("pointerdown", 160, 160);
   expect(context().selectionInProgress).toBe(true);
-  pointer("pointermove", 350, 180);
+  pointer("pointerup", 240, 240);
   expect(context().selection).toEqual(["first"]);
-  pointer("pointerup", 370, 190);
-  expect(context().selection).toEqual(["first", "second"]);
-  expect(context().region[2]).toEqual([370, 190]);
-  pointer("pointerdown", 220, 68);
-  pointer("pointermove", 260, 98);
+  expect(context().ink[0].points).toEqual([
+    [120, 120],
+    [200, 200],
+  ]);
+  expect(context().ink[1]).toEqual(strokes[1]);
+  expect(context().region[2]).toEqual([240, 240]);
+  await act(() => classroomCommands.execute({ name: "document.undo" }));
+  expect(context().ink).toEqual(strokes);
+  circle();
+  pointer("pointerdown", 120, 120);
+  pointer("pointermove", 160, 150);
   expect(context().ink[0].points[0]).toEqual([140, 130]);
-  pointer("pointercancel", 260, 98);
-  expect(context().ink[0].points[0]).toEqual([100, 100]);
-  expect(context().region[0]).toEqual([68, 68]);
-  expect(context().ink.map((stroke) => stroke.id)).toEqual(["first", "second"]);
-  pointer("pointerdown", 220, 68);
-  pointer("pointerup", 260, 98);
-  expect(context().region[0]).toEqual([108, 98]);
+  pointer("pointercancel", 160, 150);
+  expect(context().ink).toEqual(strokes);
+  expect(context().region[0]).toEqual([80, 80]);
+  pointer("pointerdown", 120, 120);
+  pointer("pointerup", 160, 150);
+  expect(context().region[0]).toEqual([120, 110]);
   expect(context().ink[0].points[0]).toEqual([140, 130]);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.undo_annotation") }),
-  );
-  expect(context().ink[0].points[0]).toEqual([100, 100]);
-  expect(context().ink).toHaveLength(2);
+  await act(() => classroomCommands.execute({ name: "document.undo" }));
+  expect(context().ink).toEqual(strokes);
   expect(context().region).toEqual([]);
-  expect(context().selection).toEqual([]);
 });
 
-it("starts a new courseware region from its interior and retains it on a tap-sized gesture", async () => {
+it("clears a courseware selection immediately when a new outside gesture starts and leaves no empty frame for a tap", async () => {
+  vi.mocked(loadInk).mockResolvedValue({
+    0: [
+      {
+        id: "ink",
+        points: [
+          [100, 100],
+          [140, 140],
+        ],
+        width: 2,
+        color: "#000",
+      },
+    ],
+  });
   const { pointer } = await setup();
   await act(() =>
     classroomCommands.execute({
@@ -1418,14 +1607,18 @@ it("starts a new courseware region from its interior and retains it on a tap-siz
     }),
   );
   const context = () =>
-    classroomCommands.read("document") as { region: [number, number][] };
+    classroomCommands.read("document") as {
+      region: [number, number][];
+      selection: string[];
+    };
   pointer("pointerdown", 80, 80);
-  pointer("pointerup", 240, 240);
-  expect(context().region[0]).toEqual([68, 68]);
-  pointer("pointerdown", 140, 140);
-  pointer("pointerup", 300, 300);
-  expect(context().region[0]).toEqual([128, 128]);
+  pointer("pointermove", 160, 80);
+  pointer("pointermove", 160, 160);
+  pointer("pointerup", 80, 160);
+  expect(context().region[0]).toEqual([80, 80]);
   pointer("pointerdown", 600, 400);
+  expect(context().region).toEqual([]);
+  expect(context().selection).toEqual([]);
   pointer("pointerup", 601, 401);
-  expect(context().region[0]).toEqual([128, 128]);
+  expect(context().region).toEqual([]);
 });

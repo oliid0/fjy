@@ -114,6 +114,7 @@ export type NewElementSceneRenderConfig = {
   canvas: HTMLCanvasElement | null;
   rc: RoughCanvas;
   newElement: ExcalidrawElement | null;
+  activeInkElements?: readonly ExcalidrawElement[];
   elementsMap: RenderableElementsMap;
   allElementsMap: NonDeletedSceneElementsMap;
   scale: number;

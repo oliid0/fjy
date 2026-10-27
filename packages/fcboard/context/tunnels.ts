@@ -16,7 +16,7 @@ type TunnelsContextValue = {
   ToolbarExtrasTunnel: Tunnel;
   ToolbarNavigationTunnel: Tunnel;
   ToolbarInsertTunnel: Tunnel;
-  ToolbarShapesTunnel: Tunnel;
+  ToolbarShapesTunnel: ReturnType<typeof stableToolbarTunnel>;
   DefaultSidebarTriggerTunnel: Tunnel;
   DefaultSidebarTabTriggersTunnel: Tunnel;
   OverwriteConfirmDialogTunnel: Tunnel;

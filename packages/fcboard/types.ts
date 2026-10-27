@@ -13,6 +13,7 @@ import type { MaybeTransformHandleType } from "@excalidraw/element";
 import type {
   PointerType,
   ExcalidrawLinearElement,
+  ExcalidrawFreeDrawElement,
   NonDeletedExcalidrawElement,
   NonDeleted,
   TextAlign,
@@ -359,6 +360,7 @@ export interface AppState {
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
   whiteboardPenWidths?: { hard?: number; brush?: number };
   whiteboardBrushVariation?: number;
+  whiteboardHardNib?: boolean;
   whiteboardPenTip?: "fine" | "thick";
   whiteboardDualPen?: boolean;
   whiteboardThickThreshold?: number;
@@ -787,6 +789,9 @@ export type UIOptions = Partial<{
     penWidthMax?: 20 | 40;
     thickThreshold?: number;
     dualPen?: boolean;
+    hardNibAvailable?: boolean;
+    hardNib?: boolean;
+    touchPressure?: boolean;
   };
   /** Host applications can replace the asset library with their own teaching tools. */
   library: boolean;
@@ -1040,6 +1045,10 @@ export interface ExcalidrawImperativeAPI {
       pointerDownState: PointerDownState,
       event: PointerEvent,
     ) => void,
+  ) => UnsubscribeCallback;
+  /** Compose completed ink synchronously; callbacks run before its history entry. */
+  onInkCommit: (
+    callback: (element: ExcalidrawFreeDrawElement) => void,
   ) => UnsubscribeCallback;
   onScrollChange: (
     callback: (scrollX: number, scrollY: number, zoom: Zoom) => void,

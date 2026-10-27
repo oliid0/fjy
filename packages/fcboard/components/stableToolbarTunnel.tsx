@@ -27,6 +27,12 @@ export const stableToolbarTunnel = () => {
     };
   };
   return {
+    useHasEntries: () =>
+      useSyncExternalStore(
+        subscribe,
+        () => snapshot,
+        () => empty,
+      ).length > 0,
     In: ({ children }: { children: React.ReactNode }) => {
       const id = useId();
       useClientLayoutEffect(() => {

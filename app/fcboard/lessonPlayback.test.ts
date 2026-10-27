@@ -374,6 +374,75 @@ it("rejects a model mutation in the observation read loop before it changes a li
   }
 });
 
+it.each(["web.action", "signal.action"])(
+  "does not allow %s mutations during the read-only lesson planning pass",
+  async (name) => {
+    const host = playback();
+    const mutate = vi.fn();
+    const release = classroomCommands.register(name, "control", mutate);
+    vi.spyOn(ai, "chat").mockResolvedValue(
+      JSON.stringify({
+        action: "commands",
+        commands: [{ name, args: { action: "close" } }],
+      }),
+    );
+    try {
+      await expect(
+        observeLesson(
+          {
+            lesson: validateLesson({ steps: [{ commands: [] }], quiz: [] }),
+            step: 0,
+            toolIndex: 0,
+            results: [],
+            correct: 0,
+            attempts: 0,
+          },
+          new AbortController().signal,
+        ),
+      ).rejects.toThrow();
+      expect(mutate).not.toHaveBeenCalled();
+    } finally {
+      release();
+      host.stop();
+    }
+  },
+);
+
+it("observes the real UI and rejects a plan when its controls change while the model is responding", async () => {
+  const host = playback();
+  let value = "hard";
+  const release = classroomCommands.register(
+    "ui.inspect",
+    "inspect UI",
+    () => ({ version: value, controls: [{ id: "pen", value }] }),
+  );
+  vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+    expect(
+      JSON.parse(String(messages.at(-1)?.content)).ui.controls[0].value,
+    ).toBe("hard");
+    value = "brush";
+    return '{"action":"keep"}';
+  });
+  try {
+    await expect(
+      observeLesson(
+        {
+          lesson: validateLesson({ steps: [{ commands: [] }], quiz: [] }),
+          step: 0,
+          toolIndex: 0,
+          results: [],
+          correct: 0,
+          attempts: 0,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  } finally {
+    release();
+    host.stop();
+  }
+});
+
 it("changes the live experiment and verifies its output before narration, then writes through the existing lesson renderer", async () => {
   const host = playback();
   const { id, frame } = await experiment(host);

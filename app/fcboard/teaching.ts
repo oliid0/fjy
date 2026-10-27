@@ -15,11 +15,21 @@ import {
   assertLessonToolsAvailable,
   lessonToolMismatch,
   lessonToolResumeIndex,
+  validateLessonTools,
 } from "./lessonTools";
 
 import type { Lesson, Quiz, LessonCommand } from "./lesson";
 import type { LessonTool, LessonToolResult } from "./lessonTools";
 import type { LessonObserver, LessonObservation } from "./lessonContinuation";
+
+const validatePlanTools = (tools: readonly LessonTool[] | undefined) => {
+  const validated = validateLessonTools(tools);
+  // Opening a file can register a later tool. Known private commands stay
+  // forbidden now; every tool must be public when it actually executes.
+  assertLessonToolsAvailable(
+    validated.filter((tool) => classroomCommands.has(tool.name)),
+  );
+};
 
 export type Lens = "standard" | "audio" | "captions" | "reading" | "focus";
 export type TeachingState = {
@@ -113,6 +123,10 @@ export class TeachingEngine {
   private generation = 0;
   private branchGeneration = 0;
   private branchActive = false;
+  private owner?: AbortSignal;
+  private branchOwner?: AbortSignal;
+  private releaseOwner = () => {};
+  private releaseBranchOwner = () => {};
   private target?: string;
   private toolRequests = new Set<AbortController>();
   private branchToolRequests = new Set<AbortController>();
@@ -133,6 +147,64 @@ export class TeachingEngine {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+  ownsSignal(signal?: AbortSignal) {
+    return (
+      !!signal &&
+      !signal.aborted &&
+      [...this.toolRequests, ...this.branchToolRequests].some((request) =>
+        classroomCommands.isOwnedBy(signal, request.signal),
+      )
+    );
+  }
+  private bindOwner(owner?: AbortSignal, branch = false) {
+    if (branch) {
+      this.releaseBranchOwner();
+      this.branchOwner = owner;
+    } else {
+      this.releaseOwner();
+      this.owner = owner;
+    }
+    const cancel = () => {
+      if (branch) {
+        this.branchOwner = undefined;
+      } else {
+        this.owner = undefined;
+      }
+      this.pause();
+    };
+    owner?.addEventListener("abort", cancel, { once: true });
+    const release = () => owner?.removeEventListener("abort", cancel);
+    if (branch) {
+      this.releaseBranchOwner = release;
+    } else {
+      this.releaseOwner = release;
+    }
+    if (owner?.aborted) {
+      cancel();
+    }
+  }
+  private acceptTransition(signal: AbortSignal) {
+    if (
+      !this.ownsSignal(signal) ||
+      !classroomCommands.isExpectedTransition(signal) ||
+      this.target === this.surface()
+    ) {
+      return;
+    }
+    this.target = this.surface();
+    // Tools run before the step's drawing. Rebind the renderer to the newly
+    // visible page; retain the lesson identity, never the old page's source ids.
+    if (this.renderer) {
+      this.renderer.cancel();
+      this.renderer = new LessonCanvas(this.api, { id: this.renderer.id });
+    }
+    if (this.branchRenderer) {
+      this.branchRenderer.cancel();
+      this.branchRenderer = new LessonCanvas(this.api, {
+        id: this.branchRenderer.id,
+      });
+    }
   }
   private update(value: Partial<TeachingState>) {
     this.state = { ...this.state, ...value };
@@ -202,13 +274,15 @@ export class TeachingEngine {
       this.update({ mode: "paused" });
     }
   }
-  resume() {
+  resume(owner?: AbortSignal) {
+    owner?.throwIfAborted();
     if (!this.state.lesson) {
       return;
     }
     if (this.state.mode === "complete") {
       return;
     }
+    this.bindOwner(owner, this.branchActive);
     if (this.branchActive) {
       this.update({ mode: "question" });
       this.branchRenderer?.resume();
@@ -235,6 +309,10 @@ export class TeachingEngine {
     this.waiting.clear();
   }
   cancel() {
+    this.releaseOwner();
+    this.releaseBranchOwner();
+    this.owner = undefined;
+    this.branchOwner = undefined;
     this.generation++;
     this.branchGeneration++;
     this.branchActive = false;
@@ -302,6 +380,10 @@ export class TeachingEngine {
         await gate();
         const request = new AbortController();
         requests.add(request);
+        const releaseOwner = classroomCommands.registerOwner(
+          request.signal,
+          branch ? this.branchOwner : this.owner,
+        );
         if (isCancellableBoardCommand(tool.name)) {
           this.cancellableRequests.add(request);
         }
@@ -311,6 +393,9 @@ export class TeachingEngine {
         try {
           assertLessonToolsAvailable([tool]);
           result = await executeBoardCommand(tool, request.signal);
+          if (current()) {
+            this.acceptTransition(request.signal);
+          }
           check();
           mismatch = lessonToolMismatch(tool, result);
           if (mismatch) {
@@ -362,6 +447,7 @@ export class TeachingEngine {
           this.pause();
           await gate();
         } finally {
+          releaseOwner();
           requests.delete(request);
         }
       }
@@ -417,7 +503,7 @@ export class TeachingEngine {
         const revised = mergeLessonContinuation(input, tail);
         revised.steps
           .slice(index)
-          .forEach((step) => assertLessonToolsAvailable(step.tools || []));
+          .forEach((step) => validatePlanTools(step.tools));
         lesson = revised;
         this.update({ lesson, observing: false, toolError: "" });
         if ((lesson.steps[index].tools?.length || 0) <= this.state.toolIndex) {
@@ -599,7 +685,9 @@ export class TeachingEngine {
     saved?: TeachingSession["canvas"],
     progress?: Pick<TeachingSession, "correct" | "attempts" | "toolIndex">,
     sourceIds?: readonly string[],
+    owner?: AbortSignal,
   ) {
+    owner?.throwIfAborted();
     if (
       !Number.isInteger(start) ||
       start < 0 ||
@@ -611,9 +699,7 @@ export class TeachingEngine {
     ) {
       throw new Error(t("fcboard.invalid_lesson_content"));
     }
-    lesson.steps.forEach((step) =>
-      assertLessonToolsAvailable(step.tools || []),
-    );
+    lesson.steps.forEach((step) => validatePlanTools(step.tools));
     this.cancel();
     this.target = this.surface();
     const generation = this.generation;
@@ -630,6 +716,7 @@ export class TeachingEngine {
       interruptions: 0,
       audioError: "",
     });
+    this.bindOwner(owner);
     for (let index = start; index < lesson.steps.length; index++) {
       await this.gate(generation);
       this.update({
@@ -686,6 +773,8 @@ export class TeachingEngine {
         : t("fcboard.lesson_complete"),
       question: undefined,
     });
+    this.releaseOwner();
+    this.owner = undefined;
   }
   private async ask(question: Quiz, generation: number) {
     this.update({
@@ -741,10 +830,13 @@ export class TeachingEngine {
       interruptions: this.state.interruptions + 1,
     });
   }
-  async branch(lesson: Lesson, sourceIds?: readonly string[]) {
-    lesson.steps.forEach((step) =>
-      assertLessonToolsAvailable(step.tools || []),
-    );
+  async branch(
+    lesson: Lesson,
+    sourceIds?: readonly string[],
+    owner?: AbortSignal,
+  ) {
+    owner?.throwIfAborted();
+    lesson.steps.forEach((step) => validatePlanTools(step.tools));
     if (this.state.mode !== "question") {
       this.interrupt();
     }
@@ -754,14 +846,15 @@ export class TeachingEngine {
     const generation = ++this.branchGeneration;
     const mainGeneration = this.generation;
     this.branchActive = true;
-    const renderer = new LessonCanvas(this.api, { sourceIds });
-    this.branchRenderer = renderer;
+    this.bindOwner(owner, true);
+    this.branchRenderer = new LessonCanvas(this.api, { sourceIds });
     for (const step of lesson.steps) {
       if (generation !== this.branchGeneration) {
         return;
       }
       this.update({ caption: "", spoken: 0, toolResults: [], toolError: "" });
       await this.tools(step.tools, mainGeneration, generation);
+      const renderer = this.branchRenderer!;
       await this.prepare(renderer, step.commands, mainGeneration, generation);
       await this.gate(mainGeneration, true);
       if (generation !== this.branchGeneration) {
@@ -788,6 +881,8 @@ export class TeachingEngine {
     }
     if (generation === this.branchGeneration) {
       this.branchActive = false;
+      this.releaseBranchOwner();
+      this.branchOwner = undefined;
       this.update({
         mode: this.state.question ? "quiz" : "paused",
         ...(this.state.question

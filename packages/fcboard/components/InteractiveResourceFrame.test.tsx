@@ -8,6 +8,8 @@ import { requestResourceControl } from "../interactiveResourceControls";
 
 import { InteractiveResourceFrame } from "./InteractiveResourceFrame";
 
+import type { ResourceControlState } from "../interactiveResourceControls";
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -34,16 +36,17 @@ it("keeps a loaded channel when the editor refreshes its callback ref, and cance
         _origin?: string | WindowPostMessageOptions,
         transfer?: Transferable[],
       ) => {
-        (transfer![0] as MessagePort).postMessage({
-          ok: true,
-          state: {
-            version: "test",
-            title: "Acceleration",
-            controls: [],
-            outputs: ["2 m/s²"],
-            truncated: false,
-          },
-        });
+        const state: ResourceControlState = {
+          version: "test",
+          title: "Acceleration",
+          viewport: { width: 640, height: 420 },
+          offset: 0,
+          total: 0,
+          controls: [],
+          outputs: ["2 m/s²"],
+          truncated: false,
+        };
+        (transfer![0] as MessagePort).postMessage({ ok: true, state });
       },
     );
   await new Promise<void>((resolve) =>

@@ -241,7 +241,7 @@ for (const viewport of [
     await expect(tools.getByText("更多工具", { exact: true })).toHaveCount(0);
     await expect(
       tools.getByRole("button", { name: "语音指令", exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     const toolsBounds = (await tools.boundingBox())!;
     expect(
       await tools
@@ -249,9 +249,7 @@ for (const viewport of [
         .first()
         .evaluate((element) => element.getBoundingClientRect().width),
     ).toBeCloseTo(insertIconWidth, 1);
-    if (viewport.width >= viewport.height) {
-      expect(toolsBounds.width).toBeGreaterThan(toolsBounds.height);
-    }
+    expect(toolsBounds.width).toBeLessThanOrEqual(240);
     const columns = await tools
       .locator(".fc-tools-grid")
       .last()
@@ -259,10 +257,14 @@ for (const viewport of [
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(" ").length,
       );
-    expect(columns).toBeGreaterThanOrEqual(viewport.width < 360 ? 3 : 4);
+    expect(columns).toBe(3);
     await page.screenshot({
       path: testInfo.outputPath(`tools-${viewport.width}.png`),
     });
+    await tools.getByRole("button", { name: "下一页", exact: true }).click();
+    await expect(
+      tools.getByRole("button", { name: "语音指令", exact: true }),
+    ).toBeVisible();
     await tools.press("Escape");
     await expect(tools).toBeHidden();
     await toolbar.getByRole("button", { name: "插入", exact: true }).click();

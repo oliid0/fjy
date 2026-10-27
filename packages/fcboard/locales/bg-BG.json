@@ -1714,6 +1714,27 @@
     "recording_resume": "Възобновяване на записа",
     "minimize_recording": "Минимизиране на записа",
     "restore_recording_window": "Възстановяване на прозореца за запис",
-    "language_pen": "Език · Писалка"
+    "language_pen": "Език · Писалка",
+    "attach_selection_image_to_ai": "Добавяне на екранна снимка на избраното към заявките до ИИ",
+    "compass": "Пергел",
+    "set_square": "Чертожен триъгълник",
+    "education_categories": "Образователни категории",
+    "math_experiments": "Математически експерименти",
+    "math_concepts": "Математически понятия",
+    "math_applications": "Приложения на математиката",
+    "select_none": "Премахване на избора",
+    "mindmap_add_child": "Добавяне на подвъзел",
+    "mindmap_move_node": "Преместване на възел",
+    "mindmap_delete_node": "Изтриване на възела и подвъзлите му",
+    "mindmap_clear_node": "Изчистване на текста във възела",
+    "selected_pages_exported_as_images": "Избраните страници са експортирани като изображения",
+    "hard_pen_nib": "Изтъняване на щриха на обикновената писалка",
+    "right_triangle": "Правоъгълен триъгълник",
+    "triangle": "Триъгълник",
+    "trapezoid": "Трапец",
+    "pentagon": "Петоъгълник",
+    "hexagon": "Шестоъгълник",
+    "star": "Звезда",
+    "hemisphere": "Полукълбо"
   }
 }

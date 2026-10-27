@@ -176,6 +176,7 @@ export const boardContext = async (
   wholeBoard = false,
   snapshot?: readonly ExcalidrawElement[],
   region?: { left: number; top: number; right: number; bottom: number },
+  captureImage = true,
 ) => {
   const all = api.getSceneElements();
   const selected = selectedBoardElements(api);
@@ -187,7 +188,7 @@ export const boardContext = async (
       .map((el) => (el.type === "text" ? el.text : "")),
     ...handwritingText(elements),
   ].join("\n");
-  if (!elements.length) {
+  if (!elements.length || !captureImage) {
     return { elements, text, image: undefined };
   }
   if (region) {
@@ -219,17 +220,22 @@ export const boardContext = async (
         output.width = Math.max(1, Math.ceil((right - left) * factor));
         output.height = Math.max(1, Math.ceil((bottom - top) * factor));
         const context = output.getContext("2d")!;
-        context.drawImage(
-          canvas,
-          left * scale,
-          top * scale,
-          (right - left) * scale,
-          (bottom - top) * scale,
-          0,
-          0,
-          output.width,
-          output.height,
+        const layers = document.querySelectorAll<HTMLCanvasElement>(
+          `.excalidraw[data-excalidraw-id="${api.id}"] canvas.excalidraw__canvas.static, .excalidraw[data-excalidraw-id="${api.id}"] canvas.excalidraw__canvas.new-element`,
         );
+        for (const layer of layers) {
+          context.drawImage(
+            layer,
+            left * scale,
+            top * scale,
+            (right - left) * scale,
+            (bottom - top) * scale,
+            0,
+            0,
+            output.width,
+            output.height,
+          );
+        }
         return { elements, text, image: output.toDataURL("image/png") };
       }
     }

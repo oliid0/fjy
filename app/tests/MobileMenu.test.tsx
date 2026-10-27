@@ -1,5 +1,4 @@
 import { t } from "@excalidraw/excalidraw/i18n";
-import { UI } from "@excalidraw/excalidraw/tests/helpers/ui";
 import {
   mockBoundingClientRect,
   render,
@@ -89,8 +88,16 @@ describe("Test MobileMenu", () => {
         .getByRole("dialog", { name: t("fcboard.insert_tools") })
         .querySelector(".zoom-actions"),
     ).toBeNull();
-    UI.clickTool("rectangle");
-    expect(h.state.activeTool.type).toBe("rectangle");
+    expect(
+      document.querySelectorAll(".fc-factory-shape-grid button"),
+    ).toHaveLength(20);
+    const rectangle = screen.getByTestId("factory-shape-rectangle");
+    fireEvent.click(rectangle);
+    expect(h.state.activeTool).toMatchObject({
+      type: "custom",
+      customType: "factory-shape:6",
+    });
+    expect(rectangle).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.getByRole("toolbar", { name: t("fcboard.whiteboard_toolbar") }),
     ).toBe(toolbar);

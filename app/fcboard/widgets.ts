@@ -14,14 +14,25 @@ import { classroomCommands } from "./commands";
 import { contentPosition, contentViewport, revealNewContent } from "./board";
 import { findVisibleContentPosition } from "./placement";
 import { configureSolid, solidDefaults, solidShapes } from "./solids";
+import { factoryGizmoShapes } from "./factoryGizmoShapes";
+import {
+  factoryFlatShape,
+  rotateFactoryShapes,
+  stretchFactoryShapes,
+  validatedFactoryShape,
+} from "./factoryShapeGeometry";
 
 import type { InkStroke } from "./documents";
 import type { SolidSettings } from "./solids";
 import type { ContentRect } from "./placement";
+import type { FactoryFlatShapeData } from "./factoryShapeGeometry";
 
 export const teachingTools = {
+  shape: "shape",
   ruler: "ruler",
   protractor: "protractor",
+  compass: "compass",
+  setSquare: "set_square",
   dice: "dice",
   timer: "timer",
   picker: "random_picker",
@@ -32,6 +43,7 @@ export const teachingTools = {
   prism: "prism",
   pyramid: "pyramid",
   frustum: "frustum",
+  hemisphere: "hemisphere",
   pendulum: "pendulum",
   projectile: "projectile_motion",
 } as const;
@@ -44,6 +56,7 @@ export const solidWidgetKinds = new Set<WidgetKind>([
   "prism",
   "pyramid",
   "frustum",
+  "hemisphere",
 ]);
 export type WidgetParams = {
   running: boolean;
@@ -59,6 +72,12 @@ export type WidgetParams = {
   names: string;
   choice: string;
   size: number;
+  sweep: number;
+  stretchX: number;
+  stretchY: number;
+  strokeWidth: number;
+  opacity: number;
+  shape?: FactoryFlatShapeData;
   solid: SolidSettings;
 };
 export type Widget = {
@@ -81,6 +100,11 @@ export const widgetDefaults = (): WidgetParams => ({
   names: "1,2,3,4,5,6",
   choice: "?",
   size: 1,
+  sweep: 0,
+  stretchX: 1,
+  stretchY: 1,
+  strokeWidth: 2,
+  opacity: 100,
   solid: solidDefaults(),
 });
 export const widgetTime = (params: WidgetParams, now = Date.now()) =>
@@ -91,6 +115,9 @@ export const configureWidget = (
   changes: Record<string, unknown>,
 ): WidgetParams => {
   const next = { ...params };
+  if (changes.shape !== undefined) {
+    next.shape = validatedFactoryShape(changes.shape);
+  }
   if (changes.solid !== undefined) {
     next.solid = configureSolid(params.solid || solidDefaults(), changes.solid);
   }
@@ -103,6 +130,11 @@ export const configureWidget = (
     vy: [1, 50],
     rotation: [-180, 180],
     size: [0.3, 2],
+    sweep: [-360, 360],
+    stretchX: [0.01, 100],
+    stretchY: [0.01, 100],
+    strokeWidth: [0.1, 240],
+    opacity: [0, 100],
     elapsed: [0, 1e9],
     started: [0, 1e15],
   };
@@ -195,80 +227,32 @@ export const widgetShapes = (
 ): ExcalidrawElementSkeleton[] => {
   const { kind, params } = widget;
   const result: ExcalidrawElementSkeleton[] = [];
-  if (kind === "ruler") {
-    result.push({
-      type: "rectangle",
-      x: 0,
-      y: 0,
-      width: 360,
-      height: 65,
-      roughness: 0,
-      backgroundColor: "#e0edff",
-      fillStyle: "solid",
-      opacity: 75,
-    });
-    for (let i = 0; i <= 60; i++) {
-      const x = i * 6;
-      result.push(
-        line(
-          x,
-          0,
-          [
-            [0, 0],
-            [0, i % 10 === 0 ? 25 : i % 5 === 0 ? 18 : 10],
-          ],
-          "#17243c",
-        ),
-      );
-      if (i % 10 === 0) {
-        result.push(label(x + 2, 30, String(i / 10), 14));
-      }
-    }
-  } else if (kind === "protractor") {
-    result.push(
-      line(
-        0,
-        0,
-        Array.from({ length: 91 }, (_, index) => {
-          const angle = (index / 90) * Math.PI;
-          return [140 - Math.cos(angle) * 140, 140 - Math.sin(angle) * 140];
-        }),
-        "#17243c",
-      ),
-      line(
-        0,
-        140,
-        [
-          [0, 0],
-          [280, 0],
-        ],
-        "#17243c",
-      ),
+  if (kind === "shape") {
+    const shape = params.shape || {
+      kind: "rectangle" as const,
+      start: [0, 0] as [number, number],
+      end: [180, 120] as [number, number],
+      fill: false,
+      width: 2,
+      opacity: 100,
+    };
+    return rotateFactoryShapes(
+      factoryFlatShape(shape.kind, shape.start, shape.end, {
+        color: params.solid.stroke,
+        width: shape.width,
+        opacity: shape.opacity,
+        fill: shape.fill,
+      }),
+      params.rotation,
+      params.size,
     );
-    for (let degrees = 0; degrees <= 180; degrees += 10) {
-      const angle = (degrees / 180) * Math.PI;
-      result.push(
-        line(
-          140,
-          140,
-          [
-            [Math.cos(angle) * 140, -Math.sin(angle) * 140],
-            [Math.cos(angle) * 126, -Math.sin(angle) * 126],
-          ],
-          "#17243c",
-        ),
-      );
-      if (degrees % 30 === 0) {
-        result.push(
-          label(
-            130 + Math.cos(angle) * 105,
-            133 - Math.sin(angle) * 105,
-            `${degrees}°`,
-            14,
-          ),
-        );
-      }
-    }
+  } else if (
+    kind === "ruler" ||
+    kind === "protractor" ||
+    kind === "compass" ||
+    kind === "setSquare"
+  ) {
+    return factoryGizmoShapes(widget);
   } else if (kind === "timer") {
     const remaining = Math.ceil(
       Math.max(0, params.duration - widgetTime(params, now)),
@@ -402,7 +386,14 @@ export const widgetShapes = (
           )),
     );
   }
-  return result;
+  return stretchFactoryShapes(result, params.stretchX, params.stretchY).map(
+    (shape) => ({
+      ...shape,
+      ...(solidWidgetKinds.has(kind)
+        ? { strokeWidth: params.strokeWidth, opacity: params.opacity }
+        : {}),
+    }),
+  );
 };
 
 export const readWidgets = (api: ExcalidrawImperativeAPI): Widget[] => {
@@ -465,7 +456,12 @@ export const renderWidget = (
   api: ExcalidrawImperativeAPI,
   widget: Widget,
   remember = true,
-  transaction: { before?: readonly InkStroke[]; preview?: boolean } = {},
+  transaction: {
+    before?: readonly InkStroke[];
+    preview?: boolean;
+    exact?: boolean;
+    onDocumentCommit?: (commit: Promise<unknown>) => void;
+  } = {},
 ) => {
   const document = classroomCommands.read("document") as
     | { ink: InkStroke[]; pen?: { color: string } }
@@ -525,7 +521,13 @@ export const renderWidget = (
         Math.min(viewport.bottom - height, widget.position.y + bounds[1]),
       ),
     };
-    if (!found) {
+    if (transaction.exact) {
+      point = {
+        x: widget.position.x + bounds[0],
+        y: widget.position.y + bounds[1],
+      };
+    }
+    if (!found && !transaction.exact) {
       const obstacles =
         layout?.obstacles ||
         existing
@@ -557,6 +559,7 @@ export const renderWidget = (
   }
   if (
     !isSolid &&
+    !transaction.exact &&
     !classroomCommands.has("document.widget") &&
     !existing.some((element) => element.customData?.fcWidget?.id === widget.id)
   ) {
@@ -598,10 +601,11 @@ export const renderWidget = (
     { regenerateIds: false },
   );
   if (classroomCommands.has("document.widget")) {
-    void classroomCommands.execute({
+    const commit = classroomCommands.execute({
       name: "document.widget",
       args: { widget, shapes: elements, remember, before: transaction.before },
     });
+    transaction.onDocumentCommit?.(commit);
     return elements;
   }
   api.updateScene({

@@ -36,12 +36,11 @@ describe("unified bottom toolbar", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
     expect(screen.getByTestId("toolbar-rectangle")).toBeInTheDocument();
-    fireEvent.keyDown(
-      screen.getByRole("dialog", { name: t("fcboard.insert_tools") }),
-      {
-        key: "Escape",
-      },
-    );
+    fireEvent.click(screen.getByTestId("toolbar-rectangle"));
+    expect(window.h.state.activeTool.type).toBe("rectangle");
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.insert_tools") }),
+    ).toBeNull();
     expect(toolbar.querySelector(".undo-redo-buttons")).toBeInTheDocument();
     expect(
       within(toolbar).getByRole("button", {
@@ -67,9 +66,7 @@ describe("unified bottom toolbar", () => {
         name: t("fcboard.pen_and_object_properties"),
       }),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.close_properties") }),
-    );
+    fireEvent.click(pen);
     expect(
       screen.queryByRole("dialog", {
         name: t("fcboard.pen_and_object_properties"),

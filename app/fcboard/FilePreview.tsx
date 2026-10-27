@@ -7,6 +7,8 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Popper from "@mui/material/Popper";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 import Slider from "@mui/material/Slider";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { FactoryPenSettings } from "@excalidraw/excalidraw/components/FactoryPenSettings";
 import {
   switchWhiteboardPen,
@@ -18,10 +20,10 @@ import factoryEraser from "@excalidraw/excalidraw/components/FactoryEraser.png?u
 import { pointFrom } from "@excalidraw/math";
 import {
   circleRegion,
+  hasRegionArea,
   regionPath,
   regionHandleAt,
   resizeRegion,
-  regionCorners,
 } from "@excalidraw/excalidraw/lasso/region";
 import {
   CloseIcon,
@@ -38,11 +40,7 @@ import {
   gridIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { Capacitor } from "@capacitor/core";
-import {
-  FONT_FAMILY,
-  getFontFamilyString,
-  DRAGGING_THRESHOLD,
-} from "@excalidraw/common";
+import { FONT_FAMILY, getFontFamilyString } from "@excalidraw/common";
 import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
 import { Fonts } from "@excalidraw/excalidraw/fonts";
 import {
@@ -66,9 +64,9 @@ import { useDeviceInkProfile } from "./ink";
 import {
   documentKey,
   documentStrokeBounds,
-  hitStroke,
-  selectDocumentRegion,
+  selectDocumentLasso,
   moveDocumentStroke,
+  scaleDocumentStroke,
   eraseDocumentInk,
   eraseDocumentObjects,
   htmlText,
@@ -98,6 +96,8 @@ import {
   insertionWritingText,
   insertionWritingTextIds,
 } from "./insertionWriting";
+import { growDocumentTableWriting } from "./insertionWritingTables";
+import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { drawPlot } from "./board";
 import { insertGeneratedImage } from "./imageGeneration";
 import { changeQuestionAnswer } from "./questionAnswer";
@@ -158,6 +158,13 @@ const StrokePath = ({ stroke }: { stroke: InkStroke }) => {
         strokeDashoffset={-geometry.dashOffset}
         opacity={(stroke.opacity ?? 100) / 100}
       />
+      {geometry.nib && (
+        <path
+          d={geometry.nib}
+          fill={stroke.color}
+          opacity={(stroke.opacity ?? 100) / 100}
+        />
+      )}
     </>
   );
 };
@@ -211,7 +218,7 @@ export const FilePreview = ({
 }: {
   api: ExcalidrawImperativeAPI;
   file: File;
-  onClose: (advance?: boolean) => void;
+  onClose: (advance?: boolean, source?: AbortSignal) => void;
   onVoice?: () => void;
   listening?: boolean;
   onReady?: (error?: string) => void;
@@ -267,8 +274,7 @@ export const FilePreview = ({
     bounds?: RegionBounds;
     handle: RegionHandle | null;
     origin: [number, number];
-    extent: RegionBounds;
-    started: boolean;
+    transformed?: RegionBounds;
   } | null>(null);
   const past = useRef<Record<number, InkStroke[][]>>({});
   const future = useRef<Record<number, InkStroke[][]>>({});
@@ -315,6 +321,7 @@ export const FilePreview = ({
   const currentTextRef = useRef("");
   const navigation = useRef(Promise.resolve());
   const navigationId = useRef(0);
+  const navigationSource = useRef<AbortSignal | undefined>(undefined);
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -384,8 +391,11 @@ export const FilePreview = ({
           instance.onLinkClick = () => true;
           instance.onChange = (index) => {
             if (index !== pageRef.current) {
-              classroomCommands.touch();
-              if (classroomCommands.has("lesson.pause")) {
+              classroomCommands.touch(navigationSource.current);
+              if (
+                !navigationSource.current &&
+                classroomCommands.has("lesson.pause")
+              ) {
                 void classroomCommands.execute({ name: "lesson.pause" });
               }
             }
@@ -533,15 +543,19 @@ export const FilePreview = ({
     return () => observer.disconnect();
   }, [ratio]);
   const navigate = useCallback(
-    (index: number) => {
+    (index: number, source?: AbortSignal) => {
       const task = (async () => {
+        source?.throwIfAborted();
         if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
           throw new Error(t("fcboard.page_number_out_of_range"));
         }
-        if (classroomCommands.has("lesson.pause")) {
+        if (!source && classroomCommands.has("lesson.pause")) {
           await classroomCommands.execute({ name: "lesson.pause" });
         }
-        classroomCommands.touch();
+        if (classroomCommands.has("mindmap.dismiss")) {
+          await classroomCommands.execute({ name: "mindmap.dismiss" });
+        }
+        classroomCommands.touch(source);
         const generation = ++navigationId.current;
         setScroll(0);
         setLasso([]);
@@ -549,7 +563,12 @@ export const FilePreview = ({
         draftRef.current = null;
         setDraft(null);
         if (viewer.current) {
-          viewer.current.goTo(index);
+          navigationSource.current = source;
+          try {
+            viewer.current.goTo(index);
+          } finally {
+            navigationSource.current = undefined;
+          }
           pageRef.current = index;
           setPage(index);
         } else if (office.current) {
@@ -598,39 +617,62 @@ export const FilePreview = ({
     return () => window.removeEventListener("message", receive);
   }, [html]);
 
-  const next = useCallback(async () => {
-    if (classroomCommands.has("lesson.pause")) {
-      void classroomCommands.execute({ name: "lesson.pause" });
-    }
-    classroomCommands.touch();
-    if (viewer.current) {
-      viewer.current.next();
-    } else {
-      await navigate(Math.min(pages.length - 1, pageRef.current + 1));
-    }
-  }, [pages.length, navigate]);
-  const previous = useCallback(async () => {
-    if (classroomCommands.has("lesson.pause")) {
-      void classroomCommands.execute({ name: "lesson.pause" });
-    }
-    classroomCommands.touch();
-    if (viewer.current) {
-      viewer.current.prev();
-    } else {
-      await navigate(Math.max(0, pageRef.current - 1));
-    }
-  }, [navigate]);
+  const next = useCallback(
+    async (source?: AbortSignal) => {
+      source?.throwIfAborted();
+      if (!source && classroomCommands.has("lesson.pause")) {
+        void classroomCommands.execute({ name: "lesson.pause" });
+      }
+      classroomCommands.touch(source);
+      if (viewer.current) {
+        navigationSource.current = source;
+        try {
+          viewer.current.next();
+        } finally {
+          navigationSource.current = undefined;
+        }
+      } else {
+        await navigate(Math.min(pages.length - 1, pageRef.current + 1), source);
+      }
+    },
+    [pages.length, navigate],
+  );
+  const previous = useCallback(
+    async (source?: AbortSignal) => {
+      source?.throwIfAborted();
+      if (!source && classroomCommands.has("lesson.pause")) {
+        void classroomCommands.execute({ name: "lesson.pause" });
+      }
+      classroomCommands.touch(source);
+      if (viewer.current) {
+        navigationSource.current = source;
+        try {
+          viewer.current.prev();
+        } finally {
+          navigationSource.current = undefined;
+        }
+      } else {
+        await navigate(Math.max(0, pageRef.current - 1), source);
+      }
+    },
+    [navigate],
+  );
   const close = useCallback(
-    async (advance = true) => {
+    async (advance = true, source?: AbortSignal) => {
       try {
-        if (classroomCommands.has("lesson.pause")) {
+        source?.throwIfAborted();
+        if (classroomCommands.has("mindmap.dismiss")) {
+          await classroomCommands.execute({ name: "mindmap.dismiss" });
+        }
+        if (!source && classroomCommands.has("lesson.pause")) {
           await classroomCommands.execute({ name: "lesson.pause" });
         }
         await saveQueue.current.catch(() => {});
         if (key && ready) {
           await saveInk(key, inkRef.current);
         }
-        onClose(advance);
+        source?.throwIfAborted();
+        onClose(advance, source);
       } catch {
         setNotice(
           t("fcboard.annotations_have_not_been_saved_please_try_again_shortly"),
@@ -663,9 +705,12 @@ export const FilePreview = ({
       classroomCommands.register(
         "document.next",
         "下一页课件；若有当前页动画，先播放动画",
-        next,
+        (args) =>
+          next(args.signal instanceof AbortSignal ? args.signal : undefined),
       ),
-      classroomCommands.register("document.previous", "上一页课件", previous),
+      classroomCommands.register("document.previous", "上一页课件", (args) =>
+        previous(args.signal instanceof AbortSignal ? args.signal : undefined),
+      ),
       classroomCommands.register(
         "document.page",
         "跳转课件到 args.page（从1开始）",
@@ -674,7 +719,10 @@ export const FilePreview = ({
           if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
             throw new Error(t("fcboard.page_number_out_of_range"));
           }
-          return navigate(index);
+          return navigate(
+            index,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          );
         },
       ),
       classroomCommands.register(
@@ -924,6 +972,11 @@ export const FilePreview = ({
             throw new Error(t("fcboard.invalid_annotation_color"));
           }
           if (penMode || assist) {
+            setInkOn(true);
+            setErase(false);
+            setSelecting(false);
+            selectedInkRef.current = [];
+            setLasso([]);
             api.updateScene({
               appState: {
                 ...switchWhiteboardPen(api.getAppState(), penMode || "hard"),
@@ -1081,7 +1134,7 @@ export const FilePreview = ({
             : pen.current.fontSize / scale);
         const layout = layoutBoardText(
           args.text,
-          measuredSize,
+          measuredSize * (source && !source.text && !source.image ? 0.9 : 1),
           fontFamily,
           viewport,
           strokes
@@ -1230,7 +1283,11 @@ export const FilePreview = ({
       classroomCommands.register(
         "document.close",
         "关闭课件并返回白板，板书自动保存",
-        (args) => close(args.next !== false),
+        (args) =>
+          close(
+            args.next !== false,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.context("document.layout", () => ({
         ...visibleDocumentArea(stage.current, size, zoomRef.current, scroll),
@@ -1265,49 +1322,69 @@ export const FilePreview = ({
           scroll,
         },
       })),
-      classroomCommands.register("document.snapshot", "@internal", async () => {
-        await navigation.current;
-        if (Capacitor.isNativePlatform() && stage.current) {
-          const rect = stage.current.getBoundingClientRect();
-          const capture = await NativeClassroom.captureFrame({
-            region: {
-              x: Math.max(0, rect.left) / innerWidth,
-              y: Math.max(0, rect.top) / innerHeight,
-              width:
-                (Math.min(innerWidth, rect.right) - Math.max(0, rect.left)) /
-                innerWidth,
-              height:
-                (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top)) /
-                innerHeight,
-            },
-          });
+      classroomCommands.register(
+        "document.snapshot",
+        "@internal",
+        async (args) => {
+          await navigation.current;
+          const current = inkRef.current[pageRef.current] || [];
+          const liveDraft =
+            gesturePage.current === pageRef.current &&
+            !selectionGesture.current &&
+            !erasing.current
+              ? draftRef.current
+              : null;
+          const snapshotInk = liveDraft ? [...current, liveDraft] : current;
+          if (args.capture === false) {
+            return {
+              text: currentTextRef.current,
+              name: file.name,
+              page: pageRef.current + 1,
+              ink: snapshotInk,
+            };
+          }
+          if (Capacitor.isNativePlatform() && stage.current) {
+            const rect = stage.current.getBoundingClientRect();
+            const capture = await NativeClassroom.captureFrame({
+              region: {
+                x: Math.max(0, rect.left) / innerWidth,
+                y: Math.max(0, rect.top) / innerHeight,
+                width:
+                  (Math.min(innerWidth, rect.right) - Math.max(0, rect.left)) /
+                  innerWidth,
+                height:
+                  (Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top)) /
+                  innerHeight,
+              },
+            });
+            return {
+              text: currentTextRef.current,
+              name: file.name,
+              page: pageRef.current + 1,
+              image: capture.image,
+              ink: snapshotInk,
+            };
+          }
+          const background = viewer.current
+            ? await viewer.current.exportPng(1)
+            : isImage
+            ? file
+            : undefined;
+          const image = await inkSnapshot(
+            snapshotInk,
+            (size.height / Math.max(1, size.width)) * 1000,
+            background,
+            scroll,
+          );
           return {
             text: currentTextRef.current,
             name: file.name,
             page: pageRef.current + 1,
-            image: capture.image,
-            ink: inkRef.current[pageRef.current] || [],
+            image,
+            ink: snapshotInk,
           };
-        }
-        const background = viewer.current
-          ? await viewer.current.exportPng(1)
-          : isImage
-          ? file
-          : undefined;
-        const image = await inkSnapshot(
-          inkRef.current[pageRef.current] || [],
-          (size.height / Math.max(1, size.width)) * 1000,
-          background,
-          scroll,
-        );
-        return {
-          text: currentTextRef.current,
-          name: file.name,
-          page: pageRef.current + 1,
-          image,
-          ink: inkRef.current[pageRef.current] || [],
-        };
-      }),
+        },
+      ),
       classroomCommands.register("document.answer", "@internal", (args) => {
         const page = pageRef.current;
         const items = inkRef.current[page] || [];
@@ -1551,8 +1628,11 @@ export const FilePreview = ({
           ...inkRef.current,
           [page]: [...current, shapeInk(element, "resource")],
         });
-        setInkOn(false);
-        setSelecting(false);
+        selectedInkRef.current = [];
+        setLasso([]);
+        setErase(false);
+        setInkOn(true);
+        setSelecting(true);
         return { ids: [element.id] };
       }),
       classroomCommands.register("document.insertion", "@internal", (args) => {
@@ -1562,16 +1642,76 @@ export const FilePreview = ({
         const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
           (shape) => shapeInk(shape, "insertion"),
         );
-        commitInk({
-          ...inkRef.current,
-          [page]: [
+        const before = args.before as InkStroke[] | undefined;
+        if (
+          before !== undefined &&
+          (!Array.isArray(before) ||
+            !before.length ||
+            before.some((stroke) => stroke.insertion?.id !== args.id))
+        ) {
+          throw new Error(t("fcboard.invalid_insertion_data"));
+        }
+        const table = strokes[0]?.insertion;
+        const handwriting = (inkRef.current[page] || []).flatMap((stroke) => {
+          const owner = stroke.insertion;
+          if (
+            !table ||
+            !owner ||
+            owner.id !== args.id ||
+            owner.inkCell === undefined
+          ) {
+            return [];
+          }
+          const dx = table.position.x - owner.position.x;
+          const dy = table.position.y - owner.position.y;
+          return [
+            {
+              ...stroke,
+              points: stroke.points.map(([x, y]): [number, number] => [
+                x + dx,
+                y + dy,
+              ]),
+              insertion: {
+                ...owner,
+                ...table,
+                inkCell: owner.inkCell,
+                origin: { x: owner.origin.x + dx, y: owner.origin.y + dy },
+              },
+            },
+          ];
+        });
+        commitInk(
+          {
+            ...inkRef.current,
+            [page]: [
+              ...(inkRef.current[page] || []).filter(
+                (stroke) => stroke.insertion?.id !== args.id,
+              ),
+              ...strokes,
+              ...handwriting,
+            ],
+          },
+          args.before === undefined && args.remember !== false,
+        );
+        if (before !== undefined) {
+          const history = (past.current[page] ||= []);
+          history.push([
             ...(inkRef.current[page] || []).filter(
               (stroke) => stroke.insertion?.id !== args.id,
             ),
-            ...strokes,
-          ],
-        });
-        selectedInkRef.current = strokes.map((stroke) => stroke.id);
+            ...before,
+          ]);
+          if (history.length > 100) {
+            history.shift();
+          }
+          future.current[page] = [];
+          refreshHistory((value) => value + 1);
+        }
+        if (args.select !== false) {
+          selectedInkRef.current = [...strokes, ...handwriting].map(
+            (stroke) => stroke.id,
+          );
+        }
         classroomCommands.changed("document");
       }),
       classroomCommands.register("document.widget", "@internal", (args) => {
@@ -1713,6 +1853,7 @@ export const FilePreview = ({
         stroke.lesson ||
         stroke.questionInput ||
         stroke.language ||
+        stroke.insertion?.inkCell !== undefined ||
         !stroke.fcInk ||
         recognized.current.has(stroke.id)
       ) {
@@ -1772,6 +1913,23 @@ export const FilePreview = ({
             source.map((stroke) => stroke.points),
             request.signal,
             target?.insertion.kind === "fourline" ? "en-US" : undefined,
+            target
+              ? (candidates) => {
+                  const rect = stage.current?.getBoundingClientRect();
+                  const scale = (rect?.width || 1000) / 1000;
+                  return chooseInsertionCandidate(
+                    candidates,
+                    {
+                      x: (rect?.left || 0) + target.x * scale,
+                      y:
+                        (rect?.top || 0) +
+                        (target.y + target.height - scroll) * scale +
+                        8,
+                    },
+                    request.signal,
+                  );
+                }
+              : undefined,
           );
           await settleInkRecognition(assistMode, since, request.signal);
           if (!current()) {
@@ -1976,7 +2134,7 @@ export const FilePreview = ({
       );
     }
     if (selectionGesture.current) {
-      if (selectionGesture.current.handle === "move") {
+      if (selectionGesture.current.handle) {
         commitInk(
           { ...inkRef.current, [gesturePage.current]: gestureBefore.current },
           false,
@@ -2030,6 +2188,16 @@ export const FilePreview = ({
           inkProfile?.palmThreshold ??
           36,
       ));
+  const applyEraserMode = (eraserMode: "stroke" | "object") => {
+    try {
+      applyCanvasConfiguration(
+        api,
+        canvasConfigurationPatch(api, { eraserMode }, inkProfile),
+      );
+    } catch (failure) {
+      setNotice(failure instanceof Error ? failure.message : String(failure));
+    }
+  };
   const startErasure = (
     event: React.PointerEvent<SVGSVGElement>,
     position: [number, number],
@@ -2120,17 +2288,52 @@ export const FilePreview = ({
           false,
         );
       } else {
-        setLasso(
-          regionPath(
-            resizeRegion(
-              selection.bounds,
-              selection.handle,
-              { x, y },
-              area.viewport,
-              area.scale,
-            ),
-          ),
+        const requested = resizeRegion(
+          selection.bounds,
+          selection.handle,
+          { x, y },
+          area.viewport,
+          area.scale,
         );
+        const scale =
+          ((requested.right - requested.left) /
+            (selection.bounds.right - selection.bounds.left) +
+            (requested.bottom - requested.top) /
+              (selection.bounds.bottom - selection.bounds.top)) /
+          2;
+        const anchor = {
+          x: selection.handle.endsWith("w")
+            ? selection.bounds.right
+            : selection.bounds.left,
+          y: selection.handle.startsWith("n")
+            ? selection.bounds.bottom
+            : selection.bounds.top,
+        };
+        const bounds = {
+          left: anchor.x + (selection.bounds.left - anchor.x) * scale,
+          top: anchor.y + (selection.bounds.top - anchor.y) * scale,
+          right: anchor.x + (selection.bounds.right - anchor.x) * scale,
+          bottom: anchor.y + (selection.bounds.bottom - anchor.y) * scale,
+        };
+        selection.transformed = bounds;
+        setLasso(regionPath(bounds));
+        const ids = new Set(selection.ids);
+        if (scale !== 1 || inkRef.current[page] !== gestureBefore.current) {
+          commitInk(
+            {
+              ...inkRef.current,
+              [page]:
+                scale === 1
+                  ? gestureBefore.current
+                  : gestureBefore.current.map((stroke) =>
+                      ids.has(stroke.id)
+                        ? scaleDocumentStroke(stroke, anchor, scale)
+                        : stroke,
+                    ),
+            },
+            false,
+          );
+        }
       }
       return true;
     }
@@ -2147,25 +2350,6 @@ export const FilePreview = ({
       samples.slice(from).forEach(removeAt);
       setEraserPreview({ ...erasing.current, position: samples.at(-1)! });
     } else if (draftRef.current) {
-      if (selection && !selection.started) {
-        const bounds = selection.extent;
-        for (const [x, y] of samples) {
-          bounds.left = Math.min(bounds.left, x);
-          bounds.right = Math.max(bounds.right, x);
-          bounds.top = Math.min(bounds.top, y);
-          bounds.bottom = Math.max(bounds.bottom, y);
-        }
-        if (
-          (Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top) *
-            rect.width) /
-            1000 >=
-          DRAGGING_THRESHOLD
-        ) {
-          selection.started = true;
-          selectedInkRef.current = [];
-          setLasso([]);
-        }
-      }
       const stroke = {
         ...draftRef.current,
         points: [...draftRef.current.points, ...samples],
@@ -2212,16 +2396,22 @@ export const FilePreview = ({
           } else if (inkOn) {
             setInkOn(false);
           } else {
-            void close().catch(() => {});
+            void close(true, classroomCommands.interactionSource).catch(
+              () => {},
+            );
           }
         }
         if (event.key === "ArrowRight") {
           event.preventDefault();
-          void next().catch((failure) => setNotice(String(failure)));
+          void next(classroomCommands.interactionSource).catch((failure) =>
+            setNotice(String(failure)),
+          );
         }
         if (event.key === "ArrowLeft") {
           event.preventDefault();
-          void previous().catch((failure) => setNotice(String(failure)));
+          void previous(classroomCommands.interactionSource).catch((failure) =>
+            setNotice(String(failure)),
+          );
         }
       }}
     >
@@ -2373,18 +2563,13 @@ export const FilePreview = ({
                     bounds,
                     handle,
                     origin,
-                    extent: {
-                      left: origin[0],
-                      right: origin[0],
-                      top: origin[1],
-                      bottom: origin[1],
-                    },
-                    started: false,
                   };
                   classroomCommands.changed("document");
                   if (handle) {
                     return;
                   }
+                  selectedInkRef.current = [];
+                  setLasso([]);
                 }
                 const style = whiteboardInkStyle(
                   api.getAppState(),
@@ -2415,7 +2600,6 @@ export const FilePreview = ({
               if (!updateInkGesture(event)) {
                 return;
               }
-              let inspectPlot = false;
               if (selecting && selectionGesture.current) {
                 const area = visibleDocumentArea(
                   stage.current,
@@ -2445,41 +2629,49 @@ export const FilePreview = ({
                           end[1] -
                           selection.origin[1],
                       }
-                    : resizeRegion(
-                        selection.bounds,
-                        selection.handle,
-                        { x: end[0], y: end[1] },
-                        area.viewport,
-                        area.scale,
-                      )
+                    : selection.transformed || selection.bounds
                   : undefined;
-                selectedInkRef.current =
-                  selection.handle === "move"
-                    ? selection.ids
-                    : bounds
-                    ? selectDocumentRegion(inkRef.current[page] || [], bounds)
-                    : selection.ids;
-                setLasso(bounds ? regionPath(bounds) : selection.before);
-                // A deliberate plot tap keeps the existing parameter editor.
-                // Ordinary taps and circle gestures never enter object editing.
+                selectedInkRef.current = selection.handle
+                  ? selection.ids
+                  : bounds &&
+                    draftRef.current &&
+                    hasRegionArea(draftRef.current.points)
+                  ? selectDocumentLasso(
+                      inkRef.current[page] || [],
+                      draftRef.current.points,
+                    )
+                  : [];
+                const selected = (inkRef.current[page] || []).filter((stroke) =>
+                  selectedInkRef.current.includes(stroke.id),
+                );
+                const selectedBounds = selected.map(documentStrokeBounds);
+                const padding = 20 / area.scale;
+                const operation =
+                  !selection.handle && bounds && selectedBounds.length
+                    ? {
+                        left:
+                          Math.min(
+                            ...selectedBounds.map((value) => value.left),
+                          ) - padding,
+                        top:
+                          Math.min(
+                            ...selectedBounds.map((value) => value.top),
+                          ) - padding,
+                        right:
+                          Math.max(
+                            ...selectedBounds.map((value) => value.right),
+                          ) + padding,
+                        bottom:
+                          Math.max(
+                            ...selectedBounds.map((value) => value.bottom),
+                          ) + padding,
+                      }
+                    : selection.handle
+                    ? bounds
+                    : undefined;
+                setLasso(operation ? regionPath(operation) : []);
                 if (
-                  !bounds &&
-                  !selection.handle &&
-                  classroomCommands.has("math.inspect")
-                ) {
-                  const plot = gestureBefore.current.find(
-                    (stroke) =>
-                      stroke.plot && hitStroke(stroke, selection.origin),
-                  )?.plot;
-                  if (plot) {
-                    selectedInkRef.current = gestureBefore.current
-                      .filter((stroke) => stroke.plot?.id === plot.id)
-                      .map((stroke) => stroke.id);
-                    inspectPlot = true;
-                  }
-                }
-                if (
-                  selectionGesture.current.handle === "move" &&
+                  selectionGesture.current.handle &&
                   gestureBefore.current !== inkRef.current[page]
                 ) {
                   (past.current[page] ||= []).push(gestureBefore.current);
@@ -2494,7 +2686,12 @@ export const FilePreview = ({
                 };
                 commitInk({
                   ...inkRef.current,
-                  [page]: [...(inkRef.current[page] || []), stroke],
+                  [page]: [
+                    ...growDocumentTableWriting(
+                      [...(inkRef.current[page] || []), stroke],
+                      new Set([stroke.id]),
+                    ),
+                  ],
                 });
               } else if (
                 erasing.current &&
@@ -2515,9 +2712,6 @@ export const FilePreview = ({
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId);
               }
-              if (inspectPlot) {
-                void classroomCommands.execute({ name: "math.inspect" });
-              }
             }}
             onPointerCancel={(event) => {
               if (activePointer.current?.id === event.pointerId) {
@@ -2535,7 +2729,7 @@ export const FilePreview = ({
                 data-document-region
                 pointerEvents="none"
                 fill="none"
-                stroke="#245bd6"
+                stroke="#0b6ff3"
               >
                 <rect
                   x={regionBounds.left}
@@ -2543,17 +2737,6 @@ export const FilePreview = ({
                   width={regionBounds.right - regionBounds.left}
                   height={regionBounds.bottom - regionBounds.top}
                   strokeWidth="1.5"
-                  vectorEffect="non-scaling-stroke"
-                  strokeDasharray="4 4"
-                />
-                <path
-                  d={regionCorners(regionBounds, (size.width * zoom) / 1000)
-                    .map(
-                      (points) =>
-                        `M${points.map((point) => point.join(",")).join(" L")}`,
-                    )
-                    .join(" ")}
-                  strokeWidth="3"
                   vectorEffect="non-scaling-stroke"
                 />
               </g>
@@ -2567,7 +2750,12 @@ export const FilePreview = ({
                   width={stroke.resource.width}
                   height={stroke.resource.height}
                   opacity={(stroke.opacity ?? 100) / 100}
-                  style={{ pointerEvents: inkOn ? "none" : "auto" }}
+                  style={{
+                    pointerEvents:
+                      (inkOn && !selecting) || activePointer.current
+                        ? "none"
+                        : "auto",
+                  }}
                 >
                   <InteractiveResourceFrame
                     resource={stroke.resource}
@@ -2693,38 +2881,45 @@ export const FilePreview = ({
               role="dialog"
               aria-label={t("fcboard.eraser_settings")}
             >
-              <label>
-                {t("fcboard.erase_mode")}
-                <MaterialSelect
+              <div className="fc-eraser-mode">
+                <span>{t("fcboard.erase_mode")}</span>
+                <ToggleButtonGroup
                   aria-label={t("fcboard.erase_mode")}
+                  exclusive
+                  size="small"
+                  orientation="horizontal"
                   value={penState.eraserMode || "stroke"}
-                  onChange={(event) => {
-                    try {
-                      applyCanvasConfiguration(
-                        api,
-                        canvasConfigurationPatch(
-                          api,
-                          { eraserMode: event.target.value },
-                          inkProfile,
-                        ),
-                      );
-                    } catch (failure) {
-                      setNotice(
-                        failure instanceof Error
-                          ? failure.message
-                          : String(failure),
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "ArrowLeft" ||
+                      event.key === "ArrowRight"
+                    ) {
+                      event.preventDefault();
+                      applyEraserMode(
+                        event.key === "ArrowLeft" ? "stroke" : "object",
                       );
                     }
                   }}
+                  onChange={(_event, mode: "stroke" | "object" | null) => {
+                    if (mode) {
+                      applyEraserMode(mode);
+                    }
+                  }}
                 >
-                  <option value="stroke">
+                  <ToggleButton
+                    value="stroke"
+                    aria-label={t("fcboard.erase_part_of_a_stroke")}
+                  >
                     {t("fcboard.erase_part_of_a_stroke")}
-                  </option>
-                  <option value="object">
+                  </ToggleButton>
+                  <ToggleButton
+                    value="object"
+                    aria-label={t("fcboard.erase_entire_object")}
+                  >
                     {t("fcboard.erase_entire_object")}
-                  </option>
-                </MaterialSelect>
-              </label>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </div>
               <label>
                 {t("fcboard.eraser_size_screen_pixels")}
                 <Slider
@@ -2766,7 +2961,9 @@ export const FilePreview = ({
           aria-label={t("fcboard.close_document")}
           title={t("fcboard.return_to_board")}
           onClick={() => {
-            void close().catch(() => {});
+            void close(true, classroomCommands.interactionSource).catch(
+              () => {},
+            );
           }}
         >
           {CloseIcon}
@@ -2779,7 +2976,9 @@ export const FilePreview = ({
           aria-label={t("fcboard.previous_page")}
           disabled={page === 0 || loading}
           onClick={() => {
-            void previous().catch((failure) => setError(String(failure)));
+            void previous(classroomCommands.interactionSource).catch(
+              (failure) => setError(String(failure)),
+            );
           }}
         >
           {chevronLeftIcon}
@@ -2790,9 +2989,10 @@ export const FilePreview = ({
           value={page}
           disabled={loading}
           onChange={(event) => {
-            void navigate(Number(event.target.value)).catch((failure) =>
-              setError(String(failure)),
-            );
+            void navigate(
+              Number(event.target.value),
+              classroomCommands.interactionSource,
+            ).catch((failure) => setError(String(failure)));
           }}
         >
           {pages.map((view, index) => (
@@ -2808,7 +3008,9 @@ export const FilePreview = ({
           aria-label={t("fcboard.next_page")}
           disabled={loading || (page >= pages.length - 1 && !pendingAnimation)}
           onClick={() => {
-            void next().catch((failure) => setError(String(failure)));
+            void next(classroomCommands.interactionSource).catch((failure) =>
+              setError(String(failure)),
+            );
           }}
         >
           {chevronRight}

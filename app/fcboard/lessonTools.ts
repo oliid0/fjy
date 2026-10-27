@@ -30,10 +30,15 @@ const lifecycle = new Set([
 // A failed assertion retries this read, never the preceding successful mutation.
 const inspections = new Set([
   "canvas.inspect",
+  "ui.inspect",
   "resources.inspect",
   "resources.list",
   "math.evaluate",
 ]);
+export const isLessonInspection = (tool: Command) =>
+  inspections.has(tool.name) ||
+  (["web.action", "signal.action"].includes(tool.name) &&
+    (tool.args?.action === undefined || tool.args.action === "read"));
 const invalid = () => new Error(t("fcboard.invalid_lesson_command"));
 const isJson = (value: unknown, depth = 0): boolean => {
   if (
@@ -94,7 +99,7 @@ export const validateLessonTools = (value: unknown): LessonTool[] => {
     }
     if (
       tool.expect !== undefined &&
-      (!inspections.has(tool.name) ||
+      (!isLessonInspection(tool as Command) ||
         !Array.isArray(tool.expect) ||
         !tool.expect.length ||
         tool.expect.length > 10)
@@ -172,7 +177,7 @@ export const lessonToolResumeIndex = (
 ) => {
   let start = completed;
   for (let index = completed - 1; index >= 0; index--) {
-    if (!inspections.has(tools[index].name)) {
+    if (!isLessonInspection(tools[index])) {
       break;
     }
     if (tools[index].expect?.length) {

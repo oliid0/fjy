@@ -88,6 +88,14 @@ export const duplicateElement = <TElement extends ExcalidrawElement>(
     },
   );
   const insertion = copy.customData?.fcInsertion;
+  const widget = copy.customData?.fcWidget;
+  const widgetId = widget && groupIdMapForOperation.get(widget.id);
+  if (widgetId) {
+    copy.customData = {
+      ...copy.customData,
+      fcWidget: { ...widget, id: widgetId },
+    };
+  }
   const language = copy.customData?.fcLanguage;
   const languageId = language && groupIdMapForOperation.get(language.group);
   if (languageId) {

@@ -24,6 +24,7 @@ export type Settings = {
   ttsKey: string;
   autoSummary: boolean;
   autoMath: boolean;
+  selectionImages: boolean;
   answerStyle: "match" | "handwritten" | "text";
 };
 
@@ -45,6 +46,7 @@ export const defaults: Settings = {
   ttsKey: "",
   autoSummary: true,
   autoMath: false,
+  selectionImages: false,
   answerStyle: "match",
 };
 
@@ -57,6 +59,7 @@ export const loadSettings = (): Settings => {
       ...saved,
       model: saved.model?.trim() || defaults.model,
       imageModel: saved.imageModel?.trim() || defaults.imageModel,
+      selectionImages: saved.selectionImages === true,
     };
   } catch {
     return {

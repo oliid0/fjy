@@ -97,11 +97,7 @@ test("a small eraser cuts the displayed bend rather than the raw handwriting sam
   const eraser = page.getByRole("button", { name: "橡皮", exact: true });
   await eraser.click();
   await eraser.click();
-  await page.getByText("触控与橡皮设置", { exact: true }).click();
-  const size = page.getByRole("slider", { name: /^橡皮大小/ });
-  await size.press("Home");
-  await expect(size).toHaveValue("12");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "小橡皮", exact: true }).click();
   await expect(eraser).toHaveClass(/ToolIcon--selected/);
   await page.mouse.click(200, 350);
   await expect.poll(() => pixel(200, 350)).toEqual([255, 255, 255, 255]);
@@ -126,7 +122,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
     await thickness.press("ArrowRight");
   }
   await expect(thickness).toHaveValue("12");
-  await page.getByRole("button", { name: "关闭属性", exact: true }).click();
+  await pen.click();
   await page.mouse.move(100, 200);
   await page.mouse.down();
   await page.mouse.move(1100, 200, { steps: 24 });
@@ -203,7 +199,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   });
 });
 
-test("the existing share menu exports the chosen saved page as an actual PNG", async ({
+test("the share menu confirms pages and exports the chosen saved page as an actual JPEG", async ({
   page,
 }) => {
   await page.goto("/");
@@ -219,14 +215,14 @@ test("the existing share menu exports the chosen saved page as an actual PNG", a
   const share = page.getByRole("dialog", { name: "分享白板", exact: true });
   await share.getByRole("checkbox", { name: /第 2 页/ }).uncheck();
   await share.getByRole("checkbox", { name: /第 1 页/ }).check();
+  await share.getByRole("button", { name: "确认", exact: true }).click();
   const downloaded = page.waitForEvent("download");
   await share.getByRole("button", { name: "下载选中页面" }).click();
   const file = await downloaded;
-  expect(file.suggestedFilename()).toBe("Fcboard-1.png");
+  expect(file.suggestedFilename()).toBe("Fcboard-1.jpg");
   const data = await readFile((await file.path())!);
-  expect(Array.from(data.subarray(0, 8))).toEqual([
-    137, 80, 78, 71, 13, 10, 26, 10,
-  ]);
+  expect(Array.from(data.subarray(0, 3))).toEqual([255, 216, 255]);
+  expect(Array.from(data.subarray(-2))).toEqual([255, 217]);
   await share.getByRole("button", { name: "关闭分享" }).click();
   await expect(share).toHaveCount(0);
 });
@@ -408,8 +404,31 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   ).toHaveCount(0);
   await toolbar.getByRole("button", { name: "插入", exact: true }).click();
   await page.getByRole("button", { name: "图形", exact: true }).click();
-  await expect(page.getByTestId("toolbar-rectangle")).toBeVisible();
-  await page.keyboard.press("Escape");
+  const shapes = page.locator(".fc-factory-shape-grid");
+  await expect(shapes.getByRole("button")).toHaveCount(20);
+  await shapes.getByTestId("factory-shape-rectangle").click();
+  await page.mouse.move(120, 120);
+  await page.mouse.down();
+  await page.mouse.move(320, 260, { steps: 8 });
+  await page.mouse.up();
+  await expect(shapes).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            (element: {
+              isDeleted?: boolean;
+              customData?: {
+                fcWidget?: { params?: { shape?: { kind?: string } } };
+              };
+            }) =>
+              !element.isDeleted &&
+              element.customData?.fcWidget?.params?.shape?.kind === "rectangle",
+          ).length,
+      ),
+    )
+    .toBe(1);
   const eraser = toolbar.getByRole("button", { name: "橡皮", exact: true });
   await eraser.click();
   await eraser.click();
@@ -532,7 +551,7 @@ test("chalkboard background and white writing remain literal in a dark interface
   });
 });
 
-test("circle selection resizes one region and keeps copy, deletion and undo on complete objects", async ({
+test("circle selection scales its complete object without absorbing nearby ink; copy, deletion and undo preserve it", async ({
   page,
 }, info) => {
   await page.goto("/");
@@ -556,22 +575,42 @@ test("circle selection resizes one region and keeps copy, deletion and undo on c
   await select.click();
   await page.mouse.move(90, 90);
   await page.mouse.down();
-  await page.mouse.move(180, 180, { steps: 6 });
+  for (const [x, y] of [
+    [180, 90],
+    [180, 180],
+    [90, 180],
+    [90, 90],
+  ]) {
+    await page.mouse.move(x, y, { steps: 4 });
+  }
   await page.mouse.up();
   const actions = page.getByRole("toolbar", { name: "选区操作" });
   await expect(actions).toBeVisible();
   await page.mouse.click(135, 135, { button: "right" });
   await expect(page.locator(".context-menu")).toHaveCount(0);
   await expect(actions).toBeVisible();
-  await page.mouse.move(192, 192);
+  const before = await strokes();
+  await page.mouse.move(
+    before[0].x + before[0].width + 20,
+    before[0].y + before[0].height + 20,
+  );
   await page.mouse.down();
   await page.mouse.move(380, 200, { steps: 6 });
   await page.mouse.up();
+  await expect
+    .poll(async () => (await strokes())[0].width)
+    .toBeGreaterThan(before[0].width);
+  expect((await strokes())[1]).toMatchObject({
+    id: before[1].id,
+    x: before[1].x,
+    y: before[1].y,
+    width: before[1].width,
+  });
   await page.screenshot({ path: info.outputPath("one-adjustable-region.png") });
   await actions.getByRole("button", { name: "拷贝", exact: true }).click();
-  await expect.poll(async () => (await strokes()).length).toBe(4);
+  await expect.poll(async () => (await strokes()).length).toBe(3);
   await actions.getByRole("button", { name: "删除", exact: true }).click();
   await expect.poll(async () => (await strokes()).length).toBe(2);
   await page.getByTestId("button-undo").click();
-  await expect.poll(async () => (await strokes()).length).toBe(4);
+  await expect.poll(async () => (await strokes()).length).toBe(3);
 });

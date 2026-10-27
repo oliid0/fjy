@@ -24,6 +24,9 @@ import { useAnchoredPanel, placePanel } from "./floating";
 import { classroomCommands } from "./commands";
 import { Classroom } from "./native";
 import { animateSolid } from "./solidAnimation";
+import { FactoryGizmos } from "./FactoryGizmos";
+import { FactoryShapes } from "./FactoryShapes";
+import { factoryGizmoColor, factoryGizmoKinds } from "./factoryGizmoShapes";
 import {
   configureWidget,
   readWidgets,
@@ -80,6 +83,7 @@ const labels = {
 export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   useI18n();
   const [open, setOpen] = useState(false);
+  const [toolPage, setToolPage] = useState(0);
   const [selected, setSelected] = useState<Widget | null>(null);
   const [lassoActive, setLassoActive] = useState(false);
   const selectedRef = useRef<Widget | null>(null);
@@ -403,14 +407,19 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         ? { x: 60, y: 60 }
         : insertionPoint(api),
     };
-    if (solidWidgetKinds.has(kind)) {
+    if (solidWidgetKinds.has(kind) || factoryGizmoKinds.has(kind)) {
       const document = classroomCommands.read("document") as
         | { pen?: { color: string } }
         | undefined;
-      widget.params.solid.stroke =
-        document?.pen?.color ||
-        api.getAppState().currentItemStrokeColor ||
-        "#17243c";
+      widget.params.solid.stroke = factoryGizmoKinds.has(kind)
+        ? factoryGizmoColor(
+            document
+              ? "#ffffff"
+              : api.getAppState().viewBackgroundColor || "#ffffff",
+          )
+        : document?.pen?.color ||
+          api.getAppState().currentItemStrokeColor ||
+          "#17243c";
     }
     const elements = renderWidget(api, widget);
     if (classroomCommands.has("document.select")) {
@@ -437,6 +446,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           void classroomCommands.execute({ name: "panel.close" });
         }
         api.updateScene({ appState: { toolbarHidden: false } });
+        setToolPage(0);
         setOpen(true);
       }),
       classroomCommands.register(
@@ -599,10 +609,27 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       aria-label={t("fcboard.insert_name", {
         name: t(`fcboard.${teachingTools[kind]}`),
       })}
+      style={{
+        order: (
+          {
+            ruler: 3,
+            compass: 4,
+            protractor: 5,
+            setSquare: 6,
+            timer: 9,
+          } as Partial<Record<WidgetKind, number>>
+        )[kind],
+      }}
       onClick={() => attempt(() => insert(kind))}
     >
-      {kind === "ruler" || kind === "protractor" ? (
-        <FactoryIcon name={kind} />
+      {factoryGizmoKinds.has(kind) ? (
+        <FactoryIcon
+          name={
+            kind === "setSquare"
+              ? "setSquare"
+              : (kind as "ruler" | "protractor" | "compass")
+          }
+        />
       ) : (
         <svg viewBox="-10 -20 380 280" aria-hidden="true">
           {widgetShapes({
@@ -659,6 +686,14 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     <ButtonBase
       key={command}
       type="button"
+      style={{
+        order:
+          command === "files.open"
+            ? 0
+            : command === "tools.spotlight"
+            ? 8
+            : undefined,
+      }}
       onClick={() => {
         setOpen(false);
         void classroomCommands
@@ -673,13 +708,14 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       <span>{label}</span>
     </ButtonBase>
   );
-  const entries = Object.entries(teachingTools) as [WidgetKind, string][];
+  const entries = Object.entries(teachingTools).filter(
+    ([kind]) => kind !== "shape",
+  ) as [WidgetKind, string][];
   const solids = solidWidgetKinds;
   return (
     <>
-      <ToolbarExtras placement="shapes">
-        {entries.filter(([kind]) => solids.has(kind)).map(widgetButton)}
-      </ToolbarExtras>
+      <FactoryGizmos api={api} />
+      <FactoryShapes api={api} />
       <ToolbarExtras>
         <div className="fc-toolbar-extras">
           <button
@@ -691,6 +727,7 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               if (classroomCommands.has("panel.close")) {
                 void classroomCommands.execute({ name: "panel.close" });
               }
+              setToolPage(0);
               setOpen(!open);
             }}
           >
@@ -713,89 +750,130 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             }
           }}
         >
-          <header>
-            <strong>{t("fcboard.teaching_tools")}</strong>
-            <button
-              aria-label={t("fcboard.close_teaching_tools")}
-              onClick={() => setOpen(false)}
-            >
-              {CloseIcon}
-            </button>
-          </header>
           {factoryLoading && (
             <p role="status">{t("fcboard.loading_display_tools")}</p>
           )}
-          {factory.some((tool) => tool !== "transfer") && (
-            <>
-              <div
-                className="fc-tools-grid fc-factory-tools"
-                role="group"
-                aria-label={t("fcboard.display_tools")}
-              >
-                {factory
-                  .filter((tool) => tool !== "transfer")
-                  .map((tool) => (
-                    <ButtonBase
-                      key={tool}
-                      type="button"
-                      aria-label={t("fcboard.open_name", {
-                        name: t(`fcboard.${factoryTools[tool].label}`),
-                      })}
-                      disabled={!!factoryPending}
-                      aria-busy={factoryPending === tool}
-                      onClick={() => {
-                        void classroomCommands
-                          .execute({ name: "tools.factory", args: { tool } })
-                          .catch((failure) => setError(String(failure)));
-                      }}
-                    >
-                      {factoryTools[tool].icon}
-                      <span>
-                        {factoryPending === tool
-                          ? t("fcboard.opening")
-                          : t(`fcboard.${factoryTools[tool].label}`)}
-                      </span>
-                    </ButtonBase>
-                  ))}
-              </div>
-            </>
+          {toolPage === 0 && (
+            <div className="fc-tools-grid">
+              {factory.some((tool) => tool !== "transfer") && (
+                <>
+                  <div
+                    className="fc-factory-tools"
+                    role="group"
+                    aria-label={t("fcboard.display_tools")}
+                  >
+                    {factory
+                      .filter((tool) => tool !== "transfer")
+                      .map((tool) => (
+                        <ButtonBase
+                          key={tool}
+                          type="button"
+                          style={{
+                            order: {
+                              split: 1,
+                              vote: 2,
+                              calculator: 7,
+                              spotlight: 8,
+                              timer: 9,
+                              transfer: 0,
+                            }[tool],
+                          }}
+                          aria-label={t("fcboard.open_name", {
+                            name: t(`fcboard.${factoryTools[tool].label}`),
+                          })}
+                          disabled={!!factoryPending}
+                          aria-busy={factoryPending === tool}
+                          onClick={() => {
+                            void classroomCommands
+                              .execute({
+                                name: "tools.factory",
+                                args: { tool },
+                              })
+                              .catch((failure) => setError(String(failure)));
+                          }}
+                        >
+                          {factoryTools[tool].icon}
+                          <span>
+                            {factoryPending === tool
+                              ? t("fcboard.opening")
+                              : t(`fcboard.${factoryTools[tool].label}`)}
+                          </span>
+                        </ButtonBase>
+                      ))}
+                  </div>
+                </>
+              )}
+              {entries
+                .filter(
+                  ([kind]) =>
+                    (factoryGizmoKinds.has(kind) || kind === "timer") &&
+                    (kind !== "timer" || !factory.includes("timer")),
+                )
+                .map(widgetButton)}
+              {(
+                [
+                  [
+                    t("fcboard.file_transfer"),
+                    "files.open",
+                    <FactoryIcon name="transfer" />,
+                  ],
+                  [
+                    t("fcboard.spotlight"),
+                    "tools.spotlight",
+                    <FactoryIcon name="spotlight" />,
+                  ],
+                ] as const
+              )
+                .filter(
+                  ([, command]) =>
+                    command !== "tools.spotlight" ||
+                    !factory.includes("spotlight"),
+                )
+                .map(actionButton)}
+            </div>
           )}
-          <div className="fc-tools-grid">
-            {entries
-              .filter(
-                ([kind]) =>
-                  !solids.has(kind) &&
-                  (kind !== "timer" || !factory.includes("timer")),
-              )
-              .map(widgetButton)}
-            {(
-              [
-                [t("fcboard.ai_summary"), "canvas.summary", TextIcon],
-                [t("fcboard.recording"), "record.open", microphoneIcon],
+          {toolPage === 1 && (
+            <div className="fc-tools-grid">
+              {entries
+                .filter(
+                  ([kind]) =>
+                    !solids.has(kind) &&
+                    !factoryGizmoKinds.has(kind) &&
+                    kind !== "timer",
+                )
+                .map(widgetButton)}
+              {(
                 [
-                  t("fcboard.file_transfer"),
-                  "files.open",
-                  <FactoryIcon name="transfer" />,
-                ],
-                [t("fcboard.ai_questions"), "assistant.open", questionCircle],
+                  [t("fcboard.ai_summary"), "canvas.summary", TextIcon],
+                  [t("fcboard.recording"), "record.open", microphoneIcon],
+                  [t("fcboard.ai_questions"), "assistant.open", questionCircle],
+                ] as const
+              ).map(actionButton)}
+              {(
                 [
-                  t("fcboard.spotlight"),
-                  "tools.spotlight",
-                  <FactoryIcon name="spotlight" />,
-                ],
-              ] as const
-            )
-              .filter(
-                ([, command]) =>
-                  command !== "tools.spotlight" ||
-                  !factory.includes("spotlight"),
-              )
-              .map(actionButton)}
-            {(
-              [
-                [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
-              ] as const
-            ).map(actionButton)}
+                  [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
+                ] as const
+              ).map(actionButton)}
+            </div>
+          )}
+          <div
+            className="fc-menu-pages"
+            role="group"
+            aria-label={t("fcboard.teaching_tools")}
+          >
+            {[0, 1].map((index) => (
+              <ButtonBase
+                key={index}
+                type="button"
+                aria-label={t(
+                  index === 0 ? "fcboard.previous_page" : "fcboard.next_page",
+                )}
+                aria-pressed={toolPage === index}
+                onClick={() => setToolPage(index)}
+              >
+                <span />
+              </ButtonBase>
+            ))}
           </div>
         </MaterialPanel>
       )}
@@ -803,7 +881,8 @@ export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         !lassoActive &&
         selected &&
         !solidWidgetKinds.has(selected.kind) &&
-        !["ruler", "protractor"].includes(selected.kind) && (
+        selected.kind !== "shape" &&
+        !factoryGizmoKinds.has(selected.kind) && (
           <MaterialPanel
             className="fc-widget-panel fc-surface"
             style={{

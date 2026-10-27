@@ -23,6 +23,7 @@ const numeric = {
 } as const;
 const booleans = {
   dualPen: "whiteboardDualPen",
+  hardNib: "whiteboardHardNib",
   palmEraser: "palmEraser",
   multiStroke: "multiStroke",
   toolbarReversed: "toolbarReversed",
@@ -56,6 +57,10 @@ export const canvasConfigurationSnapshot = (
       tip: state.whiteboardPenTip || "fine",
       mode: state.currentItemInkAssist || state.currentItemPenMode || "hard",
       brushVariation: state.whiteboardBrushVariation ?? 45,
+      hardNib:
+        device?.hardNibAvailable !== false &&
+        (state.whiteboardHardNib ?? device?.hardNib ?? false),
+      hardNibAvailable: device?.hardNibAvailable !== false,
       dualPen: state.whiteboardDualPen ?? device?.dualPen ?? false,
       thickThreshold: threshold ?? null,
       autoTipAvailable:
@@ -136,6 +141,9 @@ export const canvasConfigurationPatch = (
     patch.whiteboardThickThreshold ??
     state.whiteboardThickThreshold ??
     device?.thickThreshold;
+  if (patch.whiteboardHardNib && device?.hardNibAvailable === false) {
+    throw invalid();
+  }
   if (
     patch.whiteboardDualPen &&
     (!threshold || !Number.isFinite(threshold) || threshold <= 0)

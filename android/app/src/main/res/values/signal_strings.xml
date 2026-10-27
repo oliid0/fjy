@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signal_source">Signal source</string>
+    <string name="signal_input_number">Input %1$d</string>
+    <string name="signal_connecting">Connecting to the selected input…</string>
+    <string name="signal_no_video">No signal. Check the cable or select another input.</string>
+    <string name="signal_connection_failed">Could not display this input. Retry or select another input.</string>
+    <string name="signal_content_blocked">This input is blocked by the system content settings.</string>
+    <string name="signal_unavailable">No signal inputs are currently available on this device.</string>
+    <string name="signal_external">Opening the system signal source app. This device does not provide an input that can display inside the board.</string>
+    <string name="signal_control_unavailable">Open an embedded signal input first. External signal apps cannot be controlled here.</string>
+    <string name="signal_input_unavailable">This input is no longer available. Read the input list again.</string>
+</resources>

@@ -26,6 +26,53 @@ const brush = () => ({
 });
 
 describe("factory brush geometry", () => {
+  it("computes only appended brush geometry after validating the prefix, and recomputes edited pressure / lift correctly", () => {
+    const input = {
+      ...brush(),
+      simulatePressure: false,
+      pressures: Array.from({ length: 300 }, (_, i) => (i % 10) / 10),
+      points: Array.from({ length: 300 }, (_, i) =>
+        pointFrom<LocalPoint>(i * 10, Math.sin(i) * 20),
+      ),
+    };
+    const before = factoryBrushSamples(input);
+    const recorded = JSON.stringify(before);
+    const hypot = vi.spyOn(Math, "hypot");
+    const power = vi.spyOn(Math, "pow");
+    try {
+      input.points = [...input.points, pointFrom<LocalPoint>(3000, 8)];
+      input.pressures = [...input.pressures, 0.8];
+      const next = factoryBrushSamples(input);
+      // One width recurrence and one newly appended Bezier segment. The old
+      // 299 velocity / interpolation calculations must not run each frame.
+      expect(hypot).toHaveBeenCalledTimes(2);
+      expect(power).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(before)).toBe(recorded);
+      expect(next).toEqual(factoryBrushSamples({ ...input }));
+      input.pressures[120] = 0.95;
+      expect(factoryBrushSamples(input)).toEqual(
+        factoryBrushSamples({ ...input }),
+      );
+      Object.assign(input.customData.fcInk, { finished: true });
+      const finished = factoryBrushSamples(input);
+      expect(finished).toEqual(factoryBrushSamples({ ...input }));
+      expect(finished.at(-1)?.width).toBe(0);
+      input.points = [...input.points, pointFrom<LocalPoint>(3010, 3)];
+      input.pressures.push(0.3);
+      Object.assign(input.customData.fcInk, { finished: false });
+      expect(factoryBrushSamples(input)).toEqual(
+        factoryBrushSamples({ ...input }),
+      );
+      input.points[50] = pointFrom<LocalPoint>(501, 40);
+      expect(factoryBrushSamples(input)).toEqual(
+        factoryBrushSamples({ ...input }),
+      );
+    } finally {
+      hypot.mockRestore();
+      power.mockRestore();
+    }
+  });
+
   it("tapers only the lifted tip and invalidates the live Canvas path, retaining old strokes", () => {
     const input = brush();
     const liveWidths = factoryBrushWidths(input);

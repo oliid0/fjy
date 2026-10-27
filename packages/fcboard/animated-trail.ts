@@ -25,6 +25,7 @@ export interface AnimatedTrailOptions {
   fill: (trail: AnimatedTrail) => string;
   stroke?: (trail: AnimatedTrail) => string;
   animateTrail?: boolean;
+  centerline?: boolean;
 }
 
 export class AnimatedTrail implements Trail {
@@ -44,6 +45,11 @@ export class AnimatedTrail implements Trail {
     this.animationFrameHandler.register(this, this.onFrame.bind(this));
 
     this.trailElement = document.createElementNS(SVG_NS, "path");
+    if (this.options.centerline) {
+      this.trailElement.setAttribute("stroke-width", "1.5");
+      this.trailElement.setAttribute("stroke-linecap", "round");
+      this.trailElement.setAttribute("stroke-linejoin", "round");
+    }
     if (this.options.animateTrail) {
       this.trailAnimation = document.createElementNS(SVG_NS, "animate");
       // TODO: make this configurable
@@ -178,6 +184,28 @@ export class AnimatedTrail implements Trail {
   }
 
   private drawTrail(trail: LaserPointer, state: AppState): string {
+    if (this.options.centerline) {
+      // An in-progress lasso has an open tip, with no artificial return line
+      // to its origin and no second outline from a brush-shaped trail.
+      const points = trail.originalPoints.map(([x, y]) =>
+        sceneCoordsToViewportCoords({ sceneX: x, sceneY: y }, state),
+      );
+      if (points.length < 2) {
+        return "";
+      }
+      const path = [`M${points[0].x},${points[0].y}`];
+      for (let i = 1; i < points.length; i++) {
+        const previous = points[i - 1];
+        const current = points[i];
+        path.push(
+          `Q${previous.x},${previous.y} ${(previous.x + current.x) / 2},${
+            (previous.y + current.y) / 2
+          }`,
+        );
+      }
+      const last = points.at(-1)!;
+      return `${path.join(" ")} L${last.x},${last.y}`;
+    }
     const _stroke = trail
       .getStrokeOutline(trail.options.size / state.zoom.value)
       .map(([x, y]) => {

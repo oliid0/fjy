@@ -62,7 +62,10 @@ export const runBoardCommands = async (
     maxTokens?: number;
     textSourceIds?: readonly string[];
     allowed?: readonly string[];
+    validate?: (command: Command) => boolean;
     context?: () => unknown;
+    verify?: boolean;
+    observe?: () => unknown | Promise<unknown>;
   } = {},
 ): Promise<BoardAgentAction> => {
   let action = initial;
@@ -82,10 +85,11 @@ export const runBoardCommands = async (
         (command) =>
           command &&
           typeof command.name === "string" &&
-          classroomCommands.isPublic(command.name) &&
+          (options.verify || classroomCommands.isPublic(command.name)) &&
           command.name !== "ui.invoke" &&
           !options.exclude?.includes(command.name) &&
           (!options.allowed || options.allowed.includes(command.name)) &&
+          (!options.validate || options.validate(command)) &&
           (!command.args ||
             (typeof command.args === "object" && !Array.isArray(command.args))),
       )
@@ -114,6 +118,11 @@ export const runBoardCommands = async (
         );
       }
       try {
+        if (!classroomCommands.isPublic(command.name)) {
+          throw new Error(
+            t("fcboard.command_unavailable_command", { command: command.name }),
+          );
+        }
         const routed =
           command.name === "canvas.text" &&
           !textStyleConfigured &&
@@ -142,7 +151,11 @@ export const runBoardCommands = async (
         }
         results.push({ name: command.name, ok: true, result });
       } catch (failure) {
-        if (action.continue !== true && !options.completion) {
+        if (
+          action.continue !== true &&
+          !options.completion &&
+          !options.verify
+        ) {
           throw failure;
         }
         results.push({
@@ -154,7 +167,7 @@ export const runBoardCommands = async (
       }
     }
     if (
-      (!options.completion && action.continue !== true) ||
+      (!options.completion && !options.verify && action.continue !== true) ||
       signal?.aborted ||
       !current()
     ) {
@@ -167,6 +180,11 @@ export const runBoardCommands = async (
         ),
       );
     }
+    const observation = options.observe ? await options.observe() : undefined;
+    signal?.throwIfAborted();
+    if (!current()) {
+      return { action: "done" };
+    }
     conversation.push(
       { role: "assistant", content: JSON.stringify(action) },
       {
@@ -176,6 +194,8 @@ export const runBoardCommands = async (
           '完成后返回 {"action":"done"}，需要回答时返回 text。'
         }\n${agentContext({
           results,
+          availableCommands: classroomCommands.describe(),
+          observation,
           state: options.context
             ? options.context()
             : classroomCommands.snapshot(),

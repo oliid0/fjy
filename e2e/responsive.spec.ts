@@ -126,6 +126,9 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
     await page.keyboard.press("Escape");
     await page.locator("[data-teaching-tools]").click();
     await page
+      .getByRole("button", { name: labels.next_page, exact: true })
+      .click();
+    await page
       .getByRole("button", { name: labels.recording, exact: true })
       .click();
     const recording = page.locator(".fc-recording-dialog");

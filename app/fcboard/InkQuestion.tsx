@@ -73,6 +73,14 @@ export const InkQuestion = ({
   };
   useEffect(() => {
     const outside = (event: PointerEvent) => {
+      if (
+        classroomCommands.isOwnedBy(
+          classroomCommands.interactionSource,
+          request.current?.signal,
+        )
+      ) {
+        return;
+      }
       if (!answered && !paper.current?.contains(event.target as Node)) {
         onClose();
       }
@@ -287,6 +295,21 @@ export const InkQuestion = ({
         throw new DOMException("Question changed", "AbortError");
       }
       const before = new Set(visibleObjectIds(api));
+      const target = () => {
+        const document = classroomCommands.read("document") as
+          | { id?: string; name?: string; page?: number }
+          | undefined;
+        const boards = classroomCommands.read("boards") as
+          | { active?: string }
+          | undefined;
+        return JSON.stringify(
+          document
+            ? ["document", document.id, document.name, document.page]
+            : ["board", boards?.active || api.id],
+        );
+      };
+      let currentTarget = target();
+      let transferred = false;
       const source = () => {
         const document = classroomCommands.read("document") as
           | { ink?: InkStroke[] }
@@ -298,20 +321,57 @@ export const InkQuestion = ({
         );
       };
       const signatureBefore = source();
+      let scheduled = false;
+      let checking = true;
       const changed = () => {
-        if (source() !== signatureBefore) {
+        if (
+          !transferred &&
+          target() === currentTarget &&
+          source() !== signatureBefore &&
+          !classroomCommands.isExpectedTransition(abort.signal)
+        ) {
           abort.abort();
+          return;
         }
+        if (scheduled) {
+          return;
+        }
+        scheduled = true;
+        queueMicrotask(() => {
+          scheduled = false;
+          if (!checking) {
+            return;
+          }
+          const next = target();
+          if (next !== currentTarget) {
+            if (!classroomCommands.isExpectedTransition(abort.signal)) {
+              abort.abort();
+              return;
+            }
+            currentTarget = next;
+            transferred = true;
+          }
+          if (!transferred && source() !== signatureBefore) {
+            abort.abort();
+          }
+        });
       };
       const unwatch = api.onChange?.(changed);
       const documentChanged = classroomCommands.watch("document", changed);
+      const boardChanged = classroomCommands.watch("boards", changed);
       try {
         await onSubmit(text, abort.signal, questionIds.current);
       } finally {
+        checking = false;
         unwatch?.();
         documentChanged();
+        boardChanged();
       }
       if (!abort.signal.aborted) {
+        if (transferred) {
+          onClose();
+          return;
+        }
         const ids = visibleObjectIds(api).filter((id) => !before.has(id));
         if (questionIds.current.length && ids.length) {
           setAnswer(

@@ -1,3 +1,5 @@
+import { factoryNibControls } from "./factoryNib";
+
 import type { ExcalidrawFreeDrawElement } from "./types";
 
 export type FactoryInkData = {
@@ -7,6 +9,9 @@ export type FactoryInkData = {
   variation?: number;
   tip?: "fine" | "thick";
   finished?: boolean;
+  nib?: boolean;
+  /** Original surviving nib, relative to the first point, in stroke-width units. */
+  nibPath?: [number, number][];
   assist?: "text" | "shape" | "magic" | "function" | "calculation" | "language";
   centerline?: boolean;
   brushWidths?: number[];
@@ -60,11 +65,12 @@ export const traceFactoryInk = (
     return;
   }
   const unit = factoryInkUnit(element);
+  const nib = factoryNibControls(element);
   const round = (coordinate: number) => roundInk(coordinate, unit);
   if (!from) {
     target.moveTo(round(points[0][0]), round(points[0][1]));
   }
-  for (let i = Math.max(1, from); i < points.length; i++) {
+  for (let i = Math.max(1, from); i < points.length - (nib ? 1 : 0); i++) {
     const a = points[i - 1];
     const b = points[i];
     target.quadraticCurveTo(
@@ -76,7 +82,7 @@ export const traceFactoryInk = (
   }
   const last = points.at(-1)!;
   // Keep the visible tip at the latest real sample; do not predict future ink.
-  if (complete) {
+  if (complete && !nib) {
     target.lineTo(round(last[0]), round(last[1]));
   }
 };
@@ -107,8 +113,9 @@ export const factoryInkSamples = (element: ExcalidrawFreeDrawElement) => {
     return nodes;
   }
   const samples = [nodes[0]];
+  const nib = factoryNibControls(element);
   let source = nodes[0];
-  for (let i = 1; i < nodes.length; i++) {
+  for (let i = 1; i < nodes.length - (nib ? 1 : 0); i++) {
     const previous = element.points[i - 1];
     const current = element.points[i];
     const control = nodes[i - 1];
@@ -148,7 +155,9 @@ export const factoryInkSamples = (element: ExcalidrawFreeDrawElement) => {
     }
     source = end;
   }
-  samples.push(nodes.at(-1)!);
+  if (!nib) {
+    samples.push(nodes.at(-1)!);
+  }
   return samples;
 };
 

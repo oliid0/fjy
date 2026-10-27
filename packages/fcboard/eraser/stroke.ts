@@ -2,9 +2,16 @@ import { getSizeFromPoints } from "@excalidraw/common";
 import {
   getElementAbsoluteCoords,
   getElementBounds,
+  getElementLineSegments,
+  isPointInElement,
+  shouldTestInside,
   newElementWith,
 } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom, polygonIncludesPointNonZero } from "@excalidraw/math";
+import {
+  factoryNibControls,
+  factoryNibSamples,
+} from "@excalidraw/element/factoryNib";
 import {
   factoryBrushSamples,
   isFactoryBrush,
@@ -14,8 +21,13 @@ import {
   isFactoryStroke,
 } from "@excalidraw/element/factoryInk";
 
-import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type {
+  ExcalidrawElement,
+  ExcalidrawFreeDrawElement,
+} from "@excalidraw/element/types";
+import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
+
+import { getLassoSelectedElementIds } from "../lasso/utils";
 
 type Point = { x: number; y: number };
 type Sample = Point & {
@@ -129,6 +141,23 @@ export const eraseStroke = (
   const [, , , , cx, cy] = getElementAbsoluteCoords(element, new Map());
   const cos = Math.cos(element.angle);
   const sin = Math.sin(element.angle);
+  const globalPoint = ([x, y]: readonly [number, number]) => ({
+    x: cx + (element.x + x - cx) * cos - (element.y + y - cy) * sin,
+    y: cy + (element.x + x - cx) * sin + (element.y + y - cy) * cos,
+  });
+  const nib = factoryNibControls(element)?.map(globalPoint);
+  const nibOutline = factoryNibSamples(element).map(globalPoint);
+  const nibArea = sweptRectangle(from, to, width, height);
+  const nibPolygon = nibOutline.map(({ x, y }) => pointFrom<GlobalPoint>(x, y));
+  const nibHit =
+    nibOutline.some(
+      (point, index) =>
+        index > 0 && insideInterval(nibOutline[index - 1], point, nibArea),
+    ) ||
+    (nibPolygon.length > 0 &&
+      [from, to].some(({ x, y }) =>
+        polygonIncludesPointNonZero(pointFrom<GlobalPoint>(x, y), nibPolygon),
+      ));
   const brushAngle =
     (element.customData?.fcInk?.brushAngle || 0) + element.angle;
   const ellipse = brush
@@ -162,7 +191,7 @@ export const eraseStroke = (
   );
   const result: Sample[][] = [];
   let current: Sample[] = [];
-  let touched = false;
+  let touched = nibHit;
   const flush = () => {
     if (current.length) {
       result.push(current);
@@ -233,6 +262,21 @@ export const eraseStroke = (
                 ...element.customData?.fcInk,
                 dashOffset: first.distance,
                 ...(factory ? { centerline: true } : {}),
+                ...(nib
+                  ? {
+                      nib:
+                        !nibHit &&
+                        fragment.at(-1)!.distance === samples.at(-1)!.distance,
+                      nibPath:
+                        !nibHit &&
+                        fragment.at(-1)!.distance === samples.at(-1)!.distance
+                          ? nib.map(({ x, y }) => [
+                              (x - first.x) / element.strokeWidth,
+                              (y - first.y) / element.strokeWidth,
+                            ])
+                          : undefined,
+                    }
+                  : {}),
                 ...(brush
                   ? {
                       brushWidths: fragment.map(
@@ -257,6 +301,76 @@ export const eraseStroke = (
 export const pointerSamples = (event: PointerEvent) => {
   const samples = event.getCoalescedEvents?.() || [];
   return samples.length ? [...samples, event] : [event];
+};
+
+/** The visible rectangular footprint sweeps whole objects, including fast moves. */
+export const eraseSceneObjects = (
+  elements: readonly ExcalidrawElement[],
+  from: Point,
+  to: Point,
+  width: number,
+  height: number,
+) => {
+  const elementsMap = new Map(elements.map((element) => [element.id, element]));
+  const hit = new Set<string>();
+  const groups = new Set<string>();
+  const path = sweptRectangle(from, to, width, height).map(({ x, y }) =>
+    pointFrom<GlobalPoint>(x, y),
+  );
+  for (const element of elements) {
+    if (element.isDeleted || element.locked) {
+      continue;
+    }
+    const bounds = getElementBounds(element, elementsMap);
+    if (
+      Math.max(from.x, to.x) + width / 2 < bounds[0] ||
+      Math.min(from.x, to.x) - width / 2 > bounds[2] ||
+      Math.max(from.y, to.y) + height / 2 < bounds[1] ||
+      Math.min(from.y, to.y) - height / 2 > bounds[3]
+    ) {
+      continue;
+    }
+    const inside =
+      shouldTestInside(element) &&
+      path.some((point) => isPointInElement(point, element, elementsMap));
+    const touched =
+      inside ||
+      (element.type === "freedraw"
+        ? eraseStroke(element, from, to, width, height) !== null
+        : getLassoSelectedElementIds({
+            lassoPath: path,
+            elements: [element],
+            elementsMap,
+            elementsSegments: new Map([
+              [element.id, getElementLineSegments(element, elementsMap)],
+            ]),
+            intersectedElements: new Set(),
+            enclosedElements: new Set(),
+          }).selectedElementIds.length > 0);
+    if (touched) {
+      hit.add(element.id);
+      const group = element.groupIds.at(-1);
+      if (group) {
+        groups.add(group);
+      }
+      element.boundElements
+        ?.filter((bound) => bound.type === "text")
+        .forEach((bound) => hit.add(bound.id));
+      if (element.type === "text" && element.containerId) {
+        hit.add(element.containerId);
+      }
+    }
+  }
+  if (!hit.size) {
+    return elements;
+  }
+  return elements.map((element) =>
+    !element.locked &&
+    !element.isDeleted &&
+    (hit.has(element.id) || element.groupIds.some((id) => groups.has(id)))
+      ? newElementWith(element, { isDeleted: true })
+      : element,
+  );
 };
 
 export const isPalmContact = (

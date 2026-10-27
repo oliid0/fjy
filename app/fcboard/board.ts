@@ -318,7 +318,7 @@ export const insertText = (
     (presentation === "handwritten" ||
       (presentation === "match" && !!inkSource)) &&
     supportsHandwriting(text);
-  const size =
+  const sourceSize =
     textSource?.type === "text"
       ? textSource.fontSize
       : inkSource && styleSource
@@ -329,6 +329,7 @@ export const insertText = (
             : Infinity,
         ) / (inkOutput ? 1.25 : 1)
       : (state.currentItemFontSize || 24) / state.zoom.value;
+  const size = sourceSize * (inkSource ? 0.9 : 1);
   const fontFamily =
     presentation === "handwritten"
       ? FONT_FAMILY.Excalifont
@@ -366,6 +367,11 @@ export const insertText = (
     if (!layout) {
       break;
     }
+    const inline =
+      placement.mode === "inline" &&
+      bounds &&
+      layout.y === Math.max(viewport.top, bounds.top) &&
+      layout.x >= bounds.right + gap;
     const ink =
       presentation === "handwritten" || (presentation === "match" && inkSource)
         ? handwritingElements(
@@ -389,7 +395,9 @@ export const insertText = (
                   layout.fontSize) /
                 size,
               opacity: source?.opacity ?? state.currentItemOpacity ?? 100,
-              maxWidth: viewport.right - layout.x,
+              maxWidth: inline
+                ? Number.MAX_SAFE_INTEGER
+                : viewport.right - layout.x,
               source: styleSource,
               customData,
             },
@@ -406,7 +414,18 @@ export const insertText = (
             }
           : layout,
         { width: right - left, height: bottom - top },
-        centered ? viewport : { ...viewport, left: layout.x, top: layout.y },
+        centered
+          ? viewport
+          : {
+              ...viewport,
+              left: layout.x,
+              top: layout.y,
+              // Font metrics and stroke glyphs have different widths. Retry a
+              // smaller inline result before allowing the glyphs to wrap below.
+              ...(inline
+                ? { bottom: Math.min(viewport.bottom, layout.y + bottom - top) }
+                : {}),
+            },
         obstacles,
         gap,
       );

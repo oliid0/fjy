@@ -1,6 +1,7 @@
 import { t, languages, setLanguage } from "@excalidraw/excalidraw/i18n";
 import { factoryResources as sourceResourceNames } from "@excalidraw/excalidraw/locales/zh-CN.json";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { Capacitor } from "@capacitor/core";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -11,11 +12,95 @@ import * as ai from "./ai";
 import { deleteGeneratedResource } from "./generatedResources";
 import * as resourceStorage from "./generatedResources";
 import { interactiveResource } from "./test/interactiveResource";
+import { Classroom } from "./native";
+
+vi.mock("./native", () => ({
+  Classroom: {
+    openWebResource: vi.fn(),
+    webResourceAction: vi.fn(),
+  },
+}));
 
 const api = {} as ExcalidrawImperativeAPI;
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
   await setLanguage(languages.find((lang) => lang.code === "en")!);
+});
+
+it("routes native web actions through inspected control IDs and reports actual browser state", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  const state = {
+    open: true,
+    loading: false,
+    version: "page-one:2",
+    canGoBack: false,
+    canGoForward: false,
+    message: "",
+    title: "Force and acceleration",
+    text: "6 m/s²",
+    controls: [
+      {
+        id: "w1",
+        role: "input",
+        label: "Force",
+        value: "12",
+        disabled: false,
+        readonly: false,
+        bounds: { x: 0, y: 0, width: 120, height: 30 },
+      },
+    ],
+  };
+  vi.mocked(Classroom.webResourceAction).mockResolvedValue(state);
+  const view = render(<TeachingResources api={api} />);
+  await act(async () => {
+    expect(await classroomCommands.execute({ name: "web.action" })).toEqual(
+      state,
+    );
+    expect(
+      await classroomCommands.execute({
+        name: "web.action",
+        args: {
+          action: "set",
+          version: state.version,
+          control: "w1",
+          value: 12,
+        },
+      }),
+    ).toEqual(state);
+  });
+  expect(Classroom.webResourceAction).toHaveBeenLastCalledWith({
+    action: "set",
+    version: state.version,
+    control: "w1",
+    value: 12,
+  });
+  expect(classroomCommands.read("resources")).toMatchObject({ web: state });
+  view.unmount();
+});
+
+it("rejects native web selectors, scripts, stale requests and missing inspected IDs before dispatch", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  const view = render(<TeachingResources api={api} />);
+  const request = new AbortController();
+  request.abort();
+  await act(async () => {
+    for (const args of [
+      { action: "click", selector: "#force", version: "v1", control: "w1" },
+      { action: "read", script: "document.body.remove()" },
+      { action: "click", version: "v1" },
+      { action: "set", control: "w1", value: 12 },
+      { action: "run" },
+      { action: "read", signal: request.signal },
+    ]) {
+      await expect(
+        classroomCommands.execute({ name: "web.action", args }),
+      ).rejects.toThrow();
+    }
+  });
+  expect(Classroom.webResourceAction).not.toHaveBeenCalled();
+  view.unmount();
 });
 
 it("keeps the factory resource searchable by its original name when the interface is English", async () => {
@@ -118,9 +203,22 @@ it("retains the selected subject when the query is empty and keeps source IDs st
     screen.getByRole("button", { name: t("fcboard.mathematics") }),
   );
   expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(
-    teachingResources.filter((item) => item.category === "math").length,
+    teachingResources.filter(
+      (item) =>
+        item.category === "math" &&
+        item.titleKey.startsWith("teach_res_math_concept_"),
+    ).length,
   );
   expect(screen.getByRole("button", { name: /Number Compare/ })).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("tab", { name: t("fcboard.math_applications") }),
+  );
+  expect(screen.queryByRole("button", { name: /Number Compare/ })).toBeNull();
+  expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(
+    teachingResources.filter((item) =>
+      item.titleKey.startsWith("teach_res_math_application_"),
+    ).length,
+  );
 });
 
 it("generates, discovers and reuses an interactive lesson through the same canvas insertion command", async () => {

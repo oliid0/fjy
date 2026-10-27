@@ -4,6 +4,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 export const sceneAPI = () => {
+  let tool = { type: "selection", customType: null };
   let scene: readonly ExcalidrawElement[] = convertToExcalidrawElements([
     { type: "text", text: "学生的题目", x: 10, y: 10 },
   ]);
@@ -16,6 +17,10 @@ export const sceneAPI = () => {
       height: 900,
       zoom: { value: 1 },
       selectedElementIds: {},
+      activeTool: tool,
+    }),
+    setActiveTool: vi.fn((value) => {
+      tool = { ...tool, ...value };
     }),
     addFiles: vi.fn(),
     updateScene: vi.fn((update) => {

@@ -21,6 +21,9 @@ export const selectMenu = async (page: Page, label: string) => {
       总结白板: "AI 总结",
       "课件 / 局域网快传": "快传",
     };
+    if (["提问与讲解", "课堂录制", "总结白板", "语音指令"].includes(label)) {
+      await page.getByRole("button", { name: "下一页", exact: true }).click();
+    }
     await page
       .getByRole("button", { name: names[label] || label, exact: true })
       .click();

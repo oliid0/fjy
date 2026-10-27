@@ -13,6 +13,26 @@ export type RegionBounds = {
 };
 export type RegionHandle = "nw" | "ne" | "sw" | "se" | "move";
 
+export const hasRegionArea = (
+  path: readonly (readonly [number, number, ...number[]])[],
+) => {
+  const first = path[0];
+  const second = path.find(
+    (point) => first && (point[0] !== first[0] || point[1] !== first[1]),
+  );
+  return (
+    !!first &&
+    !!second &&
+    path.some(
+      (point) =>
+        Math.abs(
+          (second[0] - first[0]) * (point[1] - first[1]) -
+            (second[1] - first[1]) * (point[0] - first[0]),
+        ) > 1e-8,
+    )
+  );
+};
+
 export const regionPath = (bounds: RegionBounds): GlobalPoint[] => [
   pointFrom(bounds.left, bounds.top),
   pointFrom(bounds.right, bounds.top),
@@ -38,7 +58,7 @@ export const regionCorners = (bounds: RegionBounds, scale: number) => {
   ]);
 };
 
-/** CircleToSearch: a gesture defines one padded, visible screen region. */
+/** The operation frame surrounds the gesture; hit testing uses the gesture itself. */
 export const circleRegion = (
   path: readonly (readonly [number, number, ...number[]])[],
   viewport: RegionBounds,
@@ -83,16 +103,21 @@ export const regionHandleAt = (
       return handle;
     }
   }
-  // Keep whole-object movement on the border; an interior drag draws a new circle.
+  // SelectCacheLayer.touchDown drags the selected contents from anywhere inside
+  // the operation frame. Only a gesture outside it starts another lasso.
   const nearX =
     point.x >= bounds.left - radius && point.x <= bounds.right + radius;
   const nearY =
     point.y >= bounds.top - radius && point.y <= bounds.bottom + radius;
-  return (nearX &&
-    Math.min(
-      Math.abs(point.y - bounds.top),
-      Math.abs(point.y - bounds.bottom),
-    ) <= radius) ||
+  return (point.x >= bounds.left &&
+    point.x <= bounds.right &&
+    point.y >= bounds.top &&
+    point.y <= bounds.bottom) ||
+    (nearX &&
+      Math.min(
+        Math.abs(point.y - bounds.top),
+        Math.abs(point.y - bounds.bottom),
+      ) <= radius) ||
     (nearY &&
       Math.min(
         Math.abs(point.x - bounds.left),

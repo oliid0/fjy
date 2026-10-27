@@ -14,8 +14,13 @@ for (const [kind, width, height, nets, face] of [
     await toolbar.getByRole("button", { name: "插入", exact: true }).click();
     await page.getByRole("button", { name: "图形", exact: true }).click();
     await page
-      .getByRole("button", { name: `插入${kind}`, exact: true })
+      .getByTestId(`factory-shape-${kind === "立方体" ? "cube" : "cylinder"}`)
       .click();
+    const start = { x: Math.max(30, width / 2 - 120), y: height / 2 - 100 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 240, start.y + 200, { steps: 12 });
+    await page.mouse.up();
     const row = page.getByRole("toolbar", { name: "选区操作", exact: true });
     await expect(
       row.getByRole("button", { name: "展开图形", exact: true }),

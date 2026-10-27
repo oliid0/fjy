@@ -4,6 +4,7 @@ import {
   traceFactoryBrush,
 } from "./factoryBrush";
 import { traceFactoryInk } from "./factoryInk";
+import { traceFactoryNib } from "./factoryNib";
 
 import type { ExcalidrawFreeDrawElement } from "./types";
 import type { BrushSample } from "./factoryBrush";
@@ -32,6 +33,7 @@ export const factoryPath2D = (element: ExcalidrawFreeDrawElement) => {
     data?.brushAngle,
     data?.variation,
     data?.finished,
+    data?.nib,
   ].join("|");
   if (
     cached?.version === element.version &&
@@ -104,4 +106,9 @@ export const factoryPath2D = (element: ExcalidrawFreeDrawElement) => {
     brushSamples,
   });
   return path;
+};
+
+export const factoryNibPath2D = (element: ExcalidrawFreeDrawElement) => {
+  const path = new Path2D();
+  return traceFactoryNib(element, path) ? path : undefined;
 };

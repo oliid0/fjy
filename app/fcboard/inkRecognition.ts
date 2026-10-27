@@ -75,6 +75,7 @@ export const recognizeInkContent = async (
   strokes: InkInput,
   signal: AbortSignal,
   languageHint?: "en-US",
+  chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
 ): Promise<InkRecognitionResult> => {
   if (
     mode === "text" ||
@@ -83,6 +84,15 @@ export const recognizeInkContent = async (
     mode === "calculation"
   ) {
     const targetLanguage = getLanguage().code;
+    const recognitionOptions: [
+      language?: "en-US",
+      choose?: (candidates: readonly string[]) => Promise<string>,
+    ] = chooseCandidate
+      ? [languageHint, chooseCandidate]
+      : languageHint ||
+        (mode === "language" && currentSettings().inkLanguage === "auto")
+      ? [languageHint || "en-US"]
+      : [];
     const text = await recognizeHandwriting(
       capture,
       signal,
@@ -93,7 +103,16 @@ export const recognizeInkContent = async (
         : (candidate) => {
             try {
               if (mode === "calculation") {
-                prepareCalculation(mathNotation(candidate));
+                const parsed = prepareCalculation(mathNotation(candidate));
+                // A partial or truncated numeral is not a complete automatic
+                // calculation. Let OCR try its configured fallback instead of
+                // confidently writing that same numeral as the answer.
+                if (
+                  parsed.node?.type === "ConstantNode" &&
+                  !/[=＝]/.test(candidate)
+                ) {
+                  return false;
+                }
               } else {
                 localMathResult(candidate, "function");
               }
@@ -103,10 +122,7 @@ export const recognizeInkContent = async (
             }
           },
       strokes,
-      ...(languageHint ||
-      (mode === "language" && currentSettings().inkLanguage === "auto")
-        ? ([languageHint || "en-US"] as const)
-        : []),
+      ...recognitionOptions,
     );
     signal.throwIfAborted();
     if (!text.trim() || text.length > 4000) {

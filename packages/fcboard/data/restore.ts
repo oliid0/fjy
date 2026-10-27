@@ -937,6 +937,9 @@ export const restoreAppState = (
   if (typeof inkPreferences.whiteboardDualPen === "boolean") {
     nextAppState.whiteboardDualPen = inkPreferences.whiteboardDualPen;
   }
+  if (typeof inkPreferences.whiteboardHardNib === "boolean") {
+    nextAppState.whiteboardHardNib = inkPreferences.whiteboardHardNib;
+  }
   const thickThreshold = inkPreferences.whiteboardThickThreshold;
   if (
     typeof thickThreshold === "number" &&

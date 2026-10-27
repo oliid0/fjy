@@ -1,7 +1,8 @@
 import { t } from "@excalidraw/excalidraw/i18n";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
-import { chat, parseJSON } from "./ai";
+import { boardContext, chat, parseJSON } from "./ai";
+import { sceneAPI } from "./test/scene";
 import {
   currentSettings,
   defaults,
@@ -43,6 +44,31 @@ describe("AI configuration and transport", () => {
     saveSettings({ ...defaults, apiKey: "remembered-key" }, true);
     sessionStorage.clear();
     expect(currentSettings().apiKey).toBe("remembered-key");
+  });
+  it("defaults selection screenshots off and persists an explicit boolean opt-in", () => {
+    expect(currentSettings().selectionImages).toBe(false);
+    saveSettings({ ...defaults, selectionImages: true }, false);
+    expect(currentSettings().selectionImages).toBe(true);
+    localStorage.setItem(
+      "fcboard-settings",
+      JSON.stringify({ selectionImages: "true" }),
+    );
+    expect(currentSettings().selectionImages).toBe(false);
+  });
+  it("reads real board text without encoding a screenshot when capture is disabled", async () => {
+    const api = sceneAPI();
+    const encode = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL");
+    const result = await boardContext(
+      api,
+      false,
+      api.getSceneElements(),
+      undefined,
+      false,
+    );
+    expect(result.text).toBe("学生的题目");
+    expect(result.elements).toEqual(api.getSceneElements());
+    expect(result.image).toBeUndefined();
+    expect(encode).not.toHaveBeenCalled();
   });
   it("accepts secure and LAN endpoints and blocks executable URLs", () => {
     expect(validateEndpoint("http://192.168.1.2:8080/chat")).toContain(

@@ -3,14 +3,19 @@ import { Capacitor } from "@capacitor/core";
 import { exportToBlob } from "@excalidraw/excalidraw";
 import { getDataURL } from "@excalidraw/excalidraw/data/blob";
 import { useEffect, useRef, useState } from "react";
+import { CloseIcon } from "@excalidraw/excalidraw/components/icons";
 
 import { QRCode } from "../share/QRCode";
 
 import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands } from "./commands";
-import { useAnchoredPanel } from "./floating";
 import { Classroom } from "./native";
+import { MaterialPanel } from "./MaterialPanel";
+import { BoardThumbnail } from "./BoardThumbnail";
+import documentIcon from "./factory-share-icons/document.svg?url";
+import imageIcon from "./factory-share-icons/jpg.svg?url";
+import pdfIcon from "./factory-share-icons/pdf.svg?url";
 
 import type { Board, Workspace } from "./boards";
 
@@ -25,18 +30,15 @@ export const BoardShare = () => {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [mail, setMail] = useState(false);
+  const [choosing, setChoosing] = useState(true);
   const panel = useRef<HTMLElement>(null);
   const generation = useRef(0);
-  const style = useAnchoredPanel(
-    panel,
-    "[data-testid='main-menu-trigger']",
-    open,
-  );
   const native = Capacitor.isNativePlatform();
   useEffect(() => {
     const openPages = async (email: boolean) => {
       const current = ++generation.current;
       setMail(email);
+      setChoosing(true);
       setOpen(true);
       setBusy(true);
       setError("");
@@ -53,7 +55,7 @@ export const BoardShare = () => {
           return;
         }
         setPages(workspace.boards);
-        setSelected([workspace.active]);
+        setSelected(workspace.boards.map((board) => board.id).slice(0, 20));
       } catch (failure) {
         if (current === generation.current) {
           setError(String(failure));
@@ -113,7 +115,31 @@ export const BoardShare = () => {
       setError(String(failure));
     }
   };
-  const share = async (method: "qr" | "download" | "mail") => {
+  const exportEditable = () => {
+    for (const board of pages.filter((page) => selected.includes(page.id))) {
+      const url = URL.createObjectURL(
+        new Blob(
+          [
+            JSON.stringify({
+              type: "excalidraw",
+              version: 2,
+              source: "Fcboard",
+              elements: board.elements,
+              files: board.files,
+              appState: board.view,
+            }),
+          ],
+          { type: "application/json" },
+        ),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${board.name}.excalidraw`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  };
+  const share = async (method: "qr" | "download" | "mail" | "pdf") => {
     const current = ++generation.current;
     setBusy(true);
     setError("");
@@ -133,13 +159,17 @@ export const BoardShare = () => {
             exportBackground: true,
             exportWithDarkMode: false,
           },
-          mimeType: "image/png",
+          mimeType: method === "download" ? "image/jpeg" : "image/png",
           maxWidthOrHeight: 2000,
         });
         if (current !== generation.current) {
           return;
         }
-        if (method === "qr" || (method === "mail" && native)) {
+        if (
+          method === "qr" ||
+          method === "pdf" ||
+          (method === "mail" && native)
+        ) {
           images.push(await getDataURL(blob));
         } else if (method === "mail") {
           files.push(
@@ -151,7 +181,7 @@ export const BoardShare = () => {
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
-          link.download = `Fcboard-${pages.indexOf(board) + 1}.png`;
+          link.download = `Fcboard-${pages.indexOf(board) + 1}.jpg`;
           link.click();
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
@@ -167,9 +197,12 @@ export const BoardShare = () => {
             "fcboard.scan_to_download_the_selected_pages_expires_in_ten_minutes_or_when_this_window_closes",
           ),
         );
-      } else if (method === "mail") {
+      } else if (method === "mail" || method === "pdf") {
         if (native) {
-          await Classroom.sharePages({ pages: images });
+          await Classroom.sharePages({
+            pages: images,
+            ...(method === "pdf" ? { format: "pdf" as const } : {}),
+          });
         } else if (navigator.canShare?.({ files })) {
           await navigator.share({
             files,
@@ -191,7 +224,7 @@ export const BoardShare = () => {
           ),
         );
       } else {
-        setStatus(t("fcboard.selected_pages_exported_as_png"));
+        setStatus(t("fcboard.selected_pages_exported_as_images"));
       }
     } catch (failure) {
       if (current === generation.current) {
@@ -207,10 +240,13 @@ export const BoardShare = () => {
     return null;
   }
   return (
-    <section
+    <MaterialPanel
+      centered
+      onDismiss={() => void close()}
       ref={panel}
-      className="fc-board-picker fc-surface"
-      style={style}
+      className={`fc-share-dialog fc-surface${
+        !choosing && !mail ? " fc-share-dialog--formats" : ""
+      }`}
       role="dialog"
       aria-label={t("fcboard.share_board")}
       onKeyDown={(event) => {
@@ -222,35 +258,87 @@ export const BoardShare = () => {
     >
       <header>
         <strong>
-          {mail ? t("fcboard.mail_sent") : t("fcboard.share_board")}
+          {choosing
+            ? t("fcboard.select_pages")
+            : mail
+            ? t("fcboard.mail_sent")
+            : t("fcboard.share_board")}
         </strong>
         <button
           aria-label={t("fcboard.close_sharing")}
           onClick={() => void close()}
         >
-          {t("fcboard.close")}
+          {CloseIcon}
         </button>
       </header>
       <TransientMessage message={error} role="alert" />
-      <fieldset disabled={busy}>
-        <legend>{t("fcboard.select_pages")}</legend>
-        {pages.map((page, index) => (
-          <label key={page.id} className="fc-share-page">
-            <input
-              type="checkbox"
-              checked={selected.includes(page.id)}
-              onChange={(event) =>
-                setSelected((previous) =>
-                  event.target.checked
-                    ? [...previous, page.id]
-                    : previous.filter((id) => id !== page.id),
-                )
+      {choosing ? (
+        <fieldset disabled={busy}>
+          <legend>{t("fcboard.select_pages")}</legend>
+          <div className="fc-share-selection">
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(pages.map((page) => page.id).slice(0, 20))
               }
-            />
-            {t("fcboard.page_page", { page: index + 1 })} · {page.name}
-          </label>
-        ))}
-      </fieldset>
+            >
+              {t("labels.selectAll")}
+            </button>
+            <button type="button" onClick={() => setSelected([])}>
+              {t("fcboard.select_none")}
+            </button>
+          </div>
+          <div className="fc-share-pages">
+            {pages.map((page, index) => (
+              <label key={page.id} className="fc-share-page">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(page.id)}
+                  onChange={(event) =>
+                    setSelected((previous) =>
+                      event.target.checked
+                        ? [...previous, page.id]
+                        : previous.filter((id) => id !== page.id),
+                    )
+                  }
+                />
+                <BoardThumbnail board={page} />
+                <span>{t("fcboard.page_page", { page: index + 1 })}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+      {!choosing && !mail && (
+        <div className="fc-share-formats">
+          <button
+            type="button"
+            disabled={busy || !selected.length}
+            onClick={exportEditable}
+          >
+            <img src={documentIcon} alt="" />
+            <span>{t("fcboard.save_a_copy")} (.excalidraw)</span>
+          </button>
+          <button
+            type="button"
+            disabled={busy || !selected.length}
+            onClick={() => void share("download")}
+          >
+            <img src={imageIcon} alt="" />
+            <span>{t("fcboard.download_selected_pages")}</span>
+          </button>
+          {native && (
+            <button
+              type="button"
+              disabled={busy || !selected.length}
+              onClick={() => void share("pdf")}
+            >
+              <img src={pdfIcon} alt="" />
+              <span>PDF</span>
+            </button>
+          )}
+        </div>
+      )}
       {busy && <p role="status">{t("fcboard.preparing_pages")}</p>}
       <TransientMessage message={status} />
       {urls.map((url) => (
@@ -262,36 +350,62 @@ export const BoardShare = () => {
         </div>
       ))}
       <footer>
-        {mail && (
-          <button
-            disabled={busy || !selected.length}
-            onClick={() => void share("mail")}
-          >
-            {t("fcboard.open_email_share_window")}
-          </button>
+        {choosing ? (
+          <>
+            <button type="button" onClick={() => void close()}>
+              {t("buttons.cancel")}
+            </button>
+            <button
+              type="button"
+              disabled={busy || !selected.length}
+              onClick={() => setChoosing(false)}
+            >
+              {t("buttons.confirm")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setChoosing(true)}
+            >
+              {t("fcboard.select_pages")}
+            </button>
+            {mail && (
+              <button
+                disabled={busy || !selected.length}
+                onClick={() => void share("mail")}
+              >
+                {t("fcboard.open_email_share_window")}
+              </button>
+            )}
+            {native && !mail && (
+              <button
+                disabled={busy || !selected.length}
+                onClick={() => void share("qr")}
+              >
+                {t("fcboard.generate_sharing_qr_code")}
+              </button>
+            )}
+            {mail && (
+              <button
+                disabled={busy || !selected.length}
+                onClick={() => void share("download")}
+              >
+                {t("fcboard.download_selected_pages")}
+              </button>
+            )}
+          </>
         )}
-        {native && !mail && (
-          <button
-            disabled={busy || !selected.length}
-            onClick={() => void share("qr")}
-          >
-            {t("fcboard.generate_sharing_qr_code")}
-          </button>
-        )}
-        <button
-          disabled={busy || !selected.length}
-          onClick={() => void share("download")}
-        >
-          {t("fcboard.download_selected_pages")}
-        </button>
       </footer>
-      {!native && (
+      {!native && !choosing && (
         <p>
           {t(
             "fcboard.android_displays_support_qr_downloads_on_the_same_network_you_can_export_pages_here",
           )}
         </p>
       )}
-    </section>
+    </MaterialPanel>
   );
 };

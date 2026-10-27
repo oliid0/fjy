@@ -170,6 +170,11 @@ it.each([
       fireEvent.click(
         screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
       );
+      if (label !== "file_transfer") {
+        fireEvent.click(
+          screen.getByRole("button", { name: t("fcboard.next_page") }),
+        );
+      }
       if (label === "ai_questions") {
         expect(
           screen.getAllByRole("button", { name: t("fcboard.ai_questions") }),
@@ -193,6 +198,41 @@ it.each([
     }
   },
 );
+
+it("keeps original tools on the first page, exposes additions with dots, and toggles closed on another toolbar tap", () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+  render(<TeachingTools api={emptyApi()} />);
+  const trigger = screen.getByRole("button", {
+    name: t("fcboard.teaching_tools"),
+  });
+  fireEvent.pointerDown(trigger);
+  fireEvent.click(trigger);
+  expect(
+    screen.getByRole("button", {
+      name: t("fcboard.insert_name", { name: t("fcboard.ruler") }),
+    }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.ai_summary") }),
+  ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.next_page") }));
+  expect(
+    screen.getByRole("button", { name: t("fcboard.ai_summary") }),
+  ).toBeInTheDocument();
+  fireEvent.pointerDown(trigger);
+  fireEvent.click(trigger);
+  expect(
+    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+  ).toBeNull();
+  fireEvent.click(trigger);
+  expect(
+    screen.getByRole("button", { name: t("fcboard.previous_page") }),
+  ).toHaveAttribute("aria-pressed", "true");
+  fireEvent.pointerDown(document.body);
+  expect(
+    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+  ).toBeNull();
+});
 
 it("closes the tool picker with the toolbar and allows the AI to show it again", async () => {
   const api = emptyApi();

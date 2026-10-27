@@ -1714,6 +1714,27 @@
     "recording_resume": "Resumir l' enregistrament",
     "minimize_recording": "Minimizar l' enregistrament",
     "restore_recording_window": "Restaurar la fenèstra d' enregistrament",
-    "language_pen": "Lenga · PEN"
+    "language_pen": "Lenga · PEN",
+    "attach_selection_image_to_ai": "Apondre una captura de la seleccion a las demandas d’IA",
+    "compass": "Compàs",
+    "set_square": "Escaira",
+    "education_categories": "Categorias educativas",
+    "math_experiments": "Experiéncias matematicas",
+    "math_concepts": "Concèptes matematics",
+    "math_applications": "Aplicacions de las matematicas",
+    "select_none": "Deseleccionar tot",
+    "mindmap_add_child": "Apondre un nos filh",
+    "mindmap_move_node": "Desplaçar lo nos",
+    "mindmap_delete_node": "Suprimir lo nos e sos enfants",
+    "mindmap_clear_node": "Escafar lo tèxte del nos",
+    "selected_pages_exported_as_images": "Las paginas seleccionadas son estadas exportadas coma imatges",
+    "hard_pen_nib": "Afinament del traç de l’estilò dur",
+    "right_triangle": "Triangle rectangle",
+    "triangle": "Triangle",
+    "trapezoid": "Trapèzi",
+    "pentagon": "Pentagòn",
+    "hexagon": "Exagòn",
+    "star": "Estela",
+    "hemisphere": "Emisfèri"
   }
 }

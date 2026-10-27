@@ -143,6 +143,7 @@ test("new boards preserve previous work and replace the old material library wit
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
   await page.getByRole("button", { name: "教学工具", exact: true }).click();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
   await page.getByRole("button", { name: "插入单摆", exact: true }).click();
   const length = page.getByRole("slider", { name: "摆长 L（m）", exact: true });
   await expect(length).toBeVisible();
@@ -163,7 +164,12 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   await page.addInitScript(() => {
     localStorage.setItem(
       "fcboard-settings",
-      JSON.stringify({ apiKey: "test-only", model: "test", autoMath: false }),
+      JSON.stringify({
+        apiKey: "test-only",
+        model: "test",
+        autoMath: false,
+        selectionImages: true,
+      }),
     );
     localStorage.setItem(
       "fcboard-teaching",

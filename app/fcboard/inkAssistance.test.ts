@@ -23,6 +23,42 @@ import {
 } from "./insertObjects";
 import { sceneAPI } from "./test/scene";
 
+it("grows a table cell around its raw handwriting without invoking recognition", async () => {
+  const base = sceneAPI();
+  await renderInsertion(base, insertionDefaults("table", { x: 100, y: 100 }));
+  const background = base
+    .getSceneElements()
+    .filter((element) => element.customData?.fcInsertion);
+  const { api, ink, draw } = setup();
+  const source = newFreeDrawElement({
+    type: "freedraw",
+    x: 125,
+    y: 125,
+    points: [pointFrom(0, 0), pointFrom(225, 90)],
+    strokeColor: ink.strokeColor,
+    simulatePressure: true,
+  });
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const release = observeInkAssistance(api, vi.fn(), vi.fn());
+  try {
+    draw([...background, source]);
+    expect(
+      api.getSceneElements().find((element) => element.id === source.id),
+    ).toMatchObject({
+      type: "freedraw",
+      x: source.x,
+      y: source.y,
+      points: source.points,
+    });
+    expect(readInsertions(api)[0].columnWidths).toEqual([270, 120, 120]);
+    expect(readInsertions(api)[0].rowHeights).toEqual([135, 60, 60]);
+    expect(recognize).not.toHaveBeenCalled();
+    expect(api.updateScene).toHaveBeenCalledTimes(1);
+  } finally {
+    release();
+  }
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -36,6 +72,7 @@ const setup = (
 ) => {
   let scene: readonly ExcalidrawElement[] = [];
   let refresh = () => {};
+  let commit: Parameters<ExcalidrawImperativeAPI["onInkCommit"]>[0] = () => {};
   const api = {
     getSceneElements: () => scene,
     getAppState: () => ({
@@ -51,6 +88,12 @@ const setup = (
     onChange: (callback: () => void) => {
       refresh = callback;
       return () => {};
+    },
+    onInkCommit: (callback: typeof commit) => {
+      commit = callback;
+      return () => {
+        commit = () => {};
+      };
     },
     addFiles: vi.fn(),
     updateScene: vi.fn((update) => {
@@ -82,6 +125,10 @@ const setup = (
     ink,
     draw: (elements: readonly ExcalidrawElement[] = [ink]) => {
       scene = elements;
+      const stroke = elements.at(-1);
+      if (stroke?.type === "freedraw") {
+        commit(stroke);
+      }
       refresh();
     },
     append: () => {
@@ -277,6 +324,10 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
       await vi.advanceTimersByTimeAsync(1);
     });
     expect(recognize.mock.calls[0][3]).toBe("math");
+    const accepts = recognize.mock.calls[0][4]!;
+    expect(accepts("7")).toBe(false);
+    expect(accepts("6+7=")).toBe(true);
+    expect(accepts("65×3+12=")).toBe(true);
     expect(api.getSceneElements()).toEqual([ink]);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(350);

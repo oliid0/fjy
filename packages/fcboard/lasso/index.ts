@@ -4,7 +4,7 @@ import {
   pointFrom,
 } from "@excalidraw/math";
 
-import { getElementLineSegments } from "@excalidraw/element";
+import { getElementLineSegments, getCommonBounds } from "@excalidraw/element";
 import { LinearElementEditor } from "@excalidraw/element";
 import {
   isFrameLikeElement,
@@ -17,12 +17,7 @@ import { selectGroupsForSelectedElements } from "@excalidraw/element";
 
 import { getContainerElement } from "@excalidraw/element";
 
-import {
-  arrayToMap,
-  easeOut,
-  isShallowEqual,
-  DRAGGING_THRESHOLD,
-} from "@excalidraw/common";
+import { arrayToMap, easeOut, isShallowEqual } from "@excalidraw/common";
 
 import type {
   ExcalidrawElement,
@@ -35,7 +30,7 @@ import { type AnimationFrameHandler } from "../animation-frame-handler";
 import { AnimatedTrail } from "../animated-trail";
 
 import { getLassoBounds, getLassoSelectedElementIds } from "./utils";
-import { circleRegion, regionPath } from "./region";
+import { circleRegion, hasRegionArea } from "./region";
 
 import type { RegionBounds } from "./region";
 
@@ -55,12 +50,11 @@ export class LassoTrail extends AnimatedTrail {
     null;
   private canvasTranslate: CanvasTranslate | null = null;
   private keepPreviousSelection: boolean = false;
-  private regionExtent?: RegionBounds;
-  private regionStarted = false;
 
   constructor(animationFrameHandler: AnimationFrameHandler, app: App) {
     super(animationFrameHandler, app, {
       animateTrail: true,
+      centerline: app.props.UIOptions.unifiedToolbar,
       streamline: 0.4,
       sizeMapping: (c) => {
         const DECAY_TIME = Infinity;
@@ -76,8 +70,10 @@ export class LassoTrail extends AnimatedTrail {
 
         return Math.min(easeOut(l), easeOut(t));
       },
-      fill: () => "rgba(105,101,219,0.05)",
-      stroke: () => "rgba(105,101,219)",
+      fill: () =>
+        app.props.UIOptions.unifiedToolbar ? "none" : "rgba(105,101,219,0.05)",
+      stroke: () =>
+        app.props.UIOptions.unifiedToolbar ? "#16b6f1" : "rgba(105,101,219)",
     });
   }
 
@@ -91,13 +87,7 @@ export class LassoTrail extends AnimatedTrail {
 
     this.keepPreviousSelection =
       !this.app.props.UIOptions.unifiedToolbar && keepPreviousSelection;
-    this.regionExtent = { left: x, right: x, top: y, bottom: y };
-    this.regionStarted = false;
-
-    if (
-      !this.keepPreviousSelection &&
-      !this.app.props.UIOptions.unifiedToolbar
-    ) {
+    if (!this.keepPreviousSelection) {
       this.app.setState({
         whiteboardSelection: undefined,
         selectedElementIds: {},
@@ -121,6 +111,33 @@ export class LassoTrail extends AnimatedTrail {
       if (this.keepPreviousSelection) {
         for (const id of Object.keys(prevState.selectedElementIds)) {
           nextSelectedElementIds[id] = true;
+        }
+      }
+
+      if (this.app.props.UIOptions.unifiedToolbar) {
+        const composite = (element: ExcalidrawElement) => {
+          const data = element.customData;
+          return data?.fcWidget
+            ? `widget:${data.fcWidget.id}`
+            : data?.fcInsertion
+            ? `insertion:${data.fcInsertion.id}`
+            : data?.fcPlot
+            ? `plot:${data.fcPlot.id}`
+            : data?.fcLanguage
+            ? `language:${data.fcLanguage.group}`
+            : undefined;
+        };
+        const groups = new Set(
+          this.app.scene
+            .getNonDeletedElements()
+            .filter((element) => nextSelectedElementIds[element.id])
+            .map(composite)
+            .filter(Boolean),
+        );
+        for (const element of this.app.scene.getNonDeletedElements()) {
+          if (!element.locked && groups.has(composite(element))) {
+            nextSelectedElementIds[element.id] = true;
+          }
         }
       }
 
@@ -169,11 +186,25 @@ export class LassoTrail extends AnimatedTrail {
 
       const selectedIds = [...Object.keys(nextSelection.selectedElementIds)];
       const selectedGroupIds = [...Object.keys(nextSelection.selectedGroupIds)];
+      const selected = this.app.scene
+        .getNonDeletedElements()
+        .filter((element) => nextSelection.selectedElementIds[element.id]);
+      const padding = 20 / this.app.state.zoom.value;
+      const [left, top, right, bottom] = getCommonBounds(selected);
+      const operationBounds =
+        selected.length && bounds
+          ? {
+              left: left - padding,
+              top: top - padding,
+              right: right + padding,
+              bottom: bottom + padding,
+            }
+          : undefined;
 
       return {
         whiteboardSelection:
-          bounds && !this.keepPreviousSelection
-            ? { bounds, elementIds: selectedIds, path }
+          operationBounds && !this.keepPreviousSelection
+            ? { bounds: operationBounds, elementIds: selectedIds, path }
             : undefined,
         selectedElementIds: nextSelection.selectedElementIds,
         selectedGroupIds: nextSelection.selectedGroupIds,
@@ -195,32 +226,11 @@ export class LassoTrail extends AnimatedTrail {
   };
 
   addPointToPath = (x: number, y: number, keepPreviousSelection = false) => {
+    if (this.app.props.UIOptions.unifiedToolbar && this.hasLastPoint(x, y)) {
+      return;
+    }
     super.addPointToPath(x, y);
-
-    if (
-      this.app.props.UIOptions.unifiedToolbar &&
-      this.regionExtent &&
-      !this.regionStarted
-    ) {
-      const bounds = this.regionExtent;
-      bounds.left = Math.min(bounds.left, x);
-      bounds.right = Math.max(bounds.right, x);
-      bounds.top = Math.min(bounds.top, y);
-      bounds.bottom = Math.max(bounds.bottom, y);
-      if (
-        Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top) *
-          this.app.state.zoom.value >=
-        DRAGGING_THRESHOLD
-      ) {
-        this.regionStarted = true;
-        this.app.setState({
-          whiteboardSelection: undefined,
-          selectedElementIds: {},
-          selectedGroupIds: {},
-          selectedLinearElement: null,
-        });
-      }
-    } else if (!this.app.props.UIOptions.unifiedToolbar) {
+    if (!this.app.props.UIOptions.unifiedToolbar) {
       this.keepPreviousSelection = keepPreviousSelection;
       this.updateSelection();
     }
@@ -236,22 +246,23 @@ export class LassoTrail extends AnimatedTrail {
     };
   };
 
-  selectRegion = (bounds: RegionBounds) => {
-    const path = regionPath(bounds);
+  private selectRegion = (bounds: RegionBounds, path: GlobalPoint[]) => {
     const elementsMap = this.app.scene.getNonDeletedElementsMap();
-    const { selectedElementIds } = getLassoSelectedElementIds({
-      lassoPath: path,
-      elements: this.app.visibleElements,
-      elementsMap,
-      elementsSegments: new Map(
-        this.app.visibleElements.map((element) => [
-          element.id,
-          getElementLineSegments(element, elementsMap),
-        ]),
-      ),
-      intersectedElements: new Set(),
-      enclosedElements: new Set(),
-    });
+    const { selectedElementIds } = !hasRegionArea(path)
+      ? { selectedElementIds: [] }
+      : getLassoSelectedElementIds({
+          lassoPath: path,
+          elements: this.app.visibleElements,
+          elementsMap,
+          elementsSegments: new Map(
+            this.app.visibleElements.map((element) => [
+              element.id,
+              getElementLineSegments(element, elementsMap),
+            ]),
+          ),
+          intersectedElements: new Set(),
+          enclosedElements: new Set(),
+        });
     this.selectElementsFromIds(selectedElementIds, bounds, path);
   };
 
@@ -264,7 +275,12 @@ export class LassoTrail extends AnimatedTrail {
         this.app.state.zoom.value,
       );
       if (bounds) {
-        this.selectRegion(bounds);
+        // SelectCacheLayer closes the actual gesture on lift. The padded
+        // rectangle is the operation frame, never the selection geometry.
+        this.selectRegion(
+          bounds,
+          path.map(([x, y]) => pointFrom<GlobalPoint>(x, y)),
+        );
       }
     }
     this.endPath();

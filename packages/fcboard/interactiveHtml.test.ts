@@ -1,6 +1,6 @@
 import { interactiveHtml } from "./interactiveHtml";
 
-const lesson = `<h1>Acceleration</h1><input type="range"><output>2 m/s²</output><script>document.querySelector('input').oninput=()=>{};</script>`;
+const lesson = `<h1>Acceleration</h1><input type="range"><svg viewBox="0 0 400 100"><rect width="40" height="40" /></svg><output>2 m/s²</output><script>document.querySelector('input').oninput=()=>{};</script>`;
 
 it("retains local interaction and prepends the network-free document policy", () => {
   const html = interactiveHtml(lesson);
@@ -32,6 +32,8 @@ it("removes remote loading, nested documents and redirects before the iframe par
 it.each([
   "<h1>Static diagram</h1>",
   "<button>Dead button</button><output>1</output>",
+  "<input><output>2</output><script>document.querySelector('input').oninput=()=>{};</script>",
+  `<form>${lesson}</form>`,
   "<button>Dead button</button><output>1</output><script data-fc-lesson-controls>fake bootstrap</script>",
   "x".repeat(120001),
 ])("rejects an invalid or static lesson", (html) => {

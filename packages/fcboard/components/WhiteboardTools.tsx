@@ -45,6 +45,7 @@ export const WhiteboardTools = ({
     setPopupGap((16 * anchor.getBoundingClientRect().height) / 48);
   const state = useUIAppState();
   const tunnels = useTunnels();
+  const hasHostShapes = tunnels.ToolbarShapesTunnel.useHasEntries();
   const [shapesOpen, setShapesOpen] = React.useState(false);
   const { container } = useExcalidrawContainer();
   const finishClear = (value: number) => {
@@ -69,12 +70,23 @@ export const WhiteboardTools = ({
     [app],
   );
   React.useEffect(() => {
-    setOpen(false);
-    setShapesOpen(false);
+    if (
+      state.toolbarHidden ||
+      activeTool.type !== "custom" ||
+      !activeTool.customType?.startsWith("factory-shape:")
+    ) {
+      setOpen(false);
+      setShapesOpen(false);
+    }
     if (activeTool.type !== "eraser" || state.toolbarHidden) {
       setEraserOpen(false);
     }
-  }, [activeTool.type, state.toolbarHidden]);
+  }, [activeTool.type, activeTool.customType, state.toolbarHidden]);
+  React.useEffect(() => {
+    const close = () => setOpen(false);
+    window.addEventListener("fcboard:shape-draw", close);
+    return () => window.removeEventListener("fcboard:shape-draw", close);
+  }, []);
   return (
     <>
       <ToolButton
@@ -222,102 +234,55 @@ export const WhiteboardTools = ({
                     <span
                       className="fc-eraser-dot"
                       style={
-                        { "--fc-dot-size": pixels / 5 } as React.CSSProperties
+                        {
+                          "--fc-dot-size":
+                            pixels === 100 ? 14 : pixels === 150 ? 21 : 29,
+                        } as React.CSSProperties
                       }
                     />
                   </button>
                 ))}
               </div>
-              <details className="fc-eraser-advanced">
-                <summary>{t("fcboard.touch_and_eraser_settings")}</summary>
-                <div className="fc-eraser-mode">
-                  <span>{t("fcboard.erase_mode")}</span>
-                  <ToggleButtonGroup
-                    aria-label={t("fcboard.erase_mode")}
-                    value={state.eraserMode || "stroke"}
-                    exclusive
-                    size="small"
-                    orientation="vertical"
-                    onChange={(_event, value: "stroke" | "object" | null) => {
-                      if (value) {
-                        props.setAppState({ eraserMode: value });
-                        setEraserOpen(false);
-                      }
-                    }}
+              <div className="fc-eraser-mode">
+                <span>{t("fcboard.erase_mode")}</span>
+                <ToggleButtonGroup
+                  aria-label={t("fcboard.erase_mode")}
+                  value={state.eraserMode || "stroke"}
+                  exclusive
+                  size="small"
+                  orientation="horizontal"
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "ArrowLeft" ||
+                      event.key === "ArrowRight"
+                    ) {
+                      event.preventDefault();
+                      props.setAppState({
+                        eraserMode:
+                          event.key === "ArrowLeft" ? "stroke" : "object",
+                      });
+                    }
+                  }}
+                  onChange={(_event, value: "stroke" | "object" | null) => {
+                    if (value) {
+                      props.setAppState({ eraserMode: value });
+                    }
+                  }}
+                >
+                  <ToggleButton
+                    value="stroke"
+                    aria-label={t("fcboard.erase_part_of_a_stroke")}
                   >
-                    <ToggleButton
-                      value="stroke"
-                      aria-label={t("fcboard.erase_part_of_a_stroke")}
-                    >
-                      {t("fcboard.erase_part_of_a_stroke")}
-                    </ToggleButton>
-                    <ToggleButton
-                      value="object"
-                      aria-label={t("fcboard.erase_entire_object")}
-                    >
-                      {t("fcboard.erase_entire_object")}
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                </div>
-                <label>
-                  {t("fcboard.eraser_size_screen_pixels")}
-                  <input
-                    type="range"
-                    min="12"
-                    max="240"
-                    step="2"
-                    value={
-                      state.eraserSize ??
-                      app.props.UIOptions.inkProfile?.eraserSize ??
-                      60
-                    }
-                    onChange={(event) =>
-                      props.setAppState({
-                        eraserSize: Number(event.target.value),
-                      })
-                    }
-                  />
-                  <output>
-                    {state.eraserSize ??
-                      app.props.UIOptions.inkProfile?.eraserSize ??
-                      60}
-                  </output>
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={state.palmEraser !== false}
-                    onChange={(event) =>
-                      props.setAppState({ palmEraser: event.target.checked })
-                    }
-                  />
-                  {t("fcboard.palm_erasing")}
-                </label>
-                <label>
-                  {t("fcboard.palm_threshold_screen_pixels")}
-                  <input
-                    type="range"
-                    min="16"
-                    max="120"
-                    value={
-                      state.palmEraserThreshold ??
-                      app.props.UIOptions.inkProfile?.palmThreshold ??
-                      36
-                    }
-                    disabled={state.palmEraser === false}
-                    onChange={(event) =>
-                      props.setAppState({
-                        palmEraserThreshold: Number(event.target.value),
-                      })
-                    }
-                  />
-                  <output>
-                    {state.palmEraserThreshold ??
-                      app.props.UIOptions.inkProfile?.palmThreshold ??
-                      36}
-                  </output>
-                </label>
-              </details>
+                    {t("fcboard.erase_part_of_a_stroke")}
+                  </ToggleButton>
+                  <ToggleButton
+                    value="object"
+                    aria-label={t("fcboard.erase_entire_object")}
+                  >
+                    {t("fcboard.erase_entire_object")}
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </div>
             </Paper>
           </Popper>
         </ClickAwayListener>
@@ -379,56 +344,67 @@ export const WhiteboardTools = ({
               role="dialog"
               aria-label={t("fcboard.insert_tools")}
             >
-              <div
-                className="fc-insert-grid"
-                onClick={(event) => {
-                  if (
-                    (event.target as Element).closest("[data-close-insert]")
-                  ) {
-                    setOpen(false);
-                  }
-                }}
-              >
-                <button
-                  type="button"
-                  aria-expanded={shapesOpen}
-                  onClick={() => setShapesOpen(!shapesOpen)}
-                >
-                  <FactoryIcon name="shape" />
-                  <span>{t("fcboard.shape")}</span>
-                </button>
-                <tunnels.ToolbarInsertTunnel.Out />
-              </div>
-              {shapesOpen && (
+              {!shapesOpen && (
                 <div
-                  className="fc-insert-shapes"
+                  className="fc-insert-grid"
                   onClick={(event) => {
-                    if ((event.target as Element).closest("button")) {
+                    if (
+                      (event.target as Element).closest("[data-close-insert]")
+                    ) {
                       setOpen(false);
                     }
                   }}
                 >
-                  {SHAPES.filter(({ value }) =>
-                    [
-                      "rectangle",
-                      "diamond",
-                      "ellipse",
-                      "arrow",
-                      "line",
-                    ].includes(value),
-                  ).map(({ value, icon }) => (
-                    <ToolButton
-                      key={value}
-                      type="button"
-                      icon={icon}
-                      showAriaLabel
-                      aria-label={t(`toolBar.${value}`)}
-                      data-testid={`toolbar-${value}`}
-                      selected={activeTool.type === value}
-                      onClick={() => app.setActiveTool({ type: value })}
-                    />
-                  ))}
-                  <tunnels.ToolbarShapesTunnel.Out />
+                  <button
+                    type="button"
+                    aria-expanded={shapesOpen}
+                    onClick={() => {
+                      if (
+                        !shapesOpen &&
+                        hasHostShapes &&
+                        (activeTool.type !== "custom" ||
+                          !activeTool.customType?.startsWith("factory-shape:"))
+                      ) {
+                        app.setActiveTool({
+                          type: "custom",
+                          customType: "factory-shape:0",
+                        });
+                      }
+                      setShapesOpen(!shapesOpen);
+                    }}
+                  >
+                    <FactoryIcon name="shape" />
+                    <span>{t("fcboard.shape")}</span>
+                  </button>
+                  <tunnels.ToolbarInsertTunnel.Out />
+                </div>
+              )}
+              {shapesOpen && (
+                <div className="fc-insert-shapes">
+                  {hasHostShapes ? (
+                    <tunnels.ToolbarShapesTunnel.Out />
+                  ) : (
+                    SHAPES.filter(({ value }) =>
+                      [
+                        "rectangle",
+                        "diamond",
+                        "ellipse",
+                        "arrow",
+                        "line",
+                      ].includes(value),
+                    ).map(({ value, icon }) => (
+                      <ToolButton
+                        key={value}
+                        type="button"
+                        icon={icon}
+                        showAriaLabel
+                        aria-label={t(`toolBar.${value}`)}
+                        data-testid={`toolbar-${value}`}
+                        selected={activeTool.type === value}
+                        onClick={() => app.setActiveTool({ type: value })}
+                      />
+                    ))
+                  )}
                 </div>
               )}
             </Paper>

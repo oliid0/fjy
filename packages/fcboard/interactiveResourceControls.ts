@@ -1,13 +1,20 @@
 export type ResourceSurface = "whiteboard" | "document";
+export type ResourcePoint = { x: number; y: number };
 export type ResourceControlState = {
   version: string;
   title: string;
+  viewport: { width: number; height: number };
+  offset: number;
+  total: number;
   controls: {
     id: string;
     label: string;
     type: string;
     disabled: boolean;
     value: string | boolean;
+    kind?: string;
+    role?: string;
+    bounds?: ResourcePoint & { width: number; height: number };
     min?: string;
     max?: string;
     step?: string;
@@ -17,8 +24,15 @@ export type ResourceControlState = {
   truncated: boolean;
 };
 export type ResourceControlRequest =
-  | { type: "inspect" }
-  | { type: "click"; version: string; control: string }
+  | { type: "inspect"; offset?: number }
+  | { type: "click"; version: string; control: string; from?: ResourcePoint }
+  | {
+      type: "drag";
+      version: string;
+      control: string;
+      from?: ResourcePoint;
+      to: ResourcePoint;
+    }
   | {
       type: "set";
       version: string;
@@ -78,6 +92,16 @@ const isState = (value: unknown): value is ResourceControlState => {
     state.version.length <= 100 &&
     typeof state.title === "string" &&
     state.title.length <= 160 &&
+    !!state.viewport &&
+    [state.viewport.width, state.viewport.height].every(
+      (value) => Number.isFinite(value) && value > 0 && value <= 100000,
+    ) &&
+    Number.isInteger(state.offset) &&
+    state.offset >= 0 &&
+    state.offset <= 50000 &&
+    Number.isInteger(state.total) &&
+    state.total >= 0 &&
+    state.total <= 50000 &&
     typeof state.truncated === "boolean" &&
     Array.isArray(state.outputs) &&
     state.outputs.length <= 32 &&
@@ -101,6 +125,22 @@ const isState = (value: unknown): value is ResourceControlState => {
         typeof item.disabled === "boolean" &&
         (typeof item.value === "boolean" ||
           (typeof item.value === "string" && item.value.length <= 500)) &&
+        (item.kind === undefined ||
+          (typeof item.kind === "string" && item.kind.length <= 20)) &&
+        (item.role === undefined ||
+          (typeof item.role === "string" && item.role.length <= 80)) &&
+        (item.bounds === undefined ||
+          (Object.values(item.bounds).every(
+            (value) => Number.isFinite(value) && Math.abs(value) <= 100000,
+          ) &&
+            [
+              item.bounds.x,
+              item.bounds.y,
+              item.bounds.width,
+              item.bounds.height,
+            ].every(Number.isFinite) &&
+            item.bounds.width >= 0 &&
+            item.bounds.height >= 0)) &&
         (item.options === undefined ||
           (Array.isArray(item.options) &&
             item.options.length <= 80 &&

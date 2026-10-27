@@ -1,15 +1,23 @@
 import { t } from "@excalidraw/excalidraw/i18n";
 import { factoryBrushWidths } from "@excalidraw/element/factoryBrush";
+import { pointFrom } from "@excalidraw/math";
+import { CaptureUpdateAction } from "@excalidraw/element";
 
 import { DEFAULT_ELEMENT_PROPS } from "@excalidraw/common";
 
 import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
 
+import { boardContext } from "../../../app/fcboard/ai";
+
 import { Excalidraw } from "../index";
 import { getNormalizedZoom } from "../scene";
+import * as StaticScene from "../renderer/staticScene";
+import * as NewElementScene from "../renderer/renderNewElementScene";
 
 import { API } from "./helpers/api";
 import { act, fireEvent, render, screen, within } from "./test-utils";
+
+import type { ExcalidrawImperativeAPI } from "../types";
 
 const { h } = window;
 const pointer = (
@@ -45,6 +53,173 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  it("keeps a populated board static while live coalesced pressure ink paints in the overlay and stays readable through the API", async () => {
+    const staticPaint = vi.spyOn(StaticScene, "renderStaticScene");
+    const inkPaint = vi.spyOn(NewElementScene, "renderNewElementScene");
+    let api!: ExcalidrawImperativeAPI;
+    try {
+      const { container } = await render(
+        <Excalidraw
+          UIOptions={{ unifiedToolbar: true }}
+          onExcalidrawAPI={(value) => {
+            api = value;
+          }}
+        />,
+      );
+      h.state.width = 1600;
+      h.state.height = 900;
+      const background = Array.from({ length: 100 }, (_, index) =>
+        API.createElement({
+          type: "rectangle",
+          x: (index % 20) * 70,
+          y: Math.floor(index / 20) * 70,
+          width: 30,
+          height: 30,
+        }),
+      );
+      API.updateScene({ elements: background });
+      act(() => h.app.setActiveTool({ type: "freedraw" }));
+      const canvas = container.querySelector("canvas.interactive")!;
+      pointer(canvas, "pointerdown", 100, 500, {
+        pointerType: "pen",
+        pressure: 0.2,
+      });
+      const staticBefore = staticPaint.mock.calls.length;
+      const liveBefore = inkPaint.mock.calls.length;
+      for (let index = 1; index <= 12; index++) {
+        pointer(canvas, "pointermove", 100 + index * 20, 500 + index, {
+          pointerType: "pen",
+          pressure: 0.8,
+          getCoalescedEvents: () => [
+            { clientX: 90 + index * 20, clientY: 500 + index, pressure: 0.4 },
+          ],
+        });
+      }
+      const active = api
+        .getSceneElements()
+        .find((element) => element.type === "freedraw")!;
+      expect(active.points).toHaveLength(25);
+      expect(active.points.at(-1)).toEqual([240, 12]);
+      expect(active.pressures.slice(-2)).toEqual([0.4, 0.8]);
+      expect(staticPaint.mock.calls.length).toBe(staticBefore);
+      expect(inkPaint.mock.calls.length - liveBefore).toBe(12);
+      expect(
+        inkPaint.mock.lastCall?.[0].activeInkElements?.map(
+          (element) => element.id,
+        ),
+      ).toEqual([active.id]);
+      expect(
+        staticPaint.mock.lastCall?.[0].visibleElements.some(
+          (element) => element.id === active.id,
+        ),
+      ).toBe(false);
+      const crop = vi.spyOn(CanvasRenderingContext2D.prototype, "drawImage");
+      crop.mockClear();
+      try {
+        await boardContext(api, false, undefined, {
+          left: 90,
+          top: 490,
+          right: 360,
+          bottom: 530,
+        });
+        expect(crop.mock.calls.map((call) => call[0])).toEqual([
+          container.querySelector("canvas.static"),
+          container.querySelector("canvas.new-element"),
+        ]);
+        expect(crop.mock.calls[0].slice(1)).toEqual(
+          crop.mock.calls[1].slice(1),
+        );
+      } finally {
+        crop.mockRestore();
+      }
+      pointer(canvas, "pointerup", 350, 514, {
+        pointerType: "pen",
+        pressure: 0,
+      });
+      expect(staticPaint.mock.calls.length).toBeGreaterThan(staticBefore);
+      expect(
+        staticPaint.mock.lastCall?.[0].visibleElements.some(
+          (element) => element.id === active.id,
+        ),
+      ).toBe(true);
+      expect(inkPaint.mock.lastCall?.[0].activeInkElements).toEqual([]);
+      expect(active.points.at(-1)).toEqual([250, 14]);
+      expect(active.pressures.at(-1)).toBe(0);
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(api.getSceneElements()).toHaveLength(100);
+    } finally {
+      staticPaint.mockRestore();
+      inkPaint.mockRestore();
+    }
+  });
+
+  it("keeps the other active contact visible when one stroke merges into the static board", async () => {
+    const inkPaint = vi.spyOn(NewElementScene, "renderNewElementScene");
+    const staticPaint = vi.spyOn(StaticScene, "renderStaticScene");
+    try {
+      const { container } = await render(
+        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      );
+      h.state.width = 1600;
+      h.state.height = 900;
+      const canvas = container.querySelector("canvas.interactive")!;
+      API.setAppState({ multiStroke: true });
+      act(() => h.app.setActiveTool({ type: "freedraw" }));
+      pointer(canvas, "pointerdown", 100, 200, {
+        pointerId: 11,
+        pointerType: "pen",
+      });
+      pointer(canvas, "pointerdown", 100, 300, {
+        pointerId: 12,
+        pointerType: "pen",
+      });
+      pointer(canvas, "pointermove", 200, 200, {
+        pointerId: 11,
+        pointerType: "pen",
+      });
+      pointer(canvas, "pointermove", 200, 300, {
+        pointerId: 12,
+        pointerType: "pen",
+      });
+      const [first, second] = live();
+      expect(
+        inkPaint.mock.lastCall?.[0].activeInkElements?.map(
+          (element) => element.id,
+        ),
+      ).toEqual([first.id, second.id]);
+      pointer(canvas, "pointerup", 240, 300, {
+        pointerId: 12,
+        pointerType: "pen",
+      });
+      expect(
+        inkPaint.mock.lastCall?.[0].activeInkElements?.map(
+          (element) => element.id,
+        ),
+      ).toEqual([first.id]);
+      expect(
+        staticPaint.mock.lastCall?.[0].visibleElements.map(
+          (element) => element.id,
+        ),
+      ).toEqual([second.id]);
+      const staticBefore = staticPaint.mock.calls.length;
+      pointer(canvas, "pointermove", 300, 200, {
+        pointerId: 11,
+        pointerType: "pen",
+      });
+      expect(staticPaint.mock.calls.length).toBe(staticBefore);
+      pointer(canvas, "pointerup", 320, 200, {
+        pointerId: 11,
+        pointerType: "pen",
+      });
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(live().map((element) => element.id)).toEqual([second.id]);
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(live()).toEqual([]);
+    } finally {
+      inkPaint.mockRestore();
+      staticPaint.mockRestore();
+    }
+  });
   it("switches local and whole-object erasing through buttons rather than an editable field", async () => {
     await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
     const eraser = screen.getByRole("button", {
@@ -52,15 +227,12 @@ describe("APK-style whiteboard ink", () => {
     });
     fireEvent.click(eraser);
     fireEvent.click(eraser);
-    fireEvent.click(screen.getByText(t("fcboard.touch_and_eraser_settings")));
     fireEvent.click(
       within(
         screen.getByRole("group", { name: t("fcboard.erase_mode") }),
       ).getByRole("button", { name: t("fcboard.erase_entire_object") }),
     );
     expect(h.state.eraserMode).toBe("object");
-    fireEvent.click(eraser);
-    fireEvent.click(screen.getByText(t("fcboard.touch_and_eraser_settings")));
     fireEvent.click(
       screen.getByRole("button", {
         name: t("fcboard.erase_part_of_a_stroke"),
@@ -854,6 +1026,72 @@ describe("APK-style whiteboard ink", () => {
     });
     expect(live()).toHaveLength(2);
     expect(h.state.activeTool.type).toBe("freedraw");
+  });
+  it("starts palm erasing while another pen is down, preserves that handwriting and ignores its late lift", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    draw(canvas);
+    pointer(canvas, "pointerdown", 100, 400, {
+      pointerId: 2,
+      pointerType: "pen",
+    });
+    pointer(canvas, "pointermove", 200, 400, {
+      pointerId: 2,
+      pointerType: "pen",
+    });
+    pointer(canvas, "pointerdown", 250, 200, {
+      pointerId: 3,
+      pointerType: "touch",
+      width: 70,
+      height: 80,
+    });
+    expect(container.querySelector(".fc-eraser-preview")).not.toBeNull();
+    pointer(canvas, "pointerup", 250, 200, {
+      pointerId: 3,
+      pointerType: "touch",
+      width: 70,
+      height: 80,
+    });
+    const completed = live();
+    expect(completed.filter((element) => element.y === 400)).toHaveLength(1);
+    expect(completed.filter((element) => element.y === 200)).toHaveLength(2);
+    pointer(canvas, "pointerup", 500, 400, {
+      pointerId: 2,
+      pointerType: "pen",
+    });
+    expect(live()).toEqual(completed);
+    fireEvent.click(screen.getByTestId("button-undo"));
+    expect(live()).toHaveLength(2);
+    expect(live().filter((element) => element.y === 400)).toHaveLength(1);
+  });
+
+  it("uses the visible object eraser footprint at its edge and restores the whole object with undo", async () => {
+    const { container } = await render(
+      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    const line = API.createElement({
+      type: "line",
+      x: 100,
+      y: 200,
+      points: [pointFrom(0, 0), pointFrom(300, 0)],
+    });
+    API.updateScene({
+      elements: [line],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    act(() => {
+      API.setAppState({ eraserMode: "object", eraserSize: 80 });
+      h.app.setActiveTool({ type: "eraser" });
+    });
+    pointer(canvas, "pointerdown", 250, 240);
+    expect(container.querySelector(".fc-eraser-preview")).not.toBeNull();
+    pointer(canvas, "pointerup", 250, 240);
+    expect(live()).toHaveLength(0);
+    fireEvent.click(screen.getByTestId("button-undo"));
+    expect(live().map((element) => element.id)).toEqual([line.id]);
   });
   it("keeps coalesced handwriting samples and a consistent screen width across zoom and DPR", async () => {
     const { container } = await render(

@@ -29,6 +29,7 @@ import { LessonCanvas, validateLesson } from "./lesson";
 import { prepareQuestionWriting } from "./questionWriting";
 import { resourcePlacement } from "./resourcePlacement";
 import { registerResourceCommands } from "./resourceControls";
+import { registerLanguageCommands } from "./languageCommands";
 import { inkAssistMode } from "./inkRecognition";
 import {
   configureCanvas,
@@ -217,6 +218,7 @@ export const registerCanvasCommands = (
   };
   const registrations = [
     registerResourceCommands(api),
+    registerLanguageCommands(api),
     classroomCommands.register(
       "canvas.configure",
       "Configure the existing controls. Read canvas.inspect.configuration first. args: backgroundColor=#RRGGBB, backgroundPattern=0 (none) or 1..13; tip=fine|thick; dualPen=boolean (requires thickThreshold or device calibration); thickThreshold=1..240, brushVariation=0..50, palmEraser=boolean, palmThreshold=16..120, eraserMode=stroke|object, eraserSize=12..240; multiStroke and toolbarReversed=boolean. Sizes and thresholds use CSS pixels. Background and multiStroke apply only to the whiteboard. Returns actual committed configuration; never changes existing handwriting.",
@@ -280,6 +282,15 @@ export const registerCanvasCommands = (
           if (args.action === "duplicateSelection") {
             return classroomCommands.execute({ name: "document.duplicate" });
           }
+          if (args.action === "selectAll") {
+            const document = classroomCommands.read("document") as
+              | { ink?: InkStroke[] }
+              | undefined;
+            return classroomCommands.execute({
+              name: "document.select",
+              args: { ids: (document?.ink || []).map((stroke) => stroke.id) },
+            });
+          }
           if (args.action === "undo" || args.action === "redo") {
             return classroomCommands.execute({
               name: `document.${args.action}`,
@@ -299,13 +310,42 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.tool",
-      "切换原工具，args.tool=selection|freedraw|eraser|text|rectangle|ellipse|diamond|line|arrow|hand|image|frame|laser",
-      (args) => {
+      "Switch the current visible surface tool: args.tool=selection|lasso|freedraw|eraser|text|rectangle|ellipse|diamond|line|arrow|hand|image|frame|laser. selection/lasso use the factory circle selector. For eraser, optional args.eraserMode=stroke|object and args.eraserSize=12..240 configure the real eraser before switching.",
+      async (args) => {
+        if (args.eraserMode !== undefined || args.eraserSize !== undefined) {
+          if (args.tool !== "eraser") {
+            throw new Error(t("fcboard.invalid_style_parameters"));
+          }
+          await classroomCommands.execute({
+            name: "canvas.configure",
+            args: {
+              ...(args.eraserMode !== undefined
+                ? { eraserMode: args.eraserMode }
+                : {}),
+              ...(args.eraserSize !== undefined
+                ? { eraserSize: args.eraserSize }
+                : {}),
+              ...(args.signal instanceof AbortSignal
+                ? { signal: args.signal }
+                : {}),
+            },
+          });
+        }
+        if (args.signal instanceof AbortSignal) {
+          args.signal.throwIfAborted();
+        }
         if (classroomCommands.has("document.tool")) {
-          return classroomCommands.execute({ name: "document.tool", args });
+          return classroomCommands.execute({
+            name: "document.tool",
+            args: {
+              ...args,
+              tool: args.tool === "lasso" ? "selection" : args.tool,
+            },
+          });
         }
         const tools = [
           "selection",
+          "lasso",
           "freedraw",
           "eraser",
           "text",
@@ -323,7 +363,8 @@ export const registerCanvasCommands = (
         if (!tool) {
           throw new Error(t("fcboard.unknown_tool"));
         }
-        api.setActiveTool({ type: tool });
+        api.setActiveTool({ type: tool === "selection" ? "lasso" : tool });
+        return { tool: api.getAppState().activeTool };
       },
     ),
     classroomCommands.register(
@@ -416,8 +457,12 @@ export const registerCanvasCommands = (
           throw new Error(t("fcboard.pen_width_out_of_range"));
         }
         if (pen || assist) {
+          api.setActiveTool({ type: "freedraw" });
           api.updateScene({
             appState: {
+              selectedElementIds: {},
+              selectedGroupIds: {},
+              whiteboardSelection: undefined,
               ...switchWhiteboardPen(api.getAppState(), pen || "hard"),
               currentItemInkAssist: assist,
             },
@@ -645,6 +690,7 @@ export const registerCanvasCommands = (
             },
           }),
         ]);
+        api.setActiveTool({ type: "lasso" });
         return { ids };
       },
     ),
@@ -737,7 +783,10 @@ export const registerCanvasCommands = (
           ? classroomCommands.execute({ name: "document.clearInk" })
           : api.updateScene({
               elements: [],
-              appState: { selectedElementIds: {} },
+              appState: {
+                selectedElementIds: {},
+                whiteboardSelection: undefined,
+              },
               captureUpdate: CaptureUpdateAction.IMMEDIATELY,
             }),
     ),

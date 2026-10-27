@@ -47,11 +47,12 @@ it.each([0.5, 1, 2])(
   },
 );
 
-it("distinguishes corner resize, border movement and a new interior gesture", () => {
+it("resizes from corners, moves the selected contents from the frame interior or border and starts a new gesture outside", () => {
   const bounds = { left: 100, top: 100, right: 300, bottom: 200 };
   expect(regionHandleAt(bounds, { x: 100, y: 100 }, 10)).toBe("nw");
   expect(regionHandleAt(bounds, { x: 200, y: 103 }, 10)).toBe("move");
-  expect(regionHandleAt(bounds, { x: 200, y: 150 }, 10)).toBeNull();
+  expect(regionHandleAt(bounds, { x: 200, y: 150 }, 10)).toBe("move");
+  expect(regionHandleAt(bounds, { x: 340, y: 150 }, 10)).toBeNull();
   const viewport = { left: 0, top: 0, right: 500, bottom: 400 };
   expect(resizeRegion(bounds, "se", { x: 900, y: 900 }, viewport, 1)).toEqual({
     ...bounds,

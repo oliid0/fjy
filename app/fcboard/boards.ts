@@ -133,14 +133,15 @@ export class BoardBook {
     this.writing = this.writing.catch(() => {}).then(() => this.save(snapshot));
     await this.writing;
   }
-  private restore(id: string) {
+  private restore(id: string, source?: AbortSignal) {
     const board = this.value.boards.find((item) => item.id === id);
     if (!board) {
       throw new Error(t("fcboard.board_does_not_exist"));
     }
+    source?.throwIfAborted();
     this.switching = true;
     const previousState = this.api.getAppState();
-    classroomCommands.invalidate();
+    classroomCommands.invalidate(source);
     this.api.resetScene();
     this.api.addFiles(Object.values(board.files));
     this.api.updateScene({
@@ -159,7 +160,8 @@ export class BoardBook {
     this.api.history.clear();
     this.switching = false;
   }
-  async switch(id: string) {
+  async switch(id: string, source?: AbortSignal) {
+    source?.throwIfAborted();
     if (id === this.value.active) {
       return;
     }
@@ -167,19 +169,29 @@ export class BoardBook {
       throw new Error(t("fcboard.board_does_not_exist"));
     }
     await this.flush();
+    source?.throwIfAborted();
     const previous = this.value;
-    this.value = { ...previous, active: id };
+    const next = { ...previous, active: id };
+    this.value = next;
     try {
       await this.flush();
+      source?.throwIfAborted();
     } catch (error) {
-      this.value = previous;
+      if (this.value === next) {
+        this.value = previous;
+        if (source?.aborted) {
+          await this.flush();
+        }
+      }
       throw error;
     }
-    this.restore(id);
+    this.restore(id, source);
     this.emit();
   }
-  async create(name?: string) {
+  async create(name?: string, source?: AbortSignal) {
+    source?.throwIfAborted();
     await this.flush();
+    source?.throwIfAborted();
     const board: Board = {
       ...this.capture(
         name?.trim().slice(0, 80) ||
@@ -190,14 +202,21 @@ export class BoardBook {
       view: { ...this.capture("").view, scrollX: 0, scrollY: 0 },
     };
     const previous = this.value;
-    this.value = { active: board.id, boards: [...previous.boards, board] };
+    const next = { active: board.id, boards: [...previous.boards, board] };
+    this.value = next;
     try {
       await this.flush();
+      source?.throwIfAborted();
     } catch (error) {
-      this.value = previous;
+      if (this.value === next) {
+        this.value = previous;
+        if (source?.aborted) {
+          await this.flush();
+        }
+      }
       throw error;
     }
-    this.restore(board.id);
+    this.restore(board.id, source);
     this.emit();
   }
   async rename(id: string, name: string) {
@@ -220,26 +239,39 @@ export class BoardBook {
     }
     this.emit();
   }
-  async discard(id: string) {
-    await this.flush();
-    if (this.value.boards.length === 1) {
-      await this.create();
+  async discard(id: string, source?: AbortSignal) {
+    source?.throwIfAborted();
+    if (!this.value.boards.some((board) => board.id === id)) {
+      throw new Error(t("fcboard.board_does_not_exist"));
     }
+    await this.flush();
+    source?.throwIfAborted();
+    if (this.value.boards.length === 1) {
+      await this.create(undefined, source);
+    }
+    source?.throwIfAborted();
     const previous = this.value;
     const boards = previous.boards.filter((board) => board.id !== id);
     if (boards.length === previous.boards.length) {
       throw new Error(t("fcboard.board_does_not_exist"));
     }
     const active = previous.active === id ? boards[0].id : previous.active;
-    this.value = { active, boards };
+    const next = { active, boards };
+    this.value = next;
     try {
       await this.flush();
+      source?.throwIfAborted();
     } catch (error) {
-      this.value = previous;
+      if (this.value === next) {
+        this.value = previous;
+        if (source?.aborted) {
+          await this.flush();
+        }
+      }
       throw error;
     }
     if (active !== previous.active) {
-      this.restore(active);
+      this.restore(active, source);
     }
     this.emit();
   }

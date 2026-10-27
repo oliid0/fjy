@@ -44,6 +44,7 @@ import type {
 
 import { elementWithCanvasCache } from "./renderElement";
 import { dashedInk } from "./dashedInk";
+import { factoryNibSamples } from "./factoryNib";
 import {
   factoryInkPath,
   factoryInkSamples,
@@ -570,17 +571,23 @@ export const generateLinearCollisionShape = (
           : factoryBrushSamples(element);
         const points =
           samples.length === 1 ? [samples[0], samples[0]] : samples;
-        return points.map(({ x, y }, index) => {
-          const point = pointRotateRads(
-            pointFrom<GlobalPoint>(element.x + x, element.y + y),
-            center,
-            element.angle,
-          );
-          return {
-            op: index ? "lineTo" : "move",
-            data: [point[0] - element.x, point[1] - element.y],
-          };
-        });
+        const paths = [
+          points,
+          factoryNibSamples(element).map(([x, y]) => ({ x, y })),
+        ];
+        return paths.flatMap((path) =>
+          path.map(({ x, y }, index) => {
+            const point = pointRotateRads(
+              pointFrom<GlobalPoint>(element.x + x, element.y + y),
+              center,
+              element.angle,
+            );
+            return {
+              op: index ? "lineTo" : "move",
+              data: [point[0] - element.x, point[1] - element.y],
+            };
+          }),
+        );
       }
       if (element.points.length < 2) {
         return [];

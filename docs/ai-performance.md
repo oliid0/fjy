@@ -4,9 +4,9 @@
 
 ## 当前链路
 
-1. 出厂式选择工具接受开放曲线、涂划的包围区域，外扩 12 CSS 像素。区域边界由核心套索保存；显示框、按钮定位、静态画布截图和回答位置读取同一组场景坐标。选中长笔画的一部分时，识别截图限制在划过的区域。开始下一次对象操作恢复编辑框；区域不进入文件、持久化或协作数据。
+1. 原厂选择工具按手指经过的实际路径逐点显示一条开放线，松手后按圈定区域选择完整对象，不切割原笔迹。新的选择清除旧轨迹；选中框按对象范围显示，内部拖动 / 角点缩放操作对象本身。主板 / 课件共用场景坐标、复合对象归属和单步历史，临时路径不进入持久化。
 2. 点击按钮后，完全位于圈选区域内的已有文本与完整 AI 手写字形直接读取文字；部分圈选和其他笔迹优先使用原生 Digital Ink；原生不可用或无纯笔迹输入时，才按配置使用云端专用 OCR 与本地 PaddleOCR。云端优先窗口为 250ms；云端失败时立即采用就绪的有效本地结果，窗口过后采用先通过校验的一方。胜出或取消后取消另一请求；识别文字与计算分开校验，不以能够算出答案为条件改选低排序识别候选。仍保留显式纯本地 / 纯云端设置；未配置密钥时自动本地处理。课件始终裁切实际页面，保留批注下的内容，滚动 / 缩放后更新裁切坐标。相同选区缓存识别文字，重复执行不重复 OCR。改选、修改源笔迹、换页或取消会使旧结果失效。
-3. 计算由 MathJS / Nerdamer 本地执行；`y=...`、`f(x)=...`、`x^2` 等函数本地绘制；`fx=y` 插入坐标系。普通问答只把识别文字发给问答模型；包含几何 / 图片对象时直接进行一次视觉问答，保留图示关系。明确的讲课、录制、标注等操作继续进入原命令路由。图像生成使用独立图像模型，生成结果插入当前白板或课件透明层。
+3. 计算由 MathJS / Nerdamer 本地执行；`y=...`、`f(x)=...`、`x^2` 等函数本地绘制；`fx=y` 插入坐标系。默认只发送确实识别的文字和对象几何；设置启用选区截图后，文字及图形问题均附加当前选区画面并使用视觉模型。不从未附图的对象猜测图示内容。明确的讲课、录制、标注等操作继续进入原命令路由。图像生成使用独立图像模型，生成结果插入当前白板或课件透明层。
 4. 默认回答使用手写风格。可用的数字 / 拉丁字符生成普通矢量笔迹，支持局部擦除和撤销；中文等字符使用可编辑的手写字体文本。没有承诺复制用户个人笔迹。
 
 Android 有原始笔迹时优先调用 ML Kit Digital Ink 18.1.0，与 APK 的 `HSlide.createSmaText` 相同，保留采样与笔顺、应用对象旋转和圈选裁切，不先截图。中英文及形状共八个模型文件的 Google 地址、压缩 SHA1、展开 SHA256 与原 APK model.zip 对应。原厂注册元数据的 owner 迁移为本应用包名，不复制 SDK 安装身份；新增 Android 仪器测试检查注册及真实中英文轨迹识别，尚待 CI / 设备执行。
@@ -48,7 +48,7 @@ Android 已有 Moonshine 0.1.5 与固定版本中文 Tiny Streaming 模型。本
 
 ## 参考依据
 
-- [CircleToSearch 的 CircleToSearchScreen.kt](https://github.com/AKS-Labs/CircleToSearch/blob/main/app/src/main/java/com/akslabs/circletosearch/ui/CircleToSearchScreen.kt)：手势点集最小 / 最大坐标、裁切与视图映射；已对照本机 `ss/CircleToSearch-main`。
+- 本机 `ss/HWhiteBoard-reference/java/com/paike/zjc/tool/HTool.java`、`layer/SelectCacheLayer.java`：真实路径区域命中、选后操作、搜索及缩放。此前 CircleToSearch 截图矩形方案已替换。
 - [PaddleOCR 官方浏览器部署文档](https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/inference_deployment/cross_platform/browser.md)及本机 `ss/PaddleOCR-main/paddleocr-js`：创建参数、Worker 协议、模型资源、输出文字与置信度。
 - [Moonshine 0.1.5](https://repo.maven.apache.org/maven2/ai/moonshine/moonshine-voice/0.1.5/)的 sources JAR 与[上游 Java API](https://github.com/moonshine-ai/moonshine/blob/234f60faa0eb388b01cdf7e60aca232af37aefda/language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java)：模型加载、独立流、0.5 秒更新与完成事件。
 - [HersheyTextJS](https://github.com/techninja/hersheytextjs/tree/262f4782cd412ee539eb43d4d9d9b92562d7590b)：数字 / 拉丁字符的单线字形，保留 MIT 声明。
@@ -63,4 +63,10 @@ Read Frog 的固定模板与当前落地依据见[参考记录](reference-review
 
 双击原文打开保存的学习卡片，双击卡片隐藏，不再把整段学习说明写满白板。重复打开使用有效对象数据；原文改变、删除、换页或取消使旧结果失效。界面语言切换后，下次打开按新语言解释，加载可取消，迟到响应不重开；最多缓存 16 份有效目标语言结果。默认自动源语言用捆绑英语轨迹模型，显式中 / 英设置保留，不宣称任意语言的离线识别已可用。真实识别率和翻译质量仍需样本 / 真机验收。
 
-资源库描述现在生成自包含教学 HTML，保存至独立 IndexedDB，以一个 sandbox iframe 对象插到当前可见白板 / 课件。资源须包含真实控件、测量输出、演示和说明；固定 MessageChannel 让教师检查 / 操作实际控件，返回真实输出，主页面不执行模型任意命令。取消、换板 / 换页和卸载拒绝旧结果；已有资源可以再次插入和删除。保留原 231 项、网络提供器与 PhET 学科清单；生成实验的科学内容和原厂全部教学资源仍待审核。
+资源库描述现在生成自包含教学 HTML，保存至独立 IndexedDB，以一个 sandbox iframe 对象插到当前可见白板 / 课件。资源须以可交互 SVG / canvas 图形为主，包含实际输出及说明，禁止用表单或问卷替代演示；固定 MessageChannel 让教师检查 / 操作实际控件，返回真实输出，主页面不执行模型任意命令。取消、换板 / 换页和卸载拒绝旧结果；已有资源可以再次插入和删除。保留原 231 项、网络提供器与 PhET 学科清单；生成实验的科学内容和原厂全部教学资源仍待审核。
+
+## 活动笔迹与工具观察
+
+活动墨迹由独立 NewElementCanvas 承载，只追加当前曲线几何；静态层排除活动对象，移动样本不重播完整场景。提交 / 取消 / 视口变化时完成层间交接。边界计算使用循环，长笔画不通过展开参数调用 min/max；普通笔尾锋、钢笔压力与局部擦除共用实际轮廓，保留真实压力和尾部采样。几何 / 增量复杂度与大点集回归通过不等同教学屏物理延迟通过。
+
+连续任务执行后读取真实画布、可见 UI、HTML 测量输出及动态命令。当前请求自己的文件 / 页 / 板切换可继承目标，手动切换仍取消旧请求。录制可接手当前语音流，停止保存后恢复指令监听；本地 / 云端 / 系统回归只证明生命周期和路由，不能证明真实转写质量。

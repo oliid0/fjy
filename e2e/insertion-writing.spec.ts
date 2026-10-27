@@ -74,11 +74,18 @@ for (const viewport of [
           y: (body.y + (state.scrollY || 0) + 12) * zoom,
         };
       }, kind);
+      if (kind === "mindmap") {
+        await page.mouse.click(point.x, point.y);
+      }
       await page.mouse.move(point.x, point.y);
       await page.mouse.down();
       await page.mouse.move(point.x + 20, point.y + 12, { steps: 6 });
       await page.mouse.move(point.x + 38, point.y + 5, { steps: 6 });
       await page.mouse.up();
+      await page
+        .getByRole("toolbar", { name: "手写识别", exact: true })
+        .getByRole("button", { name: "Hello", exact: true })
+        .click();
       const typed = () =>
         page.evaluate(
           (kind) =>

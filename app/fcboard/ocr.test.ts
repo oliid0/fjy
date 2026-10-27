@@ -139,6 +139,31 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
+  it("passes actual ranked native alternatives to the writing surface and waits for its choice", async () => {
+    backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["你好", "你号"]);
+    const choose = vi.fn().mockResolvedValue("你号");
+    const capture = vi.fn();
+    expect(
+      await recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "text",
+        undefined,
+        [
+          [
+            [0, 0],
+            [10, 20],
+          ],
+        ],
+        undefined,
+        choose,
+      ),
+    ).toBe("你号");
+    expect(choose).toHaveBeenCalledWith(["你好", "你号"]);
+    expect(capture).not.toHaveBeenCalled();
+  });
   it("reports an unavailable offline model without disguising a cloud response as local", async () => {
     backend.nativeAvailable = true;
     backend.native.mockRejectedValue(new Error("model not registered"));

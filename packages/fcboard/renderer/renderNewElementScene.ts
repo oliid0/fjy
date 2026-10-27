@@ -17,6 +17,7 @@ const _renderNewElementScene = ({
   canvas,
   rc,
   newElement,
+  activeInkElements = [],
   elementsMap,
   allElementsMap,
   scale,
@@ -41,35 +42,44 @@ const _renderNewElementScene = ({
     // Apply zoom
     context.scale(appState.zoom.value, appState.zoom.value);
 
-    if (newElement && newElement.type !== "selection") {
+    const elements = [
+      ...(newElement ? [newElement] : []),
+      ...activeInkElements,
+    ];
+    for (const element of elements) {
+      if (element.type === "selection") {
+        continue;
+      }
       // e.g. when creating arrows and we're still below the arrow drag distance
       // threshold
       // (for now we skip render only with elements while we're creating to be
       // safe)
-      if (isInvisiblySmallElement(newElement)) {
-        context.restore();
-        return;
+      if (
+        isInvisiblySmallElement(element) &&
+        !(element.type === "freedraw" && element.customData?.fcInk)
+      ) {
+        continue;
       }
-
-      const frameId = newElement.frameId || appState.frameToHighlight?.id;
+      context.save();
+      const frameId = element.frameId || appState.frameToHighlight?.id;
 
       if (
         frameId &&
         appState.frameRendering.enabled &&
         appState.frameRendering.clip
       ) {
-        const frame = getTargetFrame(newElement, elementsMap, appState);
+        const frame = getTargetFrame(element, elementsMap, appState);
 
         if (
           frame &&
-          shouldApplyFrameClip(newElement, frame, appState, elementsMap)
+          shouldApplyFrameClip(element, frame, appState, elementsMap)
         ) {
           frameClip(frame, context, renderConfig, appState);
         }
       }
 
       renderElement(
-        newElement,
+        element,
         elementsMap,
         allElementsMap,
         rc,
@@ -77,8 +87,7 @@ const _renderNewElementScene = ({
         renderConfig,
         appState,
       );
-    } else {
-      context.clearRect(0, 0, normalizedWidth, normalizedHeight);
+      context.restore();
     }
 
     context.restore();

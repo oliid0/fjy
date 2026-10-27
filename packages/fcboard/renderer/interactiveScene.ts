@@ -87,8 +87,6 @@ import {
 
 import { getClientColor, renderRemoteCursors } from "../clients";
 
-import { regionCorners } from "../lasso/region";
-
 import {
   bootstrapCanvas,
   fillCircle,
@@ -1854,26 +1852,14 @@ const _renderInteractiveScene = ({
       context.save();
       context.translate(appState.scrollX, appState.scrollY);
       context.lineWidth = 1.5 / appState.zoom.value;
-      context.strokeStyle = selectionColor;
-      context.setLineDash([4 / appState.zoom.value, 4 / appState.zoom.value]);
+      context.strokeStyle = "#0b6ff3";
+      context.setLineDash([]);
       context.strokeRect(
         region.left,
         region.top,
         region.right - region.left,
         region.bottom - region.top,
       );
-      context.setLineDash([]);
-      context.lineWidth = 3 / appState.zoom.value;
-      for (const [start, corner, end] of regionCorners(
-        region,
-        appState.zoom.value,
-      )) {
-        context.beginPath();
-        context.moveTo(start[0], start[1]);
-        context.lineTo(corner[0], corner[1]);
-        context.lineTo(end[0], end[1]);
-        context.stroke();
-      }
       context.restore();
     }
     // Paint resize transformHandles

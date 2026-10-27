@@ -33,6 +33,47 @@ public class ClassroomPlugin extends Plugin {
     private final AIStreamTransport aiTransport = new AIStreamTransport();
 
     @PluginMethod
+    public void getAppVersion(PluginCall call) {
+        try {
+            android.content.pm.PackageInfo info = getContext().getPackageManager()
+                .getPackageInfo(getContext().getPackageName(), 0);
+            JSObject result = new JSObject();
+            result.put("name", info.versionName);
+            result.put("code", androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info));
+            call.resolve(result);
+        } catch (Exception error) { call.reject("Could not read app version", error); }
+    }
+
+    /** System installations can enable developer mode; debugging stays in the system Settings UI. */
+    @PluginMethod
+    public void openDebugSettings(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                android.content.ContentResolver resolver = getContext().getContentResolver();
+                if (getContext().checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    if (!android.provider.Settings.Global.putInt(resolver,
+                        android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)) {
+                        call.reject("Could not enable developer settings");
+                        return;
+                    }
+                }
+                android.content.Intent intent = new android.content.Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+                if (intent.resolveActivity(getContext().getPackageManager()) == null) {
+                    call.reject("Developer settings are unavailable on this device");
+                    return;
+                }
+                getActivity().startActivity(intent);
+                JSObject result = new JSObject();
+                result.put("enabled", android.provider.Settings.Global.getInt(resolver,
+                    android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1);
+                call.resolve(result);
+            } catch (Exception error) { call.reject("Could not open developer settings", error); }
+        });
+    }
+
+    @PluginMethod
     public void postAIStream(PluginCall call) {
         try {
             String id = call.getString("id");
@@ -103,14 +144,19 @@ public class ClassroomPlugin extends Plugin {
     }
 
     private Receiver receiver;
+    private SignalResourceDialog signalResource;
     @PluginMethod
     public void getFactoryInsertions(PluginCall call) {
         try {
             JSArray available = new JSArray();
+            boolean embeddedSignal = !SignalResourceDialog.availableInputs(getContext()).isEmpty();
             for (String insertion : FactoryTools.INSERTIONS.keySet()) {
-                if (FactoryTools.resolveInsertion(getContext(), insertion) != null) available.put(insertion);
+                if (("signal".equals(insertion) && embeddedSignal)
+                    || FactoryTools.resolveInsertion(getContext(), insertion) != null) available.put(insertion);
             }
-            JSObject result = new JSObject(); result.put("available", available); call.resolve(result);
+            JSArray embedded = new JSArray();
+            if (embeddedSignal) embedded.put("signal");
+            JSObject result = new JSObject(); result.put("available", available); result.put("embedded", embedded); call.resolve(result);
         } catch (Exception error) { call.reject("无法读取插入应用", error); }
     }
 
@@ -118,11 +164,46 @@ public class ClassroomPlugin extends Plugin {
     public void openFactoryInsertion(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
-                android.content.Intent intent = FactoryTools.resolveInsertion(getContext(), call.getString("insertion"));
+                String insertion = call.getString("insertion");
+                if ("signal".equals(insertion) && !SignalResourceDialog.availableInputs(getContext()).isEmpty()) {
+                    closeSignalResource();
+                    signalResource = new SignalResourceDialog(getActivity(), call.getString("language", java.util.Locale.getDefault().toLanguageTag()));
+                    signalResource.show();
+                    JSObject result = new JSObject(); result.put("embedded", true); call.resolve(result);
+                    return;
+                }
+                android.content.Intent intent = FactoryTools.resolveInsertion(getContext(), insertion);
                 if (intent == null) { call.reject("当前设备未安装或未开放这项插入应用"); return; }
+                if ("signal".equals(insertion)) android.widget.Toast.makeText(getContext(), R.string.signal_external, android.widget.Toast.LENGTH_LONG).show();
                 getActivity().startActivity(intent);
-                call.resolve();
-            } catch (Exception error) { call.reject("无法打开插入应用：" + error.getMessage(), error); }
+                JSObject result = new JSObject(); result.put("embedded", false); call.resolve(result);
+            } catch (Exception error) { closeSignalResource(); call.reject("无法打开插入应用：" + error.getMessage(), error); }
+        });
+    }
+
+    @PluginMethod
+    public void signalAction(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                String action = call.getString("action", "read");
+                if (!java.util.Arrays.asList("read", "select", "reload", "reset", "close").contains(action)) {
+                    call.reject("Unknown signal source action");
+                    return;
+                }
+                String language = call.getString("language", java.util.Locale.getDefault().toLanguageTag());
+                if (signalResource == null || !signalResource.isShowing()) {
+                    signalResource = null;
+                    if ("read".equals(action) || "close".equals(action)) {
+                        call.resolve(SignalResourceDialog.closedState(getContext(), language));
+                    } else {
+                        call.reject(getContext().getString(R.string.signal_control_unavailable));
+                    }
+                    return;
+                }
+                JSObject result = signalResource.action(action, call.getString("id"));
+                if ("close".equals(action)) signalResource = null;
+                call.resolve(result);
+            } catch (Exception error) { call.reject(error.getMessage(), error); }
         });
     }
 
@@ -175,7 +256,7 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public void sharePages(PluginCall call) {
         try {
-            android.content.Intent intent = BoardAttachments.create(getContext(), call.getArray("pages"));
+            android.content.Intent intent = BoardAttachments.create(getContext(), call.getArray("pages"), call.getString("format", "png"));
             getActivity().runOnUiThread(() -> {
                 try {
                     getActivity().startActivity(android.content.Intent.createChooser(intent, "邮件发送 / 分享白板"));
@@ -208,12 +289,26 @@ public class ClassroomPlugin extends Plugin {
                 .getMethod("getInt", String.class, int.class)
                 .invoke(null, "persist.sys.wb.addNib", 1);
             if (Integer.valueOf(1).equals(nib)) penWidthMax = 20;
+            boolean nibAvailable = Integer.valueOf(1).equals(nib);
+            result.put("hardNibAvailable", nibAvailable);
+            Object nibEnabled = Class.forName("android.os.SystemProperties")
+                .getMethod("getInt", String.class, int.class)
+                .invoke(null, "persist.sys.nib.switch", 1);
+            result.put("hardNib", nibAvailable && Integer.valueOf(1).equals(nibEnabled));
             Object dual = Class.forName("android.os.SystemProperties")
                 .getMethod("getInt", String.class, int.class)
                 .invoke(null, "persist.sys.custom.doublePen.switch", 0);
             result.put("dualPen", Integer.valueOf(1).equals(dual));
         } catch (ReflectiveOperationException | SecurityException unavailable) {
             // Non-factory Android devices can prohibit access to this firmware property.
+        }
+        try {
+            Object pressure = Class.forName("android.os.SystemProperties")
+                .getMethod("getBoolean", String.class, boolean.class)
+                .invoke(null, "persist.sys.pressure.sensitivity.switch", false);
+            result.put("touchPressure", Boolean.TRUE.equals(pressure));
+        } catch (ReflectiveOperationException | SecurityException unavailable) {
+            // Keep simulated touch pressure unless the firmware explicitly enables it.
         }
         result.put("penWidthMax", penWidthMax);
         try (android.database.Cursor cursor = getContext().getContentResolver().query(
@@ -347,9 +442,21 @@ public class ClassroomPlugin extends Plugin {
         call.resolve();
     }
 
+    private void closeSignalResource() {
+        SignalResourceDialog resource = signalResource;
+        signalResource = null;
+        if (resource != null) getActivity().runOnUiThread(() -> { if (resource.isShowing()) resource.dismiss(); });
+    }
+
+    @Override
+    protected void handleOnPause() {
+        closeSignalResource();
+    }
+
     @Override
     protected synchronized void handleOnDestroy() {
         aiTransport.close();
+        closeSignalResource();
         WebResourceDialog resource = webResource;
         webResource = null;
         if (resource != null) getActivity().runOnUiThread(() -> { if (resource.isShowing()) resource.dismiss(); });

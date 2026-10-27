@@ -43,11 +43,16 @@ export const layoutBoardText = (
       }
     : preferred;
   const inline = source ? { x: source.right + gap, y: source.top } : preferred;
-  const candidates: { x: number; y: number; nearby?: boolean }[] =
+  const candidates: {
+    x: number;
+    y: number;
+    nearby?: boolean;
+    inline?: boolean;
+  }[] =
     placement.mode === "replace" || centered
       ? [preferred]
       : placement.mode === "inline"
-      ? [inline, below]
+      ? [{ ...inline, inline: true }, below]
       : source
       ? [below]
       : [preferred];
@@ -75,8 +80,11 @@ export const layoutBoardText = (
         continue;
       }
       const font = getFontString({ fontFamily, fontSize: size });
-      const wrapped = wrapText(text, font, width);
+      const wrapped = origin.inline ? text : wrapText(text, font, width);
       const metrics = measureText(wrapped, font, lineHeight);
+      if (origin.inline && (text.includes("\n") || metrics.width > width)) {
+        continue;
+      }
       const measuredOrigin = centered
         ? {
             x: (viewport.left + viewport.right - metrics.width) / 2,
@@ -84,7 +92,16 @@ export const layoutBoardText = (
           }
         : { x, y };
       const area =
-        centered || nearby ? viewport : { ...viewport, left: x, top: y };
+        centered || nearby
+          ? viewport
+          : {
+              ...viewport,
+              left: x,
+              top: y,
+              ...(origin.inline
+                ? { bottom: Math.min(viewport.bottom, y + metrics.height) }
+                : {}),
+            };
       const position = findVisibleContentPosition(
         measuredOrigin,
         metrics,

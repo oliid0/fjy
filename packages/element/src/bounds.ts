@@ -37,6 +37,7 @@ import type { Mutable } from "@excalidraw/common/utility-types";
 import { generateRoughOptions } from "./shape";
 import { ShapeCache } from "./shape";
 import { LinearElementEditor } from "./linearElementEditor";
+import { factoryNibControls } from "./factoryNib";
 import { getBoundTextElement, getContainerElement } from "./textElement";
 import {
   isArrowElement,
@@ -159,8 +160,9 @@ export class ElementBounds {
       elementsMap,
     );
     if (isFreeDrawElement(element)) {
+      const nib = factoryNibControls(element);
       const [minX, minY, maxX, maxY] = getBoundsFromPoints(
-        element.points.map(([x, y]) =>
+        (nib ? [...element.points, ...nib] : element.points).map(([x, y]) =>
           pointRotateRads(
             pointFrom(x, y),
             pointFrom(cx - element.x, cy - element.y),

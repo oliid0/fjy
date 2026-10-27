@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="signal_source">信号源</string>
+    <string name="signal_input_number">输入 %1$d</string>
+    <string name="signal_connecting">正在连接所选信号源…</string>
+    <string name="signal_no_video">无信号，请检查连接线或切换输入。</string>
+    <string name="signal_connection_failed">无法显示此信号源，请重试或切换输入。</string>
+    <string name="signal_content_blocked">系统内容设置已限制此信号源。</string>
+    <string name="signal_unavailable">当前设备暂无可用的信号输入。</string>
+    <string name="signal_external">正在打开系统信号源应用，当前设备未提供可在白板内显示的输入。</string>
+    <string name="signal_control_unavailable">请先打开内置信号输入，无法在此控制外部信号源应用。</string>
+    <string name="signal_input_unavailable">此输入已不可用，请重新读取输入列表。</string>
+</resources>

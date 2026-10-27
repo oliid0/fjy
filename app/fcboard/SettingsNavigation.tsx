@@ -4,6 +4,8 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import { t } from "@excalidraw/excalidraw/i18n";
 
+import { AppVersion } from "./AppVersion";
+
 import type { ReactNode } from "react";
 
 const sections = {
@@ -33,24 +35,28 @@ export const SettingsNavigation = ({
   return (
     <current.Provider value={section}>
       <div className="fc-settings-layout">
-        <List
-          component="nav"
-          className="fc-settings-navigation"
-          aria-label={t("fcboard.settings_navigation")}
-        >
-          {(Object.keys(sections) as SettingsPage[])
-            .filter((id) => id !== "tools" || hasTools)
-            .map((id) => (
-              <ListItemButton
-                key={id}
-                selected={id === section}
-                aria-current={id === section ? "page" : undefined}
-                onClick={() => setSection(id)}
-              >
-                <ListItemText primary={t(`fcboard.${sections[id]}`)} />
-              </ListItemButton>
-            ))}
-        </List>
+        <aside className="fc-settings-sidebar">
+          <h3>{t("fcboard.settings")}</h3>
+          <List
+            component="nav"
+            className="fc-settings-navigation"
+            aria-label={t("fcboard.settings_navigation")}
+          >
+            {(Object.keys(sections) as SettingsPage[])
+              .filter((id) => id !== "tools" || hasTools)
+              .map((id) => (
+                <ListItemButton
+                  key={id}
+                  selected={id === section}
+                  aria-current={id === section ? "page" : undefined}
+                  onClick={() => setSection(id)}
+                >
+                  <ListItemText primary={t(`fcboard.${sections[id]}`)} />
+                </ListItemButton>
+              ))}
+          </List>
+          <AppVersion />
+        </aside>
         <section
           className="fc-settings-content"
           aria-label={t(`fcboard.${sections[section]}`)}

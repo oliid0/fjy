@@ -78,6 +78,79 @@ it("operates the actual canvas object and reports its live calculation to the ag
   }
 });
 
+it("routes a graphic drag through the public command and returns the real changed simulation", async () => {
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  const resource = {
+    ...interactiveResource,
+    html: interactiveResource.html.replace(
+      "</script>",
+      `
+const block=document.getElementById('block');
+block.setAttribute('aria-label','Mass');
+let held=false;
+block.addEventListener('pointerdown',event=>{held=true;block.setPointerCapture(event.pointerId);});
+block.addEventListener('pointermove',event=>{if(held){force.value=String(Math.round(event.clientX/10));update();}});
+block.addEventListener('pointerup',event=>{held=false;block.releasePointerCapture(event.pointerId);});
+</script>`,
+    ),
+  };
+  const { ids } = (await classroomCommands.execute({
+    name: "canvas.resource",
+    args: { resource },
+  })) as { ids: string[] };
+  const element = api.getSceneElements().find((item) => item.id === ids[0])!;
+  const frame = resourceFrame({
+    id: element.id,
+    surface: "whiteboard",
+    html: element.customData!.fcInteractiveResource.html,
+  });
+  frame.loaded();
+  const block = frame.window.document.querySelector<SVGElement>("#block")!;
+  vi.spyOn(block, "getBoundingClientRect").mockImplementation(() => ({
+    x: Number(block.getAttribute("x")),
+    y: 20,
+    width: 40,
+    height: 40,
+    left: Number(block.getAttribute("x")),
+    top: 20,
+    right: Number(block.getAttribute("x")) + 40,
+    bottom: 60,
+    toJSON: () => ({}),
+  }));
+  try {
+    const state = (await classroomCommands.execute({
+      name: "resources.inspect",
+      args: { id: element.id },
+    })) as ResourceControlState;
+    const graphic = state.controls.find((item) => item.label === "Mass")!;
+    await expect(
+      classroomCommands.execute({
+        name: "resources.interact",
+        args: {
+          id: element.id,
+          version: state.version,
+          control: graphic.id,
+          action: "drag",
+          to: { x: 100, y: 40 },
+        },
+      }),
+    ).resolves.toMatchObject({
+      id: element.id,
+      outputs: ["5 m/s²"],
+      controls: expect.arrayContaining([
+        expect.objectContaining({
+          id: graphic.id,
+          bounds: { x: 150, y: 20, width: 40, height: 40 },
+        }),
+      ]),
+    });
+  } finally {
+    frame.dispose();
+    stop();
+  }
+});
+
 it("targets only the visible document page even when the hidden board has the same resource id", async () => {
   const api = sceneAPI();
   const stop = registerCanvasCommands(api);
@@ -159,6 +232,15 @@ it("rejects invalid action payloads before dispatch and aborts requests on inval
       { action: "set", version: "v1", control: "#force", value: 10 },
       { action: "set", version: "v1", control: "c1", value: NaN },
       { action: "click", version: "v1", control: "c1", selector: "button" },
+      { action: "drag", version: "v1", control: "c1" },
+      { action: "drag", version: "v1", control: "c1", to: { x: NaN, y: 0 } },
+      {
+        action: "drag",
+        version: "v1",
+        control: "c1",
+        to: { x: 20, y: 30, selector: "rect" },
+      },
+      { action: "click", version: "v1", control: "c1", to: { x: 20, y: 30 } },
     ]) {
       await expect(
         classroomCommands.execute({

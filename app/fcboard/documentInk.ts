@@ -4,6 +4,7 @@ import {
   factoryInkSamples,
 } from "@excalidraw/element/factoryInk";
 import { factoryBrushSamples } from "@excalidraw/element/factoryBrush";
+import { factoryNibPath } from "@excalidraw/element/factoryNib";
 import { pointFrom } from "@excalidraw/math";
 
 import type { InkStroke } from "./documents";
@@ -41,6 +42,7 @@ export const documentInkElement = (stroke: InkStroke) => {
 
 const geometry = new WeakMap<InkStroke, ReturnType<typeof createGeometry>>();
 const createGeometry = (stroke: InkStroke) => ({
+  nib: factoryNibPath(documentInkElement(stroke)),
   path: stroke.fcInk
     ? getFreeDrawSvgPath(documentInkElement(stroke))
     : `M${stroke.points.map((point) => point.join(",")).join(" L")}`,

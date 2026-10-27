@@ -11,8 +11,65 @@ export class CommandRouter {
   >();
   private contexts = new Map<string, () => unknown>();
   private contextListeners = new Map<string, Set<() => void>>();
-  private invalidations = new Set<() => void>();
+  private invalidations = new Set<(source?: AbortSignal) => void>();
+  private transitions = new WeakMap<
+    AbortSignal,
+    { start: number; latest: number }
+  >();
+  private owners = new WeakMap<AbortSignal, AbortSignal>();
   revision = 0;
+  private activeInteraction?: AbortSignal;
+  get interactionSource() {
+    return this.activeInteraction;
+  }
+  /** Internal request scopes explicitly register their parent; model data cannot claim an owner. */
+  registerOwner(child: AbortSignal, parent?: AbortSignal) {
+    if (!parent || child === parent || child.aborted || parent.aborted) {
+      return () => {};
+    }
+    if (this.owners.has(child) || this.isOwnedBy(parent, child)) {
+      throw new Error("COMMAND_OWNER_CONFLICT");
+    }
+    this.owners.set(child, parent);
+    const release = () => {
+      if (this.owners.get(child) === parent) {
+        this.owners.delete(child);
+      }
+      child.removeEventListener("abort", release);
+      parent.removeEventListener("abort", release);
+    };
+    child.addEventListener("abort", release, { once: true });
+    parent.addEventListener("abort", release, { once: true });
+    return release;
+  }
+  isOwnedBy(source?: AbortSignal, owner?: AbortSignal): boolean {
+    if (!source || !owner || owner.aborted) {
+      return false;
+    }
+    for (
+      let current: AbortSignal | undefined = source;
+      current;
+      current = this.owners.get(current)
+    ) {
+      if (current.aborted) {
+        return false;
+      }
+      if (current === owner) {
+        return true;
+      }
+    }
+    return false;
+  }
+  /** Only synchronous events from this command inherit its exact owner. */
+  withInteraction<T>(source: AbortSignal | undefined, dispatch: () => T): T {
+    const previous = this.activeInteraction;
+    this.activeInteraction = source;
+    try {
+      return dispatch();
+    } finally {
+      this.activeInteraction = previous;
+    }
+  }
 
   register(name: string, description: string, handler: Handler) {
     const entry = { description, handler };
@@ -54,8 +111,38 @@ export class CommandRouter {
       ([name, value]) => `${name}: ${value.description}`,
     ).join("\n");
   }
-  touch() {
+  touch(source?: AbortSignal) {
+    source?.throwIfAborted();
+    const before = this.revision;
     this.revision++;
+    for (
+      let current = source;
+      current && !current.aborted;
+      current = this.owners.get(current)
+    ) {
+      const previous = this.transitions.get(current);
+      this.transitions.set(current, {
+        start: previous?.latest === before ? previous.start : before,
+        latest: this.revision,
+      });
+    }
+  }
+  isExpectedTransition(source?: AbortSignal) {
+    return (
+      !!source &&
+      !source.aborted &&
+      this.transitions.get(source)?.latest === this.revision
+    );
+  }
+  isCurrent(revision: number, source?: AbortSignal) {
+    if (source?.aborted) {
+      return false;
+    }
+    const transition = source && this.transitions.get(source);
+    return (
+      revision === this.revision ||
+      (transition?.start === revision && transition.latest === this.revision)
+    );
   }
   has(name: string) {
     return this.commands.has(name);
@@ -81,11 +168,11 @@ export class CommandRouter {
     }
     return entry.handler(command.args || {});
   }
-  invalidate() {
-    this.revision++;
-    this.invalidations.forEach((listener) => listener());
+  invalidate(source?: AbortSignal) {
+    this.touch(source);
+    this.invalidations.forEach((listener) => listener(source));
   }
-  onInvalidate(listener: () => void) {
+  onInvalidate(listener: (source?: AbortSignal) => void) {
     this.invalidations.add(listener);
     return () => {
       this.invalidations.delete(listener);
@@ -98,8 +185,10 @@ export const classroomCommands = new CommandRouter();
 const cancellable = new Set([
   "lesson.ask",
   "lesson.teach",
+  "lesson.resume",
   "canvas.text",
   "canvas.configure",
+  "canvas.tool",
   "canvas.ink",
   "resources.use",
   "resources.generate",
@@ -108,7 +197,32 @@ const cancellable = new Set([
   "canvas.resource",
   "voice.speak",
   "math.evaluate",
+  "language.translate",
   "tools.configure",
+  "files.open",
+  "document.next",
+  "document.previous",
+  "document.page",
+  "document.close",
+  "board.new",
+  "board.switch",
+  "board.discard",
+  "math.calculate",
+  "math.plot",
+  "insert.object",
+  "insert.open",
+  "insert.configure",
+  "signal.action",
+  "web.open",
+  "web.action",
+  "tools.insert",
+  "shapes.insert",
+  "ui.inspect",
+  "ui.interact",
+  "record.start",
+  "record.stop",
+  "record.pause",
+  "record.resume",
 ]);
 export const isCancellableBoardCommand = (name: string) =>
   cancellable.has(name);
@@ -185,6 +299,45 @@ export const directCommand = (text: string): Command | null => {
   ) {
     return { name: "voice.interrupt" };
   }
+  const request = text.trim();
+  const title = request.match(
+    /^(?:请|帮我)?(?:用(?:画笔|钢笔))?(?:板书|写下?|写一个)(?:一个)?(?:标题|题目)\s*[:：]?\s*(.+)$/,
+  );
+  if (
+    title?.[1]?.trim() &&
+    !/(?:然后|接着|随后|并且|之后|同时(?:打开|使用|开始|插入|录制))/.test(
+      request,
+    )
+  ) {
+    return {
+      name: "canvas.text",
+      args: {
+        text: title[1].trim(),
+        presentation: "handwritten",
+        placement: "center",
+        sourceIds: [],
+      },
+    };
+  }
+  const file = request.match(
+    /^(?:请|帮我)?(?:打开|切换到)(?:课件|文档|文件)\s*[:：]?\s*[“"「]?(.+?)[”"」]?[。！!]*$/,
+  );
+  if (
+    file?.[1]?.trim() &&
+    !/(?:然后|接着|随后|并且|并(?:写|插|用|生成|开始|录))/.test(request)
+  ) {
+    return { name: "files.open", args: { name: file[1].trim() } };
+  }
+  if (
+    !/(?:然后|接着|随后|并且|之后|并讲解|同时(?:打开|使用|开始|插入|录制))/.test(
+      request,
+    ) &&
+    /^(?:请|帮我)?(?:生成|制作|创建).*(?:html|教学动画|交互(?:动画|实验|图形|资源)|可交互|教学资源)/i.test(
+      request,
+    )
+  ) {
+    return { name: "resources.generate", args: { prompt: request } };
+  }
   const written = text
     .trim()
     .match(/^(?:请|帮我)?(?:写下|写上|写一个|写个|写[：:])\s*([\s\S]+)$/);
@@ -199,6 +352,144 @@ export const directCommand = (text: string): Command | null => {
     };
   }
   const value = text.replace(/[，。！!？?\s]/g, "");
+  const pen = value.match(
+    /^(?:请|帮我)?(?:换成|切换到|切换为|改用|换|使用|选择|用)?(?:一支)?(画笔|钢笔|荧光笔|虚线笔|文字笔|图形笔|彩虹笔|魔术笔|算式笔|函数笔|语言笔)$/,
+  )?.[1];
+  if (pen) {
+    const kinds = new Map([
+      ["画笔", "hard"],
+      ["钢笔", "brush"],
+      ["荧光笔", "highlighter"],
+      ["虚线笔", "dashed"],
+      ["文字笔", "text"],
+      ["图形笔", "shape"],
+      ["彩虹笔", "rainbow"],
+      ["魔术笔", "magic"],
+      ["算式笔", "calculation"],
+      ["函数笔", "function"],
+      ["语言笔", "language"],
+    ]);
+    return { name: "canvas.style", args: { pen: kinds.get(pen) } };
+  }
+  if (
+    /^(?:请|帮我)?(?:换成|切换到|使用|选择)?(?:选择|圈选|选择工具|套索)$/.test(
+      value,
+    )
+  ) {
+    return { name: "canvas.tool", args: { tool: "lasso" } };
+  }
+  const eraser = value.match(
+    /^(?:请|帮我)?(?:换成|切换到|使用|选择|打开)?(局部|对象)?(?:橡皮擦?|擦除)$/,
+  )?.[1];
+  if (
+    eraser ||
+    /^(?:请|帮我)?(?:换成|切换到|使用|选择|打开)?橡皮擦?$/.test(value)
+  ) {
+    return {
+      name: "canvas.tool",
+      args: {
+        tool: "eraser",
+        ...(eraser
+          ? { eraserMode: eraser === "对象" ? "object" : "stroke" }
+          : {}),
+      },
+    };
+  }
+  if (/^(?:请|帮我)?(?:清屏|清空画布|擦掉全部内容)$/.test(value)) {
+    return { name: "canvas.clear" };
+  }
+  if (/^(?:请|帮我)?(?:全选|选择全部|选中全部)$/.test(value)) {
+    return { name: "canvas.action", args: { action: "selectAll" } };
+  }
+  if (/^(?:请|帮我)?(?:取消选择|取消圈选)$/.test(value)) {
+    return { name: "canvas.select", args: { ids: [] } };
+  }
+  if (
+    /^(?:请|帮我)?(?:复制)(?:圈中|选中|所选|选区)(?:的)?(?:内容|部分|对象)?$/.test(
+      value,
+    )
+  ) {
+    return { name: "canvas.action", args: { action: "duplicateSelection" } };
+  }
+  if (/^(?:请|帮我)?(?:开始|开启|打开)?录制$/.test(value)) {
+    return { name: "record.start" };
+  }
+  if (/^(?:请|帮我)?暂停录制$/.test(value)) {
+    return { name: "record.pause" };
+  }
+  if (/^(?:请|帮我)?继续录制$/.test(value)) {
+    return { name: "record.resume" };
+  }
+  if (/^(?:请|帮我)?(?:打开|查看)(?:课件|文档|文件)$/.test(value)) {
+    return { name: "files.open" };
+  }
+  if (/^(?:请|帮我)?(?:打开|开启|使用)聚光灯$/.test(value)) {
+    return { name: "tools.spotlight", args: { open: true } };
+  }
+  if (/^(?:请|帮我)?(?:关闭|结束)聚光灯$/.test(value)) {
+    return { name: "tools.spotlight", args: { open: false } };
+  }
+  const ruler = value.match(
+    /^(?:请|帮我)?(?:插入|添加|创建|打开|使用)(?:一个|一把|个)?(直尺|量角器|圆规|三角板)$/,
+  )?.[1];
+  if (ruler) {
+    return {
+      name: "tools.insert",
+      args: {
+        kind: new Map([
+          ["直尺", "ruler"],
+          ["量角器", "protractor"],
+          ["圆规", "compass"],
+          ["三角板", "setSquare"],
+        ]).get(ruler),
+      },
+    };
+  }
+  if (
+    /^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?(?:思维导图|思维图)$/.test(
+      value,
+    )
+  ) {
+    return { name: "insert.object", args: { kind: "mindmap" } };
+  }
+  if (/^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?表格$/.test(value)) {
+    return { name: "insert.object", args: { kind: "table" } };
+  }
+  const table = value.match(
+    /^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?([\d一二三四五六七八九十]+)行([\d一二三四五六七八九十]+)列(?:的)?表格$/,
+  );
+  if (table) {
+    const number = (input: string) =>
+      /^\d+$/.test(input)
+        ? Number(input)
+        : [
+            "一",
+            "二",
+            "三",
+            "四",
+            "五",
+            "六",
+            "七",
+            "八",
+            "九",
+            "十",
+            "十一",
+            "十二",
+          ].indexOf(input) + 1;
+    const rows = number(table[1]);
+    const columns = number(table[2]);
+    if (rows < 1 || rows > 12 || columns < 1 || columns > 12) {
+      return null;
+    }
+    return {
+      name: "insert.object",
+      args: {
+        kind: "table",
+        rows,
+        columns,
+      },
+    };
+  }
   if (/^(?:帮我)?(?:新建|创建)$/.test(value)) {
     return { name: "board.new" };
   }

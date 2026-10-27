@@ -39,3 +39,30 @@ it("keeps independent toolbar components in position while their state and child
   ).toEqual(["白板 1", "教师 1", "录制 0"]);
   view.unmount();
 });
+
+it("notifies host availability when a shape provider mounts and unmounts", () => {
+  const tunnel = stableToolbarTunnel();
+  const Availability = () => (
+    <output>{tunnel.useHasEntries() ? "host" : "fallback"}</output>
+  );
+  const Host = () => (
+    <tunnel.In>
+      <button>Shape</button>
+    </tunnel.In>
+  );
+  const content = (present: boolean) => (
+    <>
+      {present && <Host />}
+      <Availability />
+      <tunnel.Out />
+    </>
+  );
+  const view = render(content(false));
+  expect(screen.getByRole("status")).toHaveTextContent("fallback");
+  view.rerender(content(true));
+  expect(screen.getByRole("status")).toHaveTextContent("host");
+  expect(screen.getByRole("button", { name: "Shape" })).toBeInTheDocument();
+  view.rerender(content(false));
+  expect(screen.getByRole("status")).toHaveTextContent("fallback");
+  expect(screen.queryByRole("button", { name: "Shape" })).toBeNull();
+});

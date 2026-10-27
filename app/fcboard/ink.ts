@@ -14,6 +14,9 @@ export const cssInkProfile = (
     palmThreshold?: number;
     thickThreshold?: number;
     dualPen?: boolean;
+    hardNibAvailable?: boolean;
+    hardNib?: boolean;
+    touchPressure?: boolean;
   },
   dpr: number,
 ): UIOptions["inkProfile"] => {
@@ -32,6 +35,13 @@ export const cssInkProfile = (
       ? { thickThreshold: native.thickThreshold / scale }
       : {}),
     ...(typeof native.dualPen === "boolean" ? { dualPen: native.dualPen } : {}),
+    ...(typeof native.hardNibAvailable === "boolean"
+      ? { hardNibAvailable: native.hardNibAvailable }
+      : {}),
+    ...(typeof native.hardNib === "boolean" ? { hardNib: native.hardNib } : {}),
+    ...(typeof native.touchPressure === "boolean"
+      ? { touchPressure: native.touchPressure }
+      : {}),
   };
 };
 

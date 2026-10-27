@@ -1714,6 +1714,27 @@
     "recording_resume": "nadaljevanje snemanja",
     "minimize_recording": "Zmanjšaj snemanje",
     "restore_recording_window": "Obnovi okno za snemanje",
-    "language_pen": "Jezik · Pisalo"
+    "language_pen": "Jezik · Pisalo",
+    "attach_selection_image_to_ai": "Zahtevam za UI priloži posnetek izbranega območja",
+    "compass": "Šestilo",
+    "set_square": "Trikotno ravnilo",
+    "education_categories": "Izobraževalne kategorije",
+    "math_experiments": "Matematični poskusi",
+    "math_concepts": "Matematični pojmi",
+    "math_applications": "Uporaba matematike",
+    "select_none": "Počisti izbor",
+    "mindmap_add_child": "Dodaj podrejeno vozlišče",
+    "mindmap_move_node": "Premakni vozlišče",
+    "mindmap_delete_node": "Izbriši vozlišče in podrejena vozlišča",
+    "mindmap_clear_node": "Počisti besedilo vozlišča",
+    "selected_pages_exported_as_images": "Izbrane strani so bile izvožene kot slike",
+    "hard_pen_nib": "Zožen konec poteze navadnega peresa",
+    "right_triangle": "Pravokotni trikotnik",
+    "triangle": "Trikotnik",
+    "trapezoid": "Trapez",
+    "pentagon": "Petkotnik",
+    "hexagon": "Šestkotnik",
+    "star": "Zvezda",
+    "hemisphere": "Polobla"
   }
 }

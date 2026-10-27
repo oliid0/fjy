@@ -228,6 +228,7 @@ import {
   getResizeOffsetXY,
   getResizeArrowDirection,
   transformElements,
+  resizeMultipleElements,
   getCursorForResizingElement,
   getElementWithTransformHandleType,
   getTransformHandleTypeFromCoords,
@@ -433,7 +434,12 @@ import { LassoTrail } from "../lasso";
 import { regionHandleAt, regionPath, resizeRegion } from "../lasso/region";
 
 import { EraserTrail } from "../eraser";
-import { eraseStroke, isPalmContact, pointerSamples } from "../eraser/stroke";
+import {
+  eraseStroke,
+  eraseSceneObjects,
+  isPalmContact,
+  pointerSamples,
+} from "../eraser/stroke";
 
 import { getShortcutKey } from "../shortcut";
 
@@ -710,6 +716,16 @@ class App extends React.Component<AppProps, AppState> {
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
   private stopInkErasure: (() => void) | null = null;
   private parallelInk = new Map<number, (cancelled: boolean) => void>();
+  private activeInkElements = new Map<number, ExcalidrawFreeDrawElement>();
+  private activeInkIds: ReadonlySet<string> = new Set();
+  private inkFrameEmitter = new Emitter();
+  private getActiveInkElements = () =>
+    [...this.activeInkElements.values()].flatMap((ink) => {
+      const current = this.scene.getNonDeletedElement(ink.id);
+      return current?.type === "freedraw" ? [current] : [];
+    });
+  private onInkFrame = (listener: () => void) =>
+    this.inkFrameEmitter.on(listener);
   private singleTouchStroke: {
     pointerId: number;
     length: number;
@@ -741,6 +757,9 @@ class App extends React.Component<AppProps, AppState> {
       event: PointerEvent,
     ]
   >();
+
+  /** Synchronous stroke composition after all samples, before its undo capture. */
+  onInkCommitEmitter = new Emitter<[element: ExcalidrawFreeDrawElement]>();
   onUserFollowEmitter = new Emitter<[payload: OnUserFollowedPayload]>();
   onScrollChangeEmitter = new Emitter<
     [scrollX: number, scrollY: number, zoom: AppState["zoom"]]
@@ -855,6 +874,7 @@ class App extends React.Component<AppProps, AppState> {
       onIncrement: (cb) => this.store.onStoreIncrementEmitter.on(cb),
       onPointerDown: (cb) => this.onPointerDownEmitter.on(cb),
       onPointerUp: (cb) => this.onPointerUpEmitter.on(cb),
+      onInkCommit: (cb) => this.onInkCommitEmitter.on(cb),
       onScrollChange: (cb) => this.onScrollChangeEmitter.on(cb),
       onUserFollow: (cb) => this.onUserFollowEmitter.on(cb),
       onStateChange: this.onStateChange,
@@ -1706,8 +1726,14 @@ class App extends React.Component<AppProps, AppState> {
           }
 
           const isActive =
-            this.state.activeEmbeddable?.element === el &&
-            this.state.activeEmbeddable?.state === "active";
+            (this.state.activeEmbeddable?.element === el &&
+              this.state.activeEmbeddable?.state === "active") ||
+            (!!this.props.UIOptions.unifiedToolbar &&
+              !!el.customData?.fcInteractiveResource &&
+              ["selection", "lasso", "hand"].includes(
+                this.state.activeTool.type,
+              ) &&
+              this.state.cursorButton !== "down");
           const isHovered =
             this.state.activeEmbeddable?.element === el &&
             this.state.activeEmbeddable?.state === "hover";
@@ -2073,6 +2099,7 @@ class App extends React.Component<AppProps, AppState> {
         width: this.state.width,
         editingTextElement: this.state.editingTextElement,
         newElementId: this.state.newElement?.id,
+        activeInkIds: this.activeInkIds,
       });
     this.visibleElements = visibleElements;
 
@@ -2314,8 +2341,19 @@ class App extends React.Component<AppProps, AppState> {
                               theme: boardTheme,
                             }}
                           />
-                          {this.state.newElement && (
+                          {(this.state.newElement ||
+                            this.props.UIOptions.unifiedToolbar) && (
                             <NewElementCanvas
+                              getActiveInkElements={
+                                this.props.UIOptions.unifiedToolbar
+                                  ? this.getActiveInkElements
+                                  : undefined
+                              }
+                              onInkFrame={
+                                this.props.UIOptions.unifiedToolbar
+                                  ? this.onInkFrame
+                                  : undefined
+                              }
                               appState={canvasAppState}
                               scale={window.devicePixelRatio}
                               rc={this.rc}
@@ -3222,6 +3260,7 @@ class App extends React.Component<AppProps, AppState> {
     this.laserTrails.stop();
     this.eraserTrail.stop();
     this.onChangeEmitter.clear();
+    this.inkFrameEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
     this.store.onDurableIncrementEmitter.clear();
     this.appStateObserver.clear();
@@ -6632,19 +6671,27 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
     if (this.parallelInk.size) {
-      if (
+      const palm =
         this.state.palmEraser !== false &&
-        isPalmContact(
-          event,
-          this.state.palmEraserThreshold ??
-            this.props.UIOptions.inkProfile?.palmThreshold ??
-            36,
-        )
-      ) {
+        pointerSamples(event.nativeEvent).some((sample) =>
+          isPalmContact(
+            sample,
+            this.state.palmEraserThreshold ??
+              this.props.UIOptions.inkProfile?.palmThreshold ??
+              36,
+          ),
+        );
+      const penEraser =
+        event.pointerType === "pen" &&
+        (event.button === 5 || !!(event.buttons & 34));
+      if (this.parallelInk.has(event.pointerId) && (palm || penEraser)) {
         this.parallelInk.get(event.pointerId)?.(true);
-        if (!this.parallelInk.size) {
-          this.beginInkErasure(event, true);
+        // HTool commits the other active contacts before switching to erasure.
+        // Keep their handwriting instead of ignoring this palm until all lift.
+        for (const finish of [...this.parallelInk.values()]) {
+          finish(false);
         }
+        this.beginInkErasure(event, !!palm);
       }
       return;
     }
@@ -7079,6 +7126,19 @@ class App extends React.Component<AppProps, AppState> {
       }
     }
 
+    if (this.isRegionSelectionTool()) {
+      hideHyperlinkToolip();
+      const bounds = this.state.whiteboardSelection?.bounds;
+      setCursor(
+        this.interactiveCanvas,
+        bounds &&
+          regionHandleAt(bounds, scenePointer, 10 / this.state.zoom.value)
+          ? CURSOR_TYPE.MOVE
+          : CURSOR_TYPE.CROSSHAIR,
+      );
+      return;
+    }
+
     const isPressingAnyButton = Boolean(event.buttons);
     const isLaserTool = this.state.activeTool.type === "laser";
     if (
@@ -7315,7 +7375,7 @@ class App extends React.Component<AppProps, AppState> {
       this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
     }
     const pointerDownState = this.initialPointerDownState(event);
-    const element = this.createInkElement(
+    let element = this.createInkElement(
       event,
       pointerDownState.origin.x,
       pointerDownState.origin.y,
@@ -7332,7 +7392,28 @@ class App extends React.Component<AppProps, AppState> {
     }
     let samples: PointerEvent[] = [];
     let finished = false;
+    let knownPoints = element.points;
+    let minX = 0;
+    let minY = 0;
+    let maxX = 0;
+    let maxY = 0;
     const append = withBatchedUpdatesThrottled(() => {
+      const current = this.scene.getNonDeletedElement(element.id);
+      if (current?.type !== "freedraw") {
+        samples = [];
+        return;
+      }
+      element = current;
+      if (knownPoints !== element.points) {
+        minX = minY = Infinity;
+        maxX = maxY = -Infinity;
+        for (const [x, y] of element.points) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      }
       const points = [...element.points];
       const pressures = [...element.pressures];
       for (const sample of samples) {
@@ -7355,6 +7436,10 @@ class App extends React.Component<AppProps, AppState> {
           (!element.simulatePressure && pressures.at(-1) !== sample.pressure)
         ) {
           points.push(pointFrom<LocalPoint>(dx, dy));
+          minX = Math.min(minX, dx);
+          minY = Math.min(minY, dy);
+          maxX = Math.max(maxX, dx);
+          maxY = Math.max(maxY, dy);
           if (!element.simulatePressure) {
             pressures.push(sample.pressure);
           }
@@ -7362,7 +7447,15 @@ class App extends React.Component<AppProps, AppState> {
       }
       samples = [];
       if (points.length !== element.points.length) {
-        this.scene.mutateElement(element, { points, pressures });
+        // The live scene object stays readable to API consumers, while only
+        // the ink overlay repaints. Completed content does not change here.
+        this.scene.mutateElement(
+          element,
+          { points, pressures, width: maxX - minX, height: maxY - minY },
+          { informMutation: false, isDragging: false },
+        );
+        knownPoints = element.points;
+        this.inkFrameEmitter.trigger();
       }
     });
     const move = (next: PointerEvent) => {
@@ -7400,6 +7493,10 @@ class App extends React.Component<AppProps, AppState> {
       target.removeEventListener("lostpointercapture", cancel);
       unsubscribe();
       this.parallelInk.delete(event.pointerId);
+      this.activeInkElements.delete(event.pointerId);
+      this.activeInkIds = new Set(
+        [...this.activeInkElements.values()].map((ink) => ink.id),
+      );
       if (this.singleTouchStroke?.pointerId === event.pointerId) {
         this.singleTouchStroke = null;
       }
@@ -7425,6 +7522,16 @@ class App extends React.Component<AppProps, AppState> {
           },
         });
       }
+      const beforeComposition = this.onInkCommitEmitter.subscribers.length
+        ? new Map(
+            this.scene
+              .getElementsIncludingDeleted()
+              .map((item) => [item.id, item.version]),
+          )
+        : undefined;
+      if (!cancelled) {
+        this.onInkCommitEmitter.trigger(element);
+      }
       const completedStroke = this.scene
         .getElementsMapIncludingDeleted()
         .get(element.id);
@@ -7434,6 +7541,15 @@ class App extends React.Component<AppProps, AppState> {
         const previous = this.store.snapshot;
         const completed = new Map(previous.elements) as SceneElementsMap;
         completed.set(element.id, completedStroke);
+        // Include synchronous cell growth and moved completed handwriting while
+        // keeping other, still-writing contacts out of this pointer's history.
+        if (beforeComposition) {
+          for (const item of this.scene.getElementsIncludingDeleted()) {
+            if (beforeComposition.get(item.id) !== item.version) {
+              completed.set(item.id, item);
+            }
+          }
+        }
         const next = previous.maybeClone(
           CaptureUpdateAction.IMMEDIATELY,
           completed,
@@ -7445,6 +7561,9 @@ class App extends React.Component<AppProps, AppState> {
           delta: StoreDelta.calculate(previous, next),
         });
       }
+      // Merge a completed stroke into the static layer once. The layout
+      // effects paint that layer before clearing the former live overlay.
+      this.scene.triggerUpdate();
       if (!this.parallelInk.size) {
         this.setState({ cursorButton: "up" });
       }
@@ -7469,6 +7588,10 @@ class App extends React.Component<AppProps, AppState> {
     const cancelAll = () => finish(true);
     const unsubscribe = this.missingPointerEventCleanupEmitter.on(cancelAll);
     this.parallelInk.set(event.pointerId, finish);
+    this.activeInkElements.set(event.pointerId, element);
+    this.activeInkIds = new Set(
+      [...this.activeInkElements.values()].map((ink) => ink.id),
+    );
     target.setPointerCapture?.(event.pointerId);
     this.scene.insertElement(element);
     this.setState({ selectedElementIds: {}, cursorButton: "down" });
@@ -7489,6 +7612,14 @@ class App extends React.Component<AppProps, AppState> {
     this.maybeCleanupAfterMissingPointerUp(event.nativeEvent);
     const pointerDownState = this.initialPointerDownState(event);
     const before = this.scene.getElementsIncludingDeleted();
+    const objectMode =
+      !palm &&
+      this.state.activeTool.type === "eraser" &&
+      this.state.eraserMode === "object" &&
+      !(
+        event.pointerType === "pen" &&
+        (event.button === 5 || !!(event.buttons & 34))
+      );
     const zoom = this.state.zoom.value;
     const size = Math.max(
       12,
@@ -7499,8 +7630,13 @@ class App extends React.Component<AppProps, AppState> {
           60,
       ),
     );
-    const width = palm ? Math.max(size, event.width) : size;
-    const height = palm ? Math.max(size * 1.2, event.height) : size * 1.2;
+    const contacts = pointerSamples(event.nativeEvent);
+    const width = palm
+      ? Math.max(size, ...contacts.map((sample) => sample.width || 0))
+      : size;
+    const height = palm
+      ? Math.max(size * 1.2, ...contacts.map((sample) => sample.height || 0))
+      : size * 1.2;
     let previous = viewportCoordsToSceneCoords(event, this.state);
     let changed = false;
     let finished = false;
@@ -7527,6 +7663,19 @@ class App extends React.Component<AppProps, AppState> {
         const next = viewportCoordsToSceneCoords(sample, this.state);
         preview.style.left = `${sample.clientX}px`;
         preview.style.top = `${sample.clientY}px`;
+        if (objectMode) {
+          const nextElements = eraseSceneObjects(
+            elements,
+            previous,
+            next,
+            width / zoom,
+            height / zoom,
+          );
+          update ||= nextElements !== elements;
+          elements = nextElements;
+          previous = next;
+          continue;
+        }
         const nextElements: ExcalidrawElement[] = [];
         for (const element of elements) {
           if (element.type !== "freedraw") {
@@ -7803,6 +7952,12 @@ class App extends React.Component<AppProps, AppState> {
       const penEraser =
         event.pointerType === "pen" &&
         (event.button === 5 || !!(event.buttons & 34));
+      if ((palm || penEraser) && this.parallelInk.size) {
+        // Preserve already written contacts before the temporary palm tool.
+        for (const finish of [...this.parallelInk.values()]) {
+          finish(false);
+        }
+      }
       if (
         (palm || penEraser || this.state.activeTool.type !== "freedraw") &&
         this.parallelInk.size
@@ -7817,8 +7972,7 @@ class App extends React.Component<AppProps, AppState> {
       if (
         (palm && this.state.activeTool.type === "freedraw") ||
         penEraser ||
-        (this.state.activeTool.type === "eraser" &&
-          this.state.eraserMode !== "object")
+        this.state.activeTool.type === "eraser"
       ) {
         this.beginInkErasure(event, palm);
         return;
@@ -9968,6 +10122,203 @@ class App extends React.Component<AppProps, AppState> {
     });
   }
 
+  private resizeWhiteboardSelection = (
+    pointerDownState: PointerDownState,
+    point: { x: number; y: number },
+  ) => {
+    const initial = pointerDownState.regionSelection.selection;
+    const handle = pointerDownState.regionSelection.handle;
+    if (!initial || !handle || handle === "move") {
+      return;
+    }
+    const requested = resizeRegion(
+      initial.bounds,
+      handle,
+      point,
+      this.lassoTrail.getViewport(),
+      this.state.zoom.value,
+    );
+    const width = initial.bounds.right - initial.bounds.left;
+    const height = initial.bounds.bottom - initial.bounds.top;
+    // SelectCacheLayer averages the two corner-distance ratios, then scales
+    // uniformly about the opposite corner.
+    const scale =
+      ((requested.right - requested.left) / width +
+        (requested.bottom - requested.top) / height) /
+      2;
+    if (!Number.isFinite(scale) || scale <= 0) {
+      return;
+    }
+    const anchor = {
+      x: handle.endsWith("w") ? initial.bounds.right : initial.bounds.left,
+      y: handle.startsWith("n") ? initial.bounds.bottom : initial.bounds.top,
+    };
+    const bounds = {
+      left: anchor.x + (initial.bounds.left - anchor.x) * scale,
+      top: anchor.y + (initial.bounds.top - anchor.y) * scale,
+      right: anchor.x + (initial.bounds.right - anchor.x) * scale,
+      bottom: anchor.y + (initial.bounds.bottom - anchor.y) * scale,
+    };
+    const selected = this.scene.getSelectedElements({
+      selectedElementIds: pointerDownState.regionSelection.selectedElementIds,
+      includeElementsInFrames: true,
+      includeBoundTextElement: true,
+    });
+    const versions = new Map(
+      pointerDownState.regionSelection.affectedElementIds.map((id) => [
+        id,
+        this.scene.getNonDeletedElement(id)?.version,
+      ]),
+    );
+    resizeMultipleElements(
+      selected,
+      this.scene.getNonDeletedElementsMap(),
+      handle,
+      this.scene,
+      pointerDownState.originalElements,
+      {
+        shouldMaintainAspectRatio: true,
+        nextWidth: bounds.right - bounds.left,
+        nextHeight: bounds.bottom - bounds.top,
+        originalBoundingBox: {
+          minX: initial.bounds.left,
+          minY: initial.bounds.top,
+          maxX: initial.bounds.right,
+          maxY: initial.bounds.bottom,
+          midX: (initial.bounds.left + initial.bounds.right) / 2,
+          midY: (initial.bounds.top + initial.bounds.bottom) / 2,
+          width,
+          height,
+        },
+      },
+    );
+    const transform = (position: { x: number; y: number }) => ({
+      x: anchor.x + (position.x - anchor.x) * scale,
+      y: anchor.y + (position.y - anchor.y) * scale,
+    });
+    for (const element of selected) {
+      const original = pointerDownState.originalElements.get(element.id);
+      const data = original?.customData;
+      if (!original) {
+        continue;
+      }
+      this.scene.mutateElement(element, {
+        strokeWidth: original.strokeWidth * scale,
+        ...(data
+          ? {
+              customData: {
+                ...data,
+                ...(data.fcInk
+                  ? {
+                      fcInk: {
+                        ...data.fcInk,
+                        unit:
+                          (Number.isFinite(data.fcInk.unit) &&
+                          data.fcInk.unit > 0
+                            ? data.fcInk.unit
+                            : 1) * scale,
+                        ...(data.fcInk.dashOffset !== undefined
+                          ? { dashOffset: data.fcInk.dashOffset * scale }
+                          : {}),
+                        ...(data.fcInk.rainbow
+                          ? {
+                              rainbow: {
+                                x: transform({ x: data.fcInk.rainbow.x, y: 0 })
+                                  .x,
+                                width: data.fcInk.rainbow.width * scale,
+                              },
+                            }
+                          : {}),
+                      },
+                    }
+                  : {}),
+                ...(data.fcWidget?.position &&
+                data.fcWidget.origin &&
+                data.fcWidget.params
+                  ? {
+                      fcWidget: {
+                        ...data.fcWidget,
+                        position: transform(data.fcWidget.position),
+                        origin: transform(data.fcWidget.origin),
+                        params: {
+                          ...data.fcWidget.params,
+                          size: data.fcWidget.params.size * scale,
+                        },
+                      },
+                    }
+                  : {}),
+                ...(data.fcInsertion?.position && data.fcInsertion.origin
+                  ? {
+                      fcInsertion: {
+                        ...data.fcInsertion,
+                        position: transform(data.fcInsertion.position),
+                        origin: transform(data.fcInsertion.origin),
+                        width: data.fcInsertion.width * scale,
+                        height: data.fcInsertion.height * scale,
+                        ...(data.fcInsertion.nodeSize
+                          ? {
+                              nodeSize: {
+                                width: data.fcInsertion.nodeSize.width * scale,
+                                height:
+                                  data.fcInsertion.nodeSize.height * scale,
+                              },
+                            }
+                          : {}),
+                        ...(Array.isArray(data.fcInsertion.nodePositions)
+                          ? {
+                              nodePositions: data.fcInsertion.nodePositions.map(
+                                (position: { x: number; y: number } | null) =>
+                                  position && {
+                                    x: position.x * scale,
+                                    y: position.y * scale,
+                                  },
+                              ),
+                            }
+                          : {}),
+                      },
+                    }
+                  : {}),
+                ...(data.fcPlot?.position && data.fcPlot.origin
+                  ? {
+                      fcPlot: {
+                        ...data.fcPlot,
+                        position: transform(data.fcPlot.position),
+                        origin: transform(data.fcPlot.origin),
+                      },
+                    }
+                  : {}),
+                ...(data.fcAxes
+                  ? {
+                      fcAxes: {
+                        ...transform(data.fcAxes),
+                        unit: data.fcAxes.unit * scale,
+                      },
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+      });
+    }
+    for (const [id, version] of versions) {
+      const current = this.scene.getNonDeletedElement(id)?.version;
+      if (current !== undefined && current !== version) {
+        pointerDownState.regionSelection.changedVersions.set(id, current);
+      }
+    }
+    pointerDownState.drag.hasOccurred ||= scale !== 1;
+    this.setState({
+      whiteboardSelection: {
+        ...initial,
+        bounds,
+        path: initial.path?.map(([x, y]) => {
+          const p = transform({ x, y });
+          return pointFrom(p.x, p.y);
+        }),
+      },
+    });
+  };
+
   private onPointerMoveFromPointerDownHandler(
     pointerDownState: PointerDownState,
   ) {
@@ -9991,20 +10342,7 @@ class App extends React.Component<AppProps, AppState> {
           pointerDownState.regionSelection.handle &&
           pointerDownState.regionSelection.handle !== "move"
         ) {
-          const bounds = resizeRegion(
-            initialRegion.bounds,
-            pointerDownState.regionSelection.handle,
-            pointerCoords,
-            this.lassoTrail.getViewport(),
-            this.state.zoom.value,
-          );
-          this.setState({
-            whiteboardSelection: {
-              ...initialRegion,
-              bounds,
-              path: regionPath(bounds),
-            },
-          });
+          this.resizeWhiteboardSelection(pointerDownState, pointerCoords);
         } else if (
           initialRegion &&
           pointerDownState.hit.hasHitCommonBoundingBoxOfSelectedElements
@@ -11027,14 +11365,9 @@ class App extends React.Component<AppProps, AppState> {
           pointerDownState.regionSelection.handle !== "move" &&
           pointerDownState.regionSelection.selection
         ) {
-          this.lassoTrail.selectRegion(
-            resizeRegion(
-              pointerDownState.regionSelection.selection.bounds,
-              pointerDownState.regionSelection.handle,
-              viewportCoordsToSceneCoords(childEvent, this.state),
-              this.lassoTrail.getViewport(),
-              this.state.zoom.value,
-            ),
+          this.resizeWhiteboardSelection(
+            pointerDownState,
+            viewportCoordsToSceneCoords(childEvent, this.state),
           );
         }
       } else {
@@ -11332,6 +11665,8 @@ class App extends React.Component<AppProps, AppState> {
               }
             : {}),
         });
+
+        this.onInkCommitEmitter.trigger(newElement);
 
         this.actionManager.executeAction(actionFinalize);
 

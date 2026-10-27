@@ -14,8 +14,37 @@ import java.util.UUID;
 final class BoardAttachments {
     private BoardAttachments() {}
 
+    /** PDF raster quality is bounded before decoding; the original PNG attachments stay intact. */
+    static final class PdfPageSpec {
+        static final long TOTAL_PIXELS = 12000000L;
+        final int width;
+        final int height;
+        final int sampleSize;
+        final int pageWidth;
+        final int pageHeight;
+
+        PdfPageSpec(int sourceWidth, int sourceHeight, int pageCount) throws IOException {
+            if (sourceWidth < 1 || sourceHeight < 1 || sourceWidth > 4096 || sourceHeight > 4096
+                || pageCount < 1 || pageCount > 20) throw new IOException("Invalid page image dimensions");
+            pageWidth = Math.min(1440, sourceWidth);
+            pageHeight = Math.max(1, (int) Math.round((double) pageWidth * sourceHeight / sourceWidth));
+            double scale = Math.min(1, Math.min(1440.0 / Math.max(sourceWidth, sourceHeight),
+                Math.sqrt((double) (TOTAL_PIXELS / pageCount) / ((long) sourceWidth * sourceHeight))));
+            width = Math.max(1, (int) Math.floor(sourceWidth * scale));
+            height = Math.max(1, (int) Math.floor(sourceHeight * scale));
+            int sample = 1;
+            while (sourceWidth / (sample * 2) >= width && sourceHeight / (sample * 2) >= height) sample *= 2;
+            sampleSize = sample;
+        }
+    }
+
     static Intent create(Context context, JSArray pages) throws Exception {
+        return create(context, pages, "png");
+    }
+
+    static Intent create(Context context, JSArray pages, String format) throws Exception {
         if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("请选择 1 至 20 页分享");
+        if (!"png".equals(format) && !"pdf".equals(format)) throw new IOException("Unsupported board export format");
         File root = new File(context.getCacheDir(), "board-attachments");
         if (!root.isDirectory() && !root.mkdirs()) throw new IOException("无法准备分享附件");
         File[] old = root.listFiles();
@@ -36,9 +65,42 @@ final class BoardAttachments {
             try (FileOutputStream output = new FileOutputStream(file)) { output.write(image); }
             attachments.add(androidx.core.content.FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file));
         }
+        if ("pdf".equals(format)) {
+            File file = new File(root, id + ".pdf");
+            android.graphics.pdf.PdfDocument pdf = new android.graphics.pdf.PdfDocument();
+            try {
+                for (int index = 0; index < pages.length(); index++) {
+                    File image = new File(root, id + "-" + (index + 1) + ".png");
+                    android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+                    options.inJustDecodeBounds = true;
+                    android.graphics.BitmapFactory.decodeFile(image.getAbsolutePath(), options);
+                    PdfPageSpec spec = new PdfPageSpec(options.outWidth, options.outHeight, pages.length());
+                    options.inJustDecodeBounds = false;
+                    options.inSampleSize = spec.sampleSize;
+                    options.inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888;
+                    android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeFile(image.getAbsolutePath(), options);
+                    if (bitmap == null) throw new IOException("Could not read page image");
+                    try {
+                        if (bitmap.getWidth() != spec.width || bitmap.getHeight() != spec.height) {
+                            android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, spec.width, spec.height, true);
+                            bitmap.recycle();
+                            bitmap = scaled;
+                        }
+                        android.graphics.pdf.PdfDocument.Page page = pdf.startPage(
+                            new android.graphics.pdf.PdfDocument.PageInfo.Builder(spec.pageWidth, spec.pageHeight, index + 1).create());
+                        try {
+                            page.getCanvas().drawBitmap(bitmap, null, new android.graphics.Rect(0, 0, spec.pageWidth, spec.pageHeight), null);
+                        } finally { pdf.finishPage(page); }
+                    } finally { bitmap.recycle(); }
+                }
+                try (FileOutputStream output = new FileOutputStream(file)) { pdf.writeTo(output); }
+            } finally { pdf.close(); }
+            attachments.clear();
+            attachments.add(androidx.core.content.FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file));
+        }
         android.content.Intent intent = new android.content.Intent(attachments.size() == 1
             ? android.content.Intent.ACTION_SEND : android.content.Intent.ACTION_SEND_MULTIPLE);
-        intent.setType("image/png");
+        intent.setType("pdf".equals(format) ? "application/pdf" : "image/png");
         intent.putExtra(android.content.Intent.EXTRA_SUBJECT, "Fcboard 白板");
         if (attachments.size() == 1) intent.putExtra(android.content.Intent.EXTRA_STREAM, attachments.get(0));
         else intent.putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, attachments);

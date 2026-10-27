@@ -1,0 +1,53 @@
+.fc-classroom .fc-spotlight {
+  .fc-spotlight-ring {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .fc-spotlight-controls {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: 32px;
+    background: #8c8c8caa;
+  }
+  button,
+  .fc-spotlight-color {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    min-height: 0;
+    padding: 7px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    svg {
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+  }
+  .fc-spotlight-resize {
+    position: absolute;
+    background: #72727288;
+    cursor: nwse-resize;
+  }
+}

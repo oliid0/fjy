@@ -1,6 +1,6 @@
 import { t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
-import { ToolbarExtras, exportToBlob } from "@excalidraw/excalidraw";
+import { ToolbarExtras } from "@excalidraw/excalidraw";
 import {
   TrashIcon,
   save,
@@ -17,56 +17,17 @@ import { MaterialPanel } from "./MaterialPanel";
 import { BoardBook } from "./boards";
 import { useAnchoredPanel } from "./floating";
 
-import { classroomCommands } from "./commands";
+import { classroomCommands, executeBoardCommand } from "./commands";
 
-import type { Board } from "./boards";
-
-const BoardThumbnail = ({ board }: { board: Board }) => {
-  const [source, setSource] = useState("");
-  useEffect(() => {
-    let active = true;
-    let url = "";
-    if (board.elements.length) {
-      void exportToBlob({
-        elements: board.elements,
-        files: board.files,
-        appState: {
-          ...board.view,
-          exportBackground: true,
-          exportWithDarkMode: false,
-        },
-        mimeType: "image/png",
-        maxWidthOrHeight: 280,
-      })
-        .then((blob) => {
-          url = URL.createObjectURL(blob);
-          if (active) {
-            setSource(url);
-          } else {
-            URL.revokeObjectURL(url);
-          }
-        })
-        .catch(() => {});
-    }
-    return () => {
-      active = false;
-      if (url) {
-        URL.revokeObjectURL(url);
-      }
-    };
-  }, [board.elements, board.files, board.view, board.updated]);
-  return source ? (
-    <img
-      className="fc-board-thumbnail"
-      src={source}
-      alt={t("fcboard.preview_of_name", { name: board.name })}
-    />
-  ) : null;
-};
+import { BoardThumbnail } from "./BoardThumbnail";
 
 export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   useI18n();
-  const leavePresentation = async () => {
+  const leavePresentation = async (source?: AbortSignal) => {
+    source?.throwIfAborted();
+    if (classroomCommands.has("mindmap.dismiss")) {
+      await executeBoardCommand({ name: "mindmap.dismiss" }, source);
+    }
     if (
       (
         classroomCommands.read("network") as
@@ -74,14 +35,18 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           | undefined
       )?.collaborating
     ) {
-      await classroomCommands.execute({ name: "collaboration.stop" });
+      await executeBoardCommand({ name: "collaboration.stop" }, source);
     }
     if (classroomCommands.has("document.close")) {
-      await classroomCommands.execute({
-        name: "document.close",
-        args: { next: false },
-      });
+      await executeBoardCommand(
+        {
+          name: "document.close",
+          args: { next: false },
+        },
+        source,
+      );
     }
+    source?.throwIfAborted();
   };
   const book = useRef<BoardBook | undefined>(undefined);
   const [value, setValue] = useState<BoardBook["value"]>({
@@ -140,9 +105,14 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         "board.new",
         "新建并切换白板，args.name 可选；原板自动保存",
         async (args) => {
-          await leavePresentation();
+          const source =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : classroomCommands.interactionSource;
+          await leavePresentation(source);
           await controller.create(
             typeof args.name === "string" ? args.name : undefined,
+            source,
           );
         },
       ),
@@ -150,6 +120,10 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         "board.switch",
         "切换白板，args.id 或 args.name，或从1开始的 args.index",
         async (args) => {
+          const source =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : classroomCommands.interactionSource;
           const board = controller.value.boards.find(
             (item, index) =>
               item.id === args.id ||
@@ -159,8 +133,8 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           if (!board) {
             throw new Error(t("fcboard.board_not_found"));
           }
-          await leavePresentation();
-          await controller.switch(board.id);
+          await leavePresentation(source);
+          await controller.switch(board.id, source);
         },
       ),
       classroomCommands.register(
@@ -173,11 +147,15 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         "board.discard",
         "丢弃白板，仅在用户明确要求丢弃时调用，args.id 省略为当前板",
         async (args) => {
+          const source =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : classroomCommands.interactionSource;
           const id = String(args.id || controller.value.active);
           if (id === controller.value.active) {
-            await leavePresentation();
+            await leavePresentation(source);
           }
-          await controller.discard(id);
+          await controller.discard(id, source);
         },
       ),
       classroomCommands.register("board.save", "保存当前白板到本机", () =>
@@ -225,14 +203,16 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     window.addEventListener("pointerdown", dismiss);
     return () => window.removeEventListener("pointerdown", dismiss);
   }, [open]);
-  const run = async (operation: () => Promise<void>) => {
+  const run = async (operation: (source?: AbortSignal) => Promise<void>) => {
+    const source = classroomCommands.interactionSource;
     if (busy) {
       return;
     }
     setBusy(true);
     setError("");
     try {
-      await operation();
+      source?.throwIfAborted();
+      await operation(source);
     } catch (failure) {
       setError(String(failure));
     } finally {
@@ -276,13 +256,14 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               value.boards.findIndex((board) => board.id === value.active) <= 0
             }
             onClick={() =>
-              void run(async () => {
+              void run(async (source) => {
                 const index = book.current!.value.boards.findIndex(
                   (board) => board.id === book.current!.value.active,
                 );
-                await leavePresentation();
+                await leavePresentation(source);
                 await book.current!.switch(
                   book.current!.value.boards[index - 1].id,
+                  source,
                 );
               })
             }
@@ -317,13 +298,14 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 value.boards.length - 1
             }
             onClick={() =>
-              void run(async () => {
+              void run(async (source) => {
                 const index = book.current!.value.boards.findIndex(
                   (board) => board.id === book.current!.value.active,
                 );
-                await leavePresentation();
+                await leavePresentation(source);
                 await book.current!.switch(
                   book.current!.value.boards[index + 1].id,
+                  source,
                 );
               })
             }
@@ -335,9 +317,9 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             title={t("fcboard.new_board")}
             disabled={busy || !value.active}
             onClick={() => {
-              void run(async () => {
-                await leavePresentation();
-                await book.current!.create();
+              void run(async (source) => {
+                await leavePresentation(source);
+                await book.current!.create(undefined, source);
               });
             }}
           >
@@ -348,7 +330,7 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       {(open || error) && (
         <MaterialPanel
           ref={panel}
-          className="fc-board-picker fc-surface"
+          className="fc-board-picker fc-board-preview-list fc-surface"
           style={panelStyle}
           role="dialog"
           aria-label={t("fcboard.my_boards")}
@@ -388,9 +370,9 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   })}
                   aria-pressed={board.id === value.active}
                   onClick={() => {
-                    void run(async () => {
-                      await leavePresentation();
-                      await book.current!.switch(board.id);
+                    void run(async (source) => {
+                      await leavePresentation(source);
+                      await book.current!.switch(board.id, source);
                       setOpen(false);
                     });
                   }}
@@ -432,7 +414,9 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   title={t("fcboard.discard")}
                   disabled={busy}
                   onClick={() => {
-                    void run(() => book.current!.discard(board.id));
+                    void run((source) =>
+                      book.current!.discard(board.id, source),
+                    );
                   }}
                 >
                   {TrashIcon}

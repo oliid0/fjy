@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useLayoutEffect, useRef } from "react";
 
 import { isShallowEqual } from "@excalidraw/common";
 
@@ -35,14 +35,14 @@ const StaticCanvas = (props: StaticCanvasProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isComponentMounted = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     props.canvas.style.width = `${props.appState.width}px`;
     props.canvas.style.height = `${props.appState.height}px`;
     props.canvas.width = props.appState.width * props.scale;
     props.canvas.height = props.appState.height * props.scale;
   }, [props.appState.height, props.appState.width, props.canvas, props.scale]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) {
       return;

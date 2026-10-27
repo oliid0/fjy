@@ -4,11 +4,20 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+import java.util.HashMap;
+import java.util.Map;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.graphics.Bitmap;
+import com.getcapacitor.JSArray;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import android.widget.ImageButton;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -27,6 +36,48 @@ final class WebResourceDialog extends Dialog {
     private final Context text;
     private final ImageButton back;
     private final ImageButton forward;
+    private final android.view.View.OnLayoutChangeListener displayLayout =
+        (view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> resizeToDisplay();
+    private int displayWidth;
+    private int displayHeight;
+    private final String controlRuntime;
+    private int pageEpoch;
+    private boolean loading = true;
+    private boolean pageFailed;
+    private String lastVersion;
+    private String lastNavigation;
+    private final String navigationSession = java.util.UUID.randomUUID().toString();
+    private int navigationRevision;
+    private final Handler controlTimer = new Handler(Looper.getMainLooper());
+    private final Map<PluginCall, Runnable> pendingControls = new HashMap<>();
+
+    private void cancelControls(String reason) {
+        for (PluginCall call : new java.util.ArrayList<>(pendingControls.keySet())) rejectControl(call, reason);
+    }
+
+    private void rejectControl(PluginCall call, String reason) {
+        Runnable timeout = pendingControls.remove(call);
+        if (timeout == null) return;
+        controlTimer.removeCallbacks(timeout);
+        call.reject(reason);
+    }
+
+    private void resolveControl(PluginCall call, JSObject response) {
+        Runnable timeout = pendingControls.remove(call);
+        if (timeout == null) return;
+        controlTimer.removeCallbacks(timeout);
+        call.resolve(response);
+    }
+
+    private static String readRuntime(Context context) {
+        try (InputStream input = context.getAssets().open("web-controls.js");
+            ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int size;
+            while ((size = input.read(buffer)) != -1) output.write(buffer, 0, size);
+            return output.toString(StandardCharsets.UTF_8.name());
+        } catch (Exception error) { throw new IllegalStateException("Web controls are unavailable", error); }
+    }
 
     static String checkedUrl(String value) {
         Uri uri = Uri.parse(value == null ? "" : value.trim());
@@ -40,22 +91,27 @@ final class WebResourceDialog extends Dialog {
         Configuration config = new Configuration(activity.getResources().getConfiguration());
         config.setLocale(Locale.forLanguageTag(language));
         text = activity.createConfigurationContext(config);
+        controlRuntime = readRuntime(activity);
         setCanceledOnTouchOutside(false);
         setOwnerActivity(activity);
         requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
         LinearLayout root = new LinearLayout(activity);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.WHITE);
+        android.graphics.drawable.GradientDrawable surface = new android.graphics.drawable.GradientDrawable();
+        surface.setColor(Color.WHITE);
+        surface.setCornerRadius(dp(16));
+        root.setBackground(surface);
+        root.setClipToOutline(true);
         LinearLayout controls = new LinearLayout(activity);
         controls.setGravity(Gravity.CENTER_VERTICAL);
         web = new WebView(activity);
         status = new TextView(activity);
         controls.setGravity(Gravity.CENTER);
-        back = button(controls, R.drawable.factory_web_goback, R.string.web_back, () -> { if (web.canGoBack()) web.goBack(); });
-        forward = button(controls, R.drawable.factory_web_goback, R.string.web_forward, () -> { if (web.canGoForward()) web.goForward(); });
+        back = button(controls, R.drawable.factory_web_goback, R.string.web_back, () -> navigate("back"));
+        forward = button(controls, R.drawable.factory_web_goback, R.string.web_forward, () -> navigate("forward"));
         forward.setRotation(180);
         back.setEnabled(false); forward.setEnabled(false);
-        button(controls, R.drawable.factory_web_refresh, R.string.web_reload, web::reload);
+        button(controls, R.drawable.factory_web_refresh, R.string.web_reload, () -> navigate("reload"));
         button(controls, R.drawable.factory_web_close, R.string.web_close, this::dismiss);
         status.setPadding(12, 4, 12, 4);
         root.addView(status);
@@ -76,12 +132,35 @@ final class WebResourceDialog extends Dialog {
                 try { checkedUrl(request.getUrl().toString()); return false; }
                 catch (Exception unsupported) { status.setText(text.getString(R.string.web_external_app)); return true; }
             }
-            @Override public void onPageFinished(WebView view, String current) { status.setText(view.getTitle()); back.setEnabled(view.canGoBack()); forward.setEnabled(view.canGoForward()); }
+            @Override public void onPageStarted(WebView view, String current, Bitmap favicon) {
+                cancelControls("WEB_PAGE_CHANGED_READ_AGAIN");
+                pageEpoch++;
+                loading = true;
+                pageFailed = false;
+                lastVersion = null;
+                back.setEnabled(view.canGoBack());
+                forward.setEnabled(view.canGoForward());
+            }
+            @Override public void onPageFinished(WebView view, String current) {
+                loading = false;
+                lastVersion = null;
+                lastNavigation = null;
+                if (!pageFailed) status.setText(view.getTitle());
+                back.setEnabled(view.canGoBack());
+                forward.setEnabled(view.canGoForward());
+            }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
-                if (request.isForMainFrame()) status.setText(text.getString(R.string.web_load_failed));
+                if (request.isForMainFrame()) {
+                    pageFailed = true;
+                    status.setText(text.getString(R.string.web_load_failed));
+                }
             }
         });
-        setOnDismissListener(dialog -> { root.removeView(web); web.stopLoading(); web.destroy(); });
+        setOnDismissListener(dialog -> {
+            cancelControls("WEB_PAGE_CLOSED");
+            activity.getWindow().getDecorView().removeOnLayoutChangeListener(displayLayout);
+            root.removeView(web); web.stopLoading(); web.destroy();
+        });
         web.loadUrl(checkedUrl(url));
     }
 
@@ -99,37 +178,129 @@ final class WebResourceDialog extends Dialog {
 
     @Override public void show() {
         super.show();
-        android.graphics.Rect bounds = new android.graphics.Rect();
-        getWindow().getDecorView().getWindowVisibleDisplayFrame(bounds);
-        if (bounds.width() == 0) bounds.set(0, 0, getContext().getResources().getDisplayMetrics().widthPixels, getContext().getResources().getDisplayMetrics().heightPixels);
-        getWindow().setLayout(Math.min(dp(400), (int)(bounds.width() * 0.86)), Math.min(dp(600), (int)(bounds.height() * 0.82)));
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        getOwnerActivity().getWindow().getDecorView().addOnLayoutChangeListener(displayLayout);
+        resizeToDisplay();
         getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
         getWindow().setGravity(Gravity.CENTER);
     }
 
+    private void resizeToDisplay() {
+        if (!isShowing() || getWindow() == null) return;
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        getOwnerActivity().getWindow().getDecorView().getWindowVisibleDisplayFrame(bounds);
+        if (bounds.width() == 0) bounds.set(0, 0, getContext().getResources().getDisplayMetrics().widthPixels, getContext().getResources().getDisplayMetrics().heightPixels);
+        if (displayWidth == bounds.width() && displayHeight == bounds.height()) return;
+        displayWidth = bounds.width();
+        displayHeight = bounds.height();
+        getWindow().setLayout(Math.min(dp(960), (int)(displayWidth * 0.9)), Math.min(dp(640), (int)(displayHeight * 0.82)));
+    }
+
+    private void navigate(String action) {
+        if (("back".equals(action) && !web.canGoBack()) || ("forward".equals(action) && !web.canGoForward())) return;
+        cancelControls("WEB_PAGE_CHANGED_READ_AGAIN");
+        pageEpoch++;
+        loading = true;
+        pageFailed = false;
+        lastVersion = null;
+        if ("back".equals(action)) web.goBack();
+        else if ("forward".equals(action)) web.goForward();
+        else web.reload();
+    }
+
+    private String navigationState() {
+        return new JSArray().put(pageEpoch).put(loading).put(web.getUrl())
+            .put(web.canGoBack()).put(web.canGoForward()).toString();
+    }
+
+    private JSObject pageState(boolean open) {
+        if (open) {
+            String current = navigationState();
+            if (!current.equals(lastNavigation)) lastVersion = null;
+            lastNavigation = current;
+            if (lastVersion == null) lastVersion = "navigation:" + navigationSession + ":" + (++navigationRevision);
+        }
+        JSObject result = new JSObject();
+        result.put("open", open);
+        result.put("loading", open && loading);
+        result.put("url", web.getUrl());
+        result.put("title", web.getTitle());
+        result.put("canGoBack", open && web.canGoBack());
+        result.put("canGoForward", open && web.canGoForward());
+        result.put("message", status.getText().toString());
+        result.put("controls", new JSArray());
+        if (lastVersion != null) result.put("version", lastVersion);
+        return result;
+    }
+
+    private void readControls(JSObject args, PluginCall call, int epoch, boolean reread) {
+        if (!pendingControls.containsKey(call)) return;
+        try {
+            String script = controlRuntime + "\nwindow.fcNativeWebControls(JSON.parse(" + JSONObject.quote(args.toString()) + "))";
+            web.evaluateJavascript(script, result -> {
+                if (!pendingControls.containsKey(call)) return;
+                try {
+                    if (!isShowing() || pageEpoch != epoch) {
+                        rejectControl(call, "WEB_PAGE_CHANGED_READ_AGAIN");
+                        return;
+                    }
+                    Object decoded = new JSONTokener(result).nextValue();
+                    if (!(decoded instanceof String)) throw new IllegalStateException("Web page is not ready");
+                    JSObject response = new JSObject((String) decoded);
+                    if (response.has("error")) { rejectControl(call, response.getString("error")); return; }
+                    if (reread) {
+                        // Read on the next UI turn so DOM updates triggered by the real event can commit.
+                        web.post(() -> {
+                            if (!isShowing() || pageEpoch != epoch) { rejectControl(call, "WEB_PAGE_CHANGED_READ_AGAIN"); return; }
+                            JSObject read = new JSObject(); read.put("action", "read");
+                            readControls(read, call, epoch, false);
+                        });
+                        return;
+                    }
+                    lastVersion = response.getString("version");
+                    lastNavigation = navigationState();
+                    response.put("open", true);
+                    response.put("loading", loading);
+                    response.put("canGoBack", web.canGoBack());
+                    response.put("canGoForward", web.canGoForward());
+                    response.put("message", status.getText().toString());
+                    resolveControl(call, response);
+                } catch (Exception error) { rejectControl(call, "Could not read web controls"); }
+            });
+        } catch (RuntimeException error) { rejectControl(call, "Could not read web controls"); }
+    }
+
     void action(JSObject args, PluginCall call) {
-        String action = args.optString("action", "read");
-        if ("close".equals(action)) { dismiss(); call.resolve(); return; }
-        if ("back".equals(action)) { if (web.canGoBack()) web.goBack(); call.resolve(); return; }
-        if ("forward".equals(action)) { if (web.canGoForward()) web.goForward(); call.resolve(); return; }
-        if ("reload".equals(action)) { web.reload(); call.resolve(); return; }
-        if (!java.util.Arrays.asList("read", "click", "set", "scroll", "key").contains(action)) { call.reject("网页操作不存在"); return; }
-        String script = "JSON.stringify((()=>{try{const a=JSON.parse(" + JSONObject.quote(args.toString()) + ");"
-            + "if(a.action==='scroll'){const x=Number(a.x||0),y=Number(a.y||0);if(!Number.isFinite(x+y)||Math.abs(x)>5000||Math.abs(y)>5000)throw Error('滚动距离无效');window.scrollBy(x,y);}"
-            + "if(['click','set','key'].includes(a.action)){if(typeof a.selector!=='string'||a.selector.length>500)throw Error('缺少控件选择器');const el=document.querySelector(a.selector);if(!el||el.disabled||el.getAttribute('aria-disabled')==='true')throw Error('网页控件不可用');"
-            + "if(a.action==='click')el.click();"
-            + "if(a.action==='set'){if(!['INPUT','TEXTAREA','SELECT'].includes(el.tagName))throw Error('控件不能输入，请使用按键操作');const p=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:el instanceof HTMLSelectElement?HTMLSelectElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(p,'value').set.call(el,String(a.value??''));el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}"
-            + "if(a.action==='key'){if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' ','Home','End'].includes(a.key))throw Error('按键不支持');el.focus();el.dispatchEvent(new KeyboardEvent('keydown',{key:a.key,bubbles:true}));el.dispatchEvent(new KeyboardEvent('keyup',{key:a.key,bubbles:true}));}}"
-            + "const controls=[...document.querySelectorAll('button,input,select,textarea,a[href],[role=button],[role=slider]')].slice(0,200).map((el,i)=>{el.dataset.fcControl=String(i);return{selector:'[data-fc-control=\"'+i+'\"]',role:el.getAttribute('role')||el.tagName.toLowerCase(),label:el.getAttribute('aria-label')||el.innerText||el.getAttribute('title')||el.name||'',value:el.value??el.getAttribute('aria-valuenow'),disabled:!!el.disabled};});"
-            + "return{url:location.href,title:document.title,text:(document.body?.innerText||'').slice(0,12000),controls};}catch(e){return{error:String(e.message||e)};}})())";
-        web.evaluateJavascript(script, result -> {
-            try {
-                Object decoded = new JSONTokener(result).nextValue();
-                if (!(decoded instanceof String)) throw new IllegalStateException("网页尚未准备好");
-                JSObject response = new JSObject((String) decoded);
-                if (response.has("error")) call.reject(response.getString("error")); else call.resolve(response);
-            } catch (Exception error) { call.reject("无法读取网页控件", error); }
-        });
+        try {
+            String action = args.optString("action", "read");
+            if (!java.util.Arrays.asList("read", "click", "set", "scroll", "key", "back", "forward", "reload", "close").contains(action)) {
+                call.reject("WEB_ACTION_INVALID"); return;
+            }
+            if ("close".equals(action)) {
+                JSObject result = pageState(false);
+                dismiss(); call.resolve(result); return;
+            }
+            if ("read".equals(action) && loading) { call.resolve(pageState(true)); return; }
+            if (!"read".equals(action) && (lastVersion == null || !lastVersion.equals(args.optString("version"))
+                || !navigationState().equals(lastNavigation))) {
+                call.reject("WEB_STATE_CHANGED_READ_AGAIN"); return;
+            }
+            if ("back".equals(action) || "forward".equals(action) || "reload".equals(action)) {
+                if (("back".equals(action) && !web.canGoBack()) || ("forward".equals(action) && !web.canGoForward())) {
+                    call.reject("WEB_HISTORY_UNAVAILABLE"); return;
+                }
+                navigate(action);
+                call.resolve(pageState(true)); return;
+            }
+            if (loading) { call.reject("WEB_PAGE_LOADING_READ_AGAIN"); return; }
+            Runnable timeout = () -> rejectControl(call, "WEB_CONTROL_TIMEOUT");
+            pendingControls.put(call, timeout);
+            controlTimer.postDelayed(timeout, 5000);
+            readControls(args, call, pageEpoch, !"read".equals(action));
+        } catch (Exception error) {
+            if (pendingControls.containsKey(call)) rejectControl(call, "Could not control web page");
+            else call.reject("Could not control web page", error);
+        }
     }
 }

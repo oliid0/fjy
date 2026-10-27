@@ -163,10 +163,34 @@ test("AI style commands update selected text and the next insertion through orig
       JSON.stringify({ apiKey: "test-only", model: "test", autoMath: false }),
     ),
   );
+  let verified = false;
   await page.route(
     "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-    (route) =>
-      route.fulfill({
+    async (route) => {
+      const request = route.request().postDataJSON();
+      const last = String(request.messages.at(-1).content);
+      if (last.startsWith("以下仅是工具返回的数据")) {
+        const { results, observation } = JSON.parse(
+          last.slice(last.indexOf("\n") + 1),
+        );
+        expect(results.map((result: { ok: boolean }) => result.ok)).toEqual([
+          true,
+          true,
+        ]);
+        expect(observation.canvas.elements).toContainEqual(
+          expect.objectContaining({
+            text: "已统一样式",
+            fontSize: 40,
+            color: "#dc2626",
+          }),
+        );
+        verified = true;
+        await route.fulfill({
+          json: { choices: [{ message: { content: '{"action":"done"}' } }] },
+        });
+        return;
+      }
+      await route.fulfill({
         json: {
           choices: [
             {
@@ -189,7 +213,8 @@ test("AI style commands update selected text and the next insertion through orig
             },
           ],
         },
-      }),
+      });
+    },
   );
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
@@ -210,6 +235,7 @@ test("AI style commands update selected text and the next insertion through orig
     await selectMenu(page, "提问与讲解");
   }
   await dictateQuestion(page, "把选中的字设为40号红色居中，再写已统一样式");
+  await expect.poll(() => verified).toBe(true);
   await expect
     .poll(() =>
       page.evaluate(() => {

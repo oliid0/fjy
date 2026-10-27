@@ -1,3 +1,5 @@
+import { factoryNibControls } from "@excalidraw/element/factoryNib";
+
 import { factoryInkPath } from "@excalidraw/element/factoryInk";
 
 import { selectDocumentLasso } from "./documents";
@@ -8,6 +10,8 @@ import {
   hitStroke,
   htmlText,
   shapeInk,
+  scaleDocumentStroke,
+  moveDocumentStroke,
 } from "./documents";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
@@ -21,6 +25,53 @@ import {
 import { insertionDefaults } from "./insertObjects";
 
 import type { InkStroke } from "./documents";
+
+it("scales a courseware insertion and its editable geometry together around the fixed opposite corner", () => {
+  const original: InkStroke = {
+    id: "cell-ink",
+    points: [
+      [100, 100],
+      [140, 140],
+    ],
+    width: 2,
+    color: "#123456",
+    pressures: [0.2, 0.8],
+    simulatePressure: false,
+    fcInk: {
+      version: 2,
+      pen: "rainbow",
+      unit: 1,
+      rainbow: { x: 100, width: 200 },
+      dashOffset: 5,
+    },
+    insertion: {
+      ...insertionDefaults("table", { x: 100, y: 100 }),
+      origin: { x: 100, y: 100 },
+    },
+  };
+  const next = scaleDocumentStroke(original, { x: 80, y: 80 }, 2);
+  expect(next.points).toEqual([
+    [120, 120],
+    [200, 200],
+  ]);
+  expect(next.width).toBe(4);
+  expect(next.pressures).toEqual([0.2, 0.8]);
+  expect(next.fcInk).toMatchObject({
+    unit: 2,
+    rainbow: { x: 120, width: 400 },
+    dashOffset: 10,
+  });
+  expect(next.insertion).toMatchObject({
+    position: { x: 120, y: 120 },
+    origin: { x: 120, y: 120 },
+    width: original.insertion!.width * 2,
+    height: original.insertion!.height * 2,
+  });
+  expect(original.points).toEqual([
+    [100, 100],
+    [140, 140],
+  ]);
+});
 
 describe("document ink and classroom tools", () => {
   it("removes whole swept objects and composite parts without splitting or changing missed ink", () => {
@@ -232,4 +283,36 @@ it("selects sparse segments crossing the actual lasso but excludes its empty bou
       ]),
     ),
   ).toEqual(new Set(["inside", "crossing"]));
+});
+
+it("keeps the original courseware nib through erasure, moving and uniform resizing", () => {
+  const stroke: InkStroke = {
+    id: "hard-tail",
+    color: "#123456",
+    width: 4,
+    points: [
+      [100, 100],
+      [140, 120],
+      [180, 120],
+      [220, 120],
+      [220, 120],
+    ],
+    fcInk: { version: 2, pen: "hard", unit: 1, nib: true, finished: true },
+  };
+  const original = factoryNibControls(documentInkElement(stroke))!;
+  const parts = eraseDocumentInk([stroke], [150, 120], [150, 120], 4, 4);
+  expect(parts).toHaveLength(2);
+  expect(documentStrokeGeometry(parts[0]).nib).toBe("");
+  const tail = parts[1];
+  expect(factoryNibControls(documentInkElement(tail))).toEqual(original);
+  const moved = moveDocumentStroke(tail, 80, 50);
+  expect(factoryNibControls(documentInkElement(moved))).toEqual(
+    original.map(([x, y]) => [x + 80, y + 50]),
+  );
+  const scaled = scaleDocumentStroke(moved, { x: 100, y: 100 }, 2);
+  factoryNibControls(documentInkElement(scaled))!.forEach(([x, y], index) => {
+    expect(x).toBeCloseTo(100 + (original[index][0] + 80 - 100) * 2, 10);
+    expect(y).toBeCloseTo(100 + (original[index][1] + 50 - 100) * 2, 10);
+  });
+  expect(documentStrokeGeometry(scaled).nib).not.toMatch(/NaN|Infinity/);
 });

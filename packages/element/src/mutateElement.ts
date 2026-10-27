@@ -70,7 +70,10 @@ export const mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
         options,
       ),
     };
-  } else if (typeof points !== "undefined") {
+  } else if (
+    typeof points !== "undefined" &&
+    !(typeof updates.width === "number" && typeof updates.height === "number")
+  ) {
     updates = { ...getSizeFromPoints(points), ...updates };
   }
 

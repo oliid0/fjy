@@ -69,7 +69,7 @@ import { getCornerRadius } from "./utils";
 import { ShapeCache } from "./shape";
 import { factoryInkDashes, isFactoryStroke } from "./factoryInk";
 import { isFactoryBrush } from "./factoryBrush";
-import { factoryPath2D } from "./factoryPath";
+import { factoryNibPath2D, factoryPath2D } from "./factoryPath";
 import { rainbowInkCoordinates, rainbowInkStops } from "./rainbowInk";
 
 import type {
@@ -452,6 +452,10 @@ const drawElementOnCanvas = (
             );
           }
           context.stroke(factoryPath2D(element));
+          const nib = factoryNibPath2D(element);
+          if (nib) {
+            context.fill(nib);
+          }
         }
         context.restore();
         break;
@@ -490,6 +494,10 @@ const drawElementOnCanvas = (
               );
             }
             context.stroke(cached.path);
+            const nib = factoryNibPath2D(element);
+            if (nib) {
+              context.fill(nib);
+            }
           } else {
             context.fill(cached.path);
           }

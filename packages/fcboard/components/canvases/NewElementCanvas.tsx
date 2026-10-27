@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 
-import type { NonDeletedSceneElementsMap } from "@excalidraw/element/types";
+import type {
+  ExcalidrawFreeDrawElement,
+  NonDeletedSceneElementsMap,
+} from "@excalidraw/element/types";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
 import { renderNewElementScene } from "../../renderer/renderNewElementScene";
@@ -19,6 +22,8 @@ interface NewElementCanvasProps {
   scale: number;
   rc: RoughCanvas;
   renderConfig: StaticCanvasRenderConfig;
+  getActiveInkElements?: () => readonly ExcalidrawFreeDrawElement[];
+  onInkFrame?: (listener: () => void) => () => void;
 }
 
 const NewElementCanvas = (props: NewElementCanvasProps) => {
@@ -27,26 +32,31 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
     if (!canvasRef.current) {
       return;
     }
-    renderNewElementScene(
-      {
-        canvas: canvasRef.current,
-        scale: props.scale,
-        newElement: props.appState.newElement,
-        elementsMap: props.elementsMap,
-        allElementsMap: props.allElementsMap,
-        rc: props.rc,
-        renderConfig: props.renderConfig,
-        appState: props.appState,
-      },
-      props.appState.newElement?.customData?.fcInk
-        ? false
-        : isRenderThrottlingEnabled(),
-    );
+    const paint = () =>
+      renderNewElementScene(
+        {
+          canvas: canvasRef.current,
+          scale: props.scale,
+          newElement: props.appState.newElement,
+          activeInkElements: props.getActiveInkElements?.(),
+          elementsMap: props.elementsMap,
+          allElementsMap: props.allElementsMap,
+          rc: props.rc,
+          renderConfig: props.renderConfig,
+          appState: props.appState,
+        },
+        props.getActiveInkElements ||
+          props.appState.newElement?.customData?.fcInk
+          ? false
+          : isRenderThrottlingEnabled(),
+      );
+    paint();
+    return props.onInkFrame?.(paint);
   });
 
   return (
     <canvas
-      className="excalidraw__canvas"
+      className="excalidraw__canvas new-element"
       style={{
         width: props.appState.width,
         height: props.appState.height,

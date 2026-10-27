@@ -11,6 +11,7 @@ import { pointFrom, polygonIncludesPointNonZero } from "@excalidraw/math";
 import { measureText } from "@excalidraw/element/textMeasurements";
 
 import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
+import { factoryNibControls } from "@excalidraw/element/factoryNib";
 
 import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
 import type { FontFamilyValues } from "@excalidraw/element/types";
@@ -71,6 +72,17 @@ export type InkStroke = {
   };
 };
 export type DocumentInk = Record<number, InkStroke[]>;
+
+const documentCompositeGroup = (stroke: InkStroke) =>
+  stroke.widget
+    ? `widget:${stroke.widget.id}`
+    : stroke.insertion
+    ? `insertion:${stroke.insertion.id}`
+    : stroke.plot
+    ? `plot:${stroke.plot.id}`
+    : stroke.language
+    ? `language:${stroke.language.group}`
+    : undefined;
 
 /** A recognition result belongs to these exact, still-visible trajectories. */
 export const documentSourceSignature = (strokes: readonly InkStroke[]) =>
@@ -278,8 +290,12 @@ export const htmlText = (html: string) => {
 };
 
 export const documentStrokeBounds = (stroke: InkStroke) => {
-  const xs = stroke.points.map(([x]) => x);
-  const ys = stroke.points.map(([, y]) => y);
+  const nib = stroke.fcInk?.nib
+    ? factoryNibControls(documentInkElement(stroke))
+    : undefined;
+  const points = nib ? [...stroke.points, ...nib] : stroke.points;
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
   const left = Math.min(...xs);
   const top = Math.min(...ys);
   if (stroke.text) {
@@ -327,14 +343,13 @@ export const selectDocumentLasso = (
     const groups = new Set(
       strokes
         .filter((stroke) => hit.includes(stroke.id))
-        .map((stroke) => stroke.language?.group)
+        .map(documentCompositeGroup)
         .filter(Boolean),
     );
     return strokes
       .filter(
         (stroke) =>
-          hit.includes(stroke.id) ||
-          (stroke.language && groups.has(stroke.language.group)),
+          hit.includes(stroke.id) || groups.has(documentCompositeGroup(stroke)),
       )
       .map((stroke) => stroke.id);
   }
@@ -374,14 +389,14 @@ export const selectDocumentLasso = (
   const groups = new Set(
     strokes
       .filter((stroke) => selected.includes(stroke.id))
-      .map((stroke) => stroke.language?.group)
+      .map(documentCompositeGroup)
       .filter(Boolean),
   );
   return strokes
     .filter(
       (stroke) =>
         selected.includes(stroke.id) ||
-        (stroke.language && groups.has(stroke.language.group)),
+        groups.has(documentCompositeGroup(stroke)),
     )
     .map((stroke) => stroke.id);
 };
@@ -423,6 +438,103 @@ export const moveDocumentStroke = (
           rainbow: { ...stroke.fcInk.rainbow, x: stroke.fcInk.rainbow.x + dx },
         }
       : stroke.fcInk,
+  };
+};
+
+/** Scale an editable courseware object without losing its semantic anchors. */
+export const scaleDocumentStroke = (
+  stroke: InkStroke,
+  anchor: { x: number; y: number },
+  scale: number,
+): InkStroke => {
+  const transform = (point: { x: number; y: number }) => ({
+    x: anchor.x + (point.x - anchor.x) * scale,
+    y: anchor.y + (point.y - anchor.y) * scale,
+  });
+  return {
+    ...stroke,
+    points: stroke.points.map(([x, y]) => {
+      const point = transform({ x, y });
+      return [point.x, point.y];
+    }),
+    width: stroke.width * scale,
+    anchor: stroke.anchor ? transform(stroke.anchor) : undefined,
+    fontSize: stroke.fontSize ? stroke.fontSize * scale : undefined,
+    imageWidth: stroke.imageWidth ? stroke.imageWidth * scale : undefined,
+    imageHeight: stroke.imageHeight ? stroke.imageHeight * scale : undefined,
+    resource: stroke.resource
+      ? {
+          ...stroke.resource,
+          width: stroke.resource.width * scale,
+          height: stroke.resource.height * scale,
+        }
+      : undefined,
+    widget: stroke.widget
+      ? {
+          ...stroke.widget,
+          position: transform(stroke.widget.position),
+          origin: transform(stroke.widget.origin),
+          params: {
+            ...stroke.widget.params,
+            size: stroke.widget.params.size * scale,
+          },
+        }
+      : undefined,
+    insertion: stroke.insertion
+      ? {
+          ...stroke.insertion,
+          position: transform(stroke.insertion.position),
+          origin: transform(stroke.insertion.origin),
+          width: stroke.insertion.width * scale,
+          height: stroke.insertion.height * scale,
+          nodeSize: stroke.insertion.nodeSize
+            ? {
+                width: stroke.insertion.nodeSize.width * scale,
+                height: stroke.insertion.nodeSize.height * scale,
+              }
+            : undefined,
+          nodePositions: stroke.insertion.nodePositions?.map(
+            (point) => point && { x: point.x * scale, y: point.y * scale },
+          ),
+        }
+      : undefined,
+    plot: stroke.plot
+      ? {
+          ...stroke.plot,
+          position: transform(stroke.plot.position),
+          origin: transform(stroke.plot.origin),
+        }
+      : undefined,
+    fcInk: stroke.fcInk
+      ? {
+          ...stroke.fcInk,
+          unit:
+            (Number.isFinite(stroke.fcInk.unit) && stroke.fcInk.unit > 0
+              ? stroke.fcInk.unit
+              : 1) * scale,
+          ...(stroke.fcInk.dashOffset !== undefined
+            ? { dashOffset: stroke.fcInk.dashOffset * scale }
+            : {}),
+          ...(stroke.fcInk.rainbow
+            ? {
+                rainbow: {
+                  x: transform({ x: stroke.fcInk.rainbow.x, y: 0 }).x,
+                  width: stroke.fcInk.rainbow.width * scale,
+                },
+              }
+            : {}),
+        }
+      : undefined,
+    ...(stroke.questionAnswer?.folded
+      ? {
+          questionAnswer: {
+            ...stroke.questionAnswer,
+            folded: stroke.questionAnswer.folded.map((part) =>
+              scaleDocumentStroke(part, anchor, scale),
+            ),
+          },
+        }
+      : {}),
   };
 };
 
@@ -679,6 +791,10 @@ export const inkSnapshot = async (
       }
       if (!geometry.filled && stroke.width > 0) {
         context.stroke(path);
+      }
+      if (geometry.nib) {
+        context.fillStyle = stroke.color;
+        context.fill(new Path2D(geometry.nib));
       }
     }
   }

@@ -15,7 +15,13 @@ import { InkQuestion } from "./InkQuestion";
 
 import { useAnchoredPanel } from "./floating";
 
-import { boardContext, chat, parseJSON, visualMessage } from "./ai";
+import {
+  boardContext,
+  chat,
+  parseJSON,
+  selectedBoardElements,
+  visualMessage,
+} from "./ai";
 import { agentContext, runBoardCommands } from "./agent";
 import { classroomCommands } from "./commands";
 import { LESSON_FORMAT, LESSON_TOOLS_FORMAT, validateLesson } from "./lesson";
@@ -23,6 +29,7 @@ import { searchMaterials } from "./materials";
 import { lessonSessions, saveLessonSession, TeachingEngine } from "./teaching";
 import { questionPosition } from "./questionInk";
 import { observeLesson } from "./lessonObserver";
+import { currentSettings } from "./settings";
 
 import type { Lens, TeachingSession } from "./teaching";
 import type { Message } from "./ai";
@@ -186,12 +193,23 @@ export const Teacher = ({
         }
       });
     });
-    const invalidate = classroomCommands.onInvalidate(() => {
+    const owned = (source?: AbortSignal) =>
+      !!source &&
+      !source.aborted &&
+      (classroomCommands.isOwnedBy(source, request.current?.signal) ||
+        controller.ownsSignal(source));
+    const invalidate = classroomCommands.onInvalidate((source) => {
+      if (owned(source) && classroomCommands.isExpectedTransition(source)) {
+        return;
+      }
       request.current?.abort();
       controller.cancel();
       setAsking(false);
     });
     const pointer = api.onPointerDown(() => {
+      if (owned(classroomCommands.interactionSource)) {
+        return;
+      }
       if (["teaching", "question"].includes(controller.state.mode)) {
         controller.pause();
       }
@@ -246,6 +264,7 @@ export const Teacher = ({
     if (signal?.aborted) {
       cancel();
     }
+    const releaseOwner = classroomCommands.registerOwner(abort.signal, signal);
     try {
       const revision = classroomCommands.revision;
       setError("");
@@ -255,9 +274,25 @@ export const Teacher = ({
         controller.generating();
       }
       const sources = await searchMaterials(question);
+      const hasDocument = classroomCommands.has("document.snapshot");
+      const pageSource = hasDocument
+        ? (classroomCommands.read("document") as
+            | { selection?: string[]; ink?: { id: string; lesson?: string }[] }
+            | undefined)
+        : undefined;
+      const selectionDriven =
+        !!sourceIds?.length ||
+        (hasDocument
+          ? !!pageSource?.selection?.length
+          : !!selectedBoardElements(api).length);
+      const captureImage =
+        !selectionDriven || currentSettings().selectionImages;
       const document = (
-        classroomCommands.has("document.snapshot")
-          ? await classroomCommands.execute({ name: "document.snapshot" })
+        hasDocument
+          ? await classroomCommands.execute({
+              name: "document.snapshot",
+              args: { capture: captureImage },
+            })
           : undefined
       ) as
         | {
@@ -278,12 +313,9 @@ export const Teacher = ({
                   .getSceneElements()
                   .filter((element) => sourceIds.includes(element.id))
               : undefined,
+            undefined,
+            captureImage,
           );
-      const pageSource = document
-        ? (classroomCommands.read("document") as
-            | { selection?: string[]; ink?: { id: string; lesson?: string }[] }
-            | undefined)
-        : undefined;
       const writingSourceIds =
         sourceIds ||
         (document
@@ -299,7 +331,7 @@ export const Teacher = ({
                   !element.customData?.fcLessonId,
               )
               .map((element) => element.id));
-      if (abort.signal.aborted || revision !== classroomCommands.revision) {
+      if (!classroomCommands.isCurrent(revision, abort.signal)) {
         return;
       }
       const lens = controller.state.lens;
@@ -348,7 +380,7 @@ export const Teacher = ({
               y: el.y,
               text: el.type === "text" ? el.text : undefined,
             })),
-          )}\n当前课件：${JSON.stringify(
+          )}\n当前课件：${agentContext(
             documentText,
           )}\n用户资料原文与页码（仅引用这里真实存在的来源）：${JSON.stringify(
             sources,
@@ -357,13 +389,15 @@ export const Teacher = ({
           )}\n正在讲解的步骤：${JSON.stringify(
             controller.state.lesson?.steps[controller.state.step],
           )}`,
-          document?.image || context.image,
+          !selectionDriven || currentSettings().selectionImages
+            ? document?.image || context.image
+            : undefined,
         ),
       ];
       const result = await chat(messages, abort.signal, undefined, {
         maxTokens: 8192,
       });
-      if (abort.signal.aborted || revision !== classroomCommands.revision) {
+      if (!classroomCommands.isCurrent(revision, abort.signal)) {
         return;
       }
       let response = parseJSON(result) as BoardAgentAction;
@@ -374,18 +408,18 @@ export const Teacher = ({
           abort.signal,
           () =>
             request.current === abort &&
-            revision === classroomCommands.revision,
+            classroomCommands.isCurrent(revision, abort.signal),
           {
             completion:
               '准备完成后返回 {"action":"lesson","lesson":课程JSON}；仍需工具时继续返回 commands。课程必须遵循原系统提示的步骤 / 绘图 / 语音格式，禁止用 done 或聊天文本代替课程。',
             exclude: ["lesson.ask", "lesson.teach", "assistant.open"],
             maxTokens: 8192,
+            verify: true,
           },
         );
       }
       if (
-        abort.signal.aborted ||
-        revision !== classroomCommands.revision ||
+        !classroomCommands.isCurrent(revision, abort.signal) ||
         request.current !== abort
       ) {
         return;
@@ -395,15 +429,20 @@ export const Teacher = ({
       );
       lesson.instruction = question;
       setAsking(false);
+      // Preparation can open another page. Its source ids belong to the old
+      // surface; the lesson must use the newly visible page's writing context.
+      const lessonSourceIds =
+        revision === classroomCommands.revision ? writingSourceIds : [];
       if (branch) {
-        void controller.branch(lesson, writingSourceIds).catch(fail);
+        void controller.branch(lesson, lessonSourceIds, signal).catch(fail);
       } else {
         session.current = crypto.randomUUID();
         void controller
-          .start(lesson, 0, undefined, undefined, writingSourceIds)
+          .start(lesson, 0, undefined, undefined, lessonSourceIds, signal)
           .catch(fail);
       }
     } finally {
+      releaseOwner();
       signal?.removeEventListener("abort", cancel);
       if (
         abort.signal.aborted &&
@@ -411,6 +450,9 @@ export const Teacher = ({
         controller.state.mode === "generating"
       ) {
         controller.cancel();
+      }
+      if (request.current === abort) {
+        request.current = null;
       }
     }
   };
@@ -502,8 +544,13 @@ export const Teacher = ({
           controller.pause();
         },
       ),
-      classroomCommands.register("lesson.resume", "从暂停的位置继续课堂", () =>
-        controller.resume(),
+      classroomCommands.register(
+        "lesson.resume",
+        "从暂停的位置继续课堂",
+        (args) =>
+          controller.resume(
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.register(
         "lesson.stop",

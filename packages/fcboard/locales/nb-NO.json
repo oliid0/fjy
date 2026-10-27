@@ -1714,6 +1714,27 @@
     "recording_resume": "Gjenoppta opptak",
     "minimize_recording": "Minimer opptak",
     "restore_recording_window": "Gjenopprett opptaksvindu",
-    "language_pen": "Språk · Penn"
+    "language_pen": "Språk · Penn",
+    "attach_selection_image_to_ai": "Legg ved et skjermbilde av utvalget i KI-forespørsler",
+    "compass": "Passer",
+    "set_square": "Trekantlinjal",
+    "education_categories": "Undervisningskategorier",
+    "math_experiments": "Matematikkforsøk",
+    "math_concepts": "Matematiske begreper",
+    "math_applications": "Anvendelser av matematikk",
+    "select_none": "Fjern alle valg",
+    "mindmap_add_child": "Legg til undernode",
+    "mindmap_move_node": "Flytt node",
+    "mindmap_delete_node": "Slett noden og undernodene",
+    "mindmap_clear_node": "Tøm nodeteksten",
+    "selected_pages_exported_as_images": "Valgte sider er eksportert som bilder",
+    "hard_pen_nib": "Smal strekavslutning for vanlig penn",
+    "right_triangle": "Rettvinklet trekant",
+    "triangle": "Trekant",
+    "trapezoid": "Trapes",
+    "pentagon": "Femkant",
+    "hexagon": "Sekskant",
+    "star": "Stjerne",
+    "hemisphere": "Halvkule"
   }
 }

@@ -1,6 +1,11 @@
 import { pointFrom } from "@excalidraw/math";
+import { CaptureUpdateAction } from "@excalidraw/element";
+
+import { interactiveResource } from "../../../app/fcboard/test/interactiveResource";
 
 import { Excalidraw } from "../index";
+import { AnimationFrameHandler } from "../animation-frame-handler";
+import { LassoTrail } from "../lasso";
 import { t } from "../i18n";
 import { actionDuplicateSelection } from "../actions/actionDuplicateSelection";
 import { actionDeleteSelected } from "../actions/actionDeleteSelected";
@@ -14,6 +19,136 @@ import { API } from "./helpers/api";
 import { act, fireEvent, render } from "./test-utils";
 
 const { h } = window;
+
+it("allows direct interaction with a teaching resource in the selector and gives drawing gestures the canvas", async () => {
+  const { container, getByTitle } = await render(
+    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+  );
+  h.state.width = 1600;
+  h.state.height = 900;
+  const resource = {
+    ...API.createElement({
+      type: "iframe",
+      x: 100,
+      y: 100,
+      width: 400,
+      height: 300,
+    }),
+    customData: { fcInteractiveResource: interactiveResource },
+  };
+  API.updateScene({ elements: [resource] });
+  act(() => h.app.setActiveTool({ type: "lasso" }));
+  const frame = getByTitle(interactiveResource.title);
+  const inner = frame.closest(".excalidraw__embeddable-container__inner")!;
+  expect(inner).toHaveStyle({ pointerEvents: "all" });
+  expect(h.state.activeEmbeddable).toBeNull();
+  act(() => h.app.setActiveTool({ type: "freedraw" }));
+  expect(inner).toHaveStyle({ pointerEvents: "none" });
+  act(() => h.app.setActiveTool({ type: "lasso" }));
+  const canvas = container.querySelector("canvas.interactive")!;
+  regionPointer(canvas, "pointerdown", 40, 40);
+  expect(inner).toHaveStyle({ pointerEvents: "none" });
+  regionPointer(canvas, "pointercancel", 40, 40);
+  expect(inner).toHaveStyle({ pointerEvents: "all" });
+});
+
+it("draws one open continuous lasso from the travelled area, clears it on lift and starts the next gesture cleanly", async () => {
+  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  h.state.width = 1600;
+  h.state.height = 900;
+  API.updateScene({
+    elements: [
+      API.createElement({
+        type: "rectangle",
+        x: 150,
+        y: 140,
+        width: 10,
+        height: 10,
+      }),
+    ],
+  });
+  const frames: FrameRequestCallback[] = [];
+  const raf = vi
+    .spyOn(window, "requestAnimationFrame")
+    .mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+  const frame = () => frames.splice(0).forEach((callback) => callback(0));
+  const trail = new LassoTrail(new AnimationFrameHandler(), h.app);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  act(() => {
+    trail.start(svg);
+    trail.startPath(100, 100);
+    frame();
+  });
+  expect(svg.querySelector("path")?.getAttribute("d")).toBe("");
+  act(() => {
+    trail.addPointToPath(180, 90);
+    trail.addPointToPath(240, 180);
+    trail.addPointToPath(140, 230);
+    frame();
+  });
+  const path = svg.querySelector("path")!;
+  expect(svg.querySelectorAll("path")).toHaveLength(1);
+  expect(path.getAttribute("d")?.match(/M/g)).toHaveLength(1);
+  expect(path.getAttribute("d")).not.toContain("Z");
+  expect(path.getAttribute("d")).toContain("L140,230");
+  expect(path.getAttribute("fill")).toBe("none");
+  act(() => {
+    trail.finishPath();
+    frame();
+  });
+  expect(svg.querySelector("path")).toBeNull();
+  expect(h.state.whiteboardSelection?.path).toEqual([
+    [100, 100],
+    [180, 90],
+    [240, 180],
+    [140, 230],
+  ]);
+  act(() => {
+    trail.startPath(500, 500);
+    trail.addPointToPath(550, 550);
+    frame();
+  });
+  expect(svg.querySelectorAll("path")).toHaveLength(1);
+  expect(svg.querySelector("path")?.getAttribute("d")).toMatch(/^M500,500 /);
+  expect(svg.querySelector("path")?.getAttribute("d")).not.toContain("100,100");
+  trail.endPath();
+  frame();
+  raf.mockRestore();
+});
+
+it("selects a factory composite as one object when its lasso touches only one internal line", async () => {
+  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  h.state.width = 1600;
+  h.state.height = 900;
+  const parts = [100, 300].map((y) => ({
+    ...API.createElement({
+      type: "line",
+      x: 100,
+      y,
+      points: [pointFrom(0, 0), pointFrom(100, 0)],
+    }),
+    customData: { fcWidget: { id: "one-widget", kind: "cube" } },
+  }));
+  API.updateScene({ elements: parts });
+  act(() => {
+    h.app.setActiveTool({ type: "lasso" });
+    h.app.lassoTrail.startPath(90, 80);
+    h.app.lassoTrail.addPointToPath(220, 80);
+    h.app.lassoTrail.addPointToPath(220, 120);
+    h.app.lassoTrail.addPointToPath(90, 120);
+    h.app.lassoTrail.finishPath();
+  });
+  expect(h.state.selectedElementIds).toEqual(
+    Object.fromEntries(parts.map((part) => [part.id, true])),
+  );
+  expect(h.state.selectedLinearElement).toBeNull();
+  expect(h.elements.map((element) => element.id)).toEqual(
+    parts.map((part) => part.id),
+  );
+});
 
 it("keeps an open whiteboard gesture's region when it touches only part of a long stroke", async () => {
   await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
@@ -44,7 +179,7 @@ it("keeps an open whiteboard gesture's region when it touches only part of a lon
   });
   expect(h.state.selectedElementIds).toEqual({ [ink.id]: true });
   expect(h.state.whiteboardSelection).toEqual({
-    bounds: { left: 88, top: 68, right: 312, bottom: 152 },
+    bounds: { left: -20, top: 80, right: 1020, bottom: 120 },
     elementIds: [ink.id],
     path: expect.any(Array),
   });
@@ -100,9 +235,9 @@ it("moves a circled region as one selection without editing its individual lines
         buttons: type === "pointerup" ? 0 : 1,
       }),
     );
-  event("pointerdown", 140, 68);
-  event("pointermove", 180, 98);
-  event("pointerup", 180, 98);
+  event("pointerdown", 140, 80);
+  event("pointermove", 180, 110);
+  event("pointerup", 180, 110);
   expect(h.elements.map(({ x, y }) => [x, y])).toEqual([
     [140, 130],
     [140, 180],
@@ -113,7 +248,7 @@ it("moves a circled region as one selection without editing its individual lines
   expect(h.state.selectedLinearElement).toBeNull();
 });
 
-it("captures the complete rectangular region shown after a freeform gesture", async () => {
+it("selects the actual freeform area and excludes the empty operation-frame corner", async () => {
   await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
   h.state.width = 1600;
   h.state.height = 900;
@@ -142,7 +277,6 @@ it("captures the complete rectangular region shown after a freeform gesture", as
   });
   expect(h.state.selectedElementIds).toEqual({
     [inside.id]: true,
-    [outside.id]: true,
   });
 });
 
@@ -181,11 +315,16 @@ const selectedRegion = async () => {
     height: 40,
     groupIds: ["existing"],
   });
-  API.updateScene({ elements: [first, second] });
+  API.updateScene({
+    elements: [first, second],
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
   act(() => {
     h.app.setActiveTool({ type: "lasso" });
     h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(160, 80);
     h.app.lassoTrail.addPointToPath(160, 160);
+    h.app.lassoTrail.addPointToPath(80, 160);
     h.app.lassoTrail.finishPath();
   });
   return {
@@ -243,29 +382,46 @@ it.each([false, true])(
   },
 );
 
-it("resizes only the selected region, selects its new contents on release and removes drag listeners", async () => {
+it("scales the selected objects from a corner without adding neighbouring objects and records one undo step", async () => {
   const { canvas, first, second } = await selectedRegion();
-  regionPointer(canvas, "pointerdown", 172, 172);
-  regionPointer(canvas, "pointermove", 360, 180);
-  expect(h.state.selectedElementIds).toEqual({ [first.id]: true });
-  regionPointer(canvas, "pointerup", 370, 190);
-  expect(h.state.whiteboardSelection?.bounds).toEqual({
-    left: 68,
-    top: 68,
-    right: 370,
-    bottom: 190,
+  regionPointer(canvas, "pointerdown", 160, 160);
+  regionPointer(canvas, "pointermove", 200, 200);
+  expect(h.elements.find((element) => element.id === first.id)).toMatchObject({
+    x: 110,
+    y: 110,
+    width: 60,
+    height: 60,
   });
-  expect(h.state.selectedElementIds).toEqual({
-    [first.id]: true,
-    [second.id]: true,
+  regionPointer(canvas, "pointerup", 240, 240);
+  expect(h.state.whiteboardSelection?.bounds).toEqual({
+    left: 80,
+    top: 80,
+    right: 240,
+    bottom: 240,
+  });
+  expect(h.state.selectedElementIds).toEqual({ [first.id]: true });
+  expect(h.elements.find((element) => element.id === first.id)).toMatchObject({
+    x: 120,
+    y: 120,
+    width: 80,
+    height: 80,
+  });
+  expect(h.elements.find((element) => element.id === second.id)).toMatchObject({
+    x: 300,
+    y: 100,
+    width: 40,
+    height: 40,
   });
   const before = h.state.whiteboardSelection;
   regionPointer(canvas, "pointermove", 700, 700);
   expect(h.state.whiteboardSelection).toEqual(before);
-  expect(h.elements.map(({ x, y }) => [x, y])).toEqual([
-    [100, 100],
-    [300, 100],
-  ]);
+  fireEvent.click(document.querySelector('[data-testid="button-undo"]')!);
+  expect(h.elements.find((element) => element.id === first.id)).toMatchObject({
+    x: 100,
+    y: 100,
+    width: 40,
+    height: 40,
+  });
 });
 
 it.each(["pointercancel", "lostpointercapture", "blur"])(
@@ -273,13 +429,13 @@ it.each(["pointercancel", "lostpointercapture", "blur"])(
   async (reason) => {
     const { canvas, first } = await selectedRegion();
     const before = h.state.whiteboardSelection;
-    regionPointer(canvas, "pointerdown", 120, 68);
-    regionPointer(canvas, "pointermove", 160, 98);
+    regionPointer(canvas, "pointerdown", 120, 80);
+    regionPointer(canvas, "pointermove", 160, 110);
     expect(h.elements[0].x).toBe(140);
     if (reason === "blur") {
       fireEvent(window, new Event("blur"));
     } else {
-      regionPointer(canvas, reason, 160, 98);
+      regionPointer(canvas, reason, 160, 110);
     }
     expect(h.elements[0].x).toBe(100);
     expect(h.state.whiteboardSelection).toEqual(before);
@@ -289,24 +445,62 @@ it.each(["pointercancel", "lostpointercapture", "blur"])(
   },
 );
 
-it("starts a new region from an interior drag and never edits or splits its objects", async () => {
-  const { canvas, second } = await selectedRegion();
+it("moves the entire selection from inside its frame without editing or splitting its objects", async () => {
+  const { canvas, first, second } = await selectedRegion();
+  const before = h.state.whiteboardSelection!;
   regionPointer(canvas, "pointerdown", 120, 120);
-  regionPointer(canvas, "pointermove", 350, 160);
-  expect(h.state.selectedElementIds).toEqual({});
-  regionPointer(canvas, "pointerup", 350, 160);
+  regionPointer(canvas, "pointermove", 160, 150);
+  expect(h.state.selectedElementIds).toEqual({ [first.id]: true });
+  regionPointer(canvas, "pointerup", 160, 150);
   expect(h.state.whiteboardSelection?.bounds).toEqual({
-    left: 108,
-    top: 108,
-    right: 362,
-    bottom: 172,
+    left: before.bounds.left + 40,
+    top: before.bounds.top + 30,
+    right: before.bounds.right + 40,
+    bottom: before.bounds.bottom + 30,
   });
-  expect(h.state.selectedElementIds[second.id]).toBe(true);
   expect(h.elements).toHaveLength(2);
-  expect(h.elements.map(({ x, y }) => [x, y])).toEqual([
-    [100, 100],
-    [300, 100],
-  ]);
+  expect(h.elements.find((element) => element.id === first.id)?.x).toBe(140);
+  expect(h.elements.find((element) => element.id === second.id)?.x).toBe(300);
+});
+
+it.each(["pointercancel", "lostpointercapture", "blur"])(
+  "restores all selected geometry after a corner scale is cancelled by %s",
+  async (reason) => {
+    const { canvas, first } = await selectedRegion();
+    const before = h.state.whiteboardSelection;
+    regionPointer(canvas, "pointerdown", 160, 160);
+    regionPointer(canvas, "pointermove", 240, 240);
+    expect(h.elements.find((element) => element.id === first.id)?.width).toBe(
+      80,
+    );
+    if (reason === "blur") {
+      fireEvent(window, new Event("blur"));
+    } else {
+      regionPointer(canvas, reason, 240, 240);
+    }
+    expect(h.elements.find((element) => element.id === first.id)).toMatchObject(
+      { x: 100, y: 100, width: 40, height: 40 },
+    );
+    expect(h.state.whiteboardSelection).toEqual(before);
+    regionPointer(canvas, "pointermove", 500, 500);
+    expect(h.elements.find((element) => element.id === first.id)?.width).toBe(
+      40,
+    );
+  },
+);
+
+it("clears the previous frame on a new outside pointer down and leaves no selection after a tap or a straight drag", async () => {
+  const { canvas } = await selectedRegion();
+  regionPointer(canvas, "pointerdown", 600, 400);
+  expect(h.state.whiteboardSelection).toBeUndefined();
+  expect(h.state.selectedElementIds).toEqual({});
+  regionPointer(canvas, "pointerup", 600, 400);
+  expect(h.state.whiteboardSelection).toBeUndefined();
+  regionPointer(canvas, "pointerdown", 90, 90);
+  regionPointer(canvas, "pointermove", 160, 160);
+  regionPointer(canvas, "pointerup", 170, 170);
+  expect(h.state.selectedElementIds).toEqual({});
+  expect(h.state.whiteboardSelection).toBeUndefined();
 });
 
 it("does not switch the whiteboard selector back to the legacy object editor on repeated clicks", async () => {
@@ -342,16 +536,17 @@ it("keeps all coalesced circle samples in scene coordinates at a changed zoom an
       buttons: 1,
       getCoalescedEvents: () => [
         { clientX: 630, clientY: 400 },
+        { clientX: 230, clientY: 400 },
         { clientX: 230, clientY: 200 },
       ],
     }),
   );
   regionPointer(canvas, "pointerup", 230, 200);
   expect(h.state.whiteboardSelection?.bounds).toEqual({
-    left: 84,
-    top: 94,
-    right: 296,
-    bottom: 206,
+    left: 90,
+    top: 90,
+    right: 150,
+    bottom: 150,
   });
 });
 
@@ -399,15 +594,17 @@ it("restores frame contents as well as the selected frame when a region drag is 
   act(() => {
     h.app.setActiveTool({ type: "lasso" });
     h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(320, 80);
     h.app.lassoTrail.addPointToPath(320, 320);
+    h.app.lassoTrail.addPointToPath(80, 320);
     h.app.lassoTrail.finishPath();
   });
   const canvas = container.querySelector("canvas.interactive")!;
   expect(h.state.selectedElementIds).toEqual({ [frame.id]: true });
-  regionPointer(canvas, "pointerdown", 200, 68);
-  regionPointer(canvas, "pointermove", 240, 98);
+  regionPointer(canvas, "pointerdown", 200, 80);
+  regionPointer(canvas, "pointermove", 240, 110);
   expect(h.elements.find((element) => element.id === child.id)?.x).toBe(190);
-  regionPointer(canvas, "pointercancel", 240, 98);
+  regionPointer(canvas, "pointercancel", 240, 110);
   expect(h.elements.find((element) => element.id === child.id)?.x).toBe(150);
   expect(h.elements.find((element) => element.id === frame.id)?.x).toBe(100);
 });
@@ -458,19 +655,21 @@ it("restores a container's bound label and attached arrow without reverting unre
   act(() => {
     h.app.setActiveTool({ type: "lasso" });
     h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(170, 80);
     h.app.lassoTrail.addPointToPath(170, 220);
+    h.app.lassoTrail.addPointToPath(80, 220);
     h.app.lassoTrail.finishPath();
   });
   expect(h.state.selectedElementIds).toEqual({ [box.id]: true });
   const canvas = container.querySelector("canvas.interactive")!;
-  regionPointer(canvas, "pointerdown", 125, 68);
-  regionPointer(canvas, "pointermove", 165, 98);
+  regionPointer(canvas, "pointerdown", 125, 80);
+  regionPointer(canvas, "pointermove", 165, 110);
   expect(label.x).toBe(150);
   expect({ x: arrow.x, y: arrow.y, points: arrow.points }).not.toEqual(
     originalArrow,
   );
   act(() => h.app.scene.mutateElement(outside, { strokeColor: "#ff0000" }));
-  regionPointer(canvas, "pointercancel", 165, 98);
+  regionPointer(canvas, "pointercancel", 165, 110);
   expect(label.x).toBe(110);
   expect({ x: arrow.x, y: arrow.y, points: arrow.points }).toEqual(
     originalArrow,

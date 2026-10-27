@@ -126,6 +126,35 @@ describe("progressive lesson writing", () => {
     expect(
       validateLesson({ steps: [{ commands: [], tools }] }).steps[0].tools,
     ).toEqual(tools);
+    for (const name of ["ui.inspect", "web.action", "signal.action"]) {
+      const read = {
+        name,
+        args: name === "ui.inspect" ? {} : { action: "read" },
+        expect: [{ path: "open", equals: true }],
+      };
+      expect(
+        validateLesson({ steps: [{ commands: [], tools: [read] }] }).steps[0]
+          .tools,
+      ).toEqual([read]);
+    }
+    for (const name of ["web.action", "signal.action"]) {
+      expect(() =>
+        validateLesson({
+          steps: [
+            {
+              commands: [],
+              tools: [
+                {
+                  name,
+                  args: { action: "close" },
+                  expect: [{ path: "open", equals: false }],
+                },
+              ],
+            },
+          ],
+        }),
+      ).toThrow();
+    }
     expect(() =>
       validateLesson({
         steps: Array.from({ length: 4 }, () => ({

@@ -15,6 +15,139 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("verifies a complete batch after a tool activates commands for the newly opened surface", async () => {
+  const owner = new AbortController();
+  const start = classroomCommands.revision;
+  let page = 0;
+  let stopNext: (() => void) | undefined;
+  const stopOpen = classroomCommands.register(
+    "files.open",
+    "open a document",
+    (args) => {
+      expect(args.signal).toBe(owner.signal);
+      classroomCommands.invalidate(owner.signal);
+      page = 1;
+      stopNext = classroomCommands.register(
+        "document.next",
+        "next document page",
+        () => {
+          page++;
+          classroomCommands.touch(owner.signal);
+          return { page };
+        },
+      );
+      return { page };
+    },
+  );
+  const observe = vi.fn(() => ({ page }));
+  const chat = vi.spyOn(ai, "chat").mockImplementationOnce(async (messages) => {
+    const data = String(messages.at(-1)?.content);
+    expect(data).toContain('"observation":{"page":2}');
+    expect(data).toContain("document.next: next document page");
+    expect(data).toContain('"ok":true');
+    return '{"action":"done"}';
+  });
+  try {
+    await expect(
+      runBoardCommands(
+        {
+          action: "commands",
+          commands: [
+            { name: "files.open", args: { name: "Lesson.pptx" } },
+            { name: "document.next" },
+          ],
+        },
+        [],
+        owner.signal,
+        () => classroomCommands.isCurrent(start, owner.signal),
+        { verify: true, observe },
+      ),
+    ).resolves.toEqual({ action: "done" });
+    expect(page).toBe(2);
+    expect(observe).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledTimes(1);
+  } finally {
+    stopNext?.();
+    stopOpen();
+  }
+});
+
+it("returns actual tool errors for repair without replaying preceding successful operations", async () => {
+  const create = vi.fn(() => ({ id: "created" }));
+  const repair = vi.fn(() => ({ fixed: true }));
+  const later = vi.fn();
+  const stops = [
+    classroomCommands.register("test.create", "create", create),
+    classroomCommands.register("test.fail", "fail", () => {
+      throw new Error("unavailable target");
+    }),
+    classroomCommands.register("test.repair", "repair", repair),
+    classroomCommands.register("test.later", "later", later),
+  ];
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockImplementationOnce(async (messages) => {
+      expect(String(messages.at(-1)?.content)).toContain("unavailable target");
+      expect(String(messages.at(-1)?.content)).toContain('"id":"created"');
+      return JSON.stringify({
+        action: "commands",
+        commands: [{ name: "test.repair" }],
+      });
+    })
+    .mockResolvedValueOnce('{"action":"done"}');
+  try {
+    await runBoardCommands(
+      {
+        action: "commands",
+        commands: [
+          { name: "test.create" },
+          { name: "test.fail" },
+          { name: "test.later" },
+        ],
+      },
+      [],
+      undefined,
+      () => true,
+      { verify: true },
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(repair).toHaveBeenCalledTimes(1);
+    expect(later).not.toHaveBeenCalled();
+    expect(chat).toHaveBeenCalledTimes(2);
+  } finally {
+    stops.forEach((stop) => stop());
+  }
+});
+
+it("stops before another model turn when the user changes the target during observation", async () => {
+  const owner = new AbortController();
+  const revision = classroomCommands.revision;
+  const stop = classroomCommands.register("test.read", "read", () => ({
+    read: true,
+  }));
+  const chat = vi.spyOn(ai, "chat");
+  try {
+    await expect(
+      runBoardCommands(
+        { action: "commands", commands: [{ name: "test.read" }] },
+        [],
+        owner.signal,
+        () => classroomCommands.isCurrent(revision, owner.signal),
+        {
+          verify: true,
+          observe: async () => {
+            classroomCommands.invalidate();
+            return { changed: true };
+          },
+        },
+      ),
+    ).resolves.toEqual({ action: "done" });
+    expect(chat).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
 it.each([
   {
     style: false,

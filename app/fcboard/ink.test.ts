@@ -52,6 +52,9 @@ describe("factory ink calibration", () => {
           palmThreshold: 80,
           thickThreshold: 24,
           dualPen: true,
+          hardNibAvailable: true,
+          hardNib: false,
+          touchPressure: true,
         },
         dpr,
       )!;
@@ -61,6 +64,9 @@ describe("factory ink calibration", () => {
       expect(profile.palmThreshold * dpr).toBe(80);
       expect(profile.thickThreshold! * dpr).toBe(24);
       expect(profile.dualPen).toBe(true);
+      expect(profile.hardNibAvailable).toBe(true);
+      expect(profile.hardNib).toBe(false);
+      expect(profile.touchPressure).toBe(true);
     }
   });
   it("keeps manual palm calibration available when the vendor provider is absent", () => {

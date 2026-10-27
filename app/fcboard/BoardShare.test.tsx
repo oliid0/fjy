@@ -19,7 +19,7 @@ vi.mock("./native", () => ({
 
 afterEach(() => vi.restoreAllMocks());
 
-const setup = async () => {
+const setup = async (command: "board.mail" | "board.share" = "board.mail") => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.stopShare).mockResolvedValue(undefined);
   const stop = classroomCommands.register("board.pages", "@internal", () => ({
@@ -30,7 +30,7 @@ const setup = async () => {
   }));
   const view = render(<BoardShare />);
   await act(async () => {
-    await classroomCommands.execute({ name: "board.mail" });
+    await classroomCommands.execute({ name: command });
   });
   return () => {
     view.unmount();
@@ -44,6 +44,7 @@ it("opens a page attachment composer through the same menu and AI command, witho
   );
   vi.mocked(Classroom.sharePages).mockResolvedValue(undefined);
   const close = await setup();
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.open_email_share_window") }),
   );
@@ -61,6 +62,31 @@ it("opens a page attachment composer through the same menu and AI command, witho
   close();
 });
 
+it("requires a selected page before choosing a real PDF attachment export", async () => {
+  vi.mocked(exportToBlob).mockResolvedValue(
+    new Blob(["page"], { type: "image/png" }),
+  );
+  vi.mocked(Classroom.sharePages).mockClear().mockResolvedValue(undefined);
+  const close = await setup("board.share");
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.select_none") }),
+  );
+  expect(
+    screen.getByRole("button", { name: t("buttons.confirm") }),
+  ).toBeDisabled();
+  expect(Classroom.sharePages).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: t("labels.selectAll") }));
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
+  fireEvent.click(screen.getByRole("button", { name: /^PDF$/ }));
+  await waitFor(() =>
+    expect(Classroom.sharePages).toHaveBeenCalledWith({
+      pages: ["data:image/png;base64,cGFnZQ=="],
+      format: "pdf",
+    }),
+  );
+  close();
+});
+
 it("does not launch the composer when the page chooser closes during export", async () => {
   let finish!: (blob: Blob) => void;
   vi.mocked(exportToBlob).mockReturnValue(
@@ -70,6 +96,7 @@ it("does not launch the composer when the page chooser closes during export", as
   );
   vi.mocked(Classroom.sharePages).mockClear();
   const close = await setup();
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.open_email_share_window") }),
   );

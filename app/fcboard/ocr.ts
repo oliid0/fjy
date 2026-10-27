@@ -32,6 +32,7 @@ export const recognizeHandwriting = async (
   accept: (text: string) => boolean = (text) => !!text.trim(),
   strokes?: InkInput,
   languageHint?: "en-US",
+  chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
 ) => {
   signal.throwIfAborted();
   const settings = currentSettings();
@@ -49,11 +50,18 @@ export const recognizeHandwriting = async (
       );
       const text = candidates[0];
       if (text && accept(text)) {
-        return text;
+        const chosen = chooseCandidate
+          ? await chooseCandidate(candidates.filter(accept))
+          : text;
+        signal.throwIfAborted();
+        return chosen;
       }
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     } catch (error) {
       signal.throwIfAborted();
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
       // Explicit local mode reports the real native failure. Auto can use the
       // separately configured raster/cloud fallback; never call it Digital Ink.
       if (settings.ocr === "local") {
@@ -98,12 +106,16 @@ export const recognizeHandwriting = async (
     }
     return text;
   };
-  if (settings.ocr === "local" || !settings.apiKey) {
-    return local(signal);
-  }
-  progress(t("fcboard.recognizing_handwriting"));
-  if (settings.ocr === "cloud") {
-    return cloud(signal);
-  }
-  return preferredRace(cloud, local, signal);
+  const text =
+    settings.ocr === "local" || !settings.apiKey
+      ? await local(signal)
+      : (() => {
+          progress(t("fcboard.recognizing_handwriting"));
+          return settings.ocr === "cloud"
+            ? cloud(signal)
+            : preferredRace(cloud, local, signal);
+        })();
+  const value = await text;
+  signal.throwIfAborted();
+  return chooseCandidate ? chooseCandidate([value]) : value;
 };

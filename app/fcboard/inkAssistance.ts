@@ -18,6 +18,8 @@ import { selectionSignature } from "./selection";
 import { boardInk } from "./digitalInk";
 import { insertText } from "./board";
 import { languageInkSignature } from "./languageStudy";
+import { growBoardTableWriting } from "./insertionWritingTables";
+import { chooseInsertionCandidate } from "./InsertionCandidates";
 import {
   boardWritingParts,
   insertionWritingTargets,
@@ -187,6 +189,25 @@ export const observeInkAssistance = (
             boardInk(source),
             request.signal,
             target?.insertion.kind === "fourline" ? "en-US" : undefined,
+            target
+              ? (candidates) => {
+                  const state = api.getAppState();
+                  return chooseInsertionCandidate(
+                    candidates,
+                    {
+                      x:
+                        (target.x + state.scrollX) * state.zoom.value +
+                        (state.offsetLeft || 0),
+                      y:
+                        (target.y + target.height + state.scrollY) *
+                          state.zoom.value +
+                        (state.offsetTop || 0) +
+                        8,
+                    },
+                    request.signal,
+                  );
+                }
+              : undefined,
           );
           await settleInkRecognition(mode, since, request.signal);
           if (!current()) {
@@ -401,6 +422,20 @@ export const observeInkAssistance = (
     );
   };
   const stop = api.onChange(refresh);
+  const inkCommit = api.onInkCommit?.((stroke) => {
+    if (classroomCommands.has("document.draw")) {
+      return;
+    }
+    const scene = api.getSceneElements();
+    const tableScene = growBoardTableWriting(scene, new Set([stroke.id]));
+    if (tableScene !== scene) {
+      seen.add(stroke.id);
+      api.updateScene({
+        elements: tableScene,
+        captureUpdate: CaptureUpdateAction.EVENTUALLY,
+      });
+    }
+  });
   const invalidate = classroomCommands.onInvalidate(() => {
     clearTimeout(timer);
     controller?.abort();
@@ -458,6 +493,7 @@ export const observeInkAssistance = (
     clearTimeout(timer);
     controller?.abort();
     stop();
+    inkCommit?.();
     invalidate();
     boards();
     command();

@@ -263,6 +263,7 @@ it("returns actual object ids for selection, movement and erasure", async () => 
 it("exposes the original pen modes to AI and validates the complete style request before changing the pen", async () => {
   const api = {
     getAppState: () => ({ currentItemStrokeWidth: 2 }),
+    setActiveTool: vi.fn(),
     updateScene: vi.fn(),
     executeAction: vi.fn(),
   } as unknown as ExcalidrawImperativeAPI;
@@ -286,6 +287,7 @@ it("exposes the original pen modes to AI and validates the complete style reques
       name: "canvas.style",
       args: { pen: "rainbow" },
     });
+    expect(api.setActiveTool).toHaveBeenCalledWith({ type: "freedraw" });
     expect(api.updateScene).toHaveBeenCalledWith({
       appState: expect.objectContaining({
         currentItemPenMode: "rainbow",
@@ -367,6 +369,13 @@ it("routes text, shapes, selection and plots into the visible document instead o
     expect(draw).toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith({ ids: ["ink"] });
     expect(strokes.length).toBeGreaterThan(10);
+    await classroomCommands.execute({
+      name: "canvas.action",
+      args: { action: "selectAll" },
+    });
+    expect(select).toHaveBeenLastCalledWith({
+      ids: strokes.map((stroke) => stroke.id),
+    });
     expect(selectedPlot(api)?.plot.expression).toBe("x+1");
     expect(api.updateScene).not.toHaveBeenCalled();
   } finally {

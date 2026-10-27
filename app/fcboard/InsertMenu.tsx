@@ -1,4 +1,4 @@
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t, useI18n } from "@excalidraw/excalidraw/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { ToolbarExtras } from "@excalidraw/excalidraw";
@@ -24,6 +24,7 @@ import { TableSizePicker } from "./TableSizePicker";
 
 import type { FactoryInsertion } from "./native";
 import type { InsertKind, InsertObject } from "./insertObjects";
+import type { ContentRect } from "./placement";
 
 const names = {
   website: "website",
@@ -116,12 +117,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       );
       if ((object?.id || "") !== previousSelection.current) {
         previousSelection.current = object?.id || "";
-        if (object && ["selection", "custom"].includes(state.activeTool.type)) {
-          setDraft(object);
-          setForm(object.kind);
-        } else {
-          setForm(null);
-        }
+        setForm(null);
       }
       if (state.toolbarHidden || state.activeTool.type === "lasso") {
         setForm(null);
@@ -135,18 +131,72 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       documentChanged();
     };
   }, [api]);
-  const create = async (kind: InsertKind, args: Record<string, unknown>) => {
-    const position = classroomCommands.has("document.draw")
-      ? { x: 60, y: 60 }
-      : insertionPoint(api);
-    const base = insertionDefaults(kind, position);
+  const newInsertion = (kind: InsertKind) => {
+    const document =
+      !!classroomCommands.read("document") ||
+      classroomCommands.has("document.draw");
+    const viewport = document
+      ? (
+          classroomCommands.read("document.layout") as
+            | { viewport?: ContentRect }
+            | undefined
+        )?.viewport
+      : undefined;
+    const visible =
+      viewport &&
+      [viewport.left, viewport.top, viewport.right, viewport.bottom].every(
+        Number.isFinite,
+      ) &&
+      viewport.right > viewport.left &&
+      viewport.bottom > viewport.top
+        ? viewport
+        : undefined;
+    const base = insertionDefaults(
+      kind,
+      document ? { x: 60, y: 60 } : insertionPoint(api),
+    );
     if (kind === "fourline") {
-      const state = api.getAppState();
-      base.width = Math.max(80, state.width / state.zoom.value / 5);
-      base.height = Math.max(40, state.height / state.zoom.value / 5);
+      if (visible) {
+        base.width = Math.max(
+          80,
+          Math.min(1600, (visible.right - visible.left) / 5),
+        );
+        base.height = Math.max(
+          40,
+          Math.min(1200, (visible.bottom - visible.top) / 5),
+        );
+      } else if (!document) {
+        const state = api.getAppState();
+        base.width = Math.max(80, state.width / state.zoom.value / 5);
+        base.height = Math.max(40, state.height / state.zoom.value / 5);
+      }
     }
+    if (visible) {
+      base.position = {
+        x:
+          visible.left +
+          Math.min(60, Math.max(0, visible.right - visible.left - base.width)),
+        y:
+          visible.top +
+          Math.min(60, Math.max(0, visible.bottom - visible.top - base.height)),
+      };
+    }
+    return base;
+  };
+  const create = async (kind: InsertKind, args: Record<string, unknown>) => {
+    const signal =
+      args.signal instanceof AbortSignal
+        ? args.signal
+        : classroomCommands.interactionSource;
+    signal?.throwIfAborted();
+    const revision = classroomCommands.revision;
+    const base = newInsertion(kind);
     const object = configureInsertion(base, args);
     await renderInsertion(api, object);
+    signal?.throwIfAborted();
+    if (!classroomCommands.isCurrent(revision, signal)) {
+      throw new DOMException("Insertion surface changed", "AbortError");
+    }
     if (kind === "fourline" || kind === "mindmap") {
       setForm(null);
       if (classroomCommands.has("document.tool")) {
@@ -165,7 +215,11 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     }
     return { id: object.id, kind };
   };
-  const open = async (kind: unknown) => {
+  const open = async (
+    kind: unknown,
+    signal = classroomCommands.interactionSource,
+  ) => {
+    signal?.throwIfAborted();
     if (typeof kind !== "string" || !(kind in names)) {
       throw new Error(t("fcboard.this_insertion_type_is_unavailable"));
     }
@@ -174,28 +228,27 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       return classroomCommands.execute({ name: "resources.open" });
     }
     if (kind === "fourline" || kind === "mindmap") {
-      return create(kind, {});
+      return create(kind, { signal });
     }
     if (kind === "document" || kind === "media" || kind === "signal") {
-      if (available.includes(kind)) {
-        return Classroom.openFactoryInsertion({ insertion: kind });
-      }
       if (kind === "signal") {
+        if (available.includes(kind)) {
+          return Classroom.openFactoryInsertion({
+            insertion: kind,
+            language: getLanguage().code,
+          });
+        }
         throw new Error(
           t("fcboard.the_signal_app_is_not_installed_on_this_display"),
         );
       }
-      return classroomCommands.execute({ name: "files.open" });
+      return classroomCommands.execute({
+        name: "files.open",
+        args: { signal },
+      });
     }
     if (kind !== "website") {
-      setDraft(
-        insertionDefaults(
-          kind as InsertKind,
-          classroomCommands.has("document.draw")
-            ? { x: 60, y: 60 }
-            : insertionPoint(api),
-        ),
-      );
+      setDraft(newInsertion(kind as InsertKind));
     }
     setForm(kind as InsertKind | "website");
   };
@@ -203,8 +256,12 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     const stops = [
       classroomCommands.register(
         "insert.open",
-        "打开原插入操作，args.kind=website|mindmap|table|fourline|document|media|signal|resources；文档/媒体优先原厂应用，缺失时打开本机课件",
-        (args) => open(args.kind),
+        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents and media open in the internal file viewer; signal uses the available display input app.",
+        (args) =>
+          open(
+            args.kind,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.register(
         "insert.object",
@@ -218,8 +275,11 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       ),
       classroomCommands.register(
         "insert.configure",
-        "Update an existing insertion by args.id or current selection. Accepts rows, columns, cells, outline, text, width and height; preserves existing text when omitted. Use text to edit four-line paper and outline to edit mind-map labels.",
+        "Update an existing insertion by args.id or current selection. Accepts rows, columns, cells, columnWidths, rowHeights, outline, nodePositions (relative x/y or null per node), nodeSize (width/height), text, width and height; preserves existing text when omitted. Use text to edit four-line paper and outline to edit mind-map labels. Read actual insertions context before modifying individual nodes or table tracks.",
         async (args) => {
+          const signal =
+            args.signal instanceof AbortSignal ? args.signal : undefined;
+          signal?.throwIfAborted();
           const object =
             typeof args.id === "string"
               ? readInsertions(api).find((object) => object.id === args.id)
@@ -230,6 +290,8 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             );
           }
           await renderInsertion(api, configureInsertion(object, args));
+          signal?.throwIfAborted();
+          return { id: object.id, kind: object.kind };
         },
       ),
       classroomCommands.context("insertions", () => ({
@@ -238,6 +300,40 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         factory: available,
       })),
     ];
+    if (Capacitor.isNativePlatform()) {
+      stops.push(
+        classroomCommands.register(
+          "signal.action",
+          "Inspect or control the embedded display input: args.action=read|select|reload|reset|close (default read). Read lists real input IDs, connection states and video state. Select requires an exact id from read. Open first with insert.open kind=signal. External OEM signal apps cannot be controlled by this command; an unopened input rejects select/reload/reset.",
+          async (args) => {
+            const action = args.action ?? "read";
+            if (
+              typeof action !== "string" ||
+              !["read", "select", "reload", "reset", "close"].includes(
+                action,
+              ) ||
+              (action === "select" &&
+                (typeof args.id !== "string" || !args.id.trim())) ||
+              (args.id !== undefined && typeof args.id !== "string")
+            ) {
+              throw new Error("Invalid signal source action or input ID");
+            }
+            const signal =
+              args.signal instanceof AbortSignal ? args.signal : undefined;
+            signal?.throwIfAborted();
+            const result = await Classroom.signalAction({
+              action: action as Parameters<
+                typeof Classroom.signalAction
+              >[0]["action"],
+              id: args.id as string | undefined,
+              language: getLanguage().code,
+            });
+            signal?.throwIfAborted();
+            return result;
+          },
+        ),
+      );
+    }
     return () => stops.forEach((stop) => stop());
   });
   const run = async (operation: () => Promise<unknown>) => {
@@ -295,7 +391,11 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       {form && (
         <MaterialPanel
           ref={panel}
-          className="fc-insertion-properties fc-surface"
+          className={`fc-insertion-properties fc-surface${
+            form === "table" && selected?.id !== draft.id
+              ? " fc-table-insertion"
+              : ""
+          }`}
           role="dialog"
           aria-label={t(`fcboard.${names[form]}`)}
           style={style}
@@ -349,19 +449,6 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                       rows={draft.rows}
                       columns={draft.columns}
                       disabled={busy}
-                      onSelect={
-                        selected?.id === draft.id
-                          ? undefined
-                          : (rows, columns) =>
-                              void run(async () => {
-                                await renderInsertion(
-                                  api,
-                                  configureInsertion(draft, { rows, columns }),
-                                );
-                                api.setActiveTool({ type: "selection" });
-                                setForm(null);
-                              })
-                      }
                       onChange={(rows, columns) =>
                         setDraft((current) =>
                           configureInsertion(current, { rows, columns }),
@@ -501,6 +588,8 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 ? t("fcboard.open_website")
                 : selected?.id === draft.id
                 ? t("fcboard.apply_changes")
+                : form === "table"
+                ? t("buttons.confirm")
                 : t("fcboard.insert_into_board")}
             </button>
           </form>

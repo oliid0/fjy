@@ -136,7 +136,9 @@ it("validates actual select options and checkbox types, and never exposes hidden
       { type: "inspect" },
       options,
     );
-    expect(initial.controls).toHaveLength(5);
+    expect(
+      initial.controls.filter((item) => item.type !== "graphic"),
+    ).toHaveLength(5);
     const readonly = initial.controls.find((item) => item.type === "text")!;
     expect(readonly.disabled).toBe(true);
     await expect(
@@ -209,6 +211,269 @@ it("validates actual select options and checkbox types, and never exposes hidden
         )
       ).controls.find((item) => item.id === checkbox.id)?.value,
     ).toBe(true);
+  } finally {
+    frame.dispose();
+  }
+});
+
+it("discovers SVG graphics and drags the actual experiment through pointer capture, then reports its measured output and bounds", async () => {
+  const local = {
+    ...target,
+    html: interactiveResource.html.replace(
+      "</script>",
+      `
+const block = document.getElementById('block');
+block.setAttribute('aria-label', 'Draggable mass');
+let dragging;
+block.addEventListener('pointerdown', event => {
+  event.preventDefault();
+  dragging = { x: event.clientX, force: Number(force.value) };
+  block.setPointerCapture(event.pointerId);
+});
+block.addEventListener('pointermove', event => {
+  if (dragging && block.hasPointerCapture(event.pointerId)) {
+    force.value = String(dragging.force + Math.round((event.clientX - dragging.x) / 10));
+    force.dispatchEvent(new Event('input'));
+  }
+});
+block.addEventListener('pointerup', event => {
+  block.releasePointerCapture(event.pointerId);
+  dragging = undefined;
+});
+block.addEventListener('click', () => { force.value = '8'; update(); });
+</script>`,
+    ),
+  };
+  const frame = resourceFrame(local);
+  frame.loaded();
+  const block = frame.window.document.querySelector<SVGElement>("#block")!;
+  vi.spyOn(block, "getBoundingClientRect").mockImplementation(() => ({
+    x: Number(block.getAttribute("x")),
+    y: 20,
+    width: 40,
+    height: 40,
+    top: 20,
+    bottom: 60,
+    left: Number(block.getAttribute("x")),
+    right: Number(block.getAttribute("x")) + 40,
+    toJSON: () => ({}),
+  }));
+  const descriptor = Object.getOwnPropertyDescriptor(
+    frame.window.Element.prototype,
+    "setPointerCapture",
+  );
+  try {
+    const initial = await requestResourceControl(
+      local,
+      { type: "inspect" },
+      options,
+    );
+    const graphic = initial.controls.find(
+      (item) => item.label === "Draggable mass",
+    )!;
+    expect(initial.viewport).toEqual({ width: 1024, height: 768 });
+    expect(graphic).toMatchObject({
+      type: "graphic",
+      kind: "rect",
+      bounds: { x: 60, y: 20, width: 40, height: 40 },
+    });
+    const updated = await requestResourceControl(
+      local,
+      {
+        type: "drag",
+        version: initial.version,
+        control: graphic.id,
+        to: { x: 140, y: 40 },
+      },
+      options,
+    );
+    expect(updated.outputs).toEqual(["5 m/s²"]);
+    expect(
+      updated.controls.find((item) => item.id === graphic.id)?.bounds,
+    ).toEqual({
+      x: 150,
+      y: 20,
+      width: 40,
+      height: 40,
+    });
+    expect(
+      Object.getOwnPropertyDescriptor(
+        frame.window.Element.prototype,
+        "setPointerCapture",
+      ),
+    ).toEqual(descriptor);
+    const clicked = await requestResourceControl(
+      local,
+      { type: "click", version: updated.version, control: graphic.id },
+      options,
+    );
+    expect(clicked.outputs).toEqual(["4 m/s²"]);
+    const unchanged = clicked.outputs;
+    for (const request of [
+      { type: "drag" as const, from: { x: 0, y: 0 }, to: { x: 200, y: 40 } },
+      { type: "drag" as const, to: { x: 2000, y: 40 } },
+    ]) {
+      await expect(
+        requestResourceControl(
+          local,
+          {
+            ...request,
+            version: updated.version,
+            control: graphic.id,
+          },
+          options,
+        ),
+      ).rejects.toThrow("RESOURCE_INVALID_POINT");
+    }
+    expect(
+      (await requestResourceControl(local, { type: "inspect" }, options))
+        .outputs,
+    ).toEqual(unchanged);
+    block.remove();
+    await expect(
+      requestResourceControl(
+        local,
+        {
+          type: "drag",
+          version: updated.version,
+          control: graphic.id,
+          to: { x: 200, y: 40 },
+        },
+        options,
+      ),
+    ).rejects.toThrow("RESOURCE_CONTROL_UNAVAILABLE");
+  } finally {
+    frame.dispose();
+  }
+});
+
+it("clicks and drags a canvas-only demonstration using iframe coordinates without inventing native controls", async () => {
+  const local = {
+    ...target,
+    html: `<html><body><h1>Position experiment</h1><canvas aria-label="Position" width="400" height="200"></canvas><output>0</output><script>
+const canvas = document.querySelector('canvas');
+let dragging = false;
+canvas.addEventListener('pointerdown', event => { dragging = true; canvas.setPointerCapture(event.pointerId); });
+canvas.addEventListener('pointermove', event => { if (dragging) document.querySelector('output').textContent = String(event.clientX - 10); });
+canvas.addEventListener('pointerup', event => { dragging = false; canvas.releasePointerCapture(event.pointerId); });
+canvas.addEventListener('click', () => { document.querySelector('output').textContent = 'clicked'; });
+</script></body></html>`,
+  };
+  const frame = resourceFrame(local);
+  frame.loaded();
+  const canvas = frame.window.document.querySelector("canvas")!;
+  vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+    x: 10,
+    y: 20,
+    width: 400,
+    height: 200,
+    left: 10,
+    top: 20,
+    right: 410,
+    bottom: 220,
+    toJSON: () => ({}),
+  });
+  try {
+    const state = await requestResourceControl(
+      local,
+      { type: "inspect" },
+      options,
+    );
+    expect(state.controls).toHaveLength(1);
+    expect(state.controls[0]).toMatchObject({
+      type: "graphic",
+      kind: "canvas",
+      label: "Position",
+    });
+    const dragged = await requestResourceControl(
+      local,
+      {
+        type: "drag",
+        version: state.version,
+        control: state.controls[0].id,
+        from: { x: 30, y: 40 },
+        to: { x: 130, y: 40 },
+      },
+      options,
+    );
+    expect(dragged.outputs).toEqual(["120"]);
+    expect(
+      (
+        await requestResourceControl(
+          local,
+          {
+            type: "click",
+            version: state.version,
+            control: state.controls[0].id,
+          },
+          options,
+        )
+      ).outputs,
+    ).toEqual(["clicked"]);
+  } finally {
+    frame.dispose();
+  }
+});
+
+it("pages through every inspected graphic and keeps later-page ids usable without allowing guessed controls", async () => {
+  const local = {
+    ...target,
+    html: interactiveResource.html.replace(
+      '<svg viewBox="0 0 400 100">',
+      `<svg viewBox="0 0 400 100">${Array.from(
+        { length: 95 },
+        (_, i) =>
+          `<circle aria-label="Particle ${i}" cx="${i}" cy="20" r="2"/>`,
+      ).join("")}`,
+    ),
+  };
+  const frame = resourceFrame(local);
+  frame.loaded();
+  try {
+    const first = await requestResourceControl(
+      local,
+      { type: "inspect" },
+      options,
+    );
+    expect(first).toMatchObject({ offset: 0, total: 99, truncated: true });
+    expect(first.controls).toHaveLength(80);
+    await expect(
+      requestResourceControl(
+        local,
+        {
+          type: "click",
+          version: first.version,
+          control: "c81",
+        },
+        options,
+      ),
+    ).rejects.toThrow("RESOURCE_CONTROL_UNAVAILABLE");
+    const second = await requestResourceControl(
+      local,
+      { type: "inspect", offset: 80 },
+      options,
+    );
+    expect(second).toMatchObject({ offset: 80, total: 99 });
+    expect(second.controls).toHaveLength(19);
+    const reset = second.controls.find((item) => item.label === "Reset")!;
+    const updated = await requestResourceControl(
+      local,
+      {
+        type: "click",
+        version: second.version,
+        control: reset.id,
+      },
+      options,
+    );
+    expect(updated).toMatchObject({ offset: 80, outputs: ["2 m/s²"] });
+    expect(updated.controls.find((item) => item.id === reset.id)?.label).toBe(
+      "Reset",
+    );
+    for (const offset of [-1, 0.5, 99]) {
+      await expect(
+        requestResourceControl(local, { type: "inspect", offset }, options),
+      ).rejects.toThrow("RESOURCE_INVALID_OFFSET");
+    }
   } finally {
     frame.dispose();
   }

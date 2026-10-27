@@ -71,11 +71,29 @@ for (const width of [800, 1920]) {
     await expect(
       group.getByRole("button", { name: "打开快传", exact: true }),
     ).toHaveCount(0);
-    const box = await group.boundingBox();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-    expect(box!.y).toBeGreaterThanOrEqual(0);
-    expect(box!.y + box!.height).toBeLessThanOrEqual(720);
+    // The semantic group uses display:contents so factory and built-in controls
+    // share the original three-column grid. Measure the rendered grid and buttons.
+    const box = await group.evaluate((element) => {
+      const grid = element.closest(".fc-tools-grid");
+      if (!grid) {
+        throw new Error("Factory tools are outside their rendered grid");
+      }
+      const rect = grid.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(720);
+    for (const button of await group.getByRole("button").all()) {
+      const control = (await button.boundingBox())!;
+      expect(control.x).toBeGreaterThanOrEqual(box.x);
+      expect(control.x + control.width).toBeLessThanOrEqual(box.x + box.width);
+      expect(control.y).toBeGreaterThanOrEqual(box.y);
+      expect(control.y + control.height).toBeLessThanOrEqual(
+        box.y + box.height,
+      );
+    }
     await page.screenshot({
       path: info.outputPath(`factory-toolbox-${width}.png`),
     });

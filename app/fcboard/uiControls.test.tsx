@@ -386,6 +386,63 @@ it("rejects stale values, deleted controls, disabled controls and arbitrary sele
   }
 });
 
+it("keeps semantic inspection versions through layout movement and clicks the fresh control center", async () => {
+  const down = vi.fn();
+  const clicked = vi.fn();
+  const { inspect, stop } = setup(
+    <div data-testid="editor-root">
+      <button
+        onPointerDown={(event) => down(event.clientX, event.clientY)}
+        onClick={clicked}
+      >
+        Moving control
+      </button>
+    </div>,
+  );
+  const button = screen.getByRole("button", { name: "Moving control" });
+  let left = 20;
+  vi.spyOn(button, "getBoundingClientRect").mockImplementation(() => ({
+    x: left,
+    y: 20,
+    left,
+    top: 20,
+    right: left + 200,
+    bottom: 60,
+    width: 200,
+    height: 40,
+    toJSON: () => ({}),
+  }));
+  try {
+    const before = await inspect();
+    const control = before.controls[0];
+    left = 120;
+    const after = await inspect();
+    expect(after.version).toBe(before.version);
+    expect(after.controls[0]).toMatchObject({
+      id: control.id,
+      rect: { x: 120 },
+    });
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "ui.interact",
+        args: { version: before.version, control: control.id, action: "click" },
+      });
+    });
+    expect(down).toHaveBeenCalledWith(220, 40);
+    expect(clicked).toHaveBeenCalledTimes(1);
+    button.setAttribute("disabled", "");
+    await expect(
+      classroomCommands.execute({
+        name: "ui.interact",
+        args: { version: before.version, control: control.id, action: "click" },
+      }),
+    ).rejects.toThrow("UI_STALE_INSPECTION");
+    expect(clicked).toHaveBeenCalledTimes(1);
+  } finally {
+    stop();
+  }
+});
+
 const Draggable = ({
   observe,
 }: {

@@ -19,11 +19,13 @@ for (const viewport of [
           JSON.stringify({ apiKey: "test-only", model: "test", ocr: "cloud" }),
         ),
       );
+      let recognitions = 0;
       await page.route(
         "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
         async (route) => {
           const body = route.request().postDataJSON();
           expect(body.messages[0].content).toContain("Transcribe only");
+          recognitions++;
           await route.fulfill({
             json: { choices: [{ message: { content: "Hello" } }] },
           });
@@ -70,18 +72,30 @@ for (const viewport of [
         );
         const zoom = state.zoom?.value || 1;
         return {
-          x: (body.x + (state.scrollX || 0) + 12) * zoom,
-          y: (body.y + (state.scrollY || 0) + 12) * zoom,
+          x: (body.x + body.width / 2 + (state.scrollX || 0)) * zoom,
+          y: (body.y + body.height / 2 + (state.scrollY || 0)) * zoom,
         };
       }, kind);
       if (kind === "mindmap") {
         await page.mouse.click(point.x, point.y);
+        await expect(
+          page.getByRole("button", { name: "移动节点", exact: true }),
+        ).toBeVisible();
       }
+      // Write through the node's canvas interior, outside its four editing handles.
+      expect(
+        await page.evaluate(
+          ({ x, y }) =>
+            document.elementFromPoint(x, y)?.matches("canvas.interactive"),
+          point,
+        ),
+      ).toBe(true);
       await page.mouse.move(point.x, point.y);
       await page.mouse.down();
       await page.mouse.move(point.x + 20, point.y + 12, { steps: 6 });
       await page.mouse.move(point.x + 38, point.y + 5, { steps: 6 });
       await page.mouse.up();
+      await expect.poll(() => recognitions).toBe(1);
       await page
         .getByRole("toolbar", { name: "手写识别", exact: true })
         .getByRole("button", { name: "Hello", exact: true })

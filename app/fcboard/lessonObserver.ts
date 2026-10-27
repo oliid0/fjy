@@ -11,6 +11,7 @@ import { isLessonInspection } from "./lessonTools";
 import type { Message } from "./ai";
 import type { BoardAgentAction } from "./agent";
 import type { LessonObserver } from "./lessonContinuation";
+import type { UIControlState } from "./uiControls";
 
 const reads = [
   "canvas.inspect",
@@ -41,6 +42,15 @@ const visible = () => ({
       : undefined;
   })(),
 });
+// Control positions animate while menus enter or the toolbar is re-anchored.
+// The semantic version still detects masked secret changes and replaced nodes.
+const uiSignature = (state: UIControlState | undefined) =>
+  JSON.stringify(
+    state && {
+      ...state,
+      controls: state.controls.map(({ rect, ...control }) => control),
+    },
+  );
 
 /** A planning pass reads real objects; all mutations stay in the saved lesson executor. */
 export const observeLesson: LessonObserver = async (input, signal) => {
@@ -78,9 +88,11 @@ export const observeLesson: LessonObserver = async (input, signal) => {
       }),
     );
   const resources = await inspect();
-  const ui = classroomCommands.isPublic("ui.inspect")
-    ? await executeBoardCommand({ name: "ui.inspect" }, signal)
-    : undefined;
+  const ui = (
+    classroomCommands.isPublic("ui.inspect")
+      ? await executeBoardCommand({ name: "ui.inspect" }, signal)
+      : undefined
+  ) as UIControlState | undefined;
   if (!current()) {
     throw new DOMException("Lesson observation changed", "AbortError");
   }
@@ -147,13 +159,13 @@ You may return {"action":"commands","commands":[...],"continue":true} to read mo
         controls: item.state?.controls,
       })),
     );
-  const latestUI = ui
-    ? await executeBoardCommand({ name: "ui.inspect" }, signal)
-    : undefined;
+  const latestUI = (
+    ui ? await executeBoardCommand({ name: "ui.inspect" }, signal) : undefined
+  ) as UIControlState | undefined;
   if (
     !current() ||
     controls(await inspect()) !== controls(resources) ||
-    JSON.stringify(latestUI) !== JSON.stringify(ui)
+    uiSignature(latestUI) !== uiSignature(ui)
   ) {
     throw new DOMException("Lesson observation changed", "AbortError");
   }

@@ -40,11 +40,29 @@ test("displayed handwriting can be dragged and lasso-selected at its visible ben
       ),
     );
   await expect.poll(async () => (await strokes()).length).toBe(1);
-  await page.keyboard.press("v");
+  await page.getByRole("button", { name: "选择", exact: true }).click();
   await page.mouse.move(180, 340);
   await page.mouse.down();
-  await page.mouse.move(220, 360, { steps: 4 });
+  for (const [x, y] of [
+    [220, 340],
+    [220, 360],
+    [180, 360],
+    [180, 340],
+  ]) {
+    await page.mouse.move(x, y, { steps: 2 });
+  }
   await page.mouse.up();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          Object.values(
+            JSON.parse(localStorage.getItem("excalidraw-state") || "{}")
+              .selectedElementIds || {},
+          ).filter(Boolean).length,
+      ),
+    )
+    .toBe(1);
   await page.mouse.move(200, 328);
   await page.mouse.down();
   await page.mouse.move(240, 328, { steps: 4 });
@@ -111,7 +129,9 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
 }, info) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/");
-  const pen = page.getByRole("button", { name: "画笔", exact: true });
+  const pen = page
+    .locator(".fc-drawing-tools")
+    .getByRole("button", { name: "画笔", exact: true });
   await pen.click();
   await pen.click();
   await page.getByRole("button", { name: "彩虹笔", exact: true }).click();
@@ -215,7 +235,7 @@ test("the share menu confirms pages and exports the chosen saved page as an actu
   const share = page.getByRole("dialog", { name: "分享白板", exact: true });
   await share.getByRole("checkbox", { name: /第 2 页/ }).uncheck();
   await share.getByRole("checkbox", { name: /第 1 页/ }).check();
-  await share.getByRole("button", { name: "确认", exact: true }).click();
+  await share.getByRole("button", { name: "确定", exact: true }).click();
   const downloaded = page.waitForEvent("download");
   await share.getByRole("button", { name: "下载选中页面" }).click();
   const file = await downloaded;

@@ -21,13 +21,6 @@ for (const [kind, width, height, nets, face] of [
     await page.mouse.down();
     await page.mouse.move(start.x + 240, start.y + 200, { steps: 12 });
     await page.mouse.up();
-    const row = page.getByRole("toolbar", { name: "选区操作", exact: true });
-    await expect(
-      row.getByRole("button", { name: "展开图形", exact: true }),
-    ).toBeVisible();
-    const bounds = (await row.boundingBox())!;
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     const solid = () =>
       page.evaluate(() => {
         const elements = JSON.parse(localStorage.getItem("excalidraw") || "[]");
@@ -38,6 +31,119 @@ for (const [kind, width, height, nets, face] of [
           }) => !element.isDeleted && element.customData?.fcWidget,
         )?.customData.fcWidget;
       });
+    await expect.poll(solid).toBeDefined();
+    const row = page.getByRole("toolbar", { name: "选区操作", exact: true });
+    await expect(row).toHaveCount(0);
+    await toolbar.getByRole("button", { name: "选择", exact: true }).click();
+    const region = await page.evaluate(() => {
+      type Part = {
+        id: string;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        angle?: number;
+        isDeleted?: boolean;
+        customData?: { fcWidget?: { id: string } };
+      };
+      const elements: Part[] = JSON.parse(
+        localStorage.getItem("excalidraw") || "[]",
+      );
+      const id = elements.find(
+        (element) => !element.isDeleted && element.customData?.fcWidget,
+      )?.customData?.fcWidget?.id;
+      if (!id) {
+        throw new Error("Solid not persisted");
+      }
+      const parts = elements.filter(
+        (element) =>
+          !element.isDeleted && element.customData?.fcWidget?.id === id,
+      );
+      const corners = parts.flatMap((element) => {
+        const centerX = element.x + element.width / 2;
+        const centerY = element.y + element.height / 2;
+        const cosine = Math.cos(element.angle || 0);
+        const sine = Math.sin(element.angle || 0);
+        return [
+          [element.x, element.y],
+          [element.x + element.width, element.y],
+          [element.x + element.width, element.y + element.height],
+          [element.x, element.y + element.height],
+        ].map(([x, y]) => ({
+          x: centerX + (x - centerX) * cosine - (y - centerY) * sine,
+          y: centerY + (x - centerX) * sine + (y - centerY) * cosine,
+        }));
+      });
+      const state = JSON.parse(
+        localStorage.getItem("excalidraw-state") || "{}",
+      );
+      const zoom = state.zoom?.value || 1;
+      const canvas = document
+        .querySelector("canvas.interactive")!
+        .getBoundingClientRect();
+      return {
+        ids: parts.map((part) => part.id),
+        left:
+          (Math.min(...corners.map((point) => point.x)) +
+            (state.scrollX || 0)) *
+            zoom +
+          canvas.left -
+          16,
+        top:
+          (Math.min(...corners.map((point) => point.y)) +
+            (state.scrollY || 0)) *
+            zoom +
+          canvas.top -
+          16,
+        right:
+          (Math.max(...corners.map((point) => point.x)) +
+            (state.scrollX || 0)) *
+            zoom +
+          canvas.left +
+          16,
+        bottom:
+          (Math.max(...corners.map((point) => point.y)) +
+            (state.scrollY || 0)) *
+            zoom +
+          canvas.top +
+          16,
+      };
+    });
+    expect(region.left).toBeGreaterThanOrEqual(0);
+    expect(region.top).toBeGreaterThanOrEqual(0);
+    expect(region.right).toBeLessThanOrEqual(width);
+    expect(region.bottom).toBeLessThanOrEqual(height);
+    await page.mouse.move(region.left, region.top);
+    await page.mouse.down();
+    for (const [x, y] of [
+      [region.right, region.top],
+      [region.right, region.bottom],
+      [region.left, region.bottom],
+      [region.left, region.top],
+    ]) {
+      await page.mouse.move(x, y, { steps: 4 });
+    }
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate((ids) => {
+          const state = JSON.parse(
+            localStorage.getItem("excalidraw-state") || "{}",
+          );
+          const selected = state.selectedElementIds || {};
+          return (
+            ids.every((id) => selected[id]) &&
+            Object.values(selected).filter(Boolean).length === ids.length
+          );
+        }, region.ids),
+      )
+      .toBe(true);
+    await expect(
+      row.getByRole("button", { name: "展开图形", exact: true }),
+    ).toBeVisible();
+    const bounds = (await row.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     const doubleClickFace = async () => {
       const point = await page.evaluate((face) => {
         const elements = JSON.parse(localStorage.getItem("excalidraw") || "[]");

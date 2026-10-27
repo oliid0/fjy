@@ -122,6 +122,15 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       await page.setViewportSize(viewport);
       await contained(page, resources);
       await contained(page, resources.locator(".fc-resource-content"));
+      expect(
+        await resources.evaluate((panel) =>
+          [
+            ...panel.querySelectorAll<HTMLElement>(
+              "header strong,header > span,.fc-resource-tabs button,.fc-resource-grid button span",
+            ),
+          ].every((node) => node.scrollWidth <= node.clientWidth + 1),
+        ),
+      ).toBe(true);
     }
     await page.keyboard.press("Escape");
     await page.locator("[data-teaching-tools]").click();

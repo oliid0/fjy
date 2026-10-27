@@ -11,6 +11,7 @@ import { sceneAPI } from "./test/scene";
 import { resourceFrame } from "./test/resourceFrame";
 import { interactiveResource } from "./test/interactiveResource";
 import { observeLesson } from "./lessonObserver";
+import { registerUICommands } from "./uiControls";
 import * as ai from "./ai";
 
 import type { LessonObserver } from "./lessonContinuation";
@@ -439,6 +440,189 @@ it("observes the real UI and rejects a plan when its controls change while the m
     ).rejects.toMatchObject({ name: "AbortError" });
   } finally {
     release();
+    host.stop();
+  }
+});
+
+it.each([
+  "layout",
+  "value",
+  "disabled",
+  "visibility",
+  "identity",
+  "outputs",
+  "scope",
+  "semantic version",
+])(
+  "treats UI %s changes according to their effect on the observed lesson",
+  async (change) => {
+    const host = playback();
+    const ui = {
+      version: "semantic:1",
+      scope: "visible-board",
+      controls: [
+        {
+          id: "pen",
+          value: "hard",
+          disabled: false,
+          rect: { x: 10, y: 20, width: 50, height: 30 },
+        },
+      ],
+      outputs: ["ready"],
+    };
+    const release = classroomCommands.register("ui.inspect", "inspect UI", () =>
+      structuredClone(ui),
+    );
+    vi.spyOn(ai, "chat").mockImplementation(async () => {
+      if (change === "layout") {
+        ui.controls[0].rect.x += 100;
+      }
+      if (change === "value") {
+        ui.controls[0].value = "brush";
+      }
+      if (change === "disabled") {
+        ui.controls[0].disabled = true;
+      }
+      if (change === "visibility") {
+        ui.controls = [];
+      }
+      if (change === "identity") {
+        ui.controls[0].id = "replacement";
+      }
+      if (change === "outputs") {
+        ui.outputs = ["changed"];
+      }
+      if (change === "scope") {
+        ui.scope = "other-board";
+      }
+      if (change === "semantic version") {
+        ui.version = "semantic:2";
+      }
+      return '{"action":"keep"}';
+    });
+    try {
+      const observe = observeLesson(
+        {
+          lesson: validateLesson({ steps: [{ commands: [] }], quiz: [] }),
+          step: 0,
+          toolIndex: 0,
+          results: [],
+          correct: 0,
+          attempts: 0,
+        },
+        new AbortController().signal,
+      );
+      if (change === "layout") {
+        await expect(observe).resolves.toBeUndefined();
+      } else {
+        await expect(observe).rejects.toMatchObject({ name: "AbortError" });
+      }
+    } finally {
+      release();
+      host.stop();
+    }
+  },
+);
+
+it("continues both experiment steps when app controls move during observation without retrying or replaying the setter", async () => {
+  const host = playback(observeLesson);
+  const { id, frame } = await experiment(host);
+  frame.loaded();
+  const state = (await classroomCommands.execute({
+    name: "resources.inspect",
+    args: { id },
+  })) as ResourceControlState;
+  const force = state.controls.find((control) => control.type === "range")!;
+  const root = document.createElement("div");
+  const button = document.createElement("button");
+  button.textContent = "Open app controls";
+  root.append(button);
+  document.body.append(root);
+  let left = 20;
+  vi.spyOn(button, "getBoundingClientRect").mockImplementation(() => ({
+    x: left,
+    y: 20,
+    left,
+    top: 20,
+    right: left + 120,
+    bottom: 56,
+    width: 120,
+    height: 36,
+    toJSON: () => ({}),
+  }));
+  const stopUI = registerUICommands(host.api, () => root);
+  const execute = vi.spyOn(classroomCommands, "execute");
+  const chat = vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+    const observation = JSON.parse(String(messages.at(-1)?.content));
+    expect(observation.resources[0].state.outputs).toEqual([
+      observation.completedSteps.length === 0 ? "2 m/s²" : "5 m/s²",
+    ]);
+    left += 30;
+    return '{"action":"keep"}';
+  });
+  try {
+    await host.engine.start(
+      validateLesson({
+        title: "Newton's second law",
+        steps: [
+          {
+            say: "First observe four newtons.",
+            commands: [],
+            tools: [
+              {
+                name: "resources.inspect",
+                args: { id },
+                expect: [{ path: "outputs.0", equals: "2 m/s²" }],
+              },
+            ],
+          },
+          {
+            say: "Ten newtons produce five meters per second squared.",
+            commands: [],
+            tools: [
+              {
+                name: "resources.interact",
+                args: {
+                  id,
+                  version: state.version,
+                  control: force.id,
+                  action: "set",
+                  value: 10,
+                },
+              },
+              {
+                name: "resources.inspect",
+                args: { id },
+                expect: [{ path: "outputs.0", equals: "5 m/s²" }],
+              },
+            ],
+          },
+        ],
+        quiz: [],
+      }),
+    );
+    expect(host.engine.state.mode).toBe("complete");
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(host.speak).toHaveBeenCalledWith("First observe four newtons.", {
+      rate: 1,
+      onBoundary: expect.any(Function),
+    });
+    expect(host.speak).toHaveBeenCalledWith(
+      "Ten newtons produce five meters per second squared.",
+      { rate: 1, onBoundary: expect.any(Function) },
+    );
+    expect(
+      execute.mock.calls.filter(
+        ([command]) => command.name === "resources.interact",
+      ),
+    ).toHaveLength(1);
+    expect(frame.window.document.querySelector("output")?.textContent).toBe(
+      "5 m/s²",
+    );
+  } finally {
+    stopUI();
+    root.remove();
+    frame.dispose();
     host.stop();
   }
 });

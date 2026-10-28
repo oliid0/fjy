@@ -6325,6 +6325,28 @@ class App extends React.Component<AppProps, AppState> {
         object?.customData?.fcLanguage ||
         (widget && ["cube", "cylinder"].includes(widget.kind))
       ) {
+        if (widget) {
+          const parts = this.scene
+            .getNonDeletedElements()
+            .filter(
+              (element) => element.customData?.fcWidget?.id === widget.id,
+            );
+          this.setState((previous) => ({
+            ...selectGroupsForSelectedElements(
+              {
+                editingGroupId: null,
+                selectedElementIds: Object.fromEntries(
+                  parts.map((part) => [part.id, true as const]),
+                ),
+              },
+              this.scene.getNonDeletedElements(),
+              previous,
+              this,
+            ),
+            selectedLinearElement: null,
+            whiteboardSelection: undefined,
+          }));
+        }
         this.props.onObjectDoubleClick?.(object!);
         return;
       }
@@ -7613,8 +7635,7 @@ class App extends React.Component<AppProps, AppState> {
     const pointerDownState = this.initialPointerDownState(event);
     const before = this.scene.getElementsIncludingDeleted();
     const objectMode =
-      !palm &&
-      this.state.activeTool.type === "eraser" &&
+      (palm || this.state.activeTool.type === "eraser") &&
       this.state.eraserMode === "object" &&
       !(
         event.pointerType === "pen" &&
@@ -7969,11 +7990,7 @@ class App extends React.Component<AppProps, AppState> {
         event.preventDefault();
         return;
       }
-      if (
-        (palm && this.state.activeTool.type === "freedraw") ||
-        penEraser ||
-        this.state.activeTool.type === "eraser"
-      ) {
+      if (palm || penEraser || this.state.activeTool.type === "eraser") {
         this.beginInkErasure(event, palm);
         return;
       }

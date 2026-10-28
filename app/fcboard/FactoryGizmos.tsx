@@ -14,6 +14,7 @@ import deleteIcon from "./factory-gizmo-icons/delete.png?url";
 import rotateIcon from "./factory-gizmo-icons/rotate.png?url";
 import stretchIcon from "./factory-gizmo-icons/stretch.png?url";
 import { TransientMessage } from "./TransientMessage";
+import { forwardEraseContact } from "./canvasContact";
 
 import type { PointerEvent as ReactPointerEvent } from "react";
 
@@ -107,11 +108,7 @@ export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           ? stage.top - state.offsetTop
           : state.scrollY * state.zoom.value,
         scale: stage ? stage.width / 1000 : state.zoom.value,
-        hidden:
-          state.activeTool?.type === "lasso" ||
-          (state.activeTool?.type === "custom" &&
-            !!state.activeTool.customType?.startsWith("factory-shape:")) ||
-          !!state.viewModeEnabled,
+        hidden: !!state.viewModeEnabled,
       });
       setWidgets(
         readWidgets(api).filter((widget) => factoryGizmoKinds.has(widget.kind)),
@@ -191,6 +188,9 @@ export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       .catch((failure) => setError(String(failure)));
   };
   const begin = (event: ReactPointerEvent, widget: Widget, action: Action) => {
+    if (forwardEraseContact(api, event)) {
+      return;
+    }
     if (gesture.current || event.button > 0) {
       return;
     }
@@ -468,6 +468,9 @@ export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   touchAction: "none",
                 }}
                 onPointerDown={(event) => {
+                  if (forwardEraseContact(api, event)) {
+                    return;
+                  }
                   if (action === "delete") {
                     event.stopPropagation();
                     void classroomCommands
@@ -573,11 +576,11 @@ export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 ) : widget.kind === "compass" ? (
                   <path
                     d={`M0 300 L${radius / 2} 80 L${radius} 300`}
-                    fill="none"
+                    fill="transparent"
                     stroke="transparent"
                     strokeWidth="35"
                     style={{
-                      pointerEvents: "stroke",
+                      pointerEvents: "all",
                       cursor: "move",
                       touchAction: "none",
                     }}

@@ -46,6 +46,7 @@ export const RecordingPanel = (props: {
   activeId: string;
   onSelect: (id: string) => void;
   transcript: TranscriptLine[];
+  interim?: TranscriptLine | null;
   busy: boolean;
   controlBusy: boolean;
   onStart: () => void;
@@ -72,7 +73,9 @@ export const RecordingPanel = (props: {
     props.phase,
   );
   const live = props.recording || processing;
-  const lines = live ? props.transcript : active?.transcript || [];
+  const lines = live
+    ? [...props.transcript, ...(props.interim ? [props.interim] : [])]
+    : active?.transcript || [];
   const activeBlob = active?.blob;
   useEffect(() => {
     setEditing(false);
@@ -91,7 +94,7 @@ export const RecordingPanel = (props: {
     if (live && following.current && log.current) {
       log.current.scrollTop = log.current.scrollHeight;
     }
-  }, [live, lines.length]);
+  }, [live, lines.length, props.interim?.text]);
   const controls = (
     <div
       className="fc-recording-commandbar"
@@ -296,6 +299,11 @@ export const RecordingPanel = (props: {
                       <Button
                         key={index}
                         className="fc-recording-line"
+                        data-interim={
+                          live && !!props.interim && index === lines.length - 1
+                            ? true
+                            : undefined
+                        }
                         disabled={live}
                         onClick={() => {
                           if (player.current) {

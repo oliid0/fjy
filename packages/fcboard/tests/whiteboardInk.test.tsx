@@ -1067,6 +1067,39 @@ describe("APK-style whiteboard ink", () => {
     expect(live().filter((element) => element.y === 400)).toHaveLength(1);
   });
 
+  it.each(["freedraw", "eraser", "selection", "lasso"] as const)(
+    "palm object mode erases inserted text while %s is active and supports cancel and undo",
+    async (tool) => {
+      const { container } = await render(
+        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      );
+      const canvas = container.querySelector("canvas.interactive")!;
+      const text = API.createElement({
+        type: "text",
+        x: 200,
+        y: 200,
+        text: "AI title",
+      });
+      API.updateScene({
+        elements: [text],
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      act(() => {
+        API.setAppState({ eraserMode: "object" });
+        h.app.setActiveTool({ type: tool });
+      });
+      const contact = { pointerType: "touch", width: 70, height: 80 };
+      pointer(canvas, "pointerdown", 210, 210, contact);
+      expect(live()).toHaveLength(0);
+      pointer(canvas, "pointercancel", 210, 210, contact);
+      expect(live().map((element) => element.id)).toEqual([text.id]);
+      pointer(canvas, "pointerdown", 210, 210, contact);
+      pointer(canvas, "pointerup", 210, 210, contact);
+      expect(live()).toHaveLength(0);
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(live().map((element) => element.id)).toEqual([text.id]);
+    },
+  );
   it("uses the visible object eraser footprint at its edge and restores the whole object with undo", async () => {
     const { container } = await render(
       <Excalidraw UIOptions={{ unifiedToolbar: true }} />,

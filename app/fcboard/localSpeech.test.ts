@@ -78,6 +78,44 @@ describe("built-in speech audio lifecycle", () => {
     expect(trackStop).not.toHaveBeenCalled();
   });
 
+  it("reports live words and speech activity without executing a partial sentence", async () => {
+    const final = vi.fn();
+    const interim = vi.fn();
+    const activity = vi.fn();
+    engine.push.mockResolvedValueOnce({
+      lines: [],
+      activity: true,
+      interim: { time: 0.2, text: "今天讲牛顿" },
+    });
+    const handle = await startLocalSpeech(
+      final,
+      vi.fn(),
+      stream,
+      activity,
+      interim,
+    );
+    emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
+    await vi.waitFor(() =>
+      expect(interim).toHaveBeenCalledWith({ time: 0.2, text: "今天讲牛顿" }),
+    );
+    expect(activity).toHaveBeenCalledTimes(1);
+    expect(final).not.toHaveBeenCalled();
+    engine.push.mockResolvedValueOnce({
+      lines: [{ time: 0.2, text: "今天讲牛顿定律" }],
+      activity: false,
+      interim: null,
+    });
+    emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
+    await vi.waitFor(() =>
+      expect(final.mock.calls[0]?.[0]).toEqual({
+        time: 0.2,
+        text: "今天讲牛顿定律",
+      }),
+    );
+    expect(interim).toHaveBeenLastCalledWith(null);
+    await handle.cancel();
+  });
+
   it("encodes signed PCM16 in little-endian order with clipping", () => {
     const bytes = Uint8Array.from(
       atob(encodePCM(new Float32Array([-2, -1, 0, 1, 2]))),

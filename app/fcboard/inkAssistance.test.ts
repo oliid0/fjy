@@ -22,6 +22,7 @@ import {
   readInsertions,
 } from "./insertObjects";
 import { sceneAPI } from "./test/scene";
+import * as transparent from "./transparentInkImage";
 
 it("grows a table cell around its raw handwriting without invoking recognition", async () => {
   const base = sceneAPI();
@@ -172,9 +173,7 @@ it.each(["mindmap", "fourline"] as const)(
       });
       expect(recognize).toHaveBeenCalledTimes(1);
       expect(recognize.mock.calls[0][5]).toHaveLength(1);
-      expect(recognize.mock.calls[0][6]).toBe(
-        kind === "fourline" ? "en-US" : undefined,
-      );
+      expect(recognize.mock.calls[0][6]).toBe(undefined);
       expect(
         api.getSceneElements().some((element) => element.id === handwriting.id),
       ).toBe(false);
@@ -554,7 +553,12 @@ it("turns a drawn dog into a generated hand-drawn image at its original location
     },
     false,
   );
-  vi.spyOn(ai, "chat").mockResolvedValue('{"description":"一只坐着的小狗"}');
+  vi.spyOn(ai, "chat").mockResolvedValue('{"version":1,"kind":"drawing"}');
+  vi.spyOn(transparent, "transparentInkImage").mockReturnValue({
+    dataURL: "data:image/png;base64,transparent" as DataURL,
+    width: 100,
+    height: 100,
+  });
   const fetcher = vi.fn().mockResolvedValue({
     status: 200,
     json: async () => ({
@@ -580,13 +584,13 @@ it("turns a drawn dog into a generated hand-drawn image at its original location
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1600);
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
     const request = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(request.model).toBe("illustrator");
     expect(request.image).toMatch(/^data:image\//);
-    expect(ai.chat).not.toHaveBeenCalled();
+    expect(ai.chat).toHaveBeenCalledTimes(1);
     expect(request.prompt).toContain("手绘");
     expect(api.getSceneElements()).toHaveLength(1);
     const generated = api.getSceneElements()[0];

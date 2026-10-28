@@ -48,6 +48,22 @@ const setup = (tool: "freedraw" | "selection" | "custom" = "freedraw") => {
   return { api, view: render(<InsertMenu api={api} />) };
 };
 
+const placeTable = (x: number, y: number) => {
+  const layer = document.querySelector("[data-insertion-placement=table]")!;
+  for (const type of ["pointerdown", "pointerup"]) {
+    fireEvent(
+      layer,
+      Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        pointerId: 2,
+        pointerType: "touch",
+        button: 0,
+        clientX: x,
+        clientY: y,
+      }),
+    );
+  }
+};
+
 it("previews table dimensions until confirmation and inserts once with the chosen cells", async () => {
   const insert = vi
     .spyOn(insertions, "renderInsertion")
@@ -66,10 +82,24 @@ it("previews table dimensions until confirmation and inserts once with the chose
   );
   expect(insert).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
+  expect(insert).not.toHaveBeenCalled();
+  await waitFor(() =>
+    expect(
+      document.querySelector("[data-insertion-placement=table]"),
+    ).not.toBeNull(),
+  );
+  placeTable(320, 180);
   await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
   expect(insert).toHaveBeenCalledWith(
     api,
-    expect.objectContaining({ kind: "table", rows: 4, columns: 6 }),
+    expect.objectContaining({
+      kind: "table",
+      rows: 4,
+      columns: 6,
+      position: { x: 320, y: 180 },
+    }),
+    true,
+    { exact: true, select: false },
   );
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
@@ -196,10 +226,19 @@ it("places new document insertions in the actual scrolled viewport and sizes fou
       });
     });
     fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-insertion-placement=table]"),
+      ).not.toBeNull(),
+    );
+    expect(insert).toHaveBeenCalledTimes(3);
+    placeTable(260, 960);
     await waitFor(() => expect(insert).toHaveBeenCalledTimes(4));
     expect(insert).toHaveBeenLastCalledWith(
       api,
       expect.objectContaining({ kind: "table", position: { x: 260, y: 960 } }),
+      true,
+      { exact: true, select: false },
     );
   } finally {
     view.unmount();

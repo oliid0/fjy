@@ -108,6 +108,11 @@ export const mathNotation = (input: string): string => {
   if (/[{}\\]/.test(text)) {
     throw new Error("Unsupported mathematical notation");
   }
+  // Explicit long-division notation puts the divisor before the bracket.
+  text = text.replace(
+    /^(\d+(?:\.\d+)?)\s*[)⟌]\s*(\d+(?:\.\d+)?)\s*$/,
+    "($2)/($1)",
+  );
   const rows = text
     .split(/\r?\n/)
     .map((row) => row.trim())

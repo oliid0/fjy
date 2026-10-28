@@ -10,6 +10,7 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { classroomCommands } from "./commands";
+import { forwardEraseContact } from "./canvasContact";
 import { changeMindMapNode } from "./mindMap";
 import { readInsertions, renderInsertion, mindMapNodes } from "./insertObjects";
 import {
@@ -456,7 +457,25 @@ export const MindMapControls = ({
               onClick={
                 action === "move"
                   ? undefined
-                  : () => {
+                  : (event) => {
+                      // Touch/pen actions commit on pointer-up. Keep click for
+                      // keyboard activation without executing a second time.
+                      if (event.detail !== 0) {
+                        return;
+                      }
+                      setError("");
+                      void act(action).catch(fail);
+                    }
+              }
+              onPointerUp={
+                action === "move"
+                  ? undefined
+                  : (event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (event.button > 0) {
+                        return;
+                      }
                       setError("");
                       void act(action).catch(fail);
                     }
@@ -464,6 +483,9 @@ export const MindMapControls = ({
               onPointerDown={
                 action === "move"
                   ? (event) => {
+                      if (forwardEraseContact(api, event)) {
+                        return;
+                      }
                       event.preventDefault();
                       event.stopPropagation();
                       const choice = selected.current;
@@ -497,7 +519,13 @@ export const MindMapControls = ({
                       };
                       event.currentTarget.setPointerCapture?.(event.pointerId);
                     }
-                  : undefined
+                  : (event) => {
+                      if (forwardEraseContact(api, event)) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }
               }
               sx={{
                 position: "absolute",

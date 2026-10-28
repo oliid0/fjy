@@ -2,6 +2,18 @@
 
 本文件记录参考项目的历史实现依据。原出厂 APK 的实际行为、本轮修正和未完成项以 [HWhiteBoard 5.42 对齐记录](apk-alignment.md) 为准，不能将 Excalidraw 原能力等同于原出厂白板全部功能已对齐。
 
+## 2026-10-28 真机反馈续修
+
+复核原厂 `HInsertSettingWindow` 的选表后手动放置 / 默认百度图片或 Google 网页入口、`HMindMappingOBject` 的四向动作、`layout_min_web_window.xml` 的 400×600dp 窗口 / 18dp 横向滚动条 / 四按钮，以及 `FitWidthWebView` 的长按导入。当前表格先确认再触控放置并继承笔色，图形支持连续点放 / 拖拽和保留上次宽高；尺规在选择工具下保留命中层，圆规内部可拖。浮动工具 / 节点的手背和笔侧键交回实际画布擦除。主板与课件不再强制手背走局部模式。
+
+手写依据仍为 `ModelManager.recognize` 的 ML Kit 18.1.0 与 `HSlide.createSmaText` 的 1ms 递增时间。候选不自行重排；四线格不再强制英语。`fx` 简写在本地规范化，函数笔按本次相邻笔迹隔离旧失败区域；竖式结合真实横线位置与两行操作数，结果在横线下右对齐。复杂二维除式仍需更多真机样本。
+
+语音逐项阅读 `ss/pipecat-main/src/pipecat/turns/user_turn_controller.py` 及其 function-call mute 策略、`ss/agenticSeek-main/sources` 下 speech_to_text / interaction / echo_filter / memory 代码，采用有界多轮历史、工具真实结果、轮次队列和播放回声检查。继续说话排队，不取消正在进行的工具；明确停止仍可中断。板书更正复用真实 lessonId / tutorId，保留已有位置与样式。Siri 动画使用用户提供 Swift 的原图层和 12 秒旋转 / hue / 3D 参数，暂停五秒内可继续。
+
+本地 ASR 中间事件依据项目实际 Maven 依赖 `ai.moonshine:moonshine-voice:0.1.5` 的 sources.jar 中 `TranscriptEvent` / `TranscriptLine` / `Transcriber`，并核对[官方流式转写文档](https://github.com/moonshine-ai/moonshine/blob/main/docs/using/transcription.md)。本地桥传递 Started / Updated / TextChanged / Completed / Error；云端使用现有已验证的 utterances / definite / start_time。中间稿只显示，不作为指令或持久稿；最终行保留暂停时间修正。无文字稿也允许保存真实媒体，不以摘要作为保存前提。
+
+魔术笔先区分文字与画图，文字转铅笔素描提示词，画图附原图转彩色 3D。输出须有透明背景；无 alpha 的纯白底仅移除与画布边缘相连的白色，保留主体内部白色并裁切透明边缘。不接受彩色不透明矩形；失败保留源笔迹。模型分类、绘图质量、真实候选一致率及硬件声学 / 触感尚不能由模拟测试证明。
+
 ## 2026-10-27 原厂交互与全控件操作
 
 本轮依据 `ss/HWhiteBoard-reference/README.md`、`java/com/paike/zjc/tool/HTool.java`、`layer/SelectCacheLayer.java`、`object/HCurveObject.java`、`object/HBezierObject.java`、`object/HShapeObject.java`、`data/HDataSet.java` 及 IMG_1251–1279。HTool 在移动中按接触宽高转为擦除，SelectCacheLayer 保存真实路径、区域和选后操作；CircleToSearch 的截图矩形方案已替换。原背景色、普通笔尾锋与固件开关来自 HDataSet；图形按 IMG_1254 补为 20 项。代码与单测不证明逐像素一致。

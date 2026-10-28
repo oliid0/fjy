@@ -104,6 +104,37 @@ it("offers exactly the photographed twenty shapes and commits each drag as one g
   }
 });
 
+it("keeps a shape tool ready for rapid taps and retains the last dragged aspect ratio", async () => {
+  const { api, choose, surface, close } = await setup();
+  try {
+    choose("cube");
+    pointer(surface(), "pointerdown", 100, 100);
+    pointer(surface(), "pointermove", 400, 160);
+    pointer(surface(), "pointerup", 400, 160);
+    for (const x of [500, 850]) {
+      pointer(surface(), "pointerdown", x, 100);
+      pointer(surface(), "pointerup", x, 100);
+    }
+    const widgets = readWidgets(api);
+    expect(widgets).toHaveLength(3);
+    expect(new Set(widgets.map((widget) => widget.id)).size).toBe(3);
+    for (const widget of widgets) {
+      const bounds = getCommonBounds(
+        api
+          .getSceneElements()
+          .filter((element) => element.customData?.fcWidget?.id === widget.id),
+      );
+      expect(bounds[2] - bounds[0]).toBeCloseTo(300);
+      expect(bounds[3] - bounds[1]).toBeCloseTo(60);
+    }
+    expect(api.getAppState().activeTool.type).toBe("custom");
+    Keyboard.undo();
+    expect(readWidgets(api)).toHaveLength(2);
+  } finally {
+    close();
+  }
+});
+
 it("keeps the drag position at zoom, cancels without objects, and copies a flat shape with an independent identity", async () => {
   const { api, choose, surface, close } = await setup();
   try {

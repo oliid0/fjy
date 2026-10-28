@@ -30,6 +30,9 @@ public class LocalSpeechPlugin extends Plugin {
     private int stream = -1;
     private String session;
     private JSArray completed = new JSArray();
+    private JSObject interim;
+    private boolean speechActive;
+    private Throwable transcriptError;
     private static final String[] FILES = {
         "adapter.ort", "cross_kv.ort", "decoder_kv.ort", "encoder.ort",
         "frontend.model.ort", "frontend.weights.ort", "streaming_config.json", "tokenizer.bin"
@@ -77,6 +80,7 @@ public class LocalSpeechPlugin extends Plugin {
             try {
                 prepareModel();
                 completed = new JSArray();
+                interim = null; speechActive = false; transcriptError = null;
                 stream = transcriber.createStream();
                 transcriber.startStream(stream);
                 session = UUID.randomUUID().toString();
@@ -132,7 +136,11 @@ public class LocalSpeechPlugin extends Plugin {
         }
     }
     private JSObject drain() {
-        JSObject result = new JSObject(); result.put("lines", completed); completed = new JSArray(); return result;
+        if (transcriptError != null) throw new IllegalStateException("Transcription failed", transcriptError);
+        JSObject result = new JSObject(); result.put("lines", completed);
+        result.put("activity", speechActive);
+        result.put("interim", interim == null ? org.json.JSONObject.NULL : interim);
+        completed = new JSArray(); return result;
     }
     private void prepareModel() throws Exception {
         if (transcriber != null && transcriber.isLoaded()) { return; }
@@ -142,7 +150,17 @@ public class LocalSpeechPlugin extends Plugin {
             model.loadFromFiles(modelDirectory(getContext()).getAbsolutePath(), JNI.MOONSHINE_MODEL_ARCH_TINY_STREAMING);
             model.setUpdateInterval(0.5);
             model.addListener(event -> {
+                TranscriptLine pending = null;
+                if (event instanceof TranscriptEvent.LineStarted) pending = ((TranscriptEvent.LineStarted)event).line;
+                else if (event instanceof TranscriptEvent.LineUpdated) pending = ((TranscriptEvent.LineUpdated)event).line;
+                else if (event instanceof TranscriptEvent.LineTextChanged) pending = ((TranscriptEvent.LineTextChanged)event).line;
+                else if (event instanceof TranscriptEvent.Error) transcriptError = ((TranscriptEvent.Error)event).cause;
+                if (pending != null) {
+                    speechActive = true;
+                    if (pending.text != null && !pending.text.trim().isEmpty()) interim = new JSObject().put("time", Math.max(0, pending.startTime)).put("text", pending.text.trim());
+                }
                 if (event instanceof TranscriptEvent.LineCompleted) {
+                    speechActive = false; interim = null;
                     TranscriptLine line = ((TranscriptEvent.LineCompleted) event).line;
                     if (line.text != null && !line.text.trim().isEmpty()) {
                         JSObject value = new JSObject();
@@ -160,6 +178,7 @@ public class LocalSpeechPlugin extends Plugin {
         stream = -1;
         session = null;
         completed = new JSArray();
+        interim = null; speechActive = false; transcriptError = null;
     }
     private void release() {
         releaseSession();

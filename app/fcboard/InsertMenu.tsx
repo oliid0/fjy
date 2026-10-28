@@ -21,6 +21,7 @@ import {
 import { Classroom } from "./native";
 import { useAnchoredPanel } from "./floating";
 import { TableSizePicker } from "./TableSizePicker";
+import { InsertionPlacement } from "./InsertionPlacement";
 
 import type { FactoryInsertion } from "./native";
 import type { InsertKind, InsertObject } from "./insertObjects";
@@ -40,17 +41,17 @@ type MenuKind = keyof typeof names;
 
 export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   useI18n();
-  const [form, setForm] = useState<InsertKind | "website" | null>(null);
+  const [form, setForm] = useState<InsertKind | null>(null);
   const [draft, setDraft] = useState<InsertObject>(() =>
     insertionDefaults("table", { x: 0, y: 0 }),
   );
-  const [url, setUrl] = useState("");
   const [available, setAvailable] = useState<FactoryInsertion[]>([]);
   const [loading, setLoading] = useState(Capacitor.isNativePlatform);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<InsertObject>();
+  const [placing, setPlacing] = useState<InsertObject>();
   const selectedRef = useRef<InsertObject | undefined>(undefined);
   const previousSelection = useRef("");
   const panel = useRef<HTMLElement>(null);
@@ -155,6 +156,14 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       kind,
       document ? { x: 60, y: 60 } : insertionPoint(api),
     );
+    base.color =
+      (
+        classroomCommands.read("document") as
+          | { pen?: { color: string } }
+          | undefined
+      )?.pen?.color ||
+      api.getAppState().currentItemStrokeColor ||
+      "#333333";
     if (kind === "fourline") {
       if (visible) {
         base.width = Math.max(
@@ -227,6 +236,19 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     if (kind === "resources") {
       return classroomCommands.execute({ name: "resources.open" });
     }
+    if (kind === "website") {
+      setForm(null);
+      return classroomCommands.execute({
+        name: "web.open",
+        args: {
+          url:
+            getLanguage().code === "zh-CN"
+              ? "https://image.baidu.com/search/index?tn=baiduimage&word=壁纸"
+              : "https://www.google.com/",
+          signal,
+        },
+      });
+    }
     if (kind === "fourline" || kind === "mindmap") {
       return create(kind, { signal });
     }
@@ -250,7 +272,7 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     if (kind !== "website") {
       setDraft(newInsertion(kind as InsertKind));
     }
-    setForm(kind as InsertKind | "website");
+    setForm(kind as InsertKind);
   };
   useEffect(() => {
     const stops = [
@@ -354,6 +376,14 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   };
   return (
     <>
+      {placing && (
+        <InsertionPlacement
+          api={api}
+          object={placing}
+          onFinish={() => setPlacing(undefined)}
+          onError={(failure) => setError(String(failure))}
+        />
+      )}
       <ToolbarExtras placement="insert">
         {(Object.keys(names) as MenuKind[]).map((kind) => (
           <button
@@ -417,11 +447,12 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             onSubmit={(event) => {
               event.preventDefault();
               void run(async () => {
-                if (form === "website") {
-                  await classroomCommands.execute({
-                    name: "web.open",
-                    args: { url },
+                if (form === "table" && selected?.id !== draft.id) {
+                  api.setActiveTool({
+                    type: "custom",
+                    customType: "factory-insertion:table",
                   });
+                  setPlacing(draft);
                 } else {
                   await renderInsertion(api, draft);
                   api.setActiveTool({ type: "selection" });
@@ -430,162 +461,142 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               });
             }}
           >
-            {form === "website" ? (
+            {form === "table" && (
+              <>
+                <TableSizePicker
+                  rows={draft.rows}
+                  columns={draft.columns}
+                  disabled={busy}
+                  onChange={(rows, columns) =>
+                    setDraft((current) =>
+                      configureInsertion(current, { rows, columns }),
+                    )
+                  }
+                />
+                {selected?.id === draft.id && (
+                  <details>
+                    <summary>{t("fcboard.apply_changes")}</summary>
+                    <label>
+                      {t("fcboard.rows")}
+                      <input
+                        type="number"
+                        min="1"
+                        max="12"
+                        value={draft.rows}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          if (value >= 1 && value <= 12) {
+                            setDraft((current) =>
+                              configureInsertion(current, { rows: value }),
+                            );
+                          }
+                        }}
+                      />
+                    </label>
+                    <label>
+                      {t("fcboard.columns")}
+                      <input
+                        type="number"
+                        min="1"
+                        max="12"
+                        value={draft.columns}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          if (value >= 1 && value <= 12) {
+                            setDraft((current) =>
+                              configureInsertion(current, {
+                                columns: value,
+                              }),
+                            );
+                          }
+                        }}
+                      />
+                    </label>
+                    <label>
+                      {t(
+                        "fcboard.cells_one_row_per_line_columns_separated_by_tabs",
+                      )}
+                      <textarea
+                        value={Array.from({ length: draft.rows }, (_, row) =>
+                          Array.from(
+                            { length: draft.columns },
+                            (_, column) =>
+                              draft.cells[row * draft.columns + column] || "",
+                          ).join("\t"),
+                        ).join("\n")}
+                        onChange={(event) => {
+                          const rows = event.target.value
+                            .split("\n")
+                            .map((row) => row.split("\t"));
+                          setDraft((current) => ({
+                            ...current,
+                            cells: Array.from(
+                              { length: current.rows * current.columns },
+                              (_, index) =>
+                                rows[Math.floor(index / current.columns)]?.[
+                                  index % current.columns
+                                ] || "",
+                            ),
+                          }));
+                        }}
+                      />
+                    </label>
+                  </details>
+                )}
+              </>
+            )}
+            {form === "mindmap" && (
               <label>
-                {t("fcboard.website_address")}
-                <input
-                  type="url"
-                  required
-                  value={url}
-                  placeholder="https://"
-                  onChange={(event) => setUrl(event.target.value)}
+                {t("fcboard.outline_indent_each_level_by_two_spaces")}
+                <textarea
+                  value={draft.outline}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      outline: event.target.value,
+                    }))
+                  }
                 />
               </label>
-            ) : (
-              <>
-                {form === "table" && (
-                  <>
-                    <TableSizePicker
-                      rows={draft.rows}
-                      columns={draft.columns}
-                      disabled={busy}
-                      onChange={(rows, columns) =>
-                        setDraft((current) =>
-                          configureInsertion(current, { rows, columns }),
-                        )
-                      }
-                    />
-                    {selected?.id === draft.id && (
-                      <details>
-                        <summary>{t("fcboard.apply_changes")}</summary>
-                        <label>
-                          {t("fcboard.rows")}
-                          <input
-                            type="number"
-                            min="1"
-                            max="12"
-                            value={draft.rows}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              if (value >= 1 && value <= 12) {
-                                setDraft((current) =>
-                                  configureInsertion(current, { rows: value }),
-                                );
-                              }
-                            }}
-                          />
-                        </label>
-                        <label>
-                          {t("fcboard.columns")}
-                          <input
-                            type="number"
-                            min="1"
-                            max="12"
-                            value={draft.columns}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              if (value >= 1 && value <= 12) {
-                                setDraft((current) =>
-                                  configureInsertion(current, {
-                                    columns: value,
-                                  }),
-                                );
-                              }
-                            }}
-                          />
-                        </label>
-                        <label>
-                          {t(
-                            "fcboard.cells_one_row_per_line_columns_separated_by_tabs",
-                          )}
-                          <textarea
-                            value={Array.from(
-                              { length: draft.rows },
-                              (_, row) =>
-                                Array.from(
-                                  { length: draft.columns },
-                                  (_, column) =>
-                                    draft.cells[row * draft.columns + column] ||
-                                    "",
-                                ).join("\t"),
-                            ).join("\n")}
-                            onChange={(event) => {
-                              const rows = event.target.value
-                                .split("\n")
-                                .map((row) => row.split("\t"));
-                              setDraft((current) => ({
-                                ...current,
-                                cells: Array.from(
-                                  { length: current.rows * current.columns },
-                                  (_, index) =>
-                                    rows[Math.floor(index / current.columns)]?.[
-                                      index % current.columns
-                                    ] || "",
-                                ),
-                              }));
-                            }}
-                          />
-                        </label>
-                      </details>
-                    )}
-                  </>
-                )}
-                {form === "mindmap" && (
+            )}
+            {form !== "mindmap" &&
+              (form !== "table" || selected?.id === draft.id) && (
+                <>
                   <label>
-                    {t("fcboard.outline_indent_each_level_by_two_spaces")}
-                    <textarea
-                      value={draft.outline}
+                    {t("fcboard.width")}
+                    <input
+                      type="number"
+                      min="80"
+                      max="1600"
+                      value={draft.width}
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          outline: event.target.value,
+                          width: Number(event.target.value),
                         }))
                       }
                     />
                   </label>
-                )}
-                {form !== "mindmap" &&
-                  (form !== "table" || selected?.id === draft.id) && (
-                    <>
-                      <label>
-                        {t("fcboard.width")}
-                        <input
-                          type="number"
-                          min="80"
-                          max="1600"
-                          value={draft.width}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              width: Number(event.target.value),
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        {t("fcboard.height")}
-                        <input
-                          type="number"
-                          min="40"
-                          max="1200"
-                          value={draft.height}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              height: Number(event.target.value),
-                            }))
-                          }
-                        />
-                      </label>
-                    </>
-                  )}
-              </>
-            )}
+                  <label>
+                    {t("fcboard.height")}
+                    <input
+                      type="number"
+                      min="40"
+                      max="1200"
+                      value={draft.height}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          height: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </>
+              )}
             <button type="submit" disabled={busy}>
               {busy
                 ? t("fcboard.applying")
-                : form === "website"
-                ? t("fcboard.open_website")
                 : selected?.id === draft.id
                 ? t("fcboard.apply_changes")
                 : form === "table"

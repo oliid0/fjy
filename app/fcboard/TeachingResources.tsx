@@ -19,6 +19,7 @@ import catalogue from "./factory-resources.json";
 import { classroomCommands } from "./commands";
 import { insertionPoint, insertElements } from "./board";
 import { Classroom } from "./native";
+import { insertWebSelection } from "./webSelection";
 import { selectionSignature } from "./selection";
 import { documentSourceSignature } from "./documents";
 import {
@@ -77,6 +78,29 @@ export const TeachingResources = ({
   const generation = useRef<AbortController | undefined>(undefined);
   const panel = useRef<HTMLElement>(null);
   const native = Capacitor.isNativePlatform();
+  useEffect(() => {
+    if (!native) {
+      return;
+    }
+    let disposed = false;
+    const controller = new AbortController();
+    const listener = Classroom.addListener("webSelection", (selection) => {
+      if (!disposed) {
+        void insertWebSelection(api, selection, controller.signal).catch(
+          (failure) => {
+            if (!disposed) {
+              setError(String(failure));
+            }
+          },
+        );
+      }
+    });
+    return () => {
+      disposed = true;
+      controller.abort();
+      void listener.then((handle) => handle.remove());
+    };
+  }, [api, native]);
   useEffect(() => {
     let alive = true;
     const invalidate = classroomCommands.onInvalidate(() =>

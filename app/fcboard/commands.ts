@@ -190,6 +190,7 @@ const cancellable = new Set([
   "canvas.configure",
   "canvas.tool",
   "canvas.ink",
+  "canvas.animate",
   "resources.use",
   "resources.generate",
   "resources.inspect",

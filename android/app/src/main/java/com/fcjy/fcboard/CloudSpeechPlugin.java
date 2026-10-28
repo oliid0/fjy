@@ -38,6 +38,7 @@ public class CloudSpeechPlugin extends Plugin {
         volatile String error;
         volatile boolean stopping;
         boolean activity;
+        org.json.JSONObject interim;
         WebSocket socket;
         int sequence = 1;
     }
@@ -71,7 +72,8 @@ public class CloudSpeechPlugin extends Plugin {
                             DoubaoSpeechProtocol.Response response = DoubaoSpeechProtocol.parse(bytes.toByteArray());
                             synchronized (session) {
                                 JSONArray lines = session.protocol.lines(response.body);
-                                session.activity |= DoubaoSpeechProtocol.hasInterim(response.body);
+                                session.interim = DoubaoSpeechProtocol.interim(response.body);
+                                session.activity |= session.interim != null;
                                 if (session.pending.length() + lines.length() > 1000) { throw new IOException("语音文稿接收过慢"); }
                                 for (int i = 0; i < lines.length(); i++) { session.pending.put(lines.get(i)); }
                             }
@@ -114,6 +116,7 @@ public class CloudSpeechPlugin extends Plugin {
         synchronized (session) {
             JSObject result = new JSObject(); result.put("lines", new JSArray(session.pending.toString()));
             result.put("activity", session.activity); session.activity = false;
+            result.put("interim", session.interim == null ? org.json.JSONObject.NULL : session.interim);
             while (session.pending.length() > 0) { session.pending.remove(0); }
             return result;
         }

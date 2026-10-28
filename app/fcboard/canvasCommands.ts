@@ -163,6 +163,7 @@ export const registerCanvasCommands = (
             fontFamily: stroke.fontFamily,
             opacity: stroke.opacity,
             tutorId: stroke.commandId,
+            lessonId: stroke.lesson,
           };
         }),
       };
@@ -204,12 +205,14 @@ export const registerCanvasCommands = (
         text:
           element.type === "text"
             ? element.text
-            : element.customData?.fcInteractiveResource?.title,
+            : element.customData?.fcWrittenText ||
+              element.customData?.fcInteractiveResource?.title,
         color: element.strokeColor,
         fontSize: element.type === "text" ? element.fontSize : undefined,
         fontFamily: element.type === "text" ? element.fontFamily : undefined,
         opacity: element.opacity,
         tutorId: element.customData?.fcTutorId,
+        lessonId: element.customData?.fcLessonId,
         interactive: element.customData?.fcInteractiveResource
           ? true
           : undefined,
@@ -732,14 +735,34 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.animate",
-      "逐步书写、画路径或批注，args.commands 使用教学命令 write_text/draw_path/draw_arrow/annotate_circle 等；支持id、x,y,width,height,text,points,color,duration",
+      "逐步板书，args.commands 使用 write_text/draw_path/draw_arrow 等，支持id、x,y,width,height,text,points,color,duration。返回 lessonId 与真实对象；更正已写标题须从 canvas.inspect 读取 lessonId 和 tutorId，传 args.lessonId 并复用 command.id=tutorId，原位置/字号/颜色会保留。新标题省略 lessonId。",
       async (args) => {
+        const signal =
+          args.signal instanceof AbortSignal ? args.signal : undefined;
+        signal?.throwIfAborted();
+        if (
+          args.lessonId !== undefined &&
+          (typeof args.lessonId !== "string" ||
+            !inspect().elements.some(
+              (element) => element.lessonId === args.lessonId,
+            ))
+        ) {
+          throw new DOMException(
+            "Writing to revise is no longer visible",
+            "AbortError",
+          );
+        }
         const lesson = validateLesson({
           title: "白板操作",
           steps: [{ say: "", commands: args.commands }],
           quiz: [],
         });
-        const renderer = new LessonCanvas(api);
+        const renderer = new LessonCanvas(api, {
+          id: args.lessonId as string | undefined,
+          sourceIds: [],
+        });
+        const abort = () => renderer.cancel();
+        signal?.addEventListener("abort", abort, { once: true });
         animations.add(renderer);
         try {
           await renderer.prepareStep(lesson.steps[0].commands);
@@ -751,8 +774,15 @@ export const registerCanvasCommands = (
             );
           }
         } finally {
+          signal?.removeEventListener("abort", abort);
           animations.delete(renderer);
         }
+        return {
+          lessonId: renderer.id,
+          elements: inspect().elements.filter(
+            (element) => element.lessonId === renderer.id,
+          ),
+        };
       },
     ),
     classroomCommands.register(

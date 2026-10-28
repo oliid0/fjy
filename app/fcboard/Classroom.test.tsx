@@ -191,8 +191,9 @@ describe("selection-driven classroom controls", () => {
       expect(scene.some((element) => element.customData?.fcGenerated)).toBe(
         true,
       );
-      fireEvent.click(
-        screen.getByRole("button", { name: t("fcboard.hide_question_input") }),
+      fireEvent.keyDown(
+        screen.getByRole("dialog", { name: t("fcboard.handwritten_question") }),
+        { key: "Escape" },
       );
       await act(async () => {
         await classroomCommands.execute({ name: "assistant.open" });
@@ -576,6 +577,170 @@ describe("selection-driven classroom controls", () => {
       }
     },
   );
+
+  it("queues natural speech without interrupting tools and revises the same title from conversation context", async () => {
+    vi.spyOn(window, "matchMedia").mockImplementation((media) => ({
+      matches: false,
+      media,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    saveSettings(
+      { ...defaults, speech: "local", apiKey: "test", model: "vision" },
+      false,
+    );
+    let deliver!: (text: string) => void;
+    vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      async (onLine) => {
+        deliver = (text) => onLine({ time: 0, text });
+        return {
+          stop: vi.fn().mockResolvedValue(undefined),
+          cancel: vi.fn().mockResolvedValue(undefined),
+        };
+      },
+    );
+    vi.spyOn(ocr, "warmHandwriting").mockResolvedValue(undefined);
+    vi.spyOn(ai, "boardContext").mockResolvedValue({
+      elements: [],
+      text: "",
+      image: undefined,
+    });
+    let releaseFirst!: (response: string) => void;
+    let firstSignal: AbortSignal | undefined;
+    const write = (text: string, lessonId?: string) =>
+      JSON.stringify({
+        action: "commands",
+        commands: [
+          {
+            name: "canvas.animate",
+            args: {
+              ...(lessonId ? { lessonId } : {}),
+              commands: [
+                {
+                  type: "write_text",
+                  id: "title",
+                  text,
+                  x: 0,
+                  y: 0,
+                  duration: 0,
+                },
+              ],
+            },
+          },
+        ],
+      });
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockImplementation(async (messages, signal) => {
+        const last = messages.at(-1)?.content;
+        if (typeof last === "string" && last.startsWith("我今天")) {
+          firstSignal = signal;
+          return new Promise((resolve) => {
+            releaseFirst = resolve;
+          });
+        }
+        if (typeof last === "string" && last.startsWith("搞错了")) {
+          const lessonId = scene.find(
+            (element) => element.customData?.fcTutorId === "title",
+          )?.customData?.fcLessonId;
+          expect(lessonId).toBeTruthy();
+          expect(JSON.stringify(messages)).toContain("我今天要讲牛顿定律");
+          return write("电流电阻", lessonId);
+        }
+        return JSON.stringify({ action: "done" });
+      });
+    const view = render(<Classroom api={api} />);
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      act(() => deliver("我今天要讲牛顿定律，帮我写一个标题"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(chat).toHaveBeenCalledTimes(1);
+      act(() => deliver("搞错了，我今天讲电流电阻"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(firstSignal?.aborted).toBe(false);
+      expect(chat).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        releaseFirst(write("牛顿定律"));
+        await vi.advanceTimersByTimeAsync(100);
+        await vi.waitFor(() =>
+          expect(
+            scene.some(
+              (element) =>
+                element.type === "text" && element.originalText === "电流电阻",
+            ),
+          ).toBe(true),
+        );
+      });
+      const writing = scene.filter(
+        (element) => element.customData?.fcTutorId === "title",
+      );
+      expect(writing).toHaveLength(1);
+      expect(writing[0]).toMatchObject({
+        type: "text",
+        originalText: "电流电阻",
+      });
+      expect(
+        new Set(writing.map((element) => element.customData?.fcLessonId)).size,
+      ).toBe(1);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the paused orb for five seconds and resumes capture before expiry", async () => {
+    saveSettings({ ...defaults, speech: "local" }, false);
+    const start = vi.spyOn(localSpeech, "startLocalSpeech").mockResolvedValue({
+      stop: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    });
+    const view = render(<Classroom api={api} />);
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
+        "data-state",
+        "paused",
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4999);
+      });
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
+        "data-state",
+        "listening",
+      );
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(view.container.querySelector(".fc-voice-orb")).toBeNull();
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
 
   it("keeps the assistant speaking until real audio ends and voice.speak completes only then", async () => {
     saveSettings(
@@ -1792,6 +1957,58 @@ describe("selection-driven classroom controls", () => {
     expect(BoardRecorder.prototype.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("shows partial transcript while recording and preserves only completed words in the saved timeline", async () => {
+    await saveRecordings([]);
+    saveSettings({ ...defaults, speech: "local", autoSummary: false }, false);
+    vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({
+      blob: new Blob(["audio"], { type: "audio/webm" }),
+      duration: 4,
+    });
+    let final!: (line: { time: number; text: string }) => void;
+    let partial!: (line: { time: number; text: string } | null) => void;
+    vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      async (onLine, _error, _stream, _activity, onInterim) => {
+        final = onLine;
+        partial = onInterim!;
+        return {
+          stop: async () => final({ time: 1, text: "牛顿第二定律" }),
+          cancel: vi.fn(),
+        };
+      },
+    );
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "record.start",
+          args: { mode: "audio" },
+        });
+      });
+      act(() => partial({ time: 1, text: "牛顿第二" }));
+      expect(screen.getByText("牛顿第二")).toBeVisible();
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: t("fcboard.restore_recording_window"),
+        }),
+      );
+      expect(screen.getByRole("log")).toHaveTextContent("牛顿第二");
+      await act(async () => {
+        await classroomCommands.execute({ name: "record.stop" });
+      });
+      const [saved] = await loadRecordings();
+      expect(saved.transcript.map((line) => line.text)).toEqual([
+        "牛顿第二定律",
+      ]);
+      expect(screen.queryByText("牛顿第二")).not.toBeInTheDocument();
+      act(() => partial({ time: 3, text: "迟到结果" }));
+      expect(screen.queryByText("迟到结果")).not.toBeInTheDocument();
+    } finally {
+      view.unmount();
+      await saveRecordings([]);
+    }
+  });
+
   it("stops media promptly, drains final speech and persists the video, transcript and AI summary together", async () => {
     await saveRecordings([]);
     saveSettings(
@@ -2962,12 +3179,11 @@ describe("selection-driven classroom controls", () => {
         if (outcome === "manual transition") {
           act(() => classroomCommands.invalidate());
         } else if (outcome === "question cancelled") {
-          fireEvent.click(
-            within(
-              screen.getByRole("dialog", {
-                name: t("fcboard.handwritten_question"),
-              }),
-            ).getByRole("button", { name: t("fcboard.hide_question_input") }),
+          fireEvent.keyDown(
+            screen.getByRole("dialog", {
+              name: t("fcboard.handwritten_question"),
+            }),
+            { key: "Escape" },
           );
         }
         await act(async () => {

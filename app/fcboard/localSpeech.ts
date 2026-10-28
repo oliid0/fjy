@@ -52,11 +52,11 @@ export const encodePCM = (samples: Float32Array) => {
 
 export type PCMSpeechTransport = {
   start(): Promise<{ session: string }>;
-  push(options: {
-    session: string;
-    pcm: string;
-    sampleRate: number;
-  }): Promise<{ lines: TranscriptLine[]; activity?: boolean }>;
+  push(options: { session: string; pcm: string; sampleRate: number }): Promise<{
+    lines: TranscriptLine[];
+    activity?: boolean;
+    interim?: TranscriptLine | null;
+  }>;
   stop(options: {
     session: string;
     discard?: boolean;
@@ -71,6 +71,7 @@ export const startPCMSpeech = async (
   stream?: MediaStream,
   cloud = false,
   onActivity?: () => void,
+  onInterim?: (line: TranscriptLine | null) => void,
 ): Promise<LocalSpeechHandle> => {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(
@@ -202,6 +203,9 @@ export const startPCMSpeech = async (
               sampleRate: data.sampleRate,
             });
             deliver(response.lines);
+            if (!cancelled && response.interim !== undefined) {
+              onInterim?.(response.interim);
+            }
             if (!cancelled && response.activity) {
               onActivity?.();
             }
@@ -259,7 +263,9 @@ export const startLocalSpeech = (
   onError: (message: string) => void,
   stream?: MediaStream,
   onActivity?: () => void,
-) => startPCMSpeech(engine, onLine, onError, stream, false, onActivity);
+  onInterim?: (line: TranscriptLine | null) => void,
+) =>
+  startPCMSpeech(engine, onLine, onError, stream, false, onActivity, onInterim);
 
 export const transcribeLocalRecording = async (
   blob: Blob,

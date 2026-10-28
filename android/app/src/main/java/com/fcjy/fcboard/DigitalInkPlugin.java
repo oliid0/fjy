@@ -64,9 +64,9 @@ public class DigitalInkPlugin extends Plugin {
                         if (!Double.isFinite(x) || !Double.isFinite(y) || Math.abs(x) > 1e7 || Math.abs(y) > 1e7) {
                             throw new IllegalArgumentException("Invalid handwriting point");
                         }
-                        // Like HSlide.createSmaText, preserve stroke/sample order.
-                        // The SDK supports points without synthetic timestamps.
-                        stroke.addPoint(Ink.Point.create((float)x, (float)y));
+                        // HSlide.createSmaText supplies increasing 1 ms samples.
+                        // Use the same relative ordering without sleeping on the worker.
+                        stroke.addPoint(Ink.Point.create((float)x, (float)y, (long)count));
                     }
                     ink.addStroke(stroke.build());
                 }

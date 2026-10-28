@@ -106,7 +106,7 @@ public class ClassroomPlugin extends Plugin {
             try {
                 String url = WebResourceDialog.checkedUrl(call.getString("url"));
                 if (webResource != null && webResource.isShowing()) webResource.dismiss();
-                webResource = new WebResourceDialog(getActivity(), url, call.getString("language", java.util.Locale.getDefault().toLanguageTag()));
+                webResource = new WebResourceDialog(getActivity(), url, call.getString("language", java.util.Locale.getDefault().toLanguageTag()), selected -> notifyListeners("webSelection", selected));
                 webResource.show();
                 call.resolve();
             } catch (Exception error) { call.reject("无法打开教学网页：" + error.getMessage(), error); }

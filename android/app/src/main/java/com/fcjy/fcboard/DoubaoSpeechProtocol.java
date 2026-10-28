@@ -110,7 +110,7 @@ final class DoubaoSpeechProtocol {
         return lines;
     }
 
-    static boolean hasInterim(JSONObject body) throws Exception {
+    static JSONObject interim(JSONObject body) throws Exception {
         Object results = body.opt("result");
         JSONArray array = results instanceof JSONArray ? (JSONArray) results
             : new JSONArray().put(results instanceof JSONObject ? results : new JSONObject());
@@ -119,9 +119,15 @@ final class DoubaoSpeechProtocol {
             if (utterances == null) { continue; }
             for (int j = 0; j < utterances.length(); j++) {
                 JSONObject utterance = utterances.getJSONObject(j);
-                if (!utterance.optBoolean("definite", false) && !utterance.optString("text", "").trim().isEmpty()) { return true; }
+                String text = utterance.optString("text", "").trim();
+                long start = utterance.optLong("start_time", -1);
+                if (!utterance.optBoolean("definite", false) && !text.isEmpty() && start >= 0) {
+                    return new JSONObject().put("time", start / 1000.0).put("text", text);
+                }
             }
         }
-        return false;
+        return null;
     }
+
+    static boolean hasInterim(JSONObject body) throws Exception { return interim(body) != null; }
 }

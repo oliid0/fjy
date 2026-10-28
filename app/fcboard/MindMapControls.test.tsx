@@ -121,6 +121,22 @@ it("selects a single node without adding ink, then clears, adds and deletes its 
   expect(readInsertions(api)[0].outline.split("\n")).toHaveLength(5);
 });
 
+it("activates node controls on a real pointer release exactly once", async () => {
+  const { api, pointer, select } = await setup();
+  select(1);
+  const button = screen.getByRole("button", {
+    name: t("fcboard.mindmap_add_child"),
+  });
+  pointer(button, "pointerdown", 400, 200);
+  expect(readInsertions(api)[0].outline.split("\n")).toHaveLength(4);
+  pointer(button, "pointerup", 400, 200);
+  await waitFor(() =>
+    expect(readInsertions(api)[0].outline.split("\n")).toHaveLength(5),
+  );
+  fireEvent.click(button, { detail: 1 });
+  expect(readInsertions(api)[0].outline.split("\n")).toHaveLength(5);
+});
+
 it.each([1, 2])(
   "drags a node at scale %s without collapsing size, commits one undo and rolls back cancellation",
   async (scale) => {

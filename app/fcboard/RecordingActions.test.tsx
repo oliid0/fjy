@@ -55,15 +55,19 @@ it("saves and shares one complete package, then revokes its QR session on dismis
   expect(session.close).toHaveBeenCalledTimes(1);
 });
 
-it("does not claim an incomplete transcript or summary can be exported as the three-file package", () => {
+it("allows saving real media even when transcription or AI summary is unavailable", () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
-  render(<RecordingActions recording={{ ...recording, summary: "" }} />);
+  render(
+    <RecordingActions
+      recording={{ ...recording, transcript: [], summary: "" }}
+    />,
+  );
   expect(
     screen.getByRole("button", { name: t("buttons.saveAs") }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   expect(
     screen.getByRole("button", { name: t("fcboard.qr_share") }),
-  ).toBeDisabled();
+  ).toBeEnabled();
 });
 
 it("closes a late package when its recording panel is removed during preparation", async () => {

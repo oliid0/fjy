@@ -24,6 +24,7 @@ export const startCloudSpeech = (
   onError: (message: string) => void,
   stream?: MediaStream,
   onActivity?: () => void,
+  onInterim?: (line: TranscriptLine | null) => void,
 ) => {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(
@@ -53,5 +54,6 @@ export const startCloudSpeech = (
     stream,
     true,
     onActivity,
+    onInterim,
   );
 };

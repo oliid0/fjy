@@ -24,6 +24,10 @@ import android.content.res.Configuration;
 import java.util.Locale;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.SeekBar;
+import android.widget.ProgressBar;
+import android.widget.FrameLayout;
+import android.view.MotionEvent;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
 import org.json.JSONObject;
@@ -36,6 +40,9 @@ final class WebResourceDialog extends Dialog {
     private final Context text;
     private final ImageButton back;
     private final ImageButton forward;
+    private final SeekBar horizontal;
+    private final ProgressBar spinner;
+    private final Runnable syncHorizontal = this::syncHorizontalScroll;
     private final android.view.View.OnLayoutChangeListener displayLayout =
         (view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> resizeToDisplay();
     private int displayWidth;
@@ -86,7 +93,8 @@ final class WebResourceDialog extends Dialog {
     }
 
     WebResourceDialog(Activity activity, String url) { this(activity, url, Locale.getDefault().toLanguageTag()); }
-    WebResourceDialog(Activity activity, String url, String language) {
+    WebResourceDialog(Activity activity, String url, String language) { this(activity, url, language, ignored -> {}); }
+    WebResourceDialog(Activity activity, String url, String language, java.util.function.Consumer<JSObject> selected) {
         super(activity);
         Configuration config = new Configuration(activity.getResources().getConfiguration());
         config.setLocale(Locale.forLanguageTag(language));
@@ -106,6 +114,42 @@ final class WebResourceDialog extends Dialog {
         controls.setGravity(Gravity.CENTER_VERTICAL);
         web = new WebView(activity);
         status = new TextView(activity);
+        status.setVisibility(android.view.View.GONE);
+        spinner = new ProgressBar(activity);
+        horizontal = new SeekBar(activity);
+        horizontal.setMax(1000);
+        horizontal.setPadding(dp(10), 0, dp(10), 0);
+        horizontal.setEnabled(false);
+        horizontal.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) { syncHorizontalScroll(); }
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                if (fromUser) web.evaluateJavascript("(function(){var e=window.__fcHorizontalTarget;if(e&&e.isConnected)e.scrollLeft=Math.max(0,e.scrollWidth-e.clientWidth)*" + progress + "/1000;})()", null);
+            }
+        });
+        final float[] touch = new float[2];
+        final int[] touchPage = new int[1];
+        web.setOnTouchListener((view, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { touch[0] = event.getX(); touch[1] = event.getY(); touchPage[0] = pageEpoch; }
+            return false;
+        });
+        web.setOnLongClickListener(view -> {
+            final int expectedPage = pageEpoch;
+            if (loading || touchPage[0] != expectedPage) return true;
+            float scale = Math.max(0.1f, web.getScale());
+            String script = "(function(){var e=document.elementFromPoint(" + (touch[0] / scale) + "," + (touch[1] / scale) + ");if(!e)return null;var i=e.closest('img')||e.querySelector('img');if(i)return {kind:'image',value:i.currentSrc||i.src};var t=(e.innerText||'').trim();return t?{kind:'text',value:t.slice(0,10000)}:null;})()";
+            web.evaluateJavascript(script, raw -> {
+                if (!isShowing() || expectedPage != pageEpoch) return;
+                try {
+                    JSONObject value = new JSONObject(raw);
+                    String kind = value.optString("kind"), content = value.optString("value");
+                    if (content.isEmpty() || !("image".equals(kind) || "text".equals(kind))) return;
+                    if ("image".equals(kind)) checkedUrl(content);
+                    selected.accept(new JSObject().put("kind", kind).put("value", content));
+                } catch (Exception ignored) { /* A navigation can remove the pressed node. */ }
+            });
+            return true;
+        });
         controls.setGravity(Gravity.CENTER);
         back = button(controls, R.drawable.factory_web_goback, R.string.web_back, () -> navigate("back"));
         forward = button(controls, R.drawable.factory_web_goback, R.string.web_forward, () -> navigate("forward"));
@@ -115,7 +159,11 @@ final class WebResourceDialog extends Dialog {
         button(controls, R.drawable.factory_web_close, R.string.web_close, this::dismiss);
         status.setPadding(12, 4, 12, 4);
         root.addView(status);
-        root.addView(web, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        FrameLayout content = new FrameLayout(activity);
+        content.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        content.addView(spinner, new FrameLayout.LayoutParams(dp(110), dp(110), Gravity.CENTER));
+        root.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        root.addView(horizontal, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
         root.addView(controls);
         setContentView(root);
         web.getSettings().setUseWideViewPort(true);
@@ -130,12 +178,14 @@ final class WebResourceDialog extends Dialog {
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 try { checkedUrl(request.getUrl().toString()); return false; }
-                catch (Exception unsupported) { status.setText(text.getString(R.string.web_external_app)); return true; }
+                catch (Exception unsupported) { status.setVisibility(android.view.View.VISIBLE); status.setText(text.getString(R.string.web_external_app)); return true; }
             }
             @Override public void onPageStarted(WebView view, String current, Bitmap favicon) {
                 cancelControls("WEB_PAGE_CHANGED_READ_AGAIN");
                 pageEpoch++;
                 loading = true;
+                spinner.setVisibility(android.view.View.VISIBLE);
+                status.setVisibility(android.view.View.GONE);
                 pageFailed = false;
                 lastVersion = null;
                 back.setEnabled(view.canGoBack());
@@ -143,23 +193,29 @@ final class WebResourceDialog extends Dialog {
             }
             @Override public void onPageFinished(WebView view, String current) {
                 loading = false;
+                spinner.setVisibility(android.view.View.GONE);
                 lastVersion = null;
                 lastNavigation = null;
-                if (!pageFailed) status.setText(view.getTitle());
+                if (!pageFailed) status.setVisibility(android.view.View.GONE);
+                controlTimer.postDelayed(syncHorizontal, 500);
+                controlTimer.postDelayed(syncHorizontal, 1500);
                 back.setEnabled(view.canGoBack());
                 forward.setEnabled(view.canGoForward());
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    spinner.setVisibility(android.view.View.GONE);
+                    status.setVisibility(android.view.View.VISIBLE);
                     status.setText(text.getString(R.string.web_load_failed));
                 }
             }
         });
         setOnDismissListener(dialog -> {
             cancelControls("WEB_PAGE_CLOSED");
+            controlTimer.removeCallbacksAndMessages(null);
             activity.getWindow().getDecorView().removeOnLayoutChangeListener(displayLayout);
-            root.removeView(web); web.stopLoading(); web.destroy();
+            content.removeView(web); web.stopLoading(); web.destroy();
         });
         web.loadUrl(checkedUrl(url));
     }
@@ -194,7 +250,21 @@ final class WebResourceDialog extends Dialog {
         if (displayWidth == bounds.width() && displayHeight == bounds.height()) return;
         displayWidth = bounds.width();
         displayHeight = bounds.height();
-        getWindow().setLayout(Math.min(dp(960), (int)(displayWidth * 0.9)), Math.min(dp(640), (int)(displayHeight * 0.82)));
+        getWindow().setLayout(Math.min(dp(400), (int)(displayWidth * 0.9)), Math.min(dp(600), (int)(displayHeight * 0.82)));
+    }
+
+    private void syncHorizontalScroll() {
+        if (!isShowing() || loading) return;
+        final int expected = pageEpoch;
+        web.evaluateJavascript("(function(){var all=[document.scrollingElement,...document.querySelectorAll('*')],best=null,score=0;for(var e of all){if(!e)continue;var r=e.getBoundingClientRect(),max=e.scrollWidth-e.clientWidth;if(max>1&&e.clientWidth>0&&r.bottom>0&&r.top<innerHeight){var s=max*Math.min(r.height,innerHeight);if(s>score){score=s;best=e;}}}window.__fcHorizontalTarget=best;return best?{max:best.scrollWidth-best.clientWidth,x:best.scrollLeft}:{max:0,x:0};})()", raw -> {
+            if (!isShowing() || expected != pageEpoch) return;
+            try {
+                JSONObject state = new JSONObject(raw);
+                double max = state.optDouble("max", 0);
+                horizontal.setEnabled(max > 1);
+                horizontal.setProgress(max > 1 ? (int)Math.round(1000 * state.optDouble("x", 0) / max) : 0);
+            } catch (Exception ignored) {}
+        });
     }
 
     private void navigate(String action) {

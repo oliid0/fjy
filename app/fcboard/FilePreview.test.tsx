@@ -326,9 +326,7 @@ it.each(["mindmap", "fourline"] as const)(
       { timeout: 2000 },
     );
     expect(recognize.mock.calls[0][5]).toHaveLength(1);
-    expect(recognize.mock.calls[0][6]).toBe(
-      kind === "fourline" ? "en-US" : undefined,
-    );
+    expect(recognize.mock.calls[0][6]).toBe(undefined);
     expect(read().some((stroke) => stroke.id === written)).toBe(false);
     expect(
       readInsertions(api)[0][kind === "fourline" ? "text" : "outline"],
@@ -1425,7 +1423,7 @@ it("opens compact eraser properties from the existing entry, updates real mode a
 });
 
 it.each(["palm", "barrel"])(
-  "keeps %s erasure local even when the explicit eraser is in object mode",
+  "uses the selected object mode for a palm and local erasure for a %s contact",
   async (contact) => {
     const { pointer, unmount } = await setup(undefined, {
       eraserMode: "object",
@@ -1442,9 +1440,13 @@ it.each(["palm", "barrel"])(
           : { pointerType: "pen", button: 5, buttons: 32 };
       pointer("pointerdown", 300, 100, input);
       pointer("pointerup", 304, 100, input);
-      expect(currentInk()).toHaveLength(2);
-      expect(currentInk()[0].points.at(-1)![0]).toBeLessThan(300);
-      expect(currentInk()[1].points[0][0]).toBeGreaterThan(304);
+      if (contact === "palm") {
+        expect(currentInk()).toHaveLength(0);
+      } else {
+        expect(currentInk()).toHaveLength(2);
+        expect(currentInk()[0].points.at(-1)![0]).toBeLessThan(300);
+        expect(currentInk()[1].points[0][0]).toBeGreaterThan(304);
+      }
       await act(async () => {
         await classroomCommands.execute({ name: "document.undo" });
       });

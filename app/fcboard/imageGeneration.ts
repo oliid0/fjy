@@ -11,6 +11,7 @@ import { currentSettings, validateEndpoint } from "./settings";
 import { contentViewport, insertElements, insertionPoint } from "./board";
 import { classroomCommands } from "./commands";
 import { selectionSignature } from "./selection";
+import { transparentInkImage } from "./transparentInkImage";
 
 import type { ContentRect } from "./placement";
 
@@ -24,6 +25,7 @@ export const insertGeneratedImage = async (
     sourceSignature?: string;
     sourcePage?: number;
     referenceImage?: string;
+    transparent?: boolean;
   } = {},
 ) => {
   const revision = classroomCommands.revision;
@@ -108,22 +110,32 @@ export const insertGeneratedImage = async (
   ) {
     throw new Error(t("fcboard.the_image_service_returned_no_valid_image"));
   }
-  const mimeType = encoded.startsWith("/9j/")
-    ? "image/jpeg"
-    : encoded.startsWith("UklGR")
-    ? "image/webp"
-    : encoded.startsWith("iVBORw0KGgo")
-    ? "image/png"
-    : undefined;
+  let mimeType: "image/jpeg" | "image/webp" | "image/png" | undefined =
+    encoded.startsWith("/9j/")
+      ? "image/jpeg"
+      : encoded.startsWith("UklGR")
+      ? "image/webp"
+      : encoded.startsWith("iVBORw0KGgo")
+      ? "image/png"
+      : undefined;
   if (!mimeType) {
     throw new Error(
       t("fcboard.the_image_service_returned_an_unsupported_format"),
     );
   }
-  const dataURL = `data:${mimeType};base64,${encoded}` as DataURL;
+  let dataURL = `data:${mimeType};base64,${encoded}` as DataURL;
   const image = new Image();
   image.src = dataURL;
   await image.decode();
+  const drawing = placement.transparent
+    ? transparentInkImage(image)
+    : undefined;
+  if (drawing) {
+    dataURL = drawing.dataURL;
+    mimeType = "image/png";
+  }
+  const naturalWidth = drawing?.width || image.naturalWidth;
+  const naturalHeight = drawing?.height || image.naturalHeight;
   signal.throwIfAborted();
   if (
     classroomCommands.revision !== revision ||
@@ -149,15 +161,13 @@ export const insertGeneratedImage = async (
     onDocument && layout ? layout.viewport : contentViewport(api);
   const bounds = placement.bounds;
   const scale = Math.min(
-    (bounds ? Math.max(1, bounds.right - bounds.left) : 400) /
-      image.naturalWidth,
-    (bounds ? Math.max(1, bounds.bottom - bounds.top) : 400) /
-      image.naturalHeight,
-    (viewport.right - viewport.left) / image.naturalWidth,
-    (viewport.bottom - viewport.top) / image.naturalHeight,
+    (bounds ? Math.max(1, bounds.right - bounds.left) : 400) / naturalWidth,
+    (bounds ? Math.max(1, bounds.bottom - bounds.top) : 400) / naturalHeight,
+    (viewport.right - viewport.left) / naturalWidth,
+    (viewport.bottom - viewport.top) / naturalHeight,
   );
-  const width = image.naturalWidth * scale;
-  const height = image.naturalHeight * scale;
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
   const position = bounds
     ? {
         x: Math.max(

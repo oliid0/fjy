@@ -76,8 +76,15 @@ it("releases a broken cloud session before one local restart, retaining the reco
   const lines = vi.fn();
   const error = vi.fn();
   const activity = vi.fn();
+  const interim = vi.fn();
   const stream = {} as MediaStream;
-  const handle = await startRealtimeSpeech(lines, error, stream, activity);
+  const handle = await startRealtimeSpeech(
+    lines,
+    error,
+    stream,
+    activity,
+    interim,
+  );
   start.mock.calls[0][0]({ time: 2, text: "cloud words" });
   now += 5000;
   start.mock.calls[0][1]("network lost");
@@ -87,6 +94,12 @@ it("releases a broken cloud session before one local restart, retaining the reco
   expect(offline.mock.calls[0][2]).toBe(stream);
   start.mock.calls[0][0]({ time: 9, text: "stale cloud" });
   start.mock.calls[0][3]?.();
+  start.mock.calls[0][4]?.({ time: 9, text: "stale cloud partial" });
+  offline.mock.calls[0][4]?.({ time: 0.5, text: "offline partial" });
+  expect(interim.mock.calls.map(([line]) => line)).toEqual([
+    null,
+    { time: 5.5, text: "offline partial" },
+  ]);
   offline.mock.calls[0][0]({ time: 1, text: "offline words" });
   expect(lines.mock.calls.map(([line]) => line)).toEqual([
     { time: 2, text: "cloud words" },
@@ -96,6 +109,8 @@ it("releases a broken cloud session before one local restart, retaining the reco
   expect(error).not.toHaveBeenCalled();
   await handle.stop();
   expect(localHandle.stop).toHaveBeenCalledTimes(1);
+  offline.mock.calls[0][4]?.({ time: 10, text: "late partial" });
+  expect(interim).toHaveBeenLastCalledWith(null);
 });
 
 it("does not reopen a microphone when cancelled during a delayed cloud failure cleanup", async () => {

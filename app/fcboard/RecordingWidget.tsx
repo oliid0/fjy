@@ -10,12 +10,15 @@ import {
 
 import { timestamp } from "./recording";
 
+import type { TranscriptLine } from "./speech";
+
 export const RecordingWidget = ({
   paused,
   elapsed,
   disabled,
   pauseDisabled,
   hidden = false,
+  caption,
   onPause,
   onStop,
   onRestore,
@@ -25,6 +28,7 @@ export const RecordingWidget = ({
   disabled: boolean;
   pauseDisabled: boolean;
   hidden?: boolean;
+  caption?: TranscriptLine;
   onPause: () => void;
   onStop: () => void;
   onRestore: () => void;
@@ -65,7 +69,7 @@ export const RecordingWidget = ({
       window.removeEventListener("resize", resize);
       window.removeEventListener("blur", cancel);
     };
-  }, [bounded, hidden]);
+  }, [bounded, hidden, caption?.text]);
   const label = t(
     paused ? "fcboard.recording_resume" : "fcboard.recording_pause",
   );
@@ -73,6 +77,7 @@ export const RecordingWidget = ({
     <Paper
       ref={panel}
       className="fc-recording-widget"
+      data-caption={!!caption || undefined}
       elevation={5}
       role="toolbar"
       aria-label={t("fcboard.recording")}
@@ -198,6 +203,11 @@ export const RecordingWidget = ({
           </svg>
         </IconButton>
       </Tooltip>
+      {caption && (
+        <div className="fc-recording-caption" role="log">
+          <time>{timestamp(caption.time)}</time> {caption.text}
+        </div>
+      )}
     </Paper>
   );
 };

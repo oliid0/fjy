@@ -22,6 +22,46 @@ const viewport = { left: 16, top: 16, right: 1264, bottom: 604 };
 const overlaps = (a: readonly number[], b: readonly number[]) =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
+it("right-aligns a vertical arithmetic result below the bar at the original handwriting size", () => {
+  const api = sceneAPI();
+  const source = [
+    [
+      [100, 100],
+      [180, 140],
+    ],
+    [
+      [110, 170],
+      [180, 210],
+    ],
+    [
+      [80, 225],
+      [200, 225],
+    ],
+  ].map((points) =>
+    newFreeDrawElement({
+      type: "freedraw",
+      x: points[0][0],
+      y: points[0][1],
+      points: points.map(([x, y]) =>
+        pointFrom(x - points[0][0], y - points[0][1]),
+      ),
+      strokeColor: "#dc2626",
+      simulatePressure: true,
+    }),
+  );
+  api.updateScene({ elements: source });
+  const ids = insertText(api, "168", undefined, undefined, source, "match", {
+    mode: "column",
+    sourceLines: 2,
+  });
+  const bounds = getCommonBounds(
+    api.getSceneElements().filter((element) => ids.includes(element.id)),
+  );
+  expect(bounds[1]).toBeGreaterThan(225);
+  expect(bounds[2]).toBeCloseTo(200);
+  expect(bounds[3] - bounds[1]).toBeCloseTo(36);
+});
+
 it("inserts Chinese answers at 90% of measured handwriting without applying ink-glyph scaling twice", () => {
   const api = sceneAPI();
   const source = newFreeDrawElement({

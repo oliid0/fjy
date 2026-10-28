@@ -73,20 +73,27 @@ for (const width of [800, 1920]) {
     ).toHaveCount(0);
     // The semantic group uses display:contents so factory and built-in controls
     // share the original three-column grid. Measure the rendered grid and buttons.
-    const box = await group.evaluate((element) => {
+    const { box, controls } = await group.evaluate((element) => {
       const grid = element.closest(".fc-tools-grid");
       if (!grid) {
         throw new Error("Factory tools are outside their rendered grid");
       }
-      const rect = grid.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      const bounds = (node: Element) => {
+        const rect = node.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      };
+      // Sample one animation frame so a panel transition cannot mix poses.
+      return {
+        box: bounds(grid),
+        controls: Array.from(element.querySelectorAll("button"), bounds),
+      };
     });
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(width);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(720);
-    for (const button of await group.getByRole("button").all()) {
-      const control = (await button.boundingBox())!;
+    expect(controls).toHaveLength(5);
+    for (const control of controls) {
       expect(control.x).toBeGreaterThanOrEqual(box.x);
       expect(control.x + control.width).toBeLessThanOrEqual(box.x + box.width);
       expect(control.y).toBeGreaterThanOrEqual(box.y);

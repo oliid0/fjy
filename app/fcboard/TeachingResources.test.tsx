@@ -18,10 +18,14 @@ vi.mock("./native", () => ({
   Classroom: {
     openWebResource: vi.fn(),
     webResourceAction: vi.fn(),
+    addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
   },
 }));
 
 const api = {} as ExcalidrawImperativeAPI;
+beforeEach(() => {
+  vi.mocked(Classroom.addListener).mockResolvedValue({ remove: vi.fn() });
+});
 
 afterEach(async () => {
   vi.restoreAllMocks();

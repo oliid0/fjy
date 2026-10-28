@@ -48,6 +48,10 @@ export const Classroom = registerPlugin<{
     listener: (event: { id: string; chunk: string }) => void,
   ): Promise<PluginListenerHandle>;
   openWebResource(options: { url: string; language?: string }): Promise<void>;
+  addListener(
+    event: "webSelection",
+    listener: (event: { kind: "text" | "image"; value: string }) => void,
+  ): Promise<PluginListenerHandle>;
   webResourceAction(options: {
     action:
       | "read"

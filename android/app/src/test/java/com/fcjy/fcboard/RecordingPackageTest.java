@@ -8,6 +8,18 @@ import java.util.zip.ZipFile;
 import org.junit.Test;
 
 public class RecordingPackageTest {
+    @Test public void preservesMediaWhenRecognitionAndSummaryAreUnavailable() throws Exception {
+        File cache = Files.createTempDirectory("fcboard-recording-test").toFile();
+        RecordingPackage item = new RecordingPackage(cache, 2, "video/webm", "", "");
+        try {
+            item.append(0, new byte[]{1,2});item.finish();
+            try (ZipFile zip = new ZipFile(item.archive)) {
+                assertArrayEquals(new byte[]{1,2}, zip.getInputStream(zip.getEntry("recording.webm")).readAllBytes());
+                assertEquals(0, zip.getInputStream(zip.getEntry("transcript.txt")).readAllBytes().length);
+                assertEquals(0, zip.getInputStream(zip.getEntry("summary.md")).readAllBytes().length);
+            }
+        } finally { item.close();cache.delete(); }
+    }
     @Test public void savesExactlyThreeFilesWithRealMediaAndUnicodeText() throws Exception {
         File cache = Files.createTempDirectory("fcboard-recording-test").toFile();
         RecordingPackage item = new RecordingPackage(cache, 4, "video/webm;codecs=vp8,opus", "[00:01] Newton: F=ma", "# Summary\nAcceleration changes with force.");

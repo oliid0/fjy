@@ -9,7 +9,7 @@ import { findVisibleContentPosition } from "./placement";
 import type { ContentRect } from "./placement";
 
 export type TextPlacement = {
-  mode?: "inline" | "below" | "replace" | "center";
+  mode?: "inline" | "below" | "column" | "replace" | "center";
   bounds?: ContentRect;
   sourceLines?: number;
 };
@@ -85,12 +85,15 @@ export const layoutBoardText = (
       if (origin.inline && (text.includes("\n") || metrics.width > width)) {
         continue;
       }
-      const measuredOrigin = centered
-        ? {
-            x: (viewport.left + viewport.right - metrics.width) / 2,
-            y: (viewport.top + viewport.bottom - metrics.height) / 2,
-          }
-        : { x, y };
+      const measuredOrigin =
+        placement.mode === "column" && source
+          ? { x: Math.max(viewport.left, source.right - metrics.width), y }
+          : centered
+          ? {
+              x: (viewport.left + viewport.right - metrics.width) / 2,
+              y: (viewport.top + viewport.bottom - metrics.height) / 2,
+            }
+          : { x, y };
       const area =
         centered || nearby
           ? viewport

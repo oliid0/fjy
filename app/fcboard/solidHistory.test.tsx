@@ -11,44 +11,51 @@ import { objectSelection } from "./board";
 
 afterEach(() => vi.useRealTimers());
 
-it("keeps a double-clicked factory solid grouped instead of entering its internal line editor", async () => {
-  let api!: ExcalidrawImperativeAPI;
-  const activate = vi.fn();
-  await render(
-    <Excalidraw
-      onObjectDoubleClick={activate}
-      onMount={({ excalidrawAPI }) => {
-        api = excalidrawAPI;
-      }}
-    />,
-  );
-  act(() => {
-    renderWidget(api, {
-      id: "solid",
-      kind: "cube",
-      params: widgetDefaults(),
-      position: { x: 200, y: 200 },
+it.each([false, true])(
+  "keeps a double-clicked factory solid grouped with unified toolbar %s",
+  async (unifiedToolbar) => {
+    let api!: ExcalidrawImperativeAPI;
+    const activate = vi.fn();
+    await render(
+      <Excalidraw
+        UIOptions={{ unifiedToolbar }}
+        onObjectDoubleClick={activate}
+        onMount={({ excalidrawAPI }) => {
+          api = excalidrawAPI;
+        }}
+      />,
+    );
+    act(() => {
+      renderWidget(api, {
+        id: "solid",
+        kind: "cube",
+        params: widgetDefaults(),
+        position: { x: 200, y: 200 },
+      });
     });
-  });
-  const parts = api.getSceneElements();
-  API.setAppState(objectSelection(parts));
-  const edge = parts.find(
-    (element) => element.type === "line" && !element.customData?.fcSolidFace,
-  )!;
-  new Pointer("mouse").doubleClickAt(edge.x, edge.y);
-  expect(activate).toHaveBeenCalledWith(
-    expect.objectContaining({
-      customData: expect.objectContaining({
-        fcWidget: expect.objectContaining({ id: "solid" }),
+    const parts = api.getSceneElements();
+    act(() =>
+      api.setActiveTool({ type: unifiedToolbar ? "lasso" : "selection" }),
+    );
+    API.setAppState(objectSelection(parts));
+    const edge = parts.find(
+      (element) => element.type === "line" && !element.customData?.fcSolidFace,
+    )!;
+    new Pointer("mouse").doubleClickAt(edge.x, edge.y);
+    expect(activate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customData: expect.objectContaining({
+          fcWidget: expect.objectContaining({ id: "solid" }),
+        }),
       }),
-    }),
-  );
-  expect(window.h.state.editingGroupId).toBeNull();
-  expect(window.h.state.selectedLinearElement).toBeNull();
-  expect(Object.keys(window.h.state.selectedElementIds).sort()).toEqual(
-    parts.map((element) => element.id).sort(),
-  );
-});
+    );
+    expect(window.h.state.editingGroupId).toBeNull();
+    expect(window.h.state.selectedLinearElement).toBeNull();
+    expect(Object.keys(window.h.state.selectedElementIds).sort()).toEqual(
+      parts.map((element) => element.id).sort(),
+    );
+  },
+);
 
 it("undoes the entire animated pose in the actual editor history, rather than its last frame", async () => {
   let api!: ExcalidrawImperativeAPI;

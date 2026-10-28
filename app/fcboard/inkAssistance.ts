@@ -20,6 +20,7 @@ import { insertText } from "./board";
 import { languageInkSignature } from "./languageStudy";
 import { growBoardTableWriting } from "./insertionWritingTables";
 import { chooseInsertionCandidate } from "./InsertionCandidates";
+import { latestFunctionInk } from "./functionInk";
 import {
   boardWritingParts,
   insertionWritingTargets,
@@ -133,11 +134,15 @@ export const observeInkAssistance = (
     const mode = target
       ? "text"
       : inkAssistMode(last?.customData?.fcInk?.assist);
-    const source = pending.filter((element) =>
+    let source = pending.filter((element) =>
       target
         ? targetFor(element)?.key === target.key
         : !targetFor(element) && element.customData?.fcInk?.assist === mode,
     );
+    if (!target && mode === "function") {
+      const included = latestFunctionInk(boardInk(source));
+      source = source.filter((_, index) => included.has(index));
+    }
     const signature = selectionSignature(source);
     const requestKey = `${signature}:${target?.stamp || ""}`;
     if (!mode || !signature || failed.has(requestKey)) {
@@ -188,7 +193,7 @@ export const observeInkAssistance = (
             async () => (await boardContext(api, false, source)).image || "",
             boardInk(source),
             request.signal,
-            target?.insertion.kind === "fourline" ? "en-US" : undefined,
+            undefined,
             target
               ? (candidates) => {
                   const state = api.getAppState();
@@ -262,7 +267,9 @@ export const observeInkAssistance = (
               insertText(
                 api,
                 `${
-                  /=\s*$/.test(text) || /^[xyz] =/.test(result.answer)
+                  result.layout ||
+                  /=\s*$/.test(text) ||
+                  /^[xyz] =/.test(result.answer)
                     ? ""
                     : "= "
                 }${result.answer}`,
@@ -270,7 +277,10 @@ export const observeInkAssistance = (
                 { fcSelectionSource: signature },
                 source,
                 "match",
-                { mode: "inline", sourceLines: text.split("\n").length },
+                {
+                  mode: result.layout?.mode || "inline",
+                  sourceLines: result.layout?.lines || text.split("\n").length,
+                },
               );
             }
             source.forEach((element) => seen.add(element.id));
@@ -280,6 +290,7 @@ export const observeInkAssistance = (
           if (result.kind === "magic") {
             await insertGeneratedImage(api, result.prompt, request.signal, {
               referenceImage: result.image,
+              transparent: true,
               bounds: { left, top, right, bottom },
               replaceIds: source.map((element) => element.id),
               sourceSignature: signature,
@@ -418,7 +429,11 @@ export const observeInkAssistance = (
             }
           });
       },
-      mode === "function" || mode === "calculation" ? 350 : 700,
+      mode === "function" || mode === "calculation"
+        ? 350
+        : mode === "magic"
+        ? 1600
+        : 700,
     );
   };
   const stop = api.onChange(refresh);

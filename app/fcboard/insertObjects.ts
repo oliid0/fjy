@@ -27,6 +27,7 @@ export type InsertObject = {
   rows: number;
   columns: number;
   cells: string[];
+  color?: string;
   columnWidths?: number[];
   rowHeights?: number[];
   /** Raw handwriting belongs to a cell; it is never OCR-replaced. */
@@ -46,6 +47,15 @@ export const configureInsertion = (
   args: Record<string, unknown>,
 ): InsertObject => {
   const next = { ...object };
+  if (args.color !== undefined) {
+    if (
+      typeof args.color !== "string" ||
+      !/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(args.color)
+    ) {
+      throw new Error(t("fcboard.invalid_insertion_data"));
+    }
+    next.color = args.color;
+  }
   for (const [key, min, max] of [
     ["rows", 1, 12],
     ["columns", 1, 12],
@@ -347,6 +357,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
     ];
   }
   if (object.kind === "table") {
+    const color = object.color || "#333333";
     const columns = tableTrackSizes(object.columnWidths, object.columns, width);
     const rows = tableTrackSizes(object.rowHeights, object.rows, height);
     const xs = trackOffsets(columns);
@@ -358,7 +369,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
         y: 0,
         width,
         height,
-        strokeColor: "#333333",
+        strokeColor: color,
         roughness: 0,
         strokeWidth: 1.3,
       },
@@ -370,7 +381,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
             [0, ys[row]],
             [width, ys[row]],
           ],
-          "#333333",
+          color,
         ),
       );
     }
@@ -381,7 +392,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
             [xs[column], 0],
             [xs[column], height],
           ],
-          "#333333",
+          color,
         ),
       );
     }
@@ -397,7 +408,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
             text: object.cells[index],
             fontSize: Math.min(22, rows[row] / 2),
             fontFamily: 2,
-            strokeColor: "#333333",
+            strokeColor: color,
             insertionText: index,
           });
         }
@@ -588,6 +599,7 @@ export const renderInsertion = async (
     preview?: boolean;
     before?: InkStroke[];
     select?: boolean;
+    exact?: boolean;
   } = {},
 ) => {
   object = configureInsertion(object, object);
@@ -595,6 +607,7 @@ export const renderInsertion = async (
     ? []
     : api.getSceneElements();
   if (
+    !transaction.exact &&
     !classroomCommands.has("document.insertion") &&
     !existing.some(
       (element) => element.customData?.fcInsertion?.id === object.id,
@@ -692,7 +705,7 @@ export const renderInsertion = async (
       ? CaptureUpdateAction.IMMEDIATELY
       : CaptureUpdateAction.NEVER,
   });
-  if (!transaction.preview) {
+  if (!transaction.preview && !transaction.exact) {
     revealNewContent(api, elements, context);
   }
 };

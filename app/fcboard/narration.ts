@@ -5,6 +5,19 @@ import { currentSettings, validateEndpoint } from "./settings";
 import { OfflineTts, narrationChunks } from "./nativeNarration";
 
 let activeOwner: { pause: () => void } | undefined;
+let audible: { owner: object; text: string; until: number } | undefined;
+const normalizedSpeech = (text: string) =>
+  text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+/** Only suppress a complete, substantial transcript segment contained in actual playback. */
+export const isNarrationEcho = (text: string) => {
+  const value = normalizedSpeech(text);
+  return (
+    !!audible &&
+    Date.now() <= audible.until &&
+    value.length >= 8 &&
+    audible.text.includes(value)
+  );
+};
 
 /** One audible owner. A paused lecture keeps its audio position during an interjection. */
 export const createNarrator = () => {
@@ -21,7 +34,15 @@ export const createNarrator = () => {
   let complete: (() => void) | undefined;
   let reject: ((error: Error) => void) | undefined;
   let finished = Promise.resolve();
+  const markAudible = (playing: boolean) => {
+    if (playing) {
+      audible = { owner, text: normalizedSpeech(words), until: Infinity };
+    } else if (audible?.owner === owner) {
+      audible.until = Date.now() + 1200;
+    }
+  };
   const finish = () => {
+    markAudible(false);
     complete?.();
     complete = undefined;
     reject = undefined;
@@ -60,6 +81,7 @@ export const createNarrator = () => {
     finish();
   };
   const pause = () => {
+    markAudible(false);
     paused = true;
     player?.pause();
     if (utterance && activeOwner === owner) {
@@ -90,6 +112,7 @@ export const createNarrator = () => {
     };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(next);
+    markAudible(true);
   };
   const resume = async () => {
     if (!paused) {
@@ -102,6 +125,7 @@ export const createNarrator = () => {
     paused = false;
     if (player) {
       await player.play();
+      markAudible(true);
     } else if (utterance) {
       synthesize();
     }
@@ -189,6 +213,9 @@ export const createNarrator = () => {
             };
             if (!paused) {
               await player.play();
+              if (!controller.signal.aborted) {
+                markAudible(true);
+              }
             }
           };
           await next(0);
@@ -256,6 +283,9 @@ export const createNarrator = () => {
         };
         if (!paused) {
           await player.play();
+          if (!controller.signal.aborted) {
+            markAudible(true);
+          }
         }
       } catch (error) {
         if (controller.signal.aborted) {

@@ -1,7 +1,7 @@
 import { t } from "@excalidraw/excalidraw/i18n";
 import { Capacitor } from "@capacitor/core";
 
-import { createNarrator } from "./narration";
+import { createNarrator, isNarrationEcho } from "./narration";
 import { OfflineTts, narrationChunks } from "./nativeNarration";
 
 vi.mock("./nativeNarration", async (importOriginal) => ({
@@ -87,6 +87,18 @@ describe("one audible teacher", () => {
     expect(ended).toBe(true);
     main.stop();
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+  });
+  it("filters actual Chinese playback echo while preserving a spoken correction and explicit stop", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+    const narrator = createNarrator();
+    await narrator.speak("今天讲解牛顿运动定律以及力和加速度的关系。");
+    expect(isNarrationEcho("牛顿运动定律以及力和加速度的关系")).toBe(true);
+    expect(isNarrationEcho("搞错了，我今天讲电流电阻")).toBe(false);
+    expect(isNarrationEcho("停止")).toBe(false);
+    players[0].onended?.();
+    now.mockReturnValue(2300);
+    expect(isNarrationEcho("牛顿运动定律以及力和加速度的关系")).toBe(false);
+    narrator.stop();
   });
   it("surfaces invalid audio and releases playback instead of claiming speech succeeded", async () => {
     vi.mocked(fetch).mockResolvedValue({

@@ -60,6 +60,7 @@ import { TransientMessage } from "./TransientMessage";
 import { classroomCommands, commandObjectIds } from "./commands";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
+import { latestFunctionInk } from "./functionInk";
 
 import {
   documentKey,
@@ -1156,6 +1157,8 @@ export const FilePreview = ({
               ? "replace"
               : args.placement === "inline"
               ? "inline"
+              : args.placement === "column"
+              ? "column"
               : args.placement === "center"
               ? "center"
               : "below",
@@ -1868,11 +1871,15 @@ export const FilePreview = ({
     const last = pending.at(-1);
     const target = last ? targetFor(last) : undefined;
     const assistMode = target ? "text" : last?.fcInk?.assist;
-    const source = pending.filter((stroke) =>
+    let source = pending.filter((stroke) =>
       target
         ? targetFor(stroke)?.key === target.key
         : !targetFor(stroke) && stroke.fcInk?.assist === assistMode,
     );
+    if (!target && assistMode === "function") {
+      const included = latestFunctionInk(source.map((stroke) => stroke.points));
+      source = source.filter((_, index) => included.has(index));
+    }
     if (!source.length || !assistMode) {
       return;
     }
@@ -1912,7 +1919,7 @@ export const FilePreview = ({
             () => inkSnapshot(source, bottom - top + 32, undefined, top - 16),
             source.map((stroke) => stroke.points),
             request.signal,
-            target?.insertion.kind === "fourline" ? "en-US" : undefined,
+            undefined,
             target
               ? (candidates) => {
                   const rect = stage.current?.getBoundingClientRect();
@@ -1979,7 +1986,9 @@ export const FilePreview = ({
               result.kind === "text"
                 ? result.text
                 : `${
-                    /=\s*$/.test(result.text) || /^[xyz] =/.test(result.answer)
+                    result.layout ||
+                    /=\s*$/.test(result.text) ||
+                    /^[xyz] =/.test(result.answer)
                       ? ""
                       : "= "
                   }${result.answer}`;
@@ -1988,10 +1997,16 @@ export const FilePreview = ({
               args: {
                 text,
                 presentation: result.kind === "text" ? "text" : "match",
-                placement: result.kind === "text" ? "replace" : "inline",
+                placement:
+                  result.kind === "text"
+                    ? "replace"
+                    : result.layout?.mode || "inline",
                 sourceIds,
                 sourceSignature: signature,
-                sourceLines: result.text.split("\n").length,
+                sourceLines:
+                  result.kind === "calculation" && result.layout
+                    ? result.layout.lines
+                    : result.text.split("\n").length,
                 signal: request.signal,
               },
             });
@@ -2008,6 +2023,7 @@ export const FilePreview = ({
           } else if (result.kind === "magic") {
             await insertGeneratedImage(api, result.prompt, request.signal, {
               referenceImage: result.image,
+              transparent: true,
               bounds: { left, top, right, bottom },
               replaceIds: sourceIds,
               sourceSignature: signature,
@@ -2074,7 +2090,11 @@ export const FilePreview = ({
           }
         });
       },
-      assistMode === "function" || assistMode === "calculation" ? 350 : 700,
+      assistMode === "function" || assistMode === "calculation"
+        ? 350
+        : assistMode === "magic"
+        ? 1600
+        : 700,
     );
     return () => {
       clearTimeout(timer);
@@ -2221,8 +2241,7 @@ export const FilePreview = ({
       );
     erasing.current = {
       mode:
-        erase &&
-        !palm &&
+        (erase || palm) &&
         !(
           contact.pointerType === "pen" &&
           (contact.button === 2 ||

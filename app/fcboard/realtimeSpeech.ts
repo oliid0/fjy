@@ -14,6 +14,7 @@ export const startRealtimeSpeech = async (
   onError: (message: string) => void,
   stream?: MediaStream,
   onActivity?: () => void,
+  onInterim?: (line: TranscriptLine | null) => void,
 ): Promise<LocalSpeechHandle> => {
   type Attempt = {
     cloud: boolean;
@@ -45,6 +46,7 @@ export const startRealtimeSpeech = async (
       report(error);
       return attempt.recovery;
     }
+    onInterim?.(null);
     attempt.recovery = (async () => {
       const handle = await attempt.opening.catch(() => undefined);
       await handle?.cancel().catch(() => {});
@@ -95,6 +97,15 @@ export const startRealtimeSpeech = async (
         fail,
         stream,
         activity,
+        (line) => {
+          if (!closed && current === attempt && !attempt.recovery) {
+            onInterim?.(
+              line
+                ? { ...line, time: Math.max(latestTime, offset + line.time) }
+                : null,
+            );
+          }
+        },
       );
     });
     return attempt.opening.then(() => {});
@@ -115,6 +126,7 @@ export const startRealtimeSpeech = async (
   const finish = (discard: boolean) => {
     cancelled ||= discard;
     closed = true;
+    onInterim?.(null);
     return (finishing ||= (async () => {
       await transition.catch(() => {});
       if (current.cloud && current.recovery) {

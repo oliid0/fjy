@@ -2,12 +2,11 @@ import { IconButton } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { t } from "@excalidraw/excalidraw/i18n";
 import {
-  CloseIcon,
-  microphoneIcon,
-  TrashIcon,
   searchIcon,
   chevronRight,
 } from "@excalidraw/excalidraw/components/icons";
+
+import { isPalmContact } from "@excalidraw/excalidraw/eraser/stroke";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 
@@ -16,7 +15,7 @@ import { MaterialPanel } from "./MaterialPanel";
 import { classroomCommands } from "./commands";
 import { clipInk } from "./digitalInk";
 import { documentStrokeGeometry } from "./documentInk";
-import { startDictation } from "./dictation";
+import { eraseDocumentInk } from "./documents";
 import { recognizeHandwriting, warmHandwriting } from "./ocr";
 import { questionPosition, questionSurface } from "./questionInk";
 import { updateQuestionAnswer, visibleObjectIds } from "./questionAnswer";
@@ -24,7 +23,6 @@ import { updateQuestionAnswer, visibleObjectIds } from "./questionAnswer";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { InkInput } from "./digitalInk";
 import type { InkStroke } from "./documents";
-import type { LocalSpeechHandle } from "./localSpeech";
 
 /** A bounded writing sheet on the current surface, independent of the board pen. */
 export const InkQuestion = ({
@@ -49,8 +47,6 @@ export const InkQuestion = ({
   const strokes = useRef<InkStroke[]>([]);
   const active = useRef<{ id: number; stroke: InkStroke } | null>(null);
   const [ink, setInk] = useState<InkStroke[]>([]);
-  const transcript = useRef("");
-  const [words, setWords] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [position, setPosition] = useState(placement);
@@ -58,17 +54,26 @@ export const InkQuestion = ({
   const [persisted, setPersisted] = useState(false);
   const [answer, setAnswer] = useState({ collapsed: false, count: 0 });
   const questionIds = useRef<string[]>([]);
-  const [listening, setListening] = useState(false);
-  const [connecting, setConnecting] = useState(false);
   const mounted = useRef(true);
-  const speech = useRef<LocalSpeechHandle | null>(null);
-  const voiceGeneration = useRef(0);
   const request = useRef<AbortController | null>(null);
   const submitted = useRef("");
   const lock = useRef(false);
-  const voiceLock = useRef(false);
+  const editing = useRef<Promise<void>>(Promise.resolve());
+  const erasing = useRef<
+    | {
+        id: number;
+        previous: [number, number];
+        before: InkStroke[];
+        size: number;
+      }
+    | undefined
+  >(undefined);
   const cancelStroke = () => {
     active.current = null;
+    if (erasing.current) {
+      strokes.current = erasing.current.before;
+      erasing.current = undefined;
+    }
     setInk(strokes.current);
   };
   useEffect(() => {
@@ -117,15 +122,12 @@ export const InkQuestion = ({
   }, [api]);
   useEffect(() => {
     mounted.current = true;
-    const voice = voiceGeneration;
     paper.current?.focus();
     void warmHandwriting().catch(() => {});
     window.addEventListener("blur", cancelStroke);
     return () => {
       mounted.current = false;
-      voice.current++;
       request.current?.abort();
-      void speech.current?.cancel().catch(() => {});
       window.removeEventListener("blur", cancelStroke);
     };
   }, []);
@@ -138,70 +140,8 @@ export const InkQuestion = ({
       setError(failure instanceof Error ? failure.message : String(failure));
     }
   };
-  const toggleVoice = async () => {
-    if (lock.current || voiceLock.current) {
-      return;
-    }
-    voiceLock.current = true;
-    setConnecting(true);
-    setError("");
-    try {
-      if (speech.current) {
-        const handle = speech.current;
-        speech.current = null;
-        await handle.stop();
-        voiceGeneration.current++;
-        setListening(false);
-        return;
-      }
-      const classroom = classroomCommands.read("classroom") as
-        | { recording?: boolean; listening?: boolean }
-        | undefined;
-      if (classroom?.recording || classroom?.listening) {
-        throw new Error(
-          t(
-            "fcboard.stop_recording_or_voice_commands_before_dictating_a_question",
-          ),
-        );
-      }
-      const generation = ++voiceGeneration.current;
-      const handle = await startDictation(
-        (text) => {
-          if (mounted.current && generation === voiceGeneration.current) {
-            transcript.current = [transcript.current, text.trim()]
-              .filter(Boolean)
-              .join(" ");
-            setWords(transcript.current);
-            setPersisted(false);
-          }
-        },
-        (message) => {
-          if (mounted.current && generation === voiceGeneration.current) {
-            voiceGeneration.current++;
-            void speech.current?.cancel().catch(() => {});
-            speech.current = null;
-            setListening(false);
-            setError(message);
-          }
-        },
-      );
-      if (!mounted.current || generation !== voiceGeneration.current) {
-        await handle.cancel();
-      } else {
-        speech.current = handle;
-        setListening(true);
-      }
-    } catch (failure) {
-      fail(failure);
-    } finally {
-      voiceLock.current = false;
-      if (mounted.current) {
-        setConnecting(false);
-      }
-    }
-  };
   const send = async () => {
-    if (lock.current || voiceLock.current || active.current) {
+    if (lock.current || active.current || erasing.current) {
       return;
     }
     lock.current = true;
@@ -210,13 +150,7 @@ export const InkQuestion = ({
     const abort = new AbortController();
     request.current = abort;
     try {
-      const handle = speech.current;
-      speech.current = null;
-      await handle?.stop();
-      voiceGeneration.current++;
-      if (mounted.current) {
-        setListening(false);
-      }
+      await editing.current;
       abort.signal.throwIfAborted();
       const input: InkInput = strokes.current.map((stroke) => stroke.points);
       const written = input.length
@@ -251,14 +185,11 @@ export const InkQuestion = ({
           )
         : "";
       abort.signal.throwIfAborted();
-      const text = [written, transcript.current]
-        .filter(Boolean)
-        .join("\n")
-        .trim();
+      const text = written.trim();
       if (!text) {
         return;
       }
-      const signature = JSON.stringify([input, transcript.current]);
+      const signature = JSON.stringify(input);
       if (submitted.current !== signature && svg.current) {
         const rect = svg.current.getBoundingClientRect();
         const surface = questionSurface(api);
@@ -273,7 +204,6 @@ export const InkQuestion = ({
                 ),
               ),
             ),
-            text: transcript.current,
             bounds: {
               left: surface.point(rect.left, rect.top)[0],
               top: surface.point(rect.left, rect.top)[1],
@@ -415,37 +345,62 @@ export const InkQuestion = ({
     }
     setInk([...strokes.current, { ...current.stroke }]);
   };
-  const clear = async () => {
-    if (lock.current || voiceLock.current) {
+  const prepareEdit = () => {
+    setAnswered(false);
+    setPersisted(false);
+    if (!questionIds.current.length) {
       return;
     }
-    lock.current = true;
-    setBusy(true);
-    try {
-      const available = new Set(visibleObjectIds(api));
-      const ids = questionIds.current.filter((id) => available.has(id));
-      if (ids.length) {
-        await classroomCommands.execute({
-          name: "canvas.erase",
-          args: { ids },
-        });
-      }
-      questionIds.current = [];
-      strokes.current = [];
-      transcript.current = "";
-      submitted.current = "";
-      setPersisted(false);
-      cancelStroke();
-      setWords("");
-      setError("");
-    } catch (failure) {
-      fail(failure);
-    } finally {
-      lock.current = false;
-      if (mounted.current) {
-        setBusy(false);
-      }
+    const ids = questionIds.current;
+    questionIds.current = [];
+    submitted.current = "";
+    editing.current = editing.current
+      .then(async () => {
+        if (answer.collapsed && answer.count) {
+          await updateQuestionAnswer(api, ids[0]);
+        }
+        const available = new Set(visibleObjectIds(api));
+        const existing = ids.filter((id) => available.has(id));
+        if (existing.length) {
+          await classroomCommands.execute({
+            name: "canvas.erase",
+            args: { ids: existing },
+          });
+        }
+        setAnswer({ collapsed: false, count: 0 });
+      })
+      .catch(fail);
+  };
+  const point = (event: {
+    clientX: number;
+    clientY: number;
+  }): [number, number] => {
+    const rect = svg.current!.getBoundingClientRect();
+    return [
+      ((event.clientX - rect.left) * width) / rect.width,
+      ((event.clientY - rect.top) * height) / rect.height,
+    ];
+  };
+  const erase = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const current = erasing.current;
+    if (!current || current.id !== event.pointerId) {
+      return;
     }
+    for (const sample of [
+      ...(event.nativeEvent.getCoalescedEvents?.() || []),
+      event,
+    ]) {
+      const next = point(sample);
+      strokes.current = eraseDocumentInk(
+        strokes.current,
+        current.previous,
+        next,
+        current.size,
+        current.size * 1.2,
+      );
+      current.previous = next;
+    }
+    setInk(strokes.current);
   };
 
   return (
@@ -460,7 +415,7 @@ export const InkQuestion = ({
         ...position,
         background: "transparent",
         boxShadow: "none",
-        pointerEvents: persisted ? "none" : "auto",
+        pointerEvents: "auto",
       }}
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
@@ -480,16 +435,32 @@ export const InkQuestion = ({
         onPointerDown={(event) => {
           if (
             lock.current ||
-            answered ||
             active.current ||
             event.button !== 0 ||
-            event.isPrimary === false ||
-            (event.pointerType === "touch" && event.width > 36)
+            event.isPrimary === false
           ) {
             return;
           }
           event.preventDefault();
-          setPersisted(false);
+          prepareEdit();
+          if (
+            isPalmContact(
+              event.nativeEvent,
+              api.getAppState().palmEraserThreshold ?? 36,
+            ) ||
+            (event.pointerType === "pen" && !!(event.buttons & 34))
+          ) {
+            const rect = event.currentTarget.getBoundingClientRect();
+            erasing.current = {
+              id: event.pointerId,
+              previous: point(event),
+              before: strokes.current,
+              size: (Math.max(24, event.width || 0) * width) / rect.width,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            erase(event);
+            return;
+          }
           const surface = questionSurface(api);
           active.current = {
             id: event.pointerId,
@@ -508,8 +479,16 @@ export const InkQuestion = ({
           event.currentTarget.setPointerCapture(event.pointerId);
           append(event);
         }}
-        onPointerMove={append}
+        onPointerMove={(event) =>
+          erasing.current ? erase(event) : append(event)
+        }
         onPointerUp={(event) => {
+          if (erasing.current?.id === event.pointerId) {
+            erase(event);
+            erasing.current = undefined;
+            event.currentTarget.releasePointerCapture?.(event.pointerId);
+            return;
+          }
           if (active.current?.id !== event.pointerId) {
             return;
           }
@@ -538,13 +517,12 @@ export const InkQuestion = ({
         onPointerCancel={cancelStroke}
         onLostPointerCapture={cancelStroke}
       >
-        {!ink.length && !words && (
+        {!ink.length && (
           <text x="16" y="30" className="fc-ink-question-hint">
             {t("fcboard.write_your_question_here")}
           </text>
         )}
-        {!answered &&
-          !persisted &&
+        {!persisted &&
           ink.map((stroke) => (
             <path
               key={stroke.id}
@@ -557,43 +535,11 @@ export const InkQuestion = ({
             />
           ))}
       </svg>
-      {words && !persisted && (
-        <div className="fc-ink-question-words">{words}</div>
-      )}
       <TransientMessage message={error} role="alert" />
       <footer style={{ pointerEvents: "auto" }}>
         <IconButton
-          aria-label={t("fcboard.hide_question_input")}
-          onClick={onClose}
-          size="small"
-        >
-          {CloseIcon}
-        </IconButton>
-        <IconButton
-          aria-label={t("fcboard.clear_question")}
-          disabled={busy || listening || connecting || answered}
-          size="small"
-          onClick={() => void clear()}
-        >
-          {TrashIcon}
-        </IconButton>
-        <IconButton
-          aria-label={t("fcboard.dictate_question")}
-          aria-pressed={listening}
-          disabled={busy || connecting || answered}
-          size="small"
-          onClick={() => void toggleVoice()}
-        >
-          {microphoneIcon}
-        </IconButton>
-        <IconButton
           aria-label={t("fcboard.send_question")}
-          disabled={
-            busy ||
-            connecting ||
-            answered ||
-            (!ink.length && !words && !listening)
-          }
+          disabled={busy || !ink.length}
           size="small"
           onClick={() => void send()}
         >

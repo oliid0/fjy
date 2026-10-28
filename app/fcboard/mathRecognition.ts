@@ -15,7 +15,12 @@ import type { Plot } from "./math";
 export type MathPenMode = "function" | "calculation";
 export type MathResult =
   | { kind: "function"; plot: Plot }
-  | { kind: "calculation"; expression: string; answer: string };
+  | {
+      kind: "calculation";
+      expression: string;
+      answer: string;
+      layout?: { mode: "column"; lines: number };
+    };
 
 /** This is the only function schema accepted from a model or command. No image/point data. */
 export const validatedPlot = (value: Record<string, unknown>): Plot => {
@@ -72,7 +77,7 @@ export const localMathResult = (
     return { kind: mode, expression: input, answer: calculate(input) };
   }
   const definition = input.match(
-    /^(y|z|f\(x(?:,\s*y)?\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
+    /^(y|z|f\s*x|f\s*\(\s*x(?:,\s*y)?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
   );
   const expression = definition ? definition[3] : input;
   if (!definition && !/\bx\b/.test(expression)) {

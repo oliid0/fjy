@@ -412,13 +412,18 @@ export const insertText = (
               x: (viewport.left + viewport.right - (right - left)) / 2,
               y: (viewport.top + viewport.bottom - (bottom - top)) / 2,
             }
+          : placement.mode === "column" && bounds
+          ? {
+              ...layout,
+              x: Math.max(viewport.left, bounds.right - (right - left)),
+            }
           : layout,
         { width: right - left, height: bottom - top },
         centered
           ? viewport
           : {
               ...viewport,
-              left: layout.x,
+              left: placement.mode === "column" ? viewport.left : layout.x,
               top: layout.y,
               // Font metrics and stroke glyphs have different widths. Retry a
               // smaller inline result before allowing the glyphs to wrap below.

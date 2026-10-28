@@ -36,7 +36,9 @@ public class OfflineSpeechTest {
         Transcriber transcriber = new Transcriber(Collections.singletonList(
             new TranscriberOption("max_tokens_per_second", "13.0")));
         StringBuilder text = new StringBuilder();
+        boolean[] started = {false};
         transcriber.addListener(event -> {
+            if (event instanceof ai.moonshine.voice.TranscriptEvent.LineStarted) started[0] = true;
             if (event instanceof ai.moonshine.voice.TranscriptEvent.LineCompleted) {
                 text.append(((ai.moonshine.voice.TranscriptEvent.LineCompleted) event).line.text);
             }
@@ -45,6 +47,7 @@ public class OfflineSpeechTest {
             transcriber.loadFromFiles(directory.getAbsolutePath(), JNI.MOONSHINE_MODEL_ARCH_TINY_STREAMING);
             for (int session = 0; session < 2; session++) {
                 text.setLength(0);
+                started[0] = false;
                 int stream = transcriber.createStream();
                 try {
                     transcriber.startStream(stream);
@@ -52,6 +55,7 @@ public class OfflineSpeechTest {
                         transcriber.addAudioToStream(stream, java.util.Arrays.copyOfRange(samples, offset, Math.min(samples.length, offset + 8000)), 16000);
                     }
                     transcriber.stopStream(stream);
+                    assertTrue("Expected live speech activity before completing transcript", started[0]);
                     assertTrue("Expected Chinese circle command, got: " + text, text.toString().contains("画") && text.toString().contains("圆"));
                 } finally { transcriber.freeStream(stream); }
             }

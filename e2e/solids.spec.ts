@@ -43,6 +43,7 @@ for (const [kind, width, height, nets, face] of [
         width: number;
         height: number;
         angle?: number;
+        points?: number[][];
         isDeleted?: boolean;
         customData?: { fcWidget?: { id: string } };
       };
@@ -60,15 +61,27 @@ for (const [kind, width, height, nets, face] of [
           !element.isDeleted && element.customData?.fcWidget?.id === id,
       );
       const corners = parts.flatMap((element) => {
-        const centerX = element.x + element.width / 2;
-        const centerY = element.y + element.height / 2;
+        const minX = element.points?.length
+          ? Math.min(...element.points.map((point) => point[0]))
+          : 0;
+        const maxX = element.points?.length
+          ? Math.max(...element.points.map((point) => point[0]))
+          : element.width;
+        const minY = element.points?.length
+          ? Math.min(...element.points.map((point) => point[1]))
+          : 0;
+        const maxY = element.points?.length
+          ? Math.max(...element.points.map((point) => point[1]))
+          : element.height;
+        const centerX = element.x + (minX + maxX) / 2;
+        const centerY = element.y + (minY + maxY) / 2;
         const cosine = Math.cos(element.angle || 0);
         const sine = Math.sin(element.angle || 0);
         return [
-          [element.x, element.y],
-          [element.x + element.width, element.y],
-          [element.x + element.width, element.y + element.height],
-          [element.x, element.y + element.height],
+          [element.x + minX, element.y + minY],
+          [element.x + maxX, element.y + minY],
+          [element.x + maxX, element.y + maxY],
+          [element.x + minX, element.y + maxY],
         ].map(([x, y]) => ({
           x: centerX + (x - centerX) * cosine - (y - centerY) * sine,
           y: centerY + (x - centerX) * sine + (y - centerY) * cosine,

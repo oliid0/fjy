@@ -28,7 +28,7 @@ final class RecordingPackage implements Closeable {
     RecordingPackage(File cache, long size, String mime, String transcript, String summary) throws IOException {
         String normalized = mime.split(";", 2)[0];
         if (size < 1 || size > MAX_BYTES || !java.util.Arrays.asList("audio/webm", "video/webm", "audio/mp4", "video/mp4").contains(normalized)) throw new IOException("Invalid recording format or size");
-        if (transcript == null || summary == null || transcript.trim().isEmpty() || summary.trim().isEmpty() || transcript.length() > 2000000 || summary.length() > 2000000) throw new IOException("A transcript and summary are required");
+        if (transcript == null || summary == null || transcript.length() > 2000000 || summary.length() > 2000000) throw new IOException("Invalid transcript or summary");
         this.mime = normalized;
         this.expected = size;
         this.transcript = transcript;

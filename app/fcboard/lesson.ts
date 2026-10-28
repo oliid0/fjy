@@ -17,13 +17,17 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 import { insertionPoint } from "./board";
 import { classroomCommands } from "./commands";
 import { validateLessonTools } from "./lessonTools";
-import { supportsHandwriting } from "./handwriting";
+import { supportsHandwriting, inkLineHeight } from "./handwriting";
+import { documentInkElement } from "./documentInk";
+
 import {
   lessonWritingContext,
   prepareLessonText,
   fitLessonFormula,
   noWritingSpace,
 } from "./lessonWriting";
+
+import type { InkStroke } from "./documents";
 
 import type { LessonTool } from "./lessonTools";
 import type { ContentRect } from "./placement";
@@ -385,7 +389,56 @@ export class LessonCanvas {
               context.viewport.top +
               (context.viewport.bottom - context.viewport.top) / 3,
           };
-      const preferred = { x: anchor.x + command.x, y: anchor.y + command.y };
+      const document = this.document
+        ? (classroomCommands.read("document") as { ink: InkStroke[] })
+        : undefined;
+      const previous = document
+        ? document.ink
+            .filter(
+              (stroke) =>
+                stroke.lesson === this.id && stroke.commandId === command.id,
+            )
+            .flatMap<ExcalidrawElement>((stroke) =>
+              stroke.text
+                ? convertToExcalidrawElements([
+                    {
+                      type: "text",
+                      x: stroke.points[0][0],
+                      y: stroke.points[0][1],
+                      text: stroke.text,
+                      fontSize: stroke.fontSize,
+                      fontFamily: stroke.fontFamily,
+                      strokeColor: stroke.color,
+                      opacity: stroke.opacity,
+                    },
+                  ])
+                : stroke.image
+                ? []
+                : [documentInkElement(stroke)],
+            )
+        : this.api
+            .getSceneElements()
+            .filter(
+              (element) =>
+                element.customData?.fcLessonId === this.id &&
+                element.customData?.fcTutorId === command.id,
+            );
+      const previousBounds = previous.length
+        ? getCommonBounds(previous)
+        : undefined;
+      if (previous.length) {
+        const text = previous.find((element) => element.type === "text");
+        context.fontSize =
+          text?.type === "text"
+            ? text.fontSize
+            : inkLineHeight(previous, 1 / context.scale) / 1.25;
+        context.color = previous[0].strokeColor;
+        context.width = previous[0].strokeWidth;
+        context.opacity = previous[0].opacity;
+      }
+      const preferred = previousBounds
+        ? { x: previousBounds[0], y: previousBounds[1] }
+        : { x: anchor.x + command.x, y: anchor.y + command.y };
       const color = command.color || context.color;
       const id = `${this.id}-${command.id}`;
       const customData = {

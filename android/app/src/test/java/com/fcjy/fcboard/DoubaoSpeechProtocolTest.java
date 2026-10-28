@@ -29,8 +29,11 @@ public class DoubaoSpeechProtocolTest {
         JSONObject body = new JSONObject().put("result", new JSONObject().put("utterances", new JSONArray().put(first)));
         assertEquals(0, decoder.lines(body).length());
         assertTrue(DoubaoSpeechProtocol.hasInterim(body));
+        assertEquals("画一个圆", DoubaoSpeechProtocol.interim(body).getString("text"));
+        assertEquals(0, DoubaoSpeechProtocol.interim(body).getDouble("time"), 0);
         first.put("definite", true);
         assertFalse(DoubaoSpeechProtocol.hasInterim(body));
+        assertNull(DoubaoSpeechProtocol.interim(body));
         assertEquals("画一个圆", decoder.lines(body).getJSONObject(0).getString("text"));
         assertEquals(0, decoder.lines(body).length());
         JSONObject second = new JSONObject(first.toString()).put("start_time", 2000).put("end_time", 3200);

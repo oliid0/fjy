@@ -103,10 +103,7 @@ export const RecordingActions = ({ recording }: { recording: Recording }) => {
       }
     }
   };
-  const ready =
-    !!recording.blob.size &&
-    !!recording.transcript.length &&
-    !!recording.summary.trim();
+  const ready = !!recording.blob.size;
   return (
     <>
       <div className="fc-actions">

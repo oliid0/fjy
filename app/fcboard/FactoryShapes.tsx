@@ -15,6 +15,7 @@ import { factoryShapeCatalog } from "./factoryShapeGeometry";
 import { FactoryShapeIcon } from "./factoryShapeIcons";
 import { renderWidget, widgetDefaults, widgetShapes } from "./widgets";
 import { TransientMessage } from "./TransientMessage";
+import { forwardEraseContact } from "./canvasContact";
 
 import "./FactoryShapes.scss";
 
@@ -119,6 +120,7 @@ export const FactoryShapes = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     | undefined
   >(undefined);
   const layer = useRef<SVGSVGElement>(null);
+  const lastSizes = useRef(new Map<number, ShapePoint>());
   const handlers = useRef<
     | {
         move: (event: ReactPointerEvent) => void;
@@ -369,9 +371,20 @@ export const FactoryShapes = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         current.end[1] - current.start[1],
       ) < 3
     ) {
-      return;
+      const scale = documentStage
+        ? documentStage.getBoundingClientRect().width / 1000
+        : api.getAppState().zoom.value;
+      const size = lastSizes.current.get(current.index) || [
+        160 / scale,
+        120 / scale,
+      ];
+      current.end = [current.start[0] + size[0], current.start[1] + size[1]];
     }
     try {
+      lastSizes.current.set(current.index, [
+        current.end[0] - current.start[0],
+        current.end[1] - current.start[1],
+      ]);
       renderWidget(
         api,
         draggedFactoryShape(
@@ -405,6 +418,9 @@ export const FactoryShapes = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           cursor: "crosshair",
         }}
         onPointerDown={(event) => {
+          if (forwardEraseContact(api, event)) {
+            return;
+          }
           if (event.button > 0) {
             return;
           }

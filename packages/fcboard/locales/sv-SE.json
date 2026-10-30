@@ -91,7 +91,7 @@
     "untitled": "Namnlös",
     "name": "Namn",
     "yourName": "Ditt namn",
-    "madeWithExcalidraw": "Skapad med Fcboard",
+    "madeWithFcboard": "Skapad med Fcboard",
     "group": "Gruppera markering",
     "ungroup": "Avgruppera markering",
     "collaborators": "Medarbetare",
@@ -121,7 +121,7 @@
     "toggleTheme": "Växla ljus/mörkt tema",
     "theme": "Tema",
     "personalLib": "Personligt bibliotek",
-    "excalidrawLib": "Fcboard bibliotek",
+    "fcboardlib": "Fcboard bibliotek",
     "decreaseFontSize": "Minska fontstorleken",
     "increaseFontSize": "Öka fontstorleken",
     "unbindText": "Koppla bort text",
@@ -320,7 +320,7 @@
     "laser": "Laserpekare",
     "hand": "Hand (panoreringsverktyg)",
     "extraTools": "Fler verktyg",
-    "mermaidToExcalidraw": "Mermaid till Fcboard",
+    "mermaidToFcboard": "Mermaid till Fcboard",
     "convertElementType": "Växla formtyp"
   },
   "element": {

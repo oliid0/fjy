@@ -1,14 +1,10 @@
-import { Emitter } from "@excalidraw/common";
+import { Emitter } from "@fcboard/common";
 
-import {
-  CaptureUpdateAction,
-  StoreChange,
-  StoreDelta,
-} from "@excalidraw/element";
+import { CaptureUpdateAction, StoreChange, StoreDelta } from "@fcboard/element";
 
-import type { StoreSnapshot, Store } from "@excalidraw/element";
+import type { StoreSnapshot, Store } from "@fcboard/element";
 
-import type { SceneElementsMap } from "@excalidraw/element/types";
+import type { SceneElementsMap } from "@fcboard/element/types";
 
 import type { AppState } from "./types";
 

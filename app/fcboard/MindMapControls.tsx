@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ButtonBase from "@mui/material/ButtonBase";
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
-import { isPalmContact } from "@excalidraw/excalidraw/eraser/stroke";
+import { CaptureUpdateAction } from "@fcboard/fcboard";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
+import { isPalmContact } from "@fcboard/fcboard/eraser/stroke";
 
-import type {
-  ExcalidrawImperativeAPI,
-  UIOptions,
-} from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import { forwardEraseContact } from "./canvasContact";
@@ -64,7 +61,7 @@ export const MindMapControls = ({
   api,
   inkProfile,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   inkProfile?: UIOptions["inkProfile"];
 }) => {
   useI18n();

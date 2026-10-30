@@ -1,4 +1,4 @@
-import { isFiniteNumber, pointFrom } from "@excalidraw/math";
+import { isFiniteNumber, pointFrom } from "@fcboard/math";
 
 import {
   type CombineBrandsIfNeeded,
@@ -18,23 +18,20 @@ import {
   getSizeFromPoints,
   normalizeLink,
   getLineHeight,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 import {
   calculateFixedPointForNonElbowArrowBinding,
   getNonDeletedElements,
   isPointInElement,
   isValidPolygon,
   projectFixedPointOntoDiagonal,
-} from "@excalidraw/element";
-import { normalizeFixedPoint } from "@excalidraw/element";
-import {
-  updateElbowArrowPoints,
-  validateElbowPoints,
-} from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
-import { bumpVersion } from "@excalidraw/element";
-import { getContainerElement } from "@excalidraw/element";
-import { detectLineHeight } from "@excalidraw/element";
+} from "@fcboard/element";
+import { normalizeFixedPoint } from "@fcboard/element";
+import { updateElbowArrowPoints, validateElbowPoints } from "@fcboard/element";
+import { LinearElementEditor } from "@fcboard/element";
+import { bumpVersion } from "@fcboard/element";
+import { getContainerElement } from "@fcboard/element";
+import { detectLineHeight } from "@fcboard/element";
 import {
   isArrowBoundToElement,
   isArrowElement,
@@ -43,38 +40,41 @@ import {
   isLineElement,
   isTextElement,
   isUsingAdaptiveRadius,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { syncInvalidIndices } from "@excalidraw/element";
+import { syncInvalidIndices } from "@fcboard/element";
 
-import { refreshTextDimensions } from "@excalidraw/element";
+import { refreshTextDimensions } from "@fcboard/element";
 
-import { getNormalizedDimensions } from "@excalidraw/element";
+import { getNormalizedDimensions } from "@fcboard/element";
 
-import { isInvisiblySmallElement } from "@excalidraw/element";
+import { isInvisiblySmallElement } from "@fcboard/element";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@fcboard/math";
 
 import type {
   ElementsMap,
   ElementsMapOrArray,
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
-  ExcalidrawElbowArrowElement,
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawSelectionElement,
-  ExcalidrawTextElement,
+  FcboardArrowElement,
+  FcboardBindableElement,
+  FcboardElbowArrowElement,
+  FcboardElement,
+  FcboardLinearElement,
+  FcboardSelectionElement,
+  FcboardTextElement,
   FixedPointBinding,
   FontFamilyValues,
   NonDeletedSceneElementsMap,
-  OrderedExcalidrawElement,
+  OrderedFcboardElement,
   StrokeRoundness,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { MarkOptional, Mutable } from "@excalidraw/common/utility-types";
+import type { MarkOptional, Mutable } from "@fcboard/common/utility-types";
 
-import { validWhiteboardBackground } from "../whiteboardBackground";
+import {
+  validWhiteboardBackground,
+  validBackgroundImage,
+} from "../whiteboardBackground";
 
 import { getDefaultAppState } from "../appState";
 
@@ -97,7 +97,7 @@ type RestoredAppState = Omit<
   "offsetTop" | "offsetLeft" | "width" | "height"
 >;
 
-export const AllowedExcalidrawActiveTools: Record<
+export const AllowedFcboardActiveTools: Record<
   AppState["activeTool"]["type"],
   boolean
 > = {
@@ -121,7 +121,7 @@ export const AllowedExcalidrawActiveTools: Record<
 };
 
 export type RestoredDataState = {
-  elements: OrderedExcalidrawElement[];
+  elements: OrderedFcboardElement[];
   appState: RestoredAppState;
   files: BinaryFiles;
 };
@@ -135,7 +135,7 @@ const getFontFamilyByName = (fontFamilyName: string): FontFamilyValues => {
   return DEFAULT_FONT_FAMILY;
 };
 
-const repairBinding = <T extends ExcalidrawArrowElement>(
+const repairBinding = <T extends FcboardArrowElement>(
   element: T,
   binding: FixedPointBinding | null,
   targetElementsMap: Readonly<ElementsMap>,
@@ -154,8 +154,8 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
 
     if (isElbowArrow(element)) {
       const fixedPointBinding:
-        | ExcalidrawElbowArrowElement["startBinding"]
-        | ExcalidrawElbowArrowElement["endBinding"] = {
+        | FcboardElbowArrowElement["startBinding"]
+        | FcboardElbowArrowElement["endBinding"] = {
         ...binding,
         fixedPoint: normalizeFixedPoint(binding.fixedPoint),
         mode: binding.mode || "orbit",
@@ -188,12 +188,12 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
     // ---------------------------------------------------------------------------
 
     const targetBoundElement = targetElementsMap.get(binding.elementId) as
-      | ExcalidrawBindableElement
+      | FcboardBindableElement
       | undefined;
     const boundElement =
       targetBoundElement ||
       (existingElementsMap?.get(binding.elementId) as
-        | ExcalidrawBindableElement
+        | FcboardBindableElement
         | undefined);
     const elementsMap = targetBoundElement
       ? targetElementsMap
@@ -261,14 +261,14 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
 };
 
 const restoreElementWithProperties = <
-  T extends Required<Omit<ExcalidrawElement, "customData">> & {
-    customData?: ExcalidrawElement["customData"];
+  T extends Required<Omit<FcboardElement, "customData">> & {
+    customData?: FcboardElement["customData"];
     /** @deprecated */
-    boundElementIds?: readonly ExcalidrawElement["id"][];
+    boundElementIds?: readonly FcboardElement["id"][];
     /** @deprecated */
     strokeSharpness?: StrokeRoundness;
   },
-  K extends Pick<T, keyof Omit<Required<T>, keyof ExcalidrawElement>>,
+  K extends Pick<T, keyof Omit<Required<T>, keyof FcboardElement>>,
 >(
   element: T,
   extra: Pick<
@@ -277,9 +277,9 @@ const restoreElementWithProperties = <
     // @ts-ignore TS complains here but type checks the call sites fine.
     keyof K
   > &
-    Partial<Pick<ExcalidrawElement, "type" | "x" | "y" | "customData">>,
+    Partial<Pick<FcboardElement, "type" | "x" | "y" | "customData">>,
 ): T => {
-  const base: Pick<T, keyof ExcalidrawElement> = {
+  const base: Pick<T, keyof FcboardElement> = {
     type: extra.type || element.type,
     // all elements must have version > 0 so getSceneVersion() will pick up
     // newly added elements
@@ -348,7 +348,7 @@ const restoreElementWithProperties = <
 
 export const restoreElement = (
   /** element to be restored */
-  element: Exclude<ExcalidrawElement, ExcalidrawSelectionElement>,
+  element: Exclude<FcboardElement, FcboardSelectionElement>,
   /** all elements to be restored */
   targetElementsMap: Readonly<ElementsMap>,
   /** used for additional context */
@@ -361,7 +361,7 @@ export const restoreElement = (
 
   switch (element.type) {
     case "text":
-      // temp fix: cleanup legacy obsidian-excalidraw attribute else it'll
+      // temp fix: cleanup legacy obsidian-fcboard attribute else it'll
       // conflict when porting between the apps
       delete (element as any).rawText;
 
@@ -471,14 +471,14 @@ export const restoreElement = (
       const base = {
         type: element.type,
         startBinding: repairBinding(
-          element as ExcalidrawArrowElement,
+          element as FcboardArrowElement,
           element.startBinding,
           targetElementsMap,
           existingElementsMap,
           "start",
         ),
         endBinding: repairBinding(
-          element as ExcalidrawArrowElement,
+          element as FcboardArrowElement,
           element.endBinding,
           targetElementsMap,
           existingElementsMap,
@@ -489,13 +489,13 @@ export const restoreElement = (
         points,
         x,
         y,
-        elbowed: (element as ExcalidrawArrowElement).elbowed,
+        elbowed: (element as FcboardArrowElement).elbowed,
         ...getSizeFromPoints(points),
       };
 
       // TODO: Separate arrow from linear element
       const restoredElement = isElbowArrow(element)
-        ? restoreElementWithProperties(element as ExcalidrawElbowArrowElement, {
+        ? restoreElementWithProperties(element as FcboardElbowArrowElement, {
             ...base,
             elbowed: true,
             fixedSegments:
@@ -505,7 +505,7 @@ export const restoreElement = (
             startIsSpecial: element.startIsSpecial,
             endIsSpecial: element.endIsSpecial,
           })
-        : restoreElementWithProperties(element as ExcalidrawArrowElement, base);
+        : restoreElementWithProperties(element as FcboardArrowElement, base);
 
       return {
         ...restoredElement,
@@ -543,20 +543,17 @@ export const restoreElement = (
  * NOTE mutates elements.
  */
 const repairContainerElement = (
-  container: Mutable<ExcalidrawElement>,
-  elementsMap: Map<string, Mutable<ExcalidrawElement>>,
+  container: Mutable<FcboardElement>,
+  elementsMap: Map<string, Mutable<FcboardElement>>,
 ) => {
   if (container.boundElements) {
     // copy because we're not cloning on restore, and we don't want to mutate upstream
     const boundElements = container.boundElements.slice();
 
     // dedupe bindings & fix boundElement.containerId if not set already
-    const boundIds = new Set<ExcalidrawElement["id"]>();
+    const boundIds = new Set<FcboardElement["id"]>();
     container.boundElements = boundElements.reduce(
-      (
-        acc: Mutable<NonNullable<ExcalidrawElement["boundElements"]>>,
-        binding,
-      ) => {
+      (acc: Mutable<NonNullable<FcboardElement["boundElements"]>>, binding) => {
         const boundElement = elementsMap.get(binding.id);
         if (boundElement && !boundIds.has(binding.id)) {
           boundIds.add(binding.id);
@@ -591,8 +588,8 @@ const repairContainerElement = (
  * NOTE mutates elements.
  */
 const repairBoundElement = (
-  boundElement: Mutable<ExcalidrawTextElement>,
-  elementsMap: Map<string, Mutable<ExcalidrawElement>>,
+  boundElement: Mutable<FcboardTextElement>,
+  elementsMap: Map<string, Mutable<FcboardElement>>,
 ) => {
   const container = boundElement.containerId
     ? elementsMap.get(boundElement.containerId)
@@ -630,8 +627,8 @@ const repairBoundElement = (
  * NOTE mutates elements.
  */
 const repairFrameMembership = (
-  element: Mutable<ExcalidrawElement>,
-  elementsMap: Map<string, Mutable<ExcalidrawElement>>,
+  element: Mutable<FcboardElement>,
+  elementsMap: Map<string, Mutable<FcboardElement>>,
 ) => {
   if (element.frameId) {
     const containingFrame = elementsMap.get(element.frameId);
@@ -642,7 +639,7 @@ const repairFrameMembership = (
   }
 };
 
-export const restoreElements = <T extends ExcalidrawElement>(
+export const restoreElements = <T extends FcboardElement>(
   targetElements: readonly T[] | undefined | null,
   /** used for additional context (e.g. repairing arrow bindings) */
   existingElements: Readonly<ElementsMapOrArray> | null | undefined,
@@ -653,7 +650,7 @@ export const restoreElements = <T extends ExcalidrawElement>(
         deleteInvisibleElements?: boolean;
       }
     | undefined,
-): CombineBrandsIfNeeded<T, OrderedExcalidrawElement> => {
+): CombineBrandsIfNeeded<T, OrderedFcboardElement> => {
   // used to detect duplicate top-level element ids
   const existingIds = new Set<string>();
   const targetElementsMap = arrayToMap(targetElements || []);
@@ -667,7 +664,7 @@ export const restoreElements = <T extends ExcalidrawElement>(
       if (element.type === "selection") {
         return elements;
       }
-      let migratedElement: ExcalidrawElement | null;
+      let migratedElement: FcboardElement | null;
       try {
         migratedElement = restoreElement(
           element,
@@ -704,14 +701,11 @@ export const restoreElements = <T extends ExcalidrawElement>(
       }
 
       return elements;
-    }, [] as ExcalidrawElement[]),
+    }, [] as FcboardElement[]),
   );
 
   if (!opts?.repairBindings) {
-    return restoredElements as CombineBrandsIfNeeded<
-      T,
-      OrderedExcalidrawElement
-    >;
+    return restoredElements as CombineBrandsIfNeeded<T, OrderedFcboardElement>;
   }
 
   // repair binding. Mutates elements.
@@ -744,14 +738,14 @@ export const restoreElements = <T extends ExcalidrawElement>(
         (!restoredElementsMap.has(element.startBinding.elementId) ||
           !isArrowElement(element))
       ) {
-        (element as Mutable<ExcalidrawLinearElement>).startBinding = null;
+        (element as Mutable<FcboardLinearElement>).startBinding = null;
       }
       if (
         element.endBinding &&
         (!restoredElementsMap.has(element.endBinding.elementId) ||
           !isArrowElement(element))
       ) {
-        (element as Mutable<ExcalidrawLinearElement>).endBinding = null;
+        (element as Mutable<FcboardLinearElement>).endBinding = null;
       }
     }
   }
@@ -821,20 +815,20 @@ export const restoreElements = <T extends ExcalidrawElement>(
     }
 
     return element;
-  }) as CombineBrandsIfNeeded<T, OrderedExcalidrawElement>;
+  }) as CombineBrandsIfNeeded<T, OrderedFcboardElement>;
 };
 
 /**
  * When replacing elements that may exist locally, this bumps their versions
  * to the local version + 1. Mainly for later reconciliation to work properly.
  *
- * See https://github.com/excalidraw/excalidraw/issues/3795
+ * See https://github.com/fcboard/fcboard/issues/3795
  *
  * Generally use this on editor boundaries (importing from file etc.), though
  * it does not apply universally (e.g. we don't want to do this for collab
  * updates).
  */
-export const bumpElementVersions = <T extends ExcalidrawElement>(
+export const bumpElementVersions = <T extends FcboardElement>(
   targetElements: readonly T[],
   localElements: Readonly<ElementsMapOrArray> | null | undefined,
 ) => {
@@ -940,14 +934,19 @@ export const restoreAppState = (
   if (typeof inkPreferences.whiteboardHardNib === "boolean") {
     nextAppState.whiteboardHardNib = inkPreferences.whiteboardHardNib;
   }
-  const thickThreshold = inkPreferences.whiteboardThickThreshold;
-  if (
-    typeof thickThreshold === "number" &&
-    Number.isFinite(thickThreshold) &&
-    thickThreshold > 0 &&
-    thickThreshold <= 240
-  ) {
-    nextAppState.whiteboardThickThreshold = thickThreshold;
+  for (const key of [
+    "whiteboardFineThreshold",
+    "whiteboardThickThreshold",
+  ] as const) {
+    const threshold = inkPreferences[key];
+    if (
+      typeof threshold === "number" &&
+      Number.isFinite(threshold) &&
+      threshold > 0 &&
+      threshold <= 240
+    ) {
+      nextAppState[key] = threshold;
+    }
   }
   if (inkPreferences.whiteboardPenTips) {
     nextAppState.whiteboardPenTips = {};
@@ -992,6 +991,10 @@ export const restoreAppState = (
   }
   if (validWhiteboardBackground(inkPreferences.whiteboardBackground)) {
     nextAppState.whiteboardBackground = inkPreferences.whiteboardBackground;
+  }
+  if (validBackgroundImage(inkPreferences.whiteboardCustomBackground)) {
+    nextAppState.whiteboardCustomBackground =
+      inkPreferences.whiteboardCustomBackground;
   }
   if (
     typeof inkPreferences.whiteboardBrushVariation === "number" &&
@@ -1042,9 +1045,12 @@ export const restoreAppState = (
   if (typeof inkPreferences.toolbarReversed === "boolean") {
     nextAppState.toolbarReversed = inkPreferences.toolbarReversed;
   }
+  if (typeof inkPreferences.whiteboardToolbarText === "boolean") {
+    nextAppState.whiteboardToolbarText = inkPreferences.whiteboardToolbarText;
+  }
   for (const [key, min, max] of [
     ["eraserSize", 12, 240],
-    ["palmEraserThreshold", 16, 120],
+    ["palmEraserThreshold", 1, 240],
   ] as const) {
     const value = inkPreferences[key];
     if (typeof value === "number" && Number.isFinite(value)) {
@@ -1063,7 +1069,7 @@ export const restoreAppState = (
       ...updateActiveTool(
         defaultAppState,
         nextAppState.activeTool.type &&
-          AllowedExcalidrawActiveTools[nextAppState.activeTool.type]
+          AllowedFcboardActiveTools[nextAppState.activeTool.type]
           ? nextAppState.activeTool
           : { type: "selection" },
       ),

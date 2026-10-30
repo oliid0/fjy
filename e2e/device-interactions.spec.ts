@@ -59,12 +59,12 @@ for (const width of [390, 1920]) {
         .click();
       await page
         .getByRole("dialog", { name: "教学工具", exact: true })
-        .getByRole("button", { name: label, exact: true })
+        .getByRole("button", { name: `插入${label}`, exact: true })
         .click();
       const current = async () =>
         page.evaluate(
           (kind) =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]")
+            JSON.parse(localStorage.getItem("fcboard") || "[]")
               .filter(
                 (element: {
                   isDeleted?: boolean;
@@ -131,7 +131,7 @@ for (const width of [390, 1920]) {
       .click();
     const table = () =>
       page.evaluate(() =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
           (element: {
             isDeleted?: boolean;
             customData?: { fcInsertion?: { kind: string } };
@@ -152,7 +152,7 @@ for (const width of [390, 1920]) {
     await expect.poll(async () => (await table()).length).toBeGreaterThan(0);
     const parts = await table();
     const state = await page.evaluate(() =>
-      JSON.parse(localStorage.getItem("excalidraw-state") || "{}"),
+      JSON.parse(localStorage.getItem("fcboard-state") || "{}"),
     );
     const object = parts[0].customData.fcInsertion;
     expect(object.position).toEqual({ x: 35, y: 180 });
@@ -170,6 +170,7 @@ for (const width of [390, 1920]) {
     await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
     await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
     await page
+      .locator(".fc-eraser-mode")
       .getByRole("button", { name: "整个对象擦除", exact: true })
       .click();
     await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();

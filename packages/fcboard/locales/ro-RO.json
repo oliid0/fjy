@@ -91,7 +91,7 @@
     "untitled": "Nedenumit",
     "name": "Nume",
     "yourName": "Numele tău",
-    "madeWithExcalidraw": "Realizat cu Fcboard",
+    "madeWithFcboard": "Realizat cu Fcboard",
     "group": "Grupare selecție",
     "ungroup": "Degrupare selecție",
     "collaborators": "Colaboratori",
@@ -121,7 +121,7 @@
     "toggleTheme": "Comutare temă luminoasă/întunecată",
     "theme": "Temă",
     "personalLib": "Biblioteca personală",
-    "excalidrawLib": "Biblioteca Fcboard",
+    "fcboardlib": "Biblioteca Fcboard",
     "decreaseFontSize": "Micșorează dimensiunea fontului",
     "increaseFontSize": "Mărește dimensiunea fontului",
     "unbindText": "Deconectare text",
@@ -320,7 +320,7 @@
     "laser": "Indicator laser",
     "hand": "Mână (instrument de panoramare)",
     "extraTools": "Mai multe instrumente",
-    "mermaidToExcalidraw": "Mermaid la Fcboard",
+    "mermaidToFcboard": "Mermaid la Fcboard",
     "convertElementType": "Comutare tip formă"
   },
   "element": {

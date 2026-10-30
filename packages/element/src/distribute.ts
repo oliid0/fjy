@@ -1,4 +1,4 @@
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@fcboard/fcboard/types";
 
 import { updateBoundElements } from "./binding";
 import { getCommonBoundingBox } from "./bounds";
@@ -7,7 +7,7 @@ import { getSelectedElementsByGroup } from "./groups";
 
 import type { Scene } from "./Scene";
 
-import type { ElementsMap, ExcalidrawElement } from "./types";
+import type { ElementsMap, FcboardElement } from "./types";
 
 export interface Distribution {
   space: "between";
@@ -15,12 +15,12 @@ export interface Distribution {
 }
 
 export const distributeElements = (
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   elementsMap: ElementsMap,
   distribution: Distribution,
   appState: Readonly<AppState>,
   scene: Scene,
-): ExcalidrawElement[] => {
+): FcboardElement[] => {
   const [start, mid, end, extent] =
     distribution.axis === "x"
       ? (["minX", "midX", "maxX", "width"] as const)

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="factory_fb_btn_cancle">取消</string>
+  <string name="factory_fb_btn_ok">確定</string>
+  <string name="factory_fb_file_bzd">BZD</string>
+  <string name="factory_fb_file_jpg">JPG</string>
+  <string name="factory_fb_file_name">名稱</string>
+  <string name="factory_fb_file_size">大小</string>
+  <string name="factory_fb_file_time">時間</string>
+  <string name="factory_fb_local_storage">本地存儲</string>
+  <string name="factory_fb_open_file">打開文件</string>
+  <string name="factory_fb_save_file">保存文件</string>
+  <string name="factory_fb_save_file_name">文件名稱:</string>
+  <string name="factory_fb_save_file_type">文件類型:</string>
+  <string name="factory_fb_sd_storage">SD存儲</string>
+  <string name="factory_fb_usb_storage">移動存儲</string>
+  <string name="factory_fb_access">允許存取檔案</string>
+  <string name="factory_fb_failed">無法讀取或儲存此資料夾，請檢查檔案存取權限後重試。</string>
+  <string name="factory_fb_replace">取代現有檔案？</string>
+  <string name="factory_fb_filename_required">請輸入檔案名稱</string>
+  <string name="factory_fb_file_pdf">PDF</string>
+  <string name="factory_fb_record">白板記錄</string>
+</resources>

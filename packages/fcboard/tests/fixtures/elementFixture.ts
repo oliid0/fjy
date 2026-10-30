@@ -1,10 +1,10 @@
-import { DEFAULT_FONT_FAMILY } from "@excalidraw/common";
+import { DEFAULT_FONT_FAMILY } from "@fcboard/common";
 
-import type { Radians } from "@excalidraw/math";
+import type { Radians } from "@fcboard/math";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-const elementBase: Omit<ExcalidrawElement, "type"> = {
+const elementBase: Omit<FcboardElement, "type"> = {
   id: "vWrqOAfkind2qcm7LDAGZ",
   x: 414,
   y: 237,
@@ -32,29 +32,29 @@ const elementBase: Omit<ExcalidrawElement, "type"> = {
   locked: false,
 };
 
-export const rectangleFixture: ExcalidrawElement = {
+export const rectangleFixture: FcboardElement = {
   ...elementBase,
   type: "rectangle",
 };
-export const embeddableFixture: ExcalidrawElement = {
+export const embeddableFixture: FcboardElement = {
   ...elementBase,
   type: "embeddable",
 };
-export const ellipseFixture: ExcalidrawElement = {
+export const ellipseFixture: FcboardElement = {
   ...elementBase,
   type: "ellipse",
 };
-export const diamondFixture: ExcalidrawElement = {
+export const diamondFixture: FcboardElement = {
   ...elementBase,
   type: "diamond",
 };
-export const rectangleWithLinkFixture: ExcalidrawElement = {
+export const rectangleWithLinkFixture: FcboardElement = {
   ...elementBase,
   type: "rectangle",
-  link: "excalidraw.com",
+  link: "fcboard.com",
 };
 
-export const textFixture: ExcalidrawElement = {
+export const textFixture: FcboardElement = {
   ...elementBase,
   type: "text",
   fontSize: 20,

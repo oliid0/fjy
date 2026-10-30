@@ -1,11 +1,11 @@
 import React from "react";
 
-import { isPromiseLike } from "@excalidraw/common";
+import { isPromiseLike } from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 
 import { trackEvent } from "../analytics";
 
@@ -23,7 +23,7 @@ const trackAction = (
   action: Action,
   source: ActionSource,
   appState: Readonly<AppState>,
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   app: AppClassProperties,
   value: any,
 ) => {
@@ -55,13 +55,13 @@ export class ActionManager {
   updater: (actionResult: ActionResult | Promise<ActionResult>) => void;
 
   getAppState: () => Readonly<AppState>;
-  getElementsIncludingDeleted: () => readonly OrderedExcalidrawElement[];
+  getElementsIncludingDeleted: () => readonly OrderedFcboardElement[];
   app: AppClassProperties;
 
   constructor(
     updater: UpdaterFn,
     getAppState: () => AppState,
-    getElementsIncludingDeleted: () => readonly OrderedExcalidrawElement[],
+    getElementsIncludingDeleted: () => readonly OrderedFcboardElement[],
     app: AppClassProperties,
   ) {
     this.updater = (actionResult) => {

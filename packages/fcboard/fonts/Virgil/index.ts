@@ -1,8 +1,8 @@
-import { type ExcalidrawFontFaceDescriptor } from "../Fonts";
+import { type FcboardFontFaceDescriptor } from "../Fonts";
 
 import Virgil from "./Virgil-Regular.woff2";
 
-export const VirgilFontFaces: ExcalidrawFontFaceDescriptor[] = [
+export const VirgilFontFaces: FcboardFontFaceDescriptor[] = [
   {
     uri: Virgil,
   },

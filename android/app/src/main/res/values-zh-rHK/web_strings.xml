@@ -6,4 +6,6 @@
     <string name="web_close">關閉</string>
     <string name="web_external_app">此頁面需要其他應用程式，請從白板插入選單開啟。</string>
     <string name="web_load_failed">網頁載入失敗，請檢查網路後重新整理。</string>
+    <string name="web_move">移動網頁</string>
+    <string name="web_resize">調整網頁大小</string>
 </resources>

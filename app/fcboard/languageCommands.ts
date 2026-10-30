@@ -1,6 +1,6 @@
-import { getLanguage, t } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { boardContext, selectedBoardElements } from "./ai";
 import {
@@ -25,7 +25,7 @@ type DocumentContext = {
 };
 
 /** Translation reads the visible source and writes through the existing text command. */
-export const registerLanguageCommands = (api: ExcalidrawImperativeAPI) => {
+export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
   const pending = new Set<AbortController>();
   const stopInvalidation = classroomCommands.onInvalidate(() =>
     pending.forEach((request) => request.abort()),

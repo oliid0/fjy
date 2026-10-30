@@ -1,24 +1,24 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import {
   getCommonBounds,
   hashString,
   newFreeDrawElement,
-} from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+} from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardFreeDrawElement,
+} from "@fcboard/element/types";
 
 import data from "./handwriting/glyphs.json";
 
 type Glyph = { advance: number; strokes: number[][][] };
 const glyphs: Record<string, Glyph> = data.glyphs;
-const signature = (element: ExcalidrawFreeDrawElement) =>
+const signature = (element: FcboardFreeDrawElement) =>
   hashString(JSON.stringify(element.points));
 
-export const inkLines = (elements: readonly ExcalidrawElement[]) => {
+export const inkLines = (elements: readonly FcboardElement[]) => {
   const rows: { left: number; top: number; right: number; bottom: number }[] =
     [];
   const strokes = elements
@@ -46,7 +46,7 @@ export const inkLines = (elements: readonly ExcalidrawElement[]) => {
 };
 
 export const inkLineHeight = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   unit = 1,
 ) => {
   const heights = inkLines(elements)
@@ -82,10 +82,10 @@ export const handwritingElements = (
     width: number;
     opacity: number;
     maxWidth: number;
-    source?: readonly ExcalidrawElement[];
+    source?: readonly FcboardElement[];
     customData?: Record<string, unknown>;
   },
-): ExcalidrawFreeDrawElement[] | null => {
+): FcboardFreeDrawElement[] | null => {
   if (
     ![
       options.x,
@@ -104,8 +104,7 @@ export const handwritingElements = (
     return null;
   }
   const source = options.source?.find(
-    (element): element is ExcalidrawFreeDrawElement =>
-      element.type === "freedraw",
+    (element): element is FcboardFreeDrawElement => element.type === "freedraw",
   );
   let xy = 0;
   let yy = 0;
@@ -128,7 +127,7 @@ export const handwritingElements = (
   const slant = yy ? Math.max(-0.35, Math.min(0.35, xy / yy)) : 0;
   const scale = Math.max(0.1, options.height) / 21;
   const group = crypto.randomUUID();
-  const result: ExcalidrawFreeDrawElement[] = [];
+  const result: FcboardFreeDrawElement[] = [];
   let x = 0;
   let y = 0;
   for (const character of value) {
@@ -200,8 +199,8 @@ export const handwritingElements = (
 };
 
 /** Edited or partially erased groups must be re-read visually, not reported as their old text. */
-export const handwritingText = (elements: readonly ExcalidrawElement[]) => {
-  const groups = new Map<string, ExcalidrawFreeDrawElement[]>();
+export const handwritingText = (elements: readonly FcboardElement[]) => {
+  const groups = new Map<string, FcboardFreeDrawElement[]>();
   for (const element of elements) {
     if (
       !element.isDeleted &&

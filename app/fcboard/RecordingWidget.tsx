@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import {
   playerPlayIcon,
   playerStopFilledIcon,
-} from "@excalidraw/excalidraw/components/icons";
+} from "@fcboard/fcboard/components/icons";
 
 import { timestamp } from "./recording";
 

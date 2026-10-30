@@ -36,6 +36,8 @@ import org.json.JSONTokener;
 /** HMinWebWindow's in-app browsing flow, with the same controls available to the board agent. */
 final class WebResourceDialog extends Dialog {
     final WebView web;
+    final TextView moveHandle;
+    final ImageButton resizeHandle;
     private final TextView status;
     private final Context text;
     private final ImageButton back;
@@ -110,6 +112,16 @@ final class WebResourceDialog extends Dialog {
         surface.setCornerRadius(dp(16));
         root.setBackground(surface);
         root.setClipToOutline(true);
+        moveHandle = new TextView(activity);
+        moveHandle.setText(Uri.parse(url).getHost());
+        moveHandle.setTextSize(13);
+        moveHandle.setSingleLine(true);
+        moveHandle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        moveHandle.setPadding(dp(12), 0, dp(12), 0);
+        moveHandle.setGravity(Gravity.CENTER_VERTICAL);
+        moveHandle.setContentDescription(text.getString(R.string.web_move));
+        moveHandle.setOnTouchListener(windowGesture(false));
+        root.addView(moveHandle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
         LinearLayout controls = new LinearLayout(activity);
         controls.setGravity(Gravity.CENTER_VERTICAL);
         web = new WebView(activity);
@@ -164,7 +176,18 @@ final class WebResourceDialog extends Dialog {
         content.addView(spinner, new FrameLayout.LayoutParams(dp(110), dp(110), Gravity.CENTER));
         root.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         root.addView(horizontal, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
-        root.addView(controls);
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setGravity(Gravity.CENTER_VERTICAL);
+        footer.addView(controls, new LinearLayout.LayoutParams(0, dp(40), 1));
+        resizeHandle = new ImageButton(activity);
+        resizeHandle.setImageResource(R.drawable.factory_web_resize);
+        resizeHandle.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        resizeHandle.setBackgroundColor(Color.TRANSPARENT);
+        resizeHandle.setPadding(dp(4), dp(4), dp(4), dp(4));
+        resizeHandle.setContentDescription(text.getString(R.string.web_resize));
+        resizeHandle.setOnTouchListener(windowGesture(true));
+        footer.addView(resizeHandle, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        root.addView(footer);
         setContentView(root);
         web.getSettings().setUseWideViewPort(true);
         web.getSettings().setLoadWithOverviewMode(true);
@@ -192,6 +215,7 @@ final class WebResourceDialog extends Dialog {
                 forward.setEnabled(view.canGoForward());
             }
             @Override public void onPageFinished(WebView view, String current) {
+                moveHandle.setText(view.getTitle());
                 loading = false;
                 spinner.setVisibility(android.view.View.GONE);
                 lastVersion = null;
@@ -239,7 +263,6 @@ final class WebResourceDialog extends Dialog {
         resizeToDisplay();
         getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
-        getWindow().setGravity(Gravity.CENTER);
     }
 
     private void resizeToDisplay() {
@@ -248,9 +271,60 @@ final class WebResourceDialog extends Dialog {
         getOwnerActivity().getWindow().getDecorView().getWindowVisibleDisplayFrame(bounds);
         if (bounds.width() == 0) bounds.set(0, 0, getContext().getResources().getDisplayMetrics().widthPixels, getContext().getResources().getDisplayMetrics().heightPixels);
         if (displayWidth == bounds.width() && displayHeight == bounds.height()) return;
+        boolean first = displayWidth == 0;
         displayWidth = bounds.width();
         displayHeight = bounds.height();
-        getWindow().setLayout(Math.min(dp(400), (int)(displayWidth * 0.9)), Math.min(dp(600), (int)(displayHeight * 0.82)));
+        android.view.WindowManager.LayoutParams current = getWindow().getAttributes();
+        int width = first ? Math.min(dp(400), (int)(displayWidth * 0.9)) : current.width;
+        int height = first ? Math.min(dp(600), (int)(displayHeight * 0.82)) : current.height;
+        setWindowBounds(first ? (displayWidth - width) / 2 : current.x,
+            first ? (displayHeight - height) / 2 : current.y, width, height);
+    }
+
+    /** ZXStudyFloatingWindow.setupTouchLogic / handleDragEvent / handleResizeEvent. */
+    private android.view.View.OnTouchListener windowGesture(boolean resizing) {
+        return new android.view.View.OnTouchListener() {
+            private android.view.WindowManager.LayoutParams before;
+            private float rawX, rawY;
+            private int screenWidth, screenHeight;
+            @Override public boolean onTouch(android.view.View view, MotionEvent event) {
+                if (!isShowing() || getWindow() == null) return false;
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    before = new android.view.WindowManager.LayoutParams(); before.copyFrom(getWindow().getAttributes());
+                    rawX = event.getRawX(); rawY = event.getRawY();
+                    screenWidth = displayWidth; screenHeight = displayHeight; return true;
+                }
+                if (before == null) return false;
+                if (screenWidth != displayWidth || screenHeight != displayHeight) { before = null; return true; }
+                if (event.getActionMasked() == MotionEvent.ACTION_CANCEL || event.getPointerCount() > 1) {
+                    getWindow().setAttributes(before); before = null; return true;
+                }
+                if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+                    int x = Math.round(event.getRawX() - rawX), y = Math.round(event.getRawY() - rawY);
+                    setWindowBounds(resizing ? before.x : before.x + x, resizing ? before.y : before.y + y,
+                        resizing ? before.width + x : before.width, resizing ? before.height + y : before.height);
+                    return true;
+                }
+                if (event.getActionMasked() == MotionEvent.ACTION_UP) { before = null; view.performClick(); return true; }
+                return true;
+            }
+        };
+    }
+
+    private void setWindowBounds(int x, int y, int width, int height) {
+        android.view.WindowManager.LayoutParams next = getWindow().getAttributes();
+        next.gravity = Gravity.TOP | Gravity.LEFT;
+        next.width = Math.max(Math.min(dp(260), displayWidth), Math.min(displayWidth, width));
+        next.height = Math.max(Math.min(dp(180), displayHeight), Math.min(displayHeight, height));
+        next.x = Math.max(0, Math.min(displayWidth - next.width, x));
+        next.y = Math.max(0, Math.min(displayHeight - next.height, y));
+        getWindow().setAttributes(next);
+    }
+
+    private JSObject windowBounds() {
+        android.view.WindowManager.LayoutParams current = getWindow().getAttributes();
+        JSObject bounds = new JSObject(); bounds.put("x", current.x); bounds.put("y", current.y);
+        bounds.put("width", current.width); bounds.put("height", current.height); return bounds;
     }
 
     private void syncHorizontalScroll() {
@@ -299,6 +373,7 @@ final class WebResourceDialog extends Dialog {
         result.put("canGoBack", open && web.canGoBack());
         result.put("canGoForward", open && web.canGoForward());
         result.put("message", status.getText().toString());
+        result.put("window", windowBounds());
         result.put("controls", new JSArray());
         if (lastVersion != null) result.put("version", lastVersion);
         return result;
@@ -335,6 +410,7 @@ final class WebResourceDialog extends Dialog {
                     response.put("canGoBack", web.canGoBack());
                     response.put("canGoForward", web.canGoForward());
                     response.put("message", status.getText().toString());
+                    response.put("window", windowBounds());
                     resolveControl(call, response);
                 } catch (Exception error) { rejectControl(call, "Could not read web controls"); }
             });
@@ -344,7 +420,7 @@ final class WebResourceDialog extends Dialog {
     void action(JSObject args, PluginCall call) {
         try {
             String action = args.optString("action", "read");
-            if (!java.util.Arrays.asList("read", "click", "set", "scroll", "key", "back", "forward", "reload", "close").contains(action)) {
+            if (!java.util.Arrays.asList("read", "click", "set", "scroll", "key", "back", "forward", "reload", "close", "move", "resize").contains(action)) {
                 call.reject("WEB_ACTION_INVALID"); return;
             }
             if ("close".equals(action)) {
@@ -361,6 +437,15 @@ final class WebResourceDialog extends Dialog {
                     call.reject("WEB_HISTORY_UNAVAILABLE"); return;
                 }
                 navigate(action);
+                call.resolve(pageState(true)); return;
+            }
+            if ("move".equals(action) || "resize".equals(action)) {
+                android.view.WindowManager.LayoutParams current = getWindow().getAttributes();
+                String first = "move".equals(action) ? "x" : "width", second = "move".equals(action) ? "y" : "height";
+                double a = args.optDouble(first, Double.NaN), b = args.optDouble(second, Double.NaN);
+                if (!Double.isFinite(a) || !Double.isFinite(b) || Math.abs(a) > 100000 || Math.abs(b) > 100000) { call.reject("WEB_WINDOW_BOUNDS_INVALID"); return; }
+                setWindowBounds("move".equals(action) ? (int)a : current.x, "move".equals(action) ? (int)b : current.y,
+                    "resize".equals(action) ? (int)a : current.width, "resize".equals(action) ? (int)b : current.height);
                 call.resolve(pageState(true)); return;
             }
             if (loading) { call.reject("WEB_PAGE_LOADING_READ_AGAIN"); return; }

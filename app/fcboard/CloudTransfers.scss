@@ -1,0 +1,94 @@
+.fc-classroom .fc-bzd-code {
+  position: relative;
+  width: min(317px, calc(100vw - 24px));
+  min-height: 158px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px 32px 23px;
+  border: 1px solid #00000038;
+  border-radius: 18px;
+  background: #fafafa;
+  color: #111;
+  .fc-bzd-code-close {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    min-height: 0;
+    background: transparent;
+    border: 0;
+    img {
+      width: 20px;
+      height: 20px;
+    }
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 17px;
+    text-align: center;
+    font-size: 17px;
+    line-height: 23px;
+    margin: 0;
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      height: 31px;
+      padding: 0 12px;
+      background: #f2f2f6;
+      color: #333;
+      border: 0;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+  }
+  p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  footer {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    button {
+      width: 70px;
+      min-height: 28px;
+      padding: 0;
+      border: 1px solid #0b6ff3;
+      border-radius: 6px;
+      background: transparent;
+      color: #0b6ff3;
+      font-size: 12px;
+      &:last-child {
+        background: #0b6ff3;
+        color: #fff;
+      }
+    }
+  }
+}
+@media (pointer: coarse), (max-width: 600px) {
+  .fc-classroom .fc-bzd-code {
+    padding-top: 44px;
+    .fc-bzd-code-close {
+      top: 0;
+      right: 0;
+      width: 44px;
+      height: 44px;
+    }
+    input,
+    footer button {
+      min-height: 44px;
+    }
+  }
+}

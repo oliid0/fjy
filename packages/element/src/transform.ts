@@ -1,4 +1,4 @@
-import { pointFrom, type LocalPoint } from "@excalidraw/math";
+import { pointFrom, type LocalPoint } from "@fcboard/math";
 
 import {
   DEFAULT_FONT_FAMILY,
@@ -14,9 +14,9 @@ import {
   isDevEnv,
   toBrandedType,
   getLineHeight,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { MarkOptional } from "@excalidraw/common/utility-types";
+import type { MarkOptional } from "@fcboard/common/utility-types";
 
 import { bindBindingElement } from "./binding";
 import {
@@ -43,18 +43,18 @@ import { getCommonBounds } from "./bounds";
 import { Scene } from "./Scene";
 
 import type {
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
-  ExcalidrawElement,
-  ExcalidrawFrameElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawGenericElement,
-  ExcalidrawIframeLikeElement,
-  ExcalidrawImageElement,
-  ExcalidrawLinearElement,
-  ExcalidrawMagicFrameElement,
-  ExcalidrawSelectionElement,
-  ExcalidrawTextElement,
+  FcboardArrowElement,
+  FcboardBindableElement,
+  FcboardElement,
+  FcboardFrameElement,
+  FcboardFreeDrawElement,
+  FcboardGenericElement,
+  FcboardIframeLikeElement,
+  FcboardImageElement,
+  FcboardLinearElement,
+  FcboardMagicFrameElement,
+  FcboardSelectionElement,
+  FcboardTextElement,
   FileId,
   FontFamilyValues,
   NonDeletedSceneElementsMap,
@@ -78,7 +78,7 @@ export type ValidLinearElement = {
         | (
             | {
                 type: Exclude<
-                  ExcalidrawBindableElement["type"],
+                  FcboardBindableElement["type"],
                   | "image"
                   | "text"
                   | "frame"
@@ -86,12 +86,12 @@ export type ValidLinearElement = {
                   | "embeddable"
                   | "iframe"
                 >;
-                id?: ExcalidrawGenericElement["id"];
+                id?: FcboardGenericElement["id"];
               }
             | {
-                id: ExcalidrawGenericElement["id"];
+                id: FcboardGenericElement["id"];
                 type?: Exclude<
-                  ExcalidrawBindableElement["type"],
+                  FcboardBindableElement["type"],
                   | "image"
                   | "text"
                   | "frame"
@@ -108,11 +108,11 @@ export type ValidLinearElement = {
               }
             | {
                 type?: "text";
-                id: ExcalidrawTextElement["id"];
+                id: FcboardTextElement["id"];
                 text: string;
               }
           ) &
-            Partial<ExcalidrawTextElement>)
+            Partial<FcboardTextElement>)
       ) &
         MarkOptional<ElementConstructorOpts, "x" | "y">;
   start?:
@@ -120,7 +120,7 @@ export type ValidLinearElement = {
         | (
             | {
                 type: Exclude<
-                  ExcalidrawBindableElement["type"],
+                  FcboardBindableElement["type"],
                   | "image"
                   | "text"
                   | "frame"
@@ -128,12 +128,12 @@ export type ValidLinearElement = {
                   | "embeddable"
                   | "iframe"
                 >;
-                id?: ExcalidrawGenericElement["id"];
+                id?: FcboardGenericElement["id"];
               }
             | {
-                id: ExcalidrawGenericElement["id"];
+                id: FcboardGenericElement["id"];
                 type?: Exclude<
-                  ExcalidrawBindableElement["type"],
+                  FcboardBindableElement["type"],
                   | "image"
                   | "text"
                   | "frame"
@@ -150,19 +150,19 @@ export type ValidLinearElement = {
               }
             | {
                 type?: "text";
-                id: ExcalidrawTextElement["id"];
+                id: FcboardTextElement["id"];
                 text: string;
               }
           ) &
-            Partial<ExcalidrawTextElement>)
+            Partial<FcboardTextElement>)
       ) &
         MarkOptional<ElementConstructorOpts, "x" | "y">;
-} & Partial<ExcalidrawLinearElement>;
+} & Partial<FcboardLinearElement>;
 
 export type ValidContainer =
   | {
-      type: Exclude<ExcalidrawGenericElement["type"], "selection">;
-      id?: ExcalidrawGenericElement["id"];
+      type: Exclude<FcboardGenericElement["type"], "selection">;
+      id?: FcboardGenericElement["id"];
       label?: {
         text: string;
         fontSize?: number;
@@ -172,16 +172,16 @@ export type ValidContainer =
       } & MarkOptional<ElementConstructorOpts, "x" | "y">;
     } & ElementConstructorOpts;
 
-export type ExcalidrawElementSkeleton =
+export type FcboardElementSkeleton =
   | Extract<
-      Exclude<ExcalidrawElement, ExcalidrawSelectionElement>,
-      ExcalidrawIframeLikeElement | ExcalidrawFreeDrawElement
+      Exclude<FcboardElement, FcboardSelectionElement>,
+      FcboardIframeLikeElement | FcboardFreeDrawElement
     >
   | ({
-      type: Extract<ExcalidrawLinearElement["type"], "line">;
+      type: Extract<FcboardLinearElement["type"], "line">;
       x: number;
       y: number;
-    } & Partial<ExcalidrawLinearElement>)
+    } & Partial<FcboardLinearElement>)
   | ValidContainer
   | ValidLinearElement
   | ({
@@ -189,24 +189,24 @@ export type ExcalidrawElementSkeleton =
       text: string;
       x: number;
       y: number;
-      id?: ExcalidrawTextElement["id"];
-    } & Partial<ExcalidrawTextElement>)
+      id?: FcboardTextElement["id"];
+    } & Partial<FcboardTextElement>)
   | ({
-      type: Extract<ExcalidrawImageElement["type"], "image">;
+      type: Extract<FcboardImageElement["type"], "image">;
       x: number;
       y: number;
       fileId: FileId;
-    } & Partial<ExcalidrawImageElement>)
+    } & Partial<FcboardImageElement>)
   | ({
       type: "frame";
-      children: readonly ExcalidrawElement["id"][];
+      children: readonly FcboardElement["id"][];
       name?: string;
-    } & Partial<ExcalidrawFrameElement>)
+    } & Partial<FcboardFrameElement>)
   | ({
       type: "magicframe";
-      children: readonly ExcalidrawElement["id"][];
+      children: readonly FcboardElement["id"][];
       name?: string;
-    } & Partial<ExcalidrawMagicFrameElement>);
+    } & Partial<FcboardMagicFrameElement>);
 
 const DEFAULT_LINEAR_ELEMENT_PROPS = {
   width: 100,
@@ -216,11 +216,11 @@ const DEFAULT_LINEAR_ELEMENT_PROPS = {
 const DEFAULT_DIMENSION = 100;
 
 const bindTextToContainer = (
-  container: ExcalidrawElement,
+  container: FcboardElement,
   textProps: { text: string } & MarkOptional<ElementConstructorOpts, "x" | "y">,
   scene: Scene,
 ) => {
-  const textElement: ExcalidrawTextElement = newTextElement({
+  const textElement: FcboardTextElement = newTextElement({
     x: 0,
     y: 0,
     textAlign: TEXT_ALIGN.CENTER,
@@ -243,15 +243,15 @@ const bindTextToContainer = (
 };
 
 const bindLinearElementToElement = (
-  linearElement: ExcalidrawArrowElement,
+  linearElement: FcboardArrowElement,
   start: ValidLinearElement["start"],
   end: ValidLinearElement["end"],
   elementStore: ElementStore,
   scene: Scene,
 ): {
-  linearElement: ExcalidrawLinearElement;
-  startBoundElement?: ExcalidrawElement;
-  endBoundElement?: ExcalidrawElement;
+  linearElement: FcboardLinearElement;
+  startBoundElement?: FcboardElement;
+  endBoundElement?: FcboardElement;
 } => {
   let startBoundElement;
   let endBoundElement;
@@ -331,7 +331,7 @@ const bindLinearElementToElement = (
 
       bindBindingElement(
         linearElement,
-        startBoundElement as ExcalidrawBindableElement,
+        startBoundElement as FcboardBindableElement,
         "orbit",
         "start",
         scene,
@@ -407,7 +407,7 @@ const bindLinearElementToElement = (
 
       bindBindingElement(
         linearElement,
-        endBoundElement as ExcalidrawBindableElement,
+        endBoundElement as FcboardBindableElement,
         "orbit",
         "end",
         scene,
@@ -481,9 +481,9 @@ const bindLinearElementToElement = (
 };
 
 class ElementStore {
-  excalidrawElements = new Map<string, ExcalidrawElement>();
+  excalidrawElements = new Map<string, FcboardElement>();
 
-  add = (ele?: ExcalidrawElement) => {
+  add = (ele?: FcboardElement) => {
     if (!ele) {
       return;
     }
@@ -506,8 +506,8 @@ class ElementStore {
   };
 }
 
-export const convertToExcalidrawElements = (
-  elementsSkeleton: ExcalidrawElementSkeleton[] | null,
+export const convertToFcboardElements = (
+  elementsSkeleton: FcboardElementSkeleton[] | null,
   opts?: { regenerateIds: boolean },
 ) => {
   if (!elementsSkeleton) {
@@ -515,12 +515,12 @@ export const convertToExcalidrawElements = (
   }
   const elements = cloneJSON(elementsSkeleton);
   const elementStore = new ElementStore();
-  const elementsWithIds = new Map<string, ExcalidrawElementSkeleton>();
+  const elementsWithIds = new Map<string, FcboardElementSkeleton>();
   const oldToNewElementIdMap = new Map<string, string>();
 
   // Create individual elements
   for (const element of elements) {
-    let excalidrawElement: ExcalidrawElement;
+    let excalidrawElement: FcboardElement;
     const originalId = element.id;
     if (opts?.regenerateIds !== false) {
       Object.assign(element, { id: randomId() });
@@ -716,7 +716,7 @@ export const convertToExcalidrawElements = (
               }
               const { linearElement, startBoundElement, endBoundElement } =
                 bindLinearElementToElement(
-                  excalidrawElement as ExcalidrawArrowElement,
+                  excalidrawElement as FcboardArrowElement,
                   start,
                   end,
                   elementStore,
@@ -735,7 +735,7 @@ export const convertToExcalidrawElements = (
     }
   }
 
-  // Once all the excalidraw elements are created, we can add frames since we
+  // Once all the fcboard elements are created, we can add frames since we
   // need to calculate coordinates and dimensions of frame which is possible after all
   // frame children are processed.
   for (const [id, element] of elementsWithIds) {
@@ -745,9 +745,9 @@ export const convertToExcalidrawElements = (
     const frame = elementStore.getElement(id);
 
     if (!frame) {
-      throw new Error(`Excalidraw element with id ${id} doesn't exist`);
+      throw new Error(`Fcboard element with id ${id} doesn't exist`);
     }
-    const childrenElements: ExcalidrawElement[] = [];
+    const childrenElements: FcboardElement[] = [];
 
     element.children.forEach((id) => {
       const newElementId = oldToNewElementIdMap.get(id);

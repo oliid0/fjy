@@ -1,9 +1,10 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
-import { render, act } from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard, Pointer } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { Fcboard } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { render, act } from "@fcboard/fcboard/tests/test-utils";
+import { Keyboard, Pointer } from "@fcboard/fcboard/tests/helpers/ui";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { animateSolid } from "./solidAnimation";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
@@ -14,10 +15,10 @@ afterEach(() => vi.useRealTimers());
 it.each([false, true])(
   "keeps a double-clicked factory solid grouped with unified toolbar %s",
   async (unifiedToolbar) => {
-    let api!: ExcalidrawImperativeAPI;
+    let api!: FcboardImperativeAPI;
     const activate = vi.fn();
     await render(
-      <Excalidraw
+      <Fcboard
         UIOptions={{ unifiedToolbar }}
         onObjectDoubleClick={activate}
         onMount={({ excalidrawAPI }) => {
@@ -58,9 +59,9 @@ it.each([false, true])(
 );
 
 it("undoes the entire animated pose in the actual editor history, rather than its last frame", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;

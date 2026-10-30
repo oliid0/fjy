@@ -5,14 +5,14 @@ import ClickAwayListener from "@mui/material/ClickAwayListener";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
 import { t, useI18n } from "../i18n";
 
 import { useUIAppState } from "../context/ui-appState";
 import { useTunnels } from "../context/tunnels";
 
-import { useExcalidrawContainer } from "./App";
+import { useFcboardContainer } from "./App";
 import { ToolButton } from "./ToolButton";
 import { FactoryIcon } from "./FactoryIcon";
 import cleaningIcon from "./FactoryCleaning.svg?url";
@@ -47,7 +47,7 @@ export const WhiteboardTools = ({
   const tunnels = useTunnels();
   const hasHostShapes = tunnels.ToolbarShapesTunnel.useHasEntries();
   const [shapesOpen, setShapesOpen] = React.useState(false);
-  const { container } = useExcalidrawContainer();
+  const { container } = useFcboardContainer();
   const finishClear = (value: number) => {
     setClearProgress(0);
     if (value < 98) {

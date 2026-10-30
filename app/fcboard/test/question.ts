@@ -1,5 +1,5 @@
 import { fireEvent, screen } from "@testing-library/react";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 /** Exercise real pointer sampling instead of filling an obsolete text input. */
 export const questionFrame = () => {

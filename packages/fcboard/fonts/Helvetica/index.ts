@@ -1,8 +1,8 @@
-import { LOCAL_FONT_PROTOCOL } from "@excalidraw/common";
+import { LOCAL_FONT_PROTOCOL } from "@fcboard/common";
 
-import { type ExcalidrawFontFaceDescriptor } from "../Fonts";
+import { type FcboardFontFaceDescriptor } from "../Fonts";
 
-export const HelveticaFontFaces: ExcalidrawFontFaceDescriptor[] = [
+export const HelveticaFontFaces: FcboardFontFaceDescriptor[] = [
   {
     uri: LOCAL_FONT_PROTOCOL,
   },

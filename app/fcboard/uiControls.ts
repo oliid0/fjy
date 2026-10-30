@@ -1,6 +1,6 @@
 import { flushSync } from "react-dom";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 
@@ -135,13 +135,11 @@ const nativeValue = (
 
 /** Bound to one editor root; embedded lesson/file documents retain their own semantic bridges. */
 export const registerUICommands = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   resolveRoot: () => HTMLElement | null = () =>
     [
-      ...document.querySelectorAll<HTMLElement>(
-        ".excalidraw[data-excalidraw-id]",
-      ),
-    ].find((node) => node.dataset.excalidrawId === api.id) || null,
+      ...document.querySelectorAll<HTMLElement>(".fcboard[data-fcboard-id]"),
+    ].find((node) => node.dataset.fcboardId === api.id) || null,
 ) => {
   const ids = new WeakMap<HTMLElement, string>();
   let nextId = 0;
@@ -160,10 +158,9 @@ export const registerUICommands = (
     return [
       root,
       ...[
-        ...document.querySelectorAll<HTMLElement>("[data-excalidraw-owner]"),
+        ...document.querySelectorAll<HTMLElement>("[data-fcboard-owner]"),
       ].filter(
-        (node) =>
-          node.dataset.excalidrawOwner === api.id && !root.contains(node),
+        (node) => node.dataset.fcboardOwner === api.id && !root.contains(node),
       ),
     ];
   };

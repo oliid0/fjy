@@ -1,14 +1,14 @@
-import { isElementInViewport } from "@excalidraw/element";
+import { isElementInViewport } from "@fcboard/element";
 
-import { memoize, toBrandedType } from "@excalidraw/common";
+import { memoize, toBrandedType } from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
+  FcboardElement,
   NonDeletedElementsMap,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { renderStaticSceneThrottled } from "../renderer/staticScene";
 
@@ -42,8 +42,8 @@ export class Renderer {
       scrollY: AppState["scrollY"];
       height: AppState["height"];
       width: AppState["width"];
-    }): readonly NonDeletedExcalidrawElement[] => {
-      const visibleElements: NonDeletedExcalidrawElement[] = [];
+    }): readonly NonDeletedFcboardElement[] => {
+      const visibleElements: NonDeletedFcboardElement[] = [];
       for (const element of elementsMap.values()) {
         if (
           isElementInViewport(
@@ -72,10 +72,10 @@ export class Renderer {
       newElementId,
       activeInkIds,
     }: {
-      elements: readonly NonDeletedExcalidrawElement[];
+      elements: readonly NonDeletedFcboardElement[];
       editingTextElement: AppState["editingTextElement"];
-      newElementId: ExcalidrawElement["id"] | undefined;
-      activeInkIds?: ReadonlySet<ExcalidrawElement["id"]>;
+      newElementId: FcboardElement["id"] | undefined;
+      activeInkIds?: ReadonlySet<FcboardElement["id"]>;
     }) => {
       const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
 
@@ -122,8 +122,8 @@ export class Renderer {
         editingTextElement: AppState["editingTextElement"];
         /** note: first render of newElement will always bust the cache
          * (we'd have to prefilter elements outside of this function) */
-        newElementId: ExcalidrawElement["id"] | undefined;
-        activeInkIds?: ReadonlySet<ExcalidrawElement["id"]>;
+        newElementId: FcboardElement["id"] | undefined;
+        activeInkIds?: ReadonlySet<FcboardElement["id"]>;
         sceneNonce: ReturnType<InstanceType<typeof Scene>["getSceneNonce"]>;
       }) => {
         const elements = this.scene.getNonDeletedElements();

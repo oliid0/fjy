@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useState } from "react";
 
-import { muteFSAbortError } from "@excalidraw/common";
+import { muteFSAbortError } from "@fcboard/common";
 
 import { useUIAppState } from "../context/ui-appState";
 import { fileOpen } from "../data/filesystem";
@@ -11,7 +11,7 @@ import { useAtom } from "../editor-jotai";
 import { useLibraryCache } from "../hooks/useLibraryItemSvg";
 import { t } from "../i18n";
 
-import { useApp, useExcalidrawSetAppState } from "./App";
+import { useApp, useFcboardSetAppState } from "./App";
 import ConfirmDialog from "./ConfirmDialog";
 import { isLibraryMenuOpenAtom } from "./LibraryMenu";
 import DropdownMenu from "./dropdownMenu/DropdownMenu";
@@ -89,9 +89,9 @@ export const LibraryDropdownMenuButton: React.FC<{
         libraryItems: fileOpen({
           description: "Fcboard library files",
           // ToDo: Be over-permissive until https://bugs.webkit.org/show_bug.cgi?id=34442
-          // gets resolved. Else, iOS users cannot open `.excalidraw` files.
+          // gets resolved. Else, iOS users cannot open `.fcboard` files.
           /*
-            extensions: [".json", ".excalidrawlib"],
+            extensions: [".json", ".fcboardlib"],
             */
         }),
         merge: true,
@@ -184,7 +184,7 @@ export const LibraryDropdownMenu = ({
   const { library } = useApp();
   const { clearLibraryCache, deleteItemsFromLibraryCache } = useLibraryCache();
   const appState = useUIAppState();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   const [libraryItemsData] = useAtom(libraryItemsAtom);
 

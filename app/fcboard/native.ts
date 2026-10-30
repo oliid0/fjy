@@ -62,6 +62,8 @@ export const Classroom = registerPlugin<{
       | "back"
       | "forward"
       | "reload"
+      | "move"
+      | "resize"
       | "close";
     control?: string;
     version?: string;
@@ -70,6 +72,8 @@ export const Classroom = registerPlugin<{
     key?: string;
     x?: number;
     y?: number;
+    width?: number;
+    height?: number;
   }): Promise<{
     open: boolean;
     loading: boolean;
@@ -77,6 +81,7 @@ export const Classroom = registerPlugin<{
     canGoBack: boolean;
     canGoForward: boolean;
     message: string;
+    window?: { x: number; y: number; width: number; height: number };
     total?: number;
     offset?: number;
     truncated?: boolean;
@@ -113,6 +118,7 @@ export const Classroom = registerPlugin<{
   getFactoryTools(): Promise<{ available: FactoryTool[] }>;
   openFactoryTool(options: { tool: FactoryTool }): Promise<void>;
   startShare(options: { pages: string[] }): Promise<{ urls: string[] }>;
+  setSharePassword(options: { password: string }): Promise<void>;
   stopShare(): Promise<void>;
   sharePages(options: {
     pages: string[];
@@ -126,6 +132,8 @@ export const Classroom = registerPlugin<{
     penWidthMax?: 20 | 40;
     palmThreshold?: number;
     thickThreshold?: number;
+    fineThreshold?: number;
+    factoryThresholds?: { palm?: number; fine?: number; thick?: number };
     dualPen?: boolean;
     hardNibAvailable?: boolean;
     hardNib?: boolean;

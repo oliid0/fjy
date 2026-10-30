@@ -1,11 +1,11 @@
-import { GOOGLE_FONTS_RANGES } from "@excalidraw/common";
+import { GOOGLE_FONTS_RANGES } from "@fcboard/common";
 
-import { type ExcalidrawFontFaceDescriptor } from "../Fonts";
+import { type FcboardFontFaceDescriptor } from "../Fonts";
 
 import LilitaLatinExt from "./Lilita-Regular-i7dPIFZ9Zz-WBtRtedDbYE98RXi4EwSsbg.woff2";
 import LilitaLatin from "./Lilita-Regular-i7dPIFZ9Zz-WBtRtedDbYEF8RXi4EwQ.woff2";
 
-export const LilitaFontFaces: ExcalidrawFontFaceDescriptor[] = [
+export const LilitaFontFaces: FcboardFontFaceDescriptor[] = [
   {
     uri: LilitaLatinExt,
     descriptors: { unicodeRange: GOOGLE_FONTS_RANGES.LATIN_EXT },

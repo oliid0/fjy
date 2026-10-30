@@ -1,16 +1,12 @@
-import { exportToCanvas, exportToSvg } from "@excalidraw/utils";
+import { exportToCanvas, exportToSvg } from "@fcboard/utils";
 
-import {
-  applyDarkModeFilter,
-  FONT_FAMILY,
-  FRAME_STYLE,
-} from "@excalidraw/common";
+import { applyDarkModeFilter, FONT_FAMILY, FRAME_STYLE } from "@fcboard/common";
 
 import type {
-  ExcalidrawTextElement,
+  FcboardTextElement,
   FractionalIndex,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import { prepareElementsForExport } from "../../data";
 import * as exportUtils from "../../scene/export";
@@ -51,7 +47,7 @@ describe("exportToSvg", () => {
       width: ELEMENT_WIDTH,
       index: "a3",
     },
-  ] as NonDeletedExcalidrawElement[];
+  ] as NonDeletedFcboardElement[];
 
   const DEFAULT_OPTIONS = {
     exportBackground: false,
@@ -81,7 +77,7 @@ describe("exportToSvg", () => {
           originalText:
             "中国你好！这是一个测试。中国你好！日本こんにちは！これはテストです。한국 안녕하세요! 이것은 테스트입니다.",
           index: "a4" as FractionalIndex,
-        } as ExcalidrawTextElement,
+        } as FcboardTextElement,
       ],
       DEFAULT_OPTIONS,
       null,

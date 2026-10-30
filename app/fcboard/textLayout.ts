@@ -1,8 +1,8 @@
-import { getFontString, getLineHeight } from "@excalidraw/common";
-import { measureText } from "@excalidraw/element/textMeasurements";
-import { wrapText } from "@excalidraw/element/textWrapping";
+import { getFontString, getLineHeight } from "@fcboard/common";
+import { measureText } from "@fcboard/element/textMeasurements";
+import { wrapText } from "@fcboard/element/textWrapping";
 
-import type { FontFamilyValues } from "@excalidraw/element/types";
+import type { FontFamilyValues } from "@fcboard/element/types";
 
 import { findVisibleContentPosition } from "./placement";
 

@@ -17,6 +17,57 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class WebResourceDialogTest {
+    private void pointer(View view, int action, float x, float y) {
+        long now = SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
+        view.dispatchTouchEvent(event); event.recycle();
+    }
+    @Test public void nativeBrowserMovesResizesAndCancelsWithoutReplacingItsLiveWebView() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            AtomicReference<WebResourceDialog> dialog = new AtomicReference<>();
+            scenario.onActivity(activity -> {
+                WebResourceDialog browser = new WebResourceDialog(activity, "https://example.test/", "en");
+                dialog.set(browser); browser.show();
+                browser.web.loadDataWithBaseURL("https://example.test/", "<p>Live experiment</p><script>window.__fcKeepExperiment=17</script>", "text/html", "UTF-8", null);
+            });
+            boolean initialized = false;
+            for (int attempt = 0; attempt < 30 && !initialized; attempt++) {
+                CountDownLatch read = new CountDownLatch(1);
+                AtomicReference<String> marker = new AtomicReference<>();
+                scenario.onActivity(activity -> dialog.get().web.evaluateJavascript("window.__fcKeepExperiment", value -> { marker.set(value); read.countDown(); }));
+                assertTrue(read.await(5, TimeUnit.SECONDS));
+                initialized = "17".equals(marker.get());
+                if (!initialized) Thread.sleep(100);
+            }
+            assertTrue(initialized);
+            scenario.onActivity(activity -> {
+                WebResourceDialog browser = dialog.get();
+                android.view.WindowManager.LayoutParams before = new android.view.WindowManager.LayoutParams();
+                before.copyFrom(browser.getWindow().getAttributes());
+                pointer(browser.moveHandle, MotionEvent.ACTION_DOWN, 10, 10);
+                pointer(browser.moveHandle, MotionEvent.ACTION_MOVE, 30, 25);
+                pointer(browser.moveHandle, MotionEvent.ACTION_UP, 30, 25);
+                assertTrue(browser.getWindow().getAttributes().x >= before.x);
+                assertTrue(browser.getWindow().getAttributes().y >= before.y);
+                pointer(browser.resizeHandle, MotionEvent.ACTION_DOWN, 10, 10);
+                pointer(browser.resizeHandle, MotionEvent.ACTION_MOVE, 40, 35);
+                pointer(browser.resizeHandle, MotionEvent.ACTION_UP, 40, 35);
+                assertTrue(browser.getWindow().getAttributes().width >= before.width);
+                assertTrue(browser.getWindow().getAttributes().height >= before.height);
+                int width = browser.getWindow().getAttributes().width;
+                pointer(browser.resizeHandle, MotionEvent.ACTION_DOWN, 10, 10);
+                pointer(browser.resizeHandle, MotionEvent.ACTION_MOVE, 0, 0);
+                pointer(browser.resizeHandle, MotionEvent.ACTION_CANCEL, 0, 0);
+                assertEquals(width, browser.getWindow().getAttributes().width);
+            });
+            CountDownLatch checked = new CountDownLatch(1);
+            AtomicReference<String> value = new AtomicReference<>();
+            scenario.onActivity(activity -> dialog.get().web.evaluateJavascript("window.__fcKeepExperiment", result -> { value.set(result); checked.countDown(); }));
+            assertTrue(checked.await(5, TimeUnit.SECONDS));
+            assertEquals("17", value.get());
+            scenario.onActivity(activity -> dialog.get().dismiss());
+        }
+    }
     private SeekBar findBar(View view) {
         if (view instanceof SeekBar) return (SeekBar)view;
         if (view instanceof ViewGroup) {

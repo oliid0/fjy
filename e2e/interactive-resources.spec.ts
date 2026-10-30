@@ -106,9 +106,7 @@ for (const viewport of [
       .click();
     await page.getByRole("button", { name: "教学资源", exact: true }).click();
     const library = page.getByRole("dialog", { name: "教学资源", exact: true });
-    await library
-      .getByRole("textbox", { name: "搜索资源" })
-      .fill("Newton's second law");
+    await library.getByRole("textbox", { name: "搜索资源" }).fill("牛顿力学");
     await library
       .getByRole("button", { name: "AI 生成教学资源", exact: true })
       .click();
@@ -127,6 +125,35 @@ for (const viewport of [
     await lesson.locator("input").fill("10");
     await expect(lesson.locator("output")).toHaveText("5 m/s²");
     await expect(lesson.locator("#block")).toHaveAttribute("x", "150");
+    const resourceWindow = page
+      .locator(".fc-resource-window")
+      .filter({ has: frame });
+    const drag = resourceWindow.locator(".fc-resource-window-drag");
+    const grip = (await drag.boundingBox())!;
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      grip.x + grip.width / 2 + 12,
+      grip.y + grip.height / 2 + 14,
+      { steps: 5 },
+    );
+    await page.mouse.up();
+    await expect(lesson.locator("output")).toHaveText("5 m/s²");
+    const sizing = (await resourceWindow
+      .locator(".fc-resource-window-resize")
+      .boundingBox())!;
+    await page.mouse.move(
+      sizing.x + sizing.width / 2,
+      sizing.y + sizing.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      sizing.x + sizing.width / 2 + 10,
+      sizing.y + sizing.height / 2 + 12,
+      { steps: 5 },
+    );
+    await page.mouse.up();
+    await expect(lesson.locator("output")).toHaveText("5 m/s²");
     await lesson.getByRole("button", { name: "Reset" }).click();
     await expect(lesson.locator("output")).toHaveText("2 m/s²");
     // Supply only provider/model results; the real assistant, router and sandbox do the work.

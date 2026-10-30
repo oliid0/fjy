@@ -1,4 +1,4 @@
-import { t, setLanguage, languages } from "@excalidraw/excalidraw/i18n";
+import { t, setLanguage, languages } from "@fcboard/fcboard/i18n";
 
 import { startSystemSpeech } from "./speech";
 

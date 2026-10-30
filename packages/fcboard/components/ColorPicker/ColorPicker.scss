@@ -1,7 +1,7 @@
 @use "sass:color";
 @use "../../css/variables.module" as *;
 
-.excalidraw {
+.fcboard {
   .focus-visible-none {
     &:focus-visible {
       outline: none !important;

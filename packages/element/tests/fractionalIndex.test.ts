@@ -1,23 +1,23 @@
 /* eslint-disable no-lone-blocks */
 import { generateKeyBetween } from "fractional-indexing";
 
-import { arrayToMap } from "@excalidraw/common";
+import { arrayToMap } from "@fcboard/common";
 
 import {
   syncInvalidIndices,
   syncMovedIndices,
   validateFractionalIndices,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { deepCopyElement } from "@excalidraw/element";
+import { deepCopyElement } from "@fcboard/element";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
 
 import type {
   ElementsMap,
-  ExcalidrawElement,
+  FcboardElement,
   FractionalIndex,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { InvalidFractionalIndexError } from "../src/fractionalIndex";
 
@@ -750,7 +750,7 @@ function testInvalidIndicesSync(args: {
 function prepareArguments(
   elementsLike: { id: string; index?: string }[],
   movedElementsIds?: string[],
-): [ExcalidrawElement[], ElementsMap | undefined] {
+): [FcboardElement[], ElementsMap | undefined] {
   const elements = elementsLike.map((x) =>
     API.createElement({ id: x.id, index: x.index as FractionalIndex }),
   );
@@ -764,7 +764,7 @@ function prepareArguments(
 
 function test(
   name: string,
-  elements: ExcalidrawElement[],
+  elements: FcboardElement[],
   movedElements: ElementsMap | undefined,
   expectUnchangedElements: Map<string, { id: string }>,
   expectValidInput?: boolean,

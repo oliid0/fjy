@@ -1,10 +1,10 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { ToolButton } from "./ToolButton";
 
 vi.mock("./App", () => ({
-  useExcalidrawContainer: () => ({ id: "factory-toolbar" }),
+  useFcboardContainer: () => ({ id: "factory-toolbar" }),
 }));
 
 afterEach(() => vi.useRealTimers());

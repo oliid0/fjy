@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useExcalidrawAPI } from "../components/App";
+import { useFcboardAPI } from "../components/App";
 
 import { getDefaultAppState } from "../appState";
 
@@ -10,9 +10,9 @@ import type { AppState } from "../types";
  * Subscribes to specific appState changes. The component re-renders
  * only when the specified prop(s) change — not on every appState update.
  *
- * Works both inside and outside the <Excalidraw> tree, as long as
- * ExcalidrawAPIContext.Provider is an ancestor (automatically provided
- * inside <Excalidraw>, or manually by the host app).
+ * Works both inside and outside the <Fcboard> tree, as long as
+ * FcboardAPIContext.Provider is an ancestor (automatically provided
+ * inside <Fcboard>, or manually by the host app).
  *
  * Returns the narrowed value depending on prop form:
  *  - `keyof AppState` → `AppState[K]`
@@ -48,7 +48,7 @@ export function useAppStateValue(
   callback?: (value: any, appState: AppState) => void,
   _internal: boolean = true,
 ): unknown {
-  const api = useExcalidrawAPI();
+  const api = useFcboardAPI();
 
   const getLatestValue = () => {
     let appState = api?.getAppState();
@@ -57,7 +57,7 @@ export function useAppStateValue(
         return undefined;
       }
       console.warn(
-        "useAppStateValue: excalidrawAPI not defined yet for internal component in which case it should always be defined. Are you sure you're rendering inside of <Excalidraw/> component tree?",
+        "useAppStateValue: excalidrawAPI not defined yet for internal component in which case it should always be defined. Are you sure you're rendering inside of <Fcboard/> component tree?",
       );
       // fall back in case there's a bug so we don't break the app
       // (internal components using this internal useAppStateValue expect

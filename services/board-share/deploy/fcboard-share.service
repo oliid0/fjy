@@ -1,0 +1,30 @@
+[Unit]
+Description=Fcboard cloud sharing and live whiteboard service
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/srv/fcboard/current/public/index.html
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=fcboard
+Group=fcboard
+WorkingDirectory=/opt/fcboard/share
+EnvironmentFile=/etc/fcboard/share.env
+ExecStart=/opt/fcboard/node/bin/node --max-old-space-size=384 /opt/fcboard/share/server.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=35
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fcboard
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=512M
+TasksMax=128
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

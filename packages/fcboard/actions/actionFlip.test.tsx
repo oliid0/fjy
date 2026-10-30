@@ -1,6 +1,6 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { API } from "../tests/helpers/api";
 import { render } from "../tests/test-utils";
 
@@ -59,7 +59,7 @@ describe("flipping re-centers selection", () => {
         elbowed: true,
       }),
     ];
-    await render(<Excalidraw initialData={{ elements }} />);
+    await render(<Fcboard initialData={{ elements }} />);
 
     API.setSelectedElements(elements);
 
@@ -82,7 +82,7 @@ describe("flipping re-centers selection", () => {
 
 describe("flipping arrowheads", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   it("flipping bound arrow should flip arrowheads only", () => {

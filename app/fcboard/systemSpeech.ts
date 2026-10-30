@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 import type { SpeechRecognitionPlugin } from "@capacitor-community/speech-recognition";
 

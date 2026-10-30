@@ -1,15 +1,17 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { Fcboard } from "@fcboard/fcboard";
+import { t } from "@fcboard/fcboard/i18n";
+
+import { within } from "@testing-library/react";
+
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
 import {
   render as editorRender,
   act,
   fireEvent,
-} from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { within } from "@testing-library/react";
+} from "@fcboard/fcboard/tests/test-utils";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 import { registerCanvasCommands } from "./canvasCommands";
@@ -17,8 +19,8 @@ import { TeachingTools } from "./TeachingTools";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
 import { gizmoPoint } from "./factoryGizmoShapes";
 
-vi.mock("@excalidraw/excalidraw", async (original) => ({
-  ...(await original<typeof import("@excalidraw/excalidraw")>()),
+vi.mock("@fcboard/fcboard", async (original) => ({
+  ...(await original<typeof import("@fcboard/fcboard")>()),
   ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
@@ -38,9 +40,9 @@ const pointer = (target: Element, type: string, x: number, y: number) =>
   );
 
 it("moves a ruler as one undo, rolls back interrupted rotation, and draws one constrained editable stroke", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   await editorRender(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;
@@ -107,9 +109,9 @@ it("moves a ruler as one undo, rolls back interrupted rotation, and draws one co
 });
 
 it("keeps a scaled, rotated set-square edge in scene coordinates", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   await editorRender(
-    <Excalidraw
+    <Fcboard
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;
       }}
@@ -151,9 +153,9 @@ it("keeps a scaled, rotated set-square edge in scene coordinates", async () => {
 });
 
 it("measures with the protractor needle and inserts the measured arc rather than a decorative control", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   await editorRender(
-    <Excalidraw
+    <Fcboard
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;
       }}
@@ -201,9 +203,9 @@ it("measures with the protractor needle and inserts the measured arc rather than
 });
 
 it("opens both added native gizmos from the original toolbox page and draws a compass circle", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   await editorRender(
-    <Excalidraw
+    <Fcboard
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;
       }}

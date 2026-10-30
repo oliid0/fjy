@@ -1,6 +1,6 @@
-import { factoryNibControls } from "@excalidraw/element/factoryNib";
+import { factoryNibControls } from "@fcboard/element/factoryNib";
 
-import { factoryInkPath } from "@excalidraw/element/factoryInk";
+import { factoryInkPath } from "@fcboard/element/factoryInk";
 
 import { selectDocumentLasso } from "./documents";
 

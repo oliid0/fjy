@@ -1,6 +1,6 @@
 @use "../../css/variables.module" as *;
 
-.excalidraw {
+.fcboard {
   .dropdown-menu {
     max-width: 16rem;
     z-index: 1;
@@ -67,7 +67,7 @@
 
       max-height: calc(100svh - var(--editor-container-padding) * 2 - 2.25rem);
 
-      @at-root .excalidraw.theme--dark#{&} {
+      @at-root .fcboard.theme--dark#{&} {
         box-shadow: var(--box-shadow, var(--shadow-island)),
           0 0 0 1px rgba(0, 0, 0, 0.15);
       }
@@ -240,7 +240,7 @@
 
     background-color: var(--background);
 
-    @at-root .excalidraw.theme--dark#{&} {
+    @at-root .fcboard.theme--dark#{&} {
       --background: var(--color-surface-high);
       &:hover {
         --background: #363541;
@@ -269,7 +269,7 @@
         box-shadow: none;
       }
 
-      @at-root .excalidraw.theme--dark#{&} {
+      @at-root .fcboard.theme--dark#{&} {
         &:hover {
           --background: var(--color-surface-high);
         }

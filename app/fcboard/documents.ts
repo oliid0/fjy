@@ -1,23 +1,23 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { createStore, get, set } from "idb-keyval";
-import { getDataURL } from "@excalidraw/excalidraw/data/blob";
-import { eraseStroke } from "@excalidraw/excalidraw/eraser/stroke";
-import { FONT_FAMILY, getFontString } from "@excalidraw/common";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { getElementLineSegments } from "@excalidraw/element";
-import { getLassoSelectedElementIds } from "@excalidraw/excalidraw/lasso/utils";
-import { regionPath } from "@excalidraw/excalidraw/lasso/region";
-import { pointFrom, polygonIncludesPointNonZero } from "@excalidraw/math";
-import { measureText } from "@excalidraw/element/textMeasurements";
+import { getDataURL } from "@fcboard/fcboard/data/blob";
+import { eraseStroke } from "@fcboard/fcboard/eraser/stroke";
+import { FONT_FAMILY, getFontString } from "@fcboard/common";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { getElementLineSegments } from "@fcboard/element";
+import { getLassoSelectedElementIds } from "@fcboard/fcboard/lasso/utils";
+import { regionPath } from "@fcboard/fcboard/lasso/region";
+import { pointFrom, polygonIncludesPointNonZero } from "@fcboard/math";
+import { measureText } from "@fcboard/element/textMeasurements";
 
-import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
-import { factoryNibControls } from "@excalidraw/element/factoryNib";
+import { rainbowInkStops } from "@fcboard/element/rainbowInk";
+import { factoryNibControls } from "@fcboard/element/factoryNib";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
-import type { FontFamilyValues } from "@excalidraw/element/types";
-import type { FactoryInkData } from "@excalidraw/element/factoryInk";
-import type { RegionBounds } from "@excalidraw/excalidraw/lasso/region";
-import type { InteractiveResource } from "@excalidraw/excalidraw/interactiveHtml";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
+import type { FontFamilyValues } from "@fcboard/element/types";
+import type { FactoryInkData } from "@fcboard/element/factoryInk";
+import type { RegionBounds } from "@fcboard/fcboard/lasso/region";
+import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
 import {
   documentInkElement,
@@ -63,6 +63,8 @@ export type InkStroke = {
   insertion?: InsertObject & {
     origin: { x: number; y: number };
     textIndex?: number;
+    labelPart?: number;
+    labelText?: string;
   };
   plot?: {
     id: string;
@@ -358,7 +360,7 @@ export const selectDocumentLasso = (
       return documentInkElement(stroke);
     }
     const bounds = documentStrokeBounds(stroke);
-    return convertToExcalidrawElements(
+    return convertToFcboardElements(
       [
         {
           type: "rectangle",
@@ -496,6 +498,11 @@ export const scaleDocumentStroke = (
           nodePositions: stroke.insertion.nodePositions?.map(
             (point) => point && { x: point.x * scale, y: point.y * scale },
           ),
+          nodeStyles: stroke.insertion.nodeStyles?.map((style) => ({
+            ...style,
+            width: style.width * scale,
+            height: style.height * scale,
+          })),
         }
       : undefined,
     plot: stroke.plot
@@ -573,7 +580,7 @@ export const hitStroke = (
 };
 
 export const shapeInk = (
-  shape: ExcalidrawElementSkeleton,
+  shape: FcboardElementSkeleton,
   lesson: string,
   image?: string,
 ): InkStroke => {

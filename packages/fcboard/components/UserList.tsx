@@ -2,13 +2,13 @@ import { Popover } from "radix-ui";
 import clsx from "clsx";
 import React, { useLayoutEffect } from "react";
 
-import { supportsResizeObserver, isShallowEqual } from "@excalidraw/common";
+import { supportsResizeObserver, isShallowEqual } from "@fcboard/common";
 
-import type { MarkRequired } from "@excalidraw/common/utility-types";
+import type { MarkRequired } from "@fcboard/common/utility-types";
 
 import { t } from "../i18n";
 
-import { useExcalidrawActionManager } from "./App";
+import { useFcboardActionManager } from "./App";
 import { Island } from "./Island";
 import { QuickSearch } from "./QuickSearch";
 import { ScrollableList } from "./ScrollableList";
@@ -111,7 +111,7 @@ const collaboratorComparatorKeys = [
 
 export const UserList = React.memo(
   ({ className, mobile, collaborators, userToFollow }: UserListProps) => {
-    const actionManager = useExcalidrawActionManager();
+    const actionManager = useFcboardActionManager();
 
     const uniqueCollaboratorsMap = new Map<
       ClientId,

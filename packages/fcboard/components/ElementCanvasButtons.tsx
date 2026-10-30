@@ -1,12 +1,12 @@
-import { sceneCoordsToViewportCoords } from "@excalidraw/common";
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { sceneCoordsToViewportCoords } from "@fcboard/common";
+import { getElementAbsoluteCoords } from "@fcboard/element";
 
 import type {
   ElementsMap,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
-import { useExcalidrawAppState } from "../components/App";
+import { useFcboardAppState } from "../components/App";
 
 import "./ElementCanvasButtons.scss";
 
@@ -15,7 +15,7 @@ import type { AppState } from "../types";
 const CONTAINER_PADDING = 5;
 
 const getContainerCoords = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
@@ -35,10 +35,10 @@ export const ElementCanvasButtons = ({
   elementsMap,
 }: {
   children: React.ReactNode;
-  element: NonDeletedExcalidrawElement;
+  element: NonDeletedFcboardElement;
   elementsMap: ElementsMap;
 }) => {
-  const appState = useExcalidrawAppState();
+  const appState = useFcboardAppState();
 
   if (
     appState.contextMenu ||
@@ -55,7 +55,7 @@ export const ElementCanvasButtons = ({
 
   return (
     <div
-      className="excalidraw-canvas-buttons"
+      className="fcboard-canvas-buttons"
       style={{
         top: `${y}px`,
         left: `${x}px`,

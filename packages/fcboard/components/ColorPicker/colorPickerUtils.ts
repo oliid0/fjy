@@ -1,8 +1,8 @@
-import { MAX_CUSTOM_COLORS_USED_IN_CANVAS } from "@excalidraw/common";
+import { MAX_CUSTOM_COLORS_USED_IN_CANVAS } from "@fcboard/common";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { ColorPickerColor, ColorPaletteCustom } from "@excalidraw/common";
+import type { ColorPickerColor, ColorPaletteCustom } from "@fcboard/common";
 
 import { atom } from "../../editor-jotai";
 
@@ -50,7 +50,7 @@ export const isCustomColor = ({
 };
 
 export const getMostUsedCustomColors = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   type: "elementBackground" | "elementStroke",
   palette: ColorPaletteCustom,
 ) => {

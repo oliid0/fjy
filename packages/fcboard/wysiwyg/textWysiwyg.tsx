@@ -11,17 +11,17 @@ import {
   MIME_TYPES,
   applyDarkModeFilter,
   canvasTheme,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import {
   getTextFromElements,
   originalContainerCache,
   updateBoundElements,
   updateOriginalContainerCache,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { LinearElementEditor } from "@excalidraw/element";
-import { bumpVersion } from "@excalidraw/element";
+import { LinearElementEditor } from "@fcboard/element";
+import { bumpVersion } from "@fcboard/element";
 import {
   getBoundTextElementId,
   getContainerElement,
@@ -32,22 +32,22 @@ import {
   computeContainerDimensionForBoundText,
   computeBoundTextPosition,
   getBoundTextElement,
-} from "@excalidraw/element";
-import { getTextWidth } from "@excalidraw/element";
-import { normalizeText } from "@excalidraw/element";
-import { wrapText } from "@excalidraw/element";
+} from "@fcboard/element";
+import { getTextWidth } from "@fcboard/element";
+import { normalizeText } from "@fcboard/element";
+import { wrapText } from "@fcboard/element";
 import {
   isArrowElement,
   isBoundToContainer,
   isTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElementWithContainer,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardLinearElement,
+  FcboardTextElementWithContainer,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
 import { actionSaveToActiveFile } from "../actions";
 
@@ -105,7 +105,7 @@ export const textWysiwyg = ({
   app,
   autoSelect = true,
 }: {
-  id: ExcalidrawElement["id"];
+  id: FcboardElement["id"];
   /**
    * textWysiwyg only deals with `originalText`
    *
@@ -115,14 +115,14 @@ export const textWysiwyg = ({
   onChange?: (nextOriginalText: string) => void;
   onSubmit: (data: { viaKeyboard: boolean; nextOriginalText: string }) => void;
   getViewportCoords: (x: number, y: number) => [number, number];
-  element: ExcalidrawTextElement;
+  element: FcboardTextElement;
   canvas: HTMLCanvasElement;
   excalidrawContainer: HTMLDivElement | null;
   app: App;
   autoSelect?: boolean;
 }): SubmitHandler => {
   const textPropertiesUpdated = (
-    updatedTextElement: ExcalidrawTextElement,
+    updatedTextElement: FcboardTextElement,
     editable: HTMLTextAreaElement,
   ) => {
     if (!editable.style.fontFamily || !editable.style.fontSize) {
@@ -147,7 +147,7 @@ export const textWysiwyg = ({
     LAST_THEME = app.state.theme;
 
     const appState = app.state;
-    const updatedTextElement = app.scene.getElement<ExcalidrawTextElement>(id);
+    const updatedTextElement = app.scene.getElement<FcboardTextElement>(id);
 
     if (!updatedTextElement) {
       return;
@@ -176,7 +176,7 @@ export const textWysiwyg = ({
           const boundTextCoords =
             LinearElementEditor.getBoundTextElementPosition(
               container,
-              updatedTextElement as ExcalidrawTextElementWithContainer,
+              updatedTextElement as FcboardTextElementWithContainer,
               elementsMap,
             );
           coordX = boundTextCoords.x;
@@ -206,7 +206,7 @@ export const textWysiwyg = ({
         maxWidth = getBoundTextMaxWidth(container, updatedTextElement);
         maxHeight = getBoundTextMaxHeight(
           container,
-          updatedTextElement as ExcalidrawTextElementWithContainer,
+          updatedTextElement as FcboardTextElementWithContainer,
         );
 
         // autogrow container height if text exceeds
@@ -235,7 +235,7 @@ export const textWysiwyg = ({
         } else {
           const { x, y } = computeBoundTextPosition(
             container,
-            updatedTextElement as ExcalidrawTextElementWithContainer,
+            updatedTextElement as FcboardTextElementWithContainer,
             elementsMap,
           );
           coordX = x;
@@ -306,7 +306,7 @@ export const textWysiwyg = ({
   editable.dataset.type = "wysiwyg";
   // prevent line wrapping on Safari
   editable.wrap = "off";
-  editable.classList.add("excalidraw-wysiwyg");
+  editable.classList.add("fcboard-wysiwyg");
 
   let whiteSpace = "pre";
   let wordBreak = "normal";
@@ -346,15 +346,15 @@ export const textWysiwyg = ({
 
       let dataList: ParsedDataTranferList | null = null;
 
-      // when copy/pasting excalidraw elements, only paste the text content
+      // when copy/pasting fcboard elements, only paste the text content
       //
       // Note that these custom MIME types only work within the same family
       // of browsers, so won't work e.g. between chrome and firefox. We could
-      // parse the text/plain for existence of excalidraw instead, but this
+      // parse the text/plain for existence of fcboard instead, but this
       // is an edge case
       if (
         mimeTypes.has(MIME_TYPES.excalidrawClipboard) ||
-        mimeTypes.has(MIME_TYPES.excalidraw)
+        mimeTypes.has(MIME_TYPES.fcboard)
       ) {
         // must be called in the same tick
         event.preventDefault();
@@ -381,11 +381,11 @@ export const textWysiwyg = ({
             }
           }
 
-          // if excalidraw elements don't contain any text elements,
+          // if fcboard elements don't contain any text elements,
           // don't paste anything
           return;
         } catch {
-          console.warn("failed to parse excalidraw clipboard data");
+          console.warn("failed to parse fcboard clipboard data");
         }
       }
 
@@ -606,7 +606,7 @@ export const textWysiwyg = ({
     cleanup();
     const updateElement = app.scene.getElement(
       element.id,
-    ) as ExcalidrawTextElement;
+    ) as FcboardTextElement;
     if (!updateElement) {
       return;
     }
@@ -633,9 +633,7 @@ export const textWysiwyg = ({
         app.scene.mutateElement(container, {
           boundElements: container.boundElements?.filter(
             (ele) =>
-              !isTextElement(
-                ele as ExcalidrawTextElement | ExcalidrawLinearElement,
-              ),
+              !isTextElement(ele as FcboardTextElement | FcboardLinearElement),
           ),
         });
       }
@@ -819,7 +817,7 @@ export const textWysiwyg = ({
   });
   window.addEventListener("beforeunload", handleSubmit);
   excalidrawContainer
-    ?.querySelector(".excalidraw-textEditorContainer")!
+    ?.querySelector(".fcboard-textEditorContainer")!
     .appendChild(editable);
 
   return handleSubmit;

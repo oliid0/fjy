@@ -6,19 +6,19 @@ import {
   MIME_TYPES,
   cloneJSON,
   SVG_DOCUMENT_PREAMBLE,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
 
-import { isFrameLikeElement } from "@excalidraw/element";
+import { isFrameLikeElement } from "@fcboard/element";
 
-import { getElementsOverlappingFrame } from "@excalidraw/element";
+import { getElementsOverlappingFrame } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFrameLikeElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardFrameLikeElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import {
   copyBlobToClipboardAsPng,
@@ -39,12 +39,12 @@ import type { AppState, BinaryFiles } from "../types";
 export { loadFromBlob } from "./blob";
 export { loadFromJSON, saveAsJSON } from "./json";
 
-export type ExportedElements = readonly NonDeletedExcalidrawElement[] & {
+export type ExportedElements = readonly NonDeletedFcboardElement[] & {
   _brand: "exportedElements";
 };
 
 export const prepareElementsForExport = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   { selectedElementIds }: Pick<AppState, "selectedElementIds">,
   exportSelectionOnly: boolean,
 ) => {
@@ -54,7 +54,7 @@ export const prepareElementsForExport = (
     exportSelectionOnly &&
     isSomeElementSelected(elements, { selectedElementIds });
 
-  let exportingFrame: ExcalidrawFrameLikeElement | null = null;
+  let exportingFrame: FcboardFrameLikeElement | null = null;
   let exportedElements = isExportingSelection
     ? getSelectedElements(
         elements,
@@ -109,7 +109,7 @@ export const exportCanvas = async (
     /** filename, if applicable */
     name?: string;
     fileHandle?: FileSystemFileHandle | null;
-    exportingFrame: ExcalidrawFrameLikeElement | null;
+    exportingFrame: FcboardFrameLikeElement | null;
   },
 ) => {
   if (elements.length === 0) {
@@ -142,7 +142,7 @@ export const exportCanvas = async (
         {
           description: "Export to SVG",
           name,
-          extension: appState.exportEmbedScene ? "excalidraw.svg" : "svg",
+          extension: appState.exportEmbedScene ? "fcboard.svg" : "svg",
           mimeTypes: [IMAGE_MIME_TYPES.svg],
           fileHandle,
         },
@@ -182,7 +182,7 @@ export const exportCanvas = async (
     return fileSave(blob, {
       description: "Export to PNG",
       name,
-      extension: appState.exportEmbedScene ? "excalidraw.png" : "png",
+      extension: appState.exportEmbedScene ? "fcboard.png" : "png",
       mimeTypes: [IMAGE_MIME_TYPES.png],
       fileHandle,
     });

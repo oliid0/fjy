@@ -1,17 +1,17 @@
 import {
   SHIFT_LOCKING_ANGLE,
   viewportCoordsToSceneCoords,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 import {
   normalizeRadians,
   radiansBetweenAngles,
   radiansDifference,
   type Radians,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
-import { pointsEqual } from "@excalidraw/math";
+import { pointsEqual } from "@fcboard/math";
 
-import type { AppState, Offsets, Zoom } from "@excalidraw/excalidraw/types";
+import type { AppState, Offsets, Zoom } from "@fcboard/fcboard/types";
 
 import { getCommonBounds, getElementBounds } from "./bounds";
 import {
@@ -20,16 +20,14 @@ import {
   isLinearElement,
 } from "./typeChecks";
 
-import type { ElementsMap, ExcalidrawElement } from "./types";
+import type { ElementsMap, FcboardElement } from "./types";
 
 export const INVISIBLY_SMALL_ELEMENT_SIZE = 0.1;
 
 // TODO:  remove invisible elements consistently actions, so that invisible elements are not recorded by the store, exported, broadcasted or persisted
 //        - perhaps could be as part of a standalone 'cleanup' action, in addition to 'finalize'
 //        - could also be part of `_clearElements`
-export const isInvisiblySmallElement = (
-  element: ExcalidrawElement,
-): boolean => {
+export const isInvisiblySmallElement = (element: FcboardElement): boolean => {
   if (isLinearElement(element) || isFreeDrawElement(element)) {
     return (
       element.points.length < 2 ||
@@ -47,7 +45,7 @@ export const isInvisiblySmallElement = (
 };
 
 export const isElementInViewport = (
-  element: ExcalidrawElement,
+  element: FcboardElement,
   width: number,
   height: number,
   viewTransformations: {
@@ -84,7 +82,7 @@ export const isElementInViewport = (
 };
 
 export const isElementCompletelyInViewport = (
-  elements: ExcalidrawElement[],
+  elements: FcboardElement[],
   width: number,
   height: number,
   viewTransformations: {
@@ -223,12 +221,12 @@ export const getLockedLinearCursorAlignSize = (
 };
 
 export const getNormalizedDimensions = (
-  element: Pick<ExcalidrawElement, "width" | "height" | "x" | "y">,
+  element: Pick<FcboardElement, "width" | "height" | "x" | "y">,
 ): {
-  width: ExcalidrawElement["width"];
-  height: ExcalidrawElement["height"];
-  x: ExcalidrawElement["x"];
-  y: ExcalidrawElement["y"];
+  width: FcboardElement["width"];
+  height: FcboardElement["height"];
+  x: FcboardElement["x"];
+  y: FcboardElement["y"];
 } => {
   const ret = {
     width: element.width,

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { EVENT } from "@excalidraw/common";
+import { EVENT } from "@fcboard/common";
 
 export function useOutsideClick<T extends HTMLElement>(
   ref: React.RefObject<T | null>,
@@ -55,7 +55,7 @@ export function useOutsideClick<T extends HTMLElement>(
         // when radix popup is in "modal" mode, it disables pointer events on
         // the `body` element, so the target element is going to be the `html`
         // (note: this won't work if we selectively re-enable pointer events on
-        // specific elements as we do with navbar or excalidraw UI elements)
+        // specific elements as we do with navbar or fcboard UI elements)
         (_event.target === document.documentElement &&
           document.body.style.pointerEvents === "none");
 

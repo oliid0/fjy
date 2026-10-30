@@ -1,8 +1,8 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { getCommonBounds } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { getCommonBounds } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { findVisibleContentPosition } from "./placement";
 
@@ -10,7 +10,7 @@ import type { ContentRect } from "./placement";
 
 /** Scale the whole coordinate system uniformly; labels and curves share the transform. */
 export const fitPlot = (
-  shapes: ExcalidrawElementSkeleton[],
+  shapes: FcboardElementSkeleton[],
   center: { x: number; y: number },
   viewport: ContentRect,
   obstacles: ContentRect[],
@@ -25,7 +25,7 @@ export const fitPlot = (
     bottom: viewport.bottom - gap / 4,
   };
   const [left, top, right, bottom] = getCommonBounds(
-    convertToExcalidrawElements(shapes),
+    convertToFcboardElements(shapes),
   );
   const initial = Math.min(
     1,
@@ -90,7 +90,7 @@ export const fitPlot = (
                 },
               }
             : {}),
-        } as ExcalidrawElementSkeleton;
+        } as FcboardElementSkeleton;
       }),
     };
   }

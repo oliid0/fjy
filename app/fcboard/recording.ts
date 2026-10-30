@@ -1,6 +1,6 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { createStore, get, set } from "idb-keyval";
-import { blobToArrayBuffer } from "@excalidraw/excalidraw/data/blob";
+import { blobToArrayBuffer } from "@fcboard/fcboard/data/blob";
 import { Capacitor } from "@capacitor/core";
 
 import { Classroom as NativeClassroom } from "./native";
@@ -95,8 +95,23 @@ export class BoardRecorder {
       let output = media;
       if (mode === "screen" || mode === "combined") {
         const canvas = document.createElement("canvas");
-        canvas.width = 1920;
-        canvas.height = 1080;
+        const viewport = document
+          .querySelector(".fcboard")
+          ?.getBoundingClientRect();
+        const viewportWidth = Math.max(
+          1,
+          viewport?.width || innerWidth || 1280,
+        );
+        const viewportHeight = Math.max(
+          1,
+          viewport?.height || innerHeight || 720,
+        );
+        const captureScale = Math.min(
+          1,
+          1280 / Math.max(viewportWidth, viewportHeight),
+        );
+        canvas.width = Math.max(1, Math.round(viewportWidth * captureScale));
+        canvas.height = Math.max(1, Math.round(viewportHeight * captureScale));
         const context = canvas.getContext("2d");
         if (!context || !canvas.captureStream) {
           throw new Error(
@@ -146,11 +161,11 @@ export class BoardRecorder {
           context.fillStyle = "#fff";
           context.fillRect(0, 0, canvas.width, canvas.height);
           const canvases = document.querySelectorAll<HTMLCanvasElement>(
-            ".excalidraw .excalidraw__canvas",
+            ".fcboard .fcboard__canvas",
           );
           const documentOpen = !!document.querySelector(".fc-presentation");
           const needsFrame =
-            documentOpen || !!document.querySelector(".excalidraw iframe");
+            documentOpen || !!document.querySelector(".fcboard iframe");
           if (
             Capacitor.isNativePlatform() &&
             needsFrame &&
@@ -207,16 +222,18 @@ export class BoardRecorder {
           if (camera && camera.readyState >= 2) {
             context.drawImage(
               camera,
-              canvas.width - 350,
-              canvas.height - 210,
-              320,
-              180,
+              canvas.width - Math.min(320, canvas.width * 0.35) - 16,
+              canvas.height -
+                (Math.min(320, canvas.width * 0.35) * 9) / 16 -
+                16,
+              Math.min(320, canvas.width * 0.35),
+              (Math.min(320, canvas.width * 0.35) * 9) / 16,
             );
           }
         };
         paint();
-        this.timer = setInterval(paint, 40);
-        output = canvas.captureStream(25);
+        this.timer = setInterval(paint, 66);
+        output = canvas.captureStream(15);
         media.getAudioTracks().forEach((track) => output.addTrack(track));
         this.streams.push(output);
       }

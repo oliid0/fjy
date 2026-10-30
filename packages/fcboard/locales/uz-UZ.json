@@ -91,7 +91,7 @@
     "untitled": "Nomsiz ismlar",
     "name": "Ismaning",
     "yourName": "Sizning ismingiz",
-    "madeWithExcalidraw": "Fcboard bilan ishlab chiqarilgan",
+    "madeWithFcboard": "Fcboard bilan ishlab chiqarilgan",
     "group": "Guruh tanlovi",
     "ungroup": "Guruh tanlovi",
     "collaborators": "Hamkorlar",
@@ -121,7 +121,7 @@
     "toggleTheme": "Yorug'lik/qorong'ulik mavzusi",
     "theme": "Mavzuga oid",
     "personalLib": "Shaxsiy kutubxona",
-    "excalidrawLib": "FK kutubxonasi",
+    "fcboardlib": "FK kutubxonasi",
     "decreaseFontSize": "Shrift hajmini kamaytirish",
     "increaseFontSize": "Shrift hajmini oshirish",
     "unbindText": "Uninstall text",
@@ -320,7 +320,7 @@
     "laser": "Lazer ko'rsatgichi",
     "hand": "Panning Tool (Panning Tool)",
     "extraTools": "Ko'proq vositalar",
-    "mermaidToExcalidraw": "Merida to fcboard",
+    "mermaidToFcboard": "Merida to fcboard",
     "convertElementType": "Toggle Shakli Shakli"
   },
   "element": {

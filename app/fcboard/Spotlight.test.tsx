@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { act, fireEvent, screen } from "@testing-library/react";
 
 import { render } from "./test/render";

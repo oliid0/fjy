@@ -1,0 +1,31 @@
+.fc-skizze-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1200;
+}
+
+.fc-skizze-colors {
+  position: fixed;
+  left: 50%;
+  bottom: min(calc(160 * var(--skizze-pixel)), 25vh);
+  transform: translateX(-50%);
+  display: flex;
+  pointer-events: none;
+  z-index: 1201;
+
+  img {
+    box-sizing: border-box;
+    width: calc(120 * var(--skizze-pixel));
+    height: calc(120 * var(--skizze-pixel));
+    padding: calc(10 * var(--skizze-pixel));
+    margin: calc(10 * var(--skizze-pixel));
+    transition: transform 200ms;
+
+    &.selected {
+      transform: scale(1.3);
+    }
+  }
+}

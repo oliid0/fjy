@@ -1,22 +1,21 @@
-import { t } from "@excalidraw/excalidraw/i18n";
-import { CaptureUpdateAction, restoreElements } from "@excalidraw/excalidraw";
-import { canvasStrokeColor } from "@excalidraw/common";
+import { t } from "@fcboard/fcboard/i18n";
+import { CaptureUpdateAction, restoreElements } from "@fcboard/fcboard";
+import { canvasStrokeColor } from "@fcboard/common";
 import { flushSync } from "react-dom";
-import { reconcileElements } from "@excalidraw/excalidraw/data/reconcile";
-import { validWhiteboardBackground } from "@excalidraw/excalidraw/whiteboardBackground";
+import { reconcileElements } from "@fcboard/fcboard/data/reconcile";
+import { validWhiteboardBackground } from "@fcboard/fcboard/whiteboardBackground";
 
-import type { WhiteboardBackground } from "@excalidraw/excalidraw/whiteboardBackground";
+import type { WhiteboardBackground } from "@fcboard/fcboard/whiteboardBackground";
 
-import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
-import type { OrderedExcalidrawElement } from "@excalidraw/element/types";
-import type {
-  BinaryFiles,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
+import type { RemoteFcboardElement } from "@fcboard/fcboard/data/reconcile";
+import type { OrderedFcboardElement } from "@fcboard/element/types";
+import type { BinaryFiles, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 export type ScenePacket = {
   kind: "scene" | "initial";
-  elements: readonly OrderedExcalidrawElement[];
+  page?: { id: string; epoch: number };
+  document?: SharedDocument;
+  elements: readonly OrderedFcboardElement[];
   files: BinaryFiles;
   background?: {
     color: string;
@@ -25,7 +24,33 @@ export type ScenePacket = {
     pattern?: WhiteboardBackground | null;
   };
 };
-const stamp = (element: OrderedExcalidrawElement) =>
+export type SharedDocument = {
+  id: string;
+  name: string;
+  mimeType: string;
+  page: number;
+  dataURL?: string;
+  view?: SharedDocumentView;
+};
+export type SharedDocumentView = {
+  zoom: number;
+  scroll: number;
+  animation: number;
+  animate: boolean;
+};
+export type SceneSyncAPI = Pick<
+  FcboardImperativeAPI,
+  | "getAppState"
+  | "getFiles"
+  | "getSceneElementsIncludingDeleted"
+  | "onChange"
+  | "onPointerUp"
+  | "resetScene"
+  | "history"
+  | "addFiles"
+  | "updateScene"
+>;
+const stamp = (element: OrderedFcboardElement) =>
   `${element.version}:${element.versionNonce}:${element.isDeleted}`;
 const newer = (
   a: NonNullable<ScenePacket["background"]>,
@@ -45,9 +70,11 @@ export class SceneSync {
   private disposed = false;
   private applying = false;
   private queue: Promise<unknown> = Promise.resolve();
+  private page?: ScenePacket["page"];
+  private authoritative = false;
 
   constructor(
-    private api: ExcalidrawImperativeAPI,
+    private api: SceneSyncAPI,
     private send: (packet: ScenePacket) => Promise<void>,
     private onError: (error: unknown) => void,
     private client = crypto.randomUUID(),
@@ -62,10 +89,30 @@ export class SceneSync {
   snapshot(): ScenePacket {
     return {
       kind: "scene",
+      ...(this.page ? { page: this.page } : {}),
       elements: this.api.getSceneElementsIncludingDeleted(),
       files: this.api.getFiles(),
       background: this.background,
     };
+  }
+  /** Host navigation starts a new scene epoch, including when returning to an earlier board. */
+  hostPage(id: string, epoch = (this.page?.epoch ?? -1) + 1) {
+    this.authoritative = true;
+    if (this.page?.id === id) {
+      return false;
+    }
+    this.page = { id, epoch };
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.known.clear();
+    this.files.clear();
+    this.background = {
+      color: this.api.getAppState().viewBackgroundColor,
+      pattern: this.api.getAppState().whiteboardBackground ?? null,
+      clock: ++this.clock,
+      client: this.client,
+    };
+    return true;
   }
   start() {
     let editing = false;
@@ -115,8 +162,11 @@ export class SceneSync {
     const pattern = this.api.getAppState().whiteboardBackground ?? null;
     const changedColor =
       this.background.color !== color ||
-      JSON.stringify(this.background.pattern ?? null) !==
-        JSON.stringify(pattern);
+      (this.background.pattern !== pattern &&
+        (this.background.pattern?.pattern !== pattern?.pattern ||
+          this.background.pattern?.width !== pattern?.width ||
+          this.background.pattern?.height !== pattern?.height ||
+          this.background.pattern?.image !== pattern?.image));
     if (changedColor) {
       this.background = {
         color,
@@ -139,6 +189,7 @@ export class SceneSync {
     Object.keys(files).forEach((id) => this.files.add(id));
     const packet: ScenePacket = {
       kind: "scene",
+      ...(this.page ? { page: this.page } : {}),
       elements,
       files,
       ...(full || changedColor ? { background: this.background } : {}),
@@ -161,6 +212,34 @@ export class SceneSync {
     ) {
       throw new Error(t("fcboard.invalid_sync_data"));
     }
+    if (
+      packet.page &&
+      (typeof packet.page.id !== "string" ||
+        !packet.page.id ||
+        packet.page.id.length > 128 ||
+        !Number.isSafeInteger(packet.page.epoch) ||
+        packet.page.epoch < 0)
+    ) {
+      throw new Error(t("fcboard.invalid_sync_data"));
+    }
+    const changedPage =
+      packet.page?.id !== this.page?.id ||
+      packet.page?.epoch !== this.page?.epoch;
+    if (changedPage) {
+      if (
+        this.authoritative ||
+        !packet.page ||
+        (this.page && packet.page.epoch <= this.page.epoch)
+      ) {
+        return;
+      }
+      this.page = { id: packet.page.id, epoch: packet.page.epoch };
+      this.known.clear();
+      this.files.clear();
+      clearTimeout(this.timer);
+      this.timer = undefined;
+      replace = true;
+    }
     if (!replace) {
       this.flush();
     }
@@ -168,7 +247,7 @@ export class SceneSync {
     const remote = restoreElements(packet.elements, null, {
       refreshDimensions: false,
       repairBindings: false,
-    }) as unknown as RemoteExcalidrawElement[];
+    }) as unknown as RemoteFcboardElement[];
     const elements = reconcileElements(local, remote, this.api.getAppState());
     this.applying = true;
     try {
@@ -193,12 +272,19 @@ export class SceneSync {
         }
       }
       flushSync(() => {
+        if (changedPage) {
+          this.api.resetScene();
+          this.api.history.clear();
+        }
         this.api.addFiles(Object.values(packet.files));
         this.api.updateScene({
           elements,
           appState: {
             viewBackgroundColor: this.background.color,
             whiteboardBackground: this.background.pattern ?? undefined,
+            ...(this.background.pattern?.image
+              ? { whiteboardCustomBackground: this.background.pattern.image }
+              : {}),
             currentItemStrokeColor:
               this.background.color !==
               this.api.getAppState().viewBackgroundColor

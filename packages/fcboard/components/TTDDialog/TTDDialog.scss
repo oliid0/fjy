@@ -4,7 +4,7 @@
 $verticalBreakpoint: 861px;
 $fullScreenModalBreakpoint: 600px;
 
-.excalidraw {
+.fcboard {
   .Modal.Dialog.ttd-dialog {
     padding: 1.25rem;
 
@@ -555,7 +555,7 @@ $fullScreenModalBreakpoint: 600px;
   }
 
   .ttd-dialog-panel-button {
-    &.excalidraw-button {
+    &.fcboard-button {
       font-family: inherit;
       font-weight: 600;
       height: 2.5rem;
@@ -586,7 +586,7 @@ $fullScreenModalBreakpoint: 600px;
         min-width: 7.5rem;
       }
 
-      @at-root .excalidraw.theme--dark#{&} {
+      @at-root .fcboard.theme--dark#{&} {
         color: var(--color-gray-100);
       }
     }
@@ -609,7 +609,7 @@ $fullScreenModalBreakpoint: 600px;
 
         --spinner-color: white;
 
-        @at-root .excalidraw.theme--dark#{&} {
+        @at-root .fcboard.theme--dark#{&} {
           --spinner-color: var(--color-gray-100);
         }
       }
@@ -714,7 +714,7 @@ $fullScreenModalBreakpoint: 600px;
         color: var(--color-danger);
       }
 
-      @at-root .excalidraw.theme--dark#{&} {
+      @at-root .fcboard.theme--dark#{&} {
         svg {
           color: var(--color-on-surface);
         }

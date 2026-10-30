@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Paper from "@mui/material/Paper";
 import ButtonBase from "@mui/material/ButtonBase";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 
 import { classroomCommands } from "./commands";
 

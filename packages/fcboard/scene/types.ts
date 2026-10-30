@@ -1,12 +1,12 @@
-import type { UserIdleState, EditorInterface } from "@excalidraw/common";
+import type { UserIdleState, EditorInterface } from "@fcboard/common";
 import type {
-  ExcalidrawElement,
+  FcboardElement,
   NonDeletedElementsMap,
-  NonDeletedExcalidrawElement,
+  NonDeletedFcboardElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { MakeBrand } from "@excalidraw/common/utility-types";
+import type { MakeBrand } from "@fcboard/common/utility-types";
 
 import type {
   AppClassProperties,
@@ -16,7 +16,7 @@ import type {
   InteractiveCanvasAppState,
   StaticCanvasAppState,
   SocketId,
-  PendingExcalidrawElements,
+  PendingFcboardElements,
 } from "../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Drawable } from "roughjs/bin/core";
@@ -35,7 +35,7 @@ export type StaticCanvasRenderConfig = {
   isExporting: boolean;
   embedsValidationStatus: EmbedsValidationStatus;
   elementsPendingErasure: ElementsPendingErasure;
-  pendingFlowchartNodes: PendingExcalidrawElements | null;
+  pendingFlowchartNodes: PendingFcboardElements | null;
   theme: AppState["theme"];
 };
 
@@ -61,7 +61,7 @@ export type SVGRenderConfig = {
 export type InteractiveCanvasRenderConfig = {
   // collab-related state
   // ---------------------------------------------------------------------------
-  remoteSelectedElementIds: Map<ExcalidrawElement["id"], SocketId[]>;
+  remoteSelectedElementIds: Map<FcboardElement["id"], SocketId[]>;
   remotePointerViewportCoords: Map<SocketId, { x: number; y: number }>;
   remotePointerUserStates: Map<SocketId, UserIdleState>;
   remotePointerUsernames: Map<SocketId, string>;
@@ -84,7 +84,7 @@ export type StaticSceneRenderConfig = {
   rc: RoughCanvas;
   elementsMap: RenderableElementsMap;
   allElementsMap: NonDeletedSceneElementsMap;
-  visibleElements: readonly NonDeletedExcalidrawElement[];
+  visibleElements: readonly NonDeletedFcboardElement[];
   scale: number;
   appState: StaticCanvasAppState;
   renderConfig: StaticCanvasRenderConfig;
@@ -98,8 +98,8 @@ export type InteractiveSceneRenderConfig = {
   app: AppClassProperties;
   canvas: HTMLCanvasElement | null;
   elementsMap: RenderableElementsMap;
-  visibleElements: readonly NonDeletedExcalidrawElement[];
-  selectedElements: readonly NonDeletedExcalidrawElement[];
+  visibleElements: readonly NonDeletedFcboardElement[];
+  selectedElements: readonly NonDeletedFcboardElement[];
   allElementsMap: NonDeletedSceneElementsMap;
   scale: number;
   appState: InteractiveCanvasAppState;
@@ -113,8 +113,8 @@ export type InteractiveSceneRenderConfig = {
 export type NewElementSceneRenderConfig = {
   canvas: HTMLCanvasElement | null;
   rc: RoughCanvas;
-  newElement: ExcalidrawElement | null;
-  activeInkElements?: readonly ExcalidrawElement[];
+  newElement: FcboardElement | null;
+  activeInkElements?: readonly FcboardElement[];
   elementsMap: RenderableElementsMap;
   allElementsMap: NonDeletedSceneElementsMap;
   scale: number;

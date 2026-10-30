@@ -3,46 +3,62 @@ import path from "path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [
+    {
+      name: "source-sdk-directory-entry",
+      enforce: "pre",
+      resolveId(id, importer) {
+        if (
+          importer &&
+          id.startsWith(".") &&
+          path.resolve(path.dirname(importer.split("?")[0]), id) ===
+            path.resolve(__dirname, "packages/fcboard")
+        ) {
+          return path.resolve(__dirname, "packages/fcboard/index.tsx");
+        }
+      },
+    },
+  ],
   resolve: {
     alias: [
       {
-        find: /^@excalidraw\/common$/,
+        find: /^@fcboard\/common$/,
         replacement: path.resolve(__dirname, "./packages/common/src/index.ts"),
       },
       {
-        find: /^@excalidraw\/common\/(.*?)/,
+        find: /^@fcboard\/common\/(.*?)/,
         replacement: path.resolve(__dirname, "./packages/common/src/$1"),
       },
       {
-        find: /^@excalidraw\/element$/,
+        find: /^@fcboard\/element$/,
         replacement: path.resolve(__dirname, "./packages/element/src/index.ts"),
       },
       {
-        find: /^@excalidraw\/element\/(.*?)/,
+        find: /^@fcboard\/element\/(.*?)/,
         replacement: path.resolve(__dirname, "./packages/element/src/$1"),
       },
       {
-        find: /^@excalidraw\/excalidraw$/,
+        find: /^@fcboard\/fcboard$/,
         replacement: path.resolve(__dirname, "./packages/fcboard/index.tsx"),
       },
       {
-        find: /^@excalidraw\/excalidraw\/(.*?)/,
+        find: /^@fcboard\/fcboard\/(.*?)/,
         replacement: path.resolve(__dirname, "./packages/fcboard/$1"),
       },
       {
-        find: /^@excalidraw\/math$/,
+        find: /^@fcboard\/math$/,
         replacement: path.resolve(__dirname, "./packages/math/src/index.ts"),
       },
       {
-        find: /^@excalidraw\/math\/(.*?)/,
+        find: /^@fcboard\/math\/(.*?)/,
         replacement: path.resolve(__dirname, "./packages/math/src/$1"),
       },
       {
-        find: /^@excalidraw\/utils$/,
+        find: /^@fcboard\/utils$/,
         replacement: path.resolve(__dirname, "./packages/utils/src/index.ts"),
       },
       {
-        find: /^@excalidraw\/utils\/(.*?)/,
+        find: /^@fcboard\/utils\/(.*?)/,
         replacement: path.resolve(__dirname, "./packages/utils/src/$1"),
       },
     ],

@@ -5,7 +5,7 @@ import {
   isShallowEqual,
   sceneCoordsToViewportCoords,
   type EditorInterface,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type {
   InteractiveCanvasRenderConfig,
@@ -13,12 +13,12 @@ import type {
   InteractiveSceneRenderConfig,
   RenderableElementsMap,
   RenderInteractiveSceneCallback,
-} from "@excalidraw/excalidraw/scene/types";
+} from "@fcboard/fcboard/scene/types";
 
 import type {
-  NonDeletedExcalidrawElement,
+  NonDeletedFcboardElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { t } from "../../i18n";
 import { renderInteractiveScene } from "../../renderer/interactiveScene";
@@ -36,8 +36,8 @@ type InteractiveCanvasProps = {
   containerRef: React.RefObject<HTMLDivElement | null>;
   canvas: HTMLCanvasElement | null;
   elementsMap: RenderableElementsMap;
-  visibleElements: readonly NonDeletedExcalidrawElement[];
-  selectedElements: readonly NonDeletedExcalidrawElement[];
+  visibleElements: readonly NonDeletedFcboardElement[];
+  selectedElements: readonly NonDeletedFcboardElement[];
   allElementsMap: NonDeletedSceneElementsMap;
   sceneNonce: number | undefined;
   selectionNonce: number | undefined;
@@ -199,7 +199,7 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
 
   return (
     <canvas
-      className="excalidraw__canvas interactive"
+      className="fcboard__canvas interactive"
       style={{
         width: props.appState.width,
         height: props.appState.height,

@@ -91,7 +91,7 @@
     "untitled": "Başlıqsız",
     "name": "Ad",
     "yourName": "Adınız",
-    "madeWithExcalidraw": "Fcboard ilə hazırlanmışdır",
+    "madeWithFcboard": "Fcboard ilə hazırlanmışdır",
     "group": "Qrup şəklində seçim",
     "ungroup": "Qrupsuz seçim",
     "collaborators": "Əməkdaşlar",
@@ -121,7 +121,7 @@
     "toggleTheme": "Gecə/Güzdüz rejiminə dəyiş",
     "theme": "Fon",
     "personalLib": "Şəxsi kitabxana",
-    "excalidrawLib": "Fcboard kitabxanası",
+    "fcboardlib": "Fcboard kitabxanası",
     "decreaseFontSize": "Şrift ölçüsünü azalt",
     "increaseFontSize": "Şrift ölçüsünü artır",
     "unbindText": "Mətni çıxar",
@@ -320,7 +320,7 @@
     "laser": "Lazer göstərici",
     "hand": "Əl (yönləndirmə aləti)",
     "extraTools": "Daha çox alət",
-    "mermaidToExcalidraw": "Su pərisi Fcboard'a",
+    "mermaidToFcboard": "Su pərisi Fcboard'a",
     "convertElementType": "Forma növünü dəyişdirin"
   },
   "element": {

@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
 
 import { version } from "../package.json";

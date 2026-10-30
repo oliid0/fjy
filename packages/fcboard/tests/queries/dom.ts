@@ -6,8 +6,7 @@ import {
   trimErrorStack,
 } from "../test-utils";
 
-export const TEXT_EDITOR_SELECTOR =
-  ".excalidraw-textEditorContainer > textarea";
+export const TEXT_EDITOR_SELECTOR = ".fcboard-textEditorContainer > textarea";
 
 export const getTextEditor = async ({
   selector = TEXT_EDITOR_SELECTOR,

@@ -16,12 +16,12 @@ import {
   addEventListener,
   EVENT,
   CLASSES,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import { trackEvent } from "../analytics";
 import { useUIAppState } from "../context/ui-appState";
@@ -37,8 +37,8 @@ import { getSelectedElements } from "../scene";
 import {
   useApp,
   useAppProps,
-  useExcalidrawElements,
-  useExcalidrawSetAppState,
+  useFcboardElements,
+  useFcboardSetAppState,
 } from "./App";
 import { LibraryMenuControlButtons } from "./LibraryMenuControlButtons";
 import LibraryMenuItems from "./LibraryMenuItems";
@@ -49,7 +49,7 @@ import "./LibraryMenu.scss";
 import type {
   LibraryItems,
   LibraryItem,
-  ExcalidrawProps,
+  FcboardProps,
   UIAppState,
   AppClassProperties,
 } from "../types";
@@ -78,7 +78,7 @@ const LibraryMenuContent = memo(
     onInsertLibraryItems: (libraryItems: LibraryItems) => void;
     onAddToLibrary: () => void;
     setAppState: React.Component<any, UIAppState>["setState"];
-    libraryReturnUrl: ExcalidrawProps["libraryReturnUrl"];
+    libraryReturnUrl: FcboardProps["libraryReturnUrl"];
     library: Library;
     id: string;
     theme: UIAppState["theme"];
@@ -173,7 +173,7 @@ const LibraryMenuContent = memo(
 );
 
 const getPendingElements = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   selectedElementIds: UIAppState["selectedElementIds"],
 ) => ({
   elements,
@@ -192,13 +192,13 @@ const usePendingElementsMemo = (
   appState: UIAppState,
   app: AppClassProperties,
 ) => {
-  const elements = useExcalidrawElements();
+  const elements = useFcboardElements();
   const [state, setState] = useState(() =>
     getPendingElements(elements, appState.selectedElementIds),
   );
 
   const selectedElementVersions = useRef(
-    new Map<ExcalidrawElement["id"], ExcalidrawElement["version"]>(),
+    new Map<FcboardElement["id"], FcboardElement["version"]>(),
   );
 
   useEffect(() => {
@@ -266,7 +266,7 @@ export const LibraryMenu = memo(() => {
   const { onInsertElements } = app;
   const appProps = useAppProps();
   const appState = useUIAppState();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const [selectedItems, setSelectedItems] = useState<LibraryItem["id"][]>([]);
   const memoizedLibrary = useMemo(() => app.library, [app.library]);
   const pendingElements = usePendingElementsMemo(appState, app);

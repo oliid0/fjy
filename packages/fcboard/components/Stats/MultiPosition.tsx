@@ -1,13 +1,13 @@
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@fcboard/math";
 import { useMemo } from "react";
 
-import { isTextElement } from "@excalidraw/element";
+import { isTextElement } from "@fcboard/element";
 
-import { getCommonBounds } from "@excalidraw/element";
+import { getCommonBounds } from "@fcboard/element";
 
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { ElementsMap, FcboardElement } from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import StatsDragInput from "./DragInput";
 import {
@@ -24,7 +24,7 @@ import type { AppState } from "../../types";
 
 interface MultiPositionProps {
   property: "x" | "y";
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   elementsMap: ElementsMap;
   atomicUnits: AtomicUnit[];
   scene: Scene;
@@ -35,7 +35,7 @@ const moveElements = (
   property: MultiPositionProps["property"],
   changeInTopX: number,
   changeInTopY: number,
-  originalElements: readonly ExcalidrawElement[],
+  originalElements: readonly FcboardElement[],
   originalElementsMap: ElementsMap,
   scene: Scene,
   appState: AppState,
@@ -74,7 +74,7 @@ const moveElements = (
 const moveGroupTo = (
   nextX: number,
   nextY: number,
-  originalElements: ExcalidrawElement[],
+  originalElements: FcboardElement[],
   originalElementsMap: ElementsMap,
   scene: Scene,
   appState: AppState,
@@ -229,7 +229,7 @@ const MultiPosition = ({
       atomicUnits.map((atomicUnit) => {
         const elementsInUnit = Object.keys(atomicUnit)
           .map((id) => elementsMap.get(id))
-          .filter((el) => el !== undefined) as ExcalidrawElement[];
+          .filter((el) => el !== undefined) as FcboardElement[];
 
         // we're dealing with a group
         if (elementsInUnit.length > 1) {

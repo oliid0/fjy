@@ -1,5 +1,5 @@
-import { WelcomeScreen } from "@excalidraw/excalidraw";
-import { useI18n } from "@excalidraw/excalidraw/i18n";
+import { WelcomeScreen } from "@fcboard/fcboard";
+import { useI18n } from "@fcboard/fcboard/i18n";
 import React from "react";
 
 export const AppWelcomeScreen = React.memo(

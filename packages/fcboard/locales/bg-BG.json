@@ -91,7 +91,7 @@
     "untitled": "Неозаглавено",
     "name": "Име",
     "yourName": "Вашето име",
-    "madeWithExcalidraw": "Направено с Fcboard",
+    "madeWithFcboard": "Направено с Fcboard",
     "group": "Групирай селекцията",
     "ungroup": "Спри групирането на селекцията",
     "collaborators": "Сътрудници",
@@ -121,7 +121,7 @@
     "toggleTheme": "Превключване на светла/тъмна тема",
     "theme": "Тема",
     "personalLib": "Лична Библиотека",
-    "excalidrawLib": "Fcboard Библиотека",
+    "fcboardlib": "Fcboard Библиотека",
     "decreaseFontSize": "Намали размера на шрифта",
     "increaseFontSize": "Увеличи размера на шрифта",
     "unbindText": "Развързване на текст",
@@ -320,7 +320,7 @@
     "laser": "Лазерна показалка",
     "hand": "Ръка (инструмент за панорамиране)",
     "extraTools": "Още инструменти",
-    "mermaidToExcalidraw": "Mermaid към Fcboard",
+    "mermaidToFcboard": "Mermaid към Fcboard",
     "convertElementType": "Превключване на типа форма"
   },
   "element": {

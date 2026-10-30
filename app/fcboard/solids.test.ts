@@ -1,4 +1,4 @@
-import { getCommonBounds } from "@excalidraw/element";
+import { getCommonBounds } from "@fcboard/element";
 
 import { configureSolid, solidDefaults, solidShapes } from "./solids";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";

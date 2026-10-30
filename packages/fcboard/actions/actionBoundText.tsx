@@ -5,20 +5,20 @@ import {
   VERTICAL_ALIGN,
   arrayToMap,
   getFontString,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 import {
   getOriginalContainerHeightFromCache,
   isBoundToContainer,
   resetOriginalContainerCache,
   updateOriginalContainerCache,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   computeBoundTextPosition,
   computeContainerDimensionForBoundText,
   getBoundTextElement,
   redrawTextBoundingBox,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   hasBoundTextElement,
@@ -26,26 +26,26 @@ import {
   isTextBindableContainer,
   isTextElement,
   isUsingAdaptiveRadius,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { measureText } from "@excalidraw/element";
+import { measureText } from "@fcboard/element";
 
-import { syncMovedIndices } from "@excalidraw/element";
+import { syncMovedIndices } from "@fcboard/element";
 
-import { newElement } from "@excalidraw/element";
+import { newElement } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextContainer,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardLinearElement,
+  FcboardTextContainer,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@fcboard/common/utility-types";
 
-import type { Radians } from "@excalidraw/math";
+import type { Radians } from "@fcboard/math";
 
 import { register } from "./register";
 
@@ -80,7 +80,7 @@ export const actionUnbindText = register({
           boundTextElement,
           elementsMap,
         );
-        app.scene.mutateElement(boundTextElement as ExcalidrawTextElement, {
+        app.scene.mutateElement(boundTextElement as FcboardTextElement, {
           containerId: null,
           width,
           height,
@@ -140,8 +140,8 @@ export const actionBindText = register({
   perform: (elements, appState, _, app) => {
     const selectedElements = app.scene.getSelectedElements(appState);
 
-    let textElement: ExcalidrawTextElement;
-    let container: ExcalidrawTextContainer;
+    let textElement: FcboardTextElement;
+    let container: FcboardTextContainer;
 
     if (
       isTextElement(selectedElements[0]) &&
@@ -150,8 +150,8 @@ export const actionBindText = register({
       textElement = selectedElements[0];
       container = selectedElements[1];
     } else {
-      textElement = selectedElements[1] as ExcalidrawTextElement;
-      container = selectedElements[0] as ExcalidrawTextContainer;
+      textElement = selectedElements[1] as FcboardTextElement;
+      container = selectedElements[0] as FcboardTextContainer;
     }
     app.scene.mutateElement(textElement, {
       containerId: container.id,
@@ -181,9 +181,9 @@ export const actionBindText = register({
 });
 
 const pushTextAboveContainer = (
-  elements: readonly ExcalidrawElement[],
-  container: ExcalidrawElement,
-  textElement: ExcalidrawTextElement,
+  elements: readonly FcboardElement[],
+  container: FcboardElement,
+  textElement: FcboardTextElement,
 ) => {
   const updatedElements = elements.slice();
   const textElementIndex = updatedElements.findIndex(
@@ -201,9 +201,9 @@ const pushTextAboveContainer = (
 };
 
 const pushContainerBelowText = (
-  elements: readonly ExcalidrawElement[],
-  container: ExcalidrawElement,
-  textElement: ExcalidrawTextElement,
+  elements: readonly FcboardElement[],
+  container: FcboardElement,
+  textElement: FcboardTextElement,
 ) => {
   const updatedElements = elements.slice();
   const containerIndex = updatedElements.findIndex(
@@ -233,7 +233,7 @@ export const actionWrapTextInContainer = register({
   },
   perform: (elements, appState, _, app) => {
     const selectedElements = app.scene.getSelectedElements(appState);
-    let updatedElements: readonly ExcalidrawElement[] = elements.slice();
+    let updatedElements: readonly FcboardElement[] = elements.slice();
     const containerIds: Mutable<AppState["selectedElementIds"]> = {};
 
     for (const textElement of selectedElements) {
@@ -282,7 +282,7 @@ export const actionWrapTextInContainer = register({
             .map((el) => el.id);
           const linearElements = updatedElements.filter((ele) =>
             linearElementIds.includes(ele.id),
-          ) as ExcalidrawLinearElement[];
+          ) as FcboardLinearElement[];
           linearElements.forEach((ele) => {
             let startBinding = ele.startBinding;
             let endBinding = ele.endBinding;

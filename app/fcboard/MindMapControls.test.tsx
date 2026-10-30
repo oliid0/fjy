@@ -1,14 +1,12 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
-import {
-  act,
-  fireEvent,
-  render,
-} from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { screen, waitFor } from "@testing-library/react";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { Fcboard } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { screen, waitFor } from "@testing-library/react";
+import { t } from "@fcboard/fcboard/i18n";
+
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { act, fireEvent, render } from "@fcboard/fcboard/tests/test-utils";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render as renderControls } from "./test/render";
 import { MindMapControls } from "./MindMapControls";
@@ -21,9 +19,9 @@ import {
 import { boardWritingParts, insertionWritingTargets } from "./insertionWriting";
 
 const setup = async (scale = 1) => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const editor = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       UIOptions={{ unifiedToolbar: true }}
       onMount={({ excalidrawAPI }) => {

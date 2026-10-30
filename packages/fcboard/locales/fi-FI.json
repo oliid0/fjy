@@ -91,7 +91,7 @@
     "untitled": "Nimetön",
     "name": "Nimi",
     "yourName": "Nimesi",
-    "madeWithExcalidraw": "Tehty Fcboardilla",
+    "madeWithFcboard": "Tehty Fcboardilla",
     "group": "Ryhmitä valinta",
     "ungroup": "Pura valittu ryhmä",
     "collaborators": "Yhteistyökumppanit",
@@ -121,7 +121,7 @@
     "toggleTheme": "Vaihda vaalea/tumma teema",
     "theme": "Teema",
     "personalLib": "Oma kirjasto",
-    "excalidrawLib": "Fcboard kirjasto",
+    "fcboardlib": "Fcboard kirjasto",
     "decreaseFontSize": "Pienennä kirjasinkokoa",
     "increaseFontSize": "Kasvata kirjasinkokoa",
     "unbindText": "Irroita teksti",
@@ -320,7 +320,7 @@
     "laser": "Laserosoitin",
     "hand": "Käsi (panning-työkalu)",
     "extraTools": "Lisää työkaluja",
-    "mermaidToExcalidraw": "Mermaid Fcboardiksi",
+    "mermaidToFcboard": "Mermaid Fcboardiksi",
     "convertElementType": "Vaihda muototyyppiä"
   },
   "element": {

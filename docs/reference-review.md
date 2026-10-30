@@ -1,8 +1,22 @@
 # 大屏白板改版的实现依据
 
-本文件记录参考项目的历史实现依据。原出厂 APK 的实际行为、本轮修正和未完成项以 [HWhiteBoard 5.42 对齐记录](apk-alignment.md) 为准，不能将 Excalidraw 原能力等同于原出厂白板全部功能已对齐。
+本文件记录参考项目的历史实现依据。原出厂 APK 的实际行为、本轮修正和未完成项以 [HWhiteBoard 5.42 对齐记录](apk-alignment.md) 为准，不能将 Fcboard 原能力等同于原出厂白板全部功能已对齐。
+
+## 2026-10-28 密码开关纠正
+
+逐项读取原版 `java/com/paike/zjc/popu/QRHttpPopu.java` 的 `initView` / `syncPhotoPwdIfReady` / `disablePhotoPwd`、`http/ScreenshotPwdUtils.java`、本地 `SetPwdHandler` / `GetPwdHandler` / `GetPhotoHandler`，以及 `resources-from-unpacked-archive/assets/web/photo.html` / `js/util.js`。原行为为：二维码先生成，保护默认关闭；开启显示可编辑的四位数字，满四位且与上次不同才同步；关闭隐藏密码并将服务端密码清空。保护切换不改变二维码链接。扫码端仅在保护开启时显示密码输入；原网页没有“三次失败断连”规则。
+
+`ShareQRCode.tsx` 依据 `resources/res/layout/http_popu_view.xml` 的 487×380dp 面板、24dp 圆角、147dp 二维码、44×22dp 开关及 `qr_password_switch_on/off.xml` 的原色 / 轨道尺寸移植，窄屏允许描述折行。静态页面分享和本地实时分享共用该控件；实时分享关闭 / 重开浮窗保留同一会话的开关状态。Native 桥在既有 BoardShareServer / LanServer 上更新密码，默认分享不传密码；不是创建分享前增加验证步骤。已有 HTTP / WebSocket 传输继续使用当前项目架构，条件验证沿原网页行为接入；图片也在服务端校验访问。没有照搬原网页将密码下发客户端比较的实现。
+
+此前没有原版依据的 4–128 位密码限制、三次失败断连和未接入的自拟云中继草稿已移除。云端部署及统一云 / 本地入口仍为未完成项，不因本地密码开关接通而报完成。前端回归覆盖默认关闭、四位 / 不满四位、改码、关闭清空、链接不变、失败恢复和浮窗重开；Java 实际网络回归已补，遵守本地禁用构建约束，待 CI 执行。
 
 ## 2026-10-28 真机反馈续修
+
+设置继续按用户最新要求移除保存 / 测试按钮，AI / 语音配置修改即保存，密钥仍按“记住”选择保留在会话或本机；URL 在失焦时验证，实际请求沿既有 validateEndpoint 校验。首页 → AI 与语音 → 四组设置使用独立层级与返回，旧 Toolbox 已删除。新增邮件字段使用嵌套语言键，覆盖率按实际缺口重新计算；未翻译的新项沿原 i18n 英文回退，不宣称所有语言新增字段已翻译。
+
+网页额外逐段读取 `ZXStudyFloatingWindow.java` 的 `setupTouchLogic` / `handleDragEvent` / `handleResizeEvent` 与 `zx_study_floating_window.xml`。拖动使用实际 pointer / raw 坐标差，缩放更新同一窗口尺寸；响应式最小尺寸按当前视口限制，未照搬该固件的 2000 / 1000px 下限。网页四个导航图标、缩放图标直接来自原 drawable path。React 资源窗口与原生 WebView 都保留已加载内容；拖动 / 缩放不创建第二个实验。主板窗口松手提交一次可撤销坐标修改，课件更新同一 ink.resource 的位置和尺寸。默认居中来自用户新增要求；原 `showMinWebPopupWindow` 的 8388629 为右侧垂直居中，不写成原版即居中。
+
+教学生成允许 JSON 中的 HTML 或模型直接返回的完整 HTML，仍经既有图形 / 脚本 / sandbox 验证器；无效输出最多一次完整纠正请求，失败不保存。生成 HTML 不走图片文件归一化。前端组件回归已覆盖同一 iframe 在多个缩放下拖动 / 缩放 / 取消，原生 MotionEvent 和“牛顿力学”页面实际交互回归待 CI；安装报告“保存不支持的类型”尚无对应真机堆栈，不将响应格式修复说成已定位其唯一根因。
 
 复核原厂 `HInsertSettingWindow` 的选表后手动放置 / 默认百度图片或 Google 网页入口、`HMindMappingOBject` 的四向动作、`layout_min_web_window.xml` 的 400×600dp 窗口 / 18dp 横向滚动条 / 四按钮，以及 `FitWidthWebView` 的长按导入。当前表格先确认再触控放置并继承笔色，图形支持连续点放 / 拖拽和保留上次宽高；尺规在选择工具下保留命中层，圆规内部可拖。浮动工具 / 节点的手背和笔侧键交回实际画布擦除。主板与课件不再强制手背走局部模式。
 
@@ -139,3 +153,161 @@ CI 40251850480 的生产截图 / trace 是本批 UI 修复依据：14 项页面�
 CI 40254712563 为 69 / 73 生产页面通过；余下录制两项居中偏移来自 `.fc-panel` 的 `translateY(5px)` 进入动画，中心浮层禁用这一菜单位移动画，保留 MUI Dialog 原渐显。录制拖动边界差 0.46875 px 来自 `offsetWidth` 取整，改读 `getBoundingClientRect` 的真实 CSS 宽高，隐藏时沿用既有尺寸回退。德语第四项由旧 capture 与 recording 都译作 Aufnahme 引起，旧重复入口移除后无需放宽定位；新的分数像素回归覆盖拖动与隐藏 / 恢复。
 
 背景回归实测发现原图案未加入历史观察，原 CaptureUpdateAction 不能单独使其可撤销；现把 whiteboardBackground 加入既有独立背景快照及 delta，与颜色同次撤销 / 重做。普通书写偏好仍按原规则保存，既有笔迹不被配置修改。真实编辑器 / MUI / Agent / 课件回归覆盖这些行为，物理双尖校准仍需真机。
+
+## 2026-10-28 原版设置与阈值续核
+
+`layout_about.xml` 原首页宽 373dp、左右 28dp、标题 18sp、设置行 34dp / 标签 13sp、开关 44×22dp；`about_setting_panel_bg` 是 #fafafa、22dp 圆角与 #38000000 描边。按这些值恢复首页及原 `about_close_icon` / `ic_arrow_right` 路径，不沿用旧 672px 左侧分类布局。AI 保留用户指定的逐级入口，设置自动保存覆盖原子页保存按钮。
+
+`layout_threshold.xml` 为 620×430dp，三项互斥选择、190dp 检测区与原提示 / 帮助 / 恢复默认。`ThresholdView.onTouchEvent` 只在 DOWN 记录 `min(touchMajor,touchMinor)`，UP 回调，不根据 MOVE 累加。`ZWhiteBoardActivity.getSize` 对原始橡皮阈值乘 2/3，细 / 粗笔分别乘 4/5；现页面显示物理值，应用到现有 CSS 像素偏好，避免重复换算。恢复默认读取 ThresholdPopu 的三个 `persist.sys.whiteboard.*threshold` 属性；无厂商属性时移除手动覆盖，继续使用真实设备默认。`HTool.JudgeWhichPen` 只按粗笔阈值分类，未虚构细笔迟滞。真实编辑器测试验证 1× / 2× / 3×、按下与松手、取消 / 无效触点、手动输入、重启恢复和默认值。
+
+当时确认的原版缺口为自定义背景和语言包管理，续修如下，不能据同名入口推算复刻百分比。
+
+## 原版背景、语言包与周期表续修
+
+`NewSlideBackgroundView` 的 back_pattern_1–14 / 五色 / 彩色选择器共 41 个资源按原路径转入菜单，画布图案仍用原整幅位图。自定义图片选择 / 预览 / 长按再选通过现有图像处理写入真实背景；`HCanvas.setBitmapPaint` 明确对 pattern14 使用 alpha255，其他图案 alpha150，Canvas / SVG 导出使用同样规则。背景加入已有场景历史 / 页面 / BZD 扩展 / 同步，图片解码失败及换目标不写入场景。原跨页全局图片回退已在下述 BoardBook 续修补齐。
+
+`LanguagePackDialogFragment` / `LanguagePackAdapter` / `ModelManager` 的实际目录为 39 个语言标签，按当前界面语言、内置包、当地名称排序；九种状态沿原编号。新增独立模型操作队列调用已安装 18.1.0 SDK 的 getDownloadedModels / download / deleteDownloadedModel，识别线程分开；删除关闭实际缓存识别器。界面接真实状态版本、删除确认、缺包提示、下载 / 重试和关闭释放，缺包不调用其他语言或云识别掩盖错误。原生校验使用实际内置模型和默认包删除拒绝，待 CI。
+
+`TeachingResDataProvider.chemistryToolItems` 使用动态 toolItem 创建周期表，旧图示抽取未包含它。现按 `PeriodicTableDialogFragment` / `PeriodicTableView` / `PeriodicTableDataProvider` 转入 118 个元素与 118 条详情，原分类色、图例、元素位置、选中 / 详情和 220×180 透明边缘卡片。反编译 getElementRect 的返回分支损坏，按明确 group / period 与 57–71 / 89–103 拆行算式重建，验证全部位置不重复；不能假装逐字复制错误分支。插入复用当前资源图像链路，主板 / 课件目标、取消、文件类型和撤销保持真实；原硬编码 1600 / 1600 落点按当前白板可见区域规则适配。
+
+安装的 MUI Dialog.js 在 maxWidth=false 时仍设置 `calc(100% - 64px)`。MaterialPanel 显式解除这一额外限制，让原设置宽度和小屏边距实际生效。新增六项 390 / 800 / 1920 页面用例仅发现，不能替代实际运行或逐像素验收；完整源码入口索引持续跟踪动态工具、USB 专用笔及文件浏览器；成绩板和图表编辑的后续实现如下。
+
+## 原记分牌、图表编辑与背景回退续修
+
+`TeachingResDataProvider.otherItems` / `ScoreBoardWindow` 的记分牌每次打开初始化三组 1 / 2 / 1，允许负分，改名取消不改变组名、确认保留空格和空字符串；700×300 面板 / 180×202 卡片与原渐变 / 圆角，窄屏改为纵向滚动。入口留在原“其他”分类。改名铅笔暂沿用项目已有矢量图标，原 Android 系统铅笔与关闭图标的逐像素一致仍待验。
+
+`ChartEditDialogFragment` / `dialog_chart_edit` / `ChartPreviewView` 的 900×520 面板、33 / 55 / 88 默认行、递增默认标题、增删到空行、数字过滤、柱 / 线 / 环形饼图、八种颜色、2 / 5 / 10 轴刻度与一位小数转入 ChartEditor / chartData。实时预览和插入共用同一 SVG 几何，标题按 XML 文本转义。按实际 `HCanvas.initHBitmapObject` 的 1600 上限保留预览尺寸，位置仍适配当前可见区域；复用当前资源图片与撤销 / 文件链路，失败保留编辑器，取消 / 换页拒绝迟到提交。原左侧数学实验 / 数学工具是独立子菜单，实验区只保留概念 / 应用两个标签。原随机数与手动函数绘图在下述续修接入，没有用 AI 函数笔代替。
+
+`NewSlideBackgroundView.getCurrentCustomBackgroundPath` 优先当前页路径，再回退 `HDataSet.getCustomBgPath`。BoardBook 在现有 IDB 工作区中保存全局最后图片；页面自身图片优先。只预览回退不会把它固化为页面专属图片，切换旧页 / 普通书写不回滚全局选择；创建 / 删除 / 导入保留元数据，已验证新选择再次回退与重启持久化。不在每个笔触内复制图片或写独立 localStorage。
+
+新增 390 / 800 / 1920 的记分牌 / 图表页面操作与控件不重叠用例；本地仅发现，页面和原生验收仍待 CI / 目标屏。新增回归实际覆盖资源入口、独立分数 / 改名、图表编辑 / 失败重试 / 空图、真实编辑器图片插入与单步撤销 / 重做以及背景跨页 / 重开。
+
+## 原随机数与手动函数绘图续修
+
+`RandomNumberDialogFragment` / `dialog_random_number`：720dp / 最低 500dp 面板、1–8 数量、默认 1 / 100、上下限 −999 / 999、禁止滚轮回绕 / 子输入聚焦、允许重复且含两端点；最小值大于最大值不清旧结果，成功抽取替换结果并回到左侧。RandomNumber 对应接触摸整数滚轮、滚轮 / 键盘辅助、数量与真实独立抽取，未增加文本框。窄屏上下排列且可滚动；Android NumberPicker 的原生惯性 / 触感仍需目标屏对照，不能仅靠单测认定完全一致。
+
+`FunctionGraphDialogFragment` / `FunctionGraphView` / `FunctionExpressionEvaluator`：1080×650、左侧六预设、中间坐标图、右侧表达式列表 / 自定义 / 删除 / 生成 / 清空 / 插入。六预设为 x、x^2、1/x、2^x、ln(x)、sin(x)，重复点击不创建重复预设，颜色沿原 12 色池及 HSV 扩展并释放复用，自定义序号清空后继续递增。输入先保留草稿，点击生成以原 −2 / 0 / 2 检验规则更新图像，失败保留已生成曲线。解析器按原支持的运算 / 函数 / 常量及 log 为十进制对数处理，未改变 AI 函数笔。原解析器的幂结合顺序同样保留；不是用另一套通用求值规则替代。
+
+绘图按原 x∈[−10,10]、步长 .02、|y|≤1000、屏外 100dp 截断、42dp 单位 / 20–200 缩放、原点移动范围 ± 视图宽高、聚焦点缩放与双击复位转入 functionGraphData / FactoryFunctionGraph。表达式编译和数学采样仅在曲线变化时执行，拖动复用采样；实时 SVG 与实际插入图像共用几何，保留当前坐标变换。复用原资源图片文件 / 课件 / 单步撤销和迟到取消链路，失败仍可重试；窄屏重排三块区域。原 Android 系统关闭图标的逐像素比对仍待验，现沿已有文字关闭按钮。
+
+新增文案导致此前总覆盖率门槛移除德语等既有语言，已由实际回归发现。保留完整英语目录的真实总覆盖率；脚本另按基础编辑器（不含应用 fcboard 命名空间）生成 localeEligibility，语言可选性仍用原 85% 门槛，新增教学工具可按既有机制回退英语。德语保留，低覆盖的 kaa / kab 仍不开放，四个原版界面语言使用直接提取的原文案；覆盖率、语言切换与资源搜索一并回归。
+
+新增三个 390 / 800 / 1920 页面用例覆盖随机数和函数图的可操作性 / 可见范围 / 生成 / 拖动 / 双击 / 插入，仅用例发现，尚未实际运行页面。本地不启 build / dev / 原生编译。
+
+## 原生文件浏览器与真实 BZD 读写续修
+
+按 `FileBrowserPopu` / `HFileGridAdapter` / `layout_file_browser` 直接移入原资源：580×387 面板、43 标题、31 路径栏 / 蓝色返回、127 存储侧栏、六列 60×75 卡片、52×48 图标、58×19 文件名、原选中背景 / 字号 / 配色 / 18 圆角；`MyPopu.setAlpha(100)` 对 #2f2f2f 全屏背景应用原透明度。原布局的列表 / 排序切换及 SD 项均为 GONE，Java 绑定没有把它们显示，故不凭遗留代码增添原 UI 没有的按钮。窄屏按空间换列、重新排布输入与确认区，空间不足时隐藏只读格式行并提供整框滚动；不整体缩放，键盘仅在明确编辑文件名时出现。保存初始文件名按源码 yyyyMMddHHmmss，单点选择、目录进入 / 返回、移动卷实际用户标签、拔盘回本地和覆盖确认接实际操作。BZD、图片及 PDF 保存的续修见下述记录。
+
+`HDataSet` 的默认目录确为 `Environment.getExternalStorageDirectory()/Whiteboard/xml`，移动盘来自 StorageManager。FactoryFileAccess 使用真实目录与挂载状态、后代路径边界、受限文件名与 64MB 上限；文件写入所选目录的临时文件、同步后同目录 rename，仅替换成功后报告成功，失败保留旧文件。图像素材放同目录配套资产文件夹，原 XML 写真实图像路径；无图不创建资产目录。保存失败留在弹窗内可改名 / 重试，取消不写文件。BZD 读取会话采用 256KiB 分块、核对文件长度 / 时间与读取偏移，多字节 UTF-8 在合并字节后解码，最终仍走实际 BZD 多页导入与现有页面保护。
+
+Android 10 设置 requestLegacyExternalStorage，较早版本通过已安装 Capacitor 8.2.0 的权限回调；Android 11+ 必须取得真实文件访问能力，目录无权限时接系统的文件访问设置，返回后重新读取，未伪报授权。规则已核对 [Android 官方存储文档](https://developer.android.com/about/versions/11/privacy/storage)。原生文案按当前应用语言创建 Configuration Context，原四语言文案直接从参考 resources 提取；取消按唯一请求 / 暂存 ID 归属，关闭只释放自身会话。
+
+前端回归覆盖真实 UTF-8 跨片读取 / 解析、取消 / 迟到释放、损坏分块 / 超限拒绝、实际 XML 暂存 / 保存结果 / 写入失败及浏览器取消。新增原生仪器测试使用真实文件验证过滤 / 路径边界 / 原子覆盖 / 超限与目标目录保护，并实际显示原网格、选择确认 / 默认时间戳 / 保存落盘和窗口范围；这些 Java 与资源本地仅做引用 / XML 检查，受本地编译禁令约束，必须等待 CI，不能当原生通过。旧 BZD 矩阵见下述续修；掩码 / 部分节点 / 大文件内存及全部导出 / 邮件仍保留待办。
+
+## 原位图矩阵与教学资源完整层级续修
+
+`HSaxSlideParser` 写入 / 恢复九项 Android Matrix，`HBitmapObject.doDraw` 调用 `drawBitmap(bitmap, matrix, null)`；`photoRectSrc` 是源像素矩形，不能当白板落点，`nRGBA_A` 也没有参与原位图绘制。bzdBitmap 据此解出平移、非等比缩放、旋转和轴翻转，优先采用 Android 实际解码尺寸；BzdBitmap.decode 复用 `BitmapUtils.compressImageIfNeeded` 的 1920 整数采样规则，转换静态 PNG，避免浏览器 EXIF / 动画处理改变原结果。斜切 / 透视由 Android Matrix / Canvas 烘焙为透明位图，几何位置取真实映射范围，最长边限制 2048；跨越投影极点及非法矩阵拒绝导入。
+
+导出先记录当前图像单位方形矩阵，再由原生保存按实际 SVG / 位图解码、裁剪后的像素尺寸归一化，写原格式的 matrix / photoRectSrc；不再写单位矩阵并把位置塞进源矩形。裁剪及图像透明度烘焙入 PNG，原 null Paint 绘制即可显示正确；Fcboard 扩展仍保留原文件、可编辑裁剪及透明度。普通浏览器导出的 Fcboard XML 有无损扩展，但其资产前缀及归一化标记需要 Android 保存步骤才能成为原版可直接读的图片路径 / 像素矩阵，不能把浏览器导出宣称为独立原版兼容文件。前端角点、实际素材尺寸、斜切桥接及往返回归已接；新增五项原生仪器用例通过实际非对称像素、Canvas 原绘制、裁剪 / 翻转 / 旋转 / alpha、采样和透视检查落点，未本地编译 / 运行。
+
+`TeachingResWindow.onChildSelected / showParentMenu`、`TeachingResDataProvider`、`layout_teach_res_setting`、`TeachingResCardAdapter` 和 `TeachingGroupedResourceRenderer` 是本轮资源层级、顺序、默认项及视觉参数的依据。factory-resource-menus 记录源码哈希与真实资源 ID，241 项既有目录逐项唯一归入原菜单；纠正化学 QUANTUM 黑体资源误归物理。另从 `TeachingNetworkResourceProvider` 补回原第六个网络按钮 PhET：其空 URL 经 `ZXStudyFloatingWindow.resolveCurrentHomeUrl` 取 `HDataSet.ZX_STUDY_URL_CN / EN`，有真实目标，并非空控件。最终 242 项。
+
+原八个入口按原序显示，点击学科回默认子项 / 首标签；数学实验 / 工具、物理实验七标签 / 力学原理、化学实验双标签 / 仪器 / 分子 / 工具、生物六子项与六个阶段组、地理实验 / 工具 / 天气、其他 / 函数 / 网络均接现有真实资源、窗口及撤销保存。物理两侧原矢量箭头按原 220px 滚动，键盘选择同步；AI resources 上下文和 open 命令提供真实子菜单 / 标签 ID。原 48 / 44 行高、父菜单蓝字 / 子菜单 #d6ecff 10 圆角、56 标签栏、150 实验 / 网络卡、140 工具卡、112 透明图示、120×126 分组卡和 66 / 58 / 64 图标尺寸已按适配器接入；力学七列、化学仪器 / 分子八列，窄屏改四列 / 两列，阶段组横向滚动，不挤压原图标。四语言文案直接取原 strings。
+
+回归遍历所有学科入口与标签、阶段分组、父项复位、键盘与 AI 状态；化学量子真实 URL、PhET 主页与独立函数入口实际打开，生物减数第二次分裂选定 PNG 经真实编辑器插入 / 文件保存 / 撤销重做。三种窗口尺寸新增页面用例仅待 CI 执行，不能代替已通过的页面检查。原 showNAV 的逐站点差异、全窗口像素和设备交互仍须继续核对。
+
+## 原文件窗的图片、背景、JPG 与 PDF 续修
+
+`FileBrowserPopu.initInternalPath` 和 `HDataSet` 为 BZD / 图片 / PDF 分别选择 `Whiteboard/xml`、`Whiteboard/image`、`Whiteboard/pdf`；`HFile.setFileType` 定义原 JPG / BMP / PNG 图片过滤，`HFileGridAdapter` 用实际缩略图 / default_pic 和 pdf 图标。FactoryFileAccess / Dialog 现在按模式接同一原面板、目录、过滤、只读格式和文件名规则，保留现有 JPEG / WebP / GIF 扩展。缩略图用独立线程和 4MB 缓存 / 采样解码，和界面及实际文件操作线程分开，关闭释放队列；图片和 PDF 图标直接来自原资源。
+
+主板图片工具通过可选宿主 onImagePick 进入原生文件窗，选定 File 继续走原有图片初始化 / 排列 / 文件存储 / 可编辑对象链路，浏览器仍使用既有多选。背景点击 / 500ms 长按也接同一窗，取消不改变背景；BMP / GIF 由已安装 pica.toBlob 支持的显式 PNG 编码转换为既有持久化支持的静态背景格式。关闭 / 换页取消所属选择，分块读完后的清理也再次检查取消，避免迟到落入新页面。
+
+`ChooseFileListener.SAVE_JPG` 的真实文件命名为用户基名加原页码 `_01.jpg` / `_12.jpg`，不是每张重新编号。现在选定页面一次渲染 JPEG，按现有 256KiB 分块暂存与实际尺寸清单上传；JPG 一次原文件窗选择目录 / 基名，整批预写后再替换，存在任一输出页会确认覆盖，准备失败保留旧文件，提交异常尝试恢复备份。PDF 同样走原文件窗的单文件保存，不再把保存动作接到系统附件分享。成功返回实际存在的输出路径，取消无成功提示，空间 / 写入失败保留窗及暂存以重试。
+
+`ZWhiteBoardActivity.savePdf` / `PDFUtil` 及随包 iText `PdfDocument.add(Image)` / Phrase leading 是排版依据：A4 595×842、左右 50 / 上下 30、18 号居中“白板记录”标题、27 行高、图片 500×500 范围等比缩放 / 居中、半行高 13.5 间隔与剩余空间分页。FactoryPageExport 以 Android PdfDocument / Canvas 实现这条布局，使用现有 PdfPageSpec 的 12M 总像素预算采样并实际缩小，逐张解码 / 回收。原 STSong 字体与 Android 字形差异、iText 延迟图片的边界行为仍须逐像素对照；整页导出裁切见下述续修。现有 20 页 / 64MB 限制尚在，原更大批量与大图 / EXIF 压缩尺寸需继续对齐。
+
+前端回归覆盖二进制图片 / MIME / 原模式、宿主图片工具实际初始化、背景成功 / 取消 / 迟到 / BMP 编码、原页码分块保存、选页后 PDF 真实保存入口、JPG 取消 / 空间失败与浏览器真实保存回退。新增原生仪器用例检查实际缩略图像素 / 模式筛选、JPG 像素 / 原页码、失败保留旧文件，以及读取保存的 PDF 检查 A4、图片颜色与分页；本地均未编译 / 运行，仍待 CI。原文件窗的 AI 控件检查 / 操作尚未接入，不从 DOM 工具的可用性推断原生窗已可控。
+
+## 整页预览 / 导出与原翻页键续修
+
+`HSlide.save` / `saveToEmailOrPDF` 调 `createBitmap(1)`，尺寸为当前设备完整画布；预览 `createBitmap(4)` 同样保留完整范围，JPEG 写入质量为 100。原 `createBitmapForQR` 则单独计算内容范围，不能把这两种语义混在一起。boardExport 通过现有 exportingFrame / getDimensions API 指定临时导出框，使用当前画布宽高、页面自身 scroll / zoom 和设备像素比例，保留空白、背景及对象位置；文件 / 邮件输出上限 4096 像素、预览 280，JPEG quality=1。临时框未加入场景 / 选择 / 撤销 / 文件。扫码内容范围保持原分支，没有将它改成整页。
+
+board.pages 返回当前画布尺寸快照，boards 上下文 / 视图尺寸变动也同步；未将 width / height 塞进持久化页面 view，以免旧页面覆盖新屏幕布局。翻转横竖屏及 DPR 变化会刷新预览 / 导出尺寸；空白页也渲染实际背景。关闭后尚未开始的预览跳过，迟到渲染及替换 / 卸载释放对象 URL，不把旧图显示为新页。背景旋转的原图尺寸 / 平移语义仍需单独对照，这条改动只保证当前可见范围的快照不被内容框裁掉。
+
+`ZWhiteBoardActivity.onKeyDown(92/93)` 调 `doPre / doNext`，首末页提示不回绕；当前编辑器原行为却是垂直平移画布。PageNavigation 把无修饰 PageUp / PageDown 接到现有 board.switch 或 document.next / previous（保留课件动画步进），防止键盘重复请求并发保存，关闭取消自身请求，真实写入失败显示错误。输入 / 候选菜单 / 弹窗不触发后台翻页，编辑器也不再因弹窗中的翻页键平移；修饰组合保留既有编辑快捷键。首末页文案直接取原四语言资源，重复触发仍重新显示。真实编辑器与组件回归覆盖完整尺寸 / 空白页 / 平移缩放 / DPR / 上限 / 旋转、预览迟到释放、翻页与画布不平移、课件路由、边界、输入 / 弹窗及实际失败；页面与目标设备验收仍待后续。
+
+## 专用 USB 笔的已核实协议与剩余移植
+
+`com.koga.Reference / SkizzePenManager` 的这条链路是 Java USB HID，不是 JNI：VID=9761，PID=36867/36868；控制接口索引 3、报告 3；笔尖报告 5，36867 使用接口 4，36868 与控制共用接口 3。中断类型 1 / 2 / 3 / 7 / 8 分别是连接、鼠标、原始按键、电量、姿态，数据长度 1 / 20 / 3 / 1 / 2。控制 SET_REPORT 为 26 字节、请求 33/9、wValue=0x303、接口 ID、100ms；载荷为 length/command/status0/data，GET_REPORT 请求 161/1，响应 status1。连接查询 0x81、电量查询 0x85、原始按键事件启用 0xa2（载荷 0）；源码三次重试、每次至多 15×80ms，未连接时每 3 秒复查。现代权限、拔插 / 生命周期和长度校验须按实际 Android API 处理，不能照搬反编译代码的数组 / byte 计数问题。
+
+`SkizzeService / ButtonEvent` 的 PageDown / PageUp / 原始按钮对应原始位 4 / 8 / 32；按下 / 释放，500ms 双击窗口。原始单击回桌面或唤起白板，双击发送 SYSRQ(120)，翻页发送 92/93。`SkizzePenLayer` 中的 ERASER_CLICK **实际是五色选择焦点循环**（白 / 红 / 绿 / 黄 / 黑，3 秒隐藏、120px 色项、200ms 的 1.3 倍聚焦），并非切换对象擦除；不要据事件名误接。姿态 attitude=2 的双击循环激光 / 鼠标 / 聚灯 / 放大镜；SkizzeView 可见时翻页键优先调整半径，激光 20..60 步 10、聚灯 260..420 步 40、放大镜 180..340 步 40 / 2 倍，再由 2 秒隐藏计时管理。鼠标坐标日志不能替代原生 hover 绘制。
+
+补读完整 SkizzeView：模式切换显现 3 秒，ACTION_HOVER_MOVE 使用原屏幕坐标并在最后移动 200ms 后隐藏，翻页调半径后隐藏延长到 2 秒，三种时长用途不同。聚灯底色为 0x90000000，圆内清空；鼠标用原 pointer_arrow 位图。放大镜取 HCanvas 的真实白板快照并作 2 倍采样，黑色 2px 圆框，不应截入应用按钮或用一张静态装饰图代替。
+
+现代接入依据 [Android USB Host](https://developer.android.com/develop/connectivity/usb/host) 核对设备枚举、明确 USB 授权、设备过滤和工作线程；[UsbDeviceConnection](https://developer.android.com/reference/android/hardware/usb/UsbDeviceConnection) 要求先 claimInterface，关闭释放后不能继续复用连接。[connectedDevice 前台服务](https://developer.android.com/develop/background-work/services/fgs/service-types#connected-device) 的声明、权限与启动条件也已查阅。36868 的报告 3 / 5 共用端点须单读者分发，不能照抄原双读线程互相争抢；也不移植原调试流程无条件写入 DemoTest 用户 ID。
+
+最初续修只接通标准翻页键；本轮进一步移植 SkizzeProtocol / Buttons / Usb / PenService / PenPlugin。真实枚举 / USB 授权、两个目标设备的接口 / 独立端点单读者、中断报告、SET / GET_FEATURE、连接查询 / 电量 / 原始键启用均接通；短包 / 不匹配响应忽略，连续查询失败清空连接状态，读取失败后每 3 秒重试，拒绝授权不循环弹窗，拔插 / 销毁关闭连接与线程。服务仅在目标 USB 接收器存在时启动，通知可断开，保留后台按键处理；设备滤镜可唤起应用，快捷键单击桌面 / 唤起、双击 SYSRQ，权限 / 启动失败显示实际错误，没有假报截图成功。
+
+SkizzePen 白板层用当前真实场景的 exportingFrame 快照绘制 2 倍放大镜；悬浮位置只调度一帧 canvas 重绘，不触发逐点 React 状态 / 场景转换或请求截图。失败暂停悬浮自动重试，显式切换模式可重试；未连接时不分配整屏像素缓冲。五色条使用原矢量 path / 颜色 / 次序 / 200ms 聚焦及 3 秒隐藏，直接更新下一笔颜色，保留当前工具和选中对象；原鼠标位图逐字节复制。PageNavigation 在原键路由前让可见悬浮层调整半径，隐藏后恢复真实页面 / 课件翻页。注册实际 skizze 状态与模式命令供原 AI 工具路由使用，断连拒绝操作，未加另一套无效按钮。
+
+前端回归覆盖浏览器无硬件界面、原五色 / 不改选区对象、真实悬浮坐标 / 时间、翻页优先与半径边界、2 倍真实快照 / 迟到结果 / 失败限流、更新状态优先 / 监听释放及桥接失败。新增两份 Java 测试覆盖真实报告长度 / 功能请求响应、600 包侧键边界、500ms 按下释放 / 双击、姿态隔离、冲突按键和断连取消；受本地禁止构建约束尚未执行。Java 仅语法分析，原生编译 / lint、物理 USB 授权与读写、系统特权安装的后台唤起 / 截图、目标屏上 hover / 像素 / 压感仍未验收，不能据此报告原版笔体验已完全一致。
+
+## 表格随手写实时扩展
+
+直接对照 `HTool` 的 MOVE 分支（约 384 行）和 `HTableObject.positioningArea / updateTableChanges`：落笔固定单元，宽度超过 1px 的真实笔迹推进对应边界，保留 20px 边距，移动前后其他单元内已完成内容，当前笔迹留在手下。此前主板和课件只有抬笔后的增长；本轮主板通过帧批量 `onInkProgress` 接 `LiveTableWriting`，课件在实际 pointer move 上调用同一增长函数。缓存增量笔迹边界和当前表格几何；单元内普通书写不重新发布静态表格，主板不逐点扫描整个场景。重建表格保留原图层位置和 fractional index，避免取消后额外修改其他对象。
+
+每支笔以已提交的表格为基准组合预览，落笔单元按当时显示的网格锁定；抬笔只捕获该笔的笔迹 / 扩展 / 相邻对象移动，随后恢复其他笔的预览，避免把另一支未完成笔写进本次撤销。取消、失去捕获、失焦恢复原表及相邻内容；换页或显式替换不复活旧表格。课件定时 / 关闭保存读取已提交几何，长笔画中不保存临时扩展，抬笔后整体保存和单步撤销；接触转为手背擦除先回退扩展再走真实对象擦除。课件边界提取跳过单元内原始墨迹，避免对长笔迹执行展开式 Math.min/max；15 万点相邻笔迹回归覆盖扩展和移动。目标 7 文件 132 项通过，包含真实编辑器 / 课件、两表及同表多笔、原轨迹 / 压感、取消 / 翻页、撤销 / 重做、保存和静态绘制次数；不代表真机帧率或所有表格操作已验收。
+
+续修依据：`SelectCacheLayer.drawMarks` 在恰有一张表时显示复制 / 删除 / 加行 / 减行 / 加列 / 减列六项（44px 单元、42px 高），`drawTableRows / drawTableColumn` 在末端增减，新增尺寸取当前总尺寸除以行列数，原位置及已有分隔线不重排，至少保留一行 / 一列。SelectionActions 现接 TableActions 四按钮及共享 table.track 命令，原“只剩一行 / 列”反馈也已接；主板 / 课件及 AI 读相同对象并走同一撤销链路。复制 / 删除 / 搜索及四项行列的七个矢量，完整转自原 ic_copy / ic_delete / ic_search / ic_row_add / ic_row_del / ic_columns_add / ic_columns_del，按原 24px 图标显示。小屏按钮保持原 44px，菜单按可用宽度换行并约束高度位置；表格选区抑制原本不显示的搜索项，AI 扩展保留。
+
+`SelectCacheLayer.updateScalingHObjects` 的 OBJECT_TABLE 分支只提示 `table_zoom_instructions`，普通墨迹也以 `!hObject.getTableInside()` 排除格内内容；原资源文案明确“表格及表格内的内容不支持缩放”。虽然同类有 updateScalingHTableObject 方法，实际该入口没有调用它，不能拿未调用方法认定原版支持缩放。主板 resizeWhiteboardSelection 与课件选择现排除表格 / 格内内容，保留实际拖动；混合选区里的其他对象继续走原缩放。原 SquareView 仅显示 10 列 × 7 行的初始尺寸选择格，行列增删分支没有该初始面板限制；移除表格模型原有 12 行列 / 1600×1200 上限及强制重排的小格尺寸，保留仓库 BZD 的 50,000 场景预算和既有 100,000 坐标范围，避免无限分配。14 列 / 1680px 的增列、持久化重读已有真实编辑器回归。
+
+原行列函数只修改表格线，不删除旧单元位置上的 HObject；selectTable 在后续选择时按当前表格边界纳入内容。因此 tableContents 在列数变化时重算仍在表内墨迹的行列索引，越出新边界的原始墨迹 / 已有文字留在原位置并解除表格归属，避免把一次减列变成删除文字。新角色 ID 区分行线 / 列线 / 单元文字，避免新增分隔线复用文字 ID 破坏历史；脱离表格的合成文字换独立 ID，后续加回同一列不冲突。保留相邻图层顺序、已有其他选区和单步撤销；已发布索引排序恢复旧位置式 ID 的取消预览。表格读取及内容搬移按实际几何，修复主板 / 课件移动后再加减行列使原内容二次偏移。课件选择框同步扩展范围；本轮代码回归覆盖这些真实链路，完整页面 / 实机交给 CI 构建后验收。
+
+`rotateRect` 在原类只初始化 / 清空 / 命中，未找到绘制赋值；当前 !part.angle 仍跳过已旋转表格，原版是否开放旋转须继续核实实际入口，不能凭项目已有能力发明原版行为。
+
+## 活动邮箱窗口、真实邮件动作与原版附件续修
+
+`ZWhiteBoardActivity.showEmailPopu` 实际构造 `NewEmailPopu`；未找到 `new EmailPopu` 调用。旧 `layout_email` 及其厂商账号不是本次活动流程的依据。`layout_new_email` / `NewEmailPopu.switchPage` 给出 433×339、22 圆角、#fafafa 面板和账户 / 提供方 / 写信 / 发件配置四层，写信返回其实际来源层；首页主按钮进入提供方层，保存真实验证通过才回到账户卡。MailComposer 按此移植六个提供方、213×113 账户卡、四个核心字段、27px 输入、原按钮 / 字号 / 灰阶；现有 STARTTLS / IMAP / PNG 扩展收在高级项。小屏重排并滚动，不整体缩放。Mail 专用选择器覆盖旧课堂全局的 48px 输入 / 按钮和 16px label margin，避免原尺寸被旧 CSS 改写；未把这项局部修复当作全应用布局验收。
+
+`EmailAutoComplete` 的 13 个真实后缀与过滤已接到可用键盘 / 指针候选，并保留前一分号收件人。候选用当前已安装 MUI Popper 的固定定位 / 越界翻转，避免挤压表单。`DeleteMailBoxPopu` 的 300px 确认 / 取消接真实删除，取消或 Escape 只关闭确认层，失败不移除账户。两个新增图标直接转自 `ic_email_back` / `ic_exist_email`，viewport / path / fill 已核对；四语言核心文案取原 strings，缺少的港繁键沿用原资源回退。
+
+UI 与 `mail.action` / `mail.configure` 共用实际 MailPlugin 操作；AI 可导航、读公开状态、配置草稿、确认删除、验证保存与发送，长操作接取消信号。授权码不进入公开账户 / 上下文。列表失败不会假作空账户，验证 / 导出 / SMTP 失败保留可重试草稿；同一次发送重试保留请求 ID，取消或卸载后拒绝迟到发送 / 回调。原生确认接受后关闭窗口，再显示实际成功或 IMAP 归档警告。九项界面回归覆盖这些路径及 StrictMode、端口默认加密、实际高级下拉 STARTTLS / IMAP 保存；桥接模拟不代表外部服务器已验收。
+
+原活动 `sendNewEmail` 调 `savePdf`，以 `meeting.pdf` 发送；PDFUtil 先写会议记录标题，再按 A4 / 500×500 居中图像流排版。BoardAttachments.createMail 复用既有 FactoryPageExport.writePdf，而普通分享保留原有分支。新增仪器用例以红蓝页面检查 A4 和连续图片流位置；三份 Java 仅做 javalang 语法解析，本地未编译 / 运行，实际原生检查交推送后 CI。
+
+## 原表格 BZD 类型与可继续编辑的往返续修
+
+`HSaxSlideParser` 写 `OBJECT_TABLE`、`tableVerLine` / `tableHorLine`、完整竖 / 横线列表；`HTableObject.restoreTableLines` 从线列表恢复非等宽网格，旧文件由两角和行列数恢复。此前当前工程导入仅生成普通线、导出又写成笔迹，重开即丢表格动作。现导入复用 insertionShapes / 现有表格模型 / 稳定角色 ID，格内原文字和笔迹按实际范围归属，保留原坐标、字体及路径；行列操作与新手写增长复用既有内容移动链路。线宽和透明度保留在模型，后续重建不回落默认样式。
+
+导出通过纯 readSceneInsertions 读取所选页，独立于活动课件上下文；每个网格只写一个原表格对象，格内文字 / 原笔迹继续分别写入，ObjectCount 取实际对象数。回归去掉 fcboard 无损扩展再读，确认原格式下仍可编辑、非等宽与内容保留；旧两角文件、缺边 / 重复边 / 非矩形 / 超预算拒绝也覆盖。累计坐标偏移改为线性循环，避免大表逐项复制数组；点数在构造点数组前检查，原对象展开为场景对象时检查现有 50,000 预算。未据此宣称大文件内存问题全部解决。
+
+另核实 `HCanvas.onAllTouchUp` / `cutPoint`：擦除结束后生成切分对象并经 HCutObjectCommand 替换，擦除对象没有走 HAddObjectCommand；HSlide.createBitmap 也排除 HEraserObject。不能把普通原文件假定成含持久擦除遮罩。异常含该对象的兼容分支及旧思维节点仍保留待办。
+
+本轮最终本地为 233 文件、2486 通过、46 既有跳过、1 todo；npm check / 零警告 lint 通过。表格六文件 42 项与邮箱九项定向回归通过。原生 / 页面在完成代码目标后推送 CI，再由用户安装验证；实机触感、声学和逐像素不是推送前置条件。整体目标仍未完成，不能以局部回归认定达到 90%。
+
+## 云端 / 本地实时分享与实际服务器续修
+
+原 ChooseServerPopu 是文件传输，新增实时编辑复用已有 SceneSync / LanRoom 协议，入口按 layout_chooser_bzd 的尺寸 / 两项 / 原矢量移植。LanSession 的真实云创建 / 初始认证 / 同房重连 / 密码开关、取消 / lifetime、UI 与 AI 共用配置和启动已有真实 HTTP / WebSocket / React 回归；不因这条链路接通而报原云文件传输完成。
+
+用户已提供 hus（101.96.199.53）。服务器 Node 22、ws、Caddy、独立账户、私有配置及常驻 unit 已准备，公网可信 IP TLS 经严格验证；当前 503 等待本次 CI 网页，未用旧版本或占位页面假装上线。源码 / 服务器哈希核对，生产运行环境的回环自检通过；完整部署状态、原始依据、测试及待办见 [云端分享记录](cloud-sharing.md)。静态云选页、BZD 传输和白板翻页已在下节续接；课件仍待接，不重复询问云地址。
+
+## 原云端文件传输与白板页面隔离续修
+
+直接读 ChooseSlidePopu 的 chooseType 0 / 1 / 2、ChooseServerPopu、ChooseBzdPopu、ExtraCodePopu、layout_extra_code 与 UploadBZDUtils：扫码先选页再选云 / 本地，BZD 保存 / 打开各自走云 / 本地，上传真实序列化 XML，成功显示不可编辑提取码；读取以码获取 XML 后创建新页面。提取码 XML 明确 maxLength=4 / 数字及大小写字母，原厂服务保留时间没有源码依据。当前分别接 ShareServerChooser / CloudPageShare / BzdCodeDialog / board.open，保留既有 JPG / PDF / 邮件流；云端错误可修改连接信息重试，取消和迟到创建均清理，成功才显示码或二维码。
+
+Node transfers.mjs 的静态访问复用 BoardShareServer 的图片 / 表单 / cookie 行为，实际保护所有图片端点；文件持久化到 unit 已允许的私有目录，24h 为明确的项目服务策略。未调用旧厂商域名，未部署占位页面。服务端有单次、数量及与实时房间共用的总预算；本地 HTTP 回归验证真 PNG 下载、cookie 失效、期限、重启、真实 BZD 解析及取消删除。
+
+实时页面扩展以现有 ScenePacket / LanRoom 的冲突规则为基础，为主机访问增加 page.id / epoch，主机翻页才允许替换场景。Node / Android 均拒绝旧次访问及扫码者伪造的翻页，扫码端清理旧文件和撤销；原页面的变化不会进入目的页。另修 BoardBook 异步保存期间的归属窗口，收到的编辑仍更新可见来源页，取消回退保留来源页改动。真实 socket / SceneSync / 会话 UI 回归通过，Android 新 socket 用例未本地编译。课件 FilePreview 的 DocumentInk 不等同 ScenePacket，仍未完成；不把白板页切换当作课件同步已实现。
+
+旧节点的源码定位：HSaxSlideParser 写入 nodeAddDirections / nodeColumns / nodeLeftId / nodeRect\*，文本通过 mNoteId 归属，finishMindMappingSlide 以 nodeLeftId 恢复父子关系；HAlphabetObject 另有 matrix、alphabetId 和四线文字重排。以下续修已接入这两类对象的可编辑读写；仍需核对大节点图与其他原设备基准，不重复猜测持久擦除遮罩或 rotateRect 入口。
+
+## 旧 BZD 思维节点与四线格的可编辑读写
+
+readBzdInsertions 按 HSaxSlideParser 的 nodeLeftId 恢复树关系，遍历后将真实矩形、节点列级 / 方向 / RGB / alpha 保留在 nodeStyles，不再将不同节点强制读成同一尺寸。mNoteId / alphabetId 的 HSmaTextObject 原先就是隐藏的文字载体，当前收集到所属节点 / 四线格，不在其 -10,-10 的占位坐标单独绘字。原孤立载体同样不绘制；重复节点 ID、环路及无效投影拒绝。节点曲线依据 HMindMappingOBject 的直线 / quadratic 控制点与 6px 线宽；新增子节点按父节点右边加 100px、末端子节点下边加 40px，保留 columns + 1。
+
+原 Html.fromHtml 标签合成允许一节点多种文字颜色，当前用可编辑文本片段表示，并保留源顺序及跨行拼接；片段各有独立 ID，避免识别追加时重复 ID 丢字。主板 / 课件的识别写回共用片段展开，读取实际可见标签而非复活已擦文字。移动、清空、加 / 删分支保持各节点矩形和文字颜色；保存输出真正 OBJECT_Note / OBJECT_ALPHABET 及 mNoteId / alphabetId，剥掉 Fcboard 扩展仍可继续编辑。
+
+四线格矩阵按 Android mapRect 的轴向包围矩形解出，含缩放 / 旋转；仍以既有 1920×1080 BZD 基准恢复原构造宽高的五分之一，其他原设备基准 / 大节点图及全部字体像素仍需进一步对照。现有模型的 40 节点限制没有因该导入冒称消失。原 hw.ttf 已从参考资源转入，54276 字节，SHA-256 为 6c4f2b8692ca638c0103b47f8819480aaf0c6094775baf8da9c333c1eb5a08c4；使用私有 FactoryHandwriting 字体入口，未增加通用字体菜单项。head / hhea 指标据实际字节及 [OpenType head](https://learn.microsoft.com/en-us/typography/opentype/spec/head)、[hhea](https://learn.microsoft.com/en-us/typography/opentype/spec/hhea) 核实；TrueType 的浏览器 format 标识及原字节导出依据 [CSS Fonts src](https://www.w3.org/TR/css-fonts-4/#src-desc)，未将 TTF 误送到只接 WOFF2 的解码器。
+
+另保留用户进行的 Fcboard 命名调整，已核对并修复批量误改 / 漏改和第三方边界，详细计数见 [命名核对](rename-audit.md)。内部类型为 FcboardElement；按用户最后要求，工作区和第三方依赖的包名 / 导入路径均保留原有 @fcboard 名称，源码目录仍为 packages/fcboard。

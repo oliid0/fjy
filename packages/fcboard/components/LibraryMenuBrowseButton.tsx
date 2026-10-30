@@ -1,7 +1,7 @@
-import type { ExcalidrawProps, UIAppState } from "../types";
+import type { FcboardProps, UIAppState } from "../types";
 
 const LibraryMenuBrowseButton = (_props: {
-  libraryReturnUrl: ExcalidrawProps["libraryReturnUrl"];
+  libraryReturnUrl: FcboardProps["libraryReturnUrl"];
   theme: UIAppState["theme"];
   id: string;
 }) => null;

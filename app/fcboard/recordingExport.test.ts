@@ -1,4 +1,4 @@
-import { blobToArrayBuffer } from "@excalidraw/excalidraw/data/blob";
+import { blobToArrayBuffer } from "@fcboard/fcboard/data/blob";
 
 import {
   prepareRecordingPackage,

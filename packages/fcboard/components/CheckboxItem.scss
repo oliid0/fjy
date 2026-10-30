@@ -1,7 +1,7 @@
 @use "sass:color";
 @use "../css/variables.module" as *;
 
-.excalidraw {
+.fcboard {
   .Checkbox {
     margin: 4px 0.3em;
     display: flex;
@@ -84,7 +84,7 @@
       align-items: center;
     }
 
-    .excalidraw-tooltip-icon {
+    .fcboard-tooltip-icon {
       width: 1em;
       height: 1em;
     }

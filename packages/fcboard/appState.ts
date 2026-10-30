@@ -11,7 +11,7 @@ import {
   THEME,
   DEFAULT_GRID_STEP,
   isTestEnv,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type { AppState, NormalizedZoomValue } from "./types";
 
@@ -180,10 +180,12 @@ const APP_STATE_STORAGE_CONF = (<
   whiteboardPenTips: { browser: true, export: false, server: false },
   whiteboardDualPen: { browser: true, export: false, server: false },
   whiteboardThickThreshold: { browser: true, export: false, server: false },
+  whiteboardFineThreshold: { browser: true, export: false, server: false },
   currentItemInkAssist: { browser: true, export: false, server: false },
   whiteboardSelection: { browser: false, export: false, server: false },
   multiStroke: { browser: true, export: false, server: false },
   toolbarReversed: { browser: true, export: false, server: false },
+  whiteboardToolbarText: { browser: true, export: false, server: false },
   toolbarHidden: { browser: false, export: false, server: false },
   eraserMode: { browser: true, export: false, server: false },
   eraserSize: { browser: true, export: false, server: false },
@@ -256,6 +258,7 @@ const APP_STATE_STORAGE_CONF = (<
   toast: { browser: false, export: false, server: false },
   viewBackgroundColor: { browser: true, export: true, server: true },
   whiteboardBackground: { browser: true, export: true, server: true },
+  whiteboardCustomBackground: { browser: true, export: true, server: true },
   width: { browser: false, export: false, server: false },
   zenModeEnabled: { browser: true, export: false, server: false },
   zoom: { browser: true, export: false, server: false },

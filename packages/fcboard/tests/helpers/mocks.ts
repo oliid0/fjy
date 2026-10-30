@@ -1,9 +1,10 @@
-import * as MermaidToExcalidraw from "@excalidraw/mermaid-to-excalidraw";
+import * as MermaidToFcboard from "@excalidraw/mermaid-to-excalidraw";
 import React from "react";
 import { vi } from "vitest";
 
-import type { parseMermaidToExcalidraw } from "@excalidraw/mermaid-to-excalidraw";
-import type { throttleRAF as throttleRAFType } from "@excalidraw/common";
+import type { throttleRAF as throttleRAFType } from "@fcboard/common";
+
+import type { parseMermaidToExcalidraw as parseMermaidToFcboard } from "@excalidraw/mermaid-to-excalidraw";
 
 type ThrottledFn<T extends unknown[]> = ((...args: T) => void) & {
   flush: () => void;
@@ -23,8 +24,8 @@ export const mockThrottleRAF: typeof throttleRAFType = <T extends unknown[]>(
   return ret;
 };
 
-export const mockMermaidToExcalidraw = (opts: {
-  parseMermaidToExcalidraw: typeof parseMermaidToExcalidraw;
+export const mockMermaidToFcboard = (opts: {
+  parseMermaidToFcboard: typeof parseMermaidToFcboard;
   mockRef?: boolean;
 }) => {
   vi.mock("@excalidraw/mermaid-to-excalidraw", async (importActual) => {
@@ -35,17 +36,17 @@ export const mockMermaidToExcalidraw = (opts: {
       ...module,
     };
   });
-  const parseMermaidToExcalidrawSpy = vi.spyOn(
-    MermaidToExcalidraw,
+  const parseMermaidToFcboardSpy = vi.spyOn(
+    MermaidToFcboard,
     "parseMermaidToExcalidraw",
   );
 
-  parseMermaidToExcalidrawSpy.mockImplementation(opts.parseMermaidToExcalidraw);
+  parseMermaidToFcboardSpy.mockImplementation(opts.parseMermaidToFcboard);
 
   if (opts.mockRef) {
     vi.spyOn(React, "useRef").mockReturnValue({
       current: {
-        parseMermaidToExcalidraw: parseMermaidToExcalidrawSpy,
+        parseMermaidToFcboard: parseMermaidToFcboardSpy,
       },
     });
   }

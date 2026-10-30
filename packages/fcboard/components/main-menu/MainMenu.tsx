@@ -1,15 +1,11 @@
 import React from "react";
 
-import { composeEventHandlers } from "@excalidraw/common";
+import { composeEventHandlers } from "@fcboard/common";
 
 import { useTunnels } from "../../context/tunnels";
 import { useUIAppState } from "../../context/ui-appState";
 import { t } from "../../i18n";
-import {
-  useAppProps,
-  useEditorInterface,
-  useExcalidrawSetAppState,
-} from "../App";
+import { useAppProps, useEditorInterface, useFcboardSetAppState } from "../App";
 import { FactoryIcon } from "../FactoryIcon";
 import { UserList } from "../UserList";
 import DropdownMenu from "../dropdownMenu/DropdownMenu";
@@ -38,7 +34,7 @@ const MainMenu = Object.assign(
       const appState = useUIAppState();
       const { UIOptions } = useAppProps();
       const [gap, setGap] = React.useState(16);
-      const setAppState = useExcalidrawSetAppState();
+      const setAppState = useFcboardSetAppState();
 
       if (UIOptions.unifiedToolbar) {
         return (

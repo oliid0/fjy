@@ -91,7 +91,7 @@
     "untitled": "အမည်မရှိ",
     "name": "အမည်",
     "yourName": "သင့်အမည်",
-    "madeWithExcalidraw": "Fcboard ဖြင့်ဖန်တီးသည်။",
+    "madeWithFcboard": "Fcboard ဖြင့်ဖန်တီးသည်။",
     "group": "အုပ်စုဖွဲ့",
     "ungroup": "အုပ်စုဖျက်သိမ်း",
     "collaborators": "ပူးပေါင်းပါဝင်သူများ",
@@ -121,7 +121,7 @@
     "toggleTheme": "အလင်း/အမှောင်ဆောင်ပုဒ်ကို ပြောင်းပါ",
     "theme": "အကြောင်းအရာ",
     "personalLib": "ပုဂ္ဂိုလ်ရေးစာကြည့်တိုက်",
-    "excalidrawLib": "Fcboard စာကြည့်တိုက်",
+    "fcboardlib": "Fcboard စာကြည့်တိုက်",
     "decreaseFontSize": "ဖောင့်အရွယ်အစား လျှော့ချပါ",
     "increaseFontSize": "ဖောင့်အရွယ်အစားကို မြှင့်ပါ",
     "unbindText": "စာသားကို Unbind လုပ်ပါ",
@@ -320,7 +320,7 @@
     "laser": "လေဆာထောက်ပြကိရိယာ",
     "hand": "လက် (ပန်ကာသုံး ကိရိယာ)",
     "extraTools": "နောက်ထပ် Tools များ",
-    "mermaidToExcalidraw": "Mermaid မှ Fcboard",
+    "mermaidToFcboard": "Mermaid မှ Fcboard",
     "convertElementType": "ပုံသဏ္ဌာန်အမျိုးအစား ပြောင်းပါ"
   },
   "element": {

@@ -1,0 +1,423 @@
+// layout_new_email.xml / layout_delete_mailbox_pop.xml and their drawables.
+.fc-classroom .fc-share-dialog.fc-share-mail-dialog {
+  width: min(433px, calc(100dvw - 24px));
+  height: min(339px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 16px 23px 19px;
+  margin: 12px;
+  border: 1px solid #00000038;
+  border-radius: 22px;
+  background: #fafafa;
+  color: #333;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.fc-classroom .fc-share-dialog.fc-share-mail-dialog {
+  .fc-mail-composer {
+    --fc-unit: 1px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    text-align: start;
+    color: #333;
+    font-size: 11px;
+    button {
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+      &:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+    }
+    .fc-primary {
+      background: #0b6ff3;
+      color: #fff;
+    }
+  }
+  .fc-mail-header {
+    position: relative;
+    display: flex;
+    flex: 0 0 30px;
+    justify-content: center;
+    align-items: center;
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 400;
+      color: #111;
+      padding-inline: 28px;
+      line-height: 30px;
+    }
+    button {
+      position: absolute;
+      top: 4px;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      background: transparent;
+    }
+    img {
+      width: 22px;
+      height: 22px;
+    }
+    .fc-mail-back {
+      inset-inline-start: 0;
+      padding: 5px;
+      img {
+        width: 12px;
+        height: 12px;
+      }
+    }
+    .fc-mail-close {
+      inset-inline-end: 0;
+    }
+  }
+  .fc-mail-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    margin-top: 7px;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+  }
+  .fc-mail-account-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 29px;
+    gap: 25px;
+    > button:last-of-type {
+      width: 94px;
+      min-height: 30px;
+      flex-shrink: 0;
+      font-size: 11px;
+    }
+    .fc-mail-account-switch {
+      background: #e9e9e9;
+      border-radius: 30px;
+    }
+  }
+  button.fc-mail-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: min(213px, 100%);
+    height: 113px;
+    flex-shrink: 0;
+    padding: 15px;
+    background: #f2f2f6;
+    border-radius: 7px;
+    img {
+      width: 44px;
+      height: 44px;
+    }
+    span {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #333;
+    }
+    &:disabled {
+      opacity: 1;
+    }
+  }
+  .fc-mail-providers {
+    width: min(154px, 100%);
+    margin: 8px auto 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    > button,
+    .fc-mail-provider-account {
+      width: 100%;
+      min-height: 25px;
+      background: #e9e9e9;
+      border-radius: 1px;
+      font-size: 10px;
+    }
+  }
+  .fc-mail-provider-account {
+    display: flex;
+    align-items: center;
+    > button {
+      height: 25px;
+      background: transparent;
+    }
+    > button:first-child {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    > button:last-child {
+      flex: 0 0 18px;
+      height: 18px;
+      padding: 5px;
+      img {
+        width: 8px;
+        height: 8px;
+        display: block;
+      }
+    }
+  }
+  .fc-mail-form {
+    min-width: 0;
+    fieldset {
+      display: block;
+      flex: none;
+      min-width: 0;
+      padding: 0 !important;
+      margin: 0;
+      border: 0;
+      overflow: visible;
+    }
+    label {
+      display: block;
+      min-width: 0;
+      margin: 0;
+      gap: 0;
+      font-weight: 400;
+    }
+    label + label {
+      margin-top: 7px;
+    }
+    label > span {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: baseline;
+      min-height: 16px;
+      line-height: 16px;
+    }
+    small {
+      font-size: 8px;
+      color: #777;
+    }
+    input,
+    textarea,
+    .MuiInputBase-root {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      height: 27px;
+      min-height: 27px;
+      margin-top: 3px;
+      padding: 4px 9px;
+      border: 0;
+      border-radius: 1px;
+      background: #e9e9e9;
+      color: #333;
+      font: inherit;
+      font-size: 10px;
+      outline-offset: -1px;
+      &::placeholder {
+        color: #a0a0a0;
+        opacity: 1;
+      }
+    }
+    textarea {
+      resize: vertical;
+      max-height: 120px;
+    }
+    input[type="number"] {
+      appearance: textfield;
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+      }
+    }
+    footer {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 16px;
+      padding-bottom: 1px;
+      background: #fafafa;
+      > button {
+        width: 98px;
+        height: 30px;
+        box-sizing: border-box;
+        border: 1px solid #0b6ff3;
+        background: transparent;
+        color: #0b6ff3;
+        font-size: 12px;
+        &.fc-primary {
+          background: #0b6ff3;
+          color: #fff;
+        }
+      }
+    }
+  }
+  .fc-mail-advanced {
+    font-size: 10px;
+    > summary {
+      min-height: 16px;
+      line-height: 16px;
+      cursor: pointer;
+      color: #777;
+      font-size: 8px;
+    }
+    &[open] {
+      padding-bottom: 7px;
+    }
+    label {
+      margin-top: 7px;
+    }
+  }
+  .fc-mail-suggestions {
+    max-height: 135px;
+    overflow: auto;
+    border: 1px solid #ddd;
+    background: #fff;
+    > button {
+      display: block;
+      width: 100%;
+      min-height: 30px;
+      padding: 4px 10px;
+      text-align: start;
+      border-radius: 0;
+      font-size: 10px;
+      background: #fff;
+      &[aria-selected="true"],
+      &:hover {
+        background: #e9e9e9;
+      }
+    }
+  }
+  .fc-mail-feedback {
+    margin: 6px 0 0;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  .fc-mail-feedback[role="alert"] {
+    color: #b42318;
+  }
+  .fc-mail-delete.MuiPaper-root {
+    width: min(300px, calc(100dvw - 24px));
+    margin: 12px;
+    padding: 10px 16px 25px;
+    border-radius: 8px;
+    background: #fff;
+    color: #333;
+    text-align: center;
+    > p:first-child {
+      margin: 10px 0 0;
+      min-height: 40px;
+      line-height: 40px;
+      font-size: 15px;
+    }
+    > p[role="alert"] {
+      font-size: 11px;
+      color: #b42318;
+      overflow-wrap: anywhere;
+    }
+    footer {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 10px;
+    }
+    button {
+      width: 80px;
+      min-height: 25px;
+      font-size: 13px;
+      border-radius: 30px;
+      background: #e9e9e9;
+      &.fc-primary {
+        background: #0b6ff3;
+        color: #fff;
+      }
+    }
+  }
+}
+.fc-share-result {
+  position: fixed;
+  z-index: 1200;
+  inset-inline: 12px;
+  bottom: 96px;
+  width: max-content;
+  max-width: calc(100dvw - 48px);
+  margin-inline: auto;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #333e;
+  color: white;
+  font-size: 14px;
+}
+@media (max-width: 480px), (max-height: 420px) {
+  .fc-classroom .fc-share-dialog.fc-share-mail-dialog {
+    padding: 10px 16px 12px;
+  }
+  .fc-classroom .fc-share-dialog.fc-share-mail-dialog {
+    .fc-mail-header {
+      flex-basis: 44px;
+      h2 {
+        padding-inline: 44px;
+      }
+      button {
+        top: 0;
+        width: 44px;
+        height: 44px;
+      }
+    }
+    .fc-mail-providers > button,
+    .fc-mail-provider-account {
+      min-height: 44px;
+      font-size: 12px;
+    }
+    .fc-mail-provider-account > button {
+      min-height: 44px;
+    }
+    .fc-mail-provider-account > button:last-child {
+      flex-basis: 36px;
+      padding: 8px;
+      img {
+        width: 18px;
+        height: 18px;
+      }
+    }
+    .fc-mail-form {
+      input,
+      textarea,
+      .MuiInputBase-root {
+        min-height: 38px;
+        height: 38px;
+        font-size: 14px;
+      }
+      footer {
+        gap: 12px;
+        > button {
+          min-height: 44px;
+          flex: 1;
+        }
+      }
+    }
+    .fc-mail-suggestions > button {
+      min-height: 38px;
+      font-size: 14px;
+    }
+    .fc-mail-delete button {
+      min-height: 44px;
+    }
+  }
+}

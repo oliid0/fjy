@@ -1,6 +1,6 @@
-import { isPalmContact } from "@excalidraw/excalidraw/eraser/stroke";
+import { isPalmContact } from "@fcboard/fcboard/eraser/stroke";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 
@@ -8,10 +8,13 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 
 /** Floating tools must not swallow the board's palm or pen-side eraser contact. */
 export const forwardEraseContact = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   event: ReactPointerEvent,
 ) => {
   const state = api.getAppState();
+  const currentDocument = classroomCommands.read("document") as
+    | { tool?: string }
+    | undefined;
   const configuration = classroomCommands.read("canvas") as
     | { configuration?: { eraser?: { palmThreshold?: number } } }
     | undefined;
@@ -26,18 +29,20 @@ export const forwardEraseContact = (
   const side =
     event.pointerType === "pen" &&
     (event.button === 5 || !!(event.buttons & 34));
-  if (!palm && !side && state.activeTool.type !== "eraser") {
+  if (
+    !palm &&
+    !side &&
+    (currentDocument?.tool || state.activeTool.type) !== "eraser"
+  ) {
     return false;
   }
   event.preventDefault();
   event.stopPropagation();
   const editor = Array.from(
-    document.querySelectorAll<HTMLElement>(".excalidraw[data-excalidraw-id]"),
-  ).find((element) => element.dataset.excalidrawId === api.id);
+    document.querySelectorAll<HTMLElement>(".fcboard[data-fcboard-id]"),
+  ).find((element) => element.dataset.fcboardId === api.id);
   const target = editor?.querySelector(
-    classroomCommands.read("document")
-      ? ".fc-document-ink"
-      : "canvas.interactive",
+    currentDocument ? ".fc-document-ink" : "canvas.interactive",
   );
   if (target && typeof PointerEvent !== "undefined") {
     target.dispatchEvent(

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-import { EVENT, KEYS, rgbToHex } from "@excalidraw/common";
+import { EVENT, KEYS, rgbToHex } from "@fcboard/common";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { useUIAppState } from "../context/ui-appState";
 import { atom } from "../editor-jotai";
@@ -12,7 +12,7 @@ import { useOutsideClick } from "../hooks/useOutsideClick";
 import { useStable } from "../hooks/useStable";
 import { getSelectedElements } from "../scene";
 
-import { useApp, useExcalidrawContainer, useExcalidrawElements } from "./App";
+import { useApp, useFcboardContainer, useFcboardElements } from "./App";
 
 import "./EyeDropper.scss";
 
@@ -40,17 +40,17 @@ export const EyeDropper: React.FC<{
   onChange: (
     type: ColorPickerType,
     color: string,
-    selectedElements: ExcalidrawElement[],
+    selectedElements: FcboardElement[],
     event: { altKey: boolean },
   ) => void;
   colorPickerType: EyeDropperProperties["colorPickerType"];
 }> = ({ onCancel, onChange, onSelect, colorPickerType }) => {
   const eyeDropperContainer = useCreatePortalContainer({
-    className: "excalidraw-eye-dropper-backdrop",
-    parentSelector: ".excalidraw-eye-dropper-container",
+    className: "fcboard-eye-dropper-backdrop",
+    parentSelector: ".fcboard-eye-dropper-container",
   });
   const appState = useUIAppState();
-  const elements = useExcalidrawElements();
+  const elements = useFcboardElements();
   const app = useApp();
 
   const selectedElements = getSelectedElements(elements, appState);
@@ -63,7 +63,7 @@ export const EyeDropper: React.FC<{
     selectedElements,
   });
 
-  const { container: excalidrawContainer } = useExcalidrawContainer();
+  const { container: excalidrawContainer } = useFcboardContainer();
 
   useEffect(() => {
     const colorPreviewDiv = ref.current;
@@ -217,7 +217,7 @@ export const EyeDropper: React.FC<{
     (event) => {
       if (
         event.target.closest(
-          ".excalidraw-eye-dropper-trigger, .excalidraw-eye-dropper-backdrop",
+          ".fcboard-eye-dropper-trigger, .fcboard-eye-dropper-backdrop",
         )
       ) {
         return true;
@@ -232,7 +232,7 @@ export const EyeDropper: React.FC<{
   }
 
   return createPortal(
-    <div ref={ref} className="excalidraw-eye-dropper-preview" />,
+    <div ref={ref} className="fcboard-eye-dropper-preview" />,
     eyeDropperContainer,
   );
 };

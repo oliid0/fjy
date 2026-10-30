@@ -91,7 +91,7 @@
     "untitled": "Bez názvu",
     "name": "Meno",
     "yourName": "Vaše meno",
-    "madeWithExcalidraw": "Vytvorené s Fcboard",
+    "madeWithFcboard": "Vytvorené s Fcboard",
     "group": "Zoskupiť",
     "ungroup": "Zrušiť zoskupenie",
     "collaborators": "Spolupracovníci",
@@ -121,7 +121,7 @@
     "toggleTheme": "Prepnúť svetlú/tmavú tému",
     "theme": "Téma",
     "personalLib": "Moja knižnica",
-    "excalidrawLib": "Fcboard knižnica",
+    "fcboardlib": "Fcboard knižnica",
     "decreaseFontSize": "Zmenšiť veľkosť písma",
     "increaseFontSize": "Zväčšiť veľkosť písma",
     "unbindText": "Zrušiť previazanie textu",
@@ -320,7 +320,7 @@
     "laser": "Laserový ukazovateľ",
     "hand": "Ruka (nástroj pre pohyb plátna)",
     "extraTools": "Ďalšie nástroje",
-    "mermaidToExcalidraw": "Mermaid do Fcboard",
+    "mermaidToFcboard": "Mermaid do Fcboard",
     "convertElementType": "Prepnúť typ tvaru"
   },
   "element": {

@@ -1,16 +1,16 @@
 import { vi } from "vitest";
 
-import { CURSOR_TYPE } from "@excalidraw/common";
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { CURSOR_TYPE } from "@fcboard/common";
+import { getElementAbsoluteCoords } from "@fcboard/element";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { getLinkHandleFromCoords } from "../components/hyperlink/helpers";
 
 import { API } from "./helpers/api";
 import { Pointer } from "./helpers/ui";
 import { act, GlobalTestState, render, waitFor } from "./test-utils";
 
-import type { ExcalidrawProps } from "../types";
+import type { FcboardProps } from "../types";
 
 describe("laser tool interactions", () => {
   const h = window.h;
@@ -18,13 +18,11 @@ describe("laser tool interactions", () => {
 
   it("opens links while using the laser tool", async () => {
     const onLinkOpenSpy = vi.fn();
-    const onLinkOpen: NonNullable<ExcalidrawProps["onLinkOpen"]> = (
-      ...args
-    ) => {
+    const onLinkOpen: NonNullable<FcboardProps["onLinkOpen"]> = (...args) => {
       onLinkOpenSpy(...args);
       args[1].preventDefault();
     };
-    await render(<Excalidraw onLinkOpen={onLinkOpen} />);
+    await render(<Fcboard onLinkOpen={onLinkOpen} />);
 
     const linkedRect = API.createElement({
       type: "rectangle",
@@ -63,7 +61,7 @@ describe("laser tool interactions", () => {
   });
 
   it("activates embeddables on center click while using the laser tool", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     const embeddable = API.createElement({
       type: "embeddable",
@@ -108,7 +106,7 @@ describe("laser tool interactions", () => {
   });
 
   it("doesn't pan in view mode when laser tool is active", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     API.setAppState({ viewModeEnabled: true });
     act(() => {

@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 import { LessonCanvas, revealPath, validateLesson } from "./lesson";
 import { formulaSvg } from "./formula";

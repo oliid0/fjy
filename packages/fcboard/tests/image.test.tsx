@@ -1,10 +1,10 @@
-import { randomId, reseed } from "@excalidraw/common";
+import { randomId, reseed } from "@fcboard/common";
 
-import type { FileId } from "@excalidraw/element/types";
+import type { FileId } from "@fcboard/element/types";
 
 import * as blobModule from "../data/blob";
 import * as filesystemModule from "../data/filesystem";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { createPasteEvent } from "../clipboard";
 
 import { API } from "./helpers/api";
@@ -22,7 +22,7 @@ const { h } = window;
 export const setupImageTest = async (
   sizes: { width: number; height: number }[],
 ) => {
-  await render(<Excalidraw autoFocus={true} handleKeyboardGlobally={true} />);
+  await render(<Fcboard autoFocus={true} handleKeyboardGlobally={true} />);
 
   h.state.height = 1000;
 
@@ -111,5 +111,29 @@ describe("image insertion", () => {
     UI.clickTool("image");
 
     await assert();
+  });
+
+  it("imports files from the host's native browser through the normal editable image pipeline", async () => {
+    const picker = vi.fn(
+      async () =>
+        await Promise.all([
+          API.loadFile("./fixtures/deer.png"),
+          API.loadFile("./fixtures/smiley.png"),
+        ]),
+    );
+    await render(
+      <Fcboard autoFocus handleKeyboardGlobally onImagePick={picker} />,
+    );
+    h.state.height = 1000;
+    mockMultipleHTMLImageElements([
+      [DEER_IMAGE_DIMENSIONS.width, DEER_IMAGE_DIMENSIONS.height],
+      [SMILEY_IMAGE_DIMENSIONS.width, SMILEY_IMAGE_DIMENSIONS.height],
+    ]);
+    const browser = vi.spyOn(filesystemModule, "fileOpen");
+    browser.mockClear();
+    UI.clickTool("image");
+    await assert();
+    expect(picker).toHaveBeenCalledTimes(1);
+    expect(browser).not.toHaveBeenCalled();
   });
 });

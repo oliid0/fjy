@@ -11,11 +11,42 @@ import org.junit.runner.RunWith;
 import java.util.concurrent.TimeUnit;
 import java.text.Normalizer;
 import java.util.stream.Collectors;
+import org.json.JSONArray;
 import static org.junit.Assert.*;
 
 /** Runs the real bundled SDK/models, without download(), OCR or a network service. */
 @RunWith(AndroidJUnit4.class)
 public class OfflineInkTest {
+    @Test public void languagePackCatalogReportsRealBundledModelsAndRejectsDeletingThem() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        java.util.concurrent.CountDownLatch listed = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<com.getcapacitor.JSObject> snapshot = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<Exception> failure = new java.util.concurrent.atomic.AtomicReference<>();
+        DigitalInkPacks packs = new DigitalInkPacks(context, () -> {}, tag -> fail("No pack should be deleted"));
+        try {
+            packs.list(new DigitalInkPacks.Result() {
+                public void success(com.getcapacitor.JSObject value) { snapshot.set(value); listed.countDown(); }
+                public void failure(Exception error) { failure.set(error); listed.countDown(); }
+            });
+            assertTrue(listed.await(60, TimeUnit.SECONDS));
+            assertNull(failure.get());
+            JSONArray values = snapshot.get().getJSONArray("packs");
+            assertEquals(DigitalInkPacks.TAGS.length, values.length());
+            for (int i = 0; i < values.length(); i++) {
+                org.json.JSONObject pack = values.getJSONObject(i);
+                assertTrue(DigitalInkPacks.supported(pack.getString("tag")));
+                if (pack.getBoolean("bundled")) assertEquals(1, pack.getInt("state"));
+            }
+            for (String tag : new String[]{"zh-Hani-CN", "en-US", "not-a-model"}) {
+                failure.set(null);
+                packs.operate(tag, true, new DigitalInkPacks.Result() {
+                    public void success(com.getcapacitor.JSObject value) { fail("Built-in model deletion succeeded"); }
+                    public void failure(Exception error) { failure.set(error); }
+                });
+                assertNotNull(failure.get());
+            }
+        } finally { packs.close(); }
+    }
     @Test public void bundledModelsRegisterForOurPackageAndRecognizeChineseAndLatinInk() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         DigitalInkModels.install(context);

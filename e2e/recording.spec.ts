@@ -76,7 +76,7 @@ for (const viewport of [
       .poll(() =>
         page.evaluate(
           () =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
               (item: { isDeleted?: boolean }) => !item.isDeleted,
             ).length,
         ),
@@ -110,7 +110,7 @@ for (const viewport of [
     expect(Math.abs(restored.x - moved.x)).toBeLessThan(2);
     expect(Math.abs(restored.y - moved.y)).toBeLessThan(2);
     await expect
-      .poll(() => widget.locator("time").textContent())
+      .poll(() => widget.locator(".fc-recording-drag time").textContent())
       .not.toBe("00:00");
     await widget.getByRole("button", { name: "停止录制", exact: true }).click();
     await expect(dialog).toBeVisible();

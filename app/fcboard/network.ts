@@ -7,6 +7,7 @@ export const Network = registerPlugin<{
   startCollaboration(options: {
     scene: ScenePacket;
   }): Promise<{ urls: string[] }>;
+  setCollaborationPassword(options: { password: string }): Promise<void>;
   stopCollaboration(): Promise<void>;
   sendScene(options: { message: string }): Promise<void>;
   getScene(): Promise<ScenePacket>;

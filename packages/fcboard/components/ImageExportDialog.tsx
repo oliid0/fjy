@@ -1,4 +1,4 @@
-import { exportToCanvas } from "@excalidraw/utils/export";
+import { exportToCanvas } from "@fcboard/utils/export";
 import React, { useEffect, useRef, useState } from "react";
 
 import {
@@ -7,9 +7,9 @@ import {
   isFirefox,
   EXPORT_SCALES,
   cloneJSON,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import {
   actionExportWithDarkMode,
@@ -54,7 +54,7 @@ export const ErrorCanvasPreview = () => {
 
 type ImageExportModalProps = {
   appStateSnapshot: Readonly<UIAppState>;
-  elementsSnapshot: readonly NonDeletedExcalidrawElement[];
+  elementsSnapshot: readonly NonDeletedFcboardElement[];
   files: BinaryFiles;
   actionManager: ActionManager;
   onExportImage: AppClassProperties["onExportImage"];
@@ -394,7 +394,7 @@ export const ImageExportDialog = ({
   name,
 }: {
   appState: UIAppState;
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   files: BinaryFiles;
   actionManager: ActionManager;
   onExportImage: AppClassProperties["onExportImage"];

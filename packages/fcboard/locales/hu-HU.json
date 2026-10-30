@@ -91,7 +91,7 @@
     "untitled": "Névtelen",
     "name": "Név",
     "yourName": "Neved",
-    "madeWithExcalidraw": "Fcboard-val készült",
+    "madeWithFcboard": "Fcboard-val készült",
     "group": "Csoportosítás",
     "ungroup": "Csoportbontás",
     "collaborators": "Közreműködők",
@@ -121,7 +121,7 @@
     "toggleTheme": "Világos/sötét háttér kapcsoló",
     "theme": "Téma",
     "personalLib": "Személyes könyvtár",
-    "excalidrawLib": "Fcboard könyvtár",
+    "fcboardlib": "Fcboard könyvtár",
     "decreaseFontSize": "Betűméret csökkentése",
     "increaseFontSize": "Betűméret növelése",
     "unbindText": "Szövegkötés feloldása",
@@ -320,7 +320,7 @@
     "laser": "Lézermutató",
     "hand": "Kéz (pásztázó eszköz)",
     "extraTools": "További eszközök",
-    "mermaidToExcalidraw": "Sellő az Fcboardnak",
+    "mermaidToFcboard": "Sellő az Fcboardnak",
     "convertElementType": "Az alakzat típusának váltása"
   },
   "element": {

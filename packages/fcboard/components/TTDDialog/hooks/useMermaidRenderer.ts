@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { useAtom } from "../../../editor-jotai";
 
 import { chatHistoryAtom, errorAtom, showPreviewAtom } from "../TTDContext";
-import { convertMermaidToExcalidraw } from "../common";
+import { convertMermaidToFcboard } from "../common";
 import { isValidMermaidSyntax } from "../utils/mermaidValidation";
 
 import { getLastAssistantMessage } from "../utils/chat";
@@ -13,7 +13,7 @@ import { getLastAssistantMessage } from "../utils/chat";
 import { useUIAppState } from "../../../context/ui-appState";
 
 import type { BinaryFiles } from "../../../types";
-import type { MermaidToExcalidrawLibProps } from "../types";
+import type { MermaidToFcboardLibProps } from "../types";
 
 const FAST_THROTTLE_DELAY = 300;
 const SLOW_THROTTLE_DELAY = 3000;
@@ -21,12 +21,12 @@ const RENDER_SPEED_THRESHOLD = 100;
 const PARSE_FAIL_DELAY = 100;
 
 interface UseMermaidRendererProps {
-  mermaidToExcalidrawLib: MermaidToExcalidrawLibProps;
+  mermaidToFcboardLib: MermaidToFcboardLibProps;
   canvasRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export const useMermaidRenderer = ({
-  mermaidToExcalidrawLib,
+  mermaidToFcboardLib,
   canvasRef,
 }: UseMermaidRendererProps) => {
   const [chatHistory] = useAtom(chatHistoryAtom);
@@ -47,7 +47,7 @@ export const useMermaidRenderer = ({
   }, [lastAssistantMessage]);
 
   const data = useRef<{
-    elements: readonly NonDeletedExcalidrawElement[];
+    elements: readonly NonDeletedFcboardElement[];
     files: BinaryFiles | null;
   }>({
     elements: [],
@@ -63,7 +63,7 @@ export const useMermaidRenderer = ({
 
   const renderMermaid = useCallback(
     async (mermaidDefinition: string): Promise<boolean> => {
-      if (!mermaidDefinition.trim() || !mermaidToExcalidrawLib.loaded) {
+      if (!mermaidDefinition.trim() || !mermaidToFcboardLib.loaded) {
         return false;
       }
 
@@ -75,10 +75,10 @@ export const useMermaidRenderer = ({
 
       const renderStartTime = performance.now();
 
-      const result = await convertMermaidToExcalidraw({
+      const result = await convertMermaidToFcboard({
         canvasRef,
         data,
-        mermaidToExcalidrawLib,
+        mermaidToFcboardLib,
         setError,
         mermaidDefinition,
         theme,
@@ -95,7 +95,7 @@ export const useMermaidRenderer = ({
       isRenderingRef.current = false;
       return result.success;
     },
-    [canvasRef, mermaidToExcalidrawLib, setError, theme],
+    [canvasRef, mermaidToFcboardLib, setError, theme],
   );
 
   const throttledRenderMermaid = useMemo(() => {

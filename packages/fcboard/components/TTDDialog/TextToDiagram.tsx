@@ -1,15 +1,15 @@
 import { useRef } from "react";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { useAtom, useAtomValue } from "../../editor-jotai";
 
-import { useApp, useExcalidrawSetAppState } from "../App";
+import { useApp, useFcboardSetAppState } from "../App";
 
 import { useChatAgent } from "./Chat";
 
 import {
-  convertMermaidToExcalidraw,
+  convertMermaidToFcboard,
   insertToEditor,
   saveMermaidDataToStorage,
 } from "./common";
@@ -26,20 +26,20 @@ import { getLastAssistantMessage } from "./utils/chat";
 
 import type { BinaryFiles } from "../../types";
 import type {
-  MermaidToExcalidrawLibProps,
+  MermaidToFcboardLibProps,
   TChat,
   TTDPersistenceAdapter,
   TTTDDialog,
 } from "./types";
 
 const TextToDiagramContent = ({
-  mermaidToExcalidrawLib,
+  mermaidToFcboardLib,
   onTextSubmit,
   renderWelcomeScreen,
   renderWarning,
   persistenceAdapter,
 }: {
-  mermaidToExcalidrawLib: MermaidToExcalidrawLibProps;
+  mermaidToFcboardLib: MermaidToFcboardLibProps;
   onTextSubmit: (
     props: TTTDDialog.OnTextSubmitProps,
   ) => Promise<TTTDDialog.OnTextSubmitRetValue>;
@@ -48,7 +48,7 @@ const TextToDiagramContent = ({
   persistenceAdapter: TTDPersistenceAdapter;
 }) => {
   const app = useApp();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useAtom(errorAtom);
@@ -63,7 +63,7 @@ const TextToDiagramContent = ({
 
   const { data } = useMermaidRenderer({
     canvasRef,
-    mermaidToExcalidrawLib,
+    mermaidToFcboardLib,
   });
 
   const { onGenerate, handleAbort } = useTextGeneration({
@@ -100,21 +100,21 @@ const TextToDiagramContent = ({
 
   const handleInsertMessage = async (message: TChat.ChatMessage) => {
     const mermaidContent = message.content || "";
-    if (!mermaidContent.trim() || !mermaidToExcalidrawLib.loaded) {
+    if (!mermaidContent.trim() || !mermaidToFcboardLib.loaded) {
       return;
     }
 
     const tempDataRef = {
       current: {
-        elements: [] as readonly NonDeletedExcalidrawElement[],
+        elements: [] as readonly NonDeletedFcboardElement[],
         files: null as BinaryFiles | null,
       },
     };
 
-    const result = await convertMermaidToExcalidraw({
+    const result = await convertMermaidToFcboard({
       canvasRef,
       data: tempDataRef,
-      mermaidToExcalidrawLib,
+      mermaidToFcboardLib,
       setError,
       mermaidDefinition: mermaidContent,
       theme: app.state.theme,
@@ -229,7 +229,7 @@ const TextToDiagramContent = ({
           canvasRef={canvasRef}
           hideErrorDetails={lastAssistantMessage?.errorType === "parse"}
           error={error}
-          loaded={mermaidToExcalidrawLib.loaded}
+          loaded={mermaidToFcboardLib.loaded}
           onInsert={handleInsertToEditor}
         />
       )}
@@ -238,13 +238,13 @@ const TextToDiagramContent = ({
 };
 
 export const TextToDiagram = ({
-  mermaidToExcalidrawLib,
+  mermaidToFcboardLib,
   onTextSubmit,
   renderWelcomeScreen,
   renderWarning,
   persistenceAdapter,
 }: {
-  mermaidToExcalidrawLib: MermaidToExcalidrawLibProps;
+  mermaidToFcboardLib: MermaidToFcboardLibProps;
   onTextSubmit(
     props: TTTDDialog.OnTextSubmitProps,
   ): Promise<TTTDDialog.OnTextSubmitRetValue>;
@@ -254,7 +254,7 @@ export const TextToDiagram = ({
 }) => {
   return (
     <TextToDiagramContent
-      mermaidToExcalidrawLib={mermaidToExcalidrawLib}
+      mermaidToFcboardLib={mermaidToFcboardLib}
       onTextSubmit={onTextSubmit}
       renderWelcomeScreen={renderWelcomeScreen}
       renderWarning={renderWarning}

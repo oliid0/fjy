@@ -1,16 +1,16 @@
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@fcboard/math";
 
-import { MIME_TYPES } from "@excalidraw/common";
-import { getElementAbsoluteCoords } from "@excalidraw/element";
-import { hitElementBoundingBox } from "@excalidraw/element";
+import { MIME_TYPES } from "@fcboard/common";
+import { getElementAbsoluteCoords } from "@fcboard/element";
+import { hitElementBoundingBox } from "@fcboard/element";
 
-import type { GlobalPoint, Radians } from "@excalidraw/math";
+import type { GlobalPoint, Radians } from "@fcboard/math";
 
-import type { Bounds } from "@excalidraw/common";
+import type { Bounds } from "@fcboard/common";
 import type {
   ElementsMap,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import type { AppState, UIAppState } from "../../types";
 
@@ -59,7 +59,7 @@ export const getLinkHandleFromCoords = (
 };
 
 export const isPointHittingLinkIcon = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   elementsMap: ElementsMap,
   appState: AppState,
   [x, y]: GlobalPoint,
@@ -80,7 +80,7 @@ export const isPointHittingLinkIcon = (
 };
 
 export const isPointHittingLink = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   elementsMap: ElementsMap,
   appState: AppState,
   [x, y]: GlobalPoint,

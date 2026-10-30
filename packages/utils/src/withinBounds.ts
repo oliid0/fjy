@@ -1,38 +1,35 @@
-import { arrayToMap, type Bounds } from "@excalidraw/common";
-import { getElementBounds } from "@excalidraw/element";
+import { arrayToMap, type Bounds } from "@fcboard/common";
+import { getElementBounds } from "@fcboard/element";
 import {
   isArrowElement,
-  isExcalidrawElement,
+  isFcboardElement,
   isFreeDrawElement,
   isLinearElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 import {
   rangeIncludesValue,
   pointFrom,
   pointRotateRads,
   rangeInclusive,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawLinearElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
-import type { LocalPoint } from "@excalidraw/math";
+  FcboardElement,
+  FcboardFreeDrawElement,
+  FcboardLinearElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
+import type { LocalPoint } from "@fcboard/math";
 
-type Element = NonDeletedExcalidrawElement;
-type Elements = readonly NonDeletedExcalidrawElement[];
+type Element = NonDeletedFcboardElement;
+type Elements = readonly NonDeletedFcboardElement[];
 
 type Points = readonly LocalPoint[];
 
 /** @returns vertices relative to element's top-left [0,0] position  */
 const getNonLinearElementRelativePoints = (
-  element: Exclude<
-    Element,
-    ExcalidrawLinearElement | ExcalidrawFreeDrawElement
-  >,
+  element: Exclude<Element, FcboardLinearElement | FcboardFreeDrawElement>,
 ): [
   TopLeft: LocalPoint,
   TopRight: LocalPoint,
@@ -56,7 +53,7 @@ const getNonLinearElementRelativePoints = (
 };
 
 /** @returns vertices relative to element's top-left [0,0] position  */
-const getElementRelativePoints = (element: ExcalidrawElement): Points => {
+const getElementRelativePoints = (element: FcboardElement): Points => {
   if (isLinearElement(element) || isFreeDrawElement(element)) {
     return element.points;
   }
@@ -165,7 +162,7 @@ export const elementsOverlappingBBox = ({
   errorMargin = 0,
 }: {
   elements: Elements;
-  bounds: Bounds | ExcalidrawElement;
+  bounds: Bounds | FcboardElement;
   /** safety offset. Defaults to 0. */
   errorMargin?: number;
   /**
@@ -175,7 +172,7 @@ export const elementsOverlappingBBox = ({
    **/
   type: "overlap" | "contain" | "inside";
 }) => {
-  if (isExcalidrawElement(bounds)) {
+  if (isFcboardElement(bounds)) {
     bounds = getElementBounds(bounds, arrayToMap(elements));
   }
   const adjustedBBox: Bounds = [

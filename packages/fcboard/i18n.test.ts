@@ -4,6 +4,7 @@ import path from "node:path";
 import { defaultLang, languages, setLanguage, t } from "./i18n";
 import reference from "./locales/en.json";
 import percentages from "./locales/percentages.json";
+import eligibility from "./localeEligibility.json";
 
 import type { TranslationKeys } from "./i18n";
 
@@ -73,6 +74,15 @@ describe.each(catalogs)("$code translation catalog", ({ code, strings }) => {
     expect((percentages as Record<string, number>)[code]).toBe(
       Math.floor((100 * translated) / Object.keys(canonical).length),
     );
+    const editorKeys = Object.keys(canonical).filter(
+      (key) => !key.startsWith("fcboard."),
+    );
+    expect((eligibility as Record<string, number>)[code]).toBe(
+      Math.floor(
+        (100 * editorKeys.filter((key) => strings[key]?.trim()).length) /
+          editorKeys.length,
+      ),
+    );
     if (translated === Object.keys(canonical).length) {
       expect(languages.some((language) => language.code === code)).toBe(true);
     }
@@ -89,6 +99,12 @@ describe.each(catalogs)("$code translation catalog", ({ code, strings }) => {
   });
 });
 
+it("keeps translated editor languages available when new teaching tools still use English fallback", () => {
+  expect(languages.some((language) => language.code === "de-DE")).toBe(true);
+  expect(languages.some((language) => language.code === "kaa")).toBe(false);
+  expect(languages.some((language) => language.code === "kab-KAB")).toBe(false);
+});
+
 it("keeps user resource names literal when resolving translated parameters", async () => {
   await setLanguage(defaultLang);
   const name = "$& {{attempts}}";
@@ -97,17 +113,24 @@ it("keeps user resource names literal when resolving translated parameters", asy
   );
 });
 
-it("offers complete whiteboard controls in every available language", () => {
+it("resolves all whiteboard controls and nested mailbox fields in every available language", async () => {
   for (const language of languages.filter(
     (language) => !language.code.startsWith("__test__"),
   )) {
     const catalog = catalogs.find((item) => item.code === language.code)!;
-    for (const key of Object.keys(reference.fcboard)) {
+    await setLanguage(language);
+    for (const key of Object.keys(flatten(reference.fcboard, "fcboard."))) {
+      // The loader deliberately falls back to English for untranslated new controls.
+      // Coverage above reports those gaps; nested objects themselves are not labels.
       expect({
         language: language.code,
         key,
-        missing: !catalog.strings[`fcboard.${key}`],
-      }).toEqual({ language: language.code, key, missing: false });
+        value: t(key as TranslationKeys),
+      }).toEqual({
+        language: language.code,
+        key,
+        value: catalog.strings[key] || canonical[key],
+      });
     }
   }
 });

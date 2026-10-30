@@ -12,12 +12,12 @@ import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import LinearProgress from "@mui/material/LinearProgress";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import {
   microphoneIcon,
   playerPlayIcon,
   playerStopFilledIcon,
-} from "@excalidraw/excalidraw/components/icons";
+} from "@fcboard/fcboard/components/icons";
 
 import { SummaryText } from "./SummaryText";
 import { RecordingActions } from "./RecordingActions";

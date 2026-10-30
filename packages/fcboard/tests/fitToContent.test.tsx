@@ -1,7 +1,7 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "./helpers/api";
 import { act, render } from "./test-utils";
@@ -21,7 +21,7 @@ const waitForNextAnimationFrame = () => {
 
 describe("fitToContent", () => {
   it("should zoom to fit the selected element", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     h.state.width = 10;
     h.state.height = 10;
@@ -45,7 +45,7 @@ describe("fitToContent", () => {
   });
 
   it("should zoom to fit multiple elements", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     const topLeft = API.createElement({
       width: 20,
@@ -78,7 +78,7 @@ describe("fitToContent", () => {
   });
 
   it("should scroll the viewport to the selected element", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     h.state.width = 10;
     h.state.height = 10;
@@ -117,7 +117,7 @@ describe("fitToContent animated", () => {
   });
 
   it("should ease scroll the viewport to the selected element", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     h.state.width = 10;
     h.state.height = 10;
@@ -155,7 +155,7 @@ describe("fitToContent animated", () => {
   });
 
   it("should animate the scroll but not the zoom", async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     h.state.width = 50;
     h.state.height = 50;

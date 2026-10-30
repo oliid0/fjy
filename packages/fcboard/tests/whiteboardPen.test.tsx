@@ -1,17 +1,17 @@
-import { factoryBrushWidths } from "@excalidraw/element/factoryBrush";
+import { factoryBrushWidths } from "@fcboard/element/factoryBrush";
 
 import {
   canvasConfigurationPatch,
   canvasConfigurationSnapshot,
 } from "../../../app/fcboard/canvasConfiguration";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { whiteboardInkStyle } from "../whiteboardPen";
 import { getDefaultAppState } from "../appState";
 
 import { API } from "./helpers/api";
 import { act, fireEvent, render } from "./test-utils";
 
-import type { ExcalidrawImperativeAPI, UIOptions } from "../types";
+import type { FcboardImperativeAPI, UIOptions } from "../types";
 
 const { h } = window;
 const profile: NonNullable<UIOptions["inkProfile"]> = {
@@ -39,11 +39,11 @@ it("simulates touch pressure without the explicit firmware capability, preservin
 });
 
 it("retains firmware touch pressure and applies the independent hard-nib setting only to the next hard stroke", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const { container } = await render(
-    <Excalidraw
+    <Fcboard
       UIOptions={{ unifiedToolbar: true, inkProfile: profile }}
-      onExcalidrawAPI={(value) => {
+      onFcboardAPI={(value) => {
         api = value;
       }}
     />,

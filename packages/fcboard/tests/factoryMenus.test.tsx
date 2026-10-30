@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { act, fireEvent, render, screen, within } from "./test-utils";
 
@@ -19,7 +19,7 @@ const tap = (target: Element) => {
 };
 
 it("toggles the pen menu with real pointer-down taps and keeps the original eight pens together", async () => {
-  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   act(() => h.app.setActiveTool({ type: "freedraw" }));
   const pen = screen.getByRole("button", { name: t("fcboard.pen") });
   tap(pen);
@@ -68,7 +68,7 @@ it("toggles the pen menu with real pointer-down taps and keeps the original eigh
 });
 
 it("switches eraser modes horizontally without leaving the menu or changing its selected size", async () => {
-  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
   tap(eraser);
   tap(eraser);

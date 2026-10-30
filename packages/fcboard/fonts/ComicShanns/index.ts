@@ -1,7 +1,7 @@
 // The following file content was generated with https://chinese-font.netlify.app/online-split,
 // but has been manully rewritten from `@font-face` rules into TS while leveraging FontFace API.
 
-import { type ExcalidrawFontFaceDescriptor } from "../Fonts";
+import { type FcboardFontFaceDescriptor } from "../Fonts";
 
 import _0 from "./ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2";
 import _3 from "./ComicShanns-Regular-6e066e8de2ac57ea9283adb9c24d7f0c.woff2";
@@ -67,7 +67,7 @@ SOFTWARE.
 preferredFamily: Comic Shanns Mono
  */
 
-export const ComicShannsFontFaces: ExcalidrawFontFaceDescriptor[] = [
+export const ComicShannsFontFaces: FcboardFontFaceDescriptor[] = [
   {
     uri: _0,
     descriptors: {

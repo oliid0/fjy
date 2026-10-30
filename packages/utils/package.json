@@ -1,5 +1,5 @@
 {
-  "name": "@excalidraw/utils",
+  "name": "@fcboard/utils",
   "version": "0.1.2",
   "type": "module",
   "types": "./dist/types/utils/src/index.d.ts",
@@ -19,14 +19,14 @@
   "files": [
     "dist/*"
   ],
-  "description": "Excalidraw utility functions",
+  "description": "Fcboard utility functions",
   "publishConfig": {
     "access": "public"
   },
   "license": "MIT",
   "keywords": [
-    "excalidraw",
-    "excalidraw-utils"
+    "fcboard",
+    "fcboard-utils"
   ],
   "browserslist": {
     "production": [
@@ -65,8 +65,8 @@
     "wawoff2": "2.0.1",
     "which": "4.0.0"
   },
-  "bugs": "https://github.com/excalidraw/excalidraw/issues",
-  "repository": "https://github.com/excalidraw/excalidraw",
+  "bugs": "https://github.com/fcboard/fcboard/issues",
+  "repository": "https://github.com/fcboard/fcboard",
   "scripts": {
     "gen:types": "rimraf types && tsc",
     "build:esm": "rimraf dist && node ../../scripts/buildUtils.js && npm run gen:types"

@@ -1,16 +1,10 @@
-import {
-  convertToExcalidrawElements,
-  Excalidraw,
-} from "@excalidraw/excalidraw";
+import { convertToFcboardElements, Fcboard } from "@fcboard/fcboard";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { Keyboard, Pointer } from "@excalidraw/excalidraw/tests/helpers/ui";
-import {
-  getCloneByOrigId,
-  render,
-} from "@excalidraw/excalidraw/tests/test-utils";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+import { Keyboard, Pointer } from "@fcboard/fcboard/tests/helpers/ui";
+import { getCloneByOrigId, render } from "@fcboard/fcboard/tests/test-utils";
 
-import type { ExcalidrawElement } from "../src/types";
+import type { FcboardElement } from "../src/types";
 
 const { h } = window;
 const mouse = new Pointer("mouse");
@@ -35,8 +29,8 @@ describe("adding elements to frames", () => {
   };
 
   function resizeFrameOverElement(
-    frame: ExcalidrawElement,
-    element: ExcalidrawElement,
+    frame: FcboardElement,
+    element: FcboardElement,
   ) {
     mouse.clickAt(0, 0);
     mouse.downAt(frame.x + frame.width, frame.y + frame.height);
@@ -48,8 +42,8 @@ describe("adding elements to frames", () => {
   }
 
   function dragElementIntoFrame(
-    frame: ExcalidrawElement,
-    element: ExcalidrawElement,
+    frame: FcboardElement,
+    element: FcboardElement,
   ) {
     mouse.clickAt(element.x, element.y);
     mouse.downAt(element.x + element.width / 2, element.y + element.height / 2);
@@ -58,7 +52,7 @@ describe("adding elements to frames", () => {
   }
 
   function selectElementAndDuplicate(
-    element: ExcalidrawElement,
+    element: FcboardElement,
     moveTo: [number, number] = [element.x + 25, element.y + 25],
   ) {
     const [x, y] = [
@@ -73,20 +67,20 @@ describe("adding elements to frames", () => {
     });
   }
 
-  function expectEqualIds(expected: ExcalidrawElement[]) {
+  function expectEqualIds(expected: FcboardElement[]) {
     expect(h.elements.map((x) => x.id)).toEqual(expected.map((x) => x.id));
   }
 
-  let frame: ExcalidrawElement;
-  let rect1: ExcalidrawElement;
-  let rect2: ExcalidrawElement;
-  let rect3: ExcalidrawElement;
-  let rect4: ExcalidrawElement;
-  let text: ExcalidrawElement;
-  let arrow: ExcalidrawElement;
+  let frame: FcboardElement;
+  let rect1: FcboardElement;
+  let rect2: FcboardElement;
+  let rect3: FcboardElement;
+  let rect4: FcboardElement;
+  let text: FcboardElement;
+  let arrow: FcboardElement;
 
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     frame = API.createElement({ id: "id0", type: "frame", x: 0, width: 150 });
     rect1 = API.createElement({
@@ -257,7 +251,7 @@ describe("adding elements to frames", () => {
     initialOrder: ElementType[],
     expectedOrder: ElementType[],
   ) => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
 
     const frame = API.createElement({ type: "frame", x: 0, y: 0 });
 
@@ -265,7 +259,7 @@ describe("adding elements to frames", () => {
       reorderElements(
         [
           frame,
-          ...convertToExcalidrawElements([
+          ...convertToFcboardElements([
             {
               type: containerType,
               x: 100,

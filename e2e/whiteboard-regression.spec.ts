@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
-import { dictateQuestion } from "./question";
+import { writeQuestion } from "./question";
 
 import type { Page } from "@playwright/test";
 
@@ -17,9 +17,9 @@ type Element = {
 };
 const elements = (page: Page) =>
   page.evaluate(() =>
-    (
-      JSON.parse(localStorage.getItem("excalidraw") || "[]") as Element[]
-    ).filter((element) => !element.isDeleted),
+    (JSON.parse(localStorage.getItem("fcboard") || "[]") as Element[]).filter(
+      (element) => !element.isDeleted,
+    ),
   );
 const ready = async (page: Page) => {
   await page.addInitScript(() => {
@@ -73,8 +73,7 @@ test("original selection, moving, duplication, deletion, history and zoom remain
   const zoom = () =>
     page.evaluate(
       () =>
-        JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
-          ?.value,
+        JSON.parse(localStorage.getItem("fcboard-state") || "{}").zoom?.value,
     );
   await page.keyboard.press("Control+Equal");
   await expect.poll(zoom).toBeGreaterThan(1);
@@ -100,10 +99,10 @@ test("original image insertion and editable scene export/import preserve binary 
   const saving = page.waitForEvent("download");
   await page.keyboard.press("Control+Shift+s");
   const download = await saving;
-  const filePath = info.outputPath("native-scene.excalidraw");
+  const filePath = info.outputPath("native-scene.fcboard");
   await download.saveAs(filePath);
   const saved = JSON.parse(await readFile(filePath, "utf8"));
-  expect(saved.type).toBe("excalidraw");
+  expect(saved.type).toBe("fcboard");
   expect(
     saved.elements.some((element: Element) => element.type === "image"),
   ).toBe(true);
@@ -218,7 +217,7 @@ test("AI style commands update selected text and the next insertion through orig
   );
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
-  const editor = page.locator("textarea.excalidraw-wysiwyg");
+  const editor = page.locator("textarea.fcboard-wysiwyg");
   await editor.fill("课程笔记");
   await editor.press("Escape");
   await page.keyboard.press("v");
@@ -234,14 +233,12 @@ test("AI style commands update selected text and the next insertion through orig
   } else {
     await selectMenu(page, "提问与讲解");
   }
-  await dictateQuestion(page, "把选中的字设为40号红色居中，再写已统一样式");
+  await writeQuestion(page, "把选中的字设为40号红色居中，再写已统一样式");
   await expect.poll(() => verified).toBe(true);
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const text = JSON.parse(
-          localStorage.getItem("excalidraw") || "[]",
-        ).filter(
+        const text = JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
           (element: {
             type: string;
             isDeleted?: boolean;

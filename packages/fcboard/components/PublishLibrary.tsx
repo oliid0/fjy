@@ -1,4 +1,4 @@
-import { exportToCanvas, exportToSvg } from "@excalidraw/utils/export";
+import { exportToCanvas, exportToSvg } from "@fcboard/utils/export";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -8,7 +8,7 @@ import {
   VERSIONS,
   chunk,
   getExportSource,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import { EditorLocalStorage } from "../data/EditorLocalStorage";
 import { canvasToBlob, resizeImageFile } from "../data/blob";
@@ -278,8 +278,8 @@ const PublishLibrary = ({
     const previewImage = await generatePreviewImage(clonedLibItems);
 
     const libContent: ExportedLibraryData = {
-      type: EXPORT_DATA_TYPES.excalidrawLibrary,
-      version: VERSIONS.excalidrawLibrary,
+      type: EXPORT_DATA_TYPES.fcboardlibrary,
+      version: VERSIONS.fcboardlibrary,
       source: getExportSource(),
       libraryItems: clonedLibItems,
     };
@@ -287,7 +287,7 @@ const PublishLibrary = ({
     const lib = new Blob([content], { type: "application/json" });
 
     const formData = new FormData();
-    formData.append("excalidrawLib", lib);
+    formData.append("fcboardlib", lib);
     formData.append("previewImage", previewImage);
     formData.append("previewImageType", previewImage.type);
     formData.append("title", libraryData.name);
@@ -386,7 +386,7 @@ const PublishLibrary = ({
               i18nKey="publishDialog.noteDescription"
               link={(el) => (
                 <a
-                  href="https://libraries.excalidraw.com"
+                  href="https://libraries.fcboard.com"
                   target="_blank"
                   rel="noopener"
                 >
@@ -400,7 +400,7 @@ const PublishLibrary = ({
               i18nKey="publishDialog.noteGuidelines"
               link={(el) => (
                 <a
-                  href="https://github.com/excalidraw/excalidraw-libraries#guidelines"
+                  href="https://github.com/fcboard/fcboard-libraries#guidelines"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -505,7 +505,7 @@ const PublishLibrary = ({
                 i18nKey="publishDialog.noteLicense"
                 link={(el) => (
                   <a
-                    href="https://github.com/excalidraw/excalidraw-libraries/blob/main/LICENSE"
+                    href="https://github.com/fcboard/fcboard-libraries/blob/main/LICENSE"
                     target="_blank"
                     rel="noopener noreferrer"
                   >

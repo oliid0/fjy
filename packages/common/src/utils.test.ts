@@ -1,16 +1,12 @@
-import {
-  isTransparent,
-  mapFind,
-  reduceToCommonValue,
-} from "@excalidraw/common";
+import { isTransparent, mapFind, reduceToCommonValue } from "@fcboard/common";
 import { vi } from "vitest";
 
-// Import directly to avoid the @excalidraw/common throttleRAF mock from tests/setup.ts.
+// Import directly to avoid the @fcboard/common throttleRAF mock from tests/setup.ts.
 import { throttleRAF } from "./utils";
 
 type RafCallback = FrameRequestCallback;
 
-describe("@excalidraw/common/utils", () => {
+describe("@fcboard/common/utils", () => {
   describe("isTransparent()", () => {
     it("should return true when color is rgb transparent", () => {
       expect(isTransparent("#ff00")).toEqual(true);

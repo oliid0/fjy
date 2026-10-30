@@ -1,12 +1,9 @@
-import { reconcileElements } from "@excalidraw/excalidraw";
-import { MIME_TYPES, toBrandedType } from "@excalidraw/common";
-import { decompressData } from "@excalidraw/excalidraw/data/encode";
-import {
-  encryptData,
-  decryptData,
-} from "@excalidraw/excalidraw/data/encryption";
-import { restoreElements } from "@excalidraw/excalidraw/data/restore";
-import { getSceneVersion } from "@excalidraw/element";
+import { reconcileElements } from "@fcboard/fcboard";
+import { MIME_TYPES, toBrandedType } from "@fcboard/common";
+import { decompressData } from "@fcboard/fcboard/data/encode";
+import { encryptData, decryptData } from "@fcboard/fcboard/data/encryption";
+import { restoreElements } from "@fcboard/fcboard/data/restore";
+import { getSceneVersion } from "@fcboard/element";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -17,24 +14,24 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes } from "firebase/storage";
 
-import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
+import type { RemoteFcboardElement } from "@fcboard/fcboard/data/reconcile";
 import type {
-  ExcalidrawElement,
+  FcboardElement,
   FileId,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 import type {
   AppState,
   BinaryFileData,
   BinaryFileMetadata,
   DataURL,
-} from "@excalidraw/excalidraw/types";
+} from "@fcboard/fcboard/types";
 
 import { FILE_CACHE_MAX_AGE_SEC } from "../app_constants";
 
 import { getSyncableElements } from ".";
 
-import type { SyncableExcalidrawElement } from ".";
+import type { SyncableFcboardElement } from ".";
 import type Portal from "../collab/Portal";
 import type { Socket } from "socket.io-client";
 
@@ -94,7 +91,7 @@ type FirebaseStoredScene = {
 
 const encryptElements = async (
   key: string,
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
 ): Promise<{ ciphertext: ArrayBuffer; iv: Uint8Array }> => {
   const json = JSON.stringify(elements);
   const encoded = new TextEncoder().encode(json);
@@ -106,7 +103,7 @@ const encryptElements = async (
 const decryptElements = async (
   data: FirebaseStoredScene,
   roomKey: string,
-): Promise<readonly ExcalidrawElement[]> => {
+): Promise<readonly FcboardElement[]> => {
   const ciphertext = data.ciphertext.toUint8Array() as Uint8Array<ArrayBuffer>;
   const iv = data.iv.toUint8Array() as Uint8Array<ArrayBuffer>;
 
@@ -124,7 +121,7 @@ class FirebaseSceneVersionCache {
   };
   static set = (
     socket: Socket,
-    elements: readonly SyncableExcalidrawElement[],
+    elements: readonly SyncableFcboardElement[],
   ) => {
     FirebaseSceneVersionCache.cache.set(socket, getSceneVersion(elements));
   };
@@ -132,7 +129,7 @@ class FirebaseSceneVersionCache {
 
 export const isSavedToFirebase = (
   portal: Portal,
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
 ): boolean => {
   if (portal.socket && portal.roomId && portal.roomKey) {
     const sceneVersion = getSceneVersion(elements);
@@ -174,7 +171,7 @@ export const saveFilesToFirebase = async ({
 };
 
 const createFirebaseSceneDocument = async (
-  elements: readonly SyncableExcalidrawElement[],
+  elements: readonly SyncableFcboardElement[],
   roomKey: string,
 ) => {
   const sceneVersion = getSceneVersion(elements);
@@ -188,7 +185,7 @@ const createFirebaseSceneDocument = async (
 
 export const saveToFirebase = async (
   portal: Portal,
-  elements: readonly SyncableExcalidrawElement[],
+  elements: readonly SyncableFcboardElement[],
   appState: AppState,
 ) => {
   const { roomId, roomKey, socket } = portal;
@@ -223,7 +220,7 @@ export const saveToFirebase = async (
     const reconciledElements = getSyncableElements(
       reconcileElements(
         elements,
-        prevStoredElements as OrderedExcalidrawElement[] as RemoteExcalidrawElement[],
+        prevStoredElements as OrderedFcboardElement[] as RemoteFcboardElement[],
         appState,
       ),
     );
@@ -245,14 +242,14 @@ export const saveToFirebase = async (
 
   FirebaseSceneVersionCache.set(socket, storedElements);
 
-  return toBrandedType<RemoteExcalidrawElement[]>(storedElements);
+  return toBrandedType<RemoteFcboardElement[]>(storedElements);
 };
 
 export const loadFromFirebase = async (
   roomId: string,
   roomKey: string,
   socket: Socket | null,
-): Promise<readonly SyncableExcalidrawElement[] | null> => {
+): Promise<readonly SyncableFcboardElement[] | null> => {
   const firestore = _getFirestore();
   const docRef = doc(firestore, "scenes", roomId);
   const docSnap = await getDoc(docRef);

@@ -2,7 +2,7 @@ import { actionClearCanvas } from "../actions";
 import { atom, useAtom } from "../editor-jotai";
 import { t } from "../i18n";
 
-import { useExcalidrawActionManager } from "./App";
+import { useFcboardActionManager } from "./App";
 import ConfirmDialog from "./ConfirmDialog";
 
 export const activeConfirmDialogAtom = atom<"clearCanvas" | null>(null);
@@ -11,7 +11,7 @@ export const ActiveConfirmDialog = () => {
   const [activeConfirmDialog, setActiveConfirmDialog] = useAtom(
     activeConfirmDialogAtom,
   );
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   if (!activeConfirmDialog) {
     return null;

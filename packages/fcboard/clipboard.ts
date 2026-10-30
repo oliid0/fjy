@@ -6,26 +6,26 @@ import {
   isMemberOf,
   isPromiseLike,
   EVENT,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { mutateElement } from "@excalidraw/element";
-import { deepCopyElement } from "@excalidraw/element";
+import { mutateElement } from "@fcboard/element";
+import { deepCopyElement } from "@fcboard/element";
 import {
   isFrameLikeElement,
   isInitializedImageElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { getContainingFrame } from "@excalidraw/element";
+import { getContainingFrame } from "@fcboard/element";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
+import type { ValueOf } from "@fcboard/common/utility-types";
 
-import type { IMAGE_MIME_TYPES, STRING_MIME_TYPES } from "@excalidraw/common";
+import type { IMAGE_MIME_TYPES, STRING_MIME_TYPES } from "@fcboard/common";
 import type {
-  ExcalidrawElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
-import { ExcalidrawError } from "./errors";
+import { FcboardError } from "./errors";
 import {
   createFile,
   getFileHandle,
@@ -37,14 +37,14 @@ import type { BinaryFiles } from "./types";
 
 type ElementsClipboard = {
   type: typeof EXPORT_DATA_TYPES.excalidrawClipboard;
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   files: BinaryFiles | undefined;
 };
 
 export type PastedMixedContent = { type: "text" | "imageUrl"; value: string }[];
 
 export interface ClipboardData {
-  elements?: readonly ExcalidrawElement[];
+  elements?: readonly FcboardElement[];
   files?: BinaryFiles;
   text?: string;
   mixedContent?: PastedMixedContent;
@@ -72,10 +72,10 @@ export const probablySupportsClipboardBlob =
 
 const clipboardContainsElements = (
   contents: any,
-): contents is { elements: ExcalidrawElement[]; files?: BinaryFiles } => {
+): contents is { elements: FcboardElement[]; files?: BinaryFiles } => {
   if (
     [
-      EXPORT_DATA_TYPES.excalidraw,
+      EXPORT_DATA_TYPES.fcboard,
       EXPORT_DATA_TYPES.excalidrawClipboard,
       EXPORT_DATA_TYPES.excalidrawClipboardWithAPI,
     ].includes(contents?.type) &&
@@ -143,7 +143,7 @@ export const serializeAsClipboardJSON = ({
   elements,
   files,
 }: {
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   files: BinaryFiles | null;
 }) => {
   const elementsMap = arrayToMap(elements);
@@ -192,7 +192,7 @@ export const serializeAsClipboardJSON = ({
 };
 
 export const copyToClipboard = async (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   files: BinaryFiles | null,
   /** supply if available to make the operation more certain to succeed */
   clipboardEvent?: ClipboardEvent | null,
@@ -304,11 +304,11 @@ export const readSystemClipboard = async () => {
           const file = createFile(imageBlob, type, undefined);
           types[type] = file;
         } else {
-          throw new ExcalidrawError(`Unsupported clipboard type: ${type}`);
+          throw new FcboardError(`Unsupported clipboard type: ${type}`);
         }
       } catch (error: any) {
         console.warn(
-          error instanceof ExcalidrawError
+          error instanceof FcboardError
             ? error.message
             : `Cannot retrieve ${type} from clipboardItem: ${error.message}`,
         );

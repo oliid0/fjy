@@ -4,50 +4,50 @@ import type {
   throttleRAF,
   MIME_TYPES,
   EditorInterface,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { LinearElementEditor } from "@excalidraw/element";
+import type { LinearElementEditor } from "@fcboard/element";
 
-import type { MaybeTransformHandleType } from "@excalidraw/element";
+import type { MaybeTransformHandleType } from "@fcboard/element";
 
 import type {
   PointerType,
-  ExcalidrawLinearElement,
-  ExcalidrawFreeDrawElement,
-  NonDeletedExcalidrawElement,
+  FcboardLinearElement,
+  FcboardFreeDrawElement,
+  NonDeletedFcboardElement,
   NonDeleted,
   TextAlign,
-  ExcalidrawElement,
+  FcboardElement,
   GroupId,
-  ExcalidrawBindableElement,
+  FcboardBindableElement,
   Arrowhead,
   FontFamilyValues,
   FileId,
   Theme,
   StrokeRoundness,
-  ExcalidrawEmbeddableElement,
-  ExcalidrawMagicFrameElement,
-  ExcalidrawFrameLikeElement,
-  ExcalidrawElementType,
-  ExcalidrawIframeLikeElement,
-  OrderedExcalidrawElement,
-  ExcalidrawNonSelectionElement,
+  FcboardEmbeddableElement,
+  FcboardMagicFrameElement,
+  FcboardFrameLikeElement,
+  FcboardElementType,
+  FcboardIframeLikeElement,
+  OrderedFcboardElement,
+  FcboardNonSelectionElement,
   BindMode,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import type {
   Merge,
   MaybePromise,
   ValueOf,
   MakeBrand,
-} from "@excalidraw/common/utility-types";
+} from "@fcboard/common/utility-types";
 
 import type {
   CaptureUpdateActionType,
   DurableIncrement,
   EphemeralIncrement,
-} from "@excalidraw/element";
-import type { GlobalPoint } from "@excalidraw/math";
+} from "@fcboard/element";
+import type { GlobalPoint } from "@fcboard/math";
 
 import type { Action } from "./actions/types";
 import type { Spreadsheet } from "./charts";
@@ -139,7 +139,7 @@ export type BinaryFileData = {
 
 export type BinaryFileMetadata = Omit<BinaryFileData, "dataURL">;
 
-export type BinaryFiles = Record<ExcalidrawElement["id"], BinaryFileData>;
+export type BinaryFiles = Record<FcboardElement["id"], BinaryFileData>;
 
 export type ToolType =
   | "selection"
@@ -159,7 +159,7 @@ export type ToolType =
   | "embeddable"
   | "laser";
 
-export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
+export type ElementOrToolType = FcboardElementType | ToolType | "custom";
 
 export type ActiveTool =
   | {
@@ -283,29 +283,29 @@ export interface AppState {
   isLoading: boolean;
   errorMessage: React.ReactNode;
   activeEmbeddable: {
-    element: NonDeletedExcalidrawElement;
+    element: NonDeletedFcboardElement;
     state: "hover" | "active";
   } | null;
   /**
    * for a newly created element
    * - set on pointer down, updated during pointer move, used on pointer up
    */
-  newElement: NonDeleted<ExcalidrawNonSelectionElement> | null;
+  newElement: NonDeleted<FcboardNonSelectionElement> | null;
   /**
    * for a single element that's being resized
    * - set on pointer down when it's selected and the active tool is selection
    */
-  resizingElement: NonDeletedExcalidrawElement | null;
+  resizingElement: NonDeletedFcboardElement | null;
   /**
    * multiElement is for multi-point linear element that's created by clicking as opposed to dragging
    * - when set and present, the editor will handle linear element creation logic accordingly
    */
-  multiElement: NonDeleted<ExcalidrawLinearElement> | null;
+  multiElement: NonDeleted<FcboardLinearElement> | null;
   /**
    * decoupled from newElement, dragging selection only creates selectionElement
    * - set on pointer down, updated during pointer move
    */
-  selectionElement: NonDeletedExcalidrawElement | null;
+  selectionElement: NonDeletedFcboardElement | null;
   /**
    * tracking current arrow binding editor state (takes into account
    * `bindingPreference` and keyboard modifiers (ctrl/alt)
@@ -315,12 +315,12 @@ export interface AppState {
   bindingPreference: "enabled" | "disabled";
   /** user preference whether arrow snap to midpoints while binding */
   isMidpointSnappingEnabled: boolean;
-  startBoundElement: NonDeleted<ExcalidrawBindableElement> | null;
+  startBoundElement: NonDeleted<FcboardBindableElement> | null;
   suggestedBinding: {
-    element: NonDeleted<ExcalidrawBindableElement>;
+    element: NonDeleted<FcboardBindableElement>;
     midPoint?: GlobalPoint;
   } | null;
-  frameToHighlight: NonDeleted<ExcalidrawFrameLikeElement> | null;
+  frameToHighlight: NonDeleted<FcboardFrameLikeElement> | null;
   frameRendering: {
     enabled: boolean;
     name: boolean;
@@ -328,11 +328,11 @@ export interface AppState {
     clip: boolean;
   };
   editingFrame: string | null;
-  elementsToHighlight: NonDeleted<ExcalidrawElement>[] | null;
+  elementsToHighlight: NonDeleted<FcboardElement>[] | null;
   /**
    * set when a new text is created or when an existing text is being edited
    */
-  editingTextElement: NonDeletedExcalidrawElement | null;
+  editingTextElement: NonDeletedFcboardElement | null;
   activeTool: {
     /**
      * indicates a previous tool we should revert back to if we deselect the
@@ -355,7 +355,7 @@ export interface AppState {
   exportScale: number;
   currentItemStrokeColor: string;
   currentItemBackgroundColor: string;
-  currentItemFillStyle: ExcalidrawElement["fillStyle"];
+  currentItemFillStyle: FcboardElement["fillStyle"];
   currentItemStrokeWidth: number;
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
   whiteboardPenWidths?: { hard?: number; brush?: number };
@@ -364,6 +364,7 @@ export interface AppState {
   whiteboardPenTip?: "fine" | "thick";
   whiteboardDualPen?: boolean;
   whiteboardThickThreshold?: number;
+  whiteboardFineThreshold?: number;
   whiteboardPenTips?: Partial<
     Record<
       "fine" | "thick",
@@ -390,12 +391,13 @@ export interface AppState {
   };
   multiStroke?: boolean;
   toolbarReversed?: boolean;
+  whiteboardToolbarText?: boolean;
   toolbarHidden?: boolean;
   eraserMode?: "stroke" | "object";
   eraserSize?: number;
   palmEraser?: boolean;
   palmEraserThreshold?: number;
-  currentItemStrokeStyle: ExcalidrawElement["strokeStyle"];
+  currentItemStrokeStyle: FcboardElement["strokeStyle"];
   currentItemRoughness: number;
   currentItemOpacity: number;
   currentItemFontFamily: FontFamilyValues;
@@ -408,6 +410,7 @@ export interface AppState {
   currentItemArrowType: "sharp" | "round" | "elbow";
   viewBackgroundColor: string;
   whiteboardBackground?: import("./whiteboardBackground").WhiteboardBackground;
+  whiteboardCustomBackground?: DataURL;
   scrollX: number;
   scrollY: number;
   cursorButton: "up" | "down";
@@ -434,7 +437,7 @@ export interface AppState {
     | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
     | { name: "commandPalette" }
     | { name: "settings" }
-    | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] }
+    | { name: "elementLinkSelector"; sourceElementId: FcboardElement["id"] }
     | { name: "charts"; data: Spreadsheet; rawText: string };
   /**
    * Reflects user preference for whether the default sidebar should be docked.
@@ -496,11 +499,11 @@ export interface AppState {
 
   /** image cropping */
   isCropping: boolean;
-  croppingElementId: ExcalidrawElement["id"] | null;
+  croppingElementId: FcboardElement["id"] | null;
 
   /** null if no search matches found / search closed */
   searchMatches: Readonly<{
-    focusedId: ExcalidrawElement["id"] | null;
+    focusedId: FcboardElement["id"] | null;
     matches: readonly SearchMatch[];
   }> | null;
 
@@ -558,7 +561,7 @@ export declare class GestureEvent extends UIEvent {
 // libraries
 // -----------------------------------------------------------------------------
 /** @deprecated legacy: do not use outside of migration paths */
-export type LibraryItem_v1 = readonly NonDeleted<ExcalidrawElement>[];
+export type LibraryItem_v1 = readonly NonDeleted<FcboardElement>[];
 /** @deprecated legacy: do not use outside of migration paths */
 type LibraryItems_v1 = readonly LibraryItem_v1[];
 
@@ -566,7 +569,7 @@ type LibraryItems_v1 = readonly LibraryItem_v1[];
 export type LibraryItem = {
   id: string;
   status: "published" | "unpublished";
-  elements: readonly NonDeleted<ExcalidrawElement>[];
+  elements: readonly NonDeleted<FcboardElement>[];
   /** timestamp in epoch (ms) */
   created: number;
   name?: string;
@@ -582,7 +585,7 @@ export type LibraryItemsSource =
   | MaybePromise<LibraryItems_anyVersion | Blob>;
 // -----------------------------------------------------------------------------
 
-export type ExcalidrawInitialDataState = Merge<
+export type FcboardInitialDataState = Merge<
   ImportedDataState,
   {
     libraryItems?: MaybePromise<Required<ImportedDataState>["libraryItems"]>;
@@ -601,9 +604,9 @@ export type OnExportProgress = {
   progress?: number;
 };
 
-export interface ExcalidrawProps {
+export interface FcboardProps {
   onChange?: (
-    elements: readonly OrderedExcalidrawElement[],
+    elements: readonly OrderedFcboardElement[],
     appState: AppState,
     files: BinaryFiles,
   ) => void;
@@ -612,21 +615,21 @@ export interface ExcalidrawProps {
    */
   onIncrement?: (event: DurableIncrement | EphemeralIncrement) => void;
   initialData?:
-    | (() => MaybePromise<ExcalidrawInitialDataState | null>)
-    | MaybePromise<ExcalidrawInitialDataState | null>;
+    | (() => MaybePromise<FcboardInitialDataState | null>)
+    | MaybePromise<FcboardInitialDataState | null>;
   /**
-   * Invoked as soon as the Excalidraw API is available
+   * Invoked as soon as the Fcboard API is available
    * NOTE editor is not yet mounted, and state is not yet initialized
    */
-  onExcalidrawAPI?: (api: ExcalidrawImperativeAPI) => void;
+  onFcboardAPI?: (api: FcboardImperativeAPI) => void;
   /**
    * Invoked once the editor root is mounted.
    */
-  onMount?: (payload: ExcalidrawMountPayload) => void;
+  onMount?: (payload: FcboardMountPayload) => void;
   /**
    * Invoked once the initial scene is loaded.
    */
-  onInitialize?: (api: ExcalidrawImperativeAPI) => void;
+  onInitialize?: (api: FcboardImperativeAPI) => void;
   isCollaborating?: boolean;
   onPointerUpdate?: (payload: {
     pointer: { x: number; y: number; tool: "pointer" | "laser" };
@@ -637,6 +640,8 @@ export interface ExcalidrawProps {
     data: ClipboardData,
     event: ClipboardEvent | null,
   ) => Promise<boolean> | boolean;
+  /** Optional host file browser; returned files enter the normal image pipeline. */
+  onImagePick?: () => Promise<File[]>;
   /**
    * Called when element(s) are duplicated so you can listen or modify as
    * needed.
@@ -649,10 +654,10 @@ export interface ExcalidrawProps {
    * the element if changes are made)
    */
   onDuplicate?: (
-    nextElements: readonly ExcalidrawElement[],
+    nextElements: readonly FcboardElement[],
     /** excludes the duplicated elements */
-    prevElements: readonly ExcalidrawElement[],
-  ) => ExcalidrawElement[] | void;
+    prevElements: readonly FcboardElement[],
+  ) => FcboardElement[] | void;
   renderTopLeftUI?: (
     isMobile: boolean,
     appState: UIAppState,
@@ -671,7 +676,7 @@ export interface ExcalidrawProps {
   // @TODO come with better API before v0.18.0
   name?: string;
   renderCustomStats?: (
-    elements: readonly NonDeletedExcalidrawElement[],
+    elements: readonly NonDeletedFcboardElement[],
     appState: UIAppState,
   ) => JSX.Element;
   UIOptions?: Partial<UIOptions>;
@@ -682,7 +687,7 @@ export interface ExcalidrawProps {
   generateIdForFile?: (file: File) => string | Promise<string>;
   generateLinkForSelection?: (id: string, type: "element" | "group") => string;
   onLinkOpen?: (
-    element: NonDeletedExcalidrawElement,
+    element: NonDeletedFcboardElement,
     event: CustomEvent<{
       nativeEvent: MouseEvent | React.PointerEvent<HTMLCanvasElement>;
     }>,
@@ -695,7 +700,7 @@ export interface ExcalidrawProps {
     activeTool: AppState["activeTool"],
     pointerDownState: PointerDownState,
   ) => void;
-  onObjectDoubleClick?: (element: ExcalidrawElement) => void;
+  onObjectDoubleClick?: (element: FcboardElement) => void;
   onScrollChange?: (scrollX: number, scrollY: number, zoom: Zoom) => void;
   onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;
@@ -706,7 +711,7 @@ export interface ExcalidrawProps {
     | RegExp[]
     | ((link: string) => boolean | undefined);
   renderEmbeddable?: (
-    element: NonDeleted<ExcalidrawEmbeddableElement>,
+    element: NonDeleted<FcboardEmbeddableElement>,
     appState: AppState,
   ) => JSX.Element | null;
   aiEnabled?: boolean;
@@ -726,7 +731,7 @@ export interface ExcalidrawProps {
      * JSON-embedded PNG (which is also identified as `json` type here)*/
     type: "json",
     data: {
-      elements: readonly ExcalidrawElement[];
+      elements: readonly FcboardElement[];
       appState: AppState;
       files: BinaryFiles;
     },
@@ -750,12 +755,12 @@ export type SceneData = {
 export type ExportOpts = {
   saveFileToDisk?: boolean;
   onExportToBackend?: (
-    exportedElements: readonly NonDeletedExcalidrawElement[],
+    exportedElements: readonly NonDeletedFcboardElement[],
     appState: UIAppState,
     files: BinaryFiles,
   ) => void;
   renderCustomUI?: (
-    exportedElements: readonly NonDeletedExcalidrawElement[],
+    exportedElements: readonly NonDeletedFcboardElement[],
     appState: UIAppState,
     files: BinaryFiles,
     canvas: HTMLCanvasElement,
@@ -765,7 +770,7 @@ export type ExportOpts = {
 // NOTE at the moment, if action name corresponds to canvasAction prop, its
 // truthiness value will determine whether the action is rendered or not
 // (see manager renderAction). We also override canvasAction values in
-// Excalidraw package index.tsx.
+// Fcboard package index.tsx.
 export type CanvasActions = Partial<{
   changeViewBackgroundColor: boolean;
   clearCanvas: boolean;
@@ -788,6 +793,8 @@ export type UIOptions = Partial<{
     /** Native slider units; unaffected by the display density. */
     penWidthMax?: 20 | 40;
     thickThreshold?: number;
+    fineThreshold?: number;
+    factoryThresholds?: { palm?: number; fine?: number; thick?: number };
     dualPen?: boolean;
     hardNibAvailable?: boolean;
     hardNib?: boolean;
@@ -813,7 +820,7 @@ export type UIOptions = Partial<{
 }>;
 
 export type AppProps = Merge<
-  ExcalidrawProps,
+  FcboardProps,
   {
     UIOptions: Merge<
       UIOptions,
@@ -908,7 +915,7 @@ export type PointerDownState = Readonly<{
   lastCoords: { x: number; y: number };
   // original element frozen snapshots so we can access the original
   // element attribute values at time of pointerdown
-  originalElements: Map<string, NonDeleted<ExcalidrawElement>>;
+  originalElements: Map<string, NonDeleted<FcboardElement>>;
   resize: {
     // Handle when resizing, might change during the pointer interaction
     handleType: MaybeTransformHandleType;
@@ -924,10 +931,10 @@ export type PointerDownState = Readonly<{
   hit: {
     // The element the pointer is "hitting", is determined on the initial
     // pointer down event
-    element: NonDeleted<ExcalidrawElement> | null;
+    element: NonDeleted<FcboardElement> | null;
     // The elements the pointer is "hitting", is determined on the initial
     // pointer down event
-    allHitElements: NonDeleted<ExcalidrawElement>[];
+    allHitElements: NonDeleted<FcboardElement>[];
     // This is determined on the initial pointer down event
     wasAddedToSelection: boolean;
     // Whether selected element(s) were duplicated, might change during the
@@ -968,21 +975,21 @@ export type PointerDownState = Readonly<{
 
 export type UnsubscribeCallback = () => void;
 
-export type ExcalidrawMountPayload = {
-  excalidrawAPI: ExcalidrawImperativeAPI;
+export type FcboardMountPayload = {
+  excalidrawAPI: FcboardImperativeAPI;
   /*
-   *Excalidraw container.
+   *Fcboard container.
    * should never be null, but just to be safe
    */
   container: HTMLDivElement | null;
 };
 
-export type ExcalidrawImperativeAPIEventMap = {
-  "editor:mount": [payload: ExcalidrawMountPayload];
-  "editor:initialize": [api: ExcalidrawImperativeAPI];
+export type FcboardImperativeAPIEventMap = {
+  "editor:mount": [payload: FcboardMountPayload];
+  "editor:initialize": [api: FcboardImperativeAPI];
 };
 
-export interface ExcalidrawImperativeAPI {
+export interface FcboardImperativeAPI {
   executeAction: (
     name: import("./actions/types").ActionName,
     value?: unknown,
@@ -1024,7 +1031,7 @@ export interface ExcalidrawImperativeAPI {
   updateFrameRendering: InstanceType<typeof App>["updateFrameRendering"];
   onChange: (
     callback: (
-      elements: readonly ExcalidrawElement[],
+      elements: readonly FcboardElement[],
       appState: AppState,
       files: BinaryFiles,
     ) => void,
@@ -1048,7 +1055,14 @@ export interface ExcalidrawImperativeAPI {
   ) => UnsubscribeCallback;
   /** Compose completed ink synchronously; callbacks run before its history entry. */
   onInkCommit: (
-    callback: (element: ExcalidrawFreeDrawElement) => void,
+    callback: (element: FcboardFreeDrawElement) => void,
+  ) => UnsubscribeCallback;
+  /** Frame-batched live composition. Settled runs after this contact's history capture. */
+  onInkProgress: (
+    callback: (
+      element: FcboardFreeDrawElement,
+      phase: "start" | "update" | "cancel" | "settled",
+    ) => void,
   ) => UnsubscribeCallback;
   onScrollChange: (
     callback: (scrollX: number, scrollY: number, zoom: Zoom) => void,
@@ -1070,13 +1084,13 @@ export type FrameNameBounds = {
 
 export type FrameNameBoundsCache = {
   get: (
-    frameElement: ExcalidrawFrameLikeElement | ExcalidrawMagicFrameElement,
+    frameElement: FcboardFrameLikeElement | FcboardMagicFrameElement,
   ) => FrameNameBounds | null;
   _cache: Map<
     string,
     FrameNameBounds & {
       zoom: AppState["zoom"]["value"];
-      versionNonce: ExcalidrawFrameLikeElement["versionNonce"];
+      versionNonce: FcboardFrameLikeElement["versionNonce"];
     }
   >;
 };
@@ -1100,13 +1114,13 @@ export type Primitive =
 export type JSONValue = string | number | boolean | null | object;
 
 export type EmbedsValidationStatus = Map<
-  ExcalidrawIframeLikeElement["id"],
+  FcboardIframeLikeElement["id"],
   boolean
 >;
 
-export type ElementsPendingErasure = Set<ExcalidrawElement["id"]>;
+export type ElementsPendingErasure = Set<FcboardElement["id"]>;
 
-export type PendingExcalidrawElements = ExcalidrawElement[];
+export type PendingFcboardElements = FcboardElement[];
 
 /** Runtime gridSize value. Null indicates disabled grid. */
 export type NullableGridSize =
@@ -1114,8 +1128,8 @@ export type NullableGridSize =
   | null;
 
 export type GenerateDiagramToCode = (props: {
-  frame: ExcalidrawMagicFrameElement;
-  children: readonly ExcalidrawElement[];
+  frame: FcboardMagicFrameElement;
+  children: readonly FcboardElement[];
 }) => MaybePromise<{ html: string }>;
 
 export type Offsets = Partial<{

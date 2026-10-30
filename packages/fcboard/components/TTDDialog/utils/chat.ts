@@ -1,4 +1,4 @@
-import { findLastIndex, randomId } from "@excalidraw/common";
+import { findLastIndex, randomId } from "@fcboard/common";
 
 import type { LLMMessage, TChat } from "../types";
 

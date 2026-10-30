@@ -1,25 +1,18 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
-import {
-  defaultLang,
-  languages,
-  setLanguage,
-  t,
-} from "@excalidraw/excalidraw/i18n";
-import { factoryBrushWidths } from "@excalidraw/element/factoryBrush";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
+import { defaultLang, languages, setLanguage, t } from "@fcboard/fcboard/i18n";
+import { factoryBrushWidths } from "@fcboard/element/factoryBrush";
 
-import { Fonts } from "@excalidraw/excalidraw/fonts";
+import { Fonts } from "@fcboard/fcboard/fonts";
 
-import type {
-  AppState,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
+import type { AppState, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 import { FilePreview } from "./FilePreview";
 import { MindMapControls } from "./MindMapControls";
 import { InsertionCandidates } from "./InsertionCandidates";
 import { classroomCommands } from "./commands";
+import { documentSharing } from "./documentSharing";
 import { documentInkElement } from "./documentInk";
 import {
   documentSourceSignature,
@@ -41,6 +34,8 @@ import {
   insertionDefaults,
   renderInsertion,
   readInsertions,
+  configureInsertion,
+  changeTableTrack,
 } from "./insertObjects";
 import {
   documentWritingParts,
@@ -58,7 +53,9 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.mocked(documentTools.documentKey).mockResolvedValue("document-key");
   vi.mocked(loadInk).mockResolvedValue({});
+  vi.mocked(documentTools.saveInk).mockResolvedValue(undefined);
 });
 
 const setup = async (
@@ -108,7 +105,7 @@ const setup = async (
       listeners.add(notify);
       return () => listeners.delete(notify);
     },
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const file = new File(["image"], "slide.png");
   const view = render(<FilePreview api={api} file={file} onClose={() => {}} />);
   await waitFor(() =>
@@ -171,6 +168,62 @@ const setup = async (
   };
   return { ...view, api, update, svg, pointer, draw };
 };
+
+it("exposes live original-document ink, applies peer text through the actual editor, follows host navigation and saves the received content", async () => {
+  const { pointer, svg, unmount } = await setup();
+  try {
+    pointer("pointerdown", 100, 100);
+    pointer("pointermove", 160, 130);
+    const live = documentSharing.current()!;
+    expect(live.file.name).toBe("slide.png");
+    expect(live.draft).toBe(live.ink[0].id);
+    expect(live.ink[0].points.length).toBeGreaterThan(1);
+    pointer("pointerup", 160, 130);
+    act(() =>
+      documentSharing.current()!.apply(
+        [
+          ...documentSharing.current()!.ink,
+          {
+            id: "peer-title",
+            points: [[300, 200]],
+            color: "#ee2222",
+            width: 2,
+            text: "扫码端更正的标题",
+            fontSize: 24,
+          },
+        ],
+        true,
+      ),
+    );
+    expect(svg).toHaveTextContent("扫码端更正的标题");
+    act(() => documentSharing.follow(true));
+    await expect(
+      classroomCommands.execute({ name: "document.next" }),
+    ).rejects.toThrow(t("fcboard.syncing_live"));
+    act(() => documentSharing.follow(false));
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.close",
+        args: { next: false },
+      });
+    });
+    expect(documentTools.saveInk).toHaveBeenCalledWith(
+      "document-key",
+      expect.objectContaining({
+        0: expect.arrayContaining([
+          expect.objectContaining({
+            id: "peer-title",
+            text: "扫码端更正的标题",
+          }),
+        ]),
+      }),
+    );
+  } finally {
+    documentSharing.follow(false);
+    unmount();
+  }
+  expect(documentSharing.current()).toBeUndefined();
+});
 
 it("includes the visible live document stroke in snapshots without committing it before lift", async () => {
   const snapshot = vi
@@ -353,6 +406,9 @@ it("grows visible table cells around raw handwriting and undoes the stroke and g
   });
   pointer("pointerdown", 125, 125);
   pointer("pointermove", 300, 190);
+  expect(readInsertions(api)[0].columnWidths).toEqual([220, 120, 120]);
+  expect(readInsertions(api)[0].rowHeights).toEqual([110, 60, 60]);
+  expect(currentInk().some((stroke) => stroke.fcInk)).toBe(false);
   pointer("pointerup", 350, 215);
   const source = currentInk().find(
     (stroke) => stroke.insertion?.inkCell === 0,
@@ -378,6 +434,205 @@ it("grows visible table cells around raw handwriting and undoes the stroke and g
     currentInk().find((stroke) => stroke.id === source.id)?.points,
   ).toEqual(source.points);
   expect(readInsertions(api)[0].width).toBe(510);
+});
+
+it.each(["pointercancel", "lostpointercapture", "blur"])(
+  "restores courseware table previews on %s without adding a writing undo entry",
+  async (event) => {
+    const { api, pointer } = await setup();
+    await act(async () => {
+      await renderInsertion(
+        api,
+        insertionDefaults("table", { x: 100, y: 100 }),
+      );
+    });
+    const original = currentInk();
+    pointer("pointerdown", 125, 125);
+    pointer("pointermove", 350, 215);
+    expect(readInsertions(api)[0].width).toBe(510);
+    if (event === "blur") {
+      fireEvent.blur(window);
+    } else {
+      pointer(event, 350, 215);
+    }
+    expect(currentInk()).toEqual(original);
+    pointer("pointerup", 350, 215);
+    expect(currentInk()).toEqual(original);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()).toHaveLength(0);
+  },
+);
+
+it("saves committed courseware geometry during a long stroke, then saves the completed expansion", async () => {
+  vi.useFakeTimers();
+  const { api, pointer } = await setup();
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+  });
+  const original = currentInk();
+  vi.mocked(documentTools.saveInk).mockClear();
+  pointer("pointerdown", 125, 125);
+  pointer("pointermove", 350, 215);
+  expect(readInsertions(api)[0].width).toBe(510);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1001);
+  });
+  expect(documentTools.saveInk).toHaveBeenLastCalledWith("document-key", {
+    0: original,
+  });
+  pointer("pointerup", 350, 215);
+  const completed = currentInk();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1001);
+  });
+  expect(documentTools.saveInk).toHaveBeenLastCalledWith("document-key", {
+    0: completed,
+  });
+  expect(completed.some((stroke) => stroke.insertion?.inkCell === 0)).toBe(
+    true,
+  );
+});
+
+it("rolls back live table growth before a growing contact becomes an object eraser", async () => {
+  const { api, pointer } = await setup(undefined, { eraserMode: "object" });
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+  });
+  const original = currentInk();
+  pointer("pointerdown", 125, 125, { pointerType: "touch" });
+  pointer("pointermove", 350, 215, { pointerType: "touch" });
+  expect(readInsertions(api)[0].width).toBe(510);
+  pointer("pointermove", 130, 125, {
+    pointerType: "touch",
+    width: 70,
+    height: 80,
+  });
+  expect(currentInk()).toHaveLength(0);
+  pointer("pointerup", 130, 125, {
+    pointerType: "touch",
+    width: 70,
+    height: 80,
+  });
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(currentInk()).toEqual(original);
+});
+
+it("adds and removes courseware end tracks without losing cell writing, and preserves the whole change in undo", async () => {
+  const { api, pointer } = await setup();
+  await act(async () => {
+    await renderInsertion(
+      api,
+      configureInsertion(insertionDefaults("table", { x: 100, y: 100 }), {
+        cells: ["", "", "", "", "", "", "", "", "last"],
+      }),
+    );
+  });
+  pointer("pointerdown", 365, 245);
+  pointer("pointerup", 385, 255);
+  const original = currentInk();
+  const raw = original.find((stroke) => stroke.insertion?.inkCell === 8)!;
+  await act(async () => {
+    await renderInsertion(
+      api,
+      changeTableTrack(readInsertions(api)[0], "column.remove"),
+      true,
+      { exact: true },
+    );
+  });
+  expect(readInsertions(api)[0]).toMatchObject({ columns: 2, width: 240 });
+  expect(currentInk().find((stroke) => stroke.id === raw.id)?.points).toEqual(
+    raw.points,
+  );
+  expect(
+    currentInk().find((stroke) => stroke.id === raw.id)?.insertion,
+  ).toBeUndefined();
+  expect(currentInk().filter((stroke) => stroke.text === "last")).toHaveLength(
+    1,
+  );
+  expect(
+    currentInk().find((stroke) => stroke.text === "last")?.insertion,
+  ).toBeUndefined();
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(currentInk()).toEqual(original);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  await act(async () => {
+    await renderInsertion(
+      api,
+      changeTableTrack(readInsertions(api)[0], "row.add"),
+      true,
+      { exact: true },
+    );
+  });
+  expect(readInsertions(api)[0]).toMatchObject({ rows: 4, height: 240 });
+  expect(currentInk().find((stroke) => stroke.id === raw.id)?.points).toEqual(
+    raw.points,
+  );
+  expect(new Set(currentInk().map((stroke) => stroke.id)).size).toBe(
+    currentInk().length,
+  );
+});
+
+it("keeps courseware tables and their handwriting fixed when a selected corner is dragged", async () => {
+  const { api, pointer } = await setup();
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+  });
+  pointer("pointerdown", 125, 125);
+  pointer("pointerup", 145, 135);
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.tool",
+      args: { tool: "selection" },
+    });
+  });
+  pointer("pointerdown", 80, 80);
+  pointer("pointermove", 480, 80);
+  pointer("pointermove", 480, 300);
+  pointer("pointerup", 80, 300);
+  const before = currentInk();
+  const region = (classroomCommands.read("document") as { region: number[][] })
+    .region;
+  pointer("pointerdown", 480, 300);
+  pointer("pointermove", 580, 400);
+  pointer("pointerup", 580, 400);
+  expect(currentInk()).toEqual(before);
+  expect(
+    (classroomCommands.read("document") as { region: number[][] }).region,
+  ).toEqual(region);
+  expect(screen.getByText(t("fcboard.table_zoom_instructions"))).toBeVisible();
+  pointer("pointerdown", 125, 125);
+  pointer("pointerup", 165, 155);
+  const moved = currentInk().find((stroke) => stroke.insertion?.inkCell === 0)!;
+  expect(moved.points[0]).toEqual([165, 155]);
+  expect(readInsertions(api)[0].position).toEqual({ x: 140, y: 130 });
+  await act(async () => {
+    await renderInsertion(
+      api,
+      changeTableTrack(readInsertions(api)[0], "row.add"),
+      true,
+      { exact: true },
+    );
+  });
+  expect(readInsertions(api)[0]).toMatchObject({
+    rows: 4,
+    height: 240,
+    position: { x: 140, y: 130 },
+  });
+  expect(currentInk().find((stroke) => stroke.id === moved.id)?.points).toEqual(
+    moved.points,
+  );
+  const expanded = (
+    classroomCommands.read("document") as { region: number[][] }
+  ).region;
+  expect(expanded[2]).toEqual([520, 390]);
 });
 
 it("selects and drags one courseware mind-map node, undoes once, then accepts handwriting candidates there", async () => {

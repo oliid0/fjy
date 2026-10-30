@@ -6,9 +6,9 @@ import React, {
   useState,
 } from "react";
 
-import { MIME_TYPES, arrayToMap, nextAnimationFrame } from "@excalidraw/common";
+import { MIME_TYPES, arrayToMap, nextAnimationFrame } from "@fcboard/common";
 
-import { duplicateElements } from "@excalidraw/element";
+import { duplicateElements } from "@fcboard/element";
 
 import clsx from "clsx";
 
@@ -36,10 +36,10 @@ import { useEditorInterface } from "./App";
 
 import { Button } from "./Button";
 
-import type { ExcalidrawLibraryIds } from "../data/types";
+import type { FcboardLibraryIds } from "../data/types";
 
 import type {
-  ExcalidrawProps,
+  FcboardProps,
   LibraryItem,
   LibraryItems,
   UIAppState,
@@ -69,7 +69,7 @@ export default function LibraryMenuItems({
   pendingElements: LibraryItem["elements"];
   onInsertLibraryItems: (libraryItems: LibraryItems) => void;
   onAddToLibrary: (elements: LibraryItem["elements"]) => void;
-  libraryReturnUrl: ExcalidrawProps["libraryReturnUrl"];
+  libraryReturnUrl: FcboardProps["libraryReturnUrl"];
   theme: UIAppState["theme"];
   id: string;
   selectedItems: LibraryItem["id"][];
@@ -210,11 +210,11 @@ export default function LibraryMenuItems({
     (id: LibraryItem["id"], event: React.DragEvent) => {
       // we want to serialize just the ids so the operation is fast and there's
       // no race condition if people drop the library items on canvas too fast
-      const data: ExcalidrawLibraryIds = {
+      const data: FcboardLibraryIds = {
         itemIds: selectedItems.includes(id) ? selectedItems : [id],
       };
       event.dataTransfer.setData(
-        MIME_TYPES.excalidrawlibIds,
+        MIME_TYPES.fcboardlibIds,
         JSON.stringify(data),
       );
     },
@@ -308,7 +308,7 @@ export default function LibraryMenuItems({
           className="library-menu-items-container__header"
           style={{ marginTop: "0.75rem" }}
         >
-          {t("labels.excalidrawLib")}
+          {t("labels.fcboardlib")}
         </div>
       )}
       {publishedItems.length > 0 && (

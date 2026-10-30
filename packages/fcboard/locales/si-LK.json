@@ -91,7 +91,7 @@
     "untitled": "නිර්නාමික",
     "name": "නම",
     "yourName": "ඔබගේ නම",
-    "madeWithExcalidraw": "Fcboard සමඟ සාදන ලද",
+    "madeWithFcboard": "Fcboard සමඟ සාදන ලද",
     "group": "කණ්ඩායම",
     "ungroup": "කණ්ඩායම් ඉවත් කරන්න",
     "collaborators": "සහයෝගිකයන්",
@@ -121,7 +121,7 @@
     "toggleTheme": "තේමාව ටොගල් කරන්න",
     "theme": "තේමාව",
     "personalLib": "පුද්ගලික පුස්තකාලය",
-    "excalidrawLib": "Fcboard පුස්තකාලය",
+    "fcboardlib": "Fcboard පුස්තකාලය",
     "decreaseFontSize": "අකුරු ප්‍රමාණය අඩු කරන්න",
     "increaseFontSize": "අකුරු ප්‍රමාණය වැඩි කරන්න",
     "unbindText": "පෙළ විසන්ධි කරන්න",
@@ -320,7 +320,7 @@
     "laser": "ලේසර්",
     "hand": "අත",
     "extraTools": "අමතර මෙවලම්",
-    "mermaidToExcalidraw": "Mermaid වලින් Fcboard වෙත",
+    "mermaidToFcboard": "Mermaid වලින් Fcboard වෙත",
     "convertElementType": "හැඩය වර් ‍ ගය ටොගල කරන්න"
   },
   "element": {

@@ -1,26 +1,26 @@
 import React from "react";
 
-import { resolvablePromise } from "@excalidraw/common";
+import { resolvablePromise } from "@fcboard/common";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { Pointer } from "./helpers/ui";
 import { act, render } from "./test-utils";
 
-import type { ExcalidrawImperativeAPI } from "../types";
+import type { FcboardImperativeAPI } from "../types";
 
 describe("setActiveTool()", () => {
   const h = window.h;
 
-  let excalidrawAPI: ExcalidrawImperativeAPI;
+  let excalidrawAPI: FcboardImperativeAPI;
 
   const mouse = new Pointer("mouse");
 
   beforeEach(async () => {
-    const excalidrawAPIPromise = resolvablePromise<ExcalidrawImperativeAPI>();
+    const excalidrawAPIPromise = resolvablePromise<FcboardImperativeAPI>();
     await render(
-      <Excalidraw
-        onExcalidrawAPI={(api) => excalidrawAPIPromise.resolve(api as any)}
+      <Fcboard
+        onFcboardAPI={(api) => excalidrawAPIPromise.resolve(api as any)}
       />,
     );
     excalidrawAPI = await excalidrawAPIPromise;

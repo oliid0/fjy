@@ -1,10 +1,10 @@
-import { isDevEnv } from "@excalidraw/common";
+import { isDevEnv } from "@fcboard/common";
 
-import type { NestedKeyOf } from "@excalidraw/common/utility-types";
+import type { NestedKeyOf } from "@fcboard/common/utility-types";
 
 import { useAtomValue, editorJotaiStore, atom } from "./editor-jotai";
 import fallbackLangData from "./locales/en.json";
-import percentages from "./locales/percentages.json";
+import eligibility from "./localeEligibility.json";
 
 const COMPLETION_THRESHOLD = 85;
 
@@ -80,7 +80,7 @@ export const languages: Language[] = [
   ]
     .filter(
       (lang) =>
-        (percentages as Record<string, number>)[lang.code] >=
+        (eligibility as Record<string, number>)[lang.code] >=
         COMPLETION_THRESHOLD,
     )
     .sort((left, right) => (left.label > right.label ? 1 : -1)),
@@ -187,8 +187,8 @@ export const t = (
 const editorLangCodeAtom = atom(defaultLang.code);
 
 // Should be used in components that fall under these cases:
-// - component is rendered as an <Excalidraw> child
-// - component is rendered internally by <Excalidraw>, but the component
+// - component is rendered as an <Fcboard> child
+// - component is rendered internally by <Fcboard>, but the component
 //   is memoized w/o being updated on `langCode`, `AppState`, or `UIAppState`
 export const useI18n = () => {
   const langCode = useAtomValue(editorLangCodeAtom);

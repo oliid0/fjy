@@ -4,16 +4,16 @@ import {
   getGridPoint,
   getFontString,
   DRAGGING_THRESHOLD,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type {
   AppState,
   NormalizedZoomValue,
   NullableGridSize,
   PointerDownState,
-} from "@excalidraw/excalidraw/types";
+} from "@fcboard/fcboard/types";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { unbindBindingElement, updateBoundElements } from "./binding";
 import { getCommonBounds } from "./bounds";
@@ -30,11 +30,11 @@ import {
 
 import type { Scene } from "./Scene";
 
-import type { ExcalidrawElement } from "./types";
+import type { FcboardElement } from "./types";
 
 export const dragSelectedElements = (
   pointerDownState: PointerDownState,
-  _selectedElements: NonDeletedExcalidrawElement[],
+  _selectedElements: NonDeletedFcboardElement[],
   offset: { x: number; y: number },
   scene: Scene,
   snapOffset: {
@@ -69,9 +69,7 @@ export const dragSelectedElements = (
   // we do not want a frame and its elements to be selected at the same time
   // but when it happens (due to some bug), we want to avoid updating element
   // in the frame twice, hence the use of set
-  const elementsToUpdate = new Set<NonDeletedExcalidrawElement>(
-    selectedElements,
-  );
+  const elementsToUpdate = new Set<NonDeletedFcboardElement>(selectedElements);
   const frames = selectedElements
     .filter((e) => isFrameLikeElement(e))
     .map((f) => f.id);
@@ -84,7 +82,7 @@ export const dragSelectedElements = (
     }
   }
 
-  const origElements: ExcalidrawElement[] = [];
+  const origElements: FcboardElement[] = [];
 
   for (const element of elementsToUpdate) {
     const origElement = pointerDownState.originalElements.get(element.id);
@@ -203,7 +201,7 @@ const calculateOffset = (
 
 const updateElementCoords = (
   pointerDownState: PointerDownState,
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   scene: Scene,
   dragOffset: { x: number; y: number },
 ) => {
@@ -220,7 +218,7 @@ const updateElementCoords = (
 };
 
 export const getDragOffsetXY = (
-  selectedElements: NonDeletedExcalidrawElement[],
+  selectedElements: NonDeletedFcboardElement[],
   x: number,
   y: number,
 ): [number, number] => {
@@ -245,7 +243,7 @@ export const dragNewElement = ({
   originOffset = null,
   informMutation = true,
 }: {
-  newElement: NonDeletedExcalidrawElement;
+  newElement: NonDeletedFcboardElement;
   elementType: AppState["activeTool"]["type"];
   originX: number;
   originY: number;

@@ -1,15 +1,12 @@
-import {
-  getBoundTextElement,
-  redrawTextBoundingBox,
-} from "@excalidraw/element";
-import { hasBoundTextElement, isTextElement } from "@excalidraw/element";
+import { getBoundTextElement, redrawTextBoundingBox } from "@fcboard/element";
+import { hasBoundTextElement, isTextElement } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { fontSizeIcon } from "../icons";
 
@@ -20,7 +17,7 @@ import type { DragInputCallbackType } from "./DragInput";
 import type { AppState } from "../../types";
 
 interface FontSizeProps {
-  element: ExcalidrawElement;
+  element: FcboardElement;
   scene: Scene;
   appState: AppState;
   property: "fontSize";
@@ -31,7 +28,7 @@ const STEP_SIZE = 4;
 
 const handleFontSizeChange: DragInputCallbackType<
   FontSizeProps["property"],
-  ExcalidrawTextElement
+  FcboardTextElement
 > = ({
   accumulatedChange,
   originalElements,

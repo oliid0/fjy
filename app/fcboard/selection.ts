@@ -1,6 +1,6 @@
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-export const selectionSignature = (elements: readonly ExcalidrawElement[]) =>
+export const selectionSignature = (elements: readonly FcboardElement[]) =>
   elements
     .map((element) => `${element.id}:${element.version}`)
     .sort()
@@ -13,8 +13,13 @@ export const selectionToolbarPosition = (
   unit = 1,
   items = 4,
 ) => {
-  const width = (items * 44 + 8) * unit;
-  const height = 42 * unit;
+  const available = Math.max(1, viewport.right - viewport.left - 24 * unit);
+  const columns = Math.max(
+    1,
+    Math.min(items, Math.floor((available / unit - 8) / 44)),
+  );
+  const width = Math.min(available, (columns * 44 + 8) * unit);
+  const height = Math.ceil(items / columns) * 42 * unit;
   const gap = 28 * unit;
   const margin = 12 * unit;
   const below = bounds.bottom + gap;
@@ -23,6 +28,7 @@ export const selectionToolbarPosition = (
       ? below
       : bounds.top - height - gap;
   return {
+    width,
     left: Math.max(
       viewport.left + margin,
       Math.min(

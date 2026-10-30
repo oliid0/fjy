@@ -1,12 +1,12 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { KEYS, reseed } from "@excalidraw/common";
+import { KEYS, reseed } from "@fcboard/common";
 
-import { setDateTimeForTests } from "@excalidraw/common";
+import { setDateTimeForTests } from "@fcboard/common";
 
 import { copiedStyles } from "../actions/actionStyles";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import * as StaticScene from "../renderer/staticScene";
 
 import { API } from "./helpers/api";
@@ -62,7 +62,7 @@ describe("contextMenu element", () => {
     reseed(7);
     setDateTimeForTests("201933152653");
 
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
   });
 
   beforeAll(() => {

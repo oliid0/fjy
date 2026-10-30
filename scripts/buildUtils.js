@@ -13,12 +13,15 @@ const getConfig = (outdir) => ({
   entryPoints: ["src/index.ts"],
   entryNames: "[name]",
   assetNames: "[dir]/[name]",
+  loader: {
+    ".ttf": "dataurl",
+  },
   alias: {
-    "@excalidraw/common": path.resolve(__dirname, "../packages/common/src"),
-    "@excalidraw/element": path.resolve(__dirname, "../packages/element/src"),
-    "@excalidraw/excalidraw": path.resolve(__dirname, "../packages/fcboard"),
-    "@excalidraw/math": path.resolve(__dirname, "../packages/math/src"),
-    "@excalidraw/utils": path.resolve(__dirname, "../packages/utils/src"),
+    "@fcboard/common": path.resolve(__dirname, "../packages/common/src"),
+    "@fcboard/element": path.resolve(__dirname, "../packages/element/src"),
+    "@fcboard/fcboard": path.resolve(__dirname, "../packages/fcboard"),
+    "@fcboard/math": path.resolve(__dirname, "../packages/math/src"),
+    "@fcboard/utils": path.resolve(__dirname, "../packages/utils/src"),
   },
 });
 

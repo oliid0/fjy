@@ -1,7 +1,7 @@
 @use "../css/variables.module" as *;
 
-.excalidraw {
-  &.excalidraw-modal-container {
+.fcboard {
+  &.fcboard-modal-container {
     position: absolute;
     z-index: var(--zIndex-modal);
   }

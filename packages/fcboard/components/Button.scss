@@ -1,7 +1,7 @@
 @use "../css/theme" as *;
 
-.excalidraw {
-  .excalidraw-button {
+.fcboard {
+  .fcboard-button {
     @include outlineButtonStyles;
   }
 }

@@ -91,7 +91,7 @@
     "untitled": "Be pavadinimo",
     "name": "Pavadinimas",
     "yourName": "Jūsų vardas",
-    "madeWithExcalidraw": "Sukurta su Fcboard",
+    "madeWithFcboard": "Sukurta su Fcboard",
     "group": "Grupuoti pasirinkimą",
     "ungroup": "Išgrupuoti pasirinkimą",
     "collaborators": "Bendradarbiautojai",
@@ -121,7 +121,7 @@
     "toggleTheme": "Perjungti šviesią/tamsią temą",
     "theme": "Tema",
     "personalLib": "Asmeninė biblioteka",
-    "excalidrawLib": "Exaclidraw biblioteka",
+    "fcboardlib": "Exaclidraw biblioteka",
     "decreaseFontSize": "Sumažinti šrifto dydį",
     "increaseFontSize": "Padidinti šrifto dydį",
     "unbindText": "Atsieti tekstą",
@@ -320,7 +320,7 @@
     "laser": "Lazerinis žymeklis",
     "hand": "Ranka (stūmimo įrankis)",
     "extraTools": "Daugiau įrankių",
-    "mermaidToExcalidraw": "Undinė į Fcboard",
+    "mermaidToFcboard": "Undinė į Fcboard",
     "convertElementType": "Perjungti formos tipą"
   },
   "element": {

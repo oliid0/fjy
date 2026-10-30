@@ -32,6 +32,9 @@ export const MaterialPanel = forwardRef<
           ...props,
           ref: panel,
           sx: {
+            // Dialog's maxWidth=false still imposes a 64px viewport gutter.
+            // Let the factory panels' own widths and responsive margins apply.
+            maxWidth: "calc(100% - 24px)",
             color: "var(--fc-ink)",
             backgroundColor: "var(--fc-surface)",
             backgroundImage: "none",

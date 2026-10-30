@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { KEYS, normalizeInputColor } from "@excalidraw/common";
+import { KEYS, normalizeInputColor } from "@fcboard/common";
 
 import { getShortcutKey } from "../..//shortcut";
 import { useAtom } from "../../editor-jotai";
@@ -107,7 +107,7 @@ export const ColorInput = ({
           />
           <div
             ref={eyeDropperTriggerRef}
-            className={clsx("excalidraw-eye-dropper-trigger", {
+            className={clsx("fcboard-eye-dropper-trigger", {
               selected: eyeDropperState,
             })}
             onClick={() =>

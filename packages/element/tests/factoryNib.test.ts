@@ -1,7 +1,7 @@
-import { pointFrom } from "@excalidraw/math";
-import { exportToSvg } from "@excalidraw/excalidraw";
+import { pointFrom } from "@fcboard/math";
+import { exportToSvg } from "@fcboard/fcboard";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { LocalPoint } from "@fcboard/math";
 
 import { API } from "../../fcboard/tests/helpers/api";
 import { getDefaultAppState } from "../../fcboard/appState";

@@ -91,7 +91,7 @@
     "untitled": "Adsız",
     "name": "Ad",
     "yourName": "Adınız",
-    "madeWithExcalidraw": "Fcboard ile yapıldı",
+    "madeWithFcboard": "Fcboard ile yapıldı",
     "group": "Seçimi grup yap",
     "ungroup": "Seçilen grubu dağıt",
     "collaborators": "Ortaklar",
@@ -121,7 +121,7 @@
     "toggleTheme": "Aydınlık/karanlık mod",
     "theme": "Tema",
     "personalLib": "Kişisel Kitaplık",
-    "excalidrawLib": "Fcboard Kitaplığı",
+    "fcboardlib": "Fcboard Kitaplığı",
     "decreaseFontSize": "Yazı Tipi Boyutunu Küçült",
     "increaseFontSize": "Yazı Tipi Boyutunu Büyült",
     "unbindText": "Metni çöz",
@@ -320,7 +320,7 @@
     "laser": "Lazer işaretçisi",
     "hand": "El (hareket aracı)",
     "extraTools": "Daha fazla araç",
-    "mermaidToExcalidraw": "Mermaid'den Fcboard'a",
+    "mermaidToFcboard": "Mermaid'den Fcboard'a",
     "convertElementType": "Şekil türünü aç/kapat"
   },
   "element": {

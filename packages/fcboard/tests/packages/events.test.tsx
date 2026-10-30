@@ -1,27 +1,27 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { resolvablePromise } from "@excalidraw/common";
+import { resolvablePromise } from "@fcboard/common";
 
-import { Excalidraw, CaptureUpdateAction } from "../../index";
+import { Fcboard, CaptureUpdateAction } from "../../index";
 import { API } from "../helpers/api";
 import { Pointer } from "../helpers/ui";
 import { render, unmountComponent } from "../test-utils";
 
-import type { ExcalidrawImperativeAPI } from "../../types";
+import type { FcboardImperativeAPI } from "../../types";
 
 describe("event callbacks", () => {
   const h = window.h;
 
-  let excalidrawAPI: ExcalidrawImperativeAPI;
+  let excalidrawAPI: FcboardImperativeAPI;
 
   const mouse = new Pointer("mouse");
 
   beforeEach(async () => {
-    const excalidrawAPIPromise = resolvablePromise<ExcalidrawImperativeAPI>();
+    const excalidrawAPIPromise = resolvablePromise<FcboardImperativeAPI>();
     await render(
-      <Excalidraw
-        onExcalidrawAPI={(api) => excalidrawAPIPromise.resolve(api as any)}
+      <Fcboard
+        onFcboardAPI={(api) => excalidrawAPIPromise.resolve(api as any)}
       />,
     );
     excalidrawAPI = await excalidrawAPIPromise;
@@ -31,19 +31,19 @@ describe("event callbacks", () => {
     unmountComponent();
 
     const lifecyclePromise = resolvablePromise<{
-      api: ExcalidrawImperativeAPI;
+      api: FcboardImperativeAPI;
       mount: Promise<{
-        excalidrawAPI: ExcalidrawImperativeAPI;
+        excalidrawAPI: FcboardImperativeAPI;
         container: HTMLDivElement | null;
       }>;
-      initialize: Promise<ExcalidrawImperativeAPI>;
+      initialize: Promise<FcboardImperativeAPI>;
     }>();
 
     await render(
-      <Excalidraw
-        onExcalidrawAPI={(api) =>
+      <Fcboard
+        onFcboardAPI={(api) =>
           lifecyclePromise.resolve({
-            api: api as ExcalidrawImperativeAPI,
+            api: api as FcboardImperativeAPI,
             mount: api.onEvent("editor:mount"),
             initialize: api.onEvent("editor:initialize"),
           })
@@ -91,7 +91,7 @@ describe("event callbacks", () => {
     const calls: string[] = [];
 
     await render(
-      <Excalidraw
+      <Fcboard
         onMount={({ excalidrawAPI, container }) => {
           expect(excalidrawAPI).toBeDefined();
           expect(container).toBeInstanceOf(HTMLDivElement);

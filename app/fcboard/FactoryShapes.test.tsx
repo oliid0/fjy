@@ -1,17 +1,21 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
-import { t } from "@excalidraw/excalidraw/i18n";
-import { getCommonBounds } from "@excalidraw/element";
+import { Fcboard } from "@fcboard/fcboard";
+import { t } from "@fcboard/fcboard/i18n";
+import { getCommonBounds } from "@fcboard/element";
+
+import { getNormalizedZoom } from "@fcboard/fcboard/scene";
+
+import { within } from "@testing-library/react";
+
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+
 import {
   render as editorRender,
   act,
   fireEvent,
-} from "@excalidraw/excalidraw/tests/test-utils";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { getNormalizedZoom } from "@excalidraw/excalidraw/scene";
-import { within } from "@testing-library/react";
+} from "@fcboard/fcboard/tests/test-utils";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 import { FactoryShapes } from "./FactoryShapes";
@@ -24,8 +28,8 @@ import { shapeInk } from "./documents";
 
 import type { InkStroke } from "./documents";
 
-vi.mock("@excalidraw/excalidraw", async (original) => ({
-  ...(await original<typeof import("@excalidraw/excalidraw")>()),
+vi.mock("@fcboard/fcboard", async (original) => ({
+  ...(await original<typeof import("@fcboard/fcboard")>()),
   ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
@@ -44,9 +48,9 @@ const pointer = (target: Element, type: string, x: number, y: number) =>
     }),
   );
 const setup = async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   await editorRender(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;

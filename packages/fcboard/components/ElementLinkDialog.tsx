@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { normalizeLink, KEYS } from "@excalidraw/common";
+import { normalizeLink, KEYS } from "@fcboard/common";
 
 import {
   defaultGetElementLinkFromSelection,
   getLinkIdAndTypeFromSelection,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { t } from "../i18n";
 import { getSelectedElements } from "../scene";
@@ -29,7 +29,7 @@ const ElementLinkDialog = ({
   scene,
   generateLinkForSelection = defaultGetElementLinkFromSelection,
 }: {
-  sourceElementId: ExcalidrawElement["id"];
+  sourceElementId: FcboardElement["id"];
   appState: UIAppState;
   scene: Scene;
   onClose?: () => void;

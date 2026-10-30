@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
+import { t } from "@fcboard/fcboard/i18n";
 
 import { render } from "./test/render";
 import { sceneAPI } from "./test/scene";

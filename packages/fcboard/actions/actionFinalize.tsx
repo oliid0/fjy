@@ -1,18 +1,18 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import { bindOrUnbindBindingElement } from "@excalidraw/element/binding";
+import { bindOrUnbindBindingElement } from "@fcboard/element/binding";
 import {
   isValidPolygon,
   LinearElementEditor,
   newElementWith,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   isBindingElement,
   isFreeDrawElement,
   isLinearElement,
   isLineElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   KEYS,
@@ -20,20 +20,20 @@ import {
   invariant,
   shouldRotateWithDiscreteAngle,
   updateActiveTool,
-} from "@excalidraw/common";
-import { isPathALoop } from "@excalidraw/element";
+} from "@fcboard/common";
+import { isPathALoop } from "@fcboard/element";
 
-import { isInvisiblySmallElement } from "@excalidraw/element";
+import { isInvisiblySmallElement } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@fcboard/math";
 import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
+  FcboardElement,
+  FcboardLinearElement,
   NonDeleted,
   PointsPositionUpdates,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { t } from "../i18n";
 import { resetCursor } from "../cursor";
@@ -191,7 +191,7 @@ export const actionFinalize = register<FormData>({
       focusContainer();
     }
 
-    let element: NonDeleted<ExcalidrawElement> | null = null;
+    let element: NonDeleted<FcboardElement> | null = null;
     if (appState.multiElement) {
       element = appState.multiElement;
     } else if (
@@ -202,7 +202,7 @@ export const actionFinalize = register<FormData>({
     } else if (Object.keys(appState.selectedElementIds).length === 1) {
       const candidate = elementsMap.get(
         Object.keys(appState.selectedElementIds)[0],
-      ) as NonDeleted<ExcalidrawLinearElement> | undefined;
+      ) as NonDeleted<FcboardLinearElement> | undefined;
       if (candidate) {
         element = candidate;
       }

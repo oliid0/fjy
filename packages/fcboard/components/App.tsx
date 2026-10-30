@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { finishFactoryInk } from "@excalidraw/element/factoryInk";
+import { finishFactoryInk } from "@fcboard/element/factoryInk";
 import throttle from "lodash.throttle";
 import React, { useContext } from "react";
 
@@ -18,7 +18,7 @@ import {
   vectorSubtract,
   vectorDot,
   vectorNormalize,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
 import {
   COLOR_PALETTE,
@@ -114,7 +114,7 @@ import {
   setDesktopUIMode,
   isSelectionLikeTool,
   oneOf,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import {
   getObservedAppState,
@@ -254,8 +254,8 @@ import {
   doBoundsIntersect,
   isPointInElement,
   maxBindingDistance_simple,
-  convertToExcalidrawElements,
-  type ExcalidrawElementSkeleton,
+  convertToFcboardElements,
+  type FcboardElementSkeleton,
   getSnapOutlineMidPoint,
   handleFocusPointDrag,
   handleFocusPointHover,
@@ -263,37 +263,37 @@ import {
   handleFocusPointPointerUp,
   maybeHandleArrowPointlikeDrag,
   getUncroppedWidthAndHeight,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint, Radians } from "@fcboard/math";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawGenericElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
+  FcboardElement,
+  FcboardFreeDrawElement,
+  FcboardGenericElement,
+  FcboardLinearElement,
+  FcboardTextElement,
   NonDeleted,
-  InitializedExcalidrawImageElement,
-  ExcalidrawImageElement,
+  InitializedFcboardImageElement,
+  FcboardImageElement,
   FileId,
-  NonDeletedExcalidrawElement,
-  ExcalidrawTextContainer,
-  ExcalidrawFrameLikeElement,
-  ExcalidrawMagicFrameElement,
-  ExcalidrawIframeLikeElement,
+  NonDeletedFcboardElement,
+  FcboardTextContainer,
+  FcboardFrameLikeElement,
+  FcboardMagicFrameElement,
+  FcboardIframeLikeElement,
   IframeData,
-  ExcalidrawIframeElement,
-  ExcalidrawEmbeddableElement,
+  FcboardIframeElement,
+  FcboardEmbeddableElement,
   Ordered,
   MagicGenerationData,
-  ExcalidrawArrowElement,
-  ExcalidrawElbowArrowElement,
+  FcboardArrowElement,
+  FcboardElbowArrowElement,
   SceneElementsMap,
-  ExcalidrawBindableElement,
-} from "@excalidraw/element/types";
+  FcboardBindableElement,
+} from "@fcboard/element/types";
 
-import type { Mutable, ValueOf } from "@excalidraw/common/utility-types";
+import type { Mutable, ValueOf } from "@fcboard/common/utility-types";
 
 import { whiteboardInkStyle } from "../whiteboardPen";
 
@@ -475,7 +475,7 @@ import { findShapeByKey } from "./shapes";
 
 import UnlockPopup from "./UnlockPopup";
 
-import type { ExcalidrawLibraryIds } from "../data/types";
+import type { FcboardLibraryIds } from "../data/types";
 
 import type {
   RenderInteractiveSceneCallback,
@@ -491,7 +491,7 @@ import type {
   AppProps,
   AppState,
   BinaryFileData,
-  ExcalidrawImperativeAPI,
+  FcboardImperativeAPI,
   BinaryFiles,
   Gesture,
   GestureEvent,
@@ -508,7 +508,7 @@ import type {
   UnsubscribeCallback,
   EmbedsValidationStatus,
   ElementsPendingErasure,
-  ExcalidrawImperativeAPIEventMap,
+  FcboardImperativeAPIEventMap,
   GenerateDiagramToCode,
   NullableGridSize,
   Offsets,
@@ -539,46 +539,44 @@ const editorLifecycleEventBehavior = {
   "editor:initialize": { cardinality: "once", replay: "last" },
 } as const;
 
-export const ExcalidrawContainerContext = React.createContext<{
+export const FcboardContainerContext = React.createContext<{
   container: HTMLDivElement | null;
   id: string | null;
 }>({ container: null, id: null });
-ExcalidrawContainerContext.displayName = "ExcalidrawContainerContext";
+FcboardContainerContext.displayName = "FcboardContainerContext";
 
-const ExcalidrawElementsContext = React.createContext<
-  readonly NonDeletedExcalidrawElement[]
+const FcboardElementsContext = React.createContext<
+  readonly NonDeletedFcboardElement[]
 >([]);
-ExcalidrawElementsContext.displayName = "ExcalidrawElementsContext";
+FcboardElementsContext.displayName = "FcboardElementsContext";
 
-const ExcalidrawAppStateContext = React.createContext<AppState>({
+const FcboardAppStateContext = React.createContext<AppState>({
   ...getDefaultAppState(),
   width: 0,
   height: 0,
   offsetLeft: 0,
   offsetTop: 0,
 });
-ExcalidrawAppStateContext.displayName = "ExcalidrawAppStateContext";
+FcboardAppStateContext.displayName = "FcboardAppStateContext";
 
-const ExcalidrawSetAppStateContext = React.createContext<
+const FcboardSetAppStateContext = React.createContext<
   React.Component<any, AppState>["setState"]
 >(() => {
-  console.warn("Uninitialized ExcalidrawSetAppStateContext context!");
+  console.warn("Uninitialized FcboardSetAppStateContext context!");
 });
-ExcalidrawSetAppStateContext.displayName = "ExcalidrawSetAppStateContext";
+FcboardSetAppStateContext.displayName = "FcboardSetAppStateContext";
 
-const ExcalidrawActionManagerContext = React.createContext<ActionManager>(
-  null!,
-);
-ExcalidrawActionManagerContext.displayName = "ExcalidrawActionManagerContext";
+const FcboardActionManagerContext = React.createContext<ActionManager>(null!);
+FcboardActionManagerContext.displayName = "FcboardActionManagerContext";
 
-export const ExcalidrawAPIContext =
-  React.createContext<ExcalidrawImperativeAPI | null>(null);
-ExcalidrawAPIContext.displayName = "ExcalidrawAPIContext";
+export const FcboardAPIContext =
+  React.createContext<FcboardImperativeAPI | null>(null);
+FcboardAPIContext.displayName = "FcboardAPIContext";
 
-export const ExcalidrawAPISetContext = React.createContext<
-  ((api: ExcalidrawImperativeAPI) => void) | null
+export const FcboardAPISetContext = React.createContext<
+  ((api: FcboardImperativeAPI) => void) | null
 >(null);
-ExcalidrawAPISetContext.displayName = "ExcalidrawAPISetContext";
+FcboardAPISetContext.displayName = "FcboardAPISetContext";
 
 export const useApp = () => useContext(AppContext);
 export const useAppProps = () => useContext(AppPropsContext);
@@ -586,20 +584,17 @@ export const useEditorInterface = () =>
   useContext<EditorInterface>(EditorInterfaceContext);
 export const useStylesPanelMode = () =>
   deriveStylesPanelMode(useEditorInterface());
-export const useExcalidrawContainer = () =>
-  useContext(ExcalidrawContainerContext);
-export const useExcalidrawElements = () =>
-  useContext(ExcalidrawElementsContext);
-export const useExcalidrawAppState = () =>
-  useContext(ExcalidrawAppStateContext);
-export const useExcalidrawSetAppState = () =>
-  useContext(ExcalidrawSetAppStateContext);
-export const useExcalidrawActionManager = () =>
-  useContext(ExcalidrawActionManagerContext);
+export const useFcboardContainer = () => useContext(FcboardContainerContext);
+export const useFcboardElements = () => useContext(FcboardElementsContext);
+export const useFcboardAppState = () => useContext(FcboardAppStateContext);
+export const useFcboardSetAppState = () =>
+  useContext(FcboardSetAppStateContext);
+export const useFcboardActionManager = () =>
+  useContext(FcboardActionManagerContext);
 /**
- * Requires wrapping your component in <ExcalidrawAPIContext.Provider>
+ * Requires wrapping your component in <FcboardAPIContext.Provider>
  */
-export const useExcalidrawAPI = () => useContext(ExcalidrawAPIContext);
+export const useFcboardAPI = () => useContext(FcboardAPIContext);
 
 let didTapTwice: boolean = false;
 let tappedTwiceTimer = 0;
@@ -615,7 +610,7 @@ let invalidateContextMenu = false;
  * Map of youtube embed video states
  */
 const YOUTUBE_VIDEO_STATES = new Map<
-  ExcalidrawElement["id"],
+  FcboardElement["id"],
   ValueOf<typeof YOUTUBE_STATES>
 >();
 
@@ -648,7 +643,7 @@ class App extends React.Component<AppProps, AppState> {
   public scene: Scene;
   public fonts: Fonts;
   public renderer: Renderer;
-  public visibleElements: readonly NonDeletedExcalidrawElement[];
+  public visibleElements: readonly NonDeletedFcboardElement[];
   private resizeObserver: ResizeObserver | undefined;
   public library: AppClassProperties["library"];
   public libraryItemsFromStorage: LibraryItems | undefined;
@@ -662,7 +657,7 @@ class App extends React.Component<AppProps, AppState> {
 
   public files: BinaryFiles = {};
   public imageCache: AppClassProperties["imageCache"] = new Map();
-  private iFrameRefs = new Map<ExcalidrawElement["id"], HTMLIFrameElement>();
+  private iFrameRefs = new Map<FcboardElement["id"], HTMLIFrameElement>();
   /**
    * Indicates whether the embeddable's url has been validated for rendering.
    * If value not set, indicates that the validation is pending.
@@ -672,21 +667,21 @@ class App extends React.Component<AppProps, AppState> {
   private embedsValidationStatus: EmbedsValidationStatus = new Map();
   /** embeds that have been inserted to DOM (as a perf optim, we don't want to
    * insert to DOM before user initially scrolls to them) */
-  private initializedEmbeds = new Set<ExcalidrawIframeLikeElement["id"]>();
+  private initializedEmbeds = new Set<FcboardIframeLikeElement["id"]>();
 
   private elementsPendingErasure: ElementsPendingErasure = new Set();
 
   private _initialized = false;
 
   private readonly editorLifecycleEvents = new AppEventBus<
-    ExcalidrawImperativeAPIEventMap,
+    FcboardImperativeAPIEventMap,
     typeof editorLifecycleEventBehavior
   >(editorLifecycleEventBehavior);
 
   public onEvent = this.editorLifecycleEvents.on.bind(
     this.editorLifecycleEvents,
   ) as AppEventBus<
-    ExcalidrawImperativeAPIEventMap,
+    FcboardImperativeAPIEventMap,
     typeof editorLifecycleEventBehavior
   >["on"];
 
@@ -699,7 +694,7 @@ class App extends React.Component<AppProps, AppState> {
 
   bindModeHandler: ReturnType<typeof setTimeout> | null = null;
 
-  hitLinkElement?: NonDeletedExcalidrawElement;
+  hitLinkElement?: NonDeletedFcboardElement;
   lastPointerDownEvent: React.PointerEvent<HTMLElement> | null = null;
   lastPointerUpEvent: React.PointerEvent<HTMLElement> | PointerEvent | null =
     null;
@@ -716,7 +711,7 @@ class App extends React.Component<AppProps, AppState> {
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
   private stopInkErasure: (() => void) | null = null;
   private parallelInk = new Map<number, (cancelled: boolean) => void>();
-  private activeInkElements = new Map<number, ExcalidrawFreeDrawElement>();
+  private activeInkElements = new Map<number, FcboardFreeDrawElement>();
   private activeInkIds: ReadonlySet<string> = new Set();
   private inkFrameEmitter = new Emitter();
   private getActiveInkElements = () =>
@@ -736,7 +731,7 @@ class App extends React.Component<AppProps, AppState> {
 
   onChangeEmitter = new Emitter<
     [
-      elements: readonly ExcalidrawElement[],
+      elements: readonly FcboardElement[],
       appState: AppState,
       files: BinaryFiles,
     ]
@@ -759,7 +754,13 @@ class App extends React.Component<AppProps, AppState> {
   >();
 
   /** Synchronous stroke composition after all samples, before its undo capture. */
-  onInkCommitEmitter = new Emitter<[element: ExcalidrawFreeDrawElement]>();
+  onInkCommitEmitter = new Emitter<[element: FcboardFreeDrawElement]>();
+  onInkProgressEmitter = new Emitter<
+    [
+      element: FcboardFreeDrawElement,
+      phase: "start" | "update" | "cancel" | "settled",
+    ]
+  >();
   onUserFollowEmitter = new Emitter<[payload: OnUserFollowedPayload]>();
   onScrollChangeEmitter = new Emitter<
     [scrollX: number, scrollY: number, zoom: AppState["zoom"]]
@@ -770,7 +771,7 @@ class App extends React.Component<AppProps, AppState> {
   >();
   onRemoveEventListenersEmitter = new Emitter<[]>();
 
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
 
   constructor(props: AppProps) {
     super(props);
@@ -875,13 +876,14 @@ class App extends React.Component<AppProps, AppState> {
       onPointerDown: (cb) => this.onPointerDownEmitter.on(cb),
       onPointerUp: (cb) => this.onPointerUpEmitter.on(cb),
       onInkCommit: (cb) => this.onInkCommitEmitter.on(cb),
+      onInkProgress: (cb) => this.onInkProgressEmitter.on(cb),
       onScrollChange: (cb) => this.onScrollChangeEmitter.on(cb),
       onUserFollow: (cb) => this.onUserFollowEmitter.on(cb),
       onStateChange: this.onStateChange,
       onEvent: this.onEvent,
     } as const;
 
-    props.onExcalidrawAPI?.(this.api);
+    props.onFcboardAPI?.(this.api);
   }
 
   updateEditorAtom = <Value, Args extends unknown[], Result>(
@@ -911,11 +913,11 @@ class App extends React.Component<AppProps, AppState> {
 
     switch (event.origin) {
       case "https://player.vimeo.com":
-        //Allowing for multiple instances of Excalidraw running in the window
+        //Allowing for multiple instances of Fcboard running in the window
         if (data.method === "paused") {
           let source: Window | null = null;
           const iframes = document.body.querySelectorAll(
-            "iframe.excalidraw__embeddable",
+            "iframe.fcboard__embeddable",
           );
           if (!iframes) {
             break;
@@ -1060,12 +1062,12 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private previousHoveredBindableElement: NonDeletedExcalidrawElement | null =
+  private previousHoveredBindableElement: NonDeletedFcboardElement | null =
     null;
 
   private handleDelayedBindModeChange(
-    arrow: ExcalidrawArrowElement,
-    hoveredElement: NonDeletedExcalidrawElement | null,
+    arrow: FcboardArrowElement,
+    hoveredElement: NonDeletedFcboardElement | null,
   ) {
     if (arrow.isDeleted || isElbowArrow(arrow)) {
       return;
@@ -1271,7 +1273,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private cacheEmbeddableRef(
-    element: ExcalidrawIframeLikeElement,
+    element: FcboardIframeLikeElement,
     ref: HTMLIFrameElement | null,
   ) {
     if (ref) {
@@ -1290,7 +1292,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private getHTMLIFrameElement(
-    element: ExcalidrawIframeLikeElement,
+    element: FcboardIframeLikeElement,
   ): HTMLIFrameElement | undefined {
     return this.iFrameRefs.get(element.id);
   }
@@ -1300,7 +1302,7 @@ class App extends React.Component<AppProps, AppState> {
     scenePointer,
     moveEvent,
   }: {
-    hitElement: NonDeleted<ExcalidrawElement> | null;
+    hitElement: NonDeleted<FcboardElement> | null;
     scenePointer: { x: number; y: number };
     moveEvent: React.PointerEvent<HTMLCanvasElement>;
   }): boolean => {
@@ -1480,7 +1482,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private isIframeLikeElementCenter(
-    el: ExcalidrawIframeLikeElement | null,
+    el: FcboardIframeLikeElement | null,
     event: React.PointerEvent<HTMLElement> | PointerEvent,
     sceneX: number,
     sceneY: number,
@@ -1502,7 +1504,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private updateEmbedValidationStatus = (
-    element: ExcalidrawEmbeddableElement,
+    element: FcboardEmbeddableElement,
     status: boolean,
   ) => {
     this.embedsValidationStatus.set(element.id, status);
@@ -1510,7 +1512,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private updateEmbeddables = () => {
-    const iframeLikes = new Set<ExcalidrawIframeLikeElement["id"]>();
+    const iframeLikes = new Set<FcboardIframeLikeElement["id"]>();
 
     let updated = false;
     this.scene.getNonDeletedElements().filter((element) => {
@@ -1552,7 +1554,7 @@ class App extends React.Component<AppProps, AppState> {
     const embeddableElements = this.scene
       .getNonDeletedElements()
       .filter(
-        (el): el is Ordered<NonDeleted<ExcalidrawIframeLikeElement>> =>
+        (el): el is Ordered<NonDeleted<FcboardIframeLikeElement>> =>
           (isEmbeddableElement(el) &&
             this.embedsValidationStatus.get(el.id) === true) ||
           isIframeElement(el),
@@ -1741,7 +1743,7 @@ class App extends React.Component<AppProps, AppState> {
           return (
             <div
               key={el.id}
-              className={clsx("excalidraw__embeddable-container", {
+              className={clsx("fcboard__embeddable-container", {
                 "is-hovered": isHovered,
               })}
               style={{
@@ -1760,15 +1762,17 @@ class App extends React.Component<AppProps, AppState> {
                     ? DEFAULT_REDUCED_GLOBAL_ALPHA
                     : 1,
                 ),
-                ["--embeddable-radius" as string]: `${getCornerRadius(
-                  Math.min(el.width, el.height),
-                  el,
-                )}px`,
+                ["--embeddable-radius" as string]: `${
+                  this.props.UIOptions.unifiedToolbar &&
+                  el.customData?.fcInteractiveResource
+                    ? 12 / scale
+                    : getCornerRadius(Math.min(el.width, el.height), el)
+                }px`,
               }}
             >
               <div
-                //this is a hack that addresses isse with embedded excalidraw.com embeddable
-                //https://github.com/excalidraw/excalidraw/pull/6691#issuecomment-1607383938
+                //this is a hack that addresses isse with embedded fcboard.com embeddable
+                //https://github.com/fcboard/fcboard/pull/6691#issuecomment-1607383938
                 /*ref={(ref) => {
                   if (!this.excalidrawContainerRef.current) {
                     return;
@@ -1783,7 +1787,7 @@ class App extends React.Component<AppProps, AppState> {
                     });
                   }
                 }}*/
-                className="excalidraw__embeddable-container__inner"
+                className="fcboard__embeddable-container__inner"
                 style={{
                   width: isVisible ? `${el.width}px` : 0,
                   height: isVisible ? `${el.height}px` : 0,
@@ -1791,15 +1795,20 @@ class App extends React.Component<AppProps, AppState> {
                   pointerEvents: isActive
                     ? POINTER_EVENTS.enabled
                     : POINTER_EVENTS.disabled,
+                  overflow:
+                    this.props.UIOptions.unifiedToolbar &&
+                    el.customData?.fcInteractiveResource
+                      ? "visible"
+                      : undefined,
                 }}
               >
                 {isHovered && (
-                  <div className="excalidraw__embeddable-hint">
+                  <div className="fcboard__embeddable-hint">
                     {t("buttons.embeddableInteractionButton")}
                   </div>
                 )}
                 <div
-                  className="excalidraw__embeddable__outer"
+                  className="fcboard__embeddable__outer"
                   style={{
                     padding: `${el.strokeWidth}px`,
                   }}
@@ -1810,13 +1819,65 @@ class App extends React.Component<AppProps, AppState> {
                       objectId={el.id}
                       surface="whiteboard"
                       iframeRef={(ref) => this.cacheEmbeddableRef(el, ref)}
+                      window={
+                        this.props.UIOptions.unifiedToolbar
+                          ? {
+                              bounds: el,
+                              scale,
+                              viewport: {
+                                left: -this.state.scrollX + 8 / scale,
+                                top: -this.state.scrollY + 8 / scale,
+                                right:
+                                  -this.state.scrollX +
+                                  (this.state.width - 8) / scale,
+                                bottom:
+                                  -this.state.scrollY +
+                                  (this.state.height - 88) / scale,
+                              },
+                              onCommit: (bounds) => {
+                                const current = this.scene.getNonDeletedElement(
+                                  el.id,
+                                );
+                                if (!current || current.type !== "iframe") {
+                                  return;
+                                }
+                                this.updateScene({
+                                  elements: this.scene
+                                    .getElementsIncludingDeleted()
+                                    .map((item) =>
+                                      item.id === el.id
+                                        ? newElementWith(item, bounds)
+                                        : item,
+                                    ),
+                                  captureUpdate:
+                                    CaptureUpdateAction.IMMEDIATELY,
+                                });
+                              },
+                              onClose: () => {
+                                this.updateScene({
+                                  elements: this.scene
+                                    .getElementsIncludingDeleted()
+                                    .map((item) =>
+                                      item.id === el.id
+                                        ? newElementWith(item, {
+                                            isDeleted: true,
+                                          })
+                                        : item,
+                                    ),
+                                  captureUpdate:
+                                    CaptureUpdateAction.IMMEDIATELY,
+                                });
+                              },
+                            }
+                          : undefined
+                      }
                     />
                   ) : isEmbeddableElement(el) ? (
                     this.props.renderEmbeddable?.(el, this.state)
                   ) : null) ?? (
                     <iframe
                       ref={(ref) => this.cacheEmbeddableRef(el, ref)}
-                      className="excalidraw__embeddable"
+                      className="fcboard__embeddable"
                       srcDoc={
                         src?.type === "document"
                           ? src.srcdoc(this.state.theme)
@@ -1828,7 +1889,7 @@ class App extends React.Component<AppProps, AppState> {
                       // https://stackoverflow.com/q/18470015
                       scrolling="no"
                       referrerPolicy="no-referrer-when-downgrade"
-                      title="Excalidraw Embedded Content"
+                      title="Fcboard Embedded Content"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen={true}
                       sandbox={`${
@@ -1845,7 +1906,7 @@ class App extends React.Component<AppProps, AppState> {
     );
   }
 
-  private getFrameNameDOMId = (frameElement: ExcalidrawElement) => {
+  private getFrameNameDOMId = (frameElement: FcboardElement) => {
     return `${this.id}-frame-name-${frameElement.id}`;
   };
 
@@ -1897,7 +1958,7 @@ class App extends React.Component<AppProps, AppState> {
     _cache: new Map(),
   };
 
-  private resetEditingFrame = (frame: ExcalidrawFrameLikeElement | null) => {
+  private resetEditingFrame = (frame: FcboardFrameLikeElement | null) => {
     if (frame) {
       this.scene.mutateElement(frame, { name: frame.name?.trim() || null });
     }
@@ -2126,11 +2187,12 @@ class App extends React.Component<AppProps, AppState> {
     return (
       <div
         translate="no"
-        className={clsx("excalidraw excalidraw-container notranslate", {
-          "excalidraw--view-mode":
+        className={clsx("fcboard fcboard-container notranslate", {
+          "fcboard--view-mode":
             this.state.viewModeEnabled ||
             this.state.openDialog?.name === "elementLinkSelector",
-          "excalidraw--mobile": this.editorInterface.formFactor === "phone",
+          "fcboard--mobile": this.editorInterface.formFactor === "phone",
+          "fc-hide-toolbar-text": this.state.whiteboardToolbarText === false,
         })}
         style={{
           ["--ui-pointerEvents" as any]: shouldBlockPointerEvents
@@ -2139,7 +2201,7 @@ class App extends React.Component<AppProps, AppState> {
           ["--right-sidebar-width" as any]: "302px",
         }}
         ref={this.excalidrawContainerRef}
-        data-excalidraw-id={this.id}
+        data-fcboard-id={this.id}
         onDrop={this.handleAppOnDrop}
         tabIndex={0}
         onKeyDown={
@@ -2148,21 +2210,19 @@ class App extends React.Component<AppProps, AppState> {
         onPointerEnter={this.toggleOverscrollBehavior}
         onPointerLeave={this.toggleOverscrollBehavior}
       >
-        <ExcalidrawAPIContext.Provider value={this.api}>
+        <FcboardAPIContext.Provider value={this.api}>
           <AppContext.Provider value={this}>
             <AppPropsContext.Provider value={this.props}>
-              <ExcalidrawContainerContext.Provider
+              <FcboardContainerContext.Provider
                 value={this.excalidrawContainerValue}
               >
                 <EditorInterfaceContext.Provider value={this.editorInterface}>
-                  <ExcalidrawSetAppStateContext.Provider
-                    value={this.setAppState}
-                  >
-                    <ExcalidrawAppStateContext.Provider value={this.state}>
-                      <ExcalidrawElementsContext.Provider
+                  <FcboardSetAppStateContext.Provider value={this.setAppState}>
+                    <FcboardAppStateContext.Provider value={this.state}>
+                      <FcboardElementsContext.Provider
                         value={this.scene.getNonDeletedElements()}
                       >
-                        <ExcalidrawActionManagerContext.Provider
+                        <FcboardActionManagerContext.Provider
                           value={this.actionManager}
                         >
                           <LayerUI
@@ -2202,9 +2262,9 @@ class App extends React.Component<AppProps, AppState> {
                             {this.props.children}
                           </LayerUI>
 
-                          <div className="excalidraw-textEditorContainer" />
-                          <div className="excalidraw-contextMenuContainer" />
-                          <div className="excalidraw-eye-dropper-container" />
+                          <div className="fcboard-textEditorContainer" />
+                          <div className="fcboard-contextMenuContainer" />
+                          <div className="fcboard-eye-dropper-container" />
                           <SVGLayer
                             trails={[
                               this.laserTrails,
@@ -2422,16 +2482,16 @@ class App extends React.Component<AppProps, AppState> {
                           {showShapeSwitchPanel && (
                             <ConvertElementTypePopup app={this} />
                           )}
-                        </ExcalidrawActionManagerContext.Provider>
+                        </FcboardActionManagerContext.Provider>
                         {this.renderEmbeddables()}
-                      </ExcalidrawElementsContext.Provider>
-                    </ExcalidrawAppStateContext.Provider>
-                  </ExcalidrawSetAppStateContext.Provider>
+                      </FcboardElementsContext.Provider>
+                    </FcboardAppStateContext.Provider>
+                  </FcboardSetAppStateContext.Provider>
                 </EditorInterfaceContext.Provider>
-              </ExcalidrawContainerContext.Provider>
+              </FcboardContainerContext.Provider>
             </AppPropsContext.Provider>
           </AppContext.Provider>
-        </ExcalidrawAPIContext.Provider>
+        </FcboardAPIContext.Provider>
       </div>
     );
   }
@@ -2452,7 +2512,7 @@ class App extends React.Component<AppProps, AppState> {
     return this.scene.getNonDeletedElements();
   };
 
-  public onInsertElements = (elements: readonly ExcalidrawElement[]) => {
+  public onInsertElements = (elements: readonly FcboardElement[]) => {
     this.addElementsFromPasteOrLibrary({
       elements,
       position: "center",
@@ -2463,7 +2523,7 @@ class App extends React.Component<AppProps, AppState> {
   public onExportImage = async (
     type: keyof typeof EXPORT_IMAGE_TYPES,
     elements: ExportedElements,
-    opts: { exportingFrame: ExcalidrawFrameLikeElement | null },
+    opts: { exportingFrame: FcboardFrameLikeElement | null },
   ) => {
     trackEvent("export", type, "ui");
     const fileHandle = await exportCanvas(
@@ -2494,7 +2554,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private magicGenerations = new Map<
-    ExcalidrawIframeElement["id"],
+    FcboardIframeElement["id"],
     MagicGenerationData
   >();
 
@@ -2502,7 +2562,7 @@ class App extends React.Component<AppProps, AppState> {
     frameElement,
     data,
   }: {
-    frameElement: ExcalidrawIframeElement;
+    frameElement: FcboardIframeElement;
     data: MagicGenerationData;
   }) => {
     if (data.status === "pending") {
@@ -2541,7 +2601,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private async onMagicFrameGenerate(
-    magicFrame: ExcalidrawMagicFrameElement,
+    magicFrame: FcboardMagicFrameElement,
     source: "button" | "upstream",
   ) {
     const generateDiagramToCode = this.plugins.diagramToCode?.generate;
@@ -2634,7 +2694,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
-  private onIframeSrcCopy(element: ExcalidrawIframeElement) {
+  private onIframeSrcCopy(element: FcboardIframeElement) {
     if (element.customData?.generationData?.status === "done") {
       copyTextToSystemClipboard(element.customData.generationData.html);
       this.setToast({
@@ -2654,7 +2714,7 @@ class App extends React.Component<AppProps, AppState> {
       this.setActiveTool({ type: TOOL_TYPE.magicframe });
       trackEvent("ai", "tool-select (empty-selection)", "d2c");
     } else {
-      const selectedMagicFrame: ExcalidrawMagicFrameElement | false =
+      const selectedMagicFrame: FcboardMagicFrameElement | false =
         selectedElements.length === 1 &&
         isMagicFrameElement(selectedElements[0]) &&
         selectedElements[0];
@@ -2672,7 +2732,7 @@ class App extends React.Component<AppProps, AppState> {
 
       trackEvent("ai", "tool-select (existing selection)", "d2c");
 
-      let frame: ExcalidrawMagicFrameElement;
+      let frame: FcboardMagicFrameElement;
       if (selectedMagicFrame) {
         // a single magicframe already selected -> use it
         frame = selectedMagicFrame;
@@ -3261,6 +3321,7 @@ class App extends React.Component<AppProps, AppState> {
     this.eraserTrail.stop();
     this.onChangeEmitter.clear();
     this.inkFrameEmitter.clear();
+    this.onInkProgressEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
     this.store.onDurableIncrementEmitter.clear();
     this.appStateObserver.clear();
@@ -3630,10 +3691,10 @@ class App extends React.Component<AppProps, AppState> {
   // Copy/paste
 
   private onCut = withBatchedUpdates((event: ClipboardEvent) => {
-    const isExcalidrawActive = this.excalidrawContainerRef.current?.contains(
+    const isFcboardActive = this.excalidrawContainerRef.current?.contains(
       document.activeElement,
     );
-    if (!isExcalidrawActive || isWritableElement(event.target)) {
+    if (!isFcboardActive || isWritableElement(event.target)) {
       return;
     }
     this.actionManager.executeAction(actionCut, "keyboard", event);
@@ -3642,10 +3703,10 @@ class App extends React.Component<AppProps, AppState> {
   });
 
   private onCopy = withBatchedUpdates((event: ClipboardEvent) => {
-    const isExcalidrawActive = this.excalidrawContainerRef.current?.contains(
+    const isFcboardActive = this.excalidrawContainerRef.current?.contains(
       document.activeElement,
     );
-    if (!isExcalidrawActive || isWritableElement(event.target)) {
+    if (!isFcboardActive || isWritableElement(event.target)) {
       return;
     }
     this.actionManager.executeAction(actionCopy, "keyboard", event);
@@ -3811,11 +3872,9 @@ class App extends React.Component<AppProps, AppState> {
     if (data.elements) {
       const elements = (
         data.programmaticAPI
-          ? convertToExcalidrawElements(
-              data.elements as ExcalidrawElementSkeleton[],
-            )
+          ? convertToFcboardElements(data.elements as FcboardElementSkeleton[])
           : data.elements
-      ) as readonly ExcalidrawElement[];
+      ) as readonly FcboardElement[];
       // TODO: remove formatting from elements if isPlainPaste
       this.addElementsFromPasteOrLibrary({
         elements,
@@ -3839,7 +3898,7 @@ class App extends React.Component<AppProps, AppState> {
         const { elements: skeletonElements, files } =
           await api.parseMermaidToExcalidraw(data.text);
 
-        const elements = convertToExcalidrawElements(skeletonElements, {
+        const elements = convertToFcboardElements(skeletonElements, {
           regenerateIds: true,
         });
 
@@ -3877,9 +3936,9 @@ class App extends React.Component<AppProps, AppState> {
       embbeddableUrls.length > 0 &&
       embbeddableUrls.length === nonEmptyLines.length
     ) {
-      const embeddables: NonDeleted<ExcalidrawEmbeddableElement>[] = [];
+      const embeddables: NonDeleted<FcboardEmbeddableElement>[] = [];
       for (const url of embbeddableUrls) {
-        const prevEmbeddable: ExcalidrawEmbeddableElement | undefined =
+        const prevEmbeddable: FcboardEmbeddableElement | undefined =
           embeddables[embeddables.length - 1];
         const embeddable = this.insertEmbeddableElement({
           sceneX: prevEmbeddable
@@ -3913,9 +3972,9 @@ class App extends React.Component<AppProps, AppState> {
 
       // #686
       const target = document.activeElement;
-      const isExcalidrawActive =
+      const isFcboardActive =
         this.excalidrawContainerRef.current?.contains(target);
-      if (event && !isExcalidrawActive) {
+      if (event && !isFcboardActive) {
         return;
       }
 
@@ -3961,7 +4020,7 @@ class App extends React.Component<AppProps, AppState> {
   );
 
   addElementsFromPasteOrLibrary = (opts: {
-    elements: readonly ExcalidrawElement[];
+    elements: readonly FcboardElement[];
     files: BinaryFiles | null;
     position: { clientX: number; clientY: number } | "cursor" | "center";
     retainSeed?: boolean;
@@ -4081,7 +4140,7 @@ class App extends React.Component<AppProps, AppState> {
           {
             editingGroupId: null,
             selectedElementIds: nextElementsToSelect.reduce(
-              (acc: Record<ExcalidrawElement["id"], true>, element) => {
+              (acc: Record<FcboardElement["id"], true>, element) => {
                 if (!isBoundToContainer(element)) {
                   acc[element.id] = true;
                 }
@@ -4204,7 +4263,7 @@ class App extends React.Component<AppProps, AppState> {
 
     const lines = isPlainPaste ? [text] : text.split("\n");
     const textElements = lines.reduce(
-      (acc: ExcalidrawTextElement[], line, idx) => {
+      (acc: FcboardTextElement[], line, idx) => {
         const originalText = normalizeText(line).trim();
         if (originalText.length) {
           const topLayerFrame = this.getTopLayerFrameAtSceneCoords({
@@ -4420,12 +4479,12 @@ class App extends React.Component<AppProps, AppState> {
      * target to scroll to
      *
      * - string - id of element or group, or url containing elementLink
-     * - ExcalidrawElement | ExcalidrawElement[] - element(s) objects
+     * - FcboardElement | FcboardElement[] - element(s) objects
      */
     target:
       | string
-      | ExcalidrawElement
-      | readonly ExcalidrawElement[] = this.scene.getNonDeletedElements(),
+      | FcboardElement
+      | readonly FcboardElement[] = this.scene.getNonDeletedElements(),
     opts?: (
       | {
           fitToContent?: boolean;
@@ -4480,7 +4539,7 @@ class App extends React.Component<AppProps, AppState> {
 
     this.cancelInProgressAnimation?.();
 
-    // convert provided target into ExcalidrawElement[] if necessary
+    // convert provided target into FcboardElement[] if necessary
     const targetElements = Array.isArray(target) ? target : [target];
 
     let zoom = this.state.zoom;
@@ -4597,7 +4656,7 @@ class App extends React.Component<AppProps, AppState> {
    * adds supplied files to existing files in the appState.
    * NOTE if file already exists in editor state, the file data is not updated
    * */
-  public addFiles: ExcalidrawImperativeAPI["addFiles"] = withBatchedUpdates(
+  public addFiles: FcboardImperativeAPI["addFiles"] = withBatchedUpdates(
     (files) => {
       const { addedFiles } = this.addMissingFiles(files);
 
@@ -4659,7 +4718,7 @@ class App extends React.Component<AppProps, AppState> {
        *  - `CaptureUpdateAction.NEVER`: Updates never make it to undo/redo stack. Use for remote updates or scene initialization.
        *  - `CaptureUpdateAction.EVENTUALLY`: Updates will be eventually be captured as part of a future increment.
        *
-       * Check [API docs](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/excalidraw-api#captureUpdate) for more details.
+       * Check [API docs](https://docs.fcboard.com/docs/@fcboard/fcboard/api/props/fcboard-api#captureUpdate) for more details.
        *
        * @default CaptureUpdateAction.EVENTUALLY
        */
@@ -4718,7 +4777,7 @@ class App extends React.Component<AppProps, AppState> {
     );
   };
 
-  public mutateElement = <TElement extends Mutable<ExcalidrawElement>>(
+  public mutateElement = <TElement extends Mutable<FcboardElement>>(
     element: TElement,
     updates: ElementUpdate<TElement>,
     informMutation = true,
@@ -5085,6 +5144,15 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (event.key === KEYS.PAGE_UP || event.key === KEYS.PAGE_DOWN) {
+        // A dialog/list consumes its own page keys; it must not pan the board below.
+        if (
+          event.target instanceof Element &&
+          event.target.closest(
+            '[role="dialog"],[role="menu"],[role="listbox"],[role="combobox"]',
+          )
+        ) {
+          return;
+        }
         let offset =
           (event.shiftKey ? this.state.width : this.state.height) /
           this.state.zoom.value;
@@ -5215,7 +5283,7 @@ class App extends React.Component<AppProps, AppState> {
         const arrowIdsToRemove = new Set<string>();
 
         selectedElements
-          .filter((el): el is NonDeleted<ExcalidrawArrowElement> =>
+          .filter((el): el is NonDeleted<FcboardArrowElement> =>
             isBindingElement(el),
           )
           .filter((arrow) => {
@@ -5300,7 +5368,7 @@ class App extends React.Component<AppProps, AppState> {
           ) {
             let container;
             if (!isTextElement(selectedElement)) {
-              container = selectedElement as ExcalidrawTextContainer;
+              container = selectedElement as FcboardTextContainer;
             }
             const midPoint = getContainerCenter(
               selectedElement,
@@ -5508,7 +5576,7 @@ class App extends React.Component<AppProps, AppState> {
                   element,
                   elementsMap.get(
                     element.startBinding.elementId,
-                  ) as ExcalidrawBindableElement,
+                  ) as FcboardBindableElement,
                   "start",
                   elementsMap,
                 ),
@@ -5523,7 +5591,7 @@ class App extends React.Component<AppProps, AppState> {
                   element,
                   elementsMap.get(
                     element.endBinding.elementId,
-                  ) as ExcalidrawBindableElement,
+                  ) as FcboardBindableElement,
                   "end",
                   elementsMap,
                 ),
@@ -5787,7 +5855,7 @@ class App extends React.Component<AppProps, AppState> {
   });
 
   private handleTextWysiwyg(
-    element: ExcalidrawTextElement,
+    element: FcboardTextElement,
     {
       isExistingElement = false,
     }: {
@@ -5920,7 +5988,7 @@ class App extends React.Component<AppProps, AppState> {
   private getTextElementAtPosition(
     x: number,
     y: number,
-  ): NonDeleted<ExcalidrawTextElement> | null {
+  ): NonDeleted<FcboardTextElement> | null {
     const element = this.getElementAtPosition(x, y, {
       includeBoundTextElement: true,
     });
@@ -5940,13 +6008,13 @@ class App extends React.Component<AppProps, AppState> {
           includeLockedElements?: boolean;
         }
       | {
-          allHitElements: NonDeleted<ExcalidrawElement>[];
+          allHitElements: NonDeleted<FcboardElement>[];
         }
     ) & {
       preferSelected?: boolean;
     },
-  ): NonDeleted<ExcalidrawElement> | null {
-    let allHitElements: NonDeleted<ExcalidrawElement>[] = [];
+  ): NonDeleted<FcboardElement> | null {
+    let allHitElements: NonDeleted<FcboardElement>[] = [];
     if (opts && "allHitElements" in opts) {
       allHitElements = opts?.allHitElements || [];
     } else {
@@ -5998,8 +6066,8 @@ class App extends React.Component<AppProps, AppState> {
       includeBoundTextElement?: boolean;
       includeLockedElements?: boolean;
     },
-  ): NonDeleted<ExcalidrawElement>[] {
-    const iframeLikes: Ordered<ExcalidrawIframeElement>[] = [];
+  ): NonDeleted<FcboardElement>[] {
+    const iframeLikes: Ordered<FcboardIframeElement>[] = [];
 
     const elementsMap = this.scene.getNonDeletedElementsMap();
 
@@ -6036,12 +6104,12 @@ class App extends React.Component<AppProps, AppState> {
         }
         return true;
       })
-      .concat(iframeLikes) as NonDeleted<ExcalidrawElement>[];
+      .concat(iframeLikes) as NonDeleted<FcboardElement>[];
 
     return elements;
   }
 
-  getElementHitThreshold(element: ExcalidrawElement) {
+  getElementHitThreshold(element: FcboardElement) {
     return Math.max(
       element.strokeWidth / 2 + 0.1,
       // NOTE: Here be dragons. Do not go under the 0.63 multiplier unless you're
@@ -6054,7 +6122,7 @@ class App extends React.Component<AppProps, AppState> {
   private hitElement(
     x: number,
     y: number,
-    element: ExcalidrawElement,
+    element: FcboardElement,
     considerBoundingBox = true,
   ) {
     // if the element is selected, then hit test is done against its bounding box
@@ -6149,7 +6217,7 @@ class App extends React.Component<AppProps, AppState> {
     sceneY: number;
     /** whether to attempt to insert at element center if applicable */
     insertAtParentCenter?: boolean;
-    container?: ExcalidrawTextContainer | null;
+    container?: FcboardTextContainer | null;
     autoEdit?: boolean;
   }) => {
     let shouldBindToContainer = false;
@@ -6171,7 +6239,7 @@ class App extends React.Component<AppProps, AppState> {
         shouldBindToContainer = true;
       }
     }
-    let existingTextElement: NonDeleted<ExcalidrawTextElement> | null = null;
+    let existingTextElement: NonDeleted<FcboardTextElement> | null = null;
 
     const selectedElements = this.scene.getSelectedElements(this.state);
 
@@ -6298,7 +6366,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private startImageCropping = (image: ExcalidrawImageElement) => {
+  private startImageCropping = (image: FcboardImageElement) => {
     this.store.scheduleCapture();
     this.setState({
       croppingElementId: image.id,
@@ -6399,8 +6467,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     if (selectedElements.length === 1 && isLinearElement(selectedElements[0])) {
-      const selectedLinearElement: ExcalidrawLinearElement =
-        selectedElements[0];
+      const selectedLinearElement: FcboardLinearElement = selectedElements[0];
       if (
         ((event[KEYS.CTRL_OR_CMD] && isSimpleArrow(selectedLinearElement)) ||
           isLineElement(selectedLinearElement)) &&
@@ -6570,8 +6637,8 @@ class App extends React.Component<AppProps, AppState> {
 
   private getElementLinkAtPosition = (
     scenePointer: Readonly<{ x: number; y: number }>,
-    hitElementMightBeLocked: NonDeletedExcalidrawElement | null,
-  ): ExcalidrawElement | undefined => {
+    hitElementMightBeLocked: NonDeletedFcboardElement | null,
+  ): FcboardElement | undefined => {
     if (hitElementMightBeLocked && hitElementMightBeLocked.locked) {
       return undefined;
     }
@@ -6679,7 +6746,7 @@ class App extends React.Component<AppProps, AppState> {
     const frames = this.scene
       .getNonDeletedFramesLikes()
       .filter(
-        (frame): frame is ExcalidrawFrameLikeElement =>
+        (frame): frame is FcboardFrameLikeElement =>
           !frame.locked && isCursorInFrame(sceneCoords, frame, elementsMap),
       );
 
@@ -6913,7 +6980,7 @@ class App extends React.Component<AppProps, AppState> {
       ) {
         // Since we are reading from previous state which is not possible with
         // automatic batching in React 18 hence using flush sync to synchronously
-        // update the state. Check https://github.com/excalidraw/excalidraw/pull/5508 for more details.
+        // update the state. Check https://github.com/fcboard/fcboard/pull/5508 for more details.
         flushSync(() => {
           this.setState({
             selectedLinearElement: editingLinearElement,
@@ -7266,7 +7333,7 @@ class App extends React.Component<AppProps, AppState> {
       },
     );
 
-    let hitElement: ExcalidrawElement | null = null;
+    let hitElement: FcboardElement | null = null;
     if (hitElementMightBeLocked && hitElementMightBeLocked.locked) {
       hitElement = null;
     } else {
@@ -7477,6 +7544,7 @@ class App extends React.Component<AppProps, AppState> {
           { informMutation: false, isDragging: false },
         );
         knownPoints = element.points;
+        this.onInkProgressEmitter.trigger(element, "update");
         this.inkFrameEmitter.trigger();
       }
     });
@@ -7508,6 +7576,10 @@ class App extends React.Component<AppProps, AppState> {
       finished = true;
       append.flush();
       append.cancel();
+      const current = this.scene.getNonDeletedElement(element.id);
+      if (current?.type === "freedraw") {
+        element = current;
+      }
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
@@ -7523,6 +7595,7 @@ class App extends React.Component<AppProps, AppState> {
         this.singleTouchStroke = null;
       }
       if (cancelled) {
+        this.onInkProgressEmitter.trigger(element, "cancel");
         this.scene.replaceAllElements(
           this.scene
             .getElementsIncludingDeleted()
@@ -7544,13 +7617,6 @@ class App extends React.Component<AppProps, AppState> {
           },
         });
       }
-      const beforeComposition = this.onInkCommitEmitter.subscribers.length
-        ? new Map(
-            this.scene
-              .getElementsIncludingDeleted()
-              .map((item) => [item.id, item.version]),
-          )
-        : undefined;
       if (!cancelled) {
         this.onInkCommitEmitter.trigger(element);
       }
@@ -7565,9 +7631,15 @@ class App extends React.Component<AppProps, AppState> {
         completed.set(element.id, completedStroke);
         // Include synchronous cell growth and moved completed handwriting while
         // keeping other, still-writing contacts out of this pointer's history.
-        if (beforeComposition) {
+        if (
+          this.onInkCommitEmitter.subscribers.length ||
+          this.onInkProgressEmitter.subscribers.length
+        ) {
           for (const item of this.scene.getElementsIncludingDeleted()) {
-            if (beforeComposition.get(item.id) !== item.version) {
+            if (
+              !this.activeInkIds.has(item.id) &&
+              previous.elements.get(item.id)?.version !== item.version
+            ) {
               completed.set(item.id, item);
             }
           }
@@ -7585,6 +7657,7 @@ class App extends React.Component<AppProps, AppState> {
       }
       // Merge a completed stroke into the static layer once. The layout
       // effects paint that layer before clearing the former live overlay.
+      this.onInkProgressEmitter.trigger(element, "settled");
       this.scene.triggerUpdate();
       if (!this.parallelInk.size) {
         this.setState({ cursorButton: "up" });
@@ -7616,6 +7689,7 @@ class App extends React.Component<AppProps, AppState> {
     );
     target.setPointerCapture?.(event.pointerId);
     this.scene.insertElement(element);
+    this.onInkProgressEmitter.trigger(element, "start");
     this.setState({ selectedElementIds: {}, cursorButton: "down" });
     this.props.onPointerDown?.(tool, pointerDownState);
     this.onPointerDownEmitter.trigger(tool, pointerDownState, event);
@@ -7677,7 +7751,7 @@ class App extends React.Component<AppProps, AppState> {
     });
     this.excalidrawContainerRef.current?.appendChild(preview);
     const erase = (samples: PointerEvent[]) => {
-      let elements: readonly ExcalidrawElement[] =
+      let elements: readonly FcboardElement[] =
         this.scene.getElementsIncludingDeleted();
       let update = false;
       for (const sample of samples) {
@@ -7697,7 +7771,7 @@ class App extends React.Component<AppProps, AppState> {
           previous = next;
           continue;
         }
-        const nextElements: ExcalidrawElement[] = [];
+        const nextElements: FcboardElement[] = [];
         for (const element of elements) {
           if (element.type !== "freedraw") {
             nextElements.push(element);
@@ -7921,7 +7995,7 @@ class App extends React.Component<AppProps, AppState> {
       const arrow = element as any;
       if (arrow.startBinding || arrow.endBinding) {
         hoveredFocusPointBinding = handleFocusPointHover(
-          element as ExcalidrawArrowElement,
+          element as FcboardArrowElement,
           scenePointerX,
           scenePointerY,
           this.scene,
@@ -8109,7 +8183,7 @@ class App extends React.Component<AppProps, AppState> {
       this.state.newElement &&
       this.state.newElement.type === "freedraw"
     ) {
-      const element = this.state.newElement as ExcalidrawFreeDrawElement;
+      const element = this.state.newElement as FcboardFreeDrawElement;
       this.updateScene({
         ...(element.points.length < 10
           ? {
@@ -8345,7 +8419,7 @@ class App extends React.Component<AppProps, AppState> {
             [pointerDownState.hit.element!.id]: true,
           };
 
-          const previouslySelectedElements: ExcalidrawElement[] = [];
+          const previouslySelectedElements: FcboardElement[] = [];
 
           Object.keys(prevState.selectedElementIds).forEach((id) => {
             const element = this.scene.getElement(id);
@@ -8669,7 +8743,7 @@ class App extends React.Component<AppProps, AppState> {
 
     // preventing defualt while text editing messes with cursor/focus
     if (!this.state.editingTextElement) {
-      // necessary to prevent browser from scrolling the page if excalidraw
+      // necessary to prevent browser from scrolling the page if fcboard
       // not full-page #4489
       //
       // as such, the above is broken when panning canvas while in wysiwyg
@@ -9253,7 +9327,7 @@ class App extends React.Component<AppProps, AppState> {
                   [hitElement.id]: true,
                 };
 
-                const previouslySelectedElements: ExcalidrawElement[] = [];
+                const previouslySelectedElements: FcboardElement[] = [];
 
                 Object.keys(prevState.selectedElementIds).forEach((id) => {
                   const element = this.scene.getElement(id);
@@ -9365,13 +9439,13 @@ class App extends React.Component<AppProps, AppState> {
     return false;
   };
 
-  private isASelectedElement(hitElement: ExcalidrawElement | null): boolean {
+  private isASelectedElement(hitElement: FcboardElement | null): boolean {
     return hitElement != null && this.state.selectedElementIds[hitElement.id];
   }
 
   private isHittingCommonBoundingBoxOfSelectedElements(
     point: Readonly<{ x: number; y: number }>,
-    selectedElements: readonly ExcalidrawElement[],
+    selectedElements: readonly FcboardElement[],
   ): boolean {
     if (selectedElements.length < 2) {
       return false;
@@ -9412,7 +9486,7 @@ class App extends React.Component<AppProps, AppState> {
     let container = this.getTextBindableContainerAtPosition(sceneX, sceneY);
 
     if (hasBoundTextElement(element)) {
-      container = element as ExcalidrawTextContainer;
+      container = element as FcboardTextContainer;
       sceneX = element.x + element.width / 2;
       sceneY = element.y + element.height / 2;
     }
@@ -9492,7 +9566,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private handleFreeDrawElementOnPointerDown = (
     event: React.PointerEvent<HTMLElement>,
-    _elementType: ExcalidrawFreeDrawElement["type"],
+    _elementType: FcboardFreeDrawElement["type"],
     pointerDownState: PointerDownState,
   ) => {
     // Begin a mark capture. This does not have to update state yet.
@@ -9676,7 +9750,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private handleLinearElementOnPointerDown = (
     event: React.PointerEvent<HTMLElement>,
-    elementType: ExcalidrawLinearElement["type"],
+    elementType: FcboardLinearElement["type"],
     pointerDownState: PointerDownState,
   ): void => {
     if (event.ctrlKey) {
@@ -9977,7 +10051,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private createGenericElementOnPointerDown = (
-    elementType: ExcalidrawGenericElement["type"] | "embeddable",
+    elementType: FcboardGenericElement["type"] | "embeddable",
     pointerDownState: PointerDownState,
   ): void => {
     const [gridX, gridY] = getGridPoint(
@@ -10069,7 +10143,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private maybeCacheReferenceSnapPoints(
     event: KeyboardModifiersObject,
-    selectedElements: ExcalidrawElement[],
+    selectedElements: FcboardElement[],
     recomputeAnyways: boolean = false,
   ) {
     if (
@@ -10093,7 +10167,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private maybeCacheVisibleGaps(
     event: KeyboardModifiersObject,
-    selectedElements: ExcalidrawElement[],
+    selectedElements: FcboardElement[],
     recomputeAnyways: boolean = false,
   ) {
     if (
@@ -10130,7 +10204,7 @@ class App extends React.Component<AppProps, AppState> {
     pointerDownState: PointerDownState,
   ): (event: KeyboardEvent) => void {
     return withBatchedUpdates((event: KeyboardEvent) => {
-      // Prevents focus from escaping excalidraw tab
+      // Prevents focus from escaping fcboard tab
       event.key === KEYS.ALT && event.preventDefault();
       if (this.maybeHandleResize(pointerDownState, event)) {
         return;
@@ -10176,11 +10250,23 @@ class App extends React.Component<AppProps, AppState> {
       right: anchor.x + (initial.bounds.right - anchor.x) * scale,
       bottom: anchor.y + (initial.bounds.bottom - anchor.y) * scale,
     };
-    const selected = this.scene.getSelectedElements({
+    const allSelected = this.scene.getSelectedElements({
       selectedElementIds: pointerDownState.regionSelection.selectedElementIds,
       includeElementsInFrames: true,
       includeBoundTextElement: true,
     });
+    const selected = allSelected.filter(
+      (element) => element.customData?.fcInsertion?.kind !== "table",
+    );
+    if (selected.length !== allSelected.length) {
+      const message = t("fcboard.table_zoom_instructions");
+      if (this.state.toast?.message !== message) {
+        this.setToast({ message });
+      }
+      if (!selected.length) {
+        return;
+      }
+    }
     const versions = new Map(
       pointerDownState.regionSelection.affectedElementIds.map((id) => [
         id,
@@ -10324,14 +10410,27 @@ class App extends React.Component<AppProps, AppState> {
       }
     }
     pointerDownState.drag.hasOccurred ||= scale !== 1;
+    if (selected.length !== allSelected.length) {
+      const [left, top, right, bottom] = getCommonBounds(allSelected);
+      const padding = 20 / this.state.zoom.value;
+      Object.assign(bounds, {
+        left: left - padding,
+        top: top - padding,
+        right: right + padding,
+        bottom: bottom + padding,
+      });
+    }
     this.setState({
       whiteboardSelection: {
         ...initial,
         bounds,
-        path: initial.path?.map(([x, y]) => {
-          const p = transform({ x, y });
-          return pointFrom(p.x, p.y);
-        }),
+        path:
+          selected.length !== allSelected.length
+            ? regionPath(bounds)
+            : initial.path?.map(([x, y]) => {
+                const p = transform({ x, y });
+                return pointFrom(p.x, p.y);
+              }),
       },
     });
   };
@@ -10570,7 +10669,7 @@ class App extends React.Component<AppProps, AppState> {
 
           // Since we are reading from previous state which is not possible with
           // automatic batching in React 18 hence using flush sync to synchronously
-          // update the state. Check https://github.com/excalidraw/excalidraw/pull/5508 for more details.
+          // update the state. Check https://github.com/fcboard/fcboard/pull/5508 for more details.
 
           flushSync(() => {
             if (this.state.selectedLinearElement) {
@@ -11221,7 +11320,7 @@ class App extends React.Component<AppProps, AppState> {
             const nextSelectedElementIds = {
               ...(shouldReuseSelection && prevState.selectedElementIds),
               ...elementsWithinSelection.reduce(
-                (acc: Record<ExcalidrawElement["id"], true>, element) => {
+                (acc: Record<FcboardElement["id"], true>, element) => {
                   acc[element.id] = true;
                   return acc;
                 },
@@ -11553,10 +11652,7 @@ class App extends React.Component<AppProps, AppState> {
             this.scene.getNonDeletedElementsMap(),
           );
           if (element) {
-            this.scene.mutateElement(
-              element as ExcalidrawElbowArrowElement,
-              {},
-            );
+            this.scene.mutateElement(element as FcboardElbowArrowElement, {});
           }
         }
 
@@ -11909,7 +12005,7 @@ class App extends React.Component<AppProps, AppState> {
           let nextElements = this.scene.getElementsMapIncludingDeleted();
 
           const updateGroupIdsAfterEditingGroup = (
-            elements: ExcalidrawElement[],
+            elements: FcboardElement[],
           ) => {
             if (elements.length > 0) {
               for (const element of elements) {
@@ -12016,7 +12112,7 @@ class App extends React.Component<AppProps, AppState> {
 
         const selectedFrames = this.scene
           .getSelectedElements(this.state)
-          .filter((element): element is ExcalidrawFrameLikeElement =>
+          .filter((element): element is FcboardFrameLikeElement =>
             isFrameLikeElement(element),
           );
 
@@ -12427,7 +12523,7 @@ class App extends React.Component<AppProps, AppState> {
           if (boundElement.type === "arrow") {
             const arrow = this.scene.getElement(
               boundElement.id,
-            ) as ExcalidrawArrowElement;
+            ) as FcboardArrowElement;
             if (arrow?.startBinding?.elementId === element.id) {
               // NOTE: We use the raw mutateElement() because we don't want history
               // entries or multiplayer updates
@@ -12477,7 +12573,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private initializeImage = async (
-    placeholderImageElement: ExcalidrawImageElement,
+    placeholderImageElement: FcboardImageElement,
     imageFile: File,
   ) => {
     // at this point this should be guaranteed image file, but we do this check
@@ -12539,7 +12635,7 @@ class App extends React.Component<AppProps, AppState> {
     const dataURL =
       this.files[fileId]?.dataURL || (await getDataURL(imageFile));
 
-    return new Promise<NonDeleted<InitializedExcalidrawImageElement>>(
+    return new Promise<NonDeleted<InitializedFcboardImageElement>>(
       async (resolve, reject) => {
         try {
           let initializedImageElement = this.getLatestInitializedImageElement(
@@ -12604,14 +12700,14 @@ class App extends React.Component<AppProps, AppState> {
    * and when you don't want to loose those modifications
    */
   private getLatestInitializedImageElement = (
-    imagePlaceholder: ExcalidrawImageElement,
+    imagePlaceholder: FcboardImageElement,
     fileId: FileId,
   ) => {
     const latestImageElement =
       this.scene.getElement(imagePlaceholder.id) ?? imagePlaceholder;
 
     return newElementWith(
-      latestImageElement as InitializedExcalidrawImageElement,
+      latestImageElement as InitializedFcboardImageElement,
       {
         fileId,
       },
@@ -12628,15 +12724,17 @@ class App extends React.Component<AppProps, AppState> {
         this.state,
       );
 
-      const imageFiles = await fileOpen({
-        description: "Image",
-        extensions: Object.keys(
-          IMAGE_MIME_TYPES,
-        ) as (keyof typeof IMAGE_MIME_TYPES)[],
-        multiple: true,
-      });
+      const imageFiles = this.props.onImagePick
+        ? await this.props.onImagePick()
+        : await fileOpen({
+            description: "Image",
+            extensions: Object.keys(
+              IMAGE_MIME_TYPES,
+            ) as (keyof typeof IMAGE_MIME_TYPES)[],
+            multiple: true,
+          });
 
-      this.insertImages(imageFiles, x, y);
+      await this.insertImages(imageFiles, x, y);
     } catch (error: any) {
       if (error.name !== "AbortError") {
         console.error(error);
@@ -12658,7 +12756,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private getImageNaturalDimensions = (
-    imageElement: ExcalidrawImageElement,
+    imageElement: FcboardImageElement,
     imageHTML: HTMLImageElement,
   ) => {
     const minHeight = Math.max(this.state.height - 120, 160);
@@ -12688,7 +12786,7 @@ class App extends React.Component<AppProps, AppState> {
   /** updates image cache, refreshing updated elements and/or setting status
       to error for images that fail during <img> element creation */
   private updateImageCache = async (
-    elements: readonly InitializedExcalidrawImageElement[],
+    elements: readonly InitializedFcboardImageElement[],
     files = this.files,
   ) => {
     const { updatedFiles, erroredFiles } = await _updateImageCache({
@@ -12719,7 +12817,7 @@ class App extends React.Component<AppProps, AppState> {
 
   /** adds new images to imageCache and re-renders if needed */
   private addNewImagesToImageCache = async (
-    imageElements: InitializedExcalidrawImageElement[] = getInitializedImageElements(
+    imageElements: InitializedFcboardImageElement[] = getInitializedImageElements(
       this.scene.getNonDeletedElements(),
     ),
     files: BinaryFiles = this.files,
@@ -12754,7 +12852,7 @@ class App extends React.Component<AppProps, AppState> {
     this.addNewImagesToImageCache();
   }, IMAGE_RENDER_TIMEOUT);
 
-  private clearSelection(hitElement: ExcalidrawElement | null): void {
+  private clearSelection(hitElement: FcboardElement | null): void {
     this.setState((prevState) => ({
       selectedElementIds: makeNextSelectedElementIds({}, prevState),
       activeEmbeddable: null,
@@ -12916,26 +13014,24 @@ class App extends React.Component<AppProps, AppState> {
     if (imageFiles.length > 0 && this.isToolSupported("image")) {
       return this.insertImages(imageFiles, sceneX, sceneY);
     }
-    const excalidrawLibrary_ids = dataTransferList.getData(
-      MIME_TYPES.excalidrawlibIds,
+    const fcboardlibrary_ids = dataTransferList.getData(
+      MIME_TYPES.fcboardlibIds,
     );
-    const excalidrawLibrary_data = dataTransferList.getData(
-      MIME_TYPES.excalidrawlib,
-    );
-    if (excalidrawLibrary_ids || excalidrawLibrary_data) {
+    const fcboardlibrary_data = dataTransferList.getData(MIME_TYPES.fcboardlib);
+    if (fcboardlibrary_ids || fcboardlibrary_data) {
       try {
         let libraryItems: LibraryItems | null = null;
-        if (excalidrawLibrary_ids) {
+        if (fcboardlibrary_ids) {
           const { itemIds } = JSON.parse(
-            excalidrawLibrary_ids,
-          ) as ExcalidrawLibraryIds;
+            fcboardlibrary_ids,
+          ) as FcboardLibraryIds;
           const allLibraryItems = await this.library.getLatestLibrary();
           libraryItems = allLibraryItems.filter((item) =>
             itemIds.includes(item.id),
           );
           // legacy library dataTransfer format
-        } else if (excalidrawLibrary_data) {
-          libraryItems = parseLibraryJSON(excalidrawLibrary_data);
+        } else if (fcboardlibrary_data) {
+          libraryItems = parseLibraryJSON(fcboardlibrary_data);
         }
         if (libraryItems?.length) {
           libraryItems = libraryItems.map((item) => ({
@@ -12963,7 +13059,7 @@ class App extends React.Component<AppProps, AppState> {
     if (fileItems.length > 0) {
       const { file, fileHandle } = fileItems[0];
       if (file) {
-        // Attempt to parse an excalidraw/excalidrawlib file
+        // Attempt to parse an fcboard/fcboardlib file
         await this.loadFileToCanvas(file, fileHandle);
       }
     }
@@ -13031,7 +13127,7 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
-      if (ret.type === MIME_TYPES.excalidraw) {
+      if (ret.type === MIME_TYPES.fcboard) {
         // restore the fractional indices by mutating elements
         syncInvalidIndices(elements.concat(ret.data.elements));
 
@@ -13053,7 +13149,7 @@ class App extends React.Component<AppProps, AppState> {
           replaceFiles: true,
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
-      } else if (ret.type === MIME_TYPES.excalidrawlib) {
+      } else if (ret.type === MIME_TYPES.fcboardlib) {
         await this.library
           .updateLibrary({
             libraryItems: file,
@@ -13255,7 +13351,7 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({
         elementsToHighlight: getElementsInResizingFrame(
           this.scene.getNonDeletedElements(),
-          newElement as ExcalidrawFrameLikeElement,
+          newElement as FcboardFrameLikeElement,
           this.state,
           this.scene.getNonDeletedElementsMap(),
         ),
@@ -13361,7 +13457,7 @@ class App extends React.Component<AppProps, AppState> {
   ): boolean => {
     const selectedElements = this.scene.getSelectedElements(this.state);
     const selectedFrames = selectedElements.filter(
-      (element): element is ExcalidrawFrameLikeElement =>
+      (element): element is FcboardFrameLikeElement =>
         isFrameLikeElement(element),
     );
 
@@ -13467,7 +13563,7 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState.resize.center.y,
       )
     ) {
-      const elementsToHighlight = new Set<ExcalidrawElement>();
+      const elementsToHighlight = new Set<FcboardElement>();
       selectedFrames.forEach((frame) => {
         getElementsInResizingFrame(
           this.scene.getNonDeletedElements(),
@@ -13670,7 +13766,7 @@ class App extends React.Component<AppProps, AppState> {
     x: number,
     y: number,
     appState: AppState,
-    container?: ExcalidrawTextContainer | null,
+    container?: FcboardTextContainer | null,
   ) {
     if (container) {
       let elementCenterX = container.x + container.width / 2;
@@ -13812,7 +13908,7 @@ declare global {
   interface Window {
     h: {
       scene: Scene;
-      elements: readonly ExcalidrawElement[];
+      elements: readonly FcboardElement[];
       state: AppState;
       setState: React.Component<any, AppState>["setState"];
       watchState: (prev: any, next: any) => void | undefined;
@@ -13833,7 +13929,7 @@ export const createTestHook = () => {
         get() {
           return this.app?.scene.getElementsIncludingDeleted();
         },
-        set(elements: ExcalidrawElement[]) {
+        set(elements: FcboardElement[]) {
           return this.app?.scene.replaceAllElements(
             syncInvalidIndices(elements),
           );

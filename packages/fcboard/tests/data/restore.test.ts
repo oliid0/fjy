@@ -1,21 +1,21 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 import { vi } from "vitest";
 
-import { DEFAULT_SIDEBAR, FONT_FAMILY, ROUNDNESS } from "@excalidraw/common";
+import { DEFAULT_SIDEBAR, FONT_FAMILY, ROUNDNESS } from "@fcboard/common";
 
-import { newElementWith } from "@excalidraw/element";
-import * as sizeHelpers from "@excalidraw/element";
+import { newElementWith } from "@fcboard/element";
+import * as sizeHelpers from "@fcboard/element";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { LocalPoint } from "@fcboard/math";
 
 import type {
-  ExcalidrawArrowElement,
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
-import type { NormalizedZoomValue } from "@excalidraw/excalidraw/types";
+  FcboardArrowElement,
+  FcboardElement,
+  FcboardFreeDrawElement,
+  FcboardLinearElement,
+  FcboardTextElement,
+} from "@fcboard/element/types";
+import type { NormalizedZoomValue } from "@fcboard/fcboard/types";
 
 import { API } from "../helpers/api";
 import * as restore from "../../data/restore";
@@ -53,7 +53,7 @@ describe("restoreElements", () => {
   });
 
   it("should not call isInvisiblySmallElement when element is a selection element", () => {
-    const selectionEl = { type: "selection" } as ExcalidrawElement;
+    const selectionEl = { type: "selection" } as FcboardElement;
     const restoreElements = restore.restoreElements([selectionEl], null);
     expect(restoreElements.length).toBe(0);
     expect(sizeHelpers.isInvisiblySmallElement).toBeCalledTimes(0);
@@ -95,7 +95,7 @@ describe("restoreElements", () => {
     const restoredText = restore.restoreElements(
       [textElement],
       null,
-    )[0] as ExcalidrawTextElement;
+    )[0] as FcboardTextElement;
 
     expect(restoredText).toMatchSnapshot({
       seed: expect.any(Number),
@@ -134,7 +134,7 @@ describe("restoreElements", () => {
     expect(textElement.isDeleted).toBe(false);
     const restoredText = restore.restoreElements([textElement], null, {
       deleteInvisibleElements: true,
-    })[0] as ExcalidrawTextElement;
+    })[0] as FcboardTextElement;
     expect(restoredText.isDeleted).toBe(true);
     expect(restoredText).toMatchSnapshot({
       seed: expect.any(Number),
@@ -152,7 +152,7 @@ describe("restoreElements", () => {
     const restoredFreedraw = restore.restoreElements(
       [freedrawElement],
       null,
-    )[0] as ExcalidrawFreeDrawElement;
+    )[0] as FcboardFreeDrawElement;
 
     expect(restoredFreedraw).toMatchSnapshot({
       seed: expect.any(Number),
@@ -174,8 +174,8 @@ describe("restoreElements", () => {
       null,
     );
 
-    const restoredLine = restoredElements[0] as ExcalidrawLinearElement;
-    const restoredDraw = restoredElements[1] as ExcalidrawLinearElement;
+    const restoredLine = restoredElements[0] as FcboardLinearElement;
+    const restoredDraw = restoredElements[1] as FcboardLinearElement;
 
     expect(restoredLine).toMatchSnapshot({
       seed: expect.any(Number),
@@ -192,7 +192,7 @@ describe("restoreElements", () => {
 
     const restoredElements = restore.restoreElements([arrowElement], null);
 
-    const restoredArrow = restoredElements[0] as ExcalidrawLinearElement;
+    const restoredArrow = restoredElements[0] as FcboardLinearElement;
 
     expect(restoredArrow).toMatchSnapshot({
       seed: expect.any(Number),
@@ -246,7 +246,7 @@ describe("restoreElements", () => {
     });
 
     const restoredArrow = restoredElements[0] as
-      | ExcalidrawArrowElement
+      | FcboardArrowElement
       | undefined;
 
     expect(restoredArrow).not.toBeUndefined();
@@ -314,10 +314,10 @@ describe("restoreElements", () => {
     );
 
     const restoredLinear = restoredElements[0] as
-      | ExcalidrawLinearElement
+      | FcboardLinearElement
       | undefined;
     const restoredArrow = restoredElements[1] as
-      | ExcalidrawArrowElement
+      | FcboardArrowElement
       | undefined;
 
     expect(restoredLinear?.type).toBe("line");
@@ -340,7 +340,7 @@ describe("restoreElements", () => {
     const arrowElement = API.createElement({ type: "arrow" });
     const restoredElements = restore.restoreElements([arrowElement], null);
 
-    const restoredArrow = restoredElements[0] as ExcalidrawLinearElement;
+    const restoredArrow = restoredElements[0] as FcboardLinearElement;
 
     expect(arrowElement.endArrowhead).toBe(restoredArrow.endArrowhead);
   });
@@ -353,7 +353,7 @@ describe("restoreElements", () => {
 
     const restoredElements = restore.restoreElements([arrowElement], null);
 
-    const restoredArrow = restoredElements[0] as ExcalidrawLinearElement;
+    const restoredArrow = restoredElements[0] as FcboardLinearElement;
 
     expect(restoredArrow.endArrowhead).toBe("arrow");
   });
@@ -375,7 +375,7 @@ describe("restoreElements", () => {
     const restoredLine = restore.restoreElements(
       [lineElement],
       null,
-    )[0] as ExcalidrawLinearElement;
+    )[0] as FcboardLinearElement;
 
     expect(restoredLine.points).toMatchObject(expectedLinePoints);
   });
@@ -417,8 +417,8 @@ describe("restoreElements", () => {
       null,
     );
 
-    const restoredLine_0 = restoredElements[0] as ExcalidrawLinearElement;
-    const restoredLine_1 = restoredElements[1] as ExcalidrawLinearElement;
+    const restoredLine_0 = restoredElements[0] as FcboardLinearElement;
+    const restoredLine_1 = restoredElements[1] as FcboardLinearElement;
 
     expect(restoredLine_0.points).toMatchObject(pointsEl_0);
 
@@ -436,7 +436,7 @@ describe("restoreElements", () => {
   it("should restore correctly with rectangle, ellipse and diamond elements", () => {
     const types = ["rectangle", "ellipse", "diamond"];
 
-    const elements: ExcalidrawElement[] = [];
+    const elements: FcboardElement[] = [];
     let idCount = 0;
     types.forEach((elType) => {
       idCount += 1;
@@ -555,7 +555,7 @@ describe("restoreAppState", () => {
       eraserMode: "stroke",
       eraserSize: 240,
       palmEraser: false,
-      palmEraserThreshold: 16,
+      palmEraserThreshold: 1,
     });
   });
 
@@ -676,10 +676,10 @@ describe("restoreAppState", () => {
     );
   });
 
-  it("when imported data state has a not allowed Excalidraw Element Types", () => {
+  it("when imported data state has a not allowed Fcboard Element Types", () => {
     const stubImportedAppState: any = getDefaultAppState();
 
-    stubImportedAppState.activeTool = "not allowed Excalidraw Element Types";
+    stubImportedAppState.activeTool = "not allowed Fcboard Element Types";
     const stubLocalAppState = getDefaultAppState();
 
     const restoredAppState = restore.restoreAppState(
@@ -808,7 +808,7 @@ describe("repairing bindings", () => {
       ]),
     );
 
-    const restoredArrow = restoredElements[0] as ExcalidrawLinearElement;
+    const restoredArrow = restoredElements[0] as FcboardLinearElement;
 
     expect(restoredArrow).toMatchSnapshot({
       seed: expect.any(Number),

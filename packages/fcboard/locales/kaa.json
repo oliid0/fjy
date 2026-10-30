@@ -91,7 +91,7 @@
     "untitled": "Atamasız",
     "name": "Ataması",
     "yourName": "Atıńız",
-    "madeWithExcalidraw": "Fcboard járdeminde islengen",
+    "madeWithFcboard": "Fcboard járdeminde islengen",
     "group": "",
     "ungroup": "",
     "collaborators": "Qatnasıwshılar",
@@ -121,7 +121,7 @@
     "toggleTheme": "",
     "theme": "",
     "personalLib": "Jeke kitapxana",
-    "excalidrawLib": "Fcboard kitapxanası",
+    "fcboardlib": "Fcboard kitapxanası",
     "decreaseFontSize": "Shrift ólshemin kishireytiw",
     "increaseFontSize": "Shrift ólshemin úlkeytiw",
     "unbindText": "",
@@ -312,7 +312,7 @@
     "laser": "",
     "hand": "",
     "extraTools": "",
-    "mermaidToExcalidraw": "",
+    "mermaidToFcboard": "",
     "convertElementType": ""
   },
   "element": {

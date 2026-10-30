@@ -9,13 +9,13 @@ import {
 } from "@testing-library/react";
 import ansi from "ansicolor";
 
-import { ORIG_ID, arrayToMap } from "@excalidraw/common";
+import { ORIG_ID, arrayToMap } from "@fcboard/common";
 
-import { getSelectedElements } from "@excalidraw/element";
+import { getSelectedElements } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { AllPossibleKeys } from "@excalidraw/common/utility-types";
+import type { AllPossibleKeys } from "@fcboard/common/utility-types";
 
 import { STORAGE_KEYS } from "../../../app/app_constants";
 
@@ -61,7 +61,7 @@ const renderApp: TestRenderFn = async (ui, options) => {
   GlobalTestState.renderResult = renderResult;
 
   Object.defineProperty(GlobalTestState, "canvas", {
-    // must be a getter because at the time of ExcalidrawApp render the
+    // must be a getter because at the time of FcboardApp render the
     // child App component isn't likely mounted yet (and thus canvas not
     // present in DOM)
     get() {
@@ -70,7 +70,7 @@ const renderApp: TestRenderFn = async (ui, options) => {
   });
 
   Object.defineProperty(GlobalTestState, "interactiveCanvas", {
-    // must be a getter because at the time of ExcalidrawApp render the
+    // must be a getter because at the time of FcboardApp render the
     // child App component isn't likely mounted yet (and thus canvas not
     // present in DOM)
     get() {
@@ -185,7 +185,7 @@ export const mockBoundingClientRect = (
   });
 };
 
-export const withExcalidrawDimensions = async (
+export const withFcboardDimensions = async (
   dimensions: { width: number; height: number },
   cb: () => void,
 ) => {
@@ -213,9 +213,9 @@ export const restoreOriginalGetBoundingClientRect = () => {
 
 export const assertSelectedElements = (
   ...elements: (
-    | (ExcalidrawElement["id"] | ExcalidrawElement)[]
-    | ExcalidrawElement["id"]
-    | ExcalidrawElement
+    | (FcboardElement["id"] | FcboardElement)[]
+    | FcboardElement["id"]
+    | FcboardElement
   )[]
 ) => {
   const { h } = window;
@@ -285,9 +285,9 @@ expect.addSnapshotSerializer({
 });
 
 export const getCloneByOrigId = <T extends boolean = false>(
-  origId: ExcalidrawElement["id"],
+  origId: FcboardElement["id"],
   returnNullIfNotExists: T = false as T,
-): T extends true ? ExcalidrawElement | null : ExcalidrawElement => {
+): T extends true ? FcboardElement | null : FcboardElement => {
   const clonedElement = window.h.elements?.find(
     (el) => (el as any)[ORIG_ID] === origId,
   );
@@ -297,7 +297,7 @@ export const getCloneByOrigId = <T extends boolean = false>(
   if (returnNullIfNotExists !== true) {
     throw new Error(`cloned element not found for origId: ${origId}`);
   }
-  return null as T extends true ? ExcalidrawElement | null : ExcalidrawElement;
+  return null as T extends true ? FcboardElement | null : FcboardElement;
 };
 
 /**
@@ -311,15 +311,15 @@ export const getCloneByOrigId = <T extends boolean = false>(
  * If you need to refer to cloned element properties, you can use
  * `getCloneByOrigId()`, e.g.: `{ frameId: getCloneByOrigId(origFrame.id)?.id }`
  */
-export const assertElements = <T extends AllPossibleKeys<ExcalidrawElement>>(
-  actualElements: readonly ExcalidrawElement[],
+export const assertElements = <T extends AllPossibleKeys<FcboardElement>>(
+  actualElements: readonly FcboardElement[],
   /** array order matters */
   expectedElements: (Partial<Record<T, any>> & {
     /** meta, will be stripped for element attribute checks */
     selected?: true;
   } & (
       | {
-          id: ExcalidrawElement["id"];
+          id: FcboardElement["id"];
         }
       | { [ORIG_ID]?: string }
     ))[],
@@ -327,7 +327,7 @@ export const assertElements = <T extends AllPossibleKeys<ExcalidrawElement>>(
   const h = window.h;
 
   const expectedElementsWithIds: (typeof expectedElements[number] & {
-    id: ExcalidrawElement["id"];
+    id: FcboardElement["id"];
   })[] = expectedElements.map((el) => {
     if ("id" in el) {
       return el;
@@ -347,7 +347,7 @@ export const assertElements = <T extends AllPossibleKeys<ExcalidrawElement>>(
   const map_expectedElements = arrayToMap(expectedElementsWithIds);
 
   const selectedElementIds = expectedElementsWithIds.reduce(
-    (acc: Record<ExcalidrawElement["id"], true>, el) => {
+    (acc: Record<FcboardElement["id"], true>, el) => {
       if (el.selected) {
         acc[el.id] = true;
       }

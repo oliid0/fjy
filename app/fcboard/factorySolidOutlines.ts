@@ -1,6 +1,6 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import type { SolidSettings } from "./solids";
 
@@ -10,7 +10,7 @@ export const factorySolidOutlines = (
   settings: SolidSettings,
   size: number,
   rotation: number,
-): ExcalidrawElementSkeleton[] => {
+): FcboardElementSkeleton[] => {
   type Point = [number, number];
   const paths: { points: Point[]; hidden?: boolean }[] = [];
   const arc = (

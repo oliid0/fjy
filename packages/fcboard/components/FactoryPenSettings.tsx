@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 
-import { DEFAULT_ELEMENT_PROPS } from "@excalidraw/common";
-import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
+import { DEFAULT_ELEMENT_PROPS } from "@fcboard/common";
+import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 
 import { t, useI18n } from "../i18n";
 
@@ -24,7 +24,7 @@ import magicSelected from "./factory-pen-icons/magic-selected.svg?url";
 import rainbow from "./factory-pen-icons/rainbow.svg?url";
 import rainbowSelected from "./factory-pen-icons/rainbow-selected.svg?url";
 
-import type { ExcalidrawImperativeAPI, UIAppState } from "../types";
+import type { FcboardImperativeAPI, UIAppState } from "../types";
 
 const pens = [
   ["hard", "pen", hard, hardSelected],
@@ -158,7 +158,7 @@ export const FactoryPenSettings = ({
   close,
 }: {
   app: {
-    api: Pick<ExcalidrawImperativeAPI, "updateScene">;
+    api: Pick<FcboardImperativeAPI, "updateScene">;
     props: { UIOptions: { inkProfile?: { penWidthMax?: 20 | 40 } } };
   };
   state: UIAppState;

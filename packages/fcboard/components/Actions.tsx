@@ -7,7 +7,7 @@ import {
   KEYS,
   capitalizeString,
   isTransparent,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import {
   shouldAllowVerticalAlign,
@@ -20,14 +20,14 @@ import {
   isArrowElement,
   hasStrokeColor,
   toolIsArrow,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawElementType,
+  FcboardElement,
+  FcboardElementType,
   NonDeletedElementsMap,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { actionToggleZenMode } from "../actions";
 
@@ -58,7 +58,7 @@ import "./Actions.scss";
 import {
   useEditorInterface,
   useStylesPanelMode,
-  useExcalidrawContainer,
+  useFcboardContainer,
 } from "./App";
 import Stack from "./Stack";
 import { ToolButton } from "./ToolButton";
@@ -103,9 +103,9 @@ const PROPERTIES_CLASSES = clsx([
 
 export const canChangeStrokeColor = (
   appState: UIAppState,
-  targetElements: ExcalidrawElement[],
+  targetElements: FcboardElement[],
 ) => {
-  let commonSelectedType: ExcalidrawElementType | null =
+  let commonSelectedType: FcboardElementType | null =
     targetElements[0]?.type || null;
 
   for (const element of targetElements) {
@@ -126,7 +126,7 @@ export const canChangeStrokeColor = (
 
 export const canChangeBackgroundColor = (
   appState: UIAppState,
-  targetElements: ExcalidrawElement[],
+  targetElements: FcboardElement[],
 ) => {
   return (
     hasBackground(appState.activeTool.type) ||
@@ -322,7 +322,7 @@ const CombinedShapeProperties = ({
   targetElements,
   container,
 }: {
-  targetElements: ExcalidrawElement[];
+  targetElements: FcboardElement[];
   appState: UIAppState;
   renderAction: ActionManager["renderAction"];
   setAppState: React.Component<any, AppState>["setState"];
@@ -425,7 +425,7 @@ const CombinedArrowProperties = ({
   container,
   app,
 }: {
-  targetElements: ExcalidrawElement[];
+  targetElements: FcboardElement[];
   appState: UIAppState;
   renderAction: ActionManager["renderAction"];
   setAppState: React.Component<any, AppState>["setState"];
@@ -525,7 +525,7 @@ const CombinedTextProperties = ({
   appState: UIAppState;
   renderAction: ActionManager["renderAction"];
   setAppState: React.Component<any, AppState>["setState"];
-  targetElements: ExcalidrawElement[];
+  targetElements: FcboardElement[];
   container: HTMLDivElement | null;
   elementsMap: NonDeletedElementsMap | NonDeletedSceneElementsMap;
 }) => {
@@ -616,7 +616,7 @@ const CombinedExtraActions = ({
   showDelete,
 }: {
   appState: UIAppState;
-  targetElements: ExcalidrawElement[];
+  targetElements: FcboardElement[];
   renderAction: ActionManager["renderAction"];
   setAppState: React.Component<any, AppState>["setState"];
   container: HTMLDivElement | null;
@@ -764,7 +764,7 @@ const LinearEditorAction = ({
   targetElements,
 }: {
   appState: UIAppState;
-  targetElements: ExcalidrawElement[];
+  targetElements: FcboardElement[];
   renderAction: ActionManager["renderAction"];
 }) => {
   const showLineEditorAction =
@@ -798,7 +798,7 @@ export const CompactShapeActions = ({
   setAppState: React.Component<any, AppState>["setState"];
 }) => {
   const targetElements = getTargetElements(elementsMap, appState);
-  const { container } = useExcalidrawContainer();
+  const { container } = useFcboardContainer();
 
   const isEditingTextOrNewElement = Boolean(
     appState.editingTextElement || appState.newElement,
@@ -907,7 +907,7 @@ export const MobileShapeActions = ({
   setAppState: React.Component<any, AppState>["setState"];
 }) => {
   const targetElements = getTargetElements(elementsMap, appState);
-  const { container } = useExcalidrawContainer();
+  const { container } = useFcboardContainer();
   const mobileActionsRef = useRef<HTMLDivElement>(null);
 
   const ACTIONS_WIDTH =
@@ -1286,7 +1286,7 @@ export const ShapesSwitcher = ({
             icon={mermaidLogoIcon}
             data-testid="toolbar-embeddable"
           >
-            {t("toolBar.mermaidToExcalidraw")}
+            {t("toolBar.mermaidToFcboard")}
           </DropdownMenu.Item>
           {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
             <DropdownMenu.Item

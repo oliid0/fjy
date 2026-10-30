@@ -6,14 +6,14 @@ import {
 import { traceFactoryInk } from "./factoryInk";
 import { traceFactoryNib } from "./factoryNib";
 
-import type { ExcalidrawFreeDrawElement } from "./types";
+import type { FcboardFreeDrawElement } from "./types";
 import type { BrushSample } from "./factoryBrush";
 
 const paths = new WeakMap<
-  ExcalidrawFreeDrawElement,
+  FcboardFreeDrawElement,
   {
     version: number;
-    points: ExcalidrawFreeDrawElement["points"];
+    points: FcboardFreeDrawElement["points"];
     path: Path2D;
     stable?: Path2D;
     geometryKey: string;
@@ -22,7 +22,7 @@ const paths = new WeakMap<
 >();
 
 /** Canvas consumes vector commands directly; SVG export uses the same trace. */
-export const factoryPath2D = (element: ExcalidrawFreeDrawElement) => {
+export const factoryPath2D = (element: FcboardFreeDrawElement) => {
   const cached = paths.get(element);
   const data = element.customData?.fcInk;
   const geometryKey = [
@@ -108,7 +108,7 @@ export const factoryPath2D = (element: ExcalidrawFreeDrawElement) => {
   return path;
 };
 
-export const factoryNibPath2D = (element: ExcalidrawFreeDrawElement) => {
+export const factoryNibPath2D = (element: FcboardFreeDrawElement) => {
   const path = new Path2D();
   return traceFactoryNib(element, path) ? path : undefined;
 };

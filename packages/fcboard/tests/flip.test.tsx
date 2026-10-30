@@ -1,26 +1,26 @@
 import { vi } from "vitest";
 
-import { ROUNDNESS, KEYS, arrayToMap, cloneJSON } from "@excalidraw/common";
+import { ROUNDNESS, KEYS, arrayToMap, cloneJSON } from "@fcboard/common";
 
-import { pointFrom, type Radians } from "@excalidraw/math";
+import { pointFrom, type Radians } from "@fcboard/math";
 
-import { getBoundTextElementPosition } from "@excalidraw/element";
-import { getElementAbsoluteCoords } from "@excalidraw/element";
-import { newLinearElement } from "@excalidraw/element";
+import { getBoundTextElementPosition } from "@fcboard/element";
+import { getElementAbsoluteCoords } from "@fcboard/element";
+import { newLinearElement } from "@fcboard/element";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { LocalPoint } from "@fcboard/math";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawImageElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElementWithContainer,
+  FcboardElement,
+  FcboardImageElement,
+  FcboardLinearElement,
+  FcboardTextElementWithContainer,
   FileId,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { actionFlipHorizontal, actionFlipVertical } from "../actions";
 import { createPasteEvent } from "../clipboard";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 // Importing to spy on it and mock the implementation (mocking does not work with simple vi.mock for some reason)
 import * as blobModule from "../data/blob";
@@ -65,7 +65,7 @@ beforeEach(async () => {
   Object.assign(document, {
     elementFromPoint: () => GlobalTestState.canvas,
   });
-  await render(<Excalidraw autoFocus={true} handleKeyboardGlobally={true} />);
+  await render(<Fcboard autoFocus={true} handleKeyboardGlobally={true} />);
   API.setAppState({
     zoom: {
       value: 1 as NormalizedZoomValue,
@@ -198,8 +198,8 @@ const createLinearElementsWithCurveOutsideMinMaxPoints = (
 };
 
 const checkElementsBoundingBox = async (
-  element1: ExcalidrawElement,
-  element2: ExcalidrawElement,
+  element1: FcboardElement,
+  element2: FcboardElement,
   toleranceInPx: number = 0,
 ) => {
   const elementsMap = arrayToMap([element1, element2]);
@@ -222,9 +222,9 @@ const checkHorizontalFlip = async (toleranceInPx: number = 0.00001) => {
 };
 
 const checkTwoPointsLineHorizontalFlip = async () => {
-  const originalElement = cloneJSON(h.elements[0]) as ExcalidrawLinearElement;
+  const originalElement = cloneJSON(h.elements[0]) as FcboardLinearElement;
   API.executeAction(actionFlipHorizontal);
-  const newElement = h.elements[0] as ExcalidrawLinearElement;
+  const newElement = h.elements[0] as FcboardLinearElement;
   await waitFor(() => {
     expect(originalElement.points[0][0]).toBeCloseTo(
       -newElement.points[0][0],
@@ -246,9 +246,9 @@ const checkTwoPointsLineHorizontalFlip = async () => {
 };
 
 const checkTwoPointsLineVerticalFlip = async () => {
-  const originalElement = cloneJSON(h.elements[0]) as ExcalidrawLinearElement;
+  const originalElement = cloneJSON(h.elements[0]) as FcboardLinearElement;
   API.executeAction(actionFlipVertical);
-  const newElement = h.elements[0] as ExcalidrawLinearElement;
+  const newElement = h.elements[0] as FcboardLinearElement;
   await waitFor(() => {
     expect(originalElement.points[0][0]).toBeCloseTo(
       newElement.points[0][0],
@@ -775,13 +775,13 @@ describe("image", () => {
     //paste image
     await createImage();
     await waitFor(() => {
-      expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, 1]);
+      expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, 1]);
       expect(API.getSelectedElements().length).toBeGreaterThan(0);
       expect(API.getSelectedElements()[0].type).toEqual("image");
       expect(h.app.files.fileId).toBeDefined();
     });
     await checkHorizontalFlip();
-    expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([-1, 1]);
+    expect((h.elements[0] as FcboardImageElement).scale).toEqual([-1, 1]);
     expect(h.elements[0].angle).toBeCloseTo(0);
   });
 
@@ -789,14 +789,14 @@ describe("image", () => {
     //paste image
     await createImage();
     await waitFor(() => {
-      expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, 1]);
+      expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, 1]);
       expect(API.getSelectedElements().length).toBeGreaterThan(0);
       expect(API.getSelectedElements()[0].type).toEqual("image");
       expect(h.app.files.fileId).toBeDefined();
     });
 
     await checkVerticalFlip();
-    expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, -1]);
+    expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, -1]);
     expect(h.elements[0].angle).toBeCloseTo(0);
   });
 
@@ -806,7 +806,7 @@ describe("image", () => {
     //paste image
     await createImage();
     await waitFor(() => {
-      expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, 1]);
+      expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, 1]);
       expect(API.getSelectedElements().length).toBeGreaterThan(0);
       expect(API.getSelectedElements()[0].type).toEqual("image");
       expect(h.app.files.fileId).toBeDefined();
@@ -815,7 +815,7 @@ describe("image", () => {
       angle: originalAngle,
     });
     await checkRotatedHorizontalFlip(expectedAngle);
-    expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([-1, 1]);
+    expect((h.elements[0] as FcboardImageElement).scale).toEqual([-1, 1]);
   });
 
   it("flips an rotated image vertically correctly", async () => {
@@ -824,7 +824,7 @@ describe("image", () => {
     //paste image
     await createImage();
     await waitFor(() => {
-      expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, 1]);
+      expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, 1]);
       expect(h.elements[0].angle).toEqual(0);
       expect(API.getSelectedElements().length).toBeGreaterThan(0);
       expect(API.getSelectedElements()[0].type).toEqual("image");
@@ -835,7 +835,7 @@ describe("image", () => {
     });
 
     await checkRotatedVerticalFlip(expectedAngle);
-    expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, -1]);
+    expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, -1]);
     expect(h.elements[0].angle).toBeCloseTo(expectedAngle);
   });
 
@@ -843,14 +843,14 @@ describe("image", () => {
     //paste image
     await createImage();
     await waitFor(() => {
-      expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([1, 1]);
+      expect((h.elements[0] as FcboardImageElement).scale).toEqual([1, 1]);
       expect(API.getSelectedElements().length).toBeGreaterThan(0);
       expect(API.getSelectedElements()[0].type).toEqual("image");
       expect(h.app.files.fileId).toBeDefined();
     });
 
     await checkVerticalHorizontalFlip();
-    expect((h.elements[0] as ExcalidrawImageElement).scale).toEqual([-1, -1]);
+    expect((h.elements[0] as FcboardImageElement).scale).toEqual([-1, -1]);
     expect(h.elements[0].angle).toBeCloseTo(0);
   });
 });
@@ -887,13 +887,13 @@ describe("mutliple elements", () => {
     API.executeAction(actionFlipHorizontal);
     API.executeAction(actionFlipVertical);
 
-    const arrowText = h.elements[1] as ExcalidrawTextElementWithContainer;
+    const arrowText = h.elements[1] as FcboardTextElementWithContainer;
     const arrowTextPos = getBoundTextElementPosition(
       arrow.get(),
       arrowText,
       arrayToMap(h.elements),
     )!;
-    const rectText = h.elements[3] as ExcalidrawTextElementWithContainer;
+    const rectText = h.elements[3] as FcboardTextElementWithContainer;
 
     expect(arrow.x).toBeCloseTo(180);
     expect(arrow.y).toBeCloseTo(200);

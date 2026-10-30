@@ -1,6 +1,6 @@
 import { factoryNibControls } from "./factoryNib";
 
-import type { ExcalidrawFreeDrawElement } from "./types";
+import type { FcboardFreeDrawElement } from "./types";
 
 export type FactoryInkData = {
   version: 2 | 3;
@@ -24,11 +24,11 @@ export type FactoryInkData = {
 export const finishFactoryInk = (ink: FactoryInkData | undefined) =>
   ink ? { ...ink, finished: true } : undefined;
 
-export const isFactoryStroke = (element: ExcalidrawFreeDrawElement) =>
+export const isFactoryStroke = (element: FcboardFreeDrawElement) =>
   element.customData?.fcInk?.version === 2 &&
   element.customData.fcInk.pen !== "brush";
 
-export const factoryInkUnit = (element: ExcalidrawFreeDrawElement) => {
+export const factoryInkUnit = (element: FcboardFreeDrawElement) => {
   const value = element.customData?.fcInk?.unit;
   return Number.isFinite(value) && value > 0 ? value : 1;
 };
@@ -42,7 +42,7 @@ const roundInk = (coordinate: number, unit: number) => {
 
 /** HObject.round and HCurveObject.continueStroke: half-pixel quadratic midpoints. */
 export const traceFactoryInk = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
   target: Pick<Path2D, "moveTo" | "lineTo" | "quadraticCurveTo">,
   from = 0,
   complete = true,
@@ -87,7 +87,7 @@ export const traceFactoryInk = (
   }
 };
 
-export const factoryInkPath = (element: ExcalidrawFreeDrawElement) => {
+export const factoryInkPath = (element: FcboardFreeDrawElement) => {
   const path: string[] = [];
   traceFactoryInk(element, {
     moveTo: (x, y) => path.push(`M${x},${y}`),
@@ -98,7 +98,7 @@ export const factoryInkPath = (element: ExcalidrawFreeDrawElement) => {
 };
 
 /** Sample the rendered quadratics for geometric erasure, never their control polygon. */
-export const factoryInkSamples = (element: ExcalidrawFreeDrawElement) => {
+export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
   const unit = factoryInkUnit(element);
   const sampled = element.customData?.fcInk?.centerline === true;
   const node = (x: number, y: number, pressure: number) => ({
@@ -161,7 +161,7 @@ export const factoryInkSamples = (element: ExcalidrawFreeDrawElement) => {
   return samples;
 };
 
-export const factoryInkDashes = (element: ExcalidrawFreeDrawElement) => {
+export const factoryInkDashes = (element: FcboardFreeDrawElement) => {
   const unit = factoryInkUnit(element);
   if (element.strokeStyle === "dotted") {
     return [0, Math.max(2 * element.strokeWidth, 6 * unit)];

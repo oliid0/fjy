@@ -1,4 +1,4 @@
-import { getLanguage, t } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
 import { chat, parseJSON } from "./ai";
 import { currentSettings } from "./settings";

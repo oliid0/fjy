@@ -5,16 +5,20 @@ const { pathToFileURL } = require("url");
 const { build } = require("esbuild");
 const { sassPlugin } = require("esbuild-sass-plugin");
 
-const { parseEnvVariables } = require("../packages/fcboard/env.cjs");
+const pkg = require("../packages/fcboard/package.json");
 
 const ENV_VARS = {
   development: {
-    ...parseEnvVariables(`${__dirname}/../config/.env.development`),
+    PKG_NAME: "fcboard",
+    PKG_VERSION: pkg.version,
     DEV: true,
+    MODE: "development",
   },
   production: {
-    ...parseEnvVariables(`${__dirname}/../config/.env.production`),
+    PKG_NAME: "fcboard",
+    PKG_VERSION: pkg.version,
     PROD: true,
+    MODE: "production",
   },
 };
 
@@ -63,7 +67,44 @@ const getConfig = (outdir) => ({
   splitting: true,
   format: "esm",
   packages: "external",
+  define: { "process.env.NODE_ENV": "process.env.NODE_ENV" },
   plugins: [
+    {
+      name: "fcboard-asset-queries",
+      setup(context) {
+        context.onResolve({ filter: /\?(raw|url)$/ }, (args) => ({
+          path: path.relative(
+            __dirname,
+            path.resolve(
+              args.resolveDir,
+              args.path.replace(/\?(raw|url)$/, ""),
+            ),
+          ),
+          namespace: args.path.endsWith("?raw")
+            ? "fcboard-raw"
+            : "fcboard-asset",
+        }));
+        context.onLoad(
+          { filter: /.*/, namespace: "fcboard-raw" },
+          async (args) => ({
+            contents: await fs.promises.readFile(
+              path.resolve(__dirname, args.path),
+              "utf8",
+            ),
+            loader: "text",
+          }),
+        );
+        context.onLoad(
+          { filter: /.*/, namespace: "fcboard-asset" },
+          async (args) => ({
+            contents: await fs.promises.readFile(
+              path.resolve(__dirname, args.path),
+            ),
+            loader: "file",
+          }),
+        );
+      },
+    },
     sassPlugin({
       precompile,
     }),
@@ -72,19 +113,30 @@ const getConfig = (outdir) => ({
   assetNames: "[dir]/[name]",
   chunkNames: "[dir]/[name]-[hash]",
   alias: {
-    "@excalidraw/utils": path.resolve(__dirname, "../packages/utils/src"),
+    "@fcboard/common": path.resolve(__dirname, "../packages/common/src"),
+    "@fcboard/element": path.resolve(__dirname, "../packages/element/src"),
+    "@fcboard/math": path.resolve(__dirname, "../packages/math/src"),
+    "@fcboard/fcboard": path.resolve(__dirname, "../packages/fcboard"),
+    "@fcboard/utils": path.resolve(__dirname, "../packages/utils/src"),
+    roughjs: path.dirname(require.resolve("roughjs/package.json")),
   },
-  external: ["@excalidraw/common", "@excalidraw/element", "@excalidraw/math"],
   loader: {
     ".woff2": "file",
+    ".ttf": "file",
+    ".png": "file",
+    ".svg": "file",
+    ".jpg": "file",
+    ".webp": "file",
+    ".wasm": "file",
   },
 });
 
 function buildDev(config) {
   return build({
     ...config,
-    sourcemap: true,
+    sourcemap: false,
     define: {
+      "process.env.NODE_ENV": "process.env.NODE_ENV",
       "import.meta.env": JSON.stringify(ENV_VARS.development),
     },
   });
@@ -95,15 +147,48 @@ function buildProd(config) {
     ...config,
     minify: true,
     define: {
+      "process.env.NODE_ENV": "process.env.NODE_ENV",
       "import.meta.env": JSON.stringify(ENV_VARS.production),
     },
   });
 }
 
 const createESMRawBuild = async () => {
+  const entryPoints = [];
+  const entries = (directory, prefix) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (
+        [
+          "node_modules",
+          "dist",
+          "tests",
+          "__tests__",
+          "examples",
+          "test-utils.ts",
+        ].includes(entry.name)
+      ) {
+        continue;
+      }
+      const source = path.join(directory, entry.name);
+      const output = path.posix.join(prefix, entry.name);
+      if (entry.isDirectory()) {
+        entries(source, output);
+      } else if (
+        /\.tsx?$/.test(entry.name) &&
+        !/\.d\.ts$|\.(test|spec)\./.test(entry.name)
+      ) {
+        entryPoints.push({ in: source, out: output.replace(/\.tsx?$/, "") });
+      }
+    }
+  };
+  entries(process.cwd(), "editor");
+  for (const name of ["common", "element", "math", "utils"]) {
+    entries(path.resolve("..", name, "src"), name);
+  }
+  entryPoints.push({ in: "index.tsx", out: "index" });
   const chunksConfig = {
-    entryPoints: ["index.tsx", "**/*.chunk.ts"],
-    entryNames: "[name]",
+    entryPoints,
+    entryNames: "[dir]/[name]",
   };
 
   // development unminified build with source maps
@@ -121,4 +206,7 @@ const createESMRawBuild = async () => {
 
 (async () => {
   await createESMRawBuild();
-})();
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

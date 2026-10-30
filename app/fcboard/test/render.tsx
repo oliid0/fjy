@@ -2,7 +2,7 @@ import { render as renderComponent } from "@testing-library/react";
 import {
   EditorJotaiProvider,
   editorJotaiStore,
-} from "@excalidraw/excalidraw/editor-jotai";
+} from "@fcboard/fcboard/editor-jotai";
 
 import type { ReactElement } from "react";
 

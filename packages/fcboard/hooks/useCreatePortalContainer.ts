@@ -1,8 +1,8 @@
 import { useState, useLayoutEffect } from "react";
 
-import { THEME } from "@excalidraw/common";
+import { THEME } from "@fcboard/common";
 
-import { useEditorInterface, useExcalidrawContainer } from "../components/App";
+import { useEditorInterface, useFcboardContainer } from "../components/App";
 import { useUIAppState } from "../context/ui-appState";
 
 export const useCreatePortalContainer = (opts?: {
@@ -14,14 +14,14 @@ export const useCreatePortalContainer = (opts?: {
   const editorInterface = useEditorInterface();
   const { theme } = useUIAppState();
 
-  const { container: excalidrawContainer } = useExcalidrawContainer();
+  const { container: excalidrawContainer } = useFcboardContainer();
 
   useLayoutEffect(() => {
     if (div) {
       div.className = "";
-      div.classList.add("excalidraw", ...(opts?.className?.split(/\s+/) || []));
+      div.classList.add("fcboard", ...(opts?.className?.split(/\s+/) || []));
       div.classList.toggle(
-        "excalidraw--mobile",
+        "fcboard--mobile",
         editorInterface.formFactor === "phone",
       );
       div.classList.toggle("theme--dark", theme === THEME.DARK);
@@ -39,8 +39,8 @@ export const useCreatePortalContainer = (opts?: {
 
     const div = document.createElement("div");
 
-    if (excalidrawContainer?.dataset.excalidrawId) {
-      div.dataset.excalidrawOwner = excalidrawContainer.dataset.excalidrawId;
+    if (excalidrawContainer?.dataset.fcboardId) {
+      div.dataset.fcboardOwner = excalidrawContainer.dataset.fcboardId;
     }
 
     container.appendChild(div);

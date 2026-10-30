@@ -1,6 +1,6 @@
-import { DEFAULT_ELEMENT_PROPS } from "@excalidraw/common";
+import { DEFAULT_ELEMENT_PROPS } from "@fcboard/common";
 
-import type { FactoryInkData } from "@excalidraw/element/factoryInk";
+import type { FactoryInkData } from "@fcboard/element/factoryInk";
 
 import type { AppState } from "./types";
 import type { UIOptions } from "./types";

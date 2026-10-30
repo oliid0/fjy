@@ -1,14 +1,14 @@
 import React from "react";
 
-import { SVG_NS } from "@excalidraw/common";
+import { SVG_NS } from "@fcboard/common";
 
-import type { FileId } from "@excalidraw/element/types";
+import type { FileId } from "@fcboard/element/types";
 
 import { getDefaultAppState } from "../appState";
 import { getDataURL } from "../data/blob";
 import { encodePngMetadata } from "../data/image";
 import { serializeAsJSON } from "../data/json";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import {
   decodeSvgBase64Payload,
   encodeSvgBase64Payload,
@@ -48,7 +48,7 @@ Object.defineProperty(window, "TextDecoder", {
 
 describe("export", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   it("export embedded png and reimport", async () => {
@@ -211,7 +211,7 @@ describe("export", () => {
 
     // expect 1 <image> element (deduped)
     expect(svgText.match(/<image/g)?.length).toBe(1);
-    // expect 4 <use> elements (one for each excalidraw image element)
+    // expect 4 <use> elements (one for each fcboard image element)
     expect(svgText.match(/<use/g)?.length).toBe(4);
 
     // in case of regressions, save the SVG to a file and visually compare to:

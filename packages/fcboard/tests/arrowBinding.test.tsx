@@ -1,21 +1,18 @@
-import { reseed } from "@excalidraw/common";
-import {
-  isElbowArrow,
-  projectFixedPointOntoDiagonal,
-} from "@excalidraw/element";
+import { reseed } from "@fcboard/common";
+import { isElbowArrow, projectFixedPointOntoDiagonal } from "@fcboard/element";
 
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@fcboard/math";
 
 import type {
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
-  ExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardArrowElement,
+  FcboardBindableElement,
+  FcboardElement,
+} from "@fcboard/element/types";
 
 import { actionToggleArrowBinding } from "../actions/actionToggleArrowBinding";
-import { Excalidraw, sceneCoordsToViewportCoords } from "../index";
+import { Fcboard, sceneCoordsToViewportCoords } from "../index";
 
 import { API } from "./helpers/api";
 import { Pointer, UI } from "./helpers/ui";
@@ -69,7 +66,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
   beforeEach(async () => {
     localStorage.clear();
     reseed(7);
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
     h.state.width = 1920;
     h.state.height = 1080;
   });
@@ -151,7 +148,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
 
       await waitFor(() => {
         const arrow = h.elements.find(
-          (el): el is ExcalidrawArrowElement => el.type === "arrow",
+          (el): el is FcboardArrowElement => el.type === "arrow",
         );
         expect(arrow).toBeDefined();
         expect(arrow!.startBinding).not.toBeNull();
@@ -183,7 +180,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
 
       await waitFor(() => {
         const arrow = h.elements.find(
-          (el): el is ExcalidrawArrowElement => el.type === "arrow",
+          (el): el is FcboardArrowElement => el.type === "arrow",
         );
         expect(arrow).toBeDefined();
         expect(arrow!.startBinding).toBeNull();
@@ -214,7 +211,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
 
       await waitFor(() => {
         const arrow = h.elements.find(
-          (el): el is ExcalidrawArrowElement => el.type === "arrow",
+          (el): el is FcboardArrowElement => el.type === "arrow",
         );
         expect(arrow).toBeDefined();
         expect(arrow!.endBinding).toBeNull();
@@ -244,7 +241,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
 
       await waitFor(() => {
         const arrow = h.elements.find(
-          (el): el is ExcalidrawArrowElement => el.type === "arrow",
+          (el): el is FcboardArrowElement => el.type === "arrow",
         );
         expect(arrow).toBeDefined();
         expect(arrow!.startBinding).not.toBeNull();
@@ -259,7 +256,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
         y: 500,
         width: 200,
         height: 120,
-      }) as ExcalidrawBindableElement;
+      }) as FcboardBindableElement;
       API.setElements([rect]);
 
       // Turn off arrow binding
@@ -276,7 +273,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
       mouse.downAt(700, 400);
       mouse.upAt(760, 460);
 
-      let arrow: ExcalidrawArrowElement;
+      let arrow: FcboardArrowElement;
       await waitFor(() => {
         const maybeArrow = h.elements.find(isElbowArrow);
         expect(maybeArrow).toBeDefined();
@@ -338,7 +335,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
         y: 100,
         width: 400,
         height: 200,
-      }) as ExcalidrawBindableElement;
+      }) as FcboardBindableElement;
       const arrow = API.createElement({
         type: "arrow",
         x: 0,
@@ -346,8 +343,8 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
         width: 502,
         height: -48,
         points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(502, -48)],
-      }) as ExcalidrawArrowElement;
-      const elementsMap = new Map<string, ExcalidrawElement>([
+      }) as FcboardArrowElement;
+      const elementsMap = new Map<string, FcboardElement>([
         [rect.id, rect],
         [arrow.id, arrow],
       ]);

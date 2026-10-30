@@ -1,6 +1,6 @@
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 import shadow from "./voice-orb-assets/shadow.png?url";
 import background from "./voice-orb-assets/icon-bg.png?url";

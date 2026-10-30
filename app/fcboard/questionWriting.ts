@@ -1,9 +1,9 @@
-import { FONT_FAMILY } from "@excalidraw/common";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { Fonts } from "@excalidraw/excalidraw/fonts/Fonts";
-import { getCommonBounds, newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { FONT_FAMILY } from "@fcboard/common";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { Fonts } from "@fcboard/fcboard/fonts/Fonts";
+import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
+import { t } from "@fcboard/fcboard/i18n";
 
 import { inkLineHeight, supportsHandwriting } from "./handwriting";
 import { noWritingSpace, prepareLessonText } from "./lessonWriting";
@@ -44,7 +44,7 @@ export const prepareQuestionWriting = async (
     }
     if (!supportsHandwriting(text)) {
       await Fonts.loadElementsFonts(
-        convertToExcalidrawElements([
+        convertToFcboardElements([
           {
             type: "text",
             x: 0,

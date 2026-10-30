@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useRef } from "react";
 import { createPortal } from "react-dom";
 
-import { KEYS } from "@excalidraw/common";
+import { KEYS } from "@fcboard/common";
 
 import { useCreatePortalContainer } from "../hooks/useCreatePortalContainer";
 
@@ -21,11 +21,11 @@ export const Modal: React.FC<{
 }> = (props) => {
   const { closeOnClickOutside = true } = props;
   const modalRoot = useCreatePortalContainer({
-    className: "excalidraw-modal-container",
+    className: "fcboard-modal-container",
   });
 
   const animationsDisabledRef = useRef(
-    document.body.classList.contains("excalidraw-animations-disabled"),
+    document.body.classList.contains("fcboard-animations-disabled"),
   );
 
   if (!modalRoot) {

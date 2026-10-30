@@ -1,10 +1,10 @@
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   CloseIcon,
   fullscreenIcon,
   palette,
-} from "@excalidraw/excalidraw/components/icons";
+} from "@fcboard/fcboard/components/icons";
 
 import { classroomCommands } from "./commands";
 

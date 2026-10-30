@@ -1,7 +1,7 @@
-import { randomId } from "@excalidraw/common";
+import { randomId, FONT_FAMILY, getLineHeight } from "@fcboard/common";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElement } from "@fcboard/element/types";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { layoutBoardText } from "./textLayout";
 
@@ -17,6 +17,7 @@ type WritingPart = {
   angle: number;
   rectangle: boolean;
   text?: string;
+  color?: string;
   insertion: Insertion;
   groupIds: readonly string[];
 };
@@ -27,7 +28,7 @@ export type InsertionWritingTarget = WritingPart & {
 };
 
 export const boardWritingParts = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
 ): WritingPart[] =>
   elements.flatMap((element) => {
     const insertion = element.customData?.fcInsertion as Insertion | undefined;
@@ -48,6 +49,7 @@ export const boardWritingParts = (
                 ? element.originalText || element.text
                 : undefined,
             insertion,
+            color: element.strokeColor,
             groupIds: element.groupIds,
           },
         ]
@@ -58,7 +60,9 @@ export const documentWritingParts = (
   strokes: readonly InkStroke[],
 ): WritingPart[] =>
   strokes.flatMap((stroke) => {
-    if (!stroke.insertion) {
+    // Cell handwriting is content, not another table/node boundary. In particular,
+    // never spread an arbitrarily long handwritten path into Math.min/max here.
+    if (!stroke.insertion || stroke.insertion.inkCell !== undefined) {
       return [];
     }
     const xs = stroke.points.map(([x]) => x);
@@ -73,6 +77,7 @@ export const documentWritingParts = (
         angle: 0,
         rectangle: !stroke.text && stroke.points.length === 5,
         text: stroke.originalText || stroke.text,
+        color: stroke.color,
         insertion: stroke.insertion,
         groupIds: [stroke.insertion.id],
       },
@@ -101,13 +106,32 @@ export const insertionWritingTargets = (
       return [];
     }
     const index = part.insertion.textIndex!;
-    const text = parts
+    const runs = parts
       .filter((item) => ownsText({ insertion: part.insertion, index }, item))
-      .map((item) => item.text)
-      .join(" ");
+      .map((item, position) => {
+        const text = item.text || "";
+        const source = item.insertion.labelText;
+        return {
+          text:
+            typeof item.insertion.labelPart === "number" &&
+            typeof source === "string" &&
+            source.trim() === text.trim()
+              ? source
+              : (position ? " " : "") + text,
+          color: item.color || "#333333",
+        };
+      });
+    const text = runs
+      .map((run) => run.text)
+      .join("")
+      .trim()
+      .replace(/\s+/g, " ");
+    const textRuns = [...(part.insertion.textRuns || [])];
+    textRuns[index] = runs;
     return [
       {
         ...part,
+        insertion: { ...part.insertion, textRuns },
         text,
         index,
         key: `${part.insertion.id}:${index}`,
@@ -119,6 +143,7 @@ export const insertionWritingTargets = (
           part.height,
           part.angle,
           text,
+          runs,
         ]),
       },
     ];
@@ -156,7 +181,7 @@ export const insertionWritingText = (
   input: string,
   color: string,
   sourceIds: string[],
-): ExcalidrawElementSkeleton | undefined => {
+): FcboardElementSkeleton | undefined => {
   const text = [target.text?.trim(), input.trim()]
     .filter(Boolean)
     .join(" ")
@@ -165,16 +190,22 @@ export const insertionWritingText = (
     return;
   }
   const alphabet = target.insertion.kind === "fourline";
+  const nativeNode = !!target.insertion.nodeStyles;
+  const fontFamily = alphabet
+    ? FONT_FAMILY.FactoryHandwriting
+    : FONT_FAMILY.Helvetica;
   const inset = alphabet
     ? target.width * 0.104
-    : Math.min(8, target.width * 0.1);
+    : Math.min(nativeNode ? 30 : 8, target.width * 0.1);
   const top = target.y + target.height * (alphabet ? 0.13 : 0.1);
   const left = target.x + inset;
-  const fontSize = target.height * (alphabet ? 0.528 : 20 / 48);
+  const fontSize =
+    target.height *
+    (alphabet || nativeNode ? 0.66 / getLineHeight(fontFamily) : 20 / 48);
   const layout = layoutBoardText(
     text,
     fontSize,
-    2,
+    fontFamily,
     {
       left,
       top,
@@ -203,13 +234,22 @@ export const insertionWritingText = (
     dx * Math.sin(target.angle) +
     dy * Math.cos(target.angle) -
     layout.height / 2;
+  const textRuns = [...(target.insertion.textRuns || [])];
+  textRuns[target.index] = [
+    ...(target.text
+      ? target.insertion.textRuns?.[target.index] || [
+          { text: target.text, color: target.color || color },
+        ]
+      : []),
+    { text: (target.text ? " " : "") + input.trim(), color },
+  ];
   return {
     ...layout,
     id: randomId(),
     type: "text",
     x,
     y,
-    angle: target.angle as ExcalidrawElement["angle"],
+    angle: target.angle as FcboardElement["angle"],
     groupIds: [...target.groupIds],
     strokeColor: color,
     customData: {
@@ -217,6 +257,7 @@ export const insertionWritingText = (
       fcRecognizedSource: sourceIds,
       fcInsertion: {
         ...target.insertion,
+        textRuns,
         origin: { x, y },
         textIndex: target.index,
       },

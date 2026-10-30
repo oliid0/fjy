@@ -1,7 +1,7 @@
 import { Tabs as RadixTabs } from "radix-ui";
 
 import { useUIAppState } from "../../context/ui-appState";
-import { useExcalidrawSetAppState } from "../App";
+import { useFcboardSetAppState } from "../App";
 
 export const SidebarTabs = ({
   children,
@@ -10,7 +10,7 @@ export const SidebarTabs = ({
   children: React.ReactNode;
 } & Omit<React.RefAttributes<HTMLDivElement>, "onSelect">) => {
   const appState = useUIAppState();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   if (!appState.openSidebar) {
     return null;

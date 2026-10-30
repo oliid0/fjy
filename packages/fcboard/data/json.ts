@@ -3,11 +3,11 @@ import {
   getExportSource,
   MIME_TYPES,
   VERSIONS,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { ExcalidrawElement, NonDeleted } from "@excalidraw/element/types";
+import type { FcboardElement, NonDeleted } from "@fcboard/element/types";
 
-import type { MaybePromise } from "@excalidraw/common/utility-types";
+import type { MaybePromise } from "@fcboard/common/utility-types";
 
 import { cleanAppStateForExport, clearAppStateForDatabase } from "../appState";
 
@@ -23,7 +23,7 @@ import type {
 } from "./types";
 
 export type JSONExportData = {
-  elements: readonly NonDeleted<ExcalidrawElement>[];
+  elements: readonly NonDeleted<FcboardElement>[];
   appState: AppState;
   files: BinaryFiles;
 };
@@ -32,7 +32,7 @@ export type JSONExportData = {
  * Strips out files which are only referenced by deleted elements
  */
 const filterOutDeletedFiles = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   files: BinaryFiles,
 ) => {
   const nextFiles: BinaryFiles = {};
@@ -50,14 +50,14 @@ const filterOutDeletedFiles = (
 };
 
 export const serializeAsJSON = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: Partial<AppState>,
   files: BinaryFiles,
   type: "local" | "database",
 ): string => {
   const data: ExportedDataState = {
-    type: EXPORT_DATA_TYPES.excalidraw,
-    version: VERSIONS.excalidraw,
+    type: EXPORT_DATA_TYPES.fcboard,
+    version: VERSIONS.fcboard,
     source: getExportSource(),
     elements,
     appState:
@@ -86,13 +86,13 @@ export const saveAsJSON = async ({
   const blob = Promise.resolve(data).then(({ elements, appState, files }) => {
     const serialized = serializeAsJSON(elements, appState, files, "local");
     return new Blob([serialized], {
-      type: MIME_TYPES.excalidraw,
+      type: MIME_TYPES.fcboard,
     });
   });
 
   const savedFileHandle = await fileSave(blob, {
     name: filename,
-    extension: "excalidraw",
+    extension: "fcboard",
     description: "Fcboard file",
     fileHandle: isImageFileHandle(fileHandle) ? null : fileHandle,
   });
@@ -101,24 +101,24 @@ export const saveAsJSON = async ({
 
 export const loadFromJSON = async (
   localAppState: AppState,
-  localElements: readonly ExcalidrawElement[] | null,
+  localElements: readonly FcboardElement[] | null,
 ) => {
   const file = await fileOpen({
     description: "Fcboard files",
     // ToDo: Be over-permissive until https://bugs.webkit.org/show_bug.cgi?id=34442
-    // gets resolved. Else, iOS users cannot open `.excalidraw` files.
-    // extensions: ["json", "excalidraw", "png", "svg"],
+    // gets resolved. Else, iOS users cannot open `.fcboard` files.
+    // extensions: ["json", "fcboard", "png", "svg"],
   });
   return loadFromBlob(file, localAppState, localElements, file.handle);
 };
 
-export const isValidExcalidrawData = (data?: {
+export const isValidFcboardData = (data?: {
   type?: any;
   elements?: any;
   appState?: any;
 }): data is ImportedDataState => {
   return (
-    data?.type === EXPORT_DATA_TYPES.excalidraw &&
+    (data?.type === EXPORT_DATA_TYPES.fcboard || data?.type === "excalidraw") &&
     (!data.elements ||
       (Array.isArray(data.elements) &&
         (!data.appState || typeof data.appState === "object")))
@@ -129,15 +129,16 @@ export const isValidLibrary = (json: any): json is ImportedLibraryData => {
   return (
     typeof json === "object" &&
     json &&
-    json.type === EXPORT_DATA_TYPES.excalidrawLibrary &&
+    (json.type === EXPORT_DATA_TYPES.fcboardlibrary ||
+      json.type === "excalidrawlib") &&
     (json.version === 1 || json.version === 2)
   );
 };
 
 export const serializeLibraryAsJSON = (libraryItems: LibraryItems) => {
   const data: ExportedLibraryData = {
-    type: EXPORT_DATA_TYPES.excalidrawLibrary,
-    version: VERSIONS.excalidrawLibrary,
+    type: EXPORT_DATA_TYPES.fcboardlibrary,
+    version: VERSIONS.fcboardlibrary,
     source: getExportSource(),
     libraryItems,
   };
@@ -148,11 +149,11 @@ export const saveLibraryAsJSON = async (libraryItems: LibraryItems) => {
   const serialized = serializeLibraryAsJSON(libraryItems);
   await fileSave(
     new Blob([serialized], {
-      type: MIME_TYPES.excalidrawlib,
+      type: MIME_TYPES.fcboardlib,
     }),
     {
       name: "library",
-      extension: "excalidrawlib",
+      extension: "fcboardlib",
       description: "Fcboard library file",
     },
   );

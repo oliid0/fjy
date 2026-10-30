@@ -9,18 +9,12 @@ import React, {
   useCallback,
 } from "react";
 
-import {
-  CLASSES,
-  EVENT,
-  isDevEnv,
-  KEYS,
-  updateObject,
-} from "@excalidraw/common";
+import { CLASSES, EVENT, isDevEnv, KEYS, updateObject } from "@fcboard/common";
 
 import { useUIAppState } from "../../context/ui-appState";
 import { atom, useSetAtom } from "../../editor-jotai";
 import { useOutsideClick } from "../../hooks/useOutsideClick";
-import { useEditorInterface, useExcalidrawSetAppState } from "../App";
+import { useEditorInterface, useFcboardSetAppState } from "../App";
 import { Island } from "../Island";
 
 import { SidebarHeader } from "./SidebarHeader";
@@ -63,7 +57,7 @@ export const SidebarInner = forwardRef(
       );
     }
 
-    const setAppState = useExcalidrawSetAppState();
+    const setAppState = useFcboardSetAppState();
 
     const setIsSidebarDockedAtom = useSetAtom(isSidebarDockedAtom);
 

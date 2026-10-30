@@ -1,23 +1,19 @@
 import { act, fireEvent, screen } from "@testing-library/react";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
-import {
-  defaultLang,
-  languages,
-  setLanguage,
-  t,
-} from "@excalidraw/excalidraw/i18n";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
+import { defaultLang, languages, setLanguage, t } from "@fcboard/fcboard/i18n";
 import {
   duplicateElements,
   getCommonBounds,
   newElementWith,
   newFreeDrawElement,
-} from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+} from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import type { LocalPoint } from "@fcboard/math";
 
 import { render } from "./test/render";
 import { languageStudy } from "./test/language";
@@ -28,7 +24,7 @@ import * as ai from "./ai";
 import * as ocr from "./ocr";
 
 const setup = () => {
-  let scene: readonly ExcalidrawElement[] = [];
+  let scene: readonly FcboardElement[] = [];
   const listeners = new Set<() => void>();
   const state = {
     ...getDefaultAppState(),
@@ -51,7 +47,7 @@ const setup = () => {
       }
       listeners.forEach((notify) => notify());
     }),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const source = newFreeDrawElement({
     type: "freedraw",
     x: 200,

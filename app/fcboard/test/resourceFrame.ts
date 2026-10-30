@@ -1,10 +1,10 @@
 import { createRequire } from "node:module";
 import { MessageChannel } from "node:worker_threads";
 
-import { interactiveHtml } from "@excalidraw/excalidraw/interactiveHtml";
-import { attachResourceControls } from "@excalidraw/excalidraw/interactiveResourceControls";
+import { interactiveHtml } from "@fcboard/fcboard/interactiveHtml";
+import { attachResourceControls } from "@fcboard/fcboard/interactiveResourceControls";
 
-import type { ResourceControlTarget } from "@excalidraw/excalidraw/interactiveResourceControls";
+import type { ResourceControlTarget } from "@fcboard/fcboard/interactiveResourceControls";
 
 // jsdom 22 is installed without @types/jsdom. Keep its test-only surface explicit.
 const { JSDOM } = createRequire(import.meta.url)("jsdom") as {

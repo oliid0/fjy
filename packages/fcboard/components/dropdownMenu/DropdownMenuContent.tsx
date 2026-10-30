@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import React, { useCallback, useEffect, useRef } from "react";
 
-import { CLASSES, EVENT, KEYS } from "@excalidraw/common";
+import { CLASSES, EVENT, KEYS } from "@fcboard/common";
 
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 
@@ -96,7 +96,7 @@ const MenuContent = ({
         onCloseAutoFocus={(event: Event) => event.preventDefault()}
       >
         {/* the zIndex ensures this menu has higher stacking order,
-    see https://github.com/excalidraw/excalidraw/pull/1445 */}
+    see https://github.com/fcboard/fcboard/pull/1445 */}
         {editorInterface.formFactor === "phone" ? (
           <Stack.Col className="dropdown-menu-container">{children}</Stack.Col>
         ) : (

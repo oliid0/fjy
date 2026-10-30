@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import {
   act,
   fireEvent,
@@ -6,15 +6,14 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { pointFrom } from "@excalidraw/math";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { pointFrom } from "@fcboard/math";
 
-import type {
-  DataURL,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render as renderWithProvider } from "./test/render";
 import { writeQuestion } from "./test/question";
@@ -42,8 +41,8 @@ import { lessonSessions } from "./teaching";
 
 import type { InkStroke } from "./documents";
 
-vi.mock("@excalidraw/excalidraw", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@excalidraw/excalidraw")>()),
+vi.mock("@fcboard/fcboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@fcboard/fcboard")>()),
   ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
@@ -52,21 +51,19 @@ vi.mock("./BoardSwitcher", () => ({ BoardSwitcher: () => null }));
 
 const render = (component: React.ReactElement) =>
   renderWithProvider(
-    <div className="excalidraw" data-excalidraw-id="classroom-test">
+    <div className="fcboard" data-fcboard-id="classroom-test">
       {component}
     </div>,
   );
 
 describe("selection-driven classroom controls", () => {
-  let scene: readonly ExcalidrawElement[];
-  let api: ExcalidrawImperativeAPI;
+  let scene: readonly FcboardElement[];
+  let api: FcboardImperativeAPI;
   let selected: Record<string, boolean>;
   let change: Set<() => void>;
   let cursorButton: "up" | "down";
   const selectText = (text: string) => {
-    scene = convertToExcalidrawElements([
-      { type: "text", x: 100, y: 100, text },
-    ]);
+    scene = convertToFcboardElements([{ type: "text", x: 100, y: 100, text }]);
     selected = { [scene[0].id]: true };
   };
   beforeEach(() => {
@@ -112,14 +109,12 @@ describe("selection-driven classroom controls", () => {
         }
         change.forEach((listener) => listener());
       }),
-      onChange: (
-        listener: Parameters<ExcalidrawImperativeAPI["onChange"]>[0],
-      ) => {
+      onChange: (listener: Parameters<FcboardImperativeAPI["onChange"]>[0]) => {
         const notify = () => listener(scene, api.getAppState(), {});
         change.add(notify);
         return () => change.delete(notify);
       },
-    } as unknown as ExcalidrawImperativeAPI;
+    } as unknown as FcboardImperativeAPI;
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -2190,14 +2185,8 @@ describe("selection-driven classroom controls", () => {
     }
   });
 
-  it("tests unsaved configuration and displays the actual model reply", async () => {
+  it("automatically saves model changes and keeps keys in the session unless remembering is enabled", async () => {
     saveSettings({ ...defaults, apiKey: "test", model: "saved-model" }, false);
-    vi.spyOn(ai, "boardContext").mockResolvedValue({
-      elements: [],
-      text: "",
-      image: undefined,
-    });
-    vi.spyOn(ai, "chat").mockResolvedValue("连接成功");
     render(<Classroom api={api} />);
     await act(async () => {
       await classroomCommands.execute({
@@ -2205,34 +2194,35 @@ describe("selection-driven classroom controls", () => {
         args: { panel: "settings" },
       });
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.models_and_connection") }),
-    );
     fireEvent.change(
       screen.getByPlaceholderText(t("fcboard.enter_a_vision_model_id")),
       {
-        target: { value: "unsaved-model" },
+        target: { value: "updated-model" },
       },
     );
+    expect(currentSettings().model).toBe("updated-model");
+    expect(currentSettings().apiKey).toBe("test");
+    expect(JSON.parse(localStorage.getItem("fcboard-settings")!).apiKey).toBe(
+      "",
+    );
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.save_settings") }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: t("fcboard.test_current_settings"),
+      }),
+    ).toBeNull();
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.test_current_settings") }),
-    );
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent(
-        t(
-          "fcboard.connection_test_result_result_write_on_the_board_to_test_image_recognition",
-          {
-            result: "连接成功",
-          },
+      screen.getByRole("checkbox", {
+        name: t(
+          "fcboard.remember_keys_on_this_device_avoid_on_shared_displays",
         ),
-      ),
+      }),
     );
-    expect(ai.chat).toHaveBeenCalledWith(
-      expect.any(Array),
-      undefined,
-      expect.objectContaining({ model: "unsaved-model" }),
+    expect(JSON.parse(localStorage.getItem("fcboard-settings")!).apiKey).toBe(
+      "test",
     );
-    expect(currentSettings().model).toBe("saved-model");
   });
 
   it("keeps ordinary selections on the canvas without additional AI controls", async () => {
@@ -2518,7 +2508,7 @@ describe("selection-driven classroom controls", () => {
     "answers selected geometry with the configured screenshot attachment (%s)",
     async (selectionImages) => {
       saveSettings({ ...currentSettings(), selectionImages }, false);
-      scene = convertToExcalidrawElements([
+      scene = convertToFcboardElements([
         { type: "rectangle", x: 100, y: 100, width: 120, height: 80 },
         { type: "text", x: 100, y: 210, text: "解释这个图形" },
       ]);
@@ -2602,15 +2592,13 @@ describe("selection-driven classroom controls", () => {
     await act(async () => {
       await classroomCommands.execute({ name: "board.settings" });
     });
+    fireEvent.click(screen.getByText(t("fcboard.ai_and_speech_settings")));
     fireEvent.click(screen.getByText(t("fcboard.handwriting_and_insertion")));
     const setting = screen.getByRole("checkbox", {
       name: t("fcboard.attach_selection_image_to_ai"),
     });
     expect(setting).not.toBeChecked();
     fireEvent.click(setting);
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.save_settings") }),
-    );
     expect(currentSettings().selectionImages).toBe(true);
   });
 
@@ -2912,7 +2900,7 @@ describe("selection-driven classroom controls", () => {
         y: 100,
         points: [pointFrom(0, 0), pointFrom(40, 30)],
       });
-      const text = convertToExcalidrawElements([
+      const text = convertToFcboardElements([
         { type: "text", text: " laws", x: 160, y: 100 },
       ])[0];
       scene = [ink, text];

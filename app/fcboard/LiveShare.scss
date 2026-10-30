@@ -1,0 +1,153 @@
+.fc-classroom .fc-network-panel {
+  position: relative;
+  inset: auto;
+  max-height: calc(100dvh - 24px);
+  &.fc-live-share-picker {
+    width: 250px;
+    min-height: 151px;
+    padding: 39px 28px 40px;
+    border: 1px solid #00000038;
+    border-radius: 18px;
+    background: #fafafa;
+    box-sizing: border-box;
+    position: relative;
+
+    > header {
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+
+      > strong {
+        display: none;
+      }
+      > button {
+        width: 20px;
+        height: 20px;
+        min-height: 0;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        > img {
+          width: 20px;
+          height: 20px;
+        }
+      }
+    }
+    .fc-live-share-choices {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      > button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        flex: 0 0 72px;
+        width: 72px;
+        height: 72px;
+        min-height: 0;
+        padding: 0;
+        gap: 5px;
+        background: #f2f2f6;
+        color: #333;
+        border: 0;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 400;
+        > img {
+          width: 26px;
+          height: 26px;
+        }
+        > span {
+          max-width: 100%;
+          overflow-wrap: anywhere;
+        }
+      }
+    }
+    > .fc-transient-message {
+      margin-top: 10px;
+    }
+  }
+  &.fc-live-share-config {
+    padding: 20px;
+    width: min(373px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    box-sizing: border-box;
+    border-radius: 22px;
+    background: #fafafa;
+    > header > button {
+      min-height: 36px;
+      min-width: 36px;
+      padding: 8px;
+      background: transparent;
+    }
+    > header > button > img {
+      width: 20px;
+      height: 20px;
+    }
+    .fc-live-share-cloud {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      > label {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        font-size: 13px;
+      }
+      input {
+        box-sizing: border-box;
+        min-width: 0;
+        width: 100%;
+      }
+      p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .fc-live-share-back {
+        align-self: flex-start;
+        min-height: 36px;
+        padding: 6px 14px;
+        background: #eee;
+        color: #333;
+      }
+    }
+  }
+  &.fc-share-qr-dialog > header > button {
+    padding: 0;
+    min-height: 24px;
+    width: 24px;
+    height: 24px;
+    > img {
+      width: 24px;
+      height: 24px;
+    }
+  }
+}
+@media (pointer: coarse), (max-width: 600px) {
+  .fc-classroom .fc-network-panel.fc-live-share-picker {
+    padding-top: 48px;
+    padding-bottom: 24px;
+  }
+  .fc-classroom .fc-network-panel.fc-live-share-picker > header {
+    top: 0;
+    right: 0;
+    > button {
+      min-height: 44px;
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+    }
+  }
+  .fc-classroom .fc-network-panel.fc-live-share-config .fc-live-share-back {
+    min-height: 44px;
+  }
+}

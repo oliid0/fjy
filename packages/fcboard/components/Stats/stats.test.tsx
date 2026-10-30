@@ -1,23 +1,23 @@
-import { degreesToRadians, pointFrom, pointRotateRads } from "@excalidraw/math";
+import { degreesToRadians, pointFrom, pointRotateRads } from "@fcboard/math";
 import { act, fireEvent, queryByTestId } from "@testing-library/react";
 import React from "react";
 import { vi } from "vitest";
 
-import { setDateTimeForTests, reseed } from "@excalidraw/common";
+import { setDateTimeForTests, reseed } from "@fcboard/common";
 
-import { isInGroup } from "@excalidraw/element";
+import { isInGroup } from "@fcboard/element";
 
-import { isTextElement } from "@excalidraw/element";
+import { isTextElement } from "@fcboard/element";
 
-import type { Degrees } from "@excalidraw/math";
+import type { Degrees } from "@fcboard/math";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardLinearElement,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
-import { Excalidraw, getCommonBounds } from "../..";
+import { Fcboard, getCommonBounds } from "../..";
 import { actionGroup } from "../../actions";
 import { t } from "../../i18n";
 import * as StaticScene from "../../renderer/staticScene";
@@ -40,7 +40,7 @@ let stats: HTMLElement | null = null;
 let elementStats: HTMLElement | null | undefined = null;
 
 const testInputProperty = (
-  element: ExcalidrawElement,
+  element: FcboardElement,
   property: "x" | "y" | "width" | "height" | "angle" | "fontSize",
   label: string,
   initialValue: number,
@@ -96,7 +96,7 @@ describe("binding with linear elements", () => {
     reseed(19);
     setDateTimeForTests("201933152653");
 
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
 
     API.setElements([]);
 
@@ -129,7 +129,7 @@ describe("binding with linear elements", () => {
   });
 
   it("should remain bound to linear element on small position change", async () => {
-    const linear = h.elements[1] as ExcalidrawLinearElement;
+    const linear = h.elements[1] as FcboardLinearElement;
     const inputX = UI.queryStatsProperty("X")?.querySelector(
       ".drag-input",
     ) as HTMLInputElement;
@@ -140,7 +140,7 @@ describe("binding with linear elements", () => {
   });
 
   it("should unbind linear element on large position change", async () => {
-    const linear = h.elements[1] as ExcalidrawLinearElement;
+    const linear = h.elements[1] as FcboardLinearElement;
     const inputX = UI.queryStatsProperty("X")?.querySelector(
       ".drag-input",
     ) as HTMLInputElement;
@@ -160,7 +160,7 @@ describe("stats for a generic element", () => {
     reseed(7);
     setDateTimeForTests("201933152653");
 
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
 
     API.setElements([]);
 
@@ -334,7 +334,7 @@ describe("stats for a non-generic element", () => {
     reseed(7);
     setDateTimeForTests("201933152653");
 
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
 
     API.setElements([]);
 
@@ -365,7 +365,7 @@ describe("stats for a non-generic element", () => {
       editor.blur();
     });
 
-    const text = h.elements[0] as ExcalidrawTextElement;
+    const text = h.elements[0] as FcboardTextElement;
     mouse.clickOn(text);
 
     elementStats = stats?.querySelector("#elementStats");
@@ -492,7 +492,7 @@ describe("stats for multiple elements", () => {
     reseed(7);
     setDateTimeForTests("201933152653");
 
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
 
     API.setElements([]);
 
@@ -723,7 +723,7 @@ describe("frame resizing behavior", () => {
     reseed(7);
     setDateTimeForTests("201933152653");
 
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
 
     API.setElements([]);
 

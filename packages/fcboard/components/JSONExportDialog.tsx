@@ -1,8 +1,8 @@
 import React from "react";
 
-import { getFrame } from "@excalidraw/common";
+import { getFrame } from "@fcboard/common";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { actionSaveFileToDisk } from "../actions/actionExport";
 
@@ -22,7 +22,7 @@ import type { ActionManager } from "../actions/manager";
 import type { ExportOpts, BinaryFiles, UIAppState } from "../types";
 
 export type ExportCB = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   scale?: number,
 ) => void;
 
@@ -39,7 +39,7 @@ const JSONExportModal = ({
   appState: UIAppState;
   setAppState: React.Component<any, UIAppState>["setState"];
   files: BinaryFiles;
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   actionManager: ActionManager;
   onCloseRequest: () => void;
   exportOpts: ExportOpts;
@@ -109,7 +109,7 @@ export const JSONExportDialog = ({
   canvas,
   setAppState,
 }: {
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   appState: UIAppState;
   files: BinaryFiles;
   actionManager: ActionManager;

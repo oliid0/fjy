@@ -1,4 +1,4 @@
-import { normalizeInputColor } from "@excalidraw/common";
+import { normalizeInputColor } from "@fcboard/common";
 
 describe("normalizeInputColor", () => {
   describe("hex colors", () => {

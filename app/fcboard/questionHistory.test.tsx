@@ -1,8 +1,9 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
-import { act, render } from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
+import { Fcboard } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { act, render } from "@fcboard/fcboard/tests/test-utils";
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { registerCanvasCommands } from "./canvasCommands";
 import { classroomCommands } from "./commands";
@@ -10,9 +11,9 @@ import { updateQuestionAnswer } from "./questionAnswer";
 import { handwritingText } from "./handwriting";
 
 it("undoes mixed raw and dictated question writing as one real editor transaction", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const view = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;
@@ -55,9 +56,9 @@ it("undoes mixed raw and dictated question writing as one real editor transactio
 });
 
 it("undoes the visible answer directly and restores its fold controls on redo", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const view = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;

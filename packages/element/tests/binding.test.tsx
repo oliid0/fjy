@@ -1,20 +1,16 @@
-import { KEYS, arrayToMap } from "@excalidraw/common";
+import { KEYS, arrayToMap } from "@fcboard/common";
 
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import { actionWrapTextInContainer } from "@excalidraw/excalidraw/actions/actionBoundText";
+import { actionWrapTextInContainer } from "@fcboard/fcboard/actions/actionBoundText";
 
-import { Excalidraw, isLinearElement } from "@excalidraw/excalidraw";
+import { Fcboard, isLinearElement } from "@fcboard/fcboard";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { UI, Pointer, Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import {
-  act,
-  fireEvent,
-  render,
-} from "@excalidraw/excalidraw/tests/test-utils";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+import { UI, Pointer, Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { act, fireEvent, render } from "@fcboard/fcboard/tests/test-utils";
 
-import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
+import { defaultLang, setLanguage } from "@fcboard/fcboard/i18n";
 
 import { getTransformHandles } from "../src/transformHandles";
 import {
@@ -23,8 +19,8 @@ import {
 } from "../../fcboard/tests/queries/dom";
 
 import type {
-  ExcalidrawArrowElement,
-  ExcalidrawLinearElement,
+  FcboardArrowElement,
+  FcboardLinearElement,
   FixedPointBinding,
 } from "../src/types";
 
@@ -40,7 +36,7 @@ describe("binding for simple arrows", () => {
       await act(() => {
         return setLanguage(defaultLang);
       });
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
     });
 
     it("should create an `inside` binding", () => {
@@ -59,7 +55,7 @@ describe("binding for simple arrows", () => {
       mouse.moveTo(160, 160);
       mouse.up();
 
-      const arrow = API.getSelectedElement() as ExcalidrawLinearElement;
+      const arrow = API.getSelectedElement() as FcboardLinearElement;
       expect(arrow.x).toBe(110);
       expect(arrow.y).toBe(110);
 
@@ -185,7 +181,7 @@ describe("binding for simple arrows", () => {
       await act(() => {
         return setLanguage(defaultLang);
       });
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
     });
 
     it("should handle new arrow start point binding", () => {
@@ -203,7 +199,7 @@ describe("binding for simple arrows", () => {
       mouse.moveTo(250, 150); // End outside
       mouse.up();
 
-      const arrow = API.getSelectedElement() as ExcalidrawLinearElement;
+      const arrow = API.getSelectedElement() as FcboardLinearElement;
 
       // Arrow should have start binding to rectangle
       expect(arrow.startBinding?.elementId).toBe(rectangle.id);
@@ -226,7 +222,7 @@ describe("binding for simple arrows", () => {
       mouse.moveTo(95, 95); // End near rectangle edge (should bind as orbit)
       mouse.up();
 
-      const arrow = API.getSelectedElement() as ExcalidrawLinearElement;
+      const arrow = API.getSelectedElement() as FcboardLinearElement;
 
       // Arrow should have end binding to rectangle
       expect(arrow.endBinding?.elementId).toBe(rectangle.id);
@@ -254,7 +250,7 @@ describe("binding for simple arrows", () => {
       mouse.moveTo(160, 160);
       mouse.up();
 
-      const arrow = API.getSelectedElement() as ExcalidrawLinearElement;
+      const arrow = API.getSelectedElement() as FcboardLinearElement;
       expect(arrow.x).toBe(10);
       expect(arrow.y).toBe(10);
       expect(arrow.width).toBeCloseTo(85.75985931287957);
@@ -318,7 +314,7 @@ describe("binding for simple arrows", () => {
       await act(() => {
         return setLanguage(defaultLang);
       });
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
     });
 
     it(
@@ -448,7 +444,7 @@ describe("binding for simple arrows", () => {
       mouse.moveTo(410, 251);
       mouse.clickAt(410, 251);
 
-      const arrow = API.getSelectedElement() as ExcalidrawArrowElement;
+      const arrow = API.getSelectedElement() as FcboardArrowElement;
 
       expect(arrow.startBinding?.elementId).toBe(rectLeft.id);
       expect(arrow.endBinding?.elementId).toBe(rectRight.id);
@@ -525,7 +521,7 @@ describe("binding for simple arrows", () => {
       await act(() => {
         return setLanguage(defaultLang);
       });
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
     });
 
     it("should update binding when text containerized", async () => {

@@ -2,8 +2,8 @@ import {
   getCommonBounds,
   getElementsInGroup,
   selectGroupsFromGivenElements,
-} from "@excalidraw/element";
-import { sceneCoordsToViewportCoords } from "@excalidraw/common";
+} from "@fcboard/element";
+import { sceneCoordsToViewportCoords } from "@fcboard/common";
 
 import { flushSync } from "react-dom";
 

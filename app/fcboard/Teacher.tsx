@@ -1,14 +1,11 @@
-import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { t, useI18n, getLanguage } from "@excalidraw/excalidraw/i18n";
+import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
+import { t, useI18n, getLanguage } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
 
-import {
-  CloseIcon,
-  playerPlayIcon,
-} from "@excalidraw/excalidraw/components/icons";
+import { CloseIcon, playerPlayIcon } from "@fcboard/fcboard/components/icons";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 import { InkQuestion } from "./InkQuestion";
@@ -106,7 +103,7 @@ export const Teacher = ({
   api,
   onCommand,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   onCommand: (
     text: string,
     signal: AbortSignal,

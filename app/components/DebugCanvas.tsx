@@ -2,42 +2,39 @@ import {
   ArrowheadArrowIcon,
   CloseIcon,
   TrashIcon,
-} from "@excalidraw/excalidraw/components/icons";
+} from "@fcboard/fcboard/components/icons";
 import {
   bootstrapCanvas,
   getNormalizedCanvasDimensions,
-} from "@excalidraw/excalidraw/renderer/helpers";
-import { type AppState } from "@excalidraw/excalidraw/types";
-import { arrayToMap, throttleRAF } from "@excalidraw/common";
+} from "@fcboard/fcboard/renderer/helpers";
+import { type AppState } from "@fcboard/fcboard/types";
+import { arrayToMap, throttleRAF } from "@fcboard/common";
 import { useCallback } from "react";
 
 import {
   getGlobalFixedPointForBindableElement,
   isArrowElement,
   isBindableElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   isLineSegment,
   type GlobalPoint,
   type LineSegment,
-} from "@excalidraw/math";
-import { isCurve } from "@excalidraw/math/curve";
+} from "@fcboard/math";
+import { isCurve } from "@fcboard/math/curve";
 
 import React from "react";
 
-import type { Curve } from "@excalidraw/math";
-import type {
-  DebugElement,
-  DebugPolygon,
-} from "@excalidraw/element/visualdebug";
+import type { Curve } from "@fcboard/math";
+import type { DebugElement, DebugPolygon } from "@fcboard/element/visualdebug";
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
+  FcboardArrowElement,
+  FcboardBindableElement,
   FixedPointBinding,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 
 import { STORAGE_KEYS } from "../app_constants";
 
@@ -142,9 +139,7 @@ const _renderBinding = (
     return;
   }
 
-  const bindable = elementsMap.get(
-    binding.elementId,
-  ) as ExcalidrawBindableElement;
+  const bindable = elementsMap.get(binding.elementId) as FcboardBindableElement;
   const [x, y] = getGlobalFixedPointForBindableElement(
     binding.fixedPoint,
     bindable,
@@ -177,9 +172,7 @@ const _renderBindableBinding = (
   height: number,
   color: string,
 ) => {
-  const bindable = elementsMap.get(
-    binding.elementId,
-  ) as ExcalidrawBindableElement;
+  const bindable = elementsMap.get(binding.elementId) as FcboardBindableElement;
   if (!binding.fixedPoint) {
     console.warn("Binding must have a fixedPoint");
     return;
@@ -210,7 +203,7 @@ const _renderBindableBinding = (
 
 const renderBindings = (
   context: CanvasRenderingContext2D,
-  elements: readonly OrderedExcalidrawElement[],
+  elements: readonly OrderedFcboardElement[],
   zoom: number,
 ) => {
   const elementsMap = arrayToMap(elements);
@@ -267,9 +260,7 @@ const renderBindings = (
           return;
         }
 
-        const arrow = elementsMap.get(
-          boundElement.id,
-        ) as ExcalidrawArrowElement;
+        const arrow = elementsMap.get(boundElement.id) as FcboardArrowElement;
 
         if (arrow && arrow.startBinding?.elementId === element.id) {
           _renderBindableBinding(
@@ -333,7 +324,7 @@ const render = (
 const _debugRenderer = (
   canvas: HTMLCanvasElement,
   appState: AppState,
-  elements: readonly OrderedExcalidrawElement[],
+  elements: readonly OrderedFcboardElement[],
   scale: number,
 ) => {
   const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
@@ -409,7 +400,7 @@ export const debugRenderer = throttleRAF(
   (
     canvas: HTMLCanvasElement,
     appState: AppState,
-    elements: readonly OrderedExcalidrawElement[],
+    elements: readonly OrderedFcboardElement[],
     scale: number,
   ) => {
     _debugRenderer(canvas, appState, elements, scale);

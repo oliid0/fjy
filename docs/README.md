@@ -19,7 +19,7 @@ AI 默认使用火山方舟 `https://ark.cn-beijing.volces.com/api/v3/chat/compl
 
 安卓版内置 Moonshine 中文 Tiny Streaming 模型，无需系统语音服务或首次下载；系统语音和自定义接口为可选项。安卓版默认将 sherpa-onnx 1.13.8 和中英文 MeloTTS 权重一起打包，不依赖系统声音服务或首次下载；原生后台分段合成，复用讲课暂停 / 追问 / 恢复。浏览器使用系统声音，自定义 HTTP 播报（包括[可选 IndexTTS 适配器](../services/index-tts/README.md)）可覆盖默认引擎。资源、版本及验证边界见[离线播报](offline-narration.md)。无声音或合成失败时仍可使用字幕教学。浏览器录音需要 HTTPS 或 localhost，自定义服务需允许 CORS。
 
-菜单“设置 → 实时协作”由安卓大屏直接开启本地会话，其他设备扫码即可在浏览器共同书写；元素、图片、删除和撤销同步，持续书写期间每 16 毫秒合并发送。并发沿用原 Excalidraw 版本 / nonce 规则，断线重连和恢复前台会补齐状态。每个会话共享当前一块白板，切换白板会离开 / 结束协作并保存本机内容；旧的云端协作仍需自行配置后端。
+菜单“设置 → 实时协作”由安卓大屏直接开启本地会话，其他设备扫码即可在浏览器共同书写；元素、图片、删除和撤销同步，持续书写期间每 16 毫秒合并发送。并发沿用原 Fcboard 版本 / nonce 规则，断线重连和恢复前台会补齐状态。每个会话共享当前一块白板，切换白板会离开 / 结束协作并保存本机内容；旧的云端协作仍需自行配置后端。
 
 使用 pnpm 10.28.2。验证：`pnpm check`、`pnpm lint`、`pnpm test:other`、`pnpm test`，不运行 Cargo。按仓库约束，本地不执行 build / dev；推送 main 后由 GitHub Actions 执行 Web 打包、生产页面交互、七种真实 Office / PDF 格式预览、APK 打包、Android 单元测试 / lint / 模拟器测试。产物为 `Fcboard-Android-APK`、`Fcboard-Web` 和 `Fcboard-UI-verification`。调试 APK 可安装验收；商店签名需使用自己的密钥。
 

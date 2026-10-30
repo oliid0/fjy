@@ -1,15 +1,15 @@
-import { t } from "@excalidraw/excalidraw/i18n";
-import { factoryBrushWidths } from "@excalidraw/element/factoryBrush";
-import { pointFrom } from "@excalidraw/math";
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { t } from "@fcboard/fcboard/i18n";
+import { factoryBrushWidths } from "@fcboard/element/factoryBrush";
+import { pointFrom } from "@fcboard/math";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import { DEFAULT_ELEMENT_PROPS } from "@excalidraw/common";
+import { DEFAULT_ELEMENT_PROPS } from "@fcboard/common";
 
-import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
+import type { FcboardFreeDrawElement } from "@fcboard/element/types";
 
 import { boardContext } from "../../../app/fcboard/ai";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { getNormalizedZoom } from "../scene";
 import * as StaticScene from "../renderer/staticScene";
 import * as NewElementScene from "../renderer/renderNewElementScene";
@@ -17,7 +17,7 @@ import * as NewElementScene from "../renderer/renderNewElementScene";
 import { API } from "./helpers/api";
 import { act, fireEvent, render, screen, within } from "./test-utils";
 
-import type { ExcalidrawImperativeAPI } from "../types";
+import type { FcboardImperativeAPI } from "../types";
 
 const { h } = window;
 const pointer = (
@@ -56,12 +56,12 @@ describe("APK-style whiteboard ink", () => {
   it("keeps a populated board static while live coalesced pressure ink paints in the overlay and stays readable through the API", async () => {
     const staticPaint = vi.spyOn(StaticScene, "renderStaticScene");
     const inkPaint = vi.spyOn(NewElementScene, "renderNewElementScene");
-    let api!: ExcalidrawImperativeAPI;
+    let api!: FcboardImperativeAPI;
     try {
       const { container } = await render(
-        <Excalidraw
+        <Fcboard
           UIOptions={{ unifiedToolbar: true }}
-          onExcalidrawAPI={(value) => {
+          onFcboardAPI={(value) => {
             api = value;
           }}
         />,
@@ -158,7 +158,7 @@ describe("APK-style whiteboard ink", () => {
     const staticPaint = vi.spyOn(StaticScene, "renderStaticScene");
     try {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       h.state.width = 1600;
       h.state.height = 900;
@@ -221,7 +221,7 @@ describe("APK-style whiteboard ink", () => {
     }
   });
   it("switches local and whole-object erasing through buttons rather than an editable field", async () => {
-    await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     const eraser = screen.getByRole("button", {
       name: t("toolBar.eraser"),
     });
@@ -247,14 +247,14 @@ describe("APK-style whiteboard ink", () => {
     "finishes fountain tips only on lift in multi-stroke mode %s",
     async (multiStroke) => {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => {
         API.setAppState({ currentItemPenMode: "brush", multiStroke });
         h.app.setActiveTool({ type: "freedraw" });
       });
-      const current = () => live()[0] as ExcalidrawFreeDrawElement;
+      const current = () => live()[0] as FcboardFreeDrawElement;
       pointer(canvas, "pointerdown", 100, 200, { pointerType: "pen" });
       pointer(canvas, "pointermove", 200, 200, {
         pointerType: "pen",
@@ -291,7 +291,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("keeps hard and fountain widths independent and uses the firmware's integer thickness range", async () => {
     const { container } = await render(
-      <Excalidraw
+      <Fcboard
         UIOptions={{
           unifiedToolbar: true,
           inkProfile: {
@@ -340,7 +340,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("moves the canvas one-to-one with the touch centroid and reverses immediately at the native scale limit", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => {
@@ -394,7 +394,7 @@ describe("APK-style whiteboard ink", () => {
     "converts provisional single-touch ink to a pinch at zoom %s without leaving a stroke or undo entry",
     async (zoom) => {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => {
@@ -435,7 +435,7 @@ describe("APK-style whiteboard ink", () => {
   );
   it("uses every coalesced screen sample to lock single-touch writing at the APK threshold", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => {
@@ -467,7 +467,7 @@ describe("APK-style whiteboard ink", () => {
     });
     pointer(canvas, "pointerup", 150, 100, { pointerType: "touch" });
     expect(live()).toHaveLength(1);
-    expect((live()[0] as ExcalidrawFreeDrawElement).points).toContainEqual([
+    expect((live()[0] as FcboardFreeDrawElement).points).toContainEqual([
       20, 0,
     ]);
     fireEvent.click(screen.getByTestId("button-undo"));
@@ -477,7 +477,7 @@ describe("APK-style whiteboard ink", () => {
     "recovers single-touch writing after an early pinch is interrupted by %s",
     async (type) => {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => {
@@ -520,7 +520,7 @@ describe("APK-style whiteboard ink", () => {
   );
   it("scales with three and four contacts, and rebases when fingers join or leave", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => {
@@ -563,7 +563,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("reacquires a valid multi-finger baseline after coincident contacts separate", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => {
@@ -603,7 +603,7 @@ describe("APK-style whiteboard ink", () => {
     "cleans gesture contacts on %s and allows the next single-finger drag",
     async (type) => {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => {
@@ -661,10 +661,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("dismisses tool settings with Escape without cancelling the selected tool", async () => {
     await render(
-      <Excalidraw
-        handleKeyboardGlobally
-        UIOptions={{ unifiedToolbar: true }}
-      />,
+      <Fcboard handleKeyboardGlobally UIOptions={{ unifiedToolbar: true }} />,
     );
     const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
     fireEvent.click(eraser);
@@ -686,7 +683,7 @@ describe("APK-style whiteboard ink", () => {
     expect(h.state.activeTool.type).toBe("eraser");
   });
   it("dismisses anchored tool settings when hiding the toolbar and keeps them dismissed after restoring it", async () => {
-    await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     act(() => h.app.setActiveTool({ type: "freedraw" }));
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     expect(
@@ -730,7 +727,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("clears only after the eraser slider reaches its end, preserves the board, and restores content with one undo", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     API.setAppState({
@@ -757,7 +754,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("offers working fountain, highlighter, dashed and rainbow pens without replacing the canvas", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     act(() => h.app.setActiveTool({ type: "freedraw" }));
@@ -803,7 +800,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("keeps committed single-touch writing when another contact joins", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     API.setAppState({ multiStroke: false });
@@ -845,7 +842,7 @@ describe("APK-style whiteboard ink", () => {
     "undoes each completed stroke separately with batched lifts: %s",
     async (batched) => {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => h.app.setActiveTool({ type: "freedraw" }));
@@ -910,7 +907,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("cancels only the affected contact while another user keeps writing", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     API.setAppState({ multiStroke: true });
@@ -943,7 +940,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("uses the host device calibration without persisting it as a drawing preference", async () => {
     const { container } = await render(
-      <Excalidraw
+      <Fcboard
         UIOptions={{
           unifiedToolbar: true,
           inkProfile: {
@@ -973,7 +970,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("erases only the middle of handwriting and undoes the entire eraser gesture once", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     draw(canvas);
@@ -996,7 +993,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("uses a large touch contact to erase temporarily and cancels safely", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     draw(canvas);
@@ -1029,7 +1026,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("starts palm erasing while another pen is down, preserves that handwriting and ignores its late lift", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     draw(canvas);
@@ -1071,7 +1068,7 @@ describe("APK-style whiteboard ink", () => {
     "palm object mode erases inserted text while %s is active and supports cancel and undo",
     async (tool) => {
       const { container } = await render(
-        <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
       );
       const canvas = container.querySelector("canvas.interactive")!;
       const text = API.createElement({
@@ -1102,7 +1099,7 @@ describe("APK-style whiteboard ink", () => {
   );
   it("uses the visible object eraser footprint at its edge and restores the whole object with undo", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     const line = API.createElement({
@@ -1128,7 +1125,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("keeps coalesced handwriting samples and a consistent screen width across zoom and DPR", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     for (const [zoom, dpr] of [
@@ -1164,7 +1161,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("promotes a growing touch contact to an eraser without retaining its initial false pen mark", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     draw(canvas);
@@ -1192,7 +1189,7 @@ describe("APK-style whiteboard ink", () => {
 
   it("erases immediately with a stylus barrel button and preserves the writing tool", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const canvas = container.querySelector("canvas.interactive")!;
     draw(canvas);

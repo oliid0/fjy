@@ -1,19 +1,19 @@
-import { clamp, round } from "@excalidraw/math";
+import { clamp, round } from "@fcboard/math";
 
-import { MIN_WIDTH_OR_HEIGHT } from "@excalidraw/common";
+import { MIN_WIDTH_OR_HEIGHT } from "@fcboard/common";
 import {
   MINIMAL_CROP_SIZE,
   getUncroppedWidthAndHeight,
-} from "@excalidraw/element";
-import { resizeSingleElement } from "@excalidraw/element";
-import { isImageElement } from "@excalidraw/element";
-import { isFrameLikeElement } from "@excalidraw/element";
-import { getElementsInResizingFrame } from "@excalidraw/element";
-import { replaceAllElementsInFrame } from "@excalidraw/element";
+} from "@fcboard/element";
+import { resizeSingleElement } from "@fcboard/element";
+import { isImageElement } from "@fcboard/element";
+import { isFrameLikeElement } from "@fcboard/element";
+import { getElementsInResizingFrame } from "@fcboard/element";
+import { replaceAllElementsInFrame } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import DragInput from "./DragInput";
 import { getStepSizedValue, isPropertyEditable } from "./utils";
@@ -26,13 +26,13 @@ import type { AppState } from "../../types";
 
 interface DimensionDragInputProps {
   property: "width" | "height";
-  element: ExcalidrawElement;
+  element: FcboardElement;
   scene: Scene;
   appState: AppState;
 }
 
 const STEP_SIZE = 10;
-const _shouldKeepAspectRatio = (element: ExcalidrawElement) => {
+const _shouldKeepAspectRatio = (element: FcboardElement) => {
   return element.type === "image";
 };
 

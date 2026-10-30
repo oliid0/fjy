@@ -1,17 +1,16 @@
 import { CapacitorHttp } from "@capacitor/core";
 
-import type {
-  ExcalidrawImperativeAPI,
-  DataURL,
-} from "@excalidraw/excalidraw/types";
-import type { FileId } from "@excalidraw/element/types";
+import type { FcboardImperativeAPI, DataURL } from "@fcboard/fcboard/types";
+
+import type { FileId } from "@fcboard/element/types";
 
 import { classroomCommands } from "./commands";
+
 import { insertionPoint, insertElements } from "./board";
 
 /** Native long-press imports into the visible surface, through the existing object paths. */
 export const insertWebSelection = async (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   selection: { kind: "text" | "image"; value: string },
   signal: AbortSignal,
 ) => {

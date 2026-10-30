@@ -7,7 +7,7 @@ import {
 import { API } from "./tests/helpers/api";
 
 describe("parseClipboard()", () => {
-  it("should parse JSON as plaintext if not excalidraw-api/clipboard data", async () => {
+  it("should parse JSON as plaintext if not fcboard-api/clipboard data", async () => {
     let text;
     let clipboardData;
     // -------------------------------------------------------------------------
@@ -41,7 +41,7 @@ describe("parseClipboard()", () => {
     expect(clipboardData.text).toBe(text);
   });
 
-  it("should parse valid excalidraw JSON if inside text/plain", async () => {
+  it("should parse valid fcboard JSON if inside text/plain", async () => {
     const rect = API.createElement({ type: "rectangle" });
 
     const json = serializeAsClipboardJSON({ elements: [rect], files: null });
@@ -57,7 +57,7 @@ describe("parseClipboard()", () => {
     expect(clipboardData.elements).toEqual([rect]);
   });
 
-  it("should parse valid excalidraw JSON if inside text/html", async () => {
+  it("should parse valid fcboard JSON if inside text/html", async () => {
     const rect = API.createElement({ type: "rectangle" });
 
     let json;

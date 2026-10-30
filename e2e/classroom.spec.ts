@@ -10,7 +10,7 @@ const enterText = async (page: Page, text: string, select = true) => {
   ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
-  const editor = page.locator("textarea.excalidraw-wysiwyg");
+  const editor = page.locator("textarea.fcboard-wysiwyg");
   await expect(editor).toBeVisible();
   await editor.fill(text);
   await editor.press("Escape");
@@ -349,7 +349,7 @@ test("typed equations calculate only after tapping the selection action", async 
     .poll(
       () =>
         page.evaluate(() => {
-          const scene = JSON.parse(localStorage.getItem("excalidraw") || "[]");
+          const scene = JSON.parse(localStorage.getItem("fcboard") || "[]");
           return scene.some(
             (element: { type: string; text?: string; isDeleted?: boolean }) =>
               !element.isDeleted &&
@@ -425,7 +425,7 @@ test("selected handwriting sends its PNG only after tapping calculate", async ({
       () =>
         page.evaluate(
           () =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
               (el: { type: string; text?: string; isDeleted?: boolean }) =>
                 !el.isDeleted && el.type === "text" && el.text === "64",
             ).length,
@@ -497,7 +497,7 @@ test("whole board summary sends a real board image and returns to an editable ca
   expect(
     await page.evaluate(
       () =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
           (element: { isDeleted?: boolean }) => !element.isDeleted,
         ).length,
     ),
@@ -519,7 +519,7 @@ test("whole board summary sends a real board image and returns to an editable ca
     .poll(
       () =>
         page.evaluate(() =>
-          JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+          JSON.parse(localStorage.getItem("fcboard") || "[]").some(
             (element: { type: string }) => element.type === "freedraw",
           ),
         ),
@@ -543,7 +543,7 @@ test("inserting four-line writing paper immediately accepts ink on its surface",
     .poll(() =>
       page.evaluate(
         () =>
-          JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+          JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
             (element: {
               isDeleted?: boolean;
               customData?: { fcInsertion?: { kind: string } };
@@ -555,7 +555,7 @@ test("inserting four-line writing paper immediately accepts ink on its surface",
     )
     .toBe(5);
   const paper = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem("excalidraw") || "[]").find(
+    JSON.parse(localStorage.getItem("fcboard") || "[]").find(
       (element: {
         type: string;
         customData?: { fcInsertion?: { kind: string } };
@@ -572,7 +572,7 @@ test("inserting four-line writing paper immediately accepts ink on its surface",
     .poll(() =>
       page.evaluate(
         () =>
-          JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+          JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
             (element: { type: string; isDeleted?: boolean }) =>
               !element.isDeleted && element.type === "freedraw",
           ).length,

@@ -1,8 +1,4 @@
-import {
-  applyDarkModeFilter,
-  COLOR_PALETTE,
-  rgbToHex,
-} from "@excalidraw/common";
+import { applyDarkModeFilter, COLOR_PALETTE, rgbToHex } from "@fcboard/common";
 
 describe("COLOR_PALETTE", () => {
   it("color palette doesn't regress", () => {

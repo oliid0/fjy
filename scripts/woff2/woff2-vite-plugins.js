@@ -19,14 +19,14 @@ module.exports.woff2BrowserPlugin = () => {
     transform(code, id) {
       // using copy / replace as fonts defined in the `.css` don't have to be manually copied over (vite/rollup does this automatically),
       // but at the same time can't be easily prefixed with the `EXCALIDRAW_ASSET_PATH` only for the `app`
-      if (!isDev && id.endsWith("/excalidraw/fonts/fonts.css")) {
+      if (!isDev && id.endsWith("/fcboard/fonts/fonts.css")) {
         return `/* WARN: The following content is generated during app build */
 
       @font-face {
         font-family: "Assistant";
         src: url(${OSS_FONTS_CDN}fonts/Assistant/Assistant-Regular.woff2)
             format("woff2"),
-          url(./Assistant-Regular.woff2) format("woff2");
+          url(./Assistant/Assistant-Regular.woff2) format("woff2");
         font-weight: 400;
         style: normal;
         display: swap;
@@ -36,7 +36,7 @@ module.exports.woff2BrowserPlugin = () => {
         font-family: "Assistant";
         src: url(${OSS_FONTS_CDN}fonts/Assistant/Assistant-Medium.woff2)
             format("woff2"),
-          url(./Assistant-Medium.woff2) format("woff2");
+          url(./Assistant/Assistant-Medium.woff2) format("woff2");
         font-weight: 500;
         style: normal;
         display: swap;
@@ -46,7 +46,7 @@ module.exports.woff2BrowserPlugin = () => {
         font-family: "Assistant";
         src: url(${OSS_FONTS_CDN}fonts/Assistant/Assistant-SemiBold.woff2)
             format("woff2"),
-          url(./Assistant-SemiBold.woff2) format("woff2");
+          url(./Assistant/Assistant-SemiBold.woff2) format("woff2");
         font-weight: 600;
         style: normal;
         display: swap;
@@ -56,7 +56,7 @@ module.exports.woff2BrowserPlugin = () => {
         font-family: "Assistant";
         src: url(${OSS_FONTS_CDN}fonts/Assistant/Assistant-Bold.woff2)
             format("woff2"),
-          url(./Assistant-Bold.woff2) format("woff2");
+          url(./Assistant/Assistant-Bold.woff2) format("woff2");
         font-weight: 700;
         style: normal;
         display: swap;
@@ -67,7 +67,7 @@ module.exports.woff2BrowserPlugin = () => {
         return code.replace(
           "<!-- PLACEHOLDER:EXCALIDRAW_APP_FONTS -->",
           `<script>
-        // point into our CDN in prod, fallback to root (excalidraw.com) domain in case of issues
+        // point into our CDN in prod, fallback to root (fcboard.com) domain in case of issues
         window.EXCALIDRAW_ASSET_PATH = [
           "${OSS_FONTS_CDN}",
           "${OSS_FONTS_FALLBACK}",

@@ -13,6 +13,37 @@ public class BoardShareServerTest {
         connection.setConnectTimeout(3000); connection.setReadTimeout(3000);
         return connection;
     }
+    @Test public void passwordSwitchKeepsTheLinkAndFourDigitChangesReachTheScanner() throws Exception {
+        byte[] image = new byte[]{(byte)137, 80, 78, 71};
+        BoardShareServer server = new BoardShareServer(Collections.singletonList(image), 60000);
+        server.start(3000, true);
+        try {
+            String root = "/" + server.token + "/";
+            assertFalse(new String(get(server, root).getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("name='password'"));
+            server.setPassword("0123");
+            assertTrue(new String(get(server, root).getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("name='password'"));
+            assertEquals(403, get(server, root + "page-0.png").getResponseCode());
+            server.setPassword("2345");
+            HttpURLConnection wrong = get(server, root);
+            wrong.setRequestMethod("POST"); wrong.setDoOutput(true);
+            wrong.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            wrong.getOutputStream().write("password=0123".getBytes(StandardCharsets.UTF_8));
+            assertTrue(new String(wrong.getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("密码错误"));
+            HttpURLConnection correct = get(server, root);
+            correct.setRequestMethod("POST"); correct.setDoOutput(true);
+            correct.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            correct.getOutputStream().write("password=2345".getBytes(StandardCharsets.UTF_8));
+            assertEquals(200, correct.getResponseCode());
+            assertNotNull(correct.getHeaderField("Set-Cookie"));
+            HttpURLConnection imageRequest = get(server, root + "page-0.png");
+            imageRequest.setRequestProperty("Cookie", correct.getHeaderField("Set-Cookie").split(";")[0]);
+            assertArrayEquals(image, imageRequest.getInputStream().readAllBytes());
+            server.setPassword("");
+            assertArrayEquals(image, get(server, root + "page-0.png").getInputStream().readAllBytes());
+            try { server.setPassword("abcd"); fail("Numeric digits only"); }
+            catch (IllegalArgumentException expected) { }
+        } finally { server.stop(); }
+    }
     @Test public void servesChosenPagesOnlyWithTheUnpredictableShareLink() throws Exception {
         byte[] image = new byte[]{(byte)137, 80, 78, 71, 13, 10, 26, 10};
         BoardShareServer server = new BoardShareServer(Collections.singletonList(image), 60000);

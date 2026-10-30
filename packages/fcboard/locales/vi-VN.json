@@ -91,7 +91,7 @@
     "untitled": "Không có tiêu đề",
     "name": "Tên",
     "yourName": "Tên của bạn",
-    "madeWithExcalidraw": "Làm với Fcboard",
+    "madeWithFcboard": "Làm với Fcboard",
     "group": "Gộp nhóm lại lựa chọn",
     "ungroup": "Tách nhóm lựa chọn",
     "collaborators": "Cộng tác viên",
@@ -121,7 +121,7 @@
     "toggleTheme": "Chuyển đổi giao diện sáng/tối",
     "theme": "Chủ đề",
     "personalLib": "Thư viện cá nhân",
-    "excalidrawLib": "Thư viện Fcboard",
+    "fcboardlib": "Thư viện Fcboard",
     "decreaseFontSize": "Giảm cỡ chữ",
     "increaseFontSize": "Tăng cỡ chữ",
     "unbindText": "Bỏ liên kết văn bản",
@@ -320,7 +320,7 @@
     "laser": "Con trỏ laser",
     "hand": "Tay kéo",
     "extraTools": "Công cụ khác",
-    "mermaidToExcalidraw": "Mermaid sang Fcboard",
+    "mermaidToFcboard": "Mermaid sang Fcboard",
     "convertElementType": "Bâ ̣ t tă ́ t loa ̣ i hi ̀ nh da ̣ ng"
   },
   "element": {

@@ -1,4 +1,4 @@
-import { pointFrom, type GlobalPoint } from "@excalidraw/math";
+import { pointFrom, type GlobalPoint } from "@fcboard/math";
 import clsx from "clsx";
 import {
   useCallback,
@@ -8,15 +8,15 @@ import {
   useState,
 } from "react";
 
-import { EVENT, HYPERLINK_TOOLTIP_DELAY, KEYS } from "@excalidraw/common";
+import { EVENT, HYPERLINK_TOOLTIP_DELAY, KEYS } from "@fcboard/common";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getElementAbsoluteCoords } from "@fcboard/element";
 
-import { hitElementBoundingBox } from "@excalidraw/element";
+import { hitElementBoundingBox } from "@fcboard/element";
 
-import { isElementLink } from "@excalidraw/element";
+import { isElementLink } from "@fcboard/element";
 
-import { getEmbedLink, embeddableURLValidator } from "@excalidraw/element";
+import { getEmbedLink, embeddableURLValidator } from "@fcboard/element";
 
 import {
   sceneCoordsToViewportCoords,
@@ -24,24 +24,24 @@ import {
   wrapEvent,
   isLocalLink,
   normalizeLink,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { isEmbeddableElement } from "@excalidraw/element";
+import { isEmbeddableElement } from "@fcboard/element";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import type {
   ElementsMap,
-  ExcalidrawEmbeddableElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardEmbeddableElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import { trackEvent } from "../../analytics";
 import { getTooltipDiv, updateTooltipPosition } from "../../components/Tooltip";
 
 import { t } from "../../i18n";
 
-import { useAppProps, useEditorInterface, useExcalidrawAppState } from "../App";
+import { useAppProps, useEditorInterface, useFcboardAppState } from "../App";
 import { ToolButton } from "../ToolButton";
 import { FreedrawIcon, TrashIcon, elementLinkIcon } from "../icons";
 import { getSelectedElements } from "../../scene";
@@ -50,7 +50,7 @@ import { getLinkHandleFromCoords } from "./helpers";
 
 import "./Hyperlink.scss";
 
-import type { AppState, ExcalidrawProps, UIAppState } from "../../types";
+import type { AppState, FcboardProps, UIAppState } from "../../types";
 
 const POPUP_WIDTH = 380;
 const POPUP_HEIGHT = 42;
@@ -60,10 +60,7 @@ const AUTO_HIDE_TIMEOUT = 500;
 
 let IS_HYPERLINK_TOOLTIP_VISIBLE = false;
 
-const embeddableLinkCache = new Map<
-  ExcalidrawEmbeddableElement["id"],
-  string
->();
+const embeddableLinkCache = new Map<FcboardEmbeddableElement["id"], string>();
 
 export const Hyperlink = ({
   element,
@@ -73,20 +70,20 @@ export const Hyperlink = ({
   setToast,
   updateEmbedValidationStatus,
 }: {
-  element: NonDeletedExcalidrawElement;
+  element: NonDeletedFcboardElement;
   scene: Scene;
   setAppState: React.Component<any, AppState>["setState"];
-  onLinkOpen: ExcalidrawProps["onLinkOpen"];
+  onLinkOpen: FcboardProps["onLinkOpen"];
   setToast: (
     toast: { message: string; closable?: boolean; duration?: number } | null,
   ) => void;
   updateEmbedValidationStatus: (
-    element: ExcalidrawEmbeddableElement,
+    element: FcboardEmbeddableElement,
     status: boolean,
   ) => void;
 }) => {
   const elementsMap = scene.getNonDeletedElementsMap();
-  const appState = useExcalidrawAppState();
+  const appState = useFcboardAppState();
   const appProps = useAppProps();
   const editorInterface = useEditorInterface();
 
@@ -250,7 +247,7 @@ export const Hyperlink = ({
 
   return (
     <div
-      className="excalidraw-hyperlinkContainer"
+      className="fcboard-hyperlinkContainer"
       style={{
         top: `${y}px`,
         left: `${x}px`,
@@ -260,7 +257,7 @@ export const Hyperlink = ({
     >
       {isEditing ? (
         <input
-          className={clsx("excalidraw-hyperlinkContainer-input")}
+          className={clsx("fcboard-hyperlinkContainer-input")}
           placeholder={t("labels.link.hint")}
           ref={inputRef}
           value={inputVal}
@@ -281,7 +278,7 @@ export const Hyperlink = ({
       ) : element.link ? (
         <a
           href={normalizeLink(element.link || "")}
-          className="excalidraw-hyperlinkContainer-link"
+          className="fcboard-hyperlinkContainer-link"
           target={isLocalLink(element.link) ? "_self" : "_blank"}
           onClick={(event) => {
             if (element.link && onLinkOpen) {
@@ -306,11 +303,11 @@ export const Hyperlink = ({
           {element.link}
         </a>
       ) : (
-        <div className="excalidraw-hyperlinkContainer-link">
+        <div className="fcboard-hyperlinkContainer-link">
           {t("labels.link.empty")}
         </div>
       )}
-      <div className="excalidraw-hyperlinkContainer__buttons">
+      <div className="fcboard-hyperlinkContainer__buttons">
         {!isEditing && (
           <ToolButton
             type="button"
@@ -318,7 +315,7 @@ export const Hyperlink = ({
             aria-label={t("buttons.edit")}
             label={t("buttons.edit")}
             onClick={onEdit}
-            className="excalidraw-hyperlinkContainer--edit"
+            className="fcboard-hyperlinkContainer--edit"
             icon={FreedrawIcon}
           />
         )}
@@ -344,7 +341,7 @@ export const Hyperlink = ({
             aria-label={t("buttons.remove")}
             label={t("buttons.remove")}
             onClick={handleRemove}
-            className="excalidraw-hyperlinkContainer--remove"
+            className="fcboard-hyperlinkContainer--remove"
             icon={TrashIcon}
           />
         )}
@@ -354,7 +351,7 @@ export const Hyperlink = ({
 };
 
 const getCoordsForPopover = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
@@ -369,7 +366,7 @@ const getCoordsForPopover = (
 };
 
 export const getContextMenuLabel = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   appState: UIAppState,
 ) => {
   const selectedElements = getSelectedElements(elements, appState);
@@ -383,7 +380,7 @@ export const getContextMenuLabel = (
 
 let HYPERLINK_TOOLTIP_TIMEOUT_ID: number | null = null;
 export const showHyperlinkTooltip = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
@@ -397,7 +394,7 @@ export const showHyperlinkTooltip = (
 };
 
 const renderTooltip = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
@@ -407,7 +404,7 @@ const renderTooltip = (
 
   const tooltipDiv = getTooltipDiv();
 
-  tooltipDiv.classList.add("excalidraw-tooltip--visible");
+  tooltipDiv.classList.add("fcboard-tooltip--visible");
   tooltipDiv.style.maxWidth = "20rem";
   tooltipDiv.textContent = isElementLink(element.link)
     ? t("labels.link.goToElement")
@@ -446,12 +443,12 @@ export const hideHyperlinkToolip = () => {
   }
   if (IS_HYPERLINK_TOOLTIP_VISIBLE) {
     IS_HYPERLINK_TOOLTIP_VISIBLE = false;
-    getTooltipDiv().classList.remove("excalidraw-tooltip--visible");
+    getTooltipDiv().classList.remove("fcboard-tooltip--visible");
   }
 };
 
 const shouldHideLinkPopup = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   elementsMap: ElementsMap,
   appState: AppState,
   [clientX, clientY]: GlobalPoint,

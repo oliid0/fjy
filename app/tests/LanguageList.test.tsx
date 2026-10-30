@@ -1,17 +1,18 @@
-import { t, defaultLang, languages } from "@excalidraw/excalidraw/i18n";
+import { t, defaultLang, languages } from "@fcboard/fcboard/i18n";
 import { within } from "@testing-library/react";
+
 import {
   screen,
   fireEvent,
   waitFor,
   render,
-} from "@excalidraw/excalidraw/tests/test-utils";
+} from "@fcboard/fcboard/tests/test-utils";
 
-import ExcalidrawApp from "../App";
+import FcboardApp from "../App";
 
 describe("Test LanguageList", () => {
   it("rerenders UI on language change", async () => {
-    await render(<ExcalidrawApp />);
+    await render(<FcboardApp />);
     expect(screen.getByRole("button", { name: "Pen" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Eraser" })).toBeVisible();
 
@@ -21,14 +22,16 @@ describe("Test LanguageList", () => {
     const englishFountain = t("fcboard.fountain");
     expect(screen.getByRole("button", { name: englishFountain })).toBeVisible();
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);
-    expect(screen.getAllByRole("menuitem")).toHaveLength(6);
+    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
     fireEvent.click(
       screen.getByRole("menuitem", { name: t("fcboard.settings") }),
     );
     await screen.findByRole("dialog", {
       name: t("fcboard.whiteboard_settings"),
     });
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.toolbox") }),
+    ).toBeNull();
     for (const label of [
       "recording",
       "files_transfer",
@@ -39,6 +42,10 @@ describe("Test LanguageList", () => {
         screen.queryByRole("menuitem", { name: t(`fcboard.${label}`) }),
       ).toBeNull();
     }
+
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.language") }),
+    );
 
     fireEvent.mouseDown(
       screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
@@ -82,7 +89,9 @@ describe("Test LanguageList", () => {
     await screen.findByRole("dialog", {
       name: t("fcboard.whiteboard_settings"),
     });
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.language") }),
+    );
     // reset language
     fireEvent.mouseDown(
       screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),

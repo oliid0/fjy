@@ -4,7 +4,7 @@ import {
   invariant,
   LINE_CONFIRM_THRESHOLD,
   ROUNDNESS,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import {
   bezierEquation,
@@ -24,15 +24,15 @@ import {
   vectorNormalize,
   vectorScale,
   type GlobalPoint,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
-import type { Curve, LineSegment, LocalPoint } from "@excalidraw/math";
+import type { Curve, LineSegment, LocalPoint } from "@fcboard/math";
 
 import type {
   AppState,
   NormalizedZoomValue,
   Zoom,
-} from "@excalidraw/excalidraw/types";
+} from "@fcboard/fcboard/types";
 
 import { elementCenterPoint, getDiamondPoints } from "./bounds";
 
@@ -50,23 +50,23 @@ import {
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
-  ExcalidrawDiamondElement,
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawRectanguloidElement,
+  FcboardArrowElement,
+  FcboardBindableElement,
+  FcboardDiamondElement,
+  FcboardElement,
+  FcboardFreeDrawElement,
+  FcboardLinearElement,
+  FcboardRectanguloidElement,
 } from "./types";
 
 type ElementShape = [LineSegment<GlobalPoint>[], Curve<GlobalPoint>[]];
 
 const ElementShapesCache = new WeakMap<
-  ExcalidrawElement,
-  { version: ExcalidrawElement["version"]; shapes: Map<number, ElementShape> }
+  FcboardElement,
+  { version: FcboardElement["version"]; shapes: Map<number, ElementShape> }
 >();
 
-const getElementShapesCacheEntry = <T extends ExcalidrawElement>(
+const getElementShapesCacheEntry = <T extends FcboardElement>(
   element: T,
   offset: number,
 ): ElementShape | undefined => {
@@ -86,7 +86,7 @@ const getElementShapesCacheEntry = <T extends ExcalidrawElement>(
   return shapes.get(offset);
 };
 
-const setElementShapesCacheEntry = <T extends ExcalidrawElement>(
+const setElementShapesCacheEntry = <T extends FcboardElement>(
   element: T,
   shape: ElementShape,
   offset: number,
@@ -123,7 +123,7 @@ const setElementShapesCacheEntry = <T extends ExcalidrawElement>(
  * @returns The rotated in components.
  */
 export function deconstructLinearOrFreeDrawElement(
-  element: ExcalidrawLinearElement | ExcalidrawFreeDrawElement,
+  element: FcboardLinearElement | FcboardFreeDrawElement,
 ): [LineSegment<GlobalPoint>[], Curve<GlobalPoint>[]] {
   const cachedShape = getElementShapesCacheEntry(element, 0);
 
@@ -210,7 +210,7 @@ export function deconstructLinearOrFreeDrawElement(
  * @returns Tuple of **unrotated** line segments (0) and curves (1)
  */
 export function deconstructRectanguloidElement(
-  element: ExcalidrawRectanguloidElement,
+  element: FcboardRectanguloidElement,
   offset: number = 0,
 ): [LineSegment<GlobalPoint>[], Curve<GlobalPoint>[]] {
   const cachedShape = getElementShapesCacheEntry(element, offset);
@@ -342,7 +342,7 @@ export function deconstructRectanguloidElement(
 }
 
 export function getDiamondBaseCorners(
-  element: ExcalidrawDiamondElement,
+  element: FcboardDiamondElement,
   offset: number = 0,
 ): Curve<GlobalPoint>[] {
   const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
@@ -422,7 +422,7 @@ export function getDiamondBaseCorners(
  * @returns Tuple of line **unrotated** segments (0) and curves (1)
  */
 export function deconstructDiamondElement(
-  element: ExcalidrawDiamondElement,
+  element: FcboardDiamondElement,
   offset: number = 0,
 ): [LineSegment<GlobalPoint>[], Curve<GlobalPoint>[]] {
   const cachedShape = getElementShapesCacheEntry(element, offset);
@@ -467,7 +467,7 @@ export function deconstructDiamondElement(
 // Checks if the first and last point are close enough
 // to be considered a loop
 export const isPathALoop = (
-  points: ExcalidrawLinearElement["points"],
+  points: FcboardLinearElement["points"],
   /** supply if you want the loop detection to account for current zoom */
   zoomValue: Zoom["value"] = 1 as NormalizedZoomValue,
 ): boolean => {
@@ -482,7 +482,7 @@ export const isPathALoop = (
   return false;
 };
 
-export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
+export const getCornerRadius = (x: number, element: FcboardElement) => {
   if (
     element.roundness?.type === ROUNDNESS.PROPORTIONAL_RADIUS ||
     element.roundness?.type === ROUNDNESS.LEGACY
@@ -506,7 +506,7 @@ export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
 };
 
 const getDiagonalsForBindableElement = (
-  element: ExcalidrawElement,
+  element: FcboardElement,
   elementsMap: ElementsMap,
 ) => {
   // for rectangles, shrink the diagonals a bit because there's something
@@ -591,7 +591,7 @@ const getDiagonalsForBindableElement = (
 
 export const getSnapOutlineMidPoint = (
   point: GlobalPoint,
-  element: ExcalidrawBindableElement,
+  element: FcboardBindableElement,
   elementsMap: ElementsMap,
   zoom: AppState["zoom"],
 ) => {
@@ -653,9 +653,9 @@ export const getSnapOutlineMidPoint = (
 };
 
 export const projectFixedPointOntoDiagonal = (
-  arrow: ExcalidrawArrowElement,
+  arrow: FcboardArrowElement,
   point: GlobalPoint,
-  element: ExcalidrawBindableElement,
+  element: FcboardBindableElement,
   startOrEnd: "start" | "end",
   elementsMap: ElementsMap,
   zoom: AppState["zoom"],
@@ -699,7 +699,7 @@ export const projectFixedPointOntoDiagonal = (
     const otherBindable =
       otherBinding &&
       (elementsMap.get(otherBinding.elementId) as
-        | ExcalidrawBindableElement
+        | FcboardBindableElement
         | undefined);
     const otherFocusPoint =
       otherBinding &&

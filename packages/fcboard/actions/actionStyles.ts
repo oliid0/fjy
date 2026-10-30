@@ -5,9 +5,9 @@ import {
   CODES,
   KEYS,
   getLineHeight,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElementWith } from "@fcboard/element";
 
 import {
   hasBoundTextElement,
@@ -15,18 +15,15 @@ import {
   getDefaultRoundnessTypeForElement,
   isFrameLikeElement,
   isArrowElement,
-  isExcalidrawElement,
+  isFcboardElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import {
-  getBoundTextElement,
-  redrawTextBoundingBox,
-} from "@excalidraw/element";
+import { getBoundTextElement, redrawTextBoundingBox } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawTextElement } from "@excalidraw/element/types";
+import type { FcboardTextElement } from "@fcboard/element/types";
 
 import { paintIcon } from "../components/icons";
 
@@ -78,7 +75,7 @@ export const actionPasteStyles = register({
     const elementsCopied = JSON.parse(copiedStyles);
     const pastedElement = elementsCopied[0];
     const boundTextElement = elementsCopied[1];
-    if (!isExcalidrawElement(pastedElement)) {
+    if (!isFcboardElement(pastedElement)) {
       return { elements, captureUpdate: CaptureUpdateAction.EVENTUALLY };
     }
 
@@ -116,19 +113,19 @@ export const actionPasteStyles = register({
 
           if (isTextElement(newElement)) {
             const fontSize =
-              (elementStylesToCopyFrom as ExcalidrawTextElement).fontSize ||
+              (elementStylesToCopyFrom as FcboardTextElement).fontSize ||
               DEFAULT_FONT_SIZE;
             const fontFamily =
-              (elementStylesToCopyFrom as ExcalidrawTextElement).fontFamily ||
+              (elementStylesToCopyFrom as FcboardTextElement).fontFamily ||
               DEFAULT_FONT_FAMILY;
             newElement = newElementWith(newElement, {
               fontSize,
               fontFamily,
               textAlign:
-                (elementStylesToCopyFrom as ExcalidrawTextElement).textAlign ||
+                (elementStylesToCopyFrom as FcboardTextElement).textAlign ||
                 DEFAULT_TEXT_ALIGN,
               lineHeight:
-                (elementStylesToCopyFrom as ExcalidrawTextElement).lineHeight ||
+                (elementStylesToCopyFrom as FcboardTextElement).lineHeight ||
                 getLineHeight(fontFamily),
             });
             let container = null;

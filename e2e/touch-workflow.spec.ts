@@ -34,7 +34,7 @@ test("displayed handwriting can be dragged and lasso-selected at its visible ben
   await page.mouse.up();
   const strokes = () =>
     page.evaluate(() =>
-      JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+      JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
         (element: { type: string; isDeleted?: boolean }) =>
           element.type === "freedraw" && !element.isDeleted,
       ),
@@ -57,7 +57,7 @@ test("displayed handwriting can be dragged and lasso-selected at its visible ben
       page.evaluate(
         () =>
           Object.values(
-            JSON.parse(localStorage.getItem("excalidraw-state") || "{}")
+            JSON.parse(localStorage.getItem("fcboard-state") || "{}")
               .selectedElementIds || {},
           ).filter(Boolean).length,
       ),
@@ -152,9 +152,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
       const canvas =
         document.querySelector<HTMLCanvasElement>("canvas.static")!;
       const context = canvas.getContext("2d")!;
-      const state = JSON.parse(
-        localStorage.getItem("excalidraw-state") || "{}",
-      );
+      const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
       const scale = canvas.width / canvas.getBoundingClientRect().width;
       const zoom = state.zoom?.value ?? 1;
       return [200, 640, 1000].map((x) =>
@@ -197,7 +195,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
     .poll(() =>
       page.evaluate(
         () =>
-          JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
+          JSON.parse(localStorage.getItem("fcboard-state") || "{}").zoom
             ?.value || 1,
       ),
     )
@@ -219,7 +217,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   });
 });
 
-test("the share menu confirms pages and exports the chosen saved page as an actual JPEG", async ({
+test("the save menu confirms pages and exports the chosen saved page as an actual JPEG", async ({
   page,
 }) => {
   await page.goto("/");
@@ -228,10 +226,10 @@ test("the share menu confirms pages and exports the chosen saved page as an actu
   ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(200, 200);
-  await page.locator("textarea.excalidraw-wysiwyg").fill("分享的第一页");
+  await page.locator("textarea.fcboard-wysiwyg").fill("分享的第一页");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "新建白板", exact: true }).click();
-  await selectMenu(page, "扫码分享");
+  await selectMenu(page, "保存至当前文件");
   const share = page.getByRole("dialog", { name: "分享白板", exact: true });
   await share.getByRole("checkbox", { name: /第 2 页/ }).uncheck();
   await share.getByRole("checkbox", { name: /第 1 页/ }).check();
@@ -274,7 +272,7 @@ test("two touchscreen contacts write and undo independently in multi-point mode"
   });
   const strokes = () =>
     page.evaluate(() =>
-      JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+      JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
         (el: { type: string; isDeleted: boolean }) =>
           el.type === "freedraw" && !el.isDeleted,
       ),
@@ -295,7 +293,7 @@ test("two touchscreen contacts write and undo independently in multi-point mode"
   const zoom = () =>
     page.evaluate(
       () =>
-        JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
+        JSON.parse(localStorage.getItem("fcboard-state") || "{}").zoom
           .value as number,
     );
   const beforeZoom = await zoom();
@@ -334,9 +332,7 @@ test("three touchscreen contacts transform the view and cancel without leaving g
   await page.keyboard.press("h");
   const view = () =>
     page.evaluate(() => {
-      const state = JSON.parse(
-        localStorage.getItem("excalidraw-state") || "{}",
-      );
+      const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
       return {
         zoom: state.zoom?.value as number,
         x: state.scrollX as number,
@@ -389,7 +385,7 @@ test("three touchscreen contacts transform the view and cancel without leaving g
     expect((await view()).zoom).toBeCloseTo(expanded.zoom);
     expect(
       await page.evaluate(() =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
           (el: { isDeleted: boolean }) => !el.isDeleted,
         ),
       ),
@@ -436,7 +432,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     .poll(() =>
       page.evaluate(
         () =>
-          JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+          JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
             (element: {
               isDeleted?: boolean;
               customData?: {
@@ -514,14 +510,14 @@ test("green and black chalkboards use visible white ink and restore dark ink on 
     await setBackground(page, color);
     await page.keyboard.press("t");
     await page.mouse.click(180 + index * 260, 200);
-    const input = page.locator("textarea.excalidraw-wysiwyg");
+    const input = page.locator("textarea.fcboard-wysiwyg");
     await input.fill(`板书 ${index + 1}`);
     await input.press("Escape");
     await expect
       .poll(() =>
         page.evaluate(
           (index) =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]").find(
+            JSON.parse(localStorage.getItem("fcboard") || "[]").find(
               (el: { text?: string }) => el.text === `板书 ${index + 1}`,
             )?.strokeColor,
           index,
@@ -539,9 +535,7 @@ test("green and black chalkboards use visible white ink and restore dark ink on 
 test("chalkboard background and white writing remain literal in a dark interface", async ({
   page,
 }, info) => {
-  await page.addInitScript(() =>
-    localStorage.setItem("excalidraw-theme", "dark"),
-  );
+  await page.addInitScript(() => localStorage.setItem("fcboard-theme", "dark"));
   await page.goto("/");
   await expect(
     page.getByRole("button", { name: "新建白板", exact: true }),
@@ -562,7 +556,7 @@ test("chalkboard background and white writing remain literal in a dark interface
     .toEqual([0, 0, 0]);
   await page.keyboard.press("t");
   await page.mouse.click(220, 180);
-  const text = page.locator("textarea.excalidraw-wysiwyg");
+  const text = page.locator("textarea.fcboard-wysiwyg");
   await text.fill("黑板上的白字");
   await expect(text).toHaveCSS("color", "rgb(255, 255, 255)");
   await text.press("Escape");
@@ -584,7 +578,7 @@ test("circle selection scales its complete object without absorbing nearby ink; 
   }
   const strokes = () =>
     page.evaluate(() =>
-      JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+      JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
         (element: { type: string; isDeleted?: boolean }) =>
           element.type === "freedraw" && !element.isDeleted,
       ),

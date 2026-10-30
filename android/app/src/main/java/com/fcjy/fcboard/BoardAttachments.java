@@ -43,6 +43,15 @@ final class BoardAttachments {
     }
 
     static Intent create(Context context, JSArray pages, String format) throws Exception {
+        return create(context, pages, format, null);
+    }
+
+    /** Active NewEmailPopu calls savePdf: reuse the factory A4/title/image flow. */
+    static Intent createMail(Context context, JSArray pages, String format, String title) throws Exception {
+        return create(context, pages, format, title);
+    }
+
+    private static Intent create(Context context, JSArray pages, String format, String title) throws Exception {
         if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("请选择 1 至 20 页分享");
         if (!"png".equals(format) && !"pdf".equals(format)) throw new IOException("Unsupported board export format");
         File root = new File(context.getCacheDir(), "board-attachments");
@@ -52,6 +61,7 @@ final class BoardAttachments {
             if (file.isFile() && System.currentTimeMillis() - file.lastModified() > 86400000) file.delete();
         }
         ArrayList<android.net.Uri> attachments = new ArrayList<>();
+        ArrayList<File> images = new ArrayList<>();
         String id = UUID.randomUUID().toString();
         int total = 0;
         for (int index = 0; index < pages.length(); index++) {
@@ -63,9 +73,15 @@ final class BoardAttachments {
             if (image.length < 8 || image[0] != (byte)137 || image[1] != 80 || image[2] != 78 || image[3] != 71) throw new IOException("分享页面必须是 PNG 图片");
             File file = new File(root, id + "-" + (index + 1) + ".png");
             try (FileOutputStream output = new FileOutputStream(file)) { output.write(image); }
+            images.add(file);
             attachments.add(androidx.core.content.FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file));
         }
-        if ("pdf".equals(format)) {
+        if ("pdf".equals(format) && title != null) {
+            File file = new File(root, id + ".pdf");
+            FactoryPageExport.writePdf(images, file, title);
+            attachments.clear();
+            attachments.add(androidx.core.content.FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file));
+        } else if ("pdf".equals(format)) {
             File file = new File(root, id + ".pdf");
             android.graphics.pdf.PdfDocument pdf = new android.graphics.pdf.PdfDocument();
             try {

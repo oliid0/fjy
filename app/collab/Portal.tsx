@@ -1,23 +1,21 @@
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { trackEvent } from "@excalidraw/excalidraw/analytics";
-import { encryptData } from "@excalidraw/excalidraw/data/encryption";
-import { newElementWith } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/fcboard";
+import { trackEvent } from "@fcboard/fcboard/analytics";
+import { encryptData } from "@fcboard/fcboard/data/encryption";
+import { newElementWith } from "@fcboard/element";
 import throttle from "lodash.throttle";
 
-import type { UserIdleState } from "@excalidraw/common";
-import type { OrderedExcalidrawElement } from "@excalidraw/element/types";
-import type {
-  OnUserFollowedPayload,
-  SocketId,
-} from "@excalidraw/excalidraw/types";
+import type { UserIdleState } from "@fcboard/common";
+import type { OrderedFcboardElement } from "@fcboard/element/types";
+import type { OnUserFollowedPayload, SocketId } from "@fcboard/fcboard/types";
+
+import { isSyncableElement } from "../data";
 
 import { WS_EVENTS, FILE_UPLOAD_TIMEOUT, WS_SUBTYPES } from "../app_constants";
-import { isSyncableElement } from "../data";
 
 import type {
   SocketUpdateData,
   SocketUpdateDataSource,
-  SyncableExcalidrawElement,
+  SyncableFcboardElement,
 } from "../data";
 import type { TCollabClass } from "./Collab";
 import type { Socket } from "socket.io-client";
@@ -141,7 +139,7 @@ class Portal {
 
   broadcastScene = async (
     updateType: WS_SUBTYPES.INIT | WS_SUBTYPES.UPDATE,
-    elements: readonly OrderedExcalidrawElement[],
+    elements: readonly OrderedFcboardElement[],
     syncAll: boolean,
   ) => {
     if (updateType === WS_SUBTYPES.INIT && !syncAll) {
@@ -161,7 +159,7 @@ class Portal {
         acc.push(element);
       }
       return acc;
-    }, [] as SyncableExcalidrawElement[]);
+    }, [] as SyncableFcboardElement[]);
 
     const data: SocketUpdateDataSource[typeof updateType] = {
       type: updateType,

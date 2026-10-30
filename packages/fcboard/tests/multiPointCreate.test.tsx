@@ -1,11 +1,11 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { KEYS, reseed } from "@excalidraw/common";
+import { KEYS, reseed } from "@fcboard/common";
 
-import type { ExcalidrawLinearElement } from "@excalidraw/element/types";
+import type { FcboardLinearElement } from "@fcboard/element/types";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import * as InteractiveCanvas from "../renderer/interactiveScene";
 import * as StaticScene from "../renderer/staticScene";
@@ -45,7 +45,7 @@ describe("remove shape in non linear elements", () => {
   });
 
   it("rectangle", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     // select tool
     const tool = getByToolName("rectangle");
     fireEvent.click(tool);
@@ -61,7 +61,7 @@ describe("remove shape in non linear elements", () => {
   });
 
   it("ellipse", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     // select tool
     const tool = getByToolName("ellipse");
     fireEvent.click(tool);
@@ -76,7 +76,7 @@ describe("remove shape in non linear elements", () => {
   });
 
   it("diamond", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     // select tool
     const tool = getByToolName("diamond");
     fireEvent.click(tool);
@@ -93,7 +93,7 @@ describe("remove shape in non linear elements", () => {
 
 describe("multi point mode in linear elements", () => {
   it("arrow", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     // select tool
     const tool = getByToolName("arrow");
     fireEvent.click(tool);
@@ -124,7 +124,7 @@ describe("multi point mode in linear elements", () => {
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
     expect(h.elements.length).toEqual(1);
 
-    const element = h.elements[0] as ExcalidrawLinearElement;
+    const element = h.elements[0] as FcboardLinearElement;
 
     expect(element.type).toEqual("arrow");
     expect(element.x).toEqual(30);
@@ -139,7 +139,7 @@ describe("multi point mode in linear elements", () => {
   });
 
   it("line", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     // select tool
     const tool = getByToolName("line");
     fireEvent.click(tool);
@@ -169,7 +169,7 @@ describe("multi point mode in linear elements", () => {
     expect(renderStaticScene.mock.calls.length).toMatchInlineSnapshot(`7`);
     expect(h.elements.length).toEqual(1);
 
-    const element = h.elements[0] as ExcalidrawLinearElement;
+    const element = h.elements[0] as FcboardLinearElement;
 
     expect(element.type).toEqual("line");
     expect(element.x).toEqual(30);

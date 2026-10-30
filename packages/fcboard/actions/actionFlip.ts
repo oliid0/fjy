@@ -1,22 +1,22 @@
-import { getNonDeletedElements } from "@excalidraw/element";
-import { bindOrUnbindBindingElements } from "@excalidraw/element";
-import { getCommonBoundingBox } from "@excalidraw/element";
-import { newElementWith } from "@excalidraw/element";
-import { deepCopyElement } from "@excalidraw/element";
-import { resizeMultipleElements } from "@excalidraw/element";
-import { isArrowElement, isElbowArrow } from "@excalidraw/element";
-import { updateFrameMembershipOfSelectedElements } from "@excalidraw/element";
-import { CODES, KEYS, arrayToMap } from "@excalidraw/common";
+import { getNonDeletedElements } from "@fcboard/element";
+import { bindOrUnbindBindingElements } from "@fcboard/element";
+import { getCommonBoundingBox } from "@fcboard/element";
+import { newElementWith } from "@fcboard/element";
+import { deepCopyElement } from "@fcboard/element";
+import { resizeMultipleElements } from "@fcboard/element";
+import { isArrowElement, isElbowArrow } from "@fcboard/element";
+import { updateFrameMembershipOfSelectedElements } from "@fcboard/element";
+import { CODES, KEYS, arrayToMap } from "@fcboard/common";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
 import type {
-  ExcalidrawArrowElement,
-  ExcalidrawElbowArrowElement,
-  ExcalidrawElement,
+  FcboardArrowElement,
+  FcboardElbowArrowElement,
+  FcboardElement,
   NonDeleted,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { getSelectedElements } from "../scene";
 
@@ -78,7 +78,7 @@ export const actionFlipVertical = register({
 });
 
 const flipSelectedElements = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   elementsMap: NonDeletedSceneElementsMap,
   appState: Readonly<AppState>,
   flipDirection: "horizontal" | "vertical",
@@ -108,11 +108,11 @@ const flipSelectedElements = (
 };
 
 const flipElements = (
-  selectedElements: NonDeleted<ExcalidrawElement>[],
+  selectedElements: NonDeleted<FcboardElement>[],
   elementsMap: NonDeletedSceneElementsMap,
   flipDirection: "horizontal" | "vertical",
   app: AppClassProperties,
-): ExcalidrawElement[] => {
+): FcboardElement[] => {
   if (
     selectedElements.every(
       (element) =>
@@ -120,7 +120,7 @@ const flipElements = (
     )
   ) {
     return selectedElements.map((element) => {
-      const _element = element as ExcalidrawArrowElement;
+      const _element = element as FcboardArrowElement;
       return newElementWith(_element, {
         startArrowhead: _element.endArrowhead,
         endArrowhead: _element.startArrowhead,
@@ -164,8 +164,8 @@ const flipElements = (
   const { elbowArrows, otherElements } = selectedElements.reduce(
     (
       acc: {
-        elbowArrows: ExcalidrawElbowArrowElement[];
-        otherElements: ExcalidrawElement[];
+        elbowArrows: FcboardElbowArrowElement[];
+        otherElements: FcboardElement[];
       },
       element,
     ) =>

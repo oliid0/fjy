@@ -1,13 +1,13 @@
 import React from "react";
 import MenuItem from "@mui/material/MenuItem";
 
-import { THEME } from "@excalidraw/common";
+import { THEME } from "@fcboard/common";
 
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
+import type { ValueOf } from "@fcboard/common/utility-types";
 
-import { useExcalidrawAppState } from "../App";
+import { useFcboardAppState } from "../App";
 
 import {
   getDropdownMenuItemClassName,
@@ -96,7 +96,7 @@ export const DropDownMenuItemBadge = ({
   type?: ValueOf<typeof DropDownMenuItemBadgeType>;
   children: React.ReactNode;
 }) => {
-  const { theme } = useExcalidrawAppState();
+  const { theme } = useFcboardAppState();
   const style = {
     display: "inline-flex",
     marginLeft: "auto",

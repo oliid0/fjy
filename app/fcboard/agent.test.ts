@@ -1,6 +1,6 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { ResourceControlState } from "@excalidraw/excalidraw/interactiveResourceControls";
+import type { ResourceControlState } from "@fcboard/fcboard/interactiveResourceControls";
 
 import { runBoardCommands } from "./agent";
 import { classroomCommands } from "./commands";

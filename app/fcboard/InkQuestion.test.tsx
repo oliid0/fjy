@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { t } from "@excalidraw/excalidraw/i18n";
-import { getCommonBounds } from "@excalidraw/element";
+import { t } from "@fcboard/fcboard/i18n";
+import { getCommonBounds } from "@fcboard/element";
 
 import { InkQuestion } from "./InkQuestion";
 import { registerCanvasCommands } from "./canvasCommands";

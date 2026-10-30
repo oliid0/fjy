@@ -4,7 +4,7 @@ import React from "react";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { t } from "../i18n";
 
-import { useExcalidrawAppState, useExcalidrawElements } from "./App";
+import { useFcboardAppState, useFcboardElements } from "./App";
 
 import { Popover } from "./Popover";
 
@@ -32,8 +32,8 @@ export const CONTEXT_MENU_SEPARATOR = "separator";
 
 export const ContextMenu = React.memo(
   ({ actionManager, items, top, left, onClose }: ContextMenuProps) => {
-    const appState = useExcalidrawAppState();
-    const elements = useExcalidrawElements();
+    const appState = useFcboardAppState();
+    const elements = useFcboardElements();
 
     const filteredItems = items.reduce((acc: ContextMenuItem[], item) => {
       if (

@@ -1,9 +1,9 @@
 import { Tabs as RadixTabs } from "radix-ui";
 import { useRef } from "react";
 
-import { isMemberOf } from "@excalidraw/common";
+import { isMemberOf } from "@fcboard/common";
 
-import { useExcalidrawSetAppState } from "../App";
+import { useFcboardSetAppState } from "../App";
 
 import type { ReactNode } from "react";
 
@@ -12,7 +12,7 @@ const TTDDialogTabs = (
     children: ReactNode;
   } & { dialog: "ttd"; tab: "text-to-diagram" | "mermaid" },
 ) => {
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   const rootRef = useRef<HTMLDivElement>(null);
   const minHeightRef = useRef<number>(0);

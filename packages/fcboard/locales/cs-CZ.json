@@ -91,7 +91,7 @@
     "untitled": "Bez názvu",
     "name": "Název",
     "yourName": "Vaše jméno",
-    "madeWithExcalidraw": "Vytvořeno v Fcboard",
+    "madeWithFcboard": "Vytvořeno v Fcboard",
     "group": "Sloučit výběr do skupiny",
     "ungroup": "Zrušit sloučení skupiny",
     "collaborators": "Spolupracovníci",
@@ -121,7 +121,7 @@
     "toggleTheme": "Přepnout světlý/tmavý motiv",
     "theme": "Motiv",
     "personalLib": "Osobní knihovna",
-    "excalidrawLib": "Exkalidraw knihovna",
+    "fcboardlib": "Exkalidraw knihovna",
     "decreaseFontSize": "Zmenšit písmo",
     "increaseFontSize": "Zvětšit písmo",
     "unbindText": "Zrušit vazbu textu",
@@ -320,7 +320,7 @@
     "laser": "Laserové ukazovátko",
     "hand": "Ruka (nástroj pro posouvání)",
     "extraTools": "Více nástrojů",
-    "mermaidToExcalidraw": "Mořská panna na Fcboard",
+    "mermaidToFcboard": "Mořská panna na Fcboard",
     "convertElementType": "Přepnout typ tvaru"
   },
   "element": {

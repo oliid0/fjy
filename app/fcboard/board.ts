@@ -1,16 +1,17 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import {
   CaptureUpdateAction,
-  convertToExcalidrawElements,
-} from "@excalidraw/excalidraw";
-import { getCommonBounds, newElementWith } from "@excalidraw/element";
-import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@excalidraw/common";
-import { pointFrom } from "@excalidraw/math";
+  convertToFcboardElements,
+} from "@fcboard/fcboard";
+import { getCommonBounds, newElementWith } from "@fcboard/element";
+import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@fcboard/common";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { project3D, samplePlot, sampleInequality } from "./math";
 import { classroomCommands } from "./commands";
@@ -34,13 +35,13 @@ import type { InkStroke } from "./documents";
 import type { Plot } from "./math";
 import type { ContentRect } from "./placement";
 
-const toolbarClearance = (api: ExcalidrawImperativeAPI) => {
+const toolbarClearance = (api: FcboardImperativeAPI) => {
   const state = api.getAppState();
   if (state.toolbarHidden) {
     return 16;
   }
   const toolbar = document.querySelector<HTMLElement>(
-    `.excalidraw[data-excalidraw-id="${api.id}"] .fc-unified-toolbar`,
+    `.fcboard[data-fcboard-id="${api.id}"] .fc-unified-toolbar`,
   );
   const rect = toolbar?.getBoundingClientRect();
   if (rect?.height) {
@@ -49,7 +50,7 @@ const toolbarClearance = (api: ExcalidrawImperativeAPI) => {
   return 84;
 };
 
-export const contentViewport = (api: ExcalidrawImperativeAPI) => {
+export const contentViewport = (api: FcboardImperativeAPI) => {
   const state = api.getAppState();
   const gap = 16 / state.zoom.value;
   return {
@@ -63,7 +64,7 @@ export const contentViewport = (api: ExcalidrawImperativeAPI) => {
 };
 
 export const contentPosition = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   preferred: { x: number; y: number },
   size: { width: number; height: number },
   excludeIds: readonly string[] = [],
@@ -95,7 +96,7 @@ export const contentPosition = (
 };
 
 export const insertionPoint = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   size = { width: 300, height: 180 },
 ) => {
   const state = api.getAppState();
@@ -130,8 +131,8 @@ export const insertionPoint = (
 };
 
 export const answerPosition = (
-  api: ExcalidrawImperativeAPI,
-  source: readonly ExcalidrawElement[],
+  api: FcboardImperativeAPI,
+  source: readonly FcboardElement[],
   width = 120,
   boundsOverride?: readonly [number, number, number, number],
 ) => {
@@ -159,8 +160,8 @@ export const answerPosition = (
   });
 };
 
-const arrangeElements = <T extends ExcalidrawElement>(
-  api: ExcalidrawImperativeAPI,
+const arrangeElements = <T extends FcboardElement>(
+  api: FcboardImperativeAPI,
   elements: T[],
 ) => {
   if (!elements.length) {
@@ -180,9 +181,9 @@ const arrangeElements = <T extends ExcalidrawElement>(
 };
 
 export const revealNewContent = (
-  api: ExcalidrawImperativeAPI,
-  elements: readonly ExcalidrawElement[],
-  context?: readonly ExcalidrawElement[],
+  api: FcboardImperativeAPI,
+  elements: readonly FcboardElement[],
+  context?: readonly FcboardElement[],
 ) => {
   if (!elements.length) {
     return;
@@ -214,12 +215,12 @@ export const revealNewContent = (
 };
 
 export const insertElements = (
-  api: ExcalidrawImperativeAPI,
-  skeletons: ExcalidrawElementSkeleton[],
+  api: FcboardImperativeAPI,
+  skeletons: FcboardElementSkeleton[],
   replaceIds: string[] = [],
   arrange = false,
 ) => {
-  let elements = convertToExcalidrawElements(
+  let elements = convertToFcboardElements(
     skeletons.map((element) => ({
       ...element,
       customData: { ...element.customData, fcGenerated: true },
@@ -242,7 +243,7 @@ export const insertElements = (
 };
 
 /** Programmatic selection must publish groups too, or the editor draws every part's box. */
-export const objectSelection = (elements: readonly ExcalidrawElement[]) => ({
+export const objectSelection = (elements: readonly FcboardElement[]) => ({
   selectedElementIds: Object.fromEntries(
     elements.map((element) => [element.id, true as const]),
   ),
@@ -258,11 +259,11 @@ export const objectSelection = (elements: readonly ExcalidrawElement[]) => ({
 });
 
 export const insertText = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   text: string,
   position?: { x: number; y: number },
   customData?: Record<string, unknown>,
-  styleSource?: readonly ExcalidrawElement[],
+  styleSource?: readonly FcboardElement[],
   presentation: Settings["answerStyle"] = currentSettings().answerStyle,
   placement: TextPlacement & {
     groupId?: string;
@@ -352,7 +353,7 @@ export const insertText = (
       const [left, top, right, bottom] = getCommonBounds([element]);
       return { left, top, right, bottom };
     });
-  let elements: ExcalidrawElement[] | undefined;
+  let elements: FcboardElement[] | undefined;
   for (let attempt = 0; attempt < 24; attempt++) {
     const layout = layoutBoardText(
       text,
@@ -443,7 +444,7 @@ export const insertText = (
         y: element.y + point.y - top,
       }));
     } else {
-      elements = convertToExcalidrawElements([
+      elements = convertToFcboardElements([
         {
           type: "text",
           ...layout,
@@ -498,7 +499,7 @@ export const insertText = (
 };
 
 export const drawAxes = async (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   selectionSource?: string,
 ) => {
   const origin = classroomCommands.has("document.insertion")
@@ -508,7 +509,7 @@ export const drawAxes = async (
   const y = origin.y + 200;
   const group = crypto.randomUUID();
   const color = api.getAppState().currentItemStrokeColor || "#000000";
-  const shapes: ExcalidrawElementSkeleton[] = [
+  const shapes: FcboardElementSkeleton[] = [
     {
       type: "arrow",
       x: x - 200,
@@ -610,7 +611,7 @@ export const drawAxes = async (
 };
 
 export const drawPlot = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   plot: Plot,
   position: { x: number; y: number },
   replaceIds: string[] = [],
@@ -620,7 +621,7 @@ export const drawPlot = (
 ) => {
   const lines = samplePlot(plot);
   const scale = 200 / plot.range;
-  const skeletons: ExcalidrawElementSkeleton[] = [
+  const skeletons: FcboardElementSkeleton[] = [
     {
       type: "arrow",
       x: position.x - 220,
@@ -811,7 +812,7 @@ export const drawPlot = (
   return ids;
 };
 
-export const selectedPlot = (api: ExcalidrawImperativeAPI) => {
+export const selectedPlot = (api: FcboardImperativeAPI) => {
   const document = classroomCommands.read("document") as
     | { ink: InkStroke[]; selection: string[] }
     | undefined;
@@ -875,7 +876,7 @@ export const selectedPlot = (api: ExcalidrawImperativeAPI) => {
   };
 };
 
-export const validateShapes = (value: unknown): ExcalidrawElementSkeleton[] => {
+export const validateShapes = (value: unknown): FcboardElementSkeleton[] => {
   if (!Array.isArray(value) || !value.length || value.length > 160) {
     throw new Error(t("fcboard.invalid_ai_shape_data"));
   }

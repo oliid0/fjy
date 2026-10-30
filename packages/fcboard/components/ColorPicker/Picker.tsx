@@ -1,16 +1,16 @@
 import React, { useEffect, useImperativeHandle, useState } from "react";
 
-import { EVENT } from "@excalidraw/common";
+import { EVENT } from "@fcboard/common";
 
 import {
   DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
   DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
   KEYS,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { ColorPaletteCustom } from "@excalidraw/common";
+import type { ColorPaletteCustom } from "@fcboard/common";
 
 import { useAtom } from "../../editor-jotai";
 import { t } from "../../i18n";
@@ -33,7 +33,7 @@ interface PickerProps {
   color: string | null;
   onChange: (color: string) => void;
   type: ColorPickerType;
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   palette: ColorPaletteCustom;
   updateData: (formData?: any) => void;
   children?: React.ReactNode;

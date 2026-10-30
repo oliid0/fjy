@@ -1,4 +1,4 @@
-import { getNormalizedZoom } from "@excalidraw/excalidraw/scene";
+import { getNormalizedZoom } from "@fcboard/fcboard/scene";
 
 import {
   questionPosition,

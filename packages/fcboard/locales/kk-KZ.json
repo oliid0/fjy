@@ -91,7 +91,7 @@
     "untitled": "Атауысыз",
     "name": "Аты",
     "yourName": "Сіздің атыңыз",
-    "madeWithExcalidraw": "Fcboard көмегімен жасалған",
+    "madeWithFcboard": "Fcboard көмегімен жасалған",
     "group": "Топ таңдау",
     "ungroup": "Таңдауды топтан шығару",
     "collaborators": "серіктестер",
@@ -121,7 +121,7 @@
     "toggleTheme": "Ашық/қараңғы тақырыпты ауыстыру",
     "theme": "Тақырып",
     "personalLib": "Жеке кітапхана",
-    "excalidrawLib": "Fcboard кітапханасы",
+    "fcboardlib": "Fcboard кітапханасы",
     "decreaseFontSize": "Қаріп өлшемін кішірейту",
     "increaseFontSize": "Қаріп өлшемін үлкейту",
     "unbindText": "Мәтінді байланыстыру",
@@ -320,7 +320,7 @@
     "laser": "Лазерлік көрсеткіш",
     "hand": "Қол (панировка құралы)",
     "extraTools": "Қосымша құралдар",
-    "mermaidToExcalidraw": "Fcboard-қа су перісі",
+    "mermaidToFcboard": "Fcboard-қа су перісі",
     "convertElementType": "Пішін түрін ауыстыру"
   },
   "element": {

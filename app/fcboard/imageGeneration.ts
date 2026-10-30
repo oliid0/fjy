@@ -1,11 +1,9 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type {
-  DataURL,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
-import type { FileId } from "@excalidraw/element/types";
+import type { FileId } from "@fcboard/element/types";
+
+import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { currentSettings, validateEndpoint } from "./settings";
 import { contentViewport, insertElements, insertionPoint } from "./board";
@@ -16,7 +14,7 @@ import { transparentInkImage } from "./transparentInkImage";
 import type { ContentRect } from "./placement";
 
 export const insertGeneratedImage = async (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   prompt: string,
   signal: AbortSignal,
   placement: {

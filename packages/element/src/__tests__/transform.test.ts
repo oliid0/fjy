@@ -1,12 +1,12 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 import { vi } from "vitest";
 
 import {
-  convertToExcalidrawElements,
-  type ExcalidrawElementSkeleton,
+  convertToFcboardElements,
+  type FcboardElementSkeleton,
 } from "../transform";
 
-import type { ExcalidrawArrowElement } from "../types";
+import type { FcboardArrowElement } from "../types";
 
 const opts = { regenerateIds: false };
 
@@ -20,16 +20,11 @@ describe("Test Transform", () => {
         id: "rect-1",
       },
     ];
-    let data = convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
-    );
+    let data = convertToFcboardElements(elements as FcboardElementSkeleton[]);
     expect(data.length).toBe(1);
     expect(data[0].id).toBe("id0");
 
-    data = convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
-      opts,
-    );
+    data = convertToFcboardElements(elements as FcboardElementSkeleton[], opts);
     expect(data[0].id).toBe("rect-1");
   });
 
@@ -84,8 +79,8 @@ describe("Test Transform", () => {
       },
     ];
 
-    convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
+    convertToFcboardElements(
+      elements as FcboardElementSkeleton[],
       opts,
     ).forEach((ele) => {
       expect(ele).toMatchSnapshot({
@@ -113,8 +108,8 @@ describe("Test Transform", () => {
         strokeColor: "#5f3dc4",
       },
     ];
-    convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
+    convertToFcboardElements(
+      elements as FcboardElementSkeleton[],
       opts,
     ).forEach((ele) => {
       expect(ele).toMatchSnapshot({
@@ -155,8 +150,8 @@ describe("Test Transform", () => {
         strokeStyle: "dotted",
       },
     ];
-    const excalidrawElements = convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
+    const excalidrawElements = convertToFcboardElements(
+      elements as FcboardElementSkeleton[],
       opts,
     );
 
@@ -238,8 +233,8 @@ describe("Test Transform", () => {
         },
       },
     ];
-    const excalidrawElements = convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
+    const excalidrawElements = convertToFcboardElements(
+      elements as FcboardElementSkeleton[],
       opts,
     );
 
@@ -296,8 +291,8 @@ describe("Test Transform", () => {
         },
       },
     ];
-    const excalidrawElements = convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
+    const excalidrawElements = convertToFcboardElements(
+      elements as FcboardElementSkeleton[],
       opts,
     );
 
@@ -313,7 +308,7 @@ describe("Test Transform", () => {
   });
 
   describe("Test Frames", () => {
-    const elements: ExcalidrawElementSkeleton[] = [
+    const elements: FcboardElementSkeleton[] = [
       {
         type: "rectangle",
         x: 10,
@@ -337,7 +332,7 @@ describe("Test Transform", () => {
     ];
 
     it("should transform frames and update frame ids when regenerated", () => {
-      const elementsSkeleton: ExcalidrawElementSkeleton[] = [
+      const elementsSkeleton: FcboardElementSkeleton[] = [
         ...elements,
         {
           type: "frame",
@@ -345,7 +340,7 @@ describe("Test Transform", () => {
           name: "My frame",
         },
       ];
-      const excalidrawElements = convertToExcalidrawElements(
+      const excalidrawElements = convertToFcboardElements(
         elementsSkeleton,
         opts,
       );
@@ -361,7 +356,7 @@ describe("Test Transform", () => {
     });
 
     it("should consider user defined frame dimensions over calculated when provided", () => {
-      const elementsSkeleton: ExcalidrawElementSkeleton[] = [
+      const elementsSkeleton: FcboardElementSkeleton[] = [
         ...elements,
         {
           type: "frame",
@@ -371,7 +366,7 @@ describe("Test Transform", () => {
           height: 100,
         },
       ];
-      const excalidrawElements = convertToExcalidrawElements(
+      const excalidrawElements = convertToFcboardElements(
         elementsSkeleton,
         opts,
       );
@@ -381,7 +376,7 @@ describe("Test Transform", () => {
     });
 
     it("should consider user defined frame coordinates calculated when provided", () => {
-      const elementsSkeleton: ExcalidrawElementSkeleton[] = [
+      const elementsSkeleton: FcboardElementSkeleton[] = [
         ...elements,
         {
           type: "frame",
@@ -391,7 +386,7 @@ describe("Test Transform", () => {
           y: 300,
         },
       ];
-      const excalidrawElements = convertToExcalidrawElements(
+      const excalidrawElements = convertToFcboardElements(
         elementsSkeleton,
         opts,
       );
@@ -419,8 +414,8 @@ describe("Test Transform", () => {
           },
         },
       ];
-      const excalidrawElements = convertToExcalidrawElements(
-        elements as ExcalidrawElementSkeleton[],
+      const excalidrawElements = convertToFcboardElements(
+        elements as FcboardElementSkeleton[],
         opts,
       );
 
@@ -500,8 +495,8 @@ describe("Test Transform", () => {
         },
       ];
 
-      const excalidrawElements = convertToExcalidrawElements(
-        elements as ExcalidrawElementSkeleton[],
+      const excalidrawElements = convertToFcboardElements(
+        elements as FcboardElementSkeleton[],
         opts,
       );
 
@@ -613,8 +608,8 @@ describe("Test Transform", () => {
         },
       ];
 
-      const excalidrawElements = convertToExcalidrawElements(
-        elements as ExcalidrawElementSkeleton[],
+      const excalidrawElements = convertToFcboardElements(
+        elements as FcboardElementSkeleton[],
         opts,
       );
 
@@ -662,8 +657,8 @@ describe("Test Transform", () => {
         },
       ];
 
-      const excalidrawElements = convertToExcalidrawElements(
-        elements as ExcalidrawElementSkeleton[],
+      const excalidrawElements = convertToFcboardElements(
+        elements as FcboardElementSkeleton[],
         opts,
       );
 
@@ -716,8 +711,8 @@ describe("Test Transform", () => {
         },
       ];
 
-      const excalidrawElements = convertToExcalidrawElements(
-        elements as ExcalidrawElementSkeleton[],
+      const excalidrawElements = convertToFcboardElements(
+        elements as FcboardElementSkeleton[],
         opts,
       );
 
@@ -767,13 +762,13 @@ describe("Test Transform", () => {
           backgroundColor: "#bac8ff",
         },
       ];
-      const excalidrawElements = convertToExcalidrawElements(
-        elements as ExcalidrawElementSkeleton[],
+      const excalidrawElements = convertToFcboardElements(
+        elements as FcboardElementSkeleton[],
         opts,
       );
       expect(excalidrawElements.length).toBe(2);
       const [arrow, rect] = excalidrawElements;
-      expect((arrow as ExcalidrawArrowElement).endBinding).toStrictEqual({
+      expect((arrow as FcboardArrowElement).endBinding).toStrictEqual({
         elementId: "rect-1",
         fixedPoint: [-2.05, 0.5001],
         mode: "orbit",
@@ -810,8 +805,8 @@ describe("Test Transform", () => {
         height: 200,
       },
     ];
-    const excalidrawElements = convertToExcalidrawElements(
-      elements as ExcalidrawElementSkeleton[],
+    const excalidrawElements = convertToFcboardElements(
+      elements as FcboardElementSkeleton[],
       opts,
     );
 
@@ -834,8 +829,8 @@ describe("Test Transform", () => {
         customData: { createdBy: "user01" },
       },
     ];
-    const convertedElements = convertToExcalidrawElements(
-      rawData as ExcalidrawElementSkeleton[],
+    const convertedElements = convertToFcboardElements(
+      rawData as FcboardElementSkeleton[],
       opts,
     );
     expect(convertedElements[0].customData).toStrictEqual({
@@ -844,7 +839,7 @@ describe("Test Transform", () => {
   });
 
   it("should transform the elements correctly when linear elements have single point", () => {
-    const elements: ExcalidrawElementSkeleton[] = [
+    const elements: FcboardElementSkeleton[] = [
       {
         id: "B",
         type: "rectangle",
@@ -955,7 +950,7 @@ describe("Test Transform", () => {
       },
     ];
 
-    const excalidrawElements = convertToExcalidrawElements(elements, opts);
+    const excalidrawElements = convertToFcboardElements(elements, opts);
     expect(excalidrawElements.length).toBe(12);
     excalidrawElements.forEach((ele) => {
       expect(ele).toMatchSnapshot({

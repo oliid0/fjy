@@ -1,5 +1,5 @@
-import Trans from "@excalidraw/excalidraw/components/Trans";
-import { t } from "@excalidraw/excalidraw/i18n";
+import Trans from "@fcboard/fcboard/components/Trans";
+import { t } from "@fcboard/fcboard/i18n";
 import * as Sentry from "@sentry/browser";
 import React from "react";
 
@@ -61,7 +61,7 @@ export class TopErrorBoundary extends React.Component<
 
   private errorSplash() {
     return (
-      <div className="ErrorSplash excalidraw">
+      <div className="ErrorSplash fcboard">
         <div className="ErrorSplash-messageContainer">
           <div className="ErrorSplash-paragraph bigger align-center">
             <Trans

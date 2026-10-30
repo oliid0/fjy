@@ -1,40 +1,34 @@
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { compressData } from "@excalidraw/excalidraw/data/encode";
-import { newElementWith } from "@excalidraw/element";
-import { isInitializedImageElement } from "@excalidraw/element";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { CaptureUpdateAction } from "@fcboard/fcboard";
+import { compressData } from "@fcboard/fcboard/data/encode";
+import { newElementWith } from "@fcboard/element";
+import { isInitializedImageElement } from "@fcboard/element";
+import { t } from "@fcboard/fcboard/i18n";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawImageElement,
+  FcboardElement,
+  FcboardImageElement,
   FileId,
-  InitializedExcalidrawImageElement,
-} from "@excalidraw/element/types";
+  InitializedFcboardImageElement,
+} from "@fcboard/element/types";
 import type {
   BinaryFileData,
   BinaryFileMetadata,
-  ExcalidrawImperativeAPI,
+  FcboardImperativeAPI,
   BinaryFiles,
-} from "@excalidraw/excalidraw/types";
+} from "@fcboard/fcboard/types";
 
 type FileVersion = Required<BinaryFileData>["version"];
 
 export class FileManager {
   /** files being fetched */
-  private fetchingFiles = new Map<ExcalidrawImageElement["fileId"], true>();
-  private erroredFiles_fetch = new Map<
-    ExcalidrawImageElement["fileId"],
-    true
-  >();
+  private fetchingFiles = new Map<FcboardImageElement["fileId"], true>();
+  private erroredFiles_fetch = new Map<FcboardImageElement["fileId"], true>();
   /** files being saved */
-  private savingFiles = new Map<
-    ExcalidrawImageElement["fileId"],
-    FileVersion
-  >();
+  private savingFiles = new Map<FcboardImageElement["fileId"], FileVersion>();
   /* files already saved to persistent storage */
-  private savedFiles = new Map<ExcalidrawImageElement["fileId"], FileVersion>();
+  private savedFiles = new Map<FcboardImageElement["fileId"], FileVersion>();
   private erroredFiles_save = new Map<
-    ExcalidrawImageElement["fileId"],
+    FcboardImageElement["fileId"],
     FileVersion
   >();
 
@@ -93,7 +87,7 @@ export class FileManager {
     elements,
     files,
   }: {
-    elements: readonly ExcalidrawElement[];
+    elements: readonly FcboardElement[];
     files: BinaryFiles;
   }) => {
     const addedFiles: Map<FileId, BinaryFileData> = new Map();
@@ -186,7 +180,7 @@ export class FileManager {
    *  yet saved the `status` update to storage, but that should be taken care
    *  of during regular beforeUnload unsaved files check.
    */
-  shouldPreventUnload = (elements: readonly ExcalidrawElement[]) => {
+  shouldPreventUnload = (elements: readonly FcboardElement[]) => {
     return elements.some((element) => {
       return (
         isInitializedImageElement(element) &&
@@ -200,8 +194,8 @@ export class FileManager {
    * helper to determine if image element status needs updating
    */
   shouldUpdateImageElementStatus = (
-    element: ExcalidrawElement,
-  ): element is InitializedExcalidrawImageElement => {
+    element: FcboardElement,
+  ): element is InitializedFcboardImageElement => {
     return (
       isInitializedImageElement(element) &&
       this.savedFiles.has(element.fileId) &&
@@ -270,9 +264,9 @@ export const encodeFilesForUpload = async ({
 };
 
 export const updateStaleImageStatuses = (params: {
-  excalidrawAPI: ExcalidrawImperativeAPI;
+  excalidrawAPI: FcboardImperativeAPI;
   erroredFiles: Map<FileId, true>;
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
 }) => {
   if (!params.erroredFiles.size) {
     return;

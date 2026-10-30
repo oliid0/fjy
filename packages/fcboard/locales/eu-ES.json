@@ -91,7 +91,7 @@
     "untitled": "Izengabea",
     "name": "Izena",
     "yourName": "Zure izena",
-    "madeWithExcalidraw": "Fcboard bidez egina",
+    "madeWithFcboard": "Fcboard bidez egina",
     "group": "Hautapena taldea bihurtu",
     "ungroup": "Desegin hautapenaren taldea",
     "collaborators": "Kolaboratzaileak",
@@ -121,7 +121,7 @@
     "toggleTheme": "Gaia argia/iluna aktibatu",
     "theme": "Itxura",
     "personalLib": "Liburutegi pertsonala",
-    "excalidrawLib": "Fcboard liburutegia",
+    "fcboardlib": "Fcboard liburutegia",
     "decreaseFontSize": "Txikitu letra tamaina",
     "increaseFontSize": "Handitu letra tamaina",
     "unbindText": "Askatu testua",
@@ -320,7 +320,7 @@
     "laser": "Laser punteroa",
     "hand": "Eskua (panoratze tresna)",
     "extraTools": "Tresna gehiago",
-    "mermaidToExcalidraw": "Mermaid-etik Fcboard-ra",
+    "mermaidToFcboard": "Mermaid-etik Fcboard-ra",
     "convertElementType": "Fokuaren forma mota"
   },
   "element": {

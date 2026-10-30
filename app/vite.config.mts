@@ -26,52 +26,52 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: [
         {
-          find: /^@excalidraw\/common$/,
+          find: /^@fcboard\/common$/,
           replacement: path.resolve(
             __dirname,
             "../packages/common/src/index.ts",
           ),
         },
         {
-          find: /^@excalidraw\/common\/(.*?)/,
+          find: /^@fcboard\/common\/(.*?)/,
           replacement: path.resolve(__dirname, "../packages/common/src/$1"),
         },
         {
-          find: /^@excalidraw\/element$/,
+          find: /^@fcboard\/element$/,
           replacement: path.resolve(
             __dirname,
             "../packages/element/src/index.ts",
           ),
         },
         {
-          find: /^@excalidraw\/element\/(.*?)/,
+          find: /^@fcboard\/element\/(.*?)/,
           replacement: path.resolve(__dirname, "../packages/element/src/$1"),
         },
         {
-          find: /^@excalidraw\/excalidraw$/,
+          find: /^@fcboard\/fcboard$/,
           replacement: path.resolve(__dirname, "../packages/fcboard/index.tsx"),
         },
         {
-          find: /^@excalidraw\/excalidraw\/(.*?)/,
+          find: /^@fcboard\/fcboard\/(.*?)/,
           replacement: path.resolve(__dirname, "../packages/fcboard/$1"),
         },
         {
-          find: /^@excalidraw\/math$/,
+          find: /^@fcboard\/math$/,
           replacement: path.resolve(__dirname, "../packages/math/src/index.ts"),
         },
         {
-          find: /^@excalidraw\/math\/(.*?)/,
+          find: /^@fcboard\/math\/(.*?)/,
           replacement: path.resolve(__dirname, "../packages/math/src/$1"),
         },
         {
-          find: /^@excalidraw\/utils$/,
+          find: /^@fcboard\/utils$/,
           replacement: path.resolve(
             __dirname,
             "../packages/utils/src/index.ts",
           ),
         },
         {
-          find: /^@excalidraw\/utils\/(.*?)/,
+          find: /^@fcboard\/utils\/(.*?)/,
           replacement: path.resolve(__dirname, "../packages/utils/src/$1"),
         },
       ],
@@ -120,7 +120,7 @@ export default defineConfig(({ mode }) => {
             }
 
             if (id.includes("@excalidraw/mermaid-to-excalidraw")) {
-              return "mermaid-to-excalidraw";
+              return "mermaid-to-fcboard";
             }
 
             if (id.includes("@codemirror/") || id.includes("@lezer/")) {
@@ -268,7 +268,7 @@ export default defineConfig(({ mode }) => {
             {
               action: "/",
               accept: {
-                "application/vnd.excalidraw+json": [".excalidraw"],
+                "application/vnd.fcboard+json": [".fcboard"],
               },
             },
           ],
@@ -281,9 +281,9 @@ export default defineConfig(({ mode }) => {
                 {
                   name: "file",
                   accept: [
-                    "application/vnd.excalidraw+json",
+                    "application/vnd.fcboard+json",
                     "application/json",
-                    ".excalidraw",
+                    ".fcboard",
                   ],
                 },
               ],

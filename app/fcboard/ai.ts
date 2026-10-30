@@ -1,11 +1,12 @@
 import { Capacitor } from "@capacitor/core";
-import { t } from "@excalidraw/excalidraw/i18n";
-import { exportToBlob } from "@excalidraw/excalidraw";
-import { getDataURL } from "@excalidraw/excalidraw/data/blob";
-import { getSelectedElements } from "@excalidraw/element";
+import { t } from "@fcboard/fcboard/i18n";
+import { exportToBlob } from "@fcboard/fcboard";
+import { getDataURL } from "@fcboard/fcboard/data/blob";
+import { getSelectedElements } from "@fcboard/element";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { AIStream, postAI, readAIResult } from "./aiTransport";
 import { currentSettings, validateEndpoint } from "./settings";
@@ -165,16 +166,16 @@ export const chat = async (
   }
 };
 
-export const selectedBoardElements = (api: ExcalidrawImperativeAPI) =>
+export const selectedBoardElements = (api: FcboardImperativeAPI) =>
   getSelectedElements(api.getSceneElements(), api.getAppState(), {
     includeBoundTextElement: true,
     includeElementsInFrames: true,
   });
 
 export const boardContext = async (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   wholeBoard = false,
-  snapshot?: readonly ExcalidrawElement[],
+  snapshot?: readonly FcboardElement[],
   region?: { left: number; top: number; right: number; bottom: number },
   captureImage = true,
 ) => {
@@ -194,7 +195,7 @@ export const boardContext = async (
   if (region) {
     const state = api.getAppState();
     const canvas = document.querySelector<HTMLCanvasElement>(
-      `.excalidraw[data-excalidraw-id="${api.id}"] canvas.excalidraw__canvas.static`,
+      `.fcboard[data-fcboard-id="${api.id}"] canvas.fcboard__canvas.static`,
     );
     if (canvas) {
       const scale = canvas.width / state.width;
@@ -221,7 +222,7 @@ export const boardContext = async (
         output.height = Math.max(1, Math.ceil((bottom - top) * factor));
         const context = output.getContext("2d")!;
         const layers = document.querySelectorAll<HTMLCanvasElement>(
-          `.excalidraw[data-excalidraw-id="${api.id}"] canvas.excalidraw__canvas.static, .excalidraw[data-excalidraw-id="${api.id}"] canvas.excalidraw__canvas.new-element`,
+          `.fcboard[data-fcboard-id="${api.id}"] canvas.fcboard__canvas.static, .fcboard[data-fcboard-id="${api.id}"] canvas.fcboard__canvas.new-element`,
         );
         for (const layer of layers) {
           context.drawImage(

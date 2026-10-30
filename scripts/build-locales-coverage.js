@@ -17,9 +17,13 @@ const locales = files.filter(
 );
 
 const percentages = {};
+const eligibility = {};
 const referenceKeys = Object.keys(
   flatten(require("../packages/fcboard/locales/en.json")),
 );
+// App-specific teaching features use the existing English fallback. Adding one
+// must not remove an otherwise translated editor language from its picker.
+const editorKeys = referenceKeys.filter((key) => !key.startsWith("fcboard."));
 
 for (let index = 0; index < locales.length; index++) {
   const currentLocale = locales[index];
@@ -34,10 +38,22 @@ for (let index = 0; index < locales.length; index++) {
     (100 * translatedKeys.length) / referenceKeys.length,
   );
   percentages[currentLocale.replace(".json", "")] = percentage;
+  eligibility[currentLocale.replace(".json", "")] = Math.floor(
+    (100 *
+      editorKeys.filter(
+        (key) => typeof data[key] === "string" && data[key].trim() !== "",
+      ).length) /
+      editorKeys.length,
+  );
 }
 
 writeFileSync(
   `${__dirname}/../packages/fcboard/locales/percentages.json`,
   `${JSON.stringify(percentages, null, 2)}\n`,
+  "utf8",
+);
+writeFileSync(
+  `${__dirname}/../packages/fcboard/localeEligibility.json`,
+  `${JSON.stringify(eligibility, null, 2)}\n`,
   "utf8",
 );

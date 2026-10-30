@@ -1,10 +1,11 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
-import { newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { classroomCommands } from "./commands";
 import { registerCanvasCommands } from "./canvasCommands";
@@ -17,7 +18,7 @@ import { inkLineHeight } from "./handwriting";
 import type { InkStroke } from "./documents";
 
 const setup = () => {
-  let scene: readonly ExcalidrawElement[] = convertToExcalidrawElements([
+  let scene: readonly FcboardElement[] = convertToFcboardElements([
     {
       type: "text",
       text: languageStudy.term,
@@ -52,7 +53,7 @@ const setup = () => {
       }
       listeners.forEach((listener) => listener());
     }),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const explain = vi
     .spyOn(language, "explainLanguage")
     .mockResolvedValue(languageStudy);

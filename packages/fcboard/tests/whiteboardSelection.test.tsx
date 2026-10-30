@@ -1,9 +1,13 @@
-import { pointFrom } from "@excalidraw/math";
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { pointFrom } from "@fcboard/math";
+import { CaptureUpdateAction } from "@fcboard/element";
 
 import { interactiveResource } from "../../../app/fcboard/test/interactiveResource";
+import {
+  insertionDefaults,
+  renderInsertion,
+} from "../../../app/fcboard/insertObjects";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { AnimationFrameHandler } from "../animation-frame-handler";
 import { LassoTrail } from "../lasso";
 import { t } from "../i18n";
@@ -22,7 +26,7 @@ const { h } = window;
 
 it("allows direct interaction with a teaching resource in the selector and gives drawing gestures the canvas", async () => {
   const { container, getByTitle } = await render(
-    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
   );
   h.state.width = 1600;
   h.state.height = 900;
@@ -39,7 +43,7 @@ it("allows direct interaction with a teaching resource in the selector and gives
   API.updateScene({ elements: [resource] });
   act(() => h.app.setActiveTool({ type: "lasso" }));
   const frame = getByTitle(interactiveResource.title);
-  const inner = frame.closest(".excalidraw__embeddable-container__inner")!;
+  const inner = frame.closest(".fcboard__embeddable-container__inner")!;
   expect(inner).toHaveStyle({ pointerEvents: "all" });
   expect(h.state.activeEmbeddable).toBeNull();
   act(() => h.app.setActiveTool({ type: "freedraw" }));
@@ -53,7 +57,7 @@ it("allows direct interaction with a teaching resource in the selector and gives
 });
 
 it("draws one open continuous lasso from the travelled area, clears it on lift and starts the next gesture cleanly", async () => {
-  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   h.state.width = 1600;
   h.state.height = 900;
   API.updateScene({
@@ -120,7 +124,7 @@ it("draws one open continuous lasso from the travelled area, clears it on lift a
 });
 
 it("selects a factory composite as one object when its lasso touches only one internal line", async () => {
-  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   h.state.width = 1600;
   h.state.height = 900;
   const parts = [100, 300].map((y) => ({
@@ -151,7 +155,7 @@ it("selects a factory composite as one object when its lasso touches only one in
 });
 
 it("keeps an open whiteboard gesture's region when it touches only part of a long stroke", async () => {
-  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   h.state.width = 1600;
   h.state.height = 900;
   const ink = API.createElement({
@@ -196,7 +200,7 @@ it("keeps an open whiteboard gesture's region when it touches only part of a lon
 
 it("moves a circled region as one selection without editing its individual lines", async () => {
   const { container } = await render(
-    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
   );
   h.state.width = 1600;
   h.state.height = 900;
@@ -249,7 +253,7 @@ it("moves a circled region as one selection without editing its individual lines
 });
 
 it("selects the actual freeform area and excludes the empty operation-frame corner", async () => {
-  await render(<Excalidraw UIOptions={{ unifiedToolbar: true }} />);
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   h.state.width = 1600;
   h.state.height = 900;
   const outside = API.createElement({
@@ -294,9 +298,7 @@ const regionPointer = (canvas: Element, type: string, x: number, y: number) =>
   );
 
 const selectedRegion = async () => {
-  const view = await render(
-    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
-  );
+  const view = await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   h.state.width = 1600;
   h.state.height = 900;
   const first = API.createElement({
@@ -355,7 +357,7 @@ it.each([false, true])(
   "suppresses canvas context menus without selecting objects (view mode: %s)",
   async (viewModeEnabled) => {
     const { container } = await render(
-      <Excalidraw
+      <Fcboard
         UIOptions={{ unifiedToolbar: true }}
         viewModeEnabled={viewModeEnabled}
       />,
@@ -421,6 +423,48 @@ it("scales the selected objects from a corner without adding neighbouring object
     y: 100,
     width: 40,
     height: 40,
+  });
+});
+
+it("keeps native tables fixed during a corner gesture and still allows movement", async () => {
+  let api!: import("../types").FcboardImperativeAPI;
+  const view = await render(
+    <Fcboard
+      UIOptions={{ unifiedToolbar: true }}
+      onFcboardAPI={(value) => {
+        api = value;
+      }}
+    />,
+  );
+  h.state.width = 1600;
+  h.state.height = 900;
+  await act(async () => {
+    await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+  });
+  act(() => {
+    api.setActiveTool({ type: "lasso" });
+    h.app.lassoTrail.startPath(80, 80);
+    h.app.lassoTrail.addPointToPath(480, 80);
+    h.app.lassoTrail.addPointToPath(480, 300);
+    h.app.lassoTrail.addPointToPath(80, 300);
+    h.app.lassoTrail.finishPath();
+  });
+  const before = JSON.stringify(api.getSceneElements());
+  const bounds = h.state.whiteboardSelection!.bounds;
+  const canvas = view.container.querySelector("canvas.interactive")!;
+  regionPointer(canvas, "pointerdown", bounds.right, bounds.bottom);
+  regionPointer(canvas, "pointermove", bounds.right + 100, bounds.bottom + 100);
+  regionPointer(canvas, "pointerup", bounds.right + 100, bounds.bottom + 100);
+  expect(JSON.stringify(api.getSceneElements())).toBe(before);
+  expect(h.state.whiteboardSelection!.bounds).toEqual(bounds);
+  expect(h.state.toast?.message).toBe(t("fcboard.table_zoom_instructions"));
+  regionPointer(canvas, "pointerdown", 125, 125);
+  regionPointer(canvas, "pointerup", 165, 155);
+  expect(api.getSceneElements()[0]).toMatchObject({
+    x: 140,
+    y: 130,
+    width: 360,
+    height: 180,
   });
 });
 
@@ -571,7 +615,7 @@ it("keeps duplicated contents in one translated region and clears it when deleti
 
 it("restores frame contents as well as the selected frame when a region drag is cancelled", async () => {
   const { container } = await render(
-    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
   );
   h.state.width = 1600;
   h.state.height = 900;
@@ -611,7 +655,7 @@ it("restores frame contents as well as the selected frame when a region drag is 
 
 it("restores a container's bound label and attached arrow without reverting unrelated objects", async () => {
   const { container } = await render(
-    <Excalidraw UIOptions={{ unifiedToolbar: true }} />,
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
   );
   h.state.width = 1600;
   h.state.height = 900;
@@ -682,7 +726,7 @@ it.each(["language", "cube", "cylinder"] as const)(
   async (kind) => {
     const onObjectDoubleClick = vi.fn();
     const view = await render(
-      <Excalidraw
+      <Fcboard
         UIOptions={{ unifiedToolbar: true }}
         onObjectDoubleClick={onObjectDoubleClick}
       />,

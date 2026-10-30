@@ -19,17 +19,20 @@ const setup = () => {
             }
           }}
         >
-          <MaterialSelect
-            aria-label="Recognition"
-            value={value}
-            onChange={(event) => {
-              change(event.target.value);
-              setValue(event.target.value);
-            }}
-          >
-            <option value="first">Local ink</option>
-            <option value="second">Fallback</option>
-          </MaterialSelect>
+          <label>
+            Recognition
+            <MaterialSelect
+              aria-label="Recognition"
+              value={value}
+              onChange={(event) => {
+                change(event.target.value);
+                setValue(event.target.value);
+              }}
+            >
+              <option value="first">Local ink</option>
+              <option value="second">Fallback</option>
+            </MaterialSelect>
+          </label>
           <input aria-label="Endpoint" />
         </section>
       </Dialog>
@@ -71,4 +74,14 @@ it("changes a choice and closes the temporary menu", async () => {
   await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
   expect(trigger).toHaveTextContent("Fallback");
   expect(change).toHaveBeenCalledWith("second");
+});
+
+it("keeps the internal value input out of label activation and mobile text entry", () => {
+  const { trigger, change } = setup();
+  const input = trigger.parentElement!.querySelector("input")!;
+  expect(input.type).toBe("hidden");
+  expect(input.inputMode).toBe("none");
+  fireEvent.click(screen.getByRole("option", { name: "Fallback" }));
+  expect(change).toHaveBeenCalledWith("second");
+  expect(document.activeElement).not.toBe(input);
 });

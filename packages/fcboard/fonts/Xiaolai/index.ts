@@ -1,7 +1,7 @@
 // The following file content was generated with https://chinese-font.netlify.app/online-split,
 // but has been manully rewritten from `@font-face` rules into TS while leveraging FontFace API.
 
-import { type ExcalidrawFontFaceDescriptor } from "../Fonts";
+import { type FcboardFontFaceDescriptor } from "../Fonts";
 
 import _80 from "./Xiaolai-Regular-019d66dcad46dc156b162d267f981c20.woff2";
 import _16 from "./Xiaolai-Regular-04b718e5623574919c8b0dea5f301444.woff2";
@@ -239,7 +239,7 @@ licenseURL: http://scripts.sil.org/OFL
  * - centered in width of inproperly centered CJK codepoints
  */
 
-export const XiaolaiFontFaces: ExcalidrawFontFaceDescriptor[] = [
+export const XiaolaiFontFaces: FcboardFontFaceDescriptor[] = [
   {
     uri: _0,
     descriptors: {

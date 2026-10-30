@@ -3,15 +3,14 @@ import React, { useEffect } from "react";
 import "./Tooltip.scss";
 
 export const getTooltipDiv = () => {
-  const existingDiv = document.querySelector<HTMLDivElement>(
-    ".excalidraw-tooltip",
-  );
+  const existingDiv =
+    document.querySelector<HTMLDivElement>(".fcboard-tooltip");
   if (existingDiv) {
     return existingDiv;
   }
   const div = document.createElement("div");
   document.body.appendChild(div);
-  div.classList.add("excalidraw-tooltip");
+  div.classList.add("fcboard-tooltip");
   return div;
 };
 
@@ -65,7 +64,7 @@ const updateTooltip = (
   label: string,
   long: boolean,
 ) => {
-  tooltip.classList.add("excalidraw-tooltip--visible");
+  tooltip.classList.add("fcboard-tooltip--visible");
   tooltip.style.minWidth = long ? "50ch" : "10ch";
   tooltip.style.maxWidth = long ? "50ch" : "15ch";
 
@@ -91,15 +90,14 @@ export const Tooltip = ({
   disabled,
 }: TooltipProps) => {
   useEffect(() => {
-    return () =>
-      getTooltipDiv().classList.remove("excalidraw-tooltip--visible");
+    return () => getTooltipDiv().classList.remove("fcboard-tooltip--visible");
   }, []);
   if (disabled) {
     return null;
   }
   return (
     <div
-      className="excalidraw-tooltip-wrapper"
+      className="fcboard-tooltip-wrapper"
       onPointerEnter={(event) =>
         updateTooltip(
           event.currentTarget as HTMLDivElement,
@@ -109,7 +107,7 @@ export const Tooltip = ({
         )
       }
       onPointerLeave={() =>
-        getTooltipDiv().classList.remove("excalidraw-tooltip--visible")
+        getTooltipDiv().classList.remove("fcboard-tooltip--visible")
       }
       style={style}
     >

@@ -91,7 +91,7 @@
     "untitled": "Bez nosaukuma",
     "name": "Vārds",
     "yourName": "Jūsu vārds",
-    "madeWithExcalidraw": "Radīts ar Fcboard",
+    "madeWithFcboard": "Radīts ar Fcboard",
     "group": "Grupēt atlasīto",
     "ungroup": "Atgrupēt atlasīto",
     "collaborators": "Dalībnieki",
@@ -121,7 +121,7 @@
     "toggleTheme": "Pārslēgt gaišo/tumšo dizainu",
     "theme": "Tēma",
     "personalLib": "Personīgā bibliotēka",
-    "excalidrawLib": "Fcboard bibliotēka",
+    "fcboardlib": "Fcboard bibliotēka",
     "decreaseFontSize": "Samazināt fonta izmēru",
     "increaseFontSize": "Palielināt fonta izmēru",
     "unbindText": "Atdalīt tekstu",
@@ -320,7 +320,7 @@
     "laser": "Lāzera rādītājs",
     "hand": "Roka (panoramēšanas rīks)",
     "extraTools": "Vairāk rīku",
-    "mermaidToExcalidraw": "Nāriņa uz Fcboard",
+    "mermaidToFcboard": "Nāriņa uz Fcboard",
     "convertElementType": "Pārslēgt formas tipu"
   },
   "element": {

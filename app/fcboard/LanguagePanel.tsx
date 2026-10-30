@@ -4,9 +4,9 @@ import Box from "@mui/material/Box";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import CircularProgress from "@mui/material/CircularProgress";
-import { getLanguage, t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { MaterialPanel } from "./MaterialPanel";
 import { TransientMessage } from "./TransientMessage";
@@ -22,7 +22,7 @@ import type { InkStroke } from "./documents";
 import type { LanguageInk, LanguageStudy } from "./languageStudy";
 
 /** Only the visible surface owns a card. Its source ink is checked on every change. */
-export const readLanguageCard = (api: ExcalidrawImperativeAPI, id: string) => {
+export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
   const doc = classroomCommands.read("document") as
     | { name: string; page: number; ink: InkStroke[] }
     | undefined;
@@ -72,7 +72,7 @@ export const readLanguageCard = (api: ExcalidrawImperativeAPI, id: string) => {
   } catch {}
 };
 
-export const LanguagePanel = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
   const { langCode } = useI18n();
   const [card, setCard] = useState<{
     id: string;

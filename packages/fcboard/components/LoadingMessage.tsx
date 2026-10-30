@@ -1,9 +1,9 @@
 import clsx from "clsx";
 import { useState, useEffect } from "react";
 
-import { THEME } from "@excalidraw/common";
+import { THEME } from "@fcboard/common";
 
-import type { Theme } from "@excalidraw/element/types";
+import type { Theme } from "@fcboard/element/types";
 
 import { t } from "../i18n";
 

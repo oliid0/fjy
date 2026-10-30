@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { all, create } from "mathjs";
 
 import { mathNotation } from "./mathNotation";

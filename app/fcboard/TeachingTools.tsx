@@ -1,19 +1,19 @@
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import ButtonBase from "@mui/material/ButtonBase";
-import { ToolbarExtras } from "@excalidraw/excalidraw";
-import { getCommonBounds } from "@excalidraw/element";
+import { ToolbarExtras } from "@fcboard/fcboard";
+import { getCommonBounds } from "@fcboard/element";
 import {
   CloseIcon,
   playerPlayIcon,
   TextIcon,
   microphoneIcon,
   questionCircle,
-} from "@excalidraw/excalidraw/components/icons";
-import { FactoryIcon } from "@excalidraw/excalidraw/components/FactoryIcon";
+} from "@fcboard/fcboard/components/icons";
+import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -80,7 +80,7 @@ const labels = {
   vy: "vertical_speed_m_s",
 } as const;
 
-export const TeachingTools = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const [open, setOpen] = useState(false);
   const [toolPage, setToolPage] = useState(0);

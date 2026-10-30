@@ -1,14 +1,14 @@
-import { KEYS, arrayToMap, randomId } from "@excalidraw/common";
+import { KEYS, arrayToMap, randomId } from "@fcboard/common";
 
 import {
   elementsAreInSameGroup,
   newElementWith,
   selectGroupsFromGivenElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { LockedIcon, UnlockedIcon } from "../components/icons";
 
@@ -18,7 +18,7 @@ import { register } from "./register";
 
 import type { AppState } from "../types";
 
-const shouldLock = (elements: readonly ExcalidrawElement[]) =>
+const shouldLock = (elements: readonly FcboardElement[]) =>
   elements.every((el) => !el.locked);
 
 export const actionToggleElementLock = register({

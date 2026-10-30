@@ -1,11 +1,11 @@
 import React, { useLayoutEffect, useRef } from "react";
 
-import { isShallowEqual } from "@excalidraw/common";
+import { isShallowEqual } from "@fcboard/common";
 
 import type {
-  NonDeletedExcalidrawElement,
+  NonDeletedFcboardElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
 import { renderStaticScene } from "../../renderer/staticScene";
@@ -23,7 +23,7 @@ type StaticCanvasProps = {
   rc: RoughCanvas;
   elementsMap: RenderableElementsMap;
   allElementsMap: NonDeletedSceneElementsMap;
-  visibleElements: readonly NonDeletedExcalidrawElement[];
+  visibleElements: readonly NonDeletedFcboardElement[];
   sceneNonce: number | undefined;
   selectionNonce: number | undefined;
   scale: number;
@@ -54,7 +54,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       isComponentMounted.current = true;
 
       wrapper.replaceChildren(canvas);
-      canvas.classList.add("excalidraw__canvas", "static");
+      canvas.classList.add("fcboard__canvas", "static");
     }
 
     const paint = () =>
@@ -74,7 +74,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
     paint();
     let cancelled = false;
     const background = props.appState.whiteboardBackground;
-    if (background && !backgroundImage(background.pattern)) {
+    if (background && !backgroundImage(background)) {
       void loadBackground(background)
         .then(() => {
           if (!cancelled) {
@@ -88,7 +88,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
     };
   });
 
-  return <div className="excalidraw__canvas-wrapper" ref={wrapperRef} />;
+  return <div className="fcboard__canvas-wrapper" ref={wrapperRef} />;
 };
 
 const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {

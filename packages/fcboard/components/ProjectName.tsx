@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 
-import { focusNearestParent, KEYS } from "@excalidraw/common";
+import { focusNearestParent, KEYS } from "@fcboard/common";
 
-import { useExcalidrawContainer } from "./App";
+import { useFcboardContainer } from "./App";
 
 import "./TextInput.scss";
 import "./ProjectName.scss";
@@ -15,7 +15,7 @@ type Props = {
 };
 
 export const ProjectName = (props: Props) => {
-  const { id } = useExcalidrawContainer();
+  const { id } = useFcboardContainer();
   const [fileName, setFileName] = useState<string>(props.value);
 
   const handleBlur = (event: any) => {

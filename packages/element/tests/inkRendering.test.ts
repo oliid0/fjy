@@ -1,14 +1,14 @@
 import rough from "roughjs/bin/rough";
-import { pointFrom } from "@excalidraw/math";
-import { toBrandedType } from "@excalidraw/common";
-import { exportToSvg } from "@excalidraw/excalidraw";
+import { pointFrom } from "@fcboard/math";
+import { toBrandedType } from "@fcboard/common";
+import { exportToSvg } from "@fcboard/fcboard";
 
-import type { LocalPoint } from "@excalidraw/math";
-import type { Radians } from "@excalidraw/math";
+import type { LocalPoint } from "@fcboard/math";
+import type { Radians } from "@fcboard/math";
 import type {
   RenderableElementsMap,
   StaticCanvasRenderConfig,
-} from "@excalidraw/excalidraw/scene/types";
+} from "@fcboard/fcboard/scene/types";
 
 import { Scene } from "../src/Scene";
 import { syncInvalidIndices } from "../src/fractionalIndex";

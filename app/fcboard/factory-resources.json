@@ -8,6 +8,30 @@
   },
   "items": [
     {
+      "id": "math:teach_res_math_tool_function",
+      "title": "Function",
+      "category": "math",
+      "cover": "/factory-resources/math_tool_function.png",
+      "titleKey": "teach_res_math_tool_function",
+      "action": "function-graph"
+    },
+    {
+      "id": "math:teach_res_math_tool_statistics_chart",
+      "title": "Statistical Charts",
+      "category": "math",
+      "cover": "/factory-resources/math_tool_statistics_chart.png",
+      "titleKey": "teach_res_math_tool_statistics_chart",
+      "action": "chart"
+    },
+    {
+      "id": "math:teach_res_math_tool_random_number",
+      "title": "Random Number",
+      "category": "math",
+      "cover": "/factory-resources/math_tool_random_number.png",
+      "titleKey": "teach_res_math_tool_random_number",
+      "action": "random-number"
+    },
+    {
       "id": "math:teach_res_math_concept_number_compare__898f39d4",
       "title": "Number Compare",
       "category": "math",
@@ -798,6 +822,13 @@
       "asset": "/factory-resources/force_pulley.png",
       "cover": "/factory-resources/force_pulley.png",
       "titleKey": "teach_res_mechanics_pulley_force"
+    },
+    {
+      "id": "chemistry:str_periodic_table",
+      "title": "Periodic table",
+      "titleKey": "str_periodic_table",
+      "category": "chemistry",
+      "action": "periodic-table"
     },
     {
       "id": "chemistry:teach_res_chem_equipment_tube_rack__chem_tool_tube_rack",
@@ -1600,9 +1631,9 @@
       "titleKey": "teach_res_chemistry_normal_acid_base_solutions"
     },
     {
-      "id": "physics:teach_res_item_blackbody_radiation__09de1388",
+      "id": "chemistry:teach_res_item_blackbody_radiation__09de1388",
       "title": "Blackbody Radiation",
-      "category": "physics",
+      "category": "chemistry",
       "url": "https://phet.colorado.edu/sims/html/blackbody-spectrum/latest/blackbody-spectrum_all.html?locale=zh_CN",
       "cover": "/factory-resources/phet_blackbody_spectrum.png",
       "titleKey": "teach_res_item_blackbody_radiation"
@@ -1870,6 +1901,14 @@
       "url": "https://www.zxxk.com/"
     },
     {
+      "id": "web:str_geogebra_phet",
+      "title": "PhET",
+      "category": "web",
+      "url": "https://phet.colorado.edu/",
+      "cover": "/factory-resources/phet.png",
+      "titleKey": "str_geogebra_phet"
+    },
+    {
       "id": "web:str_geogebra_gs",
       "title": "Geometer Sketchpad",
       "titleKey": "str_geogebra_gs",
@@ -1889,6 +1928,13 @@
       "titleKey": "str_geogebra_sc_calculator",
       "category": "web",
       "url": "https://www.geogebra.org/scientific"
+    },
+    {
+      "id": "other:teach_res_other_scoreboard",
+      "title": "Scoreboard",
+      "category": "other",
+      "titleKey": "teach_res_other_scoreboard",
+      "action": "scoreboard"
     }
   ]
 }

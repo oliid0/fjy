@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { viewportCoordsToSceneCoords } from "@excalidraw/common";
+import { viewportCoordsToSceneCoords } from "@fcboard/common";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import { insertionShapes, renderInsertion } from "./insertObjects";
@@ -18,7 +18,7 @@ export const InsertionPlacement = ({
   onFinish,
   onError,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   object: InsertObject;
   onFinish: () => void;
   onError: (error: unknown) => void;

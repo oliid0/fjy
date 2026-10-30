@@ -1,12 +1,10 @@
 import { act } from "@testing-library/react";
-import { newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
-import type {
-  DataURL,
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw/types";
+import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { observeInkAssistance } from "./inkAssistance";
 import { saveSettings, defaults } from "./settings";
@@ -71,9 +69,9 @@ afterEach(() => {
 const setup = (
   mode?: "text" | "shape" | "function" | "calculation" | "magic",
 ) => {
-  let scene: readonly ExcalidrawElement[] = [];
+  let scene: readonly FcboardElement[] = [];
   let refresh = () => {};
-  let commit: Parameters<ExcalidrawImperativeAPI["onInkCommit"]>[0] = () => {};
+  let commit: Parameters<FcboardImperativeAPI["onInkCommit"]>[0] = () => {};
   const api = {
     getSceneElements: () => scene,
     getAppState: () => ({
@@ -101,7 +99,7 @@ const setup = (
       scene = update.elements;
       refresh();
     }),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const ink = newFreeDrawElement({
     type: "freedraw",
     x: 100,
@@ -124,7 +122,7 @@ const setup = (
   return {
     api,
     ink,
-    draw: (elements: readonly ExcalidrawElement[] = [ink]) => {
+    draw: (elements: readonly FcboardElement[] = [ink]) => {
       scene = elements;
       const stroke = elements.at(-1);
       if (stroke?.type === "freedraw") {

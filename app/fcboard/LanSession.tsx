@@ -1,21 +1,28 @@
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
-import { useEffect, useRef, useState } from "react";
-import { CloseIcon } from "@excalidraw/excalidraw/components/icons";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-
-import { QRCode } from "../share/QRCode";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 
 import { MaterialPanel } from "./MaterialPanel";
 
 import { Network } from "./network";
-import { SceneSync } from "./sceneSync";
+import { LiveSceneSync } from "./liveSceneSync";
+import { ShareQRCode, useShareProtection } from "./ShareQRCode";
+import {
+  CloudShare,
+  loadCloudShare,
+  saveCloudShare,
+  publicCloudShareEndpoint,
+} from "./cloudShare";
+import cloudIcon from "./factory-share-icons/cloud.svg";
+import localIcon from "./factory-share-icons/local.svg";
+import closeIcon from "./factory-setting-icons/close.svg";
+import "./LiveShare.scss";
 
 import { classroomCommands } from "./commands";
-import { useAnchoredPanel } from "./floating";
 
 import type { ScenePacket } from "./sceneSync";
 
@@ -35,30 +42,49 @@ const networkStatus = () => ({
 });
 const statusText = (value: string) =>
   (networkStatus() as Record<string, string>)[value] || value;
-const native = Capacitor.isNativePlatform();
-export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
-  const [panel, setPanel] = useState<"collab" | null>(null);
-  const surface = useRef<HTMLElement>(null);
-  const panelStyle = useAnchoredPanel(
-    surface,
-    "[data-testid='main-menu-trigger']",
-    !!panel,
+  const native = Capacitor.isNativePlatform();
+  const cloud = useRef<CloudShare | undefined>(undefined);
+  const starting = useRef<AbortController | undefined>(undefined);
+  const lifetime = useRef<AbortController | undefined>(undefined);
+  const protection = useShareProtection((password) =>
+    cloud.current
+      ? cloud.current.setPassword(password)
+      : Network.setCollaborationPassword({ password }),
   );
+  const resetProtection = protection.reset;
+  const [panel, setPanel] = useState<"collab" | null>(null);
+  const [view, setView] = useState<"choose" | "cloud">("choose");
+  const [mode, setMode] = useState<"local" | "cloud" | undefined>(undefined);
+  const [config, setConfig] = useState(loadCloudShare);
+  const cloudConfig = useRef(config);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [sharing, setSharing] = useState(false);
   const [peers, setPeers] = useState(0);
   const [connection, setConnection] = useState("");
-  const sync = useRef<SceneSync | null>(null);
+  const [authentication, setAuthentication] = useState(false);
+  const [guestPassword, setGuestPassword] = useState("");
+  const guestCode = useRef("");
+  const awaitingPassword = useRef(false);
+  const sync = useRef<LiveSceneSync | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const retry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const alive = useRef(true);
   const joined = useRef(false);
   const hosted = useRef(false);
 
-  const leave = async () => {
+  const leave = useCallback(async () => {
+    starting.current?.abort();
+    if (cloud.current) {
+      await cloud.current.end();
+      cloud.current = undefined;
+    }
+    lifetime.current?.abort();
+    lifetime.current = undefined;
+    resetProtection();
     joined.current = false;
     clearTimeout(retry.current);
     sync.current?.dispose();
@@ -70,50 +96,157 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     }
     hosted.current = false;
     setSharing(false);
+    setMode(undefined);
+    setView("choose");
     setUrls([]);
     setConnection("");
     setPeers(0);
+    setAuthentication(false);
+    guestCode.current = "";
     if (location.hash.startsWith("#lan=")) {
       history.replaceState(null, "", location.pathname + location.search);
     }
     classroomCommands.changed("network");
-  };
-  const start = async () => {
-    if (!native) {
+  }, [resetProtection]);
+  const start = async (
+    nextMode: "local" | "cloud" = "local",
+    source?: AbortSignal,
+  ) => {
+    if (starting.current || hosted.current || cloud.current || joined.current) {
+      throw new Error(t("fcboard.processing"));
+    }
+    if (nextMode === "local" && !native) {
       throw new Error(
         t(
           "fcboard.start_collaboration_on_the_android_board_then_scan_the_qr_code_on_another_device",
         ),
       );
     }
-    if (classroomCommands.has("document.close")) {
-      await classroomCommands.execute({
-        name: "document.close",
-        args: { next: false },
-      });
-    }
-    sync.current?.dispose();
-    const controller = new SceneSync(
-      api,
-      (packet) => Network.sendScene({ message: JSON.stringify(packet) }),
-      (error) => setError(failureMessage(error)),
-    );
-    sync.current = controller;
+    const request = new AbortController();
+    const abort = () => request.abort(source?.reason);
+    source?.throwIfAborted();
+    source?.addEventListener("abort", abort, { once: true });
+    starting.current = request;
+    setBusy(true);
+    let controller: LiveSceneSync | undefined;
+    let session: CloudShare | undefined;
+    let localStarted = false;
     try {
-      const result = await Network.startCollaboration({
-        scene: controller.snapshot(),
-      });
-      hosted.current = true;
+      request.signal.throwIfAborted();
+      sync.current?.dispose();
+      controller = new LiveSceneSync(
+        api,
+        (packet) =>
+          nextMode === "cloud"
+            ? session
+              ? session.send(packet)
+              : Promise.reject(new Error(t("fcboard.live_share.disconnected")))
+            : Network.sendScene({ message: JSON.stringify(packet) }),
+        (error) => {
+          if (alive.current && !request.signal.aborted) {
+            setError(failureMessage(error));
+          }
+        },
+      );
+      controller.hostPage(
+        (classroomCommands.read("boards") as { active?: string } | undefined)
+          ?.active || crypto.randomUUID(),
+      );
+      const initialized = controller.initialize(request.signal);
+      if (initialized) {
+        await initialized;
+      }
+      sync.current = controller;
+      if (nextMode === "cloud") {
+        session = await CloudShare.start(
+          cloudConfig.current,
+          controller.snapshot(),
+          {
+            packet: (packet, transport) => {
+              session = transport;
+              if (alive.current && !request.signal.aborted) {
+                controller?.receive(packet);
+              }
+            },
+            status: (status) => {
+              if (alive.current && !request.signal.aborted) {
+                setConnection(status);
+              }
+            },
+            peers: (count) => {
+              if (alive.current && !request.signal.aborted) {
+                setPeers(count);
+              }
+            },
+            error: (error) => {
+              if (alive.current && !request.signal.aborted) {
+                setError(failureMessage(error));
+              }
+            },
+            ended: () => {
+              if (!alive.current || request.signal.aborted) {
+                return;
+              }
+              controller?.dispose();
+              request.abort();
+              if (lifetime.current === request) {
+                lifetime.current = undefined;
+              }
+              protection.reset();
+              cloud.current = undefined;
+              setSharing(false);
+              setMode(undefined);
+              setView("choose");
+              setConnection(
+                "collaboration_ended_this_device_keeps_its_board_content",
+              );
+              classroomCommands.changed("network");
+            },
+          },
+          request.signal,
+        );
+        request.signal.throwIfAborted();
+        cloud.current = session;
+        setUrls([session.url]);
+      } else {
+        const result = await Network.startCollaboration({
+          scene: controller.snapshot(),
+        });
+        localStarted = true;
+        request.signal.throwIfAborted();
+        hosted.current = true;
+        setUrls(result.urls);
+      }
+      setMode(nextMode);
+      lifetime.current = request;
+      setPanel("collab");
+      protection.reset();
       setSharing(true);
       setConnection("started");
-      setUrls(result.urls);
       controller.start();
       controller.flush(true);
       classroomCommands.changed("network");
     } catch (error) {
-      controller.dispose();
+      controller?.dispose();
       sync.current = null;
+      if (localStarted) {
+        await Network.stopCollaboration().catch(() => {});
+      }
+      if (session) {
+        void session.end().catch(() => session?.dispose());
+      }
+      if (request.signal.aborted) {
+        throw new DOMException("Canceled", "AbortError");
+      }
       throw error;
+    } finally {
+      source?.removeEventListener("abort", abort);
+      if (starting.current === request) {
+        starting.current = undefined;
+        if (alive.current) {
+          setBusy(false);
+        }
+      }
     }
   };
   const run = async (operation: () => Promise<void>) => {
@@ -122,7 +255,12 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     try {
       await operation();
     } catch (error) {
-      setError(failureMessage(error));
+      if (
+        alive.current &&
+        !(error instanceof DOMException && error.name === "AbortError")
+      ) {
+        setError(failureMessage(error));
+      }
     } finally {
       if (alive.current) {
         setBusy(false);
@@ -134,7 +272,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     alive.current = true;
     const handle = native
       ? Network.addListener("message", (message) => {
-          if (!alive.current) {
+          if (!alive.current || !hosted.current) {
             return;
           }
           if (message.kind === "peers") {
@@ -154,7 +292,9 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       if (document.visibilityState === "hidden") {
         return;
       }
-      if (native && hosted.current) {
+      if (cloud.current) {
+        cloud.current.snapshot();
+      } else if (native && hosted.current) {
         void Network.getScene()
           .then((packet) => sync.current?.receive(packet))
           .catch((error) => setError(failureMessage(error)));
@@ -165,10 +305,30 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         socket.current.send("snapshot");
       }
     };
+    const stopPage = classroomCommands.watch("boards", () => {
+      const active = (
+        classroomCommands.read("boards") as { active?: string } | undefined
+      )?.active;
+      if (
+        active &&
+        (hosted.current || cloud.current) &&
+        sync.current?.hostPage(active)
+      ) {
+        sync.current.flush(true);
+      }
+    });
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       alive.current = false;
+      stopPage();
+      starting.current?.abort();
+      lifetime.current?.abort();
+      const remote = cloud.current;
+      cloud.current = undefined;
+      if (remote) {
+        void remote.end().catch(() => remote.dispose());
+      }
       joined.current = false;
       clearTimeout(retry.current);
       sync.current?.dispose();
@@ -180,7 +340,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         void Network.stopCollaboration();
       }
     };
-  }, [api]);
+  }, [api, native, leave]);
 
   useEffect(() => {
     const token = /^#lan=([a-f0-9]{32})$/.exec(location.hash)?.[1];
@@ -227,7 +387,7 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         classroomCommands.changed("network");
         let first = true;
         let attempts = 0;
-        const controller = new SceneSync(
+        const controller = new LiveSceneSync(
           api,
           async (packet) => {
             if (socket.current?.readyState !== WebSocket.OPEN) {
@@ -246,11 +406,10 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           if (!joined.current || cancelled) {
             return;
           }
-          const transport = new WebSocket(
-            `${location.protocol === "https:" ? "wss:" : "ws:"}//${
-              location.host
-            }/board/${token}`,
-          );
+          const address = new URL(`board/${token}`, location.href);
+          address.protocol = location.protocol === "https:" ? "wss:" : "ws:";
+          address.hash = "";
+          const transport = new WebSocket(address.href);
           socket.current = transport;
           const heartbeat = setInterval(() => {
             if (transport.readyState === WebSocket.OPEN) {
@@ -262,11 +421,30 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
               return;
             }
             try {
-              const packet = JSON.parse(String(event.data)) as ScenePacket & {
-                error?: string;
-              };
-              if (packet.error) {
+              const packet = JSON.parse(String(event.data)) as
+                | ScenePacket
+                | { kind: "auth"; required: boolean; incorrect: boolean }
+                | { error: string };
+              if ("error" in packet) {
                 throw new Error(packet.error);
+              }
+              if (packet.kind === "auth") {
+                if (!packet.incorrect && guestCode.current) {
+                  transport.send(
+                    JSON.stringify({
+                      kind: "join",
+                      password: guestCode.current,
+                    }),
+                  );
+                } else {
+                  awaitingPassword.current = true;
+                  setAuthentication(true);
+                  setPanel("collab");
+                  if (packet.incorrect) {
+                    setError(t("fcboard.qr_password_error"));
+                  }
+                }
+                return;
               }
               if (packet.kind !== "initial" && packet.kind !== "scene") {
                 return;
@@ -277,6 +455,12 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                 controller.start();
               }
               if (packet.kind === "initial") {
+                setAuthentication(false);
+                if (awaitingPassword.current) {
+                  awaitingPassword.current = false;
+                  setPanel(null);
+                  setError("");
+                }
                 controller.flush(true);
                 attempts = 0;
                 setConnection("syncing_live");
@@ -320,23 +504,20 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       cancelled = true;
       watch();
     };
-  }, [api]);
+  }, [api, native]);
 
-  useEffect(() => {
-    if (!panel) {
-      return;
+  const dismiss = () => {
+    if (starting.current) {
+      starting.current.abort();
     }
-    const dismiss = (event: PointerEvent) => {
-      if (
-        !surface.current?.contains(event.target as Node) &&
-        !(event.target as Element).closest?.("[data-network]")
-      ) {
-        setPanel(null);
-      }
-    };
-    window.addEventListener("pointerdown", dismiss);
-    return () => window.removeEventListener("pointerdown", dismiss);
-  }, [panel]);
+    setPanel(null);
+    setError("");
+  };
+  const configure = (next: typeof config) => {
+    cloudConfig.current = next;
+    setConfig(next);
+    saveCloudShare(next);
+  };
   useEffect(() => {
     const registrations = [
       classroomCommands.register(
@@ -346,22 +527,66 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           if (args.panel !== undefined && args.panel !== "collab") {
             throw new Error(t("fcboard.this_panel_does_not_exist"));
           }
+          if (!sharing) {
+            setView("choose");
+          }
           setPanel("collab");
           setError("");
         },
       ),
       classroomCommands.register(
         "collaboration.start",
-        "开启局域网白板实时协作",
-        start,
+        "开启白板实时协作，args.mode=local|cloud（默认 local）；cloud 先用 collaboration.configure 设置实际服务地址与密钥。两种模式都使用原二维码密码开关及双向场景编辑。",
+        (args) => {
+          const mode = args.mode === undefined ? "local" : args.mode;
+          if (mode !== "local" && mode !== "cloud") {
+            throw new Error(t("fcboard.this_panel_does_not_exist"));
+          }
+          return start(
+            mode,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          );
+        },
       ),
       classroomCommands.register(
         "collaboration.stop",
         "结束或离开当前白板协作，保留本机内容",
         leave,
       ),
+      classroomCommands.register(
+        "collaboration.configure",
+        "配置实时分享云端连接：args.endpoint 和 args.key，自动保存；密钥只保留当前会话，不进入公开上下文。",
+        (args) => {
+          if (
+            starting.current ||
+            sharing ||
+            Object.keys(args).some(
+              (key) => !["endpoint", "key"].includes(key),
+            ) ||
+            Object.values(args).some(
+              (value) => typeof value !== "string" || value.length > 4096,
+            )
+          ) {
+            throw new Error(t("fcboard.live_share.invalid_server"));
+          }
+          const next = { ...cloudConfig.current, ...args } as typeof config;
+          configure(next);
+          return {
+            endpoint: publicCloudShareEndpoint(next.endpoint),
+            hasKey: !!next.key,
+          };
+        },
+      ),
       classroomCommands.context("network", () => ({
-        collaborating: hosted.current || joined.current,
+        mode,
+        busy: !!starting.current,
+        view,
+        endpoint: publicCloudShareEndpoint(cloudConfig.current.endpoint),
+        hasKey: !!cloudConfig.current.key,
+        protected: protection.enabled,
+        urls: sharing ? urls : [],
+        collaborating: hosted.current || !!cloud.current || joined.current,
+        hosting: hosted.current || !!cloud.current,
         peers,
         connection,
       })),
@@ -372,74 +597,174 @@ export const LanSession = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     <>
       {(panel || error) && (
         <MaterialPanel
-          ref={surface}
-          className="fc-network-panel fc-surface"
-          style={panelStyle}
+          centered
+          onDismiss={dismiss}
+          className={`fc-network-panel fc-surface ${
+            !sharing && !authentication && view === "choose"
+              ? "fc-live-share-picker"
+              : sharing && !!urls.length
+              ? "fc-share-qr-dialog"
+              : "fc-live-share-config"
+          }`}
           role="dialog"
           aria-label={t("fcboard.live_collaboration")}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
-              setPanel(null);
-              setError("");
+              dismiss();
             }
           }}
         >
           <header>
             <strong>{t("fcboard.live_collaboration")}</strong>
             <button
+              type="button"
               aria-label={t("fcboard.close_network_panel")}
-              onClick={() => {
-                setPanel(null);
-                setError("");
-              }}
+              onClick={dismiss}
             >
-              {CloseIcon}
+              <img src={closeIcon} alt="" />
             </button>
           </header>
           <TransientMessage message={error} role="alert" />
           {panel === "collab" && (
             <>
-              {sharing ? (
+              {authentication ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (
+                      socket.current?.readyState === WebSocket.OPEN &&
+                      /^\d{4}$/.test(guestPassword)
+                    ) {
+                      guestCode.current = guestPassword;
+                      socket.current.send(
+                        JSON.stringify({
+                          kind: "join",
+                          password: guestPassword,
+                        }),
+                      );
+                    }
+                  }}
+                >
+                  <label>
+                    {t("fcboard.qr_enter_password")}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{4}"
+                      maxLength={4}
+                      value={guestPassword}
+                      autoComplete="off"
+                      onChange={(event) => {
+                        if (/^\d{0,4}$/.test(event.target.value)) {
+                          setGuestPassword(event.target.value);
+                        }
+                      }}
+                    />
+                  </label>
+                  <button type="submit" disabled={guestPassword.length !== 4}>
+                    {t("buttons.confirm")}
+                  </button>
+                </form>
+              ) : sharing ? (
                 <>
                   <p role="status">
                     {statusText(connection)}
-                    {native
+                    {hosted.current || cloud.current
                       ? ` · ${t("fcboard.count_devices", { count: peers })}`
                       : ""}
                   </p>
-                  {urls.map((url) => (
-                    <div key={url}>
-                      <QRCode value={url} />
-                      <p className="fc-network-address">{url}</p>
-                    </div>
-                  ))}
+                  {urls[0] && (
+                    <ShareQRCode
+                      key={urls[0]}
+                      url={urls[0]}
+                      protection={protection}
+                    />
+                  )}
                   <button disabled={busy} onClick={() => void run(leave)}>
-                    {hosted.current
+                    {hosted.current || cloud.current
                       ? t("fcboard.end_collaboration")
                       : t("fcboard.leave_collaboration")}
                   </button>
                 </>
-              ) : native ? (
-                <>
-                  <p>
-                    {t(
-                      "fcboard.scan_on_the_same_network_to_join_writing_images_and_undo_sync_live",
-                    )}
-                  </p>
-                  <button disabled={busy} onClick={() => void run(start)}>
+              ) : view === "cloud" ? (
+                <form
+                  className="fc-live-share-cloud"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void run(() => start("cloud"));
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="fc-live-share-back"
+                    onClick={() => setView("choose")}
+                    disabled={busy}
+                  >
+                    {t("fcboard.back")}
+                  </button>
+                  <label>
+                    {t("fcboard.live_share.endpoint")}
+                    <input
+                      type="url"
+                      autoComplete="url"
+                      value={config.endpoint}
+                      disabled={busy}
+                      onChange={(event) =>
+                        configure({ ...config, endpoint: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    {t("fcboard.live_share.key_label")}
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={config.key}
+                      disabled={busy}
+                      onChange={(event) =>
+                        configure({ ...config, key: event.target.value })
+                      }
+                    />
+                  </label>
+                  <p>{t("fcboard.live_share.cloud_description")}</p>
+                  <button
+                    type="submit"
+                    disabled={
+                      busy || !config.endpoint.trim() || !config.key.trim()
+                    }
+                  >
                     {busy
                       ? t("fcboard.starting")
                       : t("fcboard.start_collaboration")}
                   </button>
-                </>
+                </form>
               ) : (
-                <p>
-                  {connection ||
-                    t(
-                      "fcboard.scan_the_android_board_s_collaboration_qr_code_with_this_device_to_join",
-                    )}
-                </p>
+                <div className="fc-live-share-choices" aria-busy={busy}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setView("cloud")}
+                  >
+                    <img src={cloudIcon} alt="" />
+                    <span>{t("fcboard.live_share.cloud")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !native}
+                    title={
+                      !native
+                        ? t(
+                            "fcboard.start_collaboration_on_the_android_board_then_scan_the_qr_code_on_another_device",
+                          )
+                        : undefined
+                    }
+                    onClick={() => void run(() => start("local"))}
+                  >
+                    <img src={localIcon} alt="" />
+                    <span>{t("fcboard.live_share.local")}</span>
+                  </button>
+                </div>
               )}
             </>
           )}

@@ -91,7 +91,7 @@
     "untitled": "अशीर्षित",
     "name": "नाम",
     "yourName": "आपका नाम",
-    "madeWithExcalidraw": "एक्स काली ड्रॉ द्वारा बनाया हुवा",
+    "madeWithFcboard": "एक्स काली ड्रॉ द्वारा बनाया हुवा",
     "group": "समूह चयन",
     "ungroup": "समूह चयन असमूहीकृत करें",
     "collaborators": "सहयोगी",
@@ -121,7 +121,7 @@
     "toggleTheme": "अंधेरी/उजेलि संरचना पलटे",
     "theme": "संरचना पद्धति",
     "personalLib": "वैयक्तिक समूहकोष",
-    "excalidrawLib": "एक्सकेलीड्रॉ समूहकोष",
+    "fcboardlib": "एक्सकेलीड्रॉ समूहकोष",
     "decreaseFontSize": "अक्षर आकार घटायें",
     "increaseFontSize": "अक्षर आकार बढ़ायें",
     "unbindText": "लिपि को बंधमुक्त करें",
@@ -320,7 +320,7 @@
     "laser": "लेसर टॉर्च",
     "hand": "हाथ ( खिसका के देखने का औज़ार)",
     "extraTools": "अधिक उपकरण",
-    "mermaidToExcalidraw": "मर्मेड से एक्सकाली में",
+    "mermaidToFcboard": "मर्मेड से एक्सकाली में",
     "convertElementType": "आकार प्रकार टॉगल करें"
   },
   "element": {

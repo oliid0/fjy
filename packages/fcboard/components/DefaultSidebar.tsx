@@ -5,16 +5,16 @@ import {
   DEFAULT_SIDEBAR,
   LIBRARY_SIDEBAR_TAB,
   composeEventHandlers,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
+import type { MarkOptional, Merge } from "@fcboard/common/utility-types";
 
 import { useTunnels } from "../context/tunnels";
 import { useUIAppState } from "../context/ui-appState";
 
 import "../components/dropdownMenu/DropdownMenu.scss";
 
-import { useExcalidrawSetAppState } from "./App";
+import { useFcboardSetAppState } from "./App";
 import { LibraryMenu } from "./LibraryMenu";
 import { SearchMenu } from "./SearchMenu";
 import { Sidebar } from "./Sidebar/Sidebar";
@@ -70,7 +70,7 @@ export const DefaultSidebar = Object.assign(
       }
     >) => {
       const appState = useUIAppState();
-      const setAppState = useExcalidrawSetAppState();
+      const setAppState = useFcboardSetAppState();
 
       const { DefaultSidebarTabTriggersTunnel } = useTunnels();
 

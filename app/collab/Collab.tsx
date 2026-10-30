@@ -4,9 +4,9 @@ import {
   restoreElements,
   zoomToFitBounds,
   reconcileElements,
-} from "@excalidraw/excalidraw";
-import { ErrorDialog } from "@excalidraw/excalidraw/components/ErrorDialog";
-import { APP_NAME, cloneJSON, EVENT, toBrandedType } from "@excalidraw/common";
+} from "@fcboard/fcboard";
+import { ErrorDialog } from "@fcboard/fcboard/components/ErrorDialog";
+import { APP_NAME, cloneJSON, EVENT, toBrandedType } from "@fcboard/common";
 import {
   IDLE_THRESHOLD,
   ACTIVE_THRESHOLD,
@@ -17,39 +17,43 @@ import {
   preventUnload,
   resolvablePromise,
   throttleRAF,
-} from "@excalidraw/common";
-import { decryptData } from "@excalidraw/excalidraw/data/encryption";
-import { getVisibleSceneBounds } from "@excalidraw/element";
-import { newElementWith } from "@excalidraw/element";
-import { isImageElement, isInitializedImageElement } from "@excalidraw/element";
-import { AbortError } from "@excalidraw/excalidraw/errors";
-import { t } from "@excalidraw/excalidraw/i18n";
-import { withBatchedUpdates } from "@excalidraw/excalidraw/reactUtils";
+} from "@fcboard/common";
+import { decryptData } from "@fcboard/fcboard/data/encryption";
+import { getVisibleSceneBounds } from "@fcboard/element";
+import { newElementWith } from "@fcboard/element";
+import { isImageElement, isInitializedImageElement } from "@fcboard/element";
+import { AbortError } from "@fcboard/fcboard/errors";
+import { t } from "@fcboard/fcboard/i18n";
+import { withBatchedUpdates } from "@fcboard/fcboard/reactUtils";
 
 import throttle from "lodash.throttle";
 import { PureComponent } from "react";
 
-import { bumpElementVersions } from "@excalidraw/excalidraw/data/restore";
+import { bumpElementVersions } from "@fcboard/fcboard/data/restore";
+
+import type { Mutable, ValueOf } from "@fcboard/common/utility-types";
 
 import type {
-  ReconciledExcalidrawElement,
-  RemoteExcalidrawElement,
-} from "@excalidraw/excalidraw/data/reconcile";
-import type { ImportedDataState } from "@excalidraw/excalidraw/data/types";
-import type {
-  ExcalidrawElement,
-  FileId,
-  InitializedExcalidrawImageElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
-import type {
   BinaryFileData,
-  ExcalidrawImperativeAPI,
+  FcboardImperativeAPI,
   SocketId,
   Collaborator,
   Gesture,
-} from "@excalidraw/excalidraw/types";
-import type { Mutable, ValueOf } from "@excalidraw/common/utility-types";
+} from "@fcboard/fcboard/types";
+
+import type {
+  FcboardElement,
+  FileId,
+  InitializedFcboardImageElement,
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
+
+import type { ImportedDataState } from "@fcboard/fcboard/data/types";
+
+import type {
+  ReconciledFcboardElement,
+  RemoteFcboardElement,
+} from "@fcboard/fcboard/data/reconcile";
 
 import { appJotaiStore, atom } from "../app-jotai";
 import {
@@ -90,10 +94,7 @@ import { resetBrowserStateVersions } from "../data/tabSync";
 import { collabErrorIndicatorAtom } from "./CollabError";
 import Portal from "./Portal";
 
-import type {
-  SocketUpdateDataSource,
-  SyncableExcalidrawElement,
-} from "../data";
+import type { SocketUpdateDataSource, SyncableFcboardElement } from "../data";
 
 export const collabAPIAtom = atom<CollabAPI | null>(null);
 export const isCollaboratingAtom = atom(false);
@@ -126,7 +127,7 @@ export interface CollabAPI {
 }
 
 interface CollabProps {
-  excalidrawAPI: ExcalidrawImperativeAPI;
+  excalidrawAPI: FcboardImperativeAPI;
 }
 
 class Collab extends PureComponent<CollabProps, CollabState> {
@@ -313,7 +314,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   });
 
   saveCollabRoomToFirebase = async (
-    syncableElements: readonly SyncableExcalidrawElement[],
+    syncableElements: readonly SyncableFcboardElement[],
   ) => {
     syncableElements = cloneJSON(syncableElements);
     try {
@@ -418,7 +419,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   };
 
   private fetchImageFilesFromFirebase = async (opts: {
-    elements: readonly ExcalidrawElement[];
+    elements: readonly FcboardElement[];
     /**
      * Indicates whether to fetch files that are errored or pending and older
      * than 10 seconds.
@@ -440,7 +441,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
             : element.status === "saved")
         );
       })
-      .map((element) => (element as InitializedExcalidrawImageElement).fileId);
+      .map((element) => (element as InitializedFcboardImageElement).fileId);
 
     return await this.fileManager.getFiles(unfetchedImages);
   };
@@ -498,7 +499,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
 
     // TODO: `ImportedDataState` type here seems abused
     const scenePromise = resolvablePromise<
-      | (ImportedDataState & { elements: readonly OrderedExcalidrawElement[] })
+      | (ImportedDataState & { elements: readonly OrderedFcboardElement[] })
       | null
     >();
 
@@ -585,7 +586,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
             if (!this.portal.socketInitialized) {
               this.initializeRoom({ fetchScene: false });
               const remoteElements = toBrandedType<
-                readonly RemoteExcalidrawElement[]
+                readonly RemoteFcboardElement[]
               >(decryptedData.payload.elements);
               const reconciledElements =
                 this._reconcileElements(remoteElements);
@@ -601,7 +602,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
           case WS_SUBTYPES.UPDATE:
             this.handleRemoteSceneUpdate(
               this._reconcileElements(
-                toBrandedType<readonly RemoteExcalidrawElement[]>(
+                toBrandedType<readonly RemoteFcboardElement[]>(
                   decryptedData.payload.elements,
                 ),
               ),
@@ -753,8 +754,8 @@ class Collab extends PureComponent<CollabProps, CollabState> {
   };
 
   private _reconcileElements = (
-    remoteElements: readonly RemoteExcalidrawElement[],
-  ): ReconciledExcalidrawElement[] => {
+    remoteElements: readonly RemoteFcboardElement[],
+  ): ReconciledFcboardElement[] => {
     const appState = this.excalidrawAPI.getAppState();
 
     const existingElements = this.getSceneElementsIncludingDeleted();
@@ -801,9 +802,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     });
   }, LOAD_IMAGES_TIMEOUT);
 
-  private handleRemoteSceneUpdate = (
-    elements: ReconciledExcalidrawElement[],
-  ) => {
+  private handleRemoteSceneUpdate = (elements: ReconciledFcboardElement[]) => {
     this.excalidrawAPI.updateScene({
       elements,
       captureUpdate: CaptureUpdateAction.NEVER,
@@ -941,7 +940,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     this.portal.broadcastIdleChange(userState);
   };
 
-  broadcastElements = (elements: readonly OrderedExcalidrawElement[]) => {
+  broadcastElements = (elements: readonly OrderedFcboardElement[]) => {
     if (
       getSceneVersion(elements) >
       this.getLastBroadcastedOrReceivedSceneVersion()
@@ -952,7 +951,7 @@ class Collab extends PureComponent<CollabProps, CollabState> {
     }
   };
 
-  syncElements = (elements: readonly OrderedExcalidrawElement[]) => {
+  syncElements = (elements: readonly OrderedFcboardElement[]) => {
     this.broadcastElements(elements);
     this.queueSaveToFirebase();
   };

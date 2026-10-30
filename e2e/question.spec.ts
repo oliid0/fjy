@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
-import { dictateQuestion } from "./question";
+import { writeQuestion } from "./question";
 
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 3080, height: 1240 },
   { width: 390, height: 844 },
 ]) {
-  test(`dictated questions are editable board objects with a nearby foldable answer at ${viewport.width}`, async ({
+  test(`handwritten requests are editable board ink with a nearby foldable answer at ${viewport.width}`, async ({
     page,
   }, info) => {
     await page.setViewportSize(viewport);
@@ -54,19 +54,21 @@ for (const viewport of [
     const frame = (await page
       .getByRole("img", { name: "向 AI 教师提问", exact: true })
       .boundingBox())!;
-    await dictateQuestion(page, "物体为什么会下落？");
+    await writeQuestion(page, "物体为什么会下落？");
     const fold = page.getByRole("button", { name: "折叠回答", exact: true });
     await expect(fold).toBeEnabled();
     expect(requested).toBe(true);
     const writing = () =>
       page.evaluate(() => {
         const items = JSON.parse(
-          localStorage.getItem("excalidraw") || "[]",
+          localStorage.getItem("fcboard") || "[]",
         ).filter((item: { isDeleted?: boolean }) => !item.isDeleted);
         return {
           question: items.filter(
-            (item: { customData?: { fcQuestionInput?: boolean } }) =>
-              item.customData?.fcQuestionInput,
+            (item: {
+              type: string;
+              customData?: { fcQuestionInput?: boolean; fcGenerated?: boolean };
+            }) => item.type === "freedraw" && !item.customData?.fcGenerated,
           ),
           answer: items.filter(
             (item: {
@@ -74,7 +76,7 @@ for (const viewport of [
             }) =>
               item.customData?.fcGenerated && !item.customData?.fcQuestionInput,
           ),
-          state: JSON.parse(localStorage.getItem("excalidraw-state") || "{}"),
+          state: JSON.parse(localStorage.getItem("fcboard-state") || "{}"),
         };
       });
     await expect
@@ -83,8 +85,9 @@ for (const viewport of [
     const { question, answer, state } = await writing();
     expect(question).toHaveLength(1);
     const source = question[0];
-    expect(source.fontFamily).toBe(5);
-    const root = (await page.locator(".excalidraw").boundingBox())!;
+    expect(source.type).toBe("freedraw");
+    expect(source.points.length).toBeGreaterThan(2);
+    const root = (await page.locator(".fcboard").boundingBox())!;
     const left = root.x + (source.x + state.scrollX) * state.zoom.value;
     const top = root.y + (source.y + state.scrollY) * state.zoom.value;
     expect(left).toBeGreaterThanOrEqual(frame.x - 1);
@@ -95,8 +98,8 @@ for (const viewport of [
     expect(top + source.height * state.zoom.value).toBeLessThanOrEqual(
       frame.y + frame.height + 1,
     );
-    expect(source.fontSize * state.zoom.value).toBeGreaterThanOrEqual(6);
-    expect(answer[0].fontSize).toBeLessThanOrEqual(source.fontSize);
+    expect(source.height * state.zoom.value).toBeGreaterThanOrEqual(6);
+    expect(answer[0].fontSize).toBeLessThanOrEqual(source.height);
     expect(answer[0].y).toBeGreaterThanOrEqual(source.y + source.height);
     expect(
       await page.evaluate(
@@ -104,7 +107,7 @@ for (const viewport of [
           !!document.elementFromPoint(x, y)?.closest(".fc-ink-question"),
         { x: left + 2, y: top + 2 },
       ),
-    ).toBe(false);
+    ).toBe(true);
     await expect(page.locator(".fc-ink-question-words")).toHaveCount(0);
     await fold.click();
     await expect.poll(async () => (await writing()).answer.length).toBe(0);
@@ -184,7 +187,7 @@ for (const viewport of [
       .poll(() =>
         page.evaluate(() => {
           const elements = JSON.parse(
-            localStorage.getItem("excalidraw") || "[]",
+            localStorage.getItem("fcboard") || "[]",
           ).filter((el: { isDeleted?: boolean }) => !el.isDeleted);
           const question = elements.find(
             (el: { type: string; customData?: { fcGenerated?: boolean } }) =>
@@ -211,7 +214,7 @@ for (const viewport of [
       .poll(() =>
         page.evaluate(
           () =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
               (el: {
                 isDeleted?: boolean;
                 customData?: { fcWrittenText?: string };
@@ -225,7 +228,7 @@ for (const viewport of [
       .poll(() =>
         page.evaluate(
           () =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
               (el: {
                 isDeleted?: boolean;
                 customData?: { fcWrittenText?: string };

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 import { t } from "../i18n";
 
-import { useExcalidrawContainer } from "./App";
+import { useFcboardContainer } from "./App";
 import { Dialog } from "./Dialog";
 
 export const ErrorDialog = ({
@@ -13,7 +13,7 @@ export const ErrorDialog = ({
   onClose?: () => void;
 }) => {
   const [modalIsShown, setModalIsShown] = useState(!!children);
-  const { container: excalidrawContainer } = useExcalidrawContainer();
+  const { container: excalidrawContainer } = useFcboardContainer();
 
   const handleClose = React.useCallback(() => {
     setModalIsShown(false);

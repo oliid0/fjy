@@ -1,8 +1,8 @@
-import { KEYS } from "@excalidraw/common";
+import { KEYS } from "@fcboard/common";
 
 import { actionSelectAll } from "../actions";
 import { t } from "../i18n";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "../tests/helpers/api";
 import { Keyboard, Pointer, UI } from "../tests/helpers/ui";
@@ -17,7 +17,7 @@ const h = window.h;
 
 describe("element locking", () => {
   beforeEach(async () => {
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
     API.setElements([]);
   });
 

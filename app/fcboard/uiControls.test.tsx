@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { act, fireEvent, screen } from "@testing-library/react";
 import Slider from "@mui/material/Slider";
 import Switch from "@mui/material/Switch";
-import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
+import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 
 import { render } from "./test/render";
 import { sceneAPI } from "./test/scene";
@@ -212,9 +212,9 @@ it("sets explicit new secrets through React while all returned observations rema
 
 it("discovers only portals belonging to this editor and invokes real SVG controls", async () => {
   const own = document.createElement("div");
-  own.dataset.excalidrawOwner = "owned-editor";
+  own.dataset.fcboardOwner = "owned-editor";
   const other = document.createElement("div");
-  other.dataset.excalidrawOwner = "other-editor";
+  other.dataset.fcboardOwner = "other-editor";
   other.innerHTML = "<button>Other editor</button>";
   document.body.append(own, other);
   vi.spyOn(SVGElement.prototype, "getBoundingClientRect").mockReturnValue({

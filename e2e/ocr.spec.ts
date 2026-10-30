@@ -39,9 +39,9 @@ test("handwritten selection calculates with bundled OCR and no cloud request", a
     x += glyph.advance * 3;
   }
   await page.addInitScript((ink) => {
-    localStorage.setItem("excalidraw", JSON.stringify(ink));
+    localStorage.setItem("fcboard", JSON.stringify(ink));
     localStorage.setItem(
-      "excalidraw-state",
+      "fcboard-state",
       JSON.stringify({ viewBackgroundColor: "#002820" }),
     );
     localStorage.setItem(
@@ -71,7 +71,7 @@ test("handwritten selection calculates with bundled OCR and no cloud request", a
     .poll(
       () =>
         page.evaluate(() =>
-          JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+          JSON.parse(localStorage.getItem("fcboard") || "[]").some(
             (element: {
               isDeleted?: boolean;
               customData?: { fcWrittenText?: string };

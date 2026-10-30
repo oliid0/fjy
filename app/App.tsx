@@ -1,24 +1,24 @@
 import {
-  Excalidraw,
+  Fcboard,
   LiveCollaborationTrigger,
   TTDDialogTrigger,
   CaptureUpdateAction,
   reconcileElements,
   useEditorInterface,
-  ExcalidrawAPIProvider,
-  useExcalidrawAPI,
-} from "@excalidraw/excalidraw";
-import { trackEvent } from "@excalidraw/excalidraw/analytics";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
+  FcboardAPIProvider,
+  useFcboardAPI,
+} from "@fcboard/fcboard";
+import { trackEvent } from "@fcboard/fcboard/analytics";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
 import {
   CommandPalette,
   DEFAULT_CATEGORIES,
-} from "@excalidraw/excalidraw/components/CommandPalette/CommandPalette";
-import { ErrorDialog } from "@excalidraw/excalidraw/components/ErrorDialog";
-import { OverwriteConfirmDialog } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirm";
-import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
-import { ShareableLinkDialog } from "@excalidraw/excalidraw/components/ShareableLinkDialog";
-import Trans from "@excalidraw/excalidraw/components/Trans";
+} from "@fcboard/fcboard/components/CommandPalette/CommandPalette";
+import { ErrorDialog } from "@fcboard/fcboard/components/ErrorDialog";
+import { OverwriteConfirmDialog } from "@fcboard/fcboard/components/OverwriteConfirm/OverwriteConfirm";
+import { openConfirmModal } from "@fcboard/fcboard/components/OverwriteConfirm/OverwriteConfirmState";
+import { ShareableLinkDialog } from "@fcboard/fcboard/components/ShareableLinkDialog";
+import Trans from "@fcboard/fcboard/components/Trans";
 import {
   APP_NAME,
   EVENT,
@@ -32,44 +32,46 @@ import {
   resolvablePromise,
   isRunningInIframe,
   isDevEnv,
-} from "@excalidraw/common";
-import polyfill from "@excalidraw/excalidraw/polyfill";
+} from "@fcboard/common";
+import polyfill from "@fcboard/fcboard/polyfill";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadFromBlob } from "@excalidraw/excalidraw/data/blob";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { loadFromBlob } from "@fcboard/fcboard/data/blob";
+import { t } from "@fcboard/fcboard/i18n";
 
-import { usersIcon, share } from "@excalidraw/excalidraw/components/icons";
-import { isElementLink } from "@excalidraw/element";
+import { usersIcon, share } from "@fcboard/fcboard/components/icons";
+import { isElementLink } from "@fcboard/element";
 import {
   bumpElementVersions,
   restoreAppState,
   restoreElements,
-} from "@excalidraw/excalidraw/data/restore";
-import { newElementWith } from "@excalidraw/element";
-import { isInitializedImageElement } from "@excalidraw/element";
+} from "@fcboard/fcboard/data/restore";
+import { newElementWith } from "@fcboard/element";
+import { isInitializedImageElement } from "@fcboard/element";
 import clsx from "clsx";
 import {
   parseLibraryTokensFromUrl,
   useHandleLibrary,
-} from "@excalidraw/excalidraw/data/library";
+} from "@fcboard/fcboard/data/library";
 
-import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
-import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
+import type { RemoteFcboardElement } from "@fcboard/fcboard/data/reconcile";
+import type { RestoredDataState } from "@fcboard/fcboard/data/restore";
 import type {
   FileId,
-  NonDeletedExcalidrawElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  NonDeletedFcboardElement,
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 import type {
   AppState,
-  ExcalidrawImperativeAPI,
+  FcboardImperativeAPI,
   BinaryFiles,
-  ExcalidrawInitialDataState,
+  FcboardInitialDataState,
   UIAppState,
-  ExcalidrawProps,
-} from "@excalidraw/excalidraw/types";
-import type { ResolutionType } from "@excalidraw/common/utility-types";
-import type { ResolvablePromise } from "@excalidraw/common/utils";
+  FcboardProps,
+} from "@fcboard/fcboard/types";
+import type { ResolutionType } from "@fcboard/common/utility-types";
+import type { ResolvablePromise } from "@fcboard/common/utils";
+
+import { nativeImagePicker } from "./fcboard/boardFile";
 
 import CustomStats from "./CustomStats";
 import { classroomCommands } from "./fcboard/commands";
@@ -91,7 +93,7 @@ import Collab, {
   isOfflineAtom,
 } from "./collab/Collab";
 import { AppFooter } from "./components/AppFooter";
-import { AppMainMenu, AppSettingsActions } from "./components/AppMainMenu";
+import { AppMainMenu } from "./components/AppMainMenu";
 import { AppWelcomeScreen } from "./components/AppWelcomeScreen";
 import { TopErrorBoundary } from "./components/TopErrorBoundary";
 
@@ -203,9 +205,9 @@ const shareableLinkConfirmDialog = {
 
 const initializeScene = async (opts: {
   collabAPI: CollabAPI | null;
-  excalidrawAPI: ExcalidrawImperativeAPI;
+  excalidrawAPI: FcboardImperativeAPI;
 }): Promise<
-  { scene: ExcalidrawInitialDataState | null } & (
+  { scene: FcboardInitialDataState | null } & (
     | { isExternalScene: true; id: string; key: string }
     | { isExternalScene: false; id?: null; key?: null }
   )
@@ -272,7 +274,7 @@ const initializeScene = async (opts: {
         window.history.replaceState({}, APP_NAME, window.location.origin);
       }
     } else {
-      // https://github.com/excalidraw/excalidraw/issues/1919
+      // https://github.com/fcboard/fcboard/issues/1919
       if (document.hidden) {
         return new Promise((resolve, reject) => {
           window.addEventListener(
@@ -338,7 +340,7 @@ const initializeScene = async (opts: {
         },
         elements: reconcileElements(
           scene?.elements || [],
-          excalidrawAPI.getSceneElementsIncludingDeleted() as RemoteExcalidrawElement[],
+          excalidrawAPI.getSceneElementsIncludingDeleted() as RemoteFcboardElement[],
           excalidrawAPI.getAppState(),
         ),
       },
@@ -359,9 +361,9 @@ const initializeScene = async (opts: {
   return { scene: null, isExternalScene: false };
 };
 
-const ExcalidrawWrapper = () => {
+const FcboardWrapper = () => {
   const inkProfile = useDeviceInkProfile();
-  const excalidrawAPI = useExcalidrawAPI();
+  const excalidrawAPI = useFcboardAPI();
 
   const [errorMessage, setErrorMessage] = useState("");
   const isCollabDisabled =
@@ -377,11 +379,11 @@ const ExcalidrawWrapper = () => {
   // ---------------------------------------------------------------------------
 
   const initialStatePromiseRef = useRef<{
-    promise: ResolvablePromise<ExcalidrawInitialDataState | null>;
+    promise: ResolvablePromise<FcboardInitialDataState | null>;
   }>({ promise: null! });
   if (!initialStatePromiseRef.current.promise) {
     initialStatePromiseRef.current.promise =
-      resolvablePromise<ExcalidrawInitialDataState | null>();
+      resolvablePromise<FcboardInitialDataState | null>();
   }
 
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -666,7 +668,7 @@ const ExcalidrawWrapper = () => {
   }, [excalidrawAPI]);
 
   const onChange = (
-    elements: readonly OrderedExcalidrawElement[],
+    elements: readonly OrderedFcboardElement[],
     appState: AppState,
     files: BinaryFiles,
   ) => {
@@ -722,7 +724,7 @@ const ExcalidrawWrapper = () => {
   );
 
   const onExportToBackend = async (
-    exportedElements: readonly NonDeletedExcalidrawElement[],
+    exportedElements: readonly NonDeletedFcboardElement[],
     appState: Partial<AppState>,
     files: BinaryFiles,
   ) => {
@@ -762,7 +764,7 @@ const ExcalidrawWrapper = () => {
   };
 
   const renderCustomStats = (
-    elements: readonly NonDeletedExcalidrawElement[],
+    elements: readonly NonDeletedFcboardElement[],
     appState: UIAppState,
   ) => {
     return (
@@ -786,7 +788,7 @@ const ExcalidrawWrapper = () => {
   // ---------------------------------------------------------------------------
   // onExport — intercepts file save to wait for pending image loads
   // ---------------------------------------------------------------------------
-  const onExport: Required<ExcalidrawProps>["onExport"] = useCallback(
+  const onExport: Required<FcboardProps>["onExport"] = useCallback(
     async function* () {
       let snapshot = FileStatusStore.getSnapshot();
       const { pending, total } = FileStatusStore.getPendingCount(
@@ -859,7 +861,8 @@ const ExcalidrawWrapper = () => {
         "is-collaborating": isCollaborating,
       })}
     >
-      <Excalidraw
+      <Fcboard
+        onImagePick={nativeImagePicker}
         onChange={onChange}
         onExport={onExport}
         initialData={initialStatePromiseRef.current.promise}
@@ -912,7 +915,7 @@ const ExcalidrawWrapper = () => {
           }
 
           return (
-            <div className="excalidraw-ui-top-right">
+            <div className="fcboard-ui-top-right">
               {collabError.message && <CollabError collabError={collabError} />}
               <LiveCollaborationTrigger
                 isCollaborating={isCollaborating}
@@ -949,21 +952,7 @@ const ExcalidrawWrapper = () => {
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
         {excalidrawAPI && (
-          <Classroom
-            api={excalidrawAPI}
-            inkProfile={inkProfile}
-            renderSettingsActions={(close) => (
-              <AppSettingsActions
-                onClose={close}
-                onCollabDialogOpen={onCollabDialogOpen}
-                isCollaborating={isCollaborating}
-                isCollabEnabled={!isCollabDisabled}
-                theme={appTheme}
-                setTheme={setAppTheme}
-                refresh={() => forceRefresh((prev) => !prev)}
-              />
-            )}
-          />
+          <Classroom api={excalidrawAPI} inkProfile={inkProfile} />
         )}
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
@@ -1107,21 +1096,21 @@ const ExcalidrawWrapper = () => {
             ref={debugCanvasRef}
           />
         )}
-      </Excalidraw>
+      </Fcboard>
     </div>
   );
 };
 
-const ExcalidrawApp = () => {
+const FcboardApp = () => {
   return (
     <TopErrorBoundary>
       <Provider store={appJotaiStore}>
-        <ExcalidrawAPIProvider>
-          <ExcalidrawWrapper />
-        </ExcalidrawAPIProvider>
+        <FcboardAPIProvider>
+          <FcboardWrapper />
+        </FcboardAPIProvider>
       </Provider>
     </TopErrorBoundary>
   );
 };
 
-export default ExcalidrawApp;
+export default FcboardApp;

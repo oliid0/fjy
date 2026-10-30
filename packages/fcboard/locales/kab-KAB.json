@@ -91,7 +91,7 @@
     "untitled": "War azwel",
     "name": "Isem",
     "yourName": "Isem-ik (im)",
-    "madeWithExcalidraw": "Yettwaxdem s Fcboard",
+    "madeWithFcboard": "Yettwaxdem s Fcboard",
     "group": "Segrew tafrayt",
     "ungroup": "Kkess asegrew i tefrayt",
     "collaborators": "Imɛiwnen",
@@ -121,7 +121,7 @@
     "toggleTheme": "",
     "theme": "Asentel",
     "personalLib": "Tamkarḍit tudmawant",
-    "excalidrawLib": "Tamkarḍit n Fcboard",
+    "fcboardlib": "Tamkarḍit n Fcboard",
     "decreaseFontSize": "Senqes tiddi n tsefsit",
     "increaseFontSize": "Sali tiddi n tsefsit",
     "unbindText": "Serreḥ iweḍris",
@@ -312,7 +312,7 @@
     "laser": "",
     "hand": "Afus (afecku n usmutti n tmuɣli)",
     "extraTools": "",
-    "mermaidToExcalidraw": "",
+    "mermaidToFcboard": "",
     "convertElementType": ""
   },
   "element": {

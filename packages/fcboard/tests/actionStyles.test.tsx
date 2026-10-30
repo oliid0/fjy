@@ -1,9 +1,9 @@
 import React from "react";
 
-import { CODES } from "@excalidraw/common";
+import { CODES } from "@fcboard/common";
 
 import { copiedStyles } from "../actions/actionStyles";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { API } from "../tests/helpers/api";
 import { Keyboard, Pointer, UI } from "../tests/helpers/ui";
 import {
@@ -20,7 +20,7 @@ const mouse = new Pointer("mouse");
 
 describe("actionStyles", () => {
   beforeEach(async () => {
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
   });
 
   afterEach(async () => {

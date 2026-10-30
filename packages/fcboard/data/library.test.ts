@@ -4,101 +4,101 @@ describe("validateLibraryUrl", () => {
   it("should validate hostname & pathname", () => {
     // valid hostnames
     // -------------------------------------------------------------------------
+    expect(validateLibraryUrl("https://www.fcboard.com", ["fcboard.com"])).toBe(
+      true,
+    );
+    expect(validateLibraryUrl("https://fcboard.com", ["fcboard.com"])).toBe(
+      true,
+    );
     expect(
-      validateLibraryUrl("https://www.excalidraw.com", ["excalidraw.com"]),
+      validateLibraryUrl("https://library.fcboard.com", ["fcboard.com"]),
     ).toBe(true);
     expect(
-      validateLibraryUrl("https://excalidraw.com", ["excalidraw.com"]),
-    ).toBe(true);
-    expect(
-      validateLibraryUrl("https://library.excalidraw.com", ["excalidraw.com"]),
-    ).toBe(true);
-    expect(
-      validateLibraryUrl("https://library.excalidraw.com", [
-        "library.excalidraw.com",
+      validateLibraryUrl("https://library.fcboard.com", [
+        "library.fcboard.com",
       ]),
     ).toBe(true);
-    expect(
-      validateLibraryUrl("https://excalidraw.com/", ["excalidraw.com/"]),
-    ).toBe(true);
-    expect(
-      validateLibraryUrl("https://excalidraw.com", ["excalidraw.com/"]),
-    ).toBe(true);
-    expect(
-      validateLibraryUrl("https://excalidraw.com/", ["excalidraw.com"]),
-    ).toBe(true);
+    expect(validateLibraryUrl("https://fcboard.com/", ["fcboard.com/"])).toBe(
+      true,
+    );
+    expect(validateLibraryUrl("https://fcboard.com", ["fcboard.com/"])).toBe(
+      true,
+    );
+    expect(validateLibraryUrl("https://fcboard.com/", ["fcboard.com"])).toBe(
+      true,
+    );
 
     // valid pathnames
     // -------------------------------------------------------------------------
     expect(
-      validateLibraryUrl("https://excalidraw.com/path", ["excalidraw.com"]),
+      validateLibraryUrl("https://fcboard.com/path", ["fcboard.com"]),
     ).toBe(true);
     expect(
-      validateLibraryUrl("https://excalidraw.com/path/", ["excalidraw.com"]),
+      validateLibraryUrl("https://fcboard.com/path/", ["fcboard.com"]),
     ).toBe(true);
     expect(
-      validateLibraryUrl("https://excalidraw.com/specific/path", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/specific/path", [
+        "fcboard.com/specific/path",
       ]),
     ).toBe(true);
     expect(
-      validateLibraryUrl("https://excalidraw.com/specific/path/", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/specific/path/", [
+        "fcboard.com/specific/path",
       ]),
     ).toBe(true);
     expect(
-      validateLibraryUrl("https://excalidraw.com/specific/path", [
-        "excalidraw.com/specific/path/",
+      validateLibraryUrl("https://fcboard.com/specific/path", [
+        "fcboard.com/specific/path/",
       ]),
     ).toBe(true);
     expect(
-      validateLibraryUrl("https://excalidraw.com/specific/path/other", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/specific/path/other", [
+        "fcboard.com/specific/path",
       ]),
     ).toBe(true);
 
     // invalid hostnames
     // -------------------------------------------------------------------------
     expect(() =>
-      validateLibraryUrl("https://xexcalidraw.com", ["excalidraw.com"]),
+      validateLibraryUrl("https://xexcalidraw.com", ["fcboard.com"]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://x-excalidraw.com", ["excalidraw.com"]),
+      validateLibraryUrl("https://x-fcboard.com", ["fcboard.com"]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://excalidraw.comx", ["excalidraw.com"]),
+      validateLibraryUrl("https://fcboard.comx", ["fcboard.com"]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://excalidraw.comx", ["excalidraw.com"]),
+      validateLibraryUrl("https://fcboard.comx", ["fcboard.com"]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://excalidraw.com.mx", ["excalidraw.com"]),
+      validateLibraryUrl("https://fcboard.com.mx", ["fcboard.com"]),
     ).toThrow();
     // protocol must be https
     expect(() =>
-      validateLibraryUrl("http://excalidraw.com.mx", ["excalidraw.com"]),
+      validateLibraryUrl("http://fcboard.com.mx", ["fcboard.com"]),
     ).toThrow();
 
     // invalid pathnames
     // -------------------------------------------------------------------------
     expect(() =>
-      validateLibraryUrl("https://excalidraw.com/specific/other/path", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/specific/other/path", [
+        "fcboard.com/specific/path",
       ]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://excalidraw.com/specific/paths", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/specific/paths", [
+        "fcboard.com/specific/path",
       ]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://excalidraw.com/specific/path-s", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/specific/path-s", [
+        "fcboard.com/specific/path",
       ]),
     ).toThrow();
     expect(() =>
-      validateLibraryUrl("https://excalidraw.com/some/specific/path", [
-        "excalidraw.com/specific/path",
+      validateLibraryUrl("https://fcboard.com/some/specific/path", [
+        "fcboard.com/specific/path",
       ]),
     ).toThrow();
   });

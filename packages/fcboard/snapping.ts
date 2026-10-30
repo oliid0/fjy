@@ -5,32 +5,32 @@ import {
   rangeIntersection,
   rangesOverlap,
   type GlobalPoint,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
-import { TOOL_TYPE, KEYS } from "@excalidraw/common";
+import { TOOL_TYPE, KEYS } from "@fcboard/common";
 import {
   getCommonBounds,
   getDraggedElementsBounds,
   getElementAbsoluteCoords,
-} from "@excalidraw/element";
-import { isBoundToContainer } from "@excalidraw/element";
+} from "@fcboard/element";
+import { isBoundToContainer } from "@fcboard/element";
 
-import { getMaximumGroups } from "@excalidraw/element";
+import { getMaximumGroups } from "@fcboard/element";
 
 import {
   getSelectedElements,
   getVisibleAndNonSelectedElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import type { InclusiveRange } from "@excalidraw/math";
+import type { InclusiveRange } from "@fcboard/math";
 
-import type { Bounds } from "@excalidraw/common";
-import type { MaybeTransformHandleType } from "@excalidraw/element";
+import type { Bounds } from "@fcboard/common";
+import type { MaybeTransformHandleType } from "@fcboard/element";
 import type {
   ElementsMap,
-  ExcalidrawElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import type {
   AppClassProperties,
@@ -166,7 +166,7 @@ export const isSnappingEnabled = ({
 }: {
   app: AppClassProperties;
   event: KeyboardModifiersObject;
-  selectedElements: NonDeletedExcalidrawElement[];
+  selectedElements: NonDeletedFcboardElement[];
 }) => {
   if (event) {
     // Allow snapping for lasso tool when dragging selected elements
@@ -196,7 +196,7 @@ export const areRoughlyEqual = (a: number, b: number, precision = 0.01) => {
 };
 
 export const getElementsCorners = (
-  elements: ExcalidrawElement[],
+  elements: FcboardElement[],
   elementsMap: ElementsMap,
   {
     omitCenter,
@@ -313,8 +313,8 @@ export const getElementsCorners = (
 };
 
 const getReferenceElements = (
-  elements: readonly NonDeletedExcalidrawElement[],
-  selectedElements: NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
+  selectedElements: NonDeletedFcboardElement[],
   appState: AppState,
   elementsMap: ElementsMap,
 ) =>
@@ -326,12 +326,12 @@ const getReferenceElements = (
   );
 
 export const getVisibleGaps = (
-  elements: readonly NonDeletedExcalidrawElement[],
-  selectedElements: ExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
+  selectedElements: FcboardElement[],
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
-  const referenceElements: ExcalidrawElement[] = getReferenceElements(
+  const referenceElements: FcboardElement[] = getReferenceElements(
     elements,
     selectedElements,
     appState,
@@ -444,7 +444,7 @@ export const getVisibleGaps = (
 };
 
 const getGapSnaps = (
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   dragOffset: Vector2D,
   app: AppClassProperties,
   event: KeyboardModifiersObject,
@@ -614,8 +614,8 @@ const getGapSnaps = (
 };
 
 export const getReferenceSnapPoints = (
-  elements: readonly NonDeletedExcalidrawElement[],
-  selectedElements: ExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
+  selectedElements: FcboardElement[],
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
@@ -634,7 +634,7 @@ export const getReferenceSnapPoints = (
 };
 
 const getPointSnaps = (
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   selectionSnapPoints: GlobalPoint[],
   app: AppClassProperties,
   event: KeyboardModifiersObject,
@@ -690,7 +690,7 @@ const getPointSnaps = (
 };
 
 export const snapDraggedElements = (
-  elements: ExcalidrawElement[],
+  elements: FcboardElement[],
   dragOffset: Vector2D,
   app: AppClassProperties,
   event: KeyboardModifiersObject,
@@ -913,7 +913,7 @@ const dedupeGapSnapLines = (gapSnapLines: GapSnapLine[]) => {
 };
 
 const createGapSnapLines = (
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   dragOffset: Vector2D,
   gapSnaps: GapSnap[],
 ): GapSnapLine[] => {
@@ -1107,9 +1107,9 @@ const createGapSnapLines = (
 
 export const snapResizingElements = (
   // use the latest elements to create snap lines
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   // while using the original elements to appy dragOffset to calculate snaps
-  selectedOriginalElements: ExcalidrawElement[],
+  selectedOriginalElements: FcboardElement[],
   app: AppClassProperties,
   event: KeyboardModifiersObject,
   dragOffset: Vector2D,
@@ -1244,7 +1244,7 @@ export const snapResizingElements = (
 };
 
 export const snapNewElement = (
-  newElement: ExcalidrawElement,
+  newElement: FcboardElement,
   app: AppClassProperties,
   event: KeyboardModifiersObject,
   origin: Vector2D,
@@ -1316,7 +1316,7 @@ export const snapNewElement = (
 };
 
 export const getSnapLinesAtPointer = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   app: AppClassProperties,
   pointer: Vector2D,
   event: KeyboardModifiersObject,

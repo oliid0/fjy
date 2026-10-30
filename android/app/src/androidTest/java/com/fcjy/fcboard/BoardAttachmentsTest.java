@@ -55,6 +55,38 @@ public class BoardAttachmentsTest {
         assertThrows(Exception.class, () -> BoardAttachments.create(context, invalid));
     }
 
+    @Test public void createsFactoryMailAsA4WithTheOriginalImageFlow() throws Exception {
+        Context context = ApplicationProvider.getApplicationContext();
+        JSArray pages = new JSArray();
+        for (int color : new int[]{Color.RED, Color.BLUE}) {
+            Bitmap source = Bitmap.createBitmap(1600, 900, Bitmap.Config.ARGB_8888);
+            source.eraseColor(color);
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            source.compress(Bitmap.CompressFormat.PNG, 100, bytes);
+            source.recycle();
+            pages.put("data:image/png;base64," + Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP));
+        }
+        Intent intent = BoardAttachments.createMail(context, pages, "pdf", "Meeting Record");
+        assertEquals("application/pdf", intent.getType());
+        assertEquals(1, intent.getClipData().getItemCount());
+        try (ParcelFileDescriptor descriptor = context.getContentResolver().openFileDescriptor(intent.getClipData().getItemAt(0).getUri(), "r");
+             PdfRenderer renderer = new PdfRenderer(descriptor)) {
+            assertEquals(1, renderer.getPageCount());
+            try (PdfRenderer.Page page = renderer.openPage(0)) {
+                assertEquals(595, page.getWidth());
+                assertEquals(842, page.getHeight());
+                Bitmap rendered = Bitmap.createBitmap(595, 842, Bitmap.Config.ARGB_8888);
+                try {
+                    rendered.eraseColor(Color.WHITE);
+                    page.render(rendered, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    assertEquals(Color.RED, rendered.getPixel(297, 200));
+                    assertEquals(Color.BLUE, rendered.getPixel(297, 500));
+                    assertEquals(Color.WHITE, rendered.getPixel(10, 500));
+                } finally { rendered.recycle(); }
+            }
+        }
+    }
+
     @Test public void sharesAReadablePdfWithOriginalPageAspectAndReadGrants() throws Exception {
         Context context = ApplicationProvider.getApplicationContext();
         Bitmap source = Bitmap.createBitmap(1600, 900, Bitmap.Config.ARGB_8888);

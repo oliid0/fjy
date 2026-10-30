@@ -30,6 +30,8 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check
       - run: pnpm lint
+      - name: Lint cloud sharing service
+        run: pnpm exec eslint --max-warnings=0 services/board-share/*.mjs
       - run: pnpm test:other
       - run: pnpm test
       - name: Verify model replacement and integrity rules
@@ -65,8 +67,21 @@ jobs:
       - name: Package whiteboard web assets
         run: pnpm --dir app exec vite build
         env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
+      - name: Upload deployable live-share service and matching viewer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Live-Share
+          path: |
+            services/board-share/server.mjs
+            services/board-share/transfers.mjs
+            services/board-share/package.json
+            services/board-share/README.md
+            services/board-share/deploy
+            app/build
+          if-no-files-found: error
       - run: pnpm --dir app exec cap sync android
       - uses: actions/cache@v4
         with:

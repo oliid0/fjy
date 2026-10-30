@@ -5,7 +5,7 @@
 import { version as ReactVersion } from "react";
 import { unstable_batchedUpdates } from "react-dom";
 
-import { throttleRAF } from "@excalidraw/common";
+import { throttleRAF } from "@fcboard/common";
 
 export const withBatchedUpdates = <
   TFunction extends ((event: any) => void) | (() => void),
@@ -50,7 +50,7 @@ export const isRenderThrottlingEnabled = (() => {
         if (!hasWarned) {
           hasWarned = true;
           console.warn(
-            "Excalidraw: render throttling is disabled on React versions < 18.",
+            "Fcboard: render throttling is disabled on React versions < 18.",
           );
         }
         return false;

@@ -1,4 +1,4 @@
-import { clamp, roundToStep } from "@excalidraw/math";
+import { clamp, roundToStep } from "@fcboard/math";
 
 import {
   DEFAULT_CANVAS_BACKGROUND_PICKS,
@@ -11,15 +11,15 @@ import {
   CODES,
   KEYS,
   canvasStrokeColor,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
-import { newElementWith } from "@excalidraw/element";
-import { getCommonBounds, type SceneBounds } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
+import { newElementWith } from "@fcboard/element";
+import { getCommonBounds, type SceneBounds } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import {
   getDefaultAppState,
@@ -377,7 +377,7 @@ export const zoomToFit = ({
   maxZoom,
 }: {
   canvasOffsets?: Offsets;
-  targetElements: readonly ExcalidrawElement[];
+  targetElements: readonly FcboardElement[];
   appState: Readonly<AppState>;
   /** whether to fit content to viewport (beyond >100%) */
   fitToViewport: boolean;

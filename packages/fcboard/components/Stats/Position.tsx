@@ -1,14 +1,14 @@
-import { clamp, pointFrom, pointRotateRads, round } from "@excalidraw/math";
+import { clamp, pointFrom, pointRotateRads, round } from "@fcboard/math";
 
 import {
   getFlipAdjustedCropPosition,
   getUncroppedWidthAndHeight,
-} from "@excalidraw/element";
-import { isImageElement } from "@excalidraw/element";
+} from "@fcboard/element";
+import { isImageElement } from "@fcboard/element";
 
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { ElementsMap, FcboardElement } from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import StatsDragInput from "./DragInput";
 import { getStepSizedValue, moveElement, STEP_SIZE } from "./utils";
@@ -18,7 +18,7 @@ import type { AppState } from "../../types";
 
 interface PositionProps {
   property: "x" | "y";
-  element: ExcalidrawElement;
+  element: FcboardElement;
   elementsMap: ElementsMap;
   scene: Scene;
   appState: AppState;

@@ -1,0 +1,19 @@
+{
+	default_sni 101.96.199.53
+}
+
+https://101.96.199.53 {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+		}
+	}
+
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+
+	handle_errors {
+		respond "Fcboard is waiting for its verified web release." 503
+	}
+}

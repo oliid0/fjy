@@ -1,6 +1,6 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { blobToArrayBuffer } from "@excalidraw/excalidraw/data/blob";
+import { blobToArrayBuffer } from "@fcboard/fcboard/data/blob";
 
 import type { TranscriptLine } from "./speech";
 

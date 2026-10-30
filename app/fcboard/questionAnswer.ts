@@ -1,9 +1,9 @@
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { newElementWith } from "@excalidraw/element";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { CaptureUpdateAction } from "@fcboard/fcboard";
+import { newElementWith } from "@fcboard/element";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { classroomCommands } from "./commands";
 
@@ -51,7 +51,7 @@ export const changeQuestionAnswer = <T extends { id: string }>(
   };
 };
 
-export const visibleObjectIds = (api: ExcalidrawImperativeAPI) => {
+export const visibleObjectIds = (api: FcboardImperativeAPI) => {
   const document = classroomCommands.read("document") as
     | { ink: { id: string }[] }
     | undefined;
@@ -61,7 +61,7 @@ export const visibleObjectIds = (api: ExcalidrawImperativeAPI) => {
 };
 
 export const updateQuestionAnswer = async (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   anchor: string,
   ids?: string[],
 ) => {
@@ -77,7 +77,7 @@ export const updateQuestionAnswer = async (
     current,
     anchor,
     source?.customData?.fcQuestionAnswer as
-      | QuestionAnswer<ExcalidrawElement>
+      | QuestionAnswer<FcboardElement>
       | undefined,
     ids,
   );

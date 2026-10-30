@@ -24,7 +24,7 @@ $color-blue-7: #1c7ed6;
 $color-blue-8: #1971c2;
 
 @mixin isMobile() {
-  @at-root .excalidraw--mobile#{&} {
+  @at-root .fcboard--mobile#{&} {
     @content;
   }
 }

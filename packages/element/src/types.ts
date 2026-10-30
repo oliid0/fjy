@@ -1,4 +1,4 @@
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@fcboard/math";
 
 import type {
   FONT_FAMILY,
@@ -6,14 +6,14 @@ import type {
   TEXT_ALIGN,
   THEME,
   VERTICAL_ALIGN,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type {
   MakeBrand,
   MarkNonNullable,
   Merge,
   ValueOf,
-} from "@excalidraw/common/utility-types";
+} from "@fcboard/common/utility-types";
 
 export type ChartType = "bar" | "line" | "radar";
 export type FillStyle = "hachure" | "cross-hatch" | "solid" | "zigzag";
@@ -33,11 +33,11 @@ export type VerticalAlign = typeof VERTICAL_ALIGN[VerticalAlignKeys];
 export type FractionalIndex = string & { _brand: "franctionalIndex" };
 
 export type BoundElement = Readonly<{
-  id: ExcalidrawLinearElement["id"];
+  id: FcboardLinearElement["id"];
   type: "arrow" | "text";
 }>;
 
-type _ExcalidrawElementBase = Readonly<{
+type _FcboardElementBase = Readonly<{
   id: string;
   x: number;
   y: number;
@@ -81,23 +81,23 @@ type _ExcalidrawElementBase = Readonly<{
   customData?: Record<string, any>;
 }>;
 
-export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
+export type FcboardSelectionElement = _FcboardElementBase & {
   type: "selection";
 };
 
-export type ExcalidrawRectangleElement = _ExcalidrawElementBase & {
+export type FcboardRectangleElement = _FcboardElementBase & {
   type: "rectangle";
 };
 
-export type ExcalidrawDiamondElement = _ExcalidrawElementBase & {
+export type FcboardDiamondElement = _FcboardElementBase & {
   type: "diamond";
 };
 
-export type ExcalidrawEllipseElement = _ExcalidrawElementBase & {
+export type FcboardEllipseElement = _FcboardElementBase & {
   type: "ellipse";
 };
 
-export type ExcalidrawEmbeddableElement = _ExcalidrawElementBase &
+export type FcboardEmbeddableElement = _FcboardElementBase &
   Readonly<{
     type: "embeddable";
   }>;
@@ -113,16 +113,16 @@ export type MagicGenerationData =
       code: "ERR_GENERATION_INTERRUPTED" | string;
     };
 
-export type ExcalidrawIframeElement = _ExcalidrawElementBase &
+export type FcboardIframeElement = _FcboardElementBase &
   Readonly<{
     type: "iframe";
     // TODO move later to AI-specific frame
     customData?: { generationData?: MagicGenerationData };
   }>;
 
-export type ExcalidrawIframeLikeElement =
-  | ExcalidrawIframeElement
-  | ExcalidrawEmbeddableElement;
+export type FcboardIframeLikeElement =
+  | FcboardIframeElement
+  | FcboardEmbeddableElement;
 
 export type IframeData =
   | {
@@ -143,7 +143,7 @@ export type ImageCrop = {
   naturalHeight: number;
 };
 
-export type ExcalidrawImageElement = _ExcalidrawElementBase &
+export type FcboardImageElement = _FcboardElementBase &
   Readonly<{
     type: "image";
     fileId: FileId | null;
@@ -155,84 +155,84 @@ export type ExcalidrawImageElement = _ExcalidrawElementBase &
     crop: ImageCrop | null;
   }>;
 
-export type InitializedExcalidrawImageElement = MarkNonNullable<
-  ExcalidrawImageElement,
+export type InitializedFcboardImageElement = MarkNonNullable<
+  FcboardImageElement,
   "fileId"
 >;
 
-export type ExcalidrawFrameElement = _ExcalidrawElementBase & {
+export type FcboardFrameElement = _FcboardElementBase & {
   type: "frame";
   name: string | null;
 };
 
-export type ExcalidrawMagicFrameElement = _ExcalidrawElementBase & {
+export type FcboardMagicFrameElement = _FcboardElementBase & {
   type: "magicframe";
   name: string | null;
 };
 
-export type ExcalidrawFrameLikeElement =
-  | ExcalidrawFrameElement
-  | ExcalidrawMagicFrameElement;
+export type FcboardFrameLikeElement =
+  | FcboardFrameElement
+  | FcboardMagicFrameElement;
 
 /**
  * These are elements that don't have any additional properties.
  */
-export type ExcalidrawGenericElement =
-  | ExcalidrawSelectionElement
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement;
+export type FcboardGenericElement =
+  | FcboardSelectionElement
+  | FcboardRectangleElement
+  | FcboardDiamondElement
+  | FcboardEllipseElement;
 
-export type ExcalidrawFlowchartNodeElement =
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement;
+export type FcboardFlowchartNodeElement =
+  | FcboardRectangleElement
+  | FcboardDiamondElement
+  | FcboardEllipseElement;
 
-export type ExcalidrawRectanguloidElement =
-  | ExcalidrawRectangleElement
-  | ExcalidrawImageElement
-  | ExcalidrawTextElement
-  | ExcalidrawFreeDrawElement
-  | ExcalidrawIframeLikeElement
-  | ExcalidrawFrameLikeElement
-  | ExcalidrawEmbeddableElement
-  | ExcalidrawSelectionElement;
+export type FcboardRectanguloidElement =
+  | FcboardRectangleElement
+  | FcboardImageElement
+  | FcboardTextElement
+  | FcboardFreeDrawElement
+  | FcboardIframeLikeElement
+  | FcboardFrameLikeElement
+  | FcboardEmbeddableElement
+  | FcboardSelectionElement;
 
 /**
- * ExcalidrawElement should be JSON serializable and (eventually) contain
- * no computed data. The list of all ExcalidrawElements should be shareable
+ * FcboardElement should be JSON serializable and (eventually) contain
+ * no computed data. The list of all FcboardElements should be shareable
  * between peers and contain no state local to the peer.
  */
-export type ExcalidrawElement =
-  | ExcalidrawGenericElement
-  | ExcalidrawTextElement
-  | ExcalidrawLinearElement
-  | ExcalidrawArrowElement
-  | ExcalidrawFreeDrawElement
-  | ExcalidrawImageElement
-  | ExcalidrawFrameElement
-  | ExcalidrawMagicFrameElement
-  | ExcalidrawIframeElement
-  | ExcalidrawEmbeddableElement;
+export type FcboardElement =
+  | FcboardGenericElement
+  | FcboardTextElement
+  | FcboardLinearElement
+  | FcboardArrowElement
+  | FcboardFreeDrawElement
+  | FcboardImageElement
+  | FcboardFrameElement
+  | FcboardMagicFrameElement
+  | FcboardIframeElement
+  | FcboardEmbeddableElement;
 
-export type ExcalidrawNonSelectionElement = Exclude<
-  ExcalidrawElement,
-  ExcalidrawSelectionElement
+export type FcboardNonSelectionElement = Exclude<
+  FcboardElement,
+  FcboardSelectionElement
 >;
 
-export type Ordered<TElement extends ExcalidrawElement> = TElement & {
+export type Ordered<TElement extends FcboardElement> = TElement & {
   index: FractionalIndex;
 };
 
-export type OrderedExcalidrawElement = Ordered<ExcalidrawElement>;
+export type OrderedFcboardElement = Ordered<FcboardElement>;
 
-export type NonDeleted<TElement extends ExcalidrawElement> = TElement & {
+export type NonDeleted<TElement extends FcboardElement> = TElement & {
   isDeleted: boolean;
 };
 
-export type NonDeletedExcalidrawElement = NonDeleted<ExcalidrawElement>;
+export type NonDeletedFcboardElement = NonDeleted<FcboardElement>;
 
-export type ExcalidrawTextElement = _ExcalidrawElementBase &
+export type FcboardTextElement = _FcboardElementBase &
   Readonly<{
     type: "text";
     fontSize: number;
@@ -240,7 +240,7 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
     text: string;
     textAlign: TextAlign;
     verticalAlign: VerticalAlign;
-    containerId: ExcalidrawGenericElement["id"] | null;
+    containerId: FcboardGenericElement["id"] | null;
     originalText: string;
     /**
      * If `true` the width will fit the text. If `false`, the text will
@@ -256,33 +256,33 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
     lineHeight: number & { _brand: "unitlessLineHeight" };
   }>;
 
-export type ExcalidrawBindableElement =
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement
-  | ExcalidrawTextElement
-  | ExcalidrawImageElement
-  | ExcalidrawIframeElement
-  | ExcalidrawEmbeddableElement
-  | ExcalidrawFrameElement
-  | ExcalidrawMagicFrameElement;
+export type FcboardBindableElement =
+  | FcboardRectangleElement
+  | FcboardDiamondElement
+  | FcboardEllipseElement
+  | FcboardTextElement
+  | FcboardImageElement
+  | FcboardIframeElement
+  | FcboardEmbeddableElement
+  | FcboardFrameElement
+  | FcboardMagicFrameElement;
 
-export type ExcalidrawTextContainer =
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement
-  | ExcalidrawArrowElement;
+export type FcboardTextContainer =
+  | FcboardRectangleElement
+  | FcboardDiamondElement
+  | FcboardEllipseElement
+  | FcboardArrowElement;
 
-export type ExcalidrawTextElementWithContainer = {
-  containerId: ExcalidrawTextContainer["id"];
-} & ExcalidrawTextElement;
+export type FcboardTextElementWithContainer = {
+  containerId: FcboardTextContainer["id"];
+} & FcboardTextElement;
 
 export type FixedPoint = [number, number];
 
 export type BindMode = "inside" | "orbit" | "skip";
 
 export type FixedPointBinding = {
-  elementId: ExcalidrawBindableElement["id"];
+  elementId: FcboardBindableElement["id"];
 
   // Represents the fixed point binding information in form of a vertical and
   // horizontal ratio (i.e. a percentage value in the 0.0-1.0 range). This ratio
@@ -317,7 +317,7 @@ export type Arrowhead =
   | "crowfoot_many"
   | "crowfoot_one_or_many";
 
-export type ExcalidrawLinearElement = _ExcalidrawElementBase &
+export type FcboardLinearElement = _FcboardElementBase &
   Readonly<{
     type: "line" | "arrow";
     points: readonly LocalPoint[];
@@ -327,7 +327,7 @@ export type ExcalidrawLinearElement = _ExcalidrawElementBase &
     endArrowhead: Arrowhead | null;
   }>;
 
-export type ExcalidrawLineElement = ExcalidrawLinearElement &
+export type FcboardLineElement = FcboardLinearElement &
   Readonly<{
     type: "line";
     polygon: boolean;
@@ -339,14 +339,14 @@ export type FixedSegment = {
   index: Index;
 };
 
-export type ExcalidrawArrowElement = ExcalidrawLinearElement &
+export type FcboardArrowElement = FcboardLinearElement &
   Readonly<{
     type: "arrow";
     elbowed: boolean;
   }>;
 
-export type ExcalidrawElbowArrowElement = Merge<
-  ExcalidrawArrowElement,
+export type FcboardElbowArrowElement = Merge<
+  FcboardArrowElement,
   {
     elbowed: true;
     fixedSegments: readonly FixedSegment[] | null;
@@ -371,7 +371,7 @@ export type ExcalidrawElbowArrowElement = Merge<
   }
 >;
 
-export type ExcalidrawFreeDrawElement = _ExcalidrawElementBase &
+export type FcboardFreeDrawElement = _FcboardElementBase &
   Readonly<{
     type: "freedraw";
     points: readonly LocalPoint[];
@@ -381,32 +381,32 @@ export type ExcalidrawFreeDrawElement = _ExcalidrawElementBase &
 
 export type FileId = string & { _brand: "FileId" };
 
-export type ExcalidrawElementType = ExcalidrawElement["type"];
+export type FcboardElementType = FcboardElement["type"];
 
 /**
- * Map of excalidraw elements.
+ * Map of fcboard elements.
  * Unspecified whether deleted or non-deleted.
  * Can be a subset of Scene elements.
  */
-export type ElementsMap = Map<ExcalidrawElement["id"], ExcalidrawElement>;
+export type ElementsMap = Map<FcboardElement["id"], FcboardElement>;
 
 /**
  * Map of non-deleted elements.
  * Can be a subset of Scene elements.
  */
 export type NonDeletedElementsMap = Map<
-  ExcalidrawElement["id"],
-  NonDeletedExcalidrawElement
+  FcboardElement["id"],
+  NonDeletedFcboardElement
 > &
   MakeBrand<"NonDeletedElementsMap">;
 
 /**
- * Map of all excalidraw Scene elements, including deleted.
+ * Map of all fcboard Scene elements, including deleted.
  * Not a subset. Use this type when you need access to current Scene elements.
  */
 export type SceneElementsMap = Map<
-  ExcalidrawElement["id"],
-  Ordered<ExcalidrawElement>
+  FcboardElement["id"],
+  Ordered<FcboardElement>
 > &
   MakeBrand<"SceneElementsMap">;
 
@@ -415,21 +415,21 @@ export type SceneElementsMap = Map<
  * Not a subset. Use this type when you need access to current Scene elements.
  */
 export type NonDeletedSceneElementsMap = Map<
-  ExcalidrawElement["id"],
-  Ordered<NonDeletedExcalidrawElement>
+  FcboardElement["id"],
+  Ordered<NonDeletedFcboardElement>
 > &
   MakeBrand<"NonDeletedSceneElementsMap">;
 
 export type ElementsMapOrArray =
-  | readonly ExcalidrawElement[]
+  | readonly FcboardElement[]
   | Readonly<ElementsMap>;
 
-export type ExcalidrawLinearElementSubType =
+export type FcboardLinearElementSubType =
   | "line"
   | "sharpArrow"
   | "curvedArrow"
   | "elbowArrow";
 
 export type ConvertibleGenericTypes = "rectangle" | "diamond" | "ellipse";
-export type ConvertibleLinearTypes = ExcalidrawLinearElementSubType;
+export type ConvertibleLinearTypes = FcboardLinearElementSubType;
 export type ConvertibleTypes = ConvertibleGenericTypes | ConvertibleLinearTypes;

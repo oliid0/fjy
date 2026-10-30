@@ -1,15 +1,13 @@
 import { waitFor } from "@testing-library/react";
-import { Excalidraw, CaptureUpdateAction } from "@excalidraw/excalidraw";
-import {
-  act,
-  fireEvent,
-  render,
-} from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { Fcboard, CaptureUpdateAction } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
+
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { act, fireEvent, render } from "@fcboard/fcboard/tests/test-utils";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import {
   insertionDefaults,
@@ -22,9 +20,9 @@ import * as ocr from "./ocr";
 it.each([false, true])(
   "commits one table stroke and its cell growth in one undo with unified toolbar %s",
   async (unifiedToolbar) => {
-    let api!: ExcalidrawImperativeAPI;
+    let api!: FcboardImperativeAPI;
     const view = await render(
-      <Excalidraw
+      <Fcboard
         handleKeyboardGlobally
         UIOptions={{ unifiedToolbar }}
         onMount={({ excalidrawAPI }) => {
@@ -124,9 +122,9 @@ it.each([false, true])(
 );
 
 it("undoes a handwriting conversion in the real editor without losing the surface or restarting recognition", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const view = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;
@@ -190,10 +188,10 @@ it("undoes a language translation and its metadata together while preserving the
   const { languageStudy } = await import("./test/language");
   const ai = await import("./ai");
   const { readLanguageCard } = await import("./LanguagePanel");
-  const { getLanguage } = await import("@excalidraw/excalidraw/i18n");
-  let api!: ExcalidrawImperativeAPI;
+  const { getLanguage } = await import("@fcboard/fcboard/i18n");
+  let api!: FcboardImperativeAPI;
   const view = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 import { MaterialPanel } from "./MaterialPanel";
 

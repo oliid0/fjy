@@ -91,7 +91,7 @@
     "untitled": "অনামী",
     "name": "নাম",
     "yourName": "আপনার নাম",
-    "madeWithExcalidraw": "এক্সক্যালিড্র দ্বারা তৈরি",
+    "madeWithFcboard": "এক্সক্যালিড্র দ্বারা তৈরি",
     "group": "দল গঠন করুন",
     "ungroup": "দল বিভেদ করুন",
     "collaborators": "সহযোগী",
@@ -121,7 +121,7 @@
     "toggleTheme": "আলো/অন্ধকার থিম টগল করুন",
     "theme": "থিম",
     "personalLib": "ব্যক্তিগত লাইব্রেরি",
-    "excalidrawLib": "এক্সক্যালিড্র লাইব্রেরি",
+    "fcboardlib": "এক্সক্যালিড্র লাইব্রেরি",
     "decreaseFontSize": "লেখনীর মাত্রা কমান",
     "increaseFontSize": "লেখনীর মাত্রা বাড়ান",
     "unbindText": "লেখার জোড় খুলুন",
@@ -320,7 +320,7 @@
     "laser": "লেজার পয়েন্টার",
     "hand": "হাত (প্যানিং টুল)",
     "extraTools": "আরো টুল",
-    "mermaidToExcalidraw": "Fcboard থেকে মারমেইড",
+    "mermaidToFcboard": "Fcboard থেকে মারমেইড",
     "convertElementType": "আকৃতির ধরন টগল করুন"
   },
   "element": {

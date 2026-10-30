@@ -1,33 +1,30 @@
-import {
-  compressData,
-  decompressData,
-} from "@excalidraw/excalidraw/data/encode";
+import { compressData, decompressData } from "@fcboard/fcboard/data/encode";
 import {
   decryptData,
   generateEncryptionKey,
   IV_LENGTH_BYTES,
-} from "@excalidraw/excalidraw/data/encryption";
-import { serializeAsJSON } from "@excalidraw/excalidraw/data/json";
-import { isInvisiblySmallElement } from "@excalidraw/element";
-import { isInitializedImageElement } from "@excalidraw/element";
-import { t } from "@excalidraw/excalidraw/i18n";
-import { bytesToHexString } from "@excalidraw/common";
+} from "@fcboard/fcboard/data/encryption";
+import { serializeAsJSON } from "@fcboard/fcboard/data/json";
+import { isInvisiblySmallElement } from "@fcboard/element";
+import { isInitializedImageElement } from "@fcboard/element";
+import { t } from "@fcboard/fcboard/i18n";
+import { bytesToHexString } from "@fcboard/common";
 
-import type { UserIdleState } from "@excalidraw/common";
-import type { ImportedDataState } from "@excalidraw/excalidraw/data/types";
-import type { SceneBounds } from "@excalidraw/element";
+import type { UserIdleState } from "@fcboard/common";
+import type { ImportedDataState } from "@fcboard/fcboard/data/types";
+import type { SceneBounds } from "@fcboard/element";
 import type {
-  ExcalidrawElement,
+  FcboardElement,
   FileId,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 import type {
   AppState,
   BinaryFileData,
   BinaryFiles,
   SocketId,
-} from "@excalidraw/excalidraw/types";
-import type { MakeBrand } from "@excalidraw/common/utility-types";
+} from "@fcboard/fcboard/types";
+import type { MakeBrand } from "@fcboard/common/utility-types";
 
 import {
   DELETED_ELEMENT_TIMEOUT,
@@ -40,12 +37,12 @@ import { saveFilesToFirebase } from "./firebase";
 
 import type { WS_SUBTYPES } from "../app_constants";
 
-export type SyncableExcalidrawElement = OrderedExcalidrawElement &
-  MakeBrand<"SyncableExcalidrawElement">;
+export type SyncableFcboardElement = OrderedFcboardElement &
+  MakeBrand<"SyncableFcboardElement">;
 
 export const isSyncableElement = (
-  element: OrderedExcalidrawElement,
-): element is SyncableExcalidrawElement => {
+  element: OrderedFcboardElement,
+): element is SyncableFcboardElement => {
   if (element.isDeleted) {
     if (element.updated > Date.now() - DELETED_ELEMENT_TIMEOUT) {
       return true;
@@ -56,11 +53,11 @@ export const isSyncableElement = (
 };
 
 export const getSyncableElements = (
-  elements: readonly OrderedExcalidrawElement[],
+  elements: readonly OrderedFcboardElement[],
 ) =>
   elements.filter((element) =>
     isSyncableElement(element),
-  ) as SyncableExcalidrawElement[];
+  ) as SyncableFcboardElement[];
 
 const BACKEND_V2_GET = import.meta.env.VITE_APP_BACKEND_V2_GET_URL;
 const BACKEND_V2_POST = import.meta.env.VITE_APP_BACKEND_V2_POST_URL;
@@ -83,13 +80,13 @@ export type SocketUpdateDataSource = {
   SCENE_INIT: {
     type: WS_SUBTYPES.INIT;
     payload: {
-      elements: readonly OrderedExcalidrawElement[];
+      elements: readonly OrderedFcboardElement[];
     };
   };
   SCENE_UPDATE: {
     type: WS_SUBTYPES.UPDATE;
     payload: {
-      elements: readonly OrderedExcalidrawElement[];
+      elements: readonly OrderedFcboardElement[];
     };
   };
   MOUSE_LOCATION: {
@@ -246,7 +243,7 @@ type ExportToBackendResult =
   | { url: string; errorMessage: null };
 
 export const exportToBackend = async (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: Partial<AppState>,
   files: BinaryFiles,
 ): Promise<ExportToBackendResult> => {

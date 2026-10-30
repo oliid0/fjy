@@ -91,7 +91,7 @@
     "untitled": "अशीर्षकांकित",
     "name": "नाव",
     "yourName": "तुमचे नाव",
-    "madeWithExcalidraw": "एक्सकेलीड्रॉ ने बनवलेलं",
+    "madeWithFcboard": "एक्सकेलीड्रॉ ने बनवलेलं",
     "group": "समूह निवड",
     "ungroup": "समूह निवड ला रद्द करा",
     "collaborators": "Sahayog",
@@ -121,7 +121,7 @@
     "toggleTheme": "उजेड़ाची किव्हा अंधाराची प्रणाली बदला",
     "theme": "संरचना पद्धति",
     "personalLib": "वैयक्तिक संग्रह",
-    "excalidrawLib": "एक्सकेलीड्रॉ संग्रह",
+    "fcboardlib": "एक्सकेलीड्रॉ संग्रह",
     "decreaseFontSize": "अक्षर आकार छोटा करा",
     "increaseFontSize": "अक्षर आकार मोठा करा",
     "unbindText": "लेखन संबंध संपवा",
@@ -320,7 +320,7 @@
     "laser": "लेसर टॉर्च",
     "hand": "हात ( सरकवण्या चे उपकरण)",
     "extraTools": "आणिक यंत्रे",
-    "mermaidToExcalidraw": "मर्मेड पासून एक्सकाली मधे",
+    "mermaidToFcboard": "मर्मेड पासून एक्सकाली मधे",
     "convertElementType": "आकार प्रकार टॉगल करा"
   },
   "element": {

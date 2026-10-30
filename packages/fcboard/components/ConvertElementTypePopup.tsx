@@ -5,9 +5,9 @@ import {
   getLinearElementSubType,
   mutateElement,
   updateElbowArrowPoints,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { pointFrom, pointRotateRads, type LocalPoint } from "@excalidraw/math";
+import { pointFrom, pointRotateRads, type LocalPoint } from "@fcboard/math";
 
 import {
   hasBoundTextElement,
@@ -16,21 +16,21 @@ import {
   isElbowArrow,
   isLinearElement,
   isUsingAdaptiveRadius,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   getCommonBoundingBox,
   getElementAbsoluteCoords,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
 import {
   getBoundTextElement,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
   redrawTextBoundingBox,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { wrapText } from "@excalidraw/element";
+import { wrapText } from "@fcboard/element";
 
 import {
   assertNever,
@@ -42,38 +42,38 @@ import {
   ROUNDNESS,
   sceneCoordsToViewportCoords,
   updateActiveTool,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { measureText } from "@excalidraw/element";
+import { measureText } from "@fcboard/element";
 
-import { LinearElementEditor } from "@excalidraw/element";
+import { LinearElementEditor } from "@fcboard/element";
 
 import {
   newArrowElement,
   newElement,
   newLinearElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { ShapeCache } from "@excalidraw/element";
+import { ShapeCache } from "@fcboard/element";
 
-import { updateBindings } from "@excalidraw/element";
+import { updateBindings } from "@fcboard/element";
 
 import type {
   ConvertibleGenericTypes,
   ConvertibleLinearTypes,
   ConvertibleTypes,
-  ExcalidrawDiamondElement,
-  ExcalidrawElement,
-  ExcalidrawEllipseElement,
-  ExcalidrawLinearElement,
-  ExcalidrawRectangleElement,
-  ExcalidrawSelectionElement,
-  ExcalidrawTextContainer,
-  ExcalidrawTextElementWithContainer,
+  FcboardDiamondElement,
+  FcboardElement,
+  FcboardEllipseElement,
+  FcboardLinearElement,
+  FcboardRectangleElement,
+  FcboardSelectionElement,
+  FcboardTextContainer,
+  FcboardTextElementWithContainer,
   FixedSegment,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { trackEvent } from "../analytics";
 import { atom } from "../editor-jotai";
@@ -97,11 +97,11 @@ import type { AppClassProperties } from "../types";
 const GAP_HORIZONTAL = 8;
 const GAP_VERTICAL = 10;
 
-type ExcalidrawConvertibleElement =
-  | ExcalidrawRectangleElement
-  | ExcalidrawDiamondElement
-  | ExcalidrawEllipseElement
-  | ExcalidrawLinearElement;
+type FcboardConvertibleElement =
+  | FcboardRectangleElement
+  | FcboardDiamondElement
+  | FcboardEllipseElement
+  | FcboardLinearElement;
 
 // indicates order of switching
 const GENERIC_TYPES = ["rectangle", "diamond", "ellipse"] as const;
@@ -139,7 +139,7 @@ export const convertElementTypePopupAtom = atom<{
 type CacheKey = string & { _brand: "CacheKey" };
 
 const FONT_SIZE_CONVERSION_CACHE = new Map<
-  ExcalidrawElement["id"],
+  FcboardElement["id"],
   {
     fontSize: number;
   }
@@ -147,7 +147,7 @@ const FONT_SIZE_CONVERSION_CACHE = new Map<
 
 const LINEAR_ELEMENT_CONVERSION_CACHE = new Map<
   CacheKey,
-  ExcalidrawLinearElement
+  FcboardLinearElement
 >();
 
 const ConvertElementTypePopup = ({ app }: { app: App }) => {
@@ -185,13 +185,7 @@ const ConvertElementTypePopup = ({ app }: { app: App }) => {
   return <Panel app={app} elements={selectedElements} />;
 };
 
-const Panel = ({
-  app,
-  elements,
-}: {
-  app: App;
-  elements: ExcalidrawElement[];
-}) => {
+const Panel = ({ app, elements }: { app: App; elements: FcboardElement[] }) => {
   const conversionType = getConversionTypeFromElements(elements);
 
   const genericElements = useMemo(() => {
@@ -361,8 +355,8 @@ const Panel = ({
 };
 
 export const adjustBoundTextSize = (
-  container: ExcalidrawTextContainer,
-  boundText: ExcalidrawTextElementWithContainer,
+  container: FcboardTextContainer,
+  boundText: FcboardTextElementWithContainer,
   scene: Scene,
 ) => {
   const maxWidth = getBoundTextMaxWidth(container, boundText);
@@ -452,7 +446,7 @@ export const convertElementTypes = (
       ];
 
     if (nextType && isConvertibleGenericType(nextType)) {
-      const convertedElements: Record<string, ExcalidrawElement> = {};
+      const convertedElements: Record<string, FcboardElement> = {};
 
       for (const element of convertibleGenericElements) {
         const convertedElement = convertElementType(element, nextType, app);
@@ -486,7 +480,7 @@ export const convertElementTypes = (
           }
 
           adjustBoundTextSize(
-            element as ExcalidrawTextContainer,
+            element as FcboardTextContainer,
             boundText,
             app.scene,
           );
@@ -507,7 +501,7 @@ export const convertElementTypes = (
   if (conversionType === "linear") {
     const convertibleLinearElements = filterLinearConvertibleElements(
       selectedElements,
-    ) as ExcalidrawLinearElement[];
+    ) as FcboardLinearElement[];
 
     if (!nextType) {
       const commonSubType = reduceToCommonValue(
@@ -523,9 +517,9 @@ export const convertElementTypes = (
     }
 
     if (isConvertibleLinearType(nextType)) {
-      const convertedElements: ExcalidrawElement[] = [];
+      const convertedElements: FcboardElement[] = [];
 
-      const nextElementsMap: Map<ExcalidrawElement["id"], ExcalidrawElement> =
+      const nextElementsMap: Map<FcboardElement["id"], FcboardElement> =
         app.scene.getElementsMapIncludingDeleted();
 
       for (const element of convertibleLinearElements) {
@@ -628,7 +622,7 @@ export const convertElementTypes = (
 };
 
 export const getConversionTypeFromElements = (
-  elements: ExcalidrawElement[],
+  elements: FcboardElement[],
 ): ConversionType => {
   if (elements.length === 0) {
     return null;
@@ -652,7 +646,7 @@ export const getConversionTypeFromElements = (
   return null;
 };
 
-const isEligibleLinearElement = (element: ExcalidrawElement) => {
+const isEligibleLinearElement = (element: FcboardElement) => {
   return (
     isLinearElement(element) &&
     (!isArrowElement(element) ||
@@ -661,23 +655,21 @@ const isEligibleLinearElement = (element: ExcalidrawElement) => {
 };
 
 const toCacheKey = (
-  elementId: ExcalidrawElement["id"],
+  elementId: FcboardElement["id"],
   convertitleType: ConvertibleTypes,
 ) => {
   return `${elementId}:${convertitleType}` as CacheKey;
 };
 
-const filterGenericConvetibleElements = (elements: ExcalidrawElement[]) =>
+const filterGenericConvetibleElements = (elements: FcboardElement[]) =>
   elements.filter((element) => isConvertibleGenericType(element.type)) as Array<
-    | ExcalidrawRectangleElement
-    | ExcalidrawDiamondElement
-    | ExcalidrawEllipseElement
+    FcboardRectangleElement | FcboardDiamondElement | FcboardEllipseElement
   >;
 
-const filterLinearConvertibleElements = (elements: ExcalidrawElement[]) =>
+const filterLinearConvertibleElements = (elements: FcboardElement[]) =>
   elements.filter((element) =>
     isEligibleLinearElement(element),
-  ) as ExcalidrawLinearElement[];
+  ) as FcboardLinearElement[];
 
 const THRESHOLD = 20;
 const isVert = (a: LocalPoint, b: LocalPoint) => a[0] === b[0];
@@ -685,7 +677,7 @@ const isHorz = (a: LocalPoint, b: LocalPoint) => a[1] === b[1];
 const dist = (a: LocalPoint, b: LocalPoint) =>
   isVert(a, b) ? Math.abs(a[1] - b[1]) : Math.abs(a[0] - b[0]);
 
-const convertLineToElbow = (line: ExcalidrawLinearElement): LocalPoint[] => {
+const convertLineToElbow = (line: FcboardLinearElement): LocalPoint[] => {
   // 1. build an *orthogonal* route, snapping offsets < SNAP
   const ortho: LocalPoint[] = [line.points[0]];
   const src = sanitizePoints(line.points);
@@ -807,12 +799,12 @@ const sanitizePoints = (points: readonly LocalPoint[]): LocalPoint[] => {
  *   e.g. elbow arrow -> line
  */
 const convertElementType = <
-  TElement extends Exclude<ExcalidrawElement, ExcalidrawSelectionElement>,
+  TElement extends Exclude<FcboardElement, FcboardSelectionElement>,
 >(
   element: TElement,
   targetType: ConvertibleTypes,
   app: AppClassProperties,
-): ExcalidrawElement => {
+): FcboardElement => {
   if (!isValidConversion(element.type, targetType)) {
     if (!isProdEnv()) {
       throw Error(`Invalid conversion from ${element.type} to ${targetType}.`);
@@ -926,7 +918,7 @@ const isValidConversion = (
 };
 
 const getConvertibleType = (
-  element: ExcalidrawConvertibleElement,
+  element: FcboardConvertibleElement,
 ): ConvertibleTypes => {
   if (isLinearElement(element)) {
     return getLinearElementSubType(element);

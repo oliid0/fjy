@@ -1,14 +1,15 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TeachingEngine } from "./teaching";
 import { validateLesson } from "./lesson";
 import { classroomCommands } from "./commands";
 
 const setup = () => {
-  let scene: readonly ExcalidrawElement[] = convertToExcalidrawElements([
+  let scene: readonly FcboardElement[] = convertToFcboardElements([
     { type: "text", x: 0, y: 0, text: "学生题目" },
   ]);
   const api = {
@@ -21,12 +22,12 @@ const setup = () => {
       zoom: { value: 1 },
       selectedElementIds: {},
     }),
-    updateScene: (next: { elements?: readonly ExcalidrawElement[] }) => {
+    updateScene: (next: { elements?: readonly FcboardElement[] }) => {
       if (next.elements) {
         scene = next.elements;
       }
     },
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const engine = new TeachingEngine(api);
   engine.configure(1, "captions");
   return { engine, api };

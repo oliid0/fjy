@@ -2,7 +2,7 @@ import clsx from "clsx";
 
 import LibraryMenuBrowseButton from "./LibraryMenuBrowseButton";
 
-import type { ExcalidrawProps, UIAppState } from "../types";
+import type { FcboardProps, UIAppState } from "../types";
 
 export const LibraryMenuControlButtons = ({
   libraryReturnUrl,
@@ -12,7 +12,7 @@ export const LibraryMenuControlButtons = ({
   children,
   className,
 }: {
-  libraryReturnUrl: ExcalidrawProps["libraryReturnUrl"];
+  libraryReturnUrl: FcboardProps["libraryReturnUrl"];
   theme: UIAppState["theme"];
   id: string;
   style: React.CSSProperties;

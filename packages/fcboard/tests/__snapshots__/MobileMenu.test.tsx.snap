@@ -8,10 +8,10 @@ exports[`Test MobileMenu > should initialize with welcome screen and hide once u
     class="welcome-screen-center__logo virgil welcome-screen-decor"
   >
     <div
-      class="ExcalidrawLogo is-small"
+      class="FcboardLogo is-small"
     >
       <svg
-        class="ExcalidrawLogo-icon"
+        class="FcboardLogo-icon"
         fill="none"
         viewBox="0 0 40 40"
         xmlns="http://www.w3.org/2000/svg"
@@ -22,7 +22,7 @@ exports[`Test MobileMenu > should initialize with welcome screen and hide once u
         />
       </svg>
       <svg
-        class="ExcalidrawLogo-text"
+        class="FcboardLogo-text"
         fill="none"
         viewBox="0 0 450 55"
         xmlns="http://www.w3.org/2000/svg"
@@ -197,7 +197,7 @@ exports[`Test MobileMenu > should initialize with welcome screen and hide once u
     </button>
     <a
       class="welcome-screen-menu-item "
-      href="undefined/plus?utm_source=excalidraw&utm_medium=app&utm_content=welcomeScreenGuest"
+      href="undefined/plus?utm_source=fcboard&utm_medium=app&utm_content=welcomeScreenGuest"
       rel="noreferrer"
       target="_blank"
     >
@@ -249,7 +249,7 @@ exports[`Test MobileMenu > should initialize with welcome screen and hide once u
       <div
         class="welcome-screen-menu-item__text"
       >
-        Try Excalidraw Plus!
+        Try Fcboard Plus!
       </div>
     </a>
   </div>

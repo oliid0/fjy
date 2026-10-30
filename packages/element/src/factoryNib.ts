@@ -1,4 +1,4 @@
-import type { ExcalidrawFreeDrawElement } from "./types";
+import type { FcboardFreeDrawElement } from "./types";
 
 type Point = readonly [number, number];
 
@@ -27,7 +27,7 @@ const onLine = (
 
 /** HCurveObject.addNib and RectUtil.combineIntersection's two filled quadratics. */
 export const factoryNibControls = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
 ): [number, number][] | undefined => {
   if (!element.points.length || !(element.strokeWidth > 0)) {
     return;
@@ -162,7 +162,7 @@ export const factoryNibControls = (
 };
 
 export const traceFactoryNib = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
   target: Pick<Path2D, "moveTo" | "quadraticCurveTo" | "closePath">,
 ) => {
   const points = factoryNibControls(element);
@@ -176,7 +176,7 @@ export const traceFactoryNib = (
   return true;
 };
 
-export const factoryNibPath = (element: ExcalidrawFreeDrawElement) => {
+export const factoryNibPath = (element: FcboardFreeDrawElement) => {
   const points = factoryNibControls(element);
   return points
     ? `M${points[0]} Q${points[1]} ${points[2]} Q${points[3]} ${points[4]} Z`
@@ -185,7 +185,7 @@ export const factoryNibPath = (element: ExcalidrawFreeDrawElement) => {
 
 /** The same bounded quadratic error as factoryInkSamples, including closure. */
 export const factoryNibSamples = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
 ): [number, number][] => {
   const controls = factoryNibControls(element);
   if (!controls) {

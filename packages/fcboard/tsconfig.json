@@ -3,6 +3,6 @@
   "compilerOptions": {
     "outDir": "./dist/types"
   },
-  "include": ["**/*"],
-  "exclude": ["**/*.test.*", "tests", "types", "examples", "dist"]
+  "include": ["**/*", "../common/src/**/*", "../element/src/**/*", "../math/src/**/*", "../utils/src/**/*", "../*/global.d.ts"],
+  "exclude": ["../**/*.test.*", "../**/*.spec.*", "../**/tests/**", "../**/__tests__/**", "../**/examples/**", "../**/dist/**", "../**/node_modules/**", "../utils/src/test-utils.ts", "types"]
 }

@@ -27,6 +27,23 @@ it.each([
         { left: 100, right: 300, top: 100, bottom: 200 },
         viewport,
       ),
-    ).toEqual({ left: 108, top: 228 });
+    ).toEqual({ left: 108, top: 228, width: 184 });
+  },
+);
+
+it.each([240, 320, 390])(
+  "wraps a full table/AI action bar inside a narrow %spx viewport",
+  (width) => {
+    const position = selectionToolbarPosition(
+      { left: 10, right: width - 10, top: 200, bottom: 400 },
+      { left: 0, right: width, top: 0, bottom: 600 },
+      1,
+      7,
+    );
+    expect(position.width).toBeLessThanOrEqual(width - 24);
+    expect(position.left).toBeGreaterThanOrEqual(12);
+    expect(position.left + position.width).toBeLessThanOrEqual(width - 12);
+    const columns = Math.floor((position.width - 8) / 44);
+    expect(position.top + Math.ceil(7 / columns) * 42).toBeLessThanOrEqual(588);
   },
 );

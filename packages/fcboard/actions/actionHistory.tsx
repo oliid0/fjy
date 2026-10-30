@@ -4,13 +4,13 @@ import {
   matchKey,
   arrayToMap,
   MOBILE_ACTION_BUTTON_BG,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import { orderByFractionalIndex } from "@excalidraw/element";
+import { orderByFractionalIndex } from "@fcboard/element";
 
-import type { SceneElementsMap } from "@excalidraw/element/types";
+import type { SceneElementsMap } from "@fcboard/element/types";
 
 import { ToolButton } from "../components/ToolButton";
 import { FactoryIcon } from "../components/FactoryIcon";

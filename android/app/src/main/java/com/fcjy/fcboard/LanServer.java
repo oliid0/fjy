@@ -20,8 +20,11 @@ final class LanServer extends NanoWSD {
     private final Consumer<String> host;
     private final Set<WebSocket> peers = ConcurrentHashMap.newKeySet();
     private final Map<WebSocket, java.util.concurrent.ThreadPoolExecutor> writers = new ConcurrentHashMap<>();
+    private final Map<WebSocket, Runnable> waiting = new ConcurrentHashMap<>();
     private volatile LanRoom room;
     private volatile String roomToken;
+    private byte[] passwordSalt;
+    private byte[] passwordHash;
     LanServer(Assets assets, Consumer<String> host) {
         super("0.0.0.0", 0);
         this.assets = assets; this.host = host;
@@ -34,9 +37,26 @@ final class LanServer extends NanoWSD {
         return roomToken;
     }
 
+    /** QRHttpPopu.syncPhotoPwdIfReady / disablePhotoPwd; keep the existing room and QR. */
+    synchronized void setPassword(String password) throws Exception {
+        if (room == null) throw new IllegalStateException("协作已结束");
+        if (password == null || (!password.isEmpty() && !password.matches("[0-9]{4}"))) {
+            throw new IllegalArgumentException("密码须为四位数字");
+        }
+        if (password.isEmpty()) {
+            passwordSalt = null; passwordHash = null;
+            for (Runnable join : new java.util.ArrayList<>(waiting.values())) join.run();
+        } else {
+            passwordSalt = new byte[32]; new java.security.SecureRandom().nextBytes(passwordSalt);
+            passwordHash = hash(password);
+        }
+    }
+
     synchronized void stopRoom() {
-        roomToken = null; room = null;
+        roomToken = null; room = null; passwordSalt = null; passwordHash = null;
         for (WebSocket peer : peers) abortSocket(peer);
+        for (WebSocket peer : waiting.keySet()) abortSocket(peer);
+        waiting.clear();
         peers.clear();
     }
     synchronized JSONObject snapshotRoom() throws Exception {
@@ -44,10 +64,16 @@ final class LanServer extends NanoWSD {
         return room.snapshot();
     }
 
+    private byte[] hash(String password) throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        digest.update(passwordSalt);
+        return digest.digest(password.getBytes(StandardCharsets.UTF_8));
+    }
     private static void closeSocket(WebSocket socket, String reason) {
         try { socket.close(CloseCode.NormalClosure, reason, false); } catch (IOException ignored) { }
     }
     private void abortSocket(WebSocket socket) {
+        waiting.remove(socket);
         try { socket.getHandshakeRequest().getInputStream().close(); } catch (IOException ignored) { }
         java.util.concurrent.ThreadPoolExecutor writer = writers.remove(socket);
         if (writer != null) writer.shutdownNow();
@@ -70,7 +96,7 @@ final class LanServer extends NanoWSD {
         if (current == null) throw new IllegalStateException("协作未开启");
         JSONObject value = new JSONObject(text);
         if (!"scene".equals(value.optString("kind"))) throw new IllegalArgumentException("同步消息无效");
-        String resolved = current.resolve(value).toString();
+        String resolved = current.resolve(value, sender == null).toString();
         for (WebSocket peer : peers) {
             enqueue(peer, resolved);
         }
@@ -87,26 +113,57 @@ final class LanServer extends NanoWSD {
         boolean board = roomToken != null && path.equals("/board/" + roomToken);
         return new WebSocket(request) {
             private boolean joined;
-            @Override protected void onOpen() {
-                if (!sameOrigin(request) || !board || !path.equals("/board/" + roomToken)) { closeSocket(this, "会话无效或已结束"); return; }
-                try {
-                    if (board) {
-                        synchronized (LanServer.this) {
-                            if (room == null || peers.size() >= 32) { closeSocket(this, "协作人数已满"); return; }
-                            writers.put(this, new java.util.concurrent.ThreadPoolExecutor(1, 1, 0, java.util.concurrent.TimeUnit.MILLISECONDS, new java.util.concurrent.ArrayBlockingQueue<>(16), task -> { Thread thread = new Thread(task, "Fcboard-peer"); thread.setDaemon(true); return thread; }));
-                            enqueue(this, room.snapshot().toString());
-                            peers.add(this); joined = true;
-                        }
-                        notifyPeers();
+            private void join() throws Exception {
+                synchronized (LanServer.this) {
+                    if (room == null || !path.equals("/board/" + roomToken) || peers.size() >= 32) {
+                        closeSocket(this, "会话已结束或人数已满"); return;
                     }
-                } catch (Exception error) { closeSocket(this, "连接失败：" + error.getMessage()); }
+                    if (joined) return;
+                    writers.put(this, new java.util.concurrent.ThreadPoolExecutor(1, 1, 0, java.util.concurrent.TimeUnit.MILLISECONDS,
+                        new java.util.concurrent.ArrayBlockingQueue<>(16), task -> {
+                            Thread thread = new Thread(task, "Fcboard-peer"); thread.setDaemon(true); return thread;
+                        }));
+                    waiting.remove(this);
+                    enqueue(this, room.snapshot().toString()); peers.add(this); joined = true;
+                }
+                notifyPeers();
+            }
+            private void requestPassword(boolean incorrect) throws IOException {
+                try { send(new JSONObject().put("kind", "auth").put("required", true).put("incorrect", incorrect).toString()); }
+                catch (org.json.JSONException error) { throw new IOException(error); }
+            }
+            @Override protected void onOpen() {
+                if (!sameOrigin(request) || !board || !path.equals("/board/" + roomToken)) {
+                    closeSocket(this, "会话无效或已结束"); return;
+                }
+                try {
+                    synchronized (LanServer.this) {
+                        if (passwordHash == null) join();
+                        else {
+                            waiting.put(this, () -> {
+                                try { join(); } catch (Exception error) { closeSocket(this, "连接失败"); }
+                            });
+                            requestPassword(false);
+                        }
+                    }
+                } catch (Exception error) { closeSocket(this, "连接失败"); }
             }
             @Override protected void onMessage(WebSocketFrame message) {
-                if (!joined) return;
                 try {
-                    if (message.getOpCode() == OpCode.Text && "ping".equals(message.getTextPayload())) { send("pong"); return; }
-                    if (board && message.getOpCode() == OpCode.Text && "snapshot".equals(message.getTextPayload())) { send(snapshotRoom().toString()); return; }
-                    if (board && path.equals("/board/" + roomToken) && message.getOpCode() == OpCode.Text) publish(message.getTextPayload(), this);
+                    if (message.getOpCode() != OpCode.Text) return;
+                    if ("ping".equals(message.getTextPayload())) { send("pong"); return; }
+                    if (!joined) {
+                        JSONObject auth = new JSONObject(message.getTextPayload());
+                        boolean accepted;
+                        synchronized (LanServer.this) {
+                            accepted = room != null && path.equals("/board/" + roomToken) && "join".equals(auth.optString("kind"))
+                                && (passwordHash == null || java.security.MessageDigest.isEqual(passwordHash, hash(auth.optString("password"))));
+                            if (accepted) join(); else requestPassword(true);
+                        }
+                        return;
+                    }
+                    if ("snapshot".equals(message.getTextPayload())) { send(snapshotRoom().toString()); return; }
+                    if (board && path.equals("/board/" + roomToken)) publish(message.getTextPayload(), this);
                 } catch (Exception error) {
                     try { send(new JSONObject().put("error", error.getMessage()).toString()); } catch (Exception ignored) { }
                 }

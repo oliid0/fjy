@@ -91,7 +91,7 @@
     "untitled": "ללא כותרת",
     "name": "שם",
     "yourName": "שמך",
-    "madeWithExcalidraw": "נוצר באמצעות Fcboard",
+    "madeWithFcboard": "נוצר באמצעות Fcboard",
     "group": "קיבוץ הבחירה",
     "ungroup": "פירוק קבוצה",
     "collaborators": "שותפים",
@@ -121,7 +121,7 @@
     "toggleTheme": "החלפת מצב מואר/חשוך",
     "theme": "ערכת עיצוב",
     "personalLib": "ספריה פרטית",
-    "excalidrawLib": "הספרייה של Fcboard",
+    "fcboardlib": "הספרייה של Fcboard",
     "decreaseFontSize": "הקטנת הכתב",
     "increaseFontSize": "הגדלת הכתב",
     "unbindText": "ביטול קיבוע הטקסט",
@@ -320,7 +320,7 @@
     "laser": "סמן לייזר",
     "hand": "יד (כלי הזזה)",
     "extraTools": "כלים נוספים",
-    "mermaidToExcalidraw": "Mermaid ל־Fcboard",
+    "mermaidToFcboard": "Mermaid ל־Fcboard",
     "convertElementType": "החלף את סוג הצורה"
   },
   "element": {

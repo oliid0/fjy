@@ -1,9 +1,9 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { reseed } from "@excalidraw/common";
+import { reseed } from "@fcboard/common";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import * as StaticScene from "../renderer/staticScene";
 import { render, queryByTestId, unmountComponent } from "../tests/test-utils";
 
@@ -35,10 +35,10 @@ describe("Test <App/>", () => {
       };
     };
 
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
     expect(
       queryByTestId(
-        document.querySelector(".excalidraw-modal-container")!,
+        document.querySelector(".fcboard-modal-container")!,
         "brave-measure-text-error",
       ),
     ).toMatchSnapshot();

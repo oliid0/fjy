@@ -1,18 +1,18 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { getLineHeightInPx } from "@excalidraw/element";
+import { getLineHeightInPx } from "@fcboard/element";
 
-import { KEYS, arrayToMap, getLineHeight } from "@excalidraw/common";
+import { KEYS, arrayToMap, getLineHeight } from "@fcboard/common";
 
-import { getElementBounds } from "@excalidraw/element";
+import { getElementBounds } from "@fcboard/element";
 
 import { createPasteEvent, serializeAsClipboardJSON } from "../clipboard";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "./helpers/api";
-import { mockMermaidToExcalidraw } from "./helpers/mocks";
+import { mockMermaidToFcboard } from "./helpers/mocks";
 import { Pointer, Keyboard } from "./helpers/ui";
 import {
   render,
@@ -27,8 +27,8 @@ const { h } = window;
 
 const mouse = new Pointer("mouse");
 
-vi.mock("@excalidraw/common", async (importOriginal) => {
-  const module = await importOriginal<typeof import("@excalidraw/common")>();
+vi.mock("@fcboard/common", async (importOriginal) => {
+  const module = await importOriginal<typeof import("@fcboard/common")>();
   const { mockThrottleRAF } = await import("./helpers/mocks");
 
   return {
@@ -82,7 +82,7 @@ beforeEach(async () => {
   mouse.reset();
 
   await render(
-    <Excalidraw
+    <Fcboard
       autoFocus={true}
       handleKeyboardGlobally={true}
       initialData={{ appState: { zoom: { value: 1 as NormalizedZoomValue } } }}
@@ -233,18 +233,18 @@ describe("Paste bound text container", () => {
     height: 175,
     fontSize: 20,
     fontFamily: 1,
-    text: "Excalidraw is a\nvirtual \nopensource \nwhiteboard for \nsketching \nhand-drawn like\ndiagrams",
+    text: "Fcboard is a\nvirtual \nopensource \nwhiteboard for \nsketching \nhand-drawn like\ndiagrams",
     baseline: 168,
     textAlign: "center",
     verticalAlign: "middle",
     containerId: container.id,
     originalText:
-      "Excalidraw is a virtual opensource whiteboard for sketching hand-drawn like diagrams",
+      "Fcboard is a virtual opensource whiteboard for sketching hand-drawn like diagrams",
   };
 
   it("should fix ellipse bounding box", async () => {
     const data = JSON.stringify({
-      type: "excalidraw/clipboard",
+      type: "fcboard/clipboard",
       elements: [container, textElement],
     });
     pasteWithCtrlCmdShiftV(data);
@@ -253,14 +253,14 @@ describe("Paste bound text container", () => {
       await sleep(1);
       expect(h.elements.length).toEqual(2);
       const container = h.elements[0];
-      expect(container.height).toBe(368);
+      expect(container.height).toBe(332);
       expect(container.width).toBe(166);
     });
   });
 
   it("should fix diamond bounding box", async () => {
     const data = JSON.stringify({
-      type: "excalidraw/clipboard",
+      type: "fcboard/clipboard",
       elements: [
         {
           ...container,
@@ -275,7 +275,7 @@ describe("Paste bound text container", () => {
       await sleep(1);
       expect(h.elements.length).toEqual(2);
       const container = h.elements[0];
-      expect(container.height).toBe(770);
+      expect(container.height).toBe(720);
       expect(container.width).toBe(166);
     });
   });
@@ -485,8 +485,8 @@ describe("pasting & frames", () => {
 
 describe("clipboard - pasting mermaid definition", () => {
   beforeAll(() => {
-    mockMermaidToExcalidraw({
-      parseMermaidToExcalidraw: async (definition) => {
+    mockMermaidToFcboard({
+      parseMermaidToFcboard: async (definition) => {
         const lines = definition.split("\n");
         return new Promise((resolve, reject) => {
           if (lines.some((line) => line === "flowchart TD")) {

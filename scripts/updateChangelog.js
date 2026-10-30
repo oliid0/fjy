@@ -24,7 +24,7 @@ const headerForType = {
 const badCommits = [];
 const getCommitHashForLastVersion = async () => {
   try {
-    const commitMessage = `"release @excalidraw/excalidraw"`;
+    const commitMessage = `"release @fcboard/fcboard"`;
     const { stdout } = await exec(
       `git log --format=format:"%H" --grep=${commitMessage}`,
     );
@@ -63,7 +63,7 @@ const getLibraryCommitsSinceLastRelease = async () => {
       if (existingChangeLog.includes(prNumber)) {
         return;
       }
-      const prMarkdown = `[#${prNumber}](https://github.com/excalidraw/excalidraw/pull/${prNumber})`;
+      const prMarkdown = `[#${prNumber}](https://github.com/fcboard/fcboard/pull/${prNumber})`;
       const messageWithPRLink = messageWithCapitalizeFirst.replace(
         /\(#[0-9]*\)/,
         prMarkdown,
@@ -81,7 +81,7 @@ const getLibraryCommitsSinceLastRelease = async () => {
 const updateChangelog = async (nextVersion) => {
   const commitList = await getLibraryCommitsSinceLastRelease();
   let changelogForLibrary =
-    "## Excalidraw Library\n\n**_This section lists the updates made to the excalidraw library and will not affect the integration._**\n\n";
+    "## Fcboard Library\n\n**_This section lists the updates made to the fcboard library and will not affect the integration._**\n\n";
   supportedTypes.forEach((type) => {
     if (commitList[type].length) {
       changelogForLibrary += `### ${headerForType[type]}\n\n`;

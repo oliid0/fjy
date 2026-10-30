@@ -91,7 +91,7 @@
     "untitled": "គ្មានឈ្មោះ",
     "name": "ឈ្មោះ",
     "yourName": "ឈ្មោះ​របស់​អ្នក",
-    "madeWithExcalidraw": "បង្កើតជាមួយ Fcboard",
+    "madeWithFcboard": "បង្កើតជាមួយ Fcboard",
     "group": "ការជ្រើសរើសជាក្រុម",
     "ungroup": "បំបែកក្រុមការជ្រើសរើសជាក្រុម",
     "collaborators": "អ្នកសហការ",
@@ -121,7 +121,7 @@
     "toggleTheme": "បិទ/បើករចនាប័ទ្មពន្លឺ/ងងឹត",
     "theme": "ប្រធានបទ",
     "personalLib": "បណ្ណាល័យផ្ទាល់ខ្លួន",
-    "excalidrawLib": "បណ្ណាល័យ Fcboard",
+    "fcboardlib": "បណ្ណាល័យ Fcboard",
     "decreaseFontSize": "បន្ថយទំហំពុម្ពអក្សរ",
     "increaseFontSize": "បង្កើនទំហំពុម្ពអក្សរ",
     "unbindText": "ស្រាយអត្ថបទ",
@@ -320,7 +320,7 @@
     "laser": "ទ្រនិចឡាស៊ែរ",
     "hand": "ដៃ (panning tool)",
     "extraTools": "ឧបករណ៍ច្រើនទៀត",
-    "mermaidToExcalidraw": "Mermaid ទៅ Fcboard",
+    "mermaidToFcboard": "Mermaid ទៅ Fcboard",
     "convertElementType": "បិទបើកប្រភេទរូបរាង"
   },
   "element": {

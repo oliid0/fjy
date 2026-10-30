@@ -1,13 +1,14 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
+
 import {
   mockBoundingClientRect,
   render,
   restoreOriginalGetBoundingClientRect,
   screen,
   fireEvent,
-} from "@excalidraw/excalidraw/tests/test-utils";
+} from "@fcboard/fcboard/tests/test-utils";
 
-import ExcalidrawApp from "../App";
+import FcboardApp from "../App";
 
 describe("Test MobileMenu", () => {
   const { h } = window;
@@ -18,7 +19,7 @@ describe("Test MobileMenu", () => {
   });
 
   beforeEach(async () => {
-    await render(<ExcalidrawApp />);
+    await render(<FcboardApp />);
     h.app.refreshEditorInterface();
   });
 
@@ -30,7 +31,7 @@ describe("Test MobileMenu", () => {
     expect(h.app.editorInterface.formFactor).toBe("phone");
   });
 
-  it("opens centered settings directly, keeps its category navigation and changes the factory background", async () => {
+  it("opens the original settings home and nested pages, without obsolete toolbox actions", async () => {
     fireEvent.click(screen.getByTestId("main-menu-trigger"));
     expect(
       document.querySelector(".fc-material-menu.MuiPaper-root"),
@@ -42,20 +43,21 @@ describe("Test MobileMenu", () => {
       name: t("fcboard.whiteboard_settings"),
     });
     expect(screen.queryByTestId("dropdown-menu")).toBeNull();
-    const nav = screen.getByRole("navigation", {
-      name: t("fcboard.settings_navigation"),
-    });
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
-    expect(screen.getByTestId("image-export-button")).toBeVisible();
+    expect(
+      screen.getByRole("navigation", {
+        name: t("fcboard.settings_navigation"),
+      }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.toolbox") }),
+    ).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.background") }),
     );
     expect(screen.queryByTestId("image-export-button")).toBeNull();
     expect(
-      screen.getByRole("navigation", {
-        name: t("fcboard.settings_navigation"),
-      }),
-    ).toBe(nav);
+      document.querySelector("[data-settings-page='background']"),
+    ).not.toBeNull();
     const pattern = screen.getByRole("button", {
       name: t("fcboard.background_pattern_number", { number: 4 }),
     });
@@ -63,8 +65,33 @@ describe("Test MobileMenu", () => {
     expect(h.state.whiteboardBackground?.pattern).toBe(4);
     expect(pattern).toHaveAttribute("aria-pressed", "true");
     expect(document.querySelectorAll(".fc-background-picker img")).toHaveLength(
-      13,
+      14,
     );
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.ai_and_speech_settings") }),
+    );
+    expect(document.querySelector("[data-settings-page='ai']")).not.toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.models_and_connection") }),
+    );
+    expect(
+      document.querySelector("[data-settings-page='models']"),
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.save_settings") }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: t("fcboard.test_current_settings"),
+      }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
+    expect(document.querySelector("[data-settings-page='ai']")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
+    expect(
+      document.querySelector("[data-settings-page='home']"),
+    ).not.toBeNull();
     fireEvent.keyDown(
       screen.getByRole("dialog", { name: t("fcboard.whiteboard_settings") }),
       { key: "Escape" },

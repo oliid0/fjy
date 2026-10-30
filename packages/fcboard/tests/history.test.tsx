@@ -6,9 +6,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { vi } from "vitest";
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElementWith } from "@fcboard/element";
 
 import {
   EXPORT_DATA_TYPES,
@@ -21,27 +21,27 @@ import {
   DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
   reseed,
   randomId,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import "@excalidraw/utils/test-utils";
+import "@fcboard/utils/test-utils";
 
-import { ElementsDelta, AppStateDelta } from "@excalidraw/element";
+import { ElementsDelta, AppStateDelta } from "@fcboard/element";
 
-import { CaptureUpdateAction, StoreDelta } from "@excalidraw/element";
+import { CaptureUpdateAction, StoreDelta } from "@fcboard/element";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@fcboard/math";
 
 import type {
-  ExcalidrawElbowArrowElement,
-  ExcalidrawFrameElement,
-  ExcalidrawGenericElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
+  FcboardElbowArrowElement,
+  FcboardFrameElement,
+  FcboardGenericElement,
+  FcboardLinearElement,
+  FcboardTextElement,
   FileId,
   FixedPointBinding,
   FractionalIndex,
   SceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import "../global.d.ts";
 
@@ -54,7 +54,7 @@ import { createUndoAction, createRedoAction } from "../actions/actionHistory";
 import { actionToggleViewMode } from "../actions/actionToggleViewMode";
 import * as StaticScene from "../renderer/staticScene";
 import { getDefaultAppState } from "../appState";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { createPasteEvent } from "../clipboard";
 
 import * as blobModule from "../data/blob";
@@ -145,7 +145,7 @@ describe("history", () => {
 
   describe("singleplayer undo/redo", () => {
     it("should not collapse when applying corrupted history entry", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
       const rect = API.createElement({ type: "rectangle" });
 
       API.setElements([rect]);
@@ -203,7 +203,7 @@ describe("history", () => {
     });
 
     it("should not end up with history entry when there are no appstate changes", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
       const rect1 = API.createElement({ type: "rectangle", groupIds: ["A"] });
       const rect2 = API.createElement({ type: "rectangle", groupIds: ["A"] });
 
@@ -222,7 +222,7 @@ describe("history", () => {
     });
 
     it("should not end up with history entry when there are no elements changes", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect1 = API.createElement({ type: "rectangle" });
       const rect2 = API.createElement({ type: "rectangle" });
@@ -254,7 +254,7 @@ describe("history", () => {
     it("should not modify anything on unrelated appstate change", async () => {
       const rect = API.createElement({ type: "rectangle" });
       await render(
-        <Excalidraw
+        <Fcboard
           handleKeyboardGlobally={true}
           initialData={{
             elements: [rect],
@@ -283,7 +283,7 @@ describe("history", () => {
     });
 
     it("should not clear the redo stack on standalone appstate change", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect1 = UI.createElement("rectangle", { x: 10 });
       const rect2 = UI.createElement("rectangle", { x: 20 });
@@ -337,7 +337,7 @@ describe("history", () => {
     });
 
     it("should not override appstate changes when redo stack is not cleared", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect = UI.createElement("rectangle", { x: 10 });
       togglePopover("Background");
@@ -417,7 +417,7 @@ describe("history", () => {
     });
 
     it("should clear the redo stack on elements change", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect1 = UI.createElement("rectangle", { x: 10 });
 
@@ -452,7 +452,7 @@ describe("history", () => {
     });
 
     it("should iterate through the history when selection changes do not produce visible change", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect = UI.createElement("rectangle", { x: 10 });
 
@@ -502,7 +502,7 @@ describe("history", () => {
 
     it("should end up with no history entry after initializing scene", async () => {
       await render(
-        <Excalidraw
+        <Fcboard
           initialData={{
             elements: [API.createElement({ type: "rectangle", id: "A" })],
             appState: {
@@ -554,7 +554,7 @@ describe("history", () => {
 
     it("should create new history entry on scene import via drag&drop", async () => {
       await render(
-        <Excalidraw
+        <Fcboard
           initialData={{
             elements: [API.createElement({ type: "rectangle", id: "A" })],
             appState: {
@@ -575,7 +575,7 @@ describe("history", () => {
           file: new Blob(
             [
               JSON.stringify({
-                type: EXPORT_DATA_TYPES.excalidraw,
+                type: EXPORT_DATA_TYPES.fcboard,
                 appState: {
                   ...getDefaultAppState(),
                   viewBackgroundColor: "#000",
@@ -625,7 +625,7 @@ describe("history", () => {
     });
 
     it("should create new history entry on embeddable link drag&drop", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const link = "https://www.youtube.com/watch?v=gkGMXY0wekg";
       await API.drop([
@@ -762,9 +762,7 @@ describe("history", () => {
     });
 
     it("should create new history entry on embeddable link paste", async () => {
-      await render(
-        <Excalidraw autoFocus={true} handleKeyboardGlobally={true} />,
-      );
+      await render(<Fcboard autoFocus={true} handleKeyboardGlobally={true} />);
 
       const link = "https://www.youtube.com/watch?v=gkGMXY0wekg";
 
@@ -812,7 +810,7 @@ describe("history", () => {
 
     it("should support appstate name or viewBackgroundColor change", async () => {
       await render(
-        <Excalidraw
+        <Fcboard
           handleKeyboardGlobally={true}
           initialData={{
             appState: {
@@ -887,7 +885,7 @@ describe("history", () => {
     });
 
     it("should support element creation, deletion and appstate element selection change", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect1 = UI.createElement("rectangle", { x: 10 });
       const rect2 = UI.createElement("rectangle", { x: 20, y: 20 });
@@ -998,7 +996,7 @@ describe("history", () => {
     });
 
     it("should support linear element creation and points manipulation through the editor", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       // create three point arrow
       UI.clickTool("arrow");
@@ -1247,7 +1245,7 @@ describe("history", () => {
     });
 
     it("should create entry when selecting freedraw", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       UI.clickTool("rectangle");
       mouse.down(-10, -10);
@@ -1310,7 +1308,7 @@ describe("history", () => {
     });
 
     it("should support duplication of groups, appstate group selection and editing group", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
       const rect1 = API.createElement({
         type: "rectangle",
         groupIds: ["A"],
@@ -1459,7 +1457,7 @@ describe("history", () => {
     });
 
     it("should support changes in elements' order", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
+      await render(<Fcboard handleKeyboardGlobally={true} />);
 
       const rect1 = UI.createElement("rectangle", { x: 10 });
       const rect2 = UI.createElement("rectangle", { x: 20, y: 20 });
@@ -1524,10 +1522,10 @@ describe("history", () => {
     });
 
     describe("should support bidirectional bindings", async () => {
-      let rect1: ExcalidrawGenericElement;
-      let rect2: ExcalidrawGenericElement;
-      let text: ExcalidrawTextElement;
-      let arrow: ExcalidrawLinearElement;
+      let rect1: FcboardGenericElement;
+      let rect2: FcboardGenericElement;
+      let text: FcboardTextElement;
+      let arrow: FcboardLinearElement;
 
       const rect1Props = {
         type: "rectangle",
@@ -1552,7 +1550,7 @@ describe("history", () => {
       } as const;
 
       beforeEach(async () => {
-        await render(<Excalidraw handleKeyboardGlobally={true} />);
+        await render(<Fcboard handleKeyboardGlobally={true} />);
 
         rect1 = API.createElement({ ...rect1Props });
         text = API.createElement({ ...textProps });
@@ -1585,7 +1583,7 @@ describe("history", () => {
         mouse.moveTo(50, 0);
         mouse.up(47, 0);
 
-        arrow = h.elements[3] as ExcalidrawLinearElement;
+        arrow = h.elements[3] as FcboardLinearElement;
 
         expect(API.getUndoStack().length).toBe(5);
         expect(arrow.startBinding).toEqual({
@@ -1986,7 +1984,7 @@ describe("history", () => {
 
     it("should disable undo/redo buttons when stacks empty", async () => {
       const { container } = await render(
-        <Excalidraw
+        <Fcboard
           initialData={{
             elements: [API.createElement({ type: "rectangle", id: "A" })],
           }}
@@ -2036,7 +2034,7 @@ describe("history", () => {
 
     it("remounting undo/redo buttons should initialize undo/redo state correctly", async () => {
       const { container } = await render(
-        <Excalidraw
+        <Fcboard
           initialData={{
             elements: [API.createElement({ type: "rectangle", id: "A" })],
           }}
@@ -2118,7 +2116,7 @@ describe("history", () => {
 
     beforeEach(async () => {
       await render(
-        <Excalidraw handleKeyboardGlobally={true} isCollaborating={true} />,
+        <Fcboard handleKeyboardGlobally={true} isCollaborating={true} />,
       );
     });
 
@@ -2358,7 +2356,7 @@ describe("history", () => {
 
       const modifiedArrow = h.elements.filter(
         (el) => el.type === "arrow",
-      )[0] as ExcalidrawElbowArrowElement;
+      )[0] as FcboardElbowArrowElement;
       expect(modifiedArrow.points).toCloselyEqualPoints([
         [0, 0],
         [178.9, 0],
@@ -2434,7 +2432,7 @@ describe("history", () => {
       // Simulate remote update
       API.updateScene({
         elements: [
-          newElementWith(h.elements[0] as ExcalidrawLinearElement, {
+          newElementWith(h.elements[0] as FcboardLinearElement, {
             points: [
               pointFrom(0, 0),
               pointFrom(5, 5),
@@ -3483,8 +3481,8 @@ describe("history", () => {
     });
 
     describe("conflicts in bound text elements and their containers", () => {
-      let container: ExcalidrawGenericElement;
-      let text: ExcalidrawTextElement;
+      let container: FcboardGenericElement;
+      let text: FcboardTextElement;
 
       const containerProps = {
         type: "rectangle",
@@ -3520,7 +3518,7 @@ describe("history", () => {
             newElementWith(h.elements[0], {
               boundElements: [{ id: text.id, type: "text" }],
             }),
-            newElementWith(h.elements[1] as ExcalidrawTextElement, {
+            newElementWith(h.elements[1] as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -3550,7 +3548,7 @@ describe("history", () => {
               // no conflicting updates
               x: h.elements[1].x + 20,
             }),
-            newElementWith(h.elements[1] as ExcalidrawTextElement, {
+            newElementWith(h.elements[1] as FcboardTextElement, {
               // no conflicting updates
               x: h.elements[1].x + 10,
             }),
@@ -3607,7 +3605,7 @@ describe("history", () => {
             newElementWith(h.elements[0], {
               boundElements: [{ id: text.id, type: "text" }],
             }),
-            newElementWith(h.elements[1] as ExcalidrawTextElement, {
+            newElementWith(h.elements[1] as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -3710,7 +3708,7 @@ describe("history", () => {
             newElementWith(h.elements[0], {
               boundElements: [{ id: text.id, type: "text" }],
             }),
-            newElementWith(h.elements[1] as ExcalidrawTextElement, {
+            newElementWith(h.elements[1] as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -3747,7 +3745,7 @@ describe("history", () => {
             newElementWith(remoteContainer, {
               boundElements: [{ id: text.id, type: "text" }],
             }),
-            newElementWith(h.elements[1] as ExcalidrawTextElement, {
+            newElementWith(h.elements[1] as FcboardTextElement, {
               containerId: remoteContainer.id,
             }),
           ],
@@ -4045,7 +4043,7 @@ describe("history", () => {
             newElementWith(container, {
               boundElements: [{ id: text.id, type: "text" }],
             }),
-            newElementWith(h.elements[0] as ExcalidrawTextElement, {
+            newElementWith(h.elements[0] as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -4082,7 +4080,7 @@ describe("history", () => {
               boundElements: [{ id: remoteText.id, type: "text" }],
             }),
             h.elements[1],
-            newElementWith(remoteText as ExcalidrawTextElement, {
+            newElementWith(remoteText as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -4209,7 +4207,7 @@ describe("history", () => {
               boundElements: [{ id: text.id, type: "text" }],
               isDeleted: true,
             }),
-            newElementWith(h.elements[0] as ExcalidrawTextElement, {
+            newElementWith(h.elements[0] as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -4397,7 +4395,7 @@ describe("history", () => {
             newElementWith(container, {
               boundElements: [{ id: text.id, type: "text" }],
             }),
-            newElementWith(h.elements[0] as ExcalidrawTextElement, {
+            newElementWith(h.elements[0] as FcboardTextElement, {
               containerId: container.id,
             }),
           ],
@@ -4462,8 +4460,8 @@ describe("history", () => {
     });
 
     describe("conflicts in arrows and their bindable elements", () => {
-      let rect1: ExcalidrawGenericElement;
-      let rect2: ExcalidrawGenericElement;
+      let rect1: FcboardGenericElement;
+      let rect2: FcboardGenericElement;
 
       const rect1Props = {
         type: "rectangle",
@@ -4521,17 +4519,16 @@ describe("history", () => {
         mouse.up();
 
         expect(
-          (h.elements[2] as ExcalidrawElbowArrowElement).startBinding
-            ?.fixedPoint,
+          (h.elements[2] as FcboardElbowArrowElement).startBinding?.fixedPoint,
         ).toEqual([1, 0.5001]);
         expect(
-          (h.elements[2] as ExcalidrawElbowArrowElement).startBinding?.mode,
+          (h.elements[2] as FcboardElbowArrowElement).startBinding?.mode,
         ).toBe("orbit");
         expect(
-          (h.elements[2] as ExcalidrawElbowArrowElement).endBinding,
+          (h.elements[2] as FcboardElbowArrowElement).endBinding,
         ).not.toEqual([1, 0.5001]);
         expect(
-          (h.elements[2] as ExcalidrawElbowArrowElement).endBinding?.mode,
+          (h.elements[2] as FcboardElbowArrowElement).endBinding?.mode,
         ).toBe("orbit");
 
         expect(h.elements).toEqual(
@@ -4735,7 +4732,7 @@ describe("history", () => {
           elements: [
             h.elements[0],
             newElementWith(h.elements[1], { boundElements: [] }),
-            newElementWith(h.elements[2] as ExcalidrawElbowArrowElement, {
+            newElementWith(h.elements[2] as FcboardElbowArrowElement, {
               endBinding: {
                 elementId: remoteContainer.id,
                 fixedPoint: [0.5001, 1],
@@ -4924,7 +4921,7 @@ describe("history", () => {
         // Simulate remote update
         API.updateScene({
           elements: [
-            newElementWith(h.elements[0] as ExcalidrawElbowArrowElement, {
+            newElementWith(h.elements[0] as FcboardElbowArrowElement, {
               startBinding: {
                 elementId: rect1.id,
                 fixedPoint: [0.5, 1],
@@ -5078,7 +5075,7 @@ describe("history", () => {
         expect(API.getRedoStack().length).toBe(0);
         {
           // no need to be strict about points, hence the rounding
-          const points = (h.elements[2] as ExcalidrawLinearElement).points[1];
+          const points = (h.elements[2] as FcboardLinearElement).points[1];
           expect([
             roundToNearestHundred(points[0]),
             roundToNearestHundred(points[1]),
@@ -5120,8 +5117,8 @@ describe("history", () => {
     });
 
     describe("conflicts in frames and their children", () => {
-      let frame: ExcalidrawFrameElement;
-      let rect: ExcalidrawGenericElement;
+      let frame: FcboardFrameElement;
+      let rect: FcboardGenericElement;
 
       const frameProps = {
         type: "frame",

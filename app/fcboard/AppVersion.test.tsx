@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 import { render } from "./test/render";
 import { AppVersion } from "./AppVersion";

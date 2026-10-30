@@ -1,4 +1,4 @@
-import { THEME, applyDarkModeFilter } from "@excalidraw/common";
+import { THEME, applyDarkModeFilter } from "@fcboard/common";
 
 import type { StaticCanvasRenderConfig } from "../scene/types";
 import type { AppState, StaticCanvasAppState } from "../types";

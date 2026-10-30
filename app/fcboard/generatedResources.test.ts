@@ -49,3 +49,40 @@ it("rejects a static poster and cancelled model output without saving", async ()
   ).rejects.toThrow();
   expect(await generatedResources()).toHaveLength(0);
 });
+
+it("accepts a complete graphical HTML response without passing it through image/file import", async () => {
+  vi.spyOn(ai, "chat").mockResolvedValue(
+    `\`\`\`html\n${interactiveResource.html}\n\`\`\``,
+  );
+  const item = await generateTeachingResource(
+    "牛顿力学",
+    new AbortController().signal,
+  );
+  expect(item.title).toBe(interactiveResource.title);
+  expect(item.html).toContain("<svg");
+  expect(item.html).toContain("force.addEventListener");
+  expect(await generatedResources()).toContainEqual(item);
+});
+
+it("repairs invalid form output once before storing a reusable interactive experiment", async () => {
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        title: "牛顿力学",
+        html: "<form><input><button>Submit</button></form>",
+      }),
+    )
+    .mockResolvedValueOnce(JSON.stringify(interactiveResource));
+  const item = await generateTeachingResource(
+    "牛顿力学",
+    new AbortController().signal,
+  );
+  expect(chat).toHaveBeenCalledTimes(2);
+  expect(chat.mock.calls[1][0].at(-1)?.content).toContain(
+    "working inline script",
+  );
+  expect(item.html).not.toContain("<form");
+  expect(item.html).toContain("<svg");
+  expect(await generatedResources()).toEqual([item]);
+});

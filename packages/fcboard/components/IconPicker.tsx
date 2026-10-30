@@ -2,13 +2,13 @@ import { Popover } from "radix-ui";
 import clsx from "clsx";
 import React, { useEffect } from "react";
 
-import { isArrowKey, KEYS } from "@excalidraw/common";
+import { isArrowKey, KEYS } from "@fcboard/common";
 
 import { atom, useAtom } from "../editor-jotai";
 import { getLanguage, t } from "../i18n";
 
 import Collapsible from "./Stats/Collapsible";
-import { useEditorInterface, useExcalidrawContainer } from "./App";
+import { useEditorInterface, useFcboardContainer } from "./App";
 
 import "./IconPicker.scss";
 
@@ -39,7 +39,7 @@ function Picker<T>({
   numberOfOptionsToAlwaysShow?: number;
 }) {
   const editorInterface = useEditorInterface();
-  const { container } = useExcalidrawContainer();
+  const { container } = useFcboardContainer();
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const pressedOption = options.find(

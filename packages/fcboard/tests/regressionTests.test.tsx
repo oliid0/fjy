@@ -7,13 +7,13 @@ import {
   KEYS,
   reseed,
   MQ_MIN_WIDTH_DESKTOP,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { setDateTimeForTests } from "@excalidraw/common";
+import { setDateTimeForTests } from "@fcboard/common";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import * as StaticScene from "../renderer/staticScene";
 
 import { API } from "./helpers/api";
@@ -65,7 +65,7 @@ beforeEach(async () => {
   finger1.reset();
   finger2.reset();
 
-  await render(<Excalidraw handleKeyboardGlobally={true} />);
+  await render(<Fcboard handleKeyboardGlobally={true} />);
   API.setAppState({ height: 768, width: MQ_MIN_WIDTH_DESKTOP });
 });
 
@@ -148,7 +148,7 @@ describe("regression tests", () => {
     [`5${KEYS.A}`, "arrow", true],
     [`6${KEYS.L}`, "line", true],
     [`7${KEYS.P}`, "freedraw", false],
-  ] as [string, ExcalidrawElement["type"], boolean][]) {
+  ] as [string, FcboardElement["type"], boolean][]) {
     for (const key of keys) {
       it(`key ${key} selects ${shape} tool`, () => {
         Keyboard.keyPress(key);

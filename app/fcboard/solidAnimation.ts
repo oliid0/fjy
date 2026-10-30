@@ -1,4 +1,4 @@
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import { readWidgets, renderWidget } from "./widgets";
@@ -8,7 +8,7 @@ import type { InkStroke } from "./documents";
 
 /** One visual transition, one history entry. Late frames never recreate a removed object. */
 export const animateSolid = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   original: Widget,
   target: Widget,
   signal: AbortSignal,

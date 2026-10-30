@@ -1,8 +1,8 @@
-import { isImageElement } from "@excalidraw/element";
+import { isImageElement } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawImageElement } from "@excalidraw/element/types";
+import type { FcboardImageElement } from "@fcboard/element/types";
 
 import { ToolButton } from "../components/ToolButton";
 import { cropIcon } from "../components/icons";
@@ -21,7 +21,7 @@ export const actionToggleCropEditor = register({
     const selectedElement = app.scene.getSelectedElements({
       selectedElementIds: appState.selectedElementIds,
       includeBoundTextElement: true,
-    })[0] as ExcalidrawImageElement;
+    })[0] as FcboardImageElement;
 
     return {
       appState: {

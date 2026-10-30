@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { getLanguage, t } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
 import { render } from "./test/render";
 import { sceneAPI } from "./test/scene";
@@ -12,8 +12,8 @@ import { shapeInk } from "./documents";
 
 import type { InkStroke } from "./documents";
 
-vi.mock("@excalidraw/excalidraw", async (original) => ({
-  ...(await original<typeof import("@excalidraw/excalidraw")>()),
+vi.mock("@fcboard/fcboard", async (original) => ({
+  ...(await original<typeof import("@fcboard/fcboard")>()),
   ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),

@@ -1,4 +1,4 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 
 import { updateQuestionAnswer } from "./questionAnswer";
 import { sceneAPI } from "./test/scene";
@@ -6,7 +6,7 @@ import { sceneAPI } from "./test/scene";
 it("folds only the answer, persists its geometry with the question and restores edited objects", async () => {
   const api = sceneAPI();
   const question = api.getSceneElements()[0];
-  const [answer, unrelated] = convertToExcalidrawElements([
+  const [answer, unrelated] = convertToFcboardElements([
     { type: "text", x: 100, y: 140, text: "answer" },
     { type: "rectangle", x: 700, y: 100, width: 50, height: 50 },
   ]);
@@ -42,7 +42,7 @@ it("folds only the answer, persists its geometry with the question and restores 
 it("does not restore deleted pieces or resurrect a removed question", async () => {
   const api = sceneAPI();
   const question = api.getSceneElements()[0];
-  const answers = convertToExcalidrawElements([
+  const answers = convertToFcboardElements([
     { type: "text", x: 100, y: 140, text: "first" },
     { type: "text", x: 100, y: 180, text: "second" },
   ]);
@@ -73,7 +73,7 @@ it("does not restore deleted pieces or resurrect a removed question", async () =
 it("does not let a copied question hide another question's answer", async () => {
   const api = sceneAPI();
   const question = api.getSceneElements()[0];
-  const [answer] = convertToExcalidrawElements([
+  const [answer] = convertToFcboardElements([
     { type: "text", x: 10, y: 80, text: "answer" },
   ]);
   api.updateScene({ elements: [question, answer] });

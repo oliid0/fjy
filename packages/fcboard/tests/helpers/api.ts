@@ -2,9 +2,9 @@ import fs from "fs";
 import path from "path";
 import util from "util";
 
-import { pointFrom, type LocalPoint, type Radians } from "@excalidraw/math";
+import { pointFrom, type LocalPoint, type Radians } from "@fcboard/math";
 
-import { DEFAULT_VERTICAL_ALIGN, ROUNDNESS, assertNever } from "@excalidraw/common";
+import { DEFAULT_VERTICAL_ALIGN, ROUNDNESS, assertNever } from "@fcboard/common";
 
 import {
   newArrowElement,
@@ -17,31 +17,31 @@ import {
   newLinearElement,
   newMagicFrameElement,
   newTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { isLinearElementType } from "@excalidraw/element";
-import { getSelectedElements } from "@excalidraw/element";
-import { selectGroupsForSelectedElements } from "@excalidraw/element";
+import { isLinearElementType } from "@fcboard/element";
+import { getSelectedElements } from "@fcboard/element";
+import { selectGroupsForSelectedElements } from "@fcboard/element";
 
-import { FONT_SIZES } from "@excalidraw/common";
+import { FONT_SIZES } from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawGenericElement,
-  ExcalidrawTextElement,
-  ExcalidrawLinearElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawImageElement,
+  FcboardElement,
+  FcboardGenericElement,
+  FcboardTextElement,
+  FcboardLinearElement,
+  FcboardFreeDrawElement,
+  FcboardImageElement,
   FileId,
-  ExcalidrawFrameElement,
-  ExcalidrawElementType,
-  ExcalidrawMagicFrameElement,
-  ExcalidrawElbowArrowElement,
-  ExcalidrawArrowElement,
+  FcboardFrameElement,
+  FcboardElementType,
+  FcboardMagicFrameElement,
+  FcboardElbowArrowElement,
+  FcboardArrowElement,
   FixedSegment,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@fcboard/common/utility-types";
 
 import { getMimeType } from "../../data/blob";
 import { createTestHook } from "../../components/App";
@@ -74,13 +74,13 @@ export class API {
     });
   };
 
-  static setElements = (elements: readonly ExcalidrawElement[]) => {
+  static setElements = (elements: readonly FcboardElement[]) => {
     act(() => {
       h.elements = elements;
     });
   };
 
-  static setSelectedElements = (elements: ExcalidrawElement[], editingGroupId?: string | null) => {
+  static setSelectedElements = (elements: FcboardElement[], editingGroupId?: string | null) => {
     act(() => {
       h.setState({
         ...selectGroupsForSelectedElements(
@@ -89,7 +89,7 @@ export class API {
           selectedElementIds: elements.reduce((acc, element) => {
             acc[element.id] = true;
             return acc;
-          }, {} as Record<ExcalidrawElement["id"], true>),
+          }, {} as Record<FcboardElement["id"], true>),
         },
         elements,
         h.state,
@@ -100,7 +100,7 @@ export class API {
   };
 
   // eslint-disable-next-line prettier/prettier
-  static updateElement = <T extends ExcalidrawElement>(
+  static updateElement = <T extends FcboardElement>(
     ...args: Parameters<typeof h.app.scene.mutateElement<T>>
   ) => {
     act(() => {
@@ -111,14 +111,14 @@ export class API {
   static getSelectedElements = (
     includeBoundTextElement: boolean = false,
     includeElementsInFrames: boolean = false,
-  ): ExcalidrawElement[] => {
+  ): FcboardElement[] => {
     return getSelectedElements(h.elements, h.state, {
       includeBoundTextElement,
       includeElementsInFrames,
     });
   };
 
-  static getSelectedElement = (): ExcalidrawElement => {
+  static getSelectedElement = (): FcboardElement => {
     const selectedElements = API.getSelectedElements();
     if (selectedElements.length !== 1) {
       throw new Error(
@@ -150,12 +150,12 @@ export class API {
     expect(API.getSelectedElements().length).toBe(0);
   };
 
-  static getElement = <T extends ExcalidrawElement>(element: T): T => {
+  static getElement = <T extends FcboardElement>(element: T): T => {
     return h.app.scene.getElementsMapIncludingDeleted().get(element.id) as T || element;
   }
 
   static createElement = <
-    T extends Exclude<ExcalidrawElementType, "selection"> = "rectangle",
+    T extends Exclude<FcboardElementType, "selection"> = "rectangle",
   >({
     // @ts-ignore
     type = "rectangle",
@@ -176,68 +176,68 @@ export class API {
     angle?: number;
     id?: string;
     isDeleted?: boolean;
-    frameId?: ExcalidrawElement["id"] | null;
-    index?: ExcalidrawElement["index"];
-    groupIds?: ExcalidrawElement["groupIds"];
+    frameId?: FcboardElement["id"] | null;
+    index?: FcboardElement["index"];
+    groupIds?: FcboardElement["groupIds"];
     // generic element props
-    strokeColor?: ExcalidrawGenericElement["strokeColor"];
-    backgroundColor?: ExcalidrawGenericElement["backgroundColor"];
-    fillStyle?: ExcalidrawGenericElement["fillStyle"];
-    strokeWidth?: ExcalidrawGenericElement["strokeWidth"];
-    strokeStyle?: ExcalidrawGenericElement["strokeStyle"];
-    roundness?: ExcalidrawGenericElement["roundness"];
-    roughness?: ExcalidrawGenericElement["roughness"];
-    opacity?: ExcalidrawGenericElement["opacity"];
+    strokeColor?: FcboardGenericElement["strokeColor"];
+    backgroundColor?: FcboardGenericElement["backgroundColor"];
+    fillStyle?: FcboardGenericElement["fillStyle"];
+    strokeWidth?: FcboardGenericElement["strokeWidth"];
+    strokeStyle?: FcboardGenericElement["strokeStyle"];
+    roundness?: FcboardGenericElement["roundness"];
+    roughness?: FcboardGenericElement["roughness"];
+    opacity?: FcboardGenericElement["opacity"];
     // text props
-    text?: T extends "text" ? ExcalidrawTextElement["text"] : never;
-    fontSize?: T extends "text" ? ExcalidrawTextElement["fontSize"] : never;
-    fontFamily?: T extends "text" ? ExcalidrawTextElement["fontFamily"] : never;
-    textAlign?: T extends "text" ? ExcalidrawTextElement["textAlign"] : never;
+    text?: T extends "text" ? FcboardTextElement["text"] : never;
+    fontSize?: T extends "text" ? FcboardTextElement["fontSize"] : never;
+    fontFamily?: T extends "text" ? FcboardTextElement["fontFamily"] : never;
+    textAlign?: T extends "text" ? FcboardTextElement["textAlign"] : never;
     verticalAlign?: T extends "text"
-      ? ExcalidrawTextElement["verticalAlign"]
+      ? FcboardTextElement["verticalAlign"]
       : never;
-    boundElements?: ExcalidrawGenericElement["boundElements"];
+    boundElements?: FcboardGenericElement["boundElements"];
     containerId?: T extends "text"
-      ? ExcalidrawTextElement["containerId"]
+      ? FcboardTextElement["containerId"]
       : never;
     points?: T extends "arrow" | "line" | "freedraw" ? readonly LocalPoint[] : never;
     locked?: boolean;
     fileId?: T extends "image" ? string : never;
-    scale?: T extends "image" ? ExcalidrawImageElement["scale"] : never;
-    status?: T extends "image" ? ExcalidrawImageElement["status"] : never;
+    scale?: T extends "image" ? FcboardImageElement["scale"] : never;
+    status?: T extends "image" ? FcboardImageElement["status"] : never;
     startBinding?: T extends "arrow"
-      ? ExcalidrawArrowElement["startBinding"] | ExcalidrawElbowArrowElement["startBinding"]
+      ? FcboardArrowElement["startBinding"] | FcboardElbowArrowElement["startBinding"]
       : never;
     endBinding?: T extends "arrow"
-      ? ExcalidrawArrowElement["endBinding"] | ExcalidrawElbowArrowElement["endBinding"]
+      ? FcboardArrowElement["endBinding"] | FcboardElbowArrowElement["endBinding"]
       : never;
     startArrowhead?: T extends "arrow"
-      ? ExcalidrawArrowElement["startArrowhead"] | ExcalidrawElbowArrowElement["startArrowhead"]
+      ? FcboardArrowElement["startArrowhead"] | FcboardElbowArrowElement["startArrowhead"]
       : never;
     endArrowhead?: T extends "arrow"
-      ? ExcalidrawArrowElement["endArrowhead"] | ExcalidrawElbowArrowElement["endArrowhead"]
+      ? FcboardArrowElement["endArrowhead"] | FcboardElbowArrowElement["endArrowhead"]
       : never;
     elbowed?: boolean;
     fixedSegments?: FixedSegment[] | null;
   }): T extends "arrow" | "line"
-    ? ExcalidrawLinearElement
+    ? FcboardLinearElement
     : T extends "freedraw"
-    ? ExcalidrawFreeDrawElement
+    ? FcboardFreeDrawElement
     : T extends "text"
-    ? ExcalidrawTextElement
+    ? FcboardTextElement
     : T extends "image"
-    ? ExcalidrawImageElement
+    ? FcboardImageElement
     : T extends "frame"
-    ? ExcalidrawFrameElement
+    ? FcboardFrameElement
     : T extends "magicframe"
-    ? ExcalidrawMagicFrameElement
-    : ExcalidrawGenericElement => {
-    let element: Mutable<ExcalidrawElement> = null!;
+    ? FcboardMagicFrameElement
+    : FcboardGenericElement => {
+    let element: Mutable<FcboardElement> = null!;
 
     const appState = h?.state || getDefaultAppState();
 
     const base: Omit<
-      ExcalidrawGenericElement,
+      FcboardGenericElement,
       | "id"
       | "type"
       | "version"
@@ -389,12 +389,12 @@ export class API {
   };
 
   static createTextContainer = (opts?: {
-    frameId?: ExcalidrawElement["id"];
-    groupIds?: ExcalidrawElement["groupIds"];
+    frameId?: FcboardElement["id"];
+    groupIds?: FcboardElement["groupIds"];
     label?: {
       text?: string;
-      frameId?: ExcalidrawElement["id"] | null;
-      groupIds?: ExcalidrawElement["groupIds"];
+      frameId?: FcboardElement["id"] | null;
+      groupIds?: FcboardElement["groupIds"];
     };
   }) => {
     const rectangle = API.createElement({
@@ -431,10 +431,10 @@ export class API {
   };
 
   static createLabeledArrow = (opts?: {
-    frameId?: ExcalidrawElement["id"];
+    frameId?: FcboardElement["id"];
     label?: {
       text?: string;
-      frameId?: ExcalidrawElement["id"] | null;
+      frameId?: FcboardElement["id"] | null;
     };
   }) => {
     const arrow = API.createElement({

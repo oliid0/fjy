@@ -118,7 +118,7 @@ export const isLatinChar = (key: string) => /^[a-z]$/.test(key.toLowerCase());
  * Japanese              | [KeyZ] |  つ | z with cmd
  * 2-Set Korean          | [KeyZ] |  ㅋ | z with cmd
  *
- * More details in https://github.com/excalidraw/excalidraw/pull/5944
+ * More details in https://github.com/fcboard/fcboard/pull/5944
  */
 export const matchKey = (
   event: KeyboardEvent | React.KeyboardEvent<Element>,

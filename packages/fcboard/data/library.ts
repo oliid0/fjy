@@ -15,15 +15,15 @@ import {
   toValidURL,
   Queue,
   Emitter,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { hashElementsVersion, hashString } from "@excalidraw/element";
+import { hashElementsVersion, hashString } from "@fcboard/element";
 
-import { getCommonBoundingBox } from "@excalidraw/element";
+import { getCommonBoundingBox } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { MaybePromise } from "@excalidraw/common/utility-types";
+import type { MaybePromise } from "@fcboard/common/utility-types";
 
 import { atom, editorJotaiStore } from "../editor-jotai";
 
@@ -39,7 +39,7 @@ import type App from "../components/App";
 import type {
   LibraryItems,
   LibraryItem,
-  ExcalidrawImperativeAPI,
+  FcboardImperativeAPI,
   LibraryItemsSource,
   LibraryItems_anyVersion,
 } from "../types";
@@ -52,9 +52,9 @@ import type {
  * boundaries
  **/
 const ALLOWED_LIBRARY_URLS = [
-  "excalidraw.com",
+  "fcboard.com",
   // when installing from github PRs
-  "raw.githubusercontent.com/excalidraw/excalidraw-libraries",
+  "raw.githubusercontent.com/fcboard/fcboard-libraries",
 ];
 
 type LibraryUpdate = {
@@ -128,12 +128,12 @@ const isUniqueItem = (
       return false;
     }
 
-    // detect z-index difference by checking the excalidraw elements
+    // detect z-index difference by checking the fcboard elements
     // are in order
-    return libraryItem.elements.every((libItemExcalidrawItem, idx) => {
+    return libraryItem.elements.every((libItemFcboardItem, idx) => {
       return (
-        libItemExcalidrawItem.id === targetLibraryItem.elements[idx].id &&
-        libItemExcalidrawItem.versionNonce ===
+        libItemFcboardItem.id === targetLibraryItem.elements[idx].id &&
+        libItemFcboardItem.versionNonce ===
           targetLibraryItem.elements[idx].versionNonce
       );
     });
@@ -245,7 +245,7 @@ class Library {
     }
   };
 
-  /** call on excalidraw instance unmount */
+  /** call on fcboard instance unmount */
   destroy = () => {
     this.updateQueue = [];
     this.currLibraryItems = [];
@@ -281,7 +281,7 @@ class Library {
     });
   };
 
-  // NOTE this is a high-level public API (exposed on ExcalidrawAPI) with
+  // NOTE this is a high-level public API (exposed on FcboardAPI) with
   // a slight overhead (always restoring library items). For internal use
   // where merging isn't needed, use `library.setLibrary()` directly.
   updateLibrary = async ({
@@ -408,7 +408,7 @@ export const distributeLibraryItemsOnSquareGrid = (
   const PADDING = 50;
   const ITEMS_PER_ROW = Math.ceil(Math.sqrt(libraryItems.length));
 
-  const resElements: ExcalidrawElement[] = [];
+  const resElements: FcboardElement[] = [];
 
   const getMaxHeightPerRow = (row: number) => {
     const maxHeight = libraryItems
@@ -676,10 +676,10 @@ const persistLibraryUpdate = async (
 
 export const useHandleLibrary = (
   opts: {
-    excalidrawAPI: ExcalidrawImperativeAPI | null;
+    excalidrawAPI: FcboardImperativeAPI | null;
     /**
      * Return `true` if the library install url should be allowed.
-     * If not supplied, only the excalidraw.com base domain is allowed.
+     * If not supplied, only the fcboard.com base domain is allowed.
      */
     validateLibraryUrl?: (libraryUrl: string) => boolean;
   } & (

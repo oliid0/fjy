@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="skizze_channel">Smart pen</string>
+    <string name="skizze_active">Smart pen receiver connected</string>
+    <string name="skizze_stop">Disconnect</string>
+</resources>

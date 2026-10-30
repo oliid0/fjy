@@ -1,6 +1,6 @@
-import type { MaybePromise } from "@excalidraw/common/utility-types";
+import type { MaybePromise } from "@fcboard/common/utility-types";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { getFileHandleType, isImageFileHandleType } from "./blob";
 
@@ -11,7 +11,7 @@ import type { AppState, BinaryFiles } from "../types";
 
 export const resaveAsImageWithScene = async (
   data: MaybePromise<{
-    elements: readonly ExcalidrawElement[];
+    elements: readonly FcboardElement[];
     appState: AppState;
     files: BinaryFiles;
   }>,

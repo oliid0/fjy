@@ -91,7 +91,7 @@
     "untitled": "Neimenovana",
     "name": "Ime",
     "yourName": "Vaše ime",
-    "madeWithExcalidraw": "Izdelano z Fcboard",
+    "madeWithFcboard": "Izdelano z Fcboard",
     "group": "Združi izbor",
     "ungroup": "Razdruži izbor",
     "collaborators": "Sodelavci",
@@ -121,7 +121,7 @@
     "toggleTheme": "Preklapljanje med svetlo/temno temo",
     "theme": "Tema",
     "personalLib": "Osebna knjižnica",
-    "excalidrawLib": "Knjižnica Fcboard",
+    "fcboardlib": "Knjižnica Fcboard",
     "decreaseFontSize": "Zmanjšaj velikost pisave",
     "increaseFontSize": "Povečaj velikost pisave",
     "unbindText": "Veži besedilo",
@@ -320,7 +320,7 @@
     "laser": "Laserski kazalec",
     "hand": "Roka (orodje za premikanje)",
     "extraTools": "Več orodij",
-    "mermaidToExcalidraw": "Mermaid v Fcboard",
+    "mermaidToFcboard": "Mermaid v Fcboard",
     "convertElementType": "Preklopi vrsto oblike"
   },
   "element": {

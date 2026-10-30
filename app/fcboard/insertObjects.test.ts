@@ -1,6 +1,6 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { sceneAPI } from "./test/scene";
 import { classroomCommands } from "./commands";
@@ -81,7 +81,7 @@ it("inserts all courseware parts atomically and can read the same object from an
   const api = sceneAPI();
   let strokes: ReturnType<typeof shapeInk>[] = [];
   const save = vi.fn((args) => {
-    strokes = (args.shapes as ExcalidrawElementSkeleton[]).map((shape) =>
+    strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
       shapeInk(shape, "insertion"),
     );
   });
@@ -113,7 +113,7 @@ it("validates an entire request before generating any object", () => {
   expect(() => configureInsertion(object, { cells: [null] })).toThrow();
   expect(() => configureInsertion(object, { width: Infinity })).toThrow();
   expect(() => configureInsertion(object, { outline: " " })).toThrow();
-  const roundtrip = convertToExcalidrawElements(insertionShapes(object));
+  const roundtrip = convertToFcboardElements(insertionShapes(object));
   expect(roundtrip.filter((element) => element.type === "line")).toHaveLength(
     4,
   );

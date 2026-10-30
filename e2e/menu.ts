@@ -5,6 +5,10 @@ export const openSettingsMenu = async (page: Page) => {
 };
 
 export const selectMenu = async (page: Page, label: string) => {
+  if (label === "导出图片...") {
+    await page.keyboard.press("Control+Shift+e");
+    return;
+  }
   if (
     [
       "提问与讲解",
@@ -30,9 +34,7 @@ export const selectMenu = async (page: Page, label: string) => {
     return;
   }
   await page.getByTestId("main-menu-trigger").click();
-  if (
-    !["白板设置", "AI 与语音设置", "实时协作", "导出图片..."].includes(label)
-  ) {
+  if (!["白板设置", "AI 与语音设置"].includes(label)) {
     await page.getByRole("menuitem", { name: label, exact: true }).click();
     return;
   }
@@ -41,9 +43,13 @@ export const selectMenu = async (page: Page, label: string) => {
     return;
   }
   if (label === "AI 与语音设置") {
+    await page
+      .getByRole("button", { name: "AI 与语音设置", exact: true })
+      .click();
     await page.getByRole("button", { name: "模型与连接", exact: true }).click();
     return;
   }
-  await page.getByRole("button", { name: "工具箱", exact: true }).click();
-  await page.getByRole("menuitem", { name: label, exact: true }).click();
+  throw new Error(
+    `Settings action must have an explicit current route: ${label}`,
+  );
 };

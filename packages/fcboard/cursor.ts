@@ -1,4 +1,4 @@
-import { CURSOR_TYPE, MIME_TYPES, THEME } from "@excalidraw/common";
+import { CURSOR_TYPE, MIME_TYPES, THEME } from "@fcboard/common";
 
 import { isHandToolActive, isEraserActive } from "./appState";
 

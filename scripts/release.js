@@ -6,7 +6,7 @@ const { execSync } = require("child_process");
 const updateChangelog = require("./updateChangelog");
 
 // skipping utils for now, as it has independent release process
-const PACKAGES = ["common", "math", "element", "excalidraw"];
+const PACKAGES = ["common", "math", "element", "fcboard"];
 const PACKAGES_DIR = path.resolve(__dirname, "../packages");
 
 /**
@@ -14,11 +14,11 @@ const PACKAGES_DIR = path.resolve(__dirname, "../packages");
  *
  * Usage examples:
  * - yarn release --help                          -> prints this help message
- * - yarn release                                 -> publishes `@excalidraw` packages with "test" tag and "-[hash]" version suffix
+ * - yarn release                                 -> publishes `@fcboard` packages with "test" tag and "-[hash]" version suffix
  * - yarn release --tag=test                      -> same as above
- * - yarn release --tag=next                      -> publishes `@excalidraw` packages with "next" tag and version "-[hash]" suffix
+ * - yarn release --tag=next                      -> publishes `@fcboard` packages with "next" tag and version "-[hash]" suffix
  * - yarn release --tag=next --non-interactive    -> skips interactive prompts (runs on CI/CD), otherwise same as above
- * - yarn release --tag=latest --version=0.19.0   -> publishes `@excalidraw` packages with "latest" tag and version "0.19.0" & prepares changelog for the release
+ * - yarn release --tag=latest --version=0.19.0   -> publishes `@fcboard` packages with "latest" tag and version "0.19.0" & prepares changelog for the release
  *
  * @returns [tag, version, nonInteractive]
  */
@@ -35,11 +35,11 @@ const getArguments = () => {
   --non-interactive                              -> (optional) disables interactive prompts`);
 
       console.info(`\nUsage examples:
-  - yarn release                                 -> publishes \`@excalidraw\` packages with "test" tag and "-[hash]" version suffix
+  - yarn release                                 -> publishes \`@fcboard\` packages with "test" tag and "-[hash]" version suffix
   - yarn release --tag=test                      -> same as above
-  - yarn release --tag=next                      -> publishes \`@excalidraw\` packages with "next" tag and version "-[hash]" suffix
+  - yarn release --tag=next                      -> publishes \`@fcboard\` packages with "next" tag and version "-[hash]" suffix
   - yarn release --tag=next --non-interactive    -> skips interactive prompts (runs on CI/CD), otherwise same as above
-  - yarn release --tag=latest --version=0.19.0   -> publishes \`@excalidraw\` packages with "latest" tag and version "0.19.0" & prepares changelog for the release`);
+  - yarn release --tag=latest --version=0.19.0   -> publishes \`@fcboard\` packages with "latest" tag and version "0.19.0" & prepares changelog for the release`);
 
       process.exit(0);
     }
@@ -68,18 +68,18 @@ const getArguments = () => {
   }
 
   if (!version) {
-    // set the next version based on the excalidraw package version + commit hash
-    const excalidrawPackageVersion = require(getPackageJsonPath(
-      "excalidraw",
+    // set the next version based on the fcboard package version + commit hash
+    const fcboardPackageVersion = require(getPackageJsonPath(
+      "fcboard",
     )).version;
 
     const hash = getShortCommitHash();
 
-    if (!excalidrawPackageVersion.includes(hash)) {
-      version = `${excalidrawPackageVersion}-${hash}`;
+    if (!fcboardPackageVersion.includes(hash)) {
+      version = `${fcboardPackageVersion}-${hash}`;
     } else {
       // ensuring idempotency
-      version = excalidrawPackageVersion;
+      version = fcboardPackageVersion;
     }
   }
 
@@ -110,11 +110,14 @@ const updatePackageJsons = (nextVersion) => {
 
     if (pkg.dependencies) {
       for (const dependencyName of PACKAGES) {
-        if (!pkg.dependencies[`@excalidraw/${dependencyName}`]) {
+        const dependencyPackageName = require(getPackageJsonPath(
+          dependencyName,
+        )).name;
+        if (!pkg.dependencies[dependencyPackageName]) {
           continue;
         }
 
-        pkg.dependencies[`@excalidraw/${dependencyName}`] = nextVersion;
+        pkg.dependencies[dependencyPackageName] = nextVersion;
       }
     }
 
@@ -151,7 +154,7 @@ const askToCommit = (tag, nextVersion) => {
         if (answer.toLowerCase() === "y") {
           execSync(`git add -u`);
           execSync(
-            `git commit -m "chore: release @excalidraw/excalidraw@${nextVersion} 🎉"`,
+            `git commit -m "chore: release @fcboard/fcboard@${nextVersion} 🎉"`,
           );
         } else {
           console.warn(
@@ -173,7 +176,8 @@ const buildPackages = () => {
   execSync(`yarn rm:build`, { stdio: "inherit" });
 
   for (const packageName of PACKAGES) {
-    console.info(`Building "@excalidraw/${packageName}"...`);
+    const packageNameToBuild = require(getPackageJsonPath(packageName)).name;
+    console.info(`Building "${packageNameToBuild}"...`);
     execSync(`yarn run build:esm`, {
       cwd: path.resolve(PACKAGES_DIR, packageName),
       stdio: "inherit",
@@ -207,13 +211,14 @@ const askToPublish = (tag, version) => {
 
 const publishPackages = (tag, version) => {
   for (const packageName of PACKAGES) {
+    const packageNameToPublish = require(getPackageJsonPath(packageName)).name;
     execSync(`yarn publish --tag ${tag}`, {
       cwd: path.resolve(PACKAGES_DIR, packageName),
       stdio: "inherit",
     });
 
     console.info(
-      `Published "@excalidraw/${packageName}@${tag}" with version "${version}"! 🎉`,
+      `Published "${packageNameToPublish}@${tag}" with version "${version}"! 🎉`,
     );
   }
 };

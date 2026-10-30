@@ -6,4 +6,6 @@
     <string name="web_close">关闭</string>
     <string name="web_external_app">此页面要求外部应用，请在白板插入菜单打开对应应用</string>
     <string name="web_load_failed">网页加载失败，请检查网络后刷新</string>
+    <string name="web_move">移动网页</string>
+    <string name="web_resize">调整网页大小</string>
 </resources>

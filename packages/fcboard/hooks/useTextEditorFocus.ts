@@ -8,7 +8,7 @@ export type CaretPosition = {
 
 // Utility function to get text editor element
 const getTextEditor = (): HTMLTextAreaElement | null => {
-  return document.querySelector(".excalidraw-wysiwyg") as HTMLTextAreaElement;
+  return document.querySelector(".fcboard-wysiwyg") as HTMLTextAreaElement;
 };
 
 // Utility functions for caret position management

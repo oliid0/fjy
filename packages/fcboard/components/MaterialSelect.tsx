@@ -49,6 +49,15 @@ export const MaterialSelect = ({
       style={style}
       value={selected}
       disabled={disabled}
+      inputProps={{ inputMode: "none" }}
+      inputRef={(handle: { node?: HTMLInputElement } | null) => {
+        // SelectInput discards its type prop. Its value input must not become
+        // the enclosing label's editable target on Android.
+        if (handle?.node) {
+          handle.node.type = "hidden";
+          handle.node.readOnly = true;
+        }
+      }}
       open={open}
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}

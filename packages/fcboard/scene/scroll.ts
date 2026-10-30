@@ -1,14 +1,14 @@
-import { getVisibleElements } from "@excalidraw/element";
+import { getVisibleElements } from "@fcboard/element";
 import {
   sceneCoordsToViewportCoords,
   viewportCoordsToSceneCoords,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { getClosestElementBounds } from "@excalidraw/element";
+import { getClosestElementBounds } from "@fcboard/element";
 
-import { getCommonBounds } from "@excalidraw/element";
+import { getCommonBounds } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import type { AppState, Offsets, PointerCoords, Zoom } from "../types";
 
@@ -58,7 +58,7 @@ export const centerScrollOn = ({
 };
 
 export const calculateScrollCenter = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: AppState,
 ): { scrollX: number; scrollY: number } => {
   elements = getVisibleElements(elements);

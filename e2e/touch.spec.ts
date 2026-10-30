@@ -46,13 +46,12 @@ test("real touch input distinguishes a single-mode pinch from committed and mult
   const zoom = () =>
     page.evaluate(
       () =>
-        JSON.parse(localStorage.getItem("excalidraw-state") || "{}").zoom
-          ?.value,
+        JSON.parse(localStorage.getItem("fcboard-state") || "{}").zoom?.value,
     );
   const inkCount = () =>
     page.evaluate(
       () =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+        JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
           (element: { type: string; isDeleted?: boolean }) =>
             element.type === "freedraw" && !element.isDeleted,
         ).length,

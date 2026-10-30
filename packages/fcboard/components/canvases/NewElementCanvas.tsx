@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 
 import type {
-  ExcalidrawFreeDrawElement,
+  FcboardFreeDrawElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
 import { renderNewElementScene } from "../../renderer/renderNewElementScene";
@@ -22,7 +22,7 @@ interface NewElementCanvasProps {
   scale: number;
   rc: RoughCanvas;
   renderConfig: StaticCanvasRenderConfig;
-  getActiveInkElements?: () => readonly ExcalidrawFreeDrawElement[];
+  getActiveInkElements?: () => readonly FcboardFreeDrawElement[];
   onInkFrame?: (listener: () => void) => () => void;
 }
 
@@ -56,7 +56,7 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
 
   return (
     <canvas
-      className="excalidraw__canvas new-element"
+      className="fcboard__canvas new-element"
       style={{
         width: props.appState.width,
         height: props.appState.height,

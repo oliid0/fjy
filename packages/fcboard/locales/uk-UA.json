@@ -91,7 +91,7 @@
     "untitled": "Без назви",
     "name": "Ім’я",
     "yourName": "Ваше ім’я",
-    "madeWithExcalidraw": "Зроблено з Fcboard",
+    "madeWithFcboard": "Зроблено з Fcboard",
     "group": "Групувати виділене",
     "ungroup": "Розгрупувати виділене",
     "collaborators": "Співавтори",
@@ -121,7 +121,7 @@
     "toggleTheme": "Перемикати світлу/темну теми",
     "theme": "Тема",
     "personalLib": "Персональна бібліотека",
-    "excalidrawLib": "Бібліотека Fcboard",
+    "fcboardlib": "Бібліотека Fcboard",
     "decreaseFontSize": "Зменшити розмір шрифту",
     "increaseFontSize": "Збільшити розмір шрифту",
     "unbindText": "Відв'язати текст",
@@ -320,7 +320,7 @@
     "laser": "Лазерний вказівник",
     "hand": "Рука (інструмент для панорамування)",
     "extraTools": "Інші інструменти",
-    "mermaidToExcalidraw": "Mermaid у Fcboard",
+    "mermaidToFcboard": "Mermaid у Fcboard",
     "convertElementType": "Тип форми перемикача"
   },
   "element": {

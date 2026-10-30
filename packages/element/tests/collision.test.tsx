@@ -1,10 +1,10 @@
-import { arrayToMap } from "@excalidraw/common";
-import { type GlobalPoint, type LocalPoint, pointFrom } from "@excalidraw/math";
-import { Excalidraw } from "@excalidraw/excalidraw";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { UI } from "@excalidraw/excalidraw/tests/helpers/ui";
-import "@excalidraw/utils/test-utils";
-import { render } from "@excalidraw/excalidraw/tests/test-utils";
+import { arrayToMap } from "@fcboard/common";
+import { type GlobalPoint, type LocalPoint, pointFrom } from "@fcboard/math";
+import { Fcboard } from "@fcboard/fcboard";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+import { UI } from "@fcboard/fcboard/tests/helpers/ui";
+import "@fcboard/utils/test-utils";
+import { render } from "@fcboard/fcboard/tests/test-utils";
 
 import * as distance from "../src/distance";
 import { hitElementItself } from "../src/collision";
@@ -62,7 +62,7 @@ it("lets a factory ink dot be selected", () => {
 describe("check rotated elements can be hit:", () => {
   beforeEach(async () => {
     localStorage.clear();
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
   });
 
   it("arrow", () => {
@@ -106,7 +106,7 @@ describe("hitElementItself cache", () => {
     });
 
     localStorage.clear();
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
   });
 
   it("reuses cached result when threshold increases", () => {

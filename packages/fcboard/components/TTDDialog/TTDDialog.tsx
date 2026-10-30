@@ -6,7 +6,7 @@ import { useApp } from "../App";
 import { Dialog } from "../Dialog";
 import { withInternalFallback } from "../hoc/withInternalFallback";
 
-import MermaidToExcalidraw from "./MermaidToExcalidraw";
+import MermaidToFcboard from "./MermaidToFcboard";
 import TextToDiagram from "./TextToDiagram";
 import TTDDialogTabs from "./TTDDialogTabs";
 import { TTDDialogTabTriggers } from "./TTDDialogTabTriggers";
@@ -18,7 +18,7 @@ import "./TTDDialog.scss";
 import { TTDWelcomeMessage } from "./TTDWelcomeMessage";
 
 import type {
-  MermaidToExcalidrawLibProps,
+  MermaidToFcboardLibProps,
   TTDPersistenceAdapter,
   TTTDDialog,
 } from "./types";
@@ -67,19 +67,21 @@ const TTDDialogBase = withInternalFallback(
   )) => {
     const app = useApp();
 
-    const [mermaidToExcalidrawLib, setMermaidToExcalidrawLib] =
-      useState<MermaidToExcalidrawLibProps>({
+    const [mermaidToFcboardLib, setMermaidToFcboardLib] =
+      useState<MermaidToFcboardLibProps>({
         loaded: false,
-        api: import("@excalidraw/mermaid-to-excalidraw"),
+        api: import("@excalidraw/mermaid-to-excalidraw").then((api) => ({
+          parseMermaidToFcboard: api.parseMermaidToExcalidraw,
+        })),
       });
 
     useEffect(() => {
       const fn = async () => {
-        await mermaidToExcalidrawLib.api;
-        setMermaidToExcalidrawLib((prev) => ({ ...prev, loaded: true }));
+        await mermaidToFcboardLib.api;
+        setMermaidToFcboardLib((prev) => ({ ...prev, loaded: true }));
       };
       fn();
-    }, [mermaidToExcalidrawLib.api]);
+    }, [mermaidToFcboardLib.api]);
 
     return (
       <Dialog
@@ -114,7 +116,7 @@ const TTDDialogBase = withInternalFallback(
           {!("__fallback" in rest) && (
             <TTDDialogTab className="ttd-dialog-content" tab="text-to-diagram">
               <TextToDiagram
-                mermaidToExcalidrawLib={mermaidToExcalidrawLib}
+                mermaidToFcboardLib={mermaidToFcboardLib}
                 onTextSubmit={rest.onTextSubmit}
                 renderWelcomeScreen={rest.renderWelcomeScreen}
                 renderWarning={rest.renderWarning}
@@ -123,8 +125,8 @@ const TTDDialogBase = withInternalFallback(
             </TTDDialogTab>
           )}
           <TTDDialogTab className="ttd-dialog-content" tab="mermaid">
-            <MermaidToExcalidraw
-              mermaidToExcalidrawLib={mermaidToExcalidrawLib}
+            <MermaidToFcboard
+              mermaidToFcboardLib={mermaidToFcboardLib}
               isActive={tab === "mermaid"}
             />
           </TTDDialogTab>

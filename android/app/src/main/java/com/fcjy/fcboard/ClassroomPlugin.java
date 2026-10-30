@@ -252,6 +252,15 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public void stopShare(PluginCall call) { stopBoardShare(); call.resolve(); }
 
+    /** QRHttpPopu / ScreenshotPwdUtils: empty disables, four digits enables. */
+    @PluginMethod
+    public synchronized void setSharePassword(PluginCall call) {
+        try {
+            if (boardShare == null) throw new IOException("分享已结束，请重新生成二维码");
+            boardShare.setPassword(call.getString("password", "")); call.resolve();
+        } catch (Exception error) { call.reject(error.getMessage()); }
+    }
+
     /** Open the system attachment composer; the user chooses the recipient and sends. */
     @PluginMethod
     public void sharePages(PluginCall call) {
@@ -324,6 +333,14 @@ public class ClassroomPlugin extends Plugin {
         // ZWhiteBoardActivity.getThickSize applies 4/5 to the stored physical contact threshold.
         try (android.database.Cursor cursor = getContext().getContentResolver().query(
                 android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
+                new String[]{"pen_threshold"}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("pen_threshold"));
+                if (Float.isFinite(threshold) && threshold > 0) result.put("fineThreshold", threshold * 4.0 / 5.0);
+            }
+        } catch (Exception unavailable) { /* Calibration can be entered manually on other firmware. */ }
+        try (android.database.Cursor cursor = getContext().getContentResolver().query(
+                android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
                 new String[]{"thick_threshold"}, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
                 float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("thick_threshold"));
@@ -332,6 +349,17 @@ public class ClassroomPlugin extends Plugin {
         } catch (Exception unavailable) {
             // Manual calibration and explicit fine/thick selection remain available.
         }
+        // ThresholdPopu reset reads these exact factory properties, in physical pixels.
+        JSObject defaults = new JSObject();
+        String[][] fields = {{"palm", "persist.sys.whiteboard.threshold"}, {"fine", "persist.sys.whiteboard.pen_threshold"}, {"thick", "persist.sys.whiteboard.thick_threshold"}};
+        for (String[] field : fields) {
+            try {
+                String raw = (String)Class.forName("android.os.SystemProperties").getMethod("get", String.class, String.class).invoke(null, field[1], "");
+                float value = Float.parseFloat(raw);
+                if (Float.isFinite(value) && value > 0) defaults.put(field[0], value);
+            } catch (Exception unavailable) { /* No factory default for this contact on this device. */ }
+        }
+        result.put("factoryThresholds", defaults);
         call.resolve(result);
     }
 
@@ -353,7 +381,7 @@ public class ClassroomPlugin extends Plugin {
                     call.reject("截图范围无效"); return;
                 }
                 Rect area = new Rect(location[0] + (int)(x * view.getWidth()), location[1] + (int)(y * view.getHeight()), location[0] + (int)((x + w) * view.getWidth()), location[1] + (int)((y + h) * view.getHeight()));
-                double scale = Math.min(1, 1280.0 / area.width());
+                double scale = Math.min(1, 1280.0 / Math.max(area.width(), area.height()));
                 Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int)(area.width() * scale)), Math.max(1, (int)(area.height() * scale)), Bitmap.Config.ARGB_8888);
                 PixelCopy.request(window, area, bitmap, status -> {
                     if (imageEncoder.isShutdown()) { bitmap.recycle(); return; }

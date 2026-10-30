@@ -10,46 +10,43 @@ import {
   getVerticalOffset,
   applyDarkModeFilter,
   MIME_TYPES,
-} from "@excalidraw/common";
-import { normalizeLink, toValidURL } from "@excalidraw/common";
-import { hashString } from "@excalidraw/element";
-import { getUncroppedWidthAndHeight } from "@excalidraw/element";
+} from "@fcboard/common";
+import { normalizeLink, toValidURL } from "@fcboard/common";
+import { hashString } from "@fcboard/element";
+import { getUncroppedWidthAndHeight } from "@fcboard/element";
 import {
   createPlaceholderEmbeddableLabel,
   getEmbedLink,
-} from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
-import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
-import { getLineHeightInPx } from "@excalidraw/element";
+} from "@fcboard/element";
+import { LinearElementEditor } from "@fcboard/element";
+import { getBoundTextElement, getContainerElement } from "@fcboard/element";
+import { getLineHeightInPx } from "@fcboard/element";
 import {
   isArrowElement,
   isIframeLikeElement,
   isInitializedImageElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { getContainingFrame } from "@excalidraw/element";
+import { getContainingFrame } from "@fcboard/element";
 
-import { getCornerRadius, isPathALoop } from "@excalidraw/element";
+import { getCornerRadius, isPathALoop } from "@fcboard/element";
 
-import { ShapeCache } from "@excalidraw/element";
-import {
-  factoryInkDashes,
-  isFactoryStroke,
-} from "@excalidraw/element/factoryInk";
-import { factoryNibPath } from "@excalidraw/element/factoryNib";
+import { ShapeCache } from "@fcboard/element";
+import { factoryInkDashes, isFactoryStroke } from "@fcboard/element/factoryInk";
+import { factoryNibPath } from "@fcboard/element/factoryNib";
 import {
   rainbowInkCoordinates,
   rainbowInkStops,
-} from "@excalidraw/element/rainbowInk";
+} from "@fcboard/element/rainbowInk";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getElementAbsoluteCoords } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawTextElementWithContainer,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardTextElementWithContainer,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import type { RenderableElementsMap, SVGRenderConfig } from "../scene/types";
 import type { AppState, BinaryFiles } from "../types";
@@ -73,7 +70,7 @@ const roughSVGDrawWithPrecision = (
 };
 
 const maybeWrapNodesInFrameClipPath = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   root: SVGElement,
   nodes: SVGElement[],
   frameRendering: AppState["frameRendering"],
@@ -94,7 +91,7 @@ const maybeWrapNodesInFrameClipPath = (
 };
 
 const renderElementToSvg = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   elementsMap: RenderableElementsMap,
   rsvg: RoughSVG,
   svgRoot: SVGElement,
@@ -114,7 +111,7 @@ const renderElementToSvg = (
 
       const boundTextCoords = LinearElementEditor.getBoundTextElementPosition(
         container,
-        element as ExcalidrawTextElementWithContainer,
+        element as FcboardTextElementWithContainer,
         elementsMap,
       );
       cx = (x2 - x1) / 2 - (boundTextCoords.x - x1);
@@ -136,7 +133,7 @@ const renderElementToSvg = (
     root = anchorTag;
   }
 
-  const addToRoot = (node: SVGElement, element: ExcalidrawElement) => {
+  const addToRoot = (node: SVGElement, element: FcboardElement) => {
     if (isTestEnv()) {
       node.setAttribute("data-id", element.id);
     }
@@ -209,8 +206,7 @@ const renderElementToSvg = (
       );
       addToRoot(node, element);
 
-      const label: ExcalidrawElement =
-        createPlaceholderEmbeddableLabel(element);
+      const label: FcboardElement = createPlaceholderEmbeddableLabel(element);
       renderElementToSvg(
         label,
         elementsMap,
@@ -769,7 +765,7 @@ const renderElementToSvg = (
 };
 
 export const renderSceneToSvg = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   elementsMap: RenderableElementsMap,
   rsvg: RoughSVG,
   svgRoot: SVGElement,

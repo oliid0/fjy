@@ -1,5 +1,6 @@
-import { resourceFrame } from "../../app/fcboard/test/resourceFrame";
 import { interactiveResource } from "../../app/fcboard/test/interactiveResource";
+
+import { resourceFrame } from "./tests/resourceFrame";
 
 import { requestResourceControl } from "./interactiveResourceControls";
 

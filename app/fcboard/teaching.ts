@@ -1,7 +1,7 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { createStore, get, set } from "idb-keyval";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { LessonCanvas } from "./lesson";
 import { createNarrator } from "./narration";
@@ -139,7 +139,7 @@ export class TeachingEngine {
   private voice = createNarrator();
   private interjection = createNarrator();
   constructor(
-    private api: ExcalidrawImperativeAPI,
+    private api: FcboardImperativeAPI,
     private observer?: LessonObserver,
   ) {}
   subscribe(listener: (state: TeachingState) => void) {

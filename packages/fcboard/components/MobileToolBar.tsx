@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import clsx from "clsx";
 
-import { KEYS, capitalizeString } from "@excalidraw/common";
+import { KEYS, capitalizeString } from "@fcboard/common";
 
 import { trackEvent } from "../analytics";
 
@@ -464,7 +464,7 @@ export const MobileToolBar = ({
             icon={mermaidLogoIcon}
             data-testid="toolbar-embeddable"
           >
-            {t("toolBar.mermaidToExcalidraw")}
+            {t("toolBar.mermaidToFcboard")}
           </DropdownMenu.Item>
           {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
             <>

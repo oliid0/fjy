@@ -8,7 +8,7 @@ import {
   bezierEquation,
   pointRotateRads,
   pointDistance,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
 import {
   arrayToMap,
@@ -18,7 +18,7 @@ import {
   getFeatureFlag,
   invariant,
   THEME,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import {
   deconstructDiamondElement,
@@ -41,41 +41,38 @@ import {
   maxBindingDistance_simple,
   isTextElement,
   LinearElementEditor,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { renderSelectionElement } from "@excalidraw/element";
+import { renderSelectionElement } from "@fcboard/element";
 
 import {
   getElementsInGroup,
   getSelectedGroupIds,
   isSelectedViaGroup,
   selectGroupsFromGivenElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
+import { getCommonBounds, getElementAbsoluteCoords } from "@fcboard/element";
 import {
   getGlobalFixedPointForBindableElement,
   isFocusPointVisible,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import type {
-  TransformHandles,
-  TransformHandleType,
-} from "@excalidraw/element";
+import type { TransformHandles, TransformHandleType } from "@fcboard/element";
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
-  ExcalidrawElement,
-  ExcalidrawFrameLikeElement,
-  ExcalidrawImageElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
+  FcboardArrowElement,
+  FcboardBindableElement,
+  FcboardElement,
+  FcboardFrameLikeElement,
+  FcboardImageElement,
+  FcboardLinearElement,
+  FcboardTextElement,
   GroupId,
   NonDeleted,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { renderSnaps } from "../renderer/renderSnaps";
 import { roundRect } from "../renderer/roundRect";
@@ -551,7 +548,7 @@ const renderBindingHighlightForBindableElement_simple = (
 const renderBindingHighlightForBindableElement_complex = (
   app: AppClassProperties,
   context: CanvasRenderingContext2D,
-  element: ExcalidrawBindableElement,
+  element: FcboardBindableElement,
   allElementsMap: NonDeletedSceneElementsMap,
   appState: InteractiveCanvasAppState,
   deltaTime: number,
@@ -995,7 +992,7 @@ const renderSelectionBorder = (
 const renderFrameHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
-  frame: NonDeleted<ExcalidrawFrameLikeElement>,
+  frame: NonDeleted<FcboardFrameLikeElement>,
   elementsMap: ElementsMap,
 ) => {
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(frame, elementsMap);
@@ -1025,7 +1022,7 @@ const renderFrameHighlight = (
 const renderElementsBoxHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
-  elements: NonDeleted<ExcalidrawElement>[],
+  elements: NonDeleted<FcboardElement>[],
   config?: { colors?: string[]; dashed?: boolean },
 ) => {
   const { colors = ["rgb(0,118,255)"], dashed = false } = config || {};
@@ -1037,7 +1034,7 @@ const renderElementsBoxHighlight = (
     (element) => element.groupIds.length > 0,
   );
 
-  const getSelectionFromElements = (elements: ExcalidrawElement[]) => {
+  const getSelectionFromElements = (elements: FcboardElement[]) => {
     const [x1, y1, x2, y2] = getCommonBounds(elements);
     return {
       angle: 0,
@@ -1073,7 +1070,7 @@ const renderElementsBoxHighlight = (
 const renderLinearPointHandles = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
-  element: NonDeleted<ExcalidrawLinearElement>,
+  element: NonDeleted<FcboardLinearElement>,
   elementsMap: RenderableElementsMap,
 ) => {
   if (!appState.selectedLinearElement) {
@@ -1249,7 +1246,7 @@ const renderFocusPointIndicator = ({
   context,
   elementsMap,
 }: {
-  arrow: NonDeleted<ExcalidrawArrowElement>;
+  arrow: NonDeleted<FcboardArrowElement>;
   appState: InteractiveCanvasAppState;
   context: CanvasRenderingContext2D;
   elementsMap: NonDeletedSceneElementsMap;
@@ -1381,7 +1378,7 @@ const renderCropHandles = (
   context: CanvasRenderingContext2D,
   renderConfig: InteractiveCanvasRenderConfig,
   appState: InteractiveCanvasAppState,
-  croppingElement: ExcalidrawImageElement,
+  croppingElement: FcboardImageElement,
   elementsMap: ElementsMap,
 ): void => {
   const [x1, y1, , , cx, cy] = getElementAbsoluteCoords(
@@ -1483,7 +1480,7 @@ const renderCropHandles = (
 };
 
 const renderTextBox = (
-  text: NonDeleted<ExcalidrawTextElement>,
+  text: NonDeleted<FcboardTextElement>,
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
   selectionColor: InteractiveCanvasRenderConfig["selectionColor"],
@@ -1544,7 +1541,7 @@ const _renderInteractiveScene = ({
   context.save();
   context.scale(appState.zoom.value, appState.zoom.value);
 
-  let editingLinearElement: NonDeleted<ExcalidrawLinearElement> | undefined =
+  let editingLinearElement: NonDeleted<FcboardLinearElement> | undefined =
     undefined;
 
   visibleElements.forEach((element) => {
@@ -1556,7 +1553,7 @@ const _renderInteractiveScene = ({
       appState.selectedLinearElement.elementId === element.id
     ) {
       if (element) {
-        editingLinearElement = element as NonDeleted<ExcalidrawLinearElement>;
+        editingLinearElement = element as NonDeleted<FcboardLinearElement>;
       }
     }
   });
@@ -1589,7 +1586,7 @@ const _renderInteractiveScene = ({
     isTextElement(appState.editingTextElement)
   ) {
     const textElement = allElementsMap.get(appState.editingTextElement.id) as
-      | ExcalidrawTextElement
+      | FcboardTextElement
       | undefined;
     if (textElement && !textElement.autoResize) {
       renderTextBox(
@@ -1660,7 +1657,7 @@ const _renderInteractiveScene = ({
     renderLinearPointHandles(
       context,
       appState,
-      selectedElements[0] as NonDeleted<ExcalidrawLinearElement>,
+      selectedElements[0] as NonDeleted<FcboardLinearElement>,
       elementsMap,
     );
   }
@@ -1737,7 +1734,7 @@ const _renderInteractiveScene = ({
       renderLinearPointHandles(
         context,
         appState,
-        selectedElements[0] as ExcalidrawLinearElement,
+        selectedElements[0] as FcboardLinearElement,
         elementsMap,
       );
     }

@@ -2,28 +2,28 @@ import {
   KEYS,
   MOBILE_ACTION_BUTTON_BG,
   updateActiveTool,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
-import { fixBindingsAfterDeletion } from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
-import { newElementWith } from "@excalidraw/element";
-import { getContainerElement } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
+import { fixBindingsAfterDeletion } from "@fcboard/element";
+import { LinearElementEditor } from "@fcboard/element";
+import { newElementWith } from "@fcboard/element";
+import { getContainerElement } from "@fcboard/element";
 import {
   isBoundToContainer,
   isElbowArrow,
   isFrameLikeElement,
-} from "@excalidraw/element";
-import { getFrameChildren } from "@excalidraw/element";
+} from "@fcboard/element";
+import { getFrameChildren } from "@fcboard/element";
 
 import {
   getElementsInGroup,
   selectGroupsForSelectedElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { t } from "../i18n";
 import { getSelectedElements, isSomeElementSelected } from "../scene";
@@ -37,7 +37,7 @@ import { register } from "./register";
 import type { AppClassProperties, AppState } from "../types";
 
 const deleteSelectedElements = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: AppState,
   app: AppClassProperties,
 ) => {
@@ -48,11 +48,11 @@ const deleteSelectedElements = (
     ).map((el) => el.id),
   );
 
-  const selectedElementIds: Record<ExcalidrawElement["id"], true> = {};
+  const selectedElementIds: Record<FcboardElement["id"], true> = {};
 
   const elementsMap = app.scene.getNonDeletedElementsMap();
 
-  const processedElements = new Set<ExcalidrawElement["id"]>();
+  const processedElements = new Set<FcboardElement["id"]>();
 
   for (const frameId of framesToBeDeleted) {
     const frameChildren = getFrameChildren(elements, frameId);
@@ -188,7 +188,7 @@ const deleteSelectedElements = (
 
 const handleGroupEditingState = (
   appState: AppState,
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
 ): AppState => {
   if (appState.editingGroupId) {
     const siblingElements = getElementsInGroup(

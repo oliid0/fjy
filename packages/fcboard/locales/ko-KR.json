@@ -91,7 +91,7 @@
     "untitled": "제목 없음",
     "name": "이름",
     "yourName": "이름 입력",
-    "madeWithExcalidraw": "Fcboard에서 생성됨",
+    "madeWithFcboard": "Fcboard에서 생성됨",
     "group": "그룹 생성",
     "ungroup": "그룹 해제",
     "collaborators": "공동 작업자",
@@ -121,7 +121,7 @@
     "toggleTheme": "밝은 모드/다크 모드 전환",
     "theme": "테마",
     "personalLib": "개인 라이브러리",
-    "excalidrawLib": "Fcboard 라이브러리",
+    "fcboardlib": "Fcboard 라이브러리",
     "decreaseFontSize": "폰트 사이즈 줄이기",
     "increaseFontSize": "폰트 사이즈 키우기",
     "unbindText": "텍스트 분리",
@@ -320,7 +320,7 @@
     "laser": "레이저 포인터",
     "hand": "손 (패닝 도구)",
     "extraTools": "다른 도구",
-    "mermaidToExcalidraw": "Mermaid를 Fcboard로",
+    "mermaidToFcboard": "Mermaid를 Fcboard로",
     "convertElementType": "도형 유형 전환"
   },
   "element": {

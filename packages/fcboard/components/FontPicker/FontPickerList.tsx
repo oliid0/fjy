@@ -7,23 +7,23 @@ import React, {
   type KeyboardEventHandler,
 } from "react";
 
-import { type FontFamilyValues } from "@excalidraw/element/types";
+import { type FontFamilyValues } from "@fcboard/element/types";
 
 import {
   arrayToList,
   debounce,
   FONT_FAMILY,
   getFontFamilyString,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
+import type { ValueOf } from "@fcboard/common/utility-types";
 
 import { Fonts } from "../../fonts";
 import { t } from "../../i18n";
 import {
   useApp,
   useAppProps,
-  useExcalidrawContainer,
+  useFcboardContainer,
   useStylesPanelMode,
 } from "../App";
 import { PropertiesPopover } from "../PropertiesPopover";
@@ -96,7 +96,7 @@ export const FontPickerList = React.memo(
     onOpen,
     onClose,
   }: FontPickerListProps) => {
-    const { container } = useExcalidrawContainer();
+    const { container } = useFcboardContainer();
     const app = useApp();
     const { fonts } = app;
     const { showDeprecatedFonts } = useAppProps();
@@ -203,7 +203,7 @@ export const FontPickerList = React.memo(
         let savedSelection: { start: number; end: number } | null = null;
         if (app.state.editingTextElement) {
           const textEditor = document.querySelector(
-            ".excalidraw-wysiwyg",
+            ".fcboard-wysiwyg",
           ) as HTMLTextAreaElement;
           if (textEditor) {
             savedSelection = {
@@ -219,7 +219,7 @@ export const FontPickerList = React.memo(
         if (app.state.editingTextElement && savedSelection) {
           setTimeout(() => {
             const textEditor = document.querySelector(
-              ".excalidraw-wysiwyg",
+              ".fcboard-wysiwyg",
             ) as HTMLTextAreaElement;
             if (textEditor && savedSelection) {
               textEditor.focus();
@@ -369,7 +369,7 @@ export const FontPickerList = React.memo(
           if (app.state.editingTextElement) {
             setTimeout(() => {
               const textEditor = document.querySelector(
-                ".excalidraw-wysiwyg",
+                ".fcboard-wysiwyg",
               ) as HTMLTextAreaElement;
               if (textEditor) {
                 textEditor.focus();

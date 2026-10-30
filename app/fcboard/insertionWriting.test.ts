@@ -1,5 +1,5 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { duplicateElement } from "@excalidraw/element/duplicate";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { duplicateElement } from "@fcboard/element/duplicate";
 
 import {
   boardWritingParts,
@@ -64,7 +64,7 @@ it.each(["fourline", "mindmap"] as const)(
     expect(text.strokeColor).toBe("#e03131");
     expect(text.customData?.fcInsertion.textIndex).toBe(target.index);
     expect(text.groupIds).toEqual(body.groupIds);
-    const elements = convertToExcalidrawElements([text], {
+    const elements = convertToFcboardElements([text], {
       regenerateIds: false,
     });
     const combined = boardWritingParts([moved, ...elements]);
@@ -112,7 +112,7 @@ it("uses the same targets and keeps handwriting text and color after JSON persis
   ]);
   const text = insertionWritingText(board, "Hello world", "#e03131", ["ink"])!;
   api.updateScene({
-    elements: [...original, ...convertToExcalidrawElements([text])],
+    elements: [...original, ...convertToFcboardElements([text])],
   });
   const value = JSON.parse(JSON.stringify(readInsertions(api)[0]));
   expect(value.text).toBe("Hello world");
@@ -133,7 +133,7 @@ it("appends recognized words without turning wrapped node text into extra nodes"
   ])!;
   expect(label.type === "text" && label.text).toContain("\n");
   api.updateScene({
-    elements: [...all, ...convertToExcalidrawElements([label])],
+    elements: [...all, ...convertToFcboardElements([label])],
   });
   const current = insertionWritingTargets(
     boardWritingParts(api.getSceneElements()),

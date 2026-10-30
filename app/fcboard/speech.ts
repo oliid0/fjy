@@ -1,4 +1,4 @@
-import { t, getLanguage } from "@excalidraw/excalidraw/i18n";
+import { t, getLanguage } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
 
 import { startAndroidSpeech } from "./systemSpeech";

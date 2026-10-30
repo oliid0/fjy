@@ -1,5 +1,5 @@
-import { getCommonBounds, newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
 import { findContentPosition } from "./placement";
 import {
@@ -431,8 +431,8 @@ it("uses the actual toolbar bounds for an offset or resized board", () => {
   const state = api.getAppState();
   vi.spyOn(api, "getAppState").mockReturnValue({ ...state, offsetTop: 100 });
   const root = document.createElement("div");
-  root.className = "excalidraw";
-  root.dataset.excalidrawId = api.id;
+  root.className = "fcboard";
+  root.dataset.fcboardId = api.id;
   const toolbar = document.createElement("div");
   toolbar.className = "fc-unified-toolbar";
   vi.spyOn(toolbar, "getBoundingClientRect").mockReturnValue({

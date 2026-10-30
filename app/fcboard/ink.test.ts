@@ -51,6 +51,8 @@ describe("factory ink calibration", () => {
           eraserSize: 150,
           palmThreshold: 80,
           thickThreshold: 24,
+          fineThreshold: 8,
+          factoryThresholds: { palm: 120, fine: 10, thick: 30 },
           dualPen: true,
           hardNibAvailable: true,
           hardNib: false,
@@ -63,6 +65,12 @@ describe("factory ink calibration", () => {
       expect(profile.eraserSize * dpr).toBe(150);
       expect(profile.palmThreshold * dpr).toBe(80);
       expect(profile.thickThreshold! * dpr).toBe(24);
+      expect(profile.fineThreshold! * dpr).toBe(8);
+      expect(profile.factoryThresholds).toEqual({
+        palm: 120,
+        fine: 10,
+        thick: 30,
+      });
       expect(profile.dualPen).toBe(true);
       expect(profile.hardNibAvailable).toBe(true);
       expect(profile.hardNib).toBe(false);

@@ -1,5 +1,5 @@
 {
-  "name": "@excalidraw/element",
+  "name": "@fcboard/element",
   "version": "0.18.0",
   "type": "module",
   "types": "./dist/types/element/src/index.d.ts",
@@ -28,14 +28,14 @@
   "files": [
     "dist/*"
   ],
-  "description": "Excalidraw elements-related logic",
+  "description": "Fcboard elements-related logic",
   "publishConfig": {
     "access": "public"
   },
   "license": "MIT",
   "keywords": [
-    "excalidraw",
-    "excalidraw-utils"
+    "fcboard",
+    "fcboard-utils"
   ],
   "browserslist": {
     "production": [
@@ -56,14 +56,14 @@
       "last 1 safari version"
     ]
   },
-  "bugs": "https://github.com/excalidraw/excalidraw/issues",
-  "repository": "https://github.com/excalidraw/excalidraw",
+  "bugs": "https://github.com/fcboard/fcboard/issues",
+  "repository": "https://github.com/fcboard/fcboard",
   "scripts": {
     "gen:types": "rimraf types && tsc",
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && npm run gen:types"
   },
   "dependencies": {
-    "@excalidraw/common": "0.18.0",
-    "@excalidraw/math": "0.18.0"
+    "@fcboard/common": "0.18.0",
+    "@fcboard/math": "0.18.0"
   }
 }

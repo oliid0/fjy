@@ -181,6 +181,27 @@ describe("explicit handwriting actions", () => {
     expect(backend.cloud).not.toHaveBeenCalled();
     expect(backend.local).not.toHaveBeenCalled();
   });
+  it("keeps the missing-language-pack flow local in automatic mode without sending a screenshot to another recognizer", async () => {
+    backend.nativeAvailable = true;
+    const failure = Object.assign(new Error("Language pack required"), {
+      code: "HANDWRITING_MODEL_REQUIRED",
+    });
+    backend.native.mockRejectedValue(failure);
+    const capture = vi.fn();
+    await expect(
+      recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "text",
+        undefined,
+        [[[0, 0]]],
+      ),
+    ).rejects.toBe(failure);
+    expect(capture).not.toHaveBeenCalled();
+    expect(backend.local).not.toHaveBeenCalled();
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
   it("does not choose a lower ranked candidate just because it produces an answer", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["illegible", "1+1="]);

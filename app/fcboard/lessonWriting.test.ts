@@ -1,11 +1,11 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 import {
   getCommonBounds,
   newFreeDrawElement,
   newIframeElement,
-} from "@excalidraw/element";
-import { Fonts } from "@excalidraw/excalidraw/fonts";
-import { FONT_FAMILY } from "@excalidraw/common";
+} from "@fcboard/element";
+import { Fonts } from "@fcboard/fcboard/fonts";
+import { FONT_FAMILY } from "@fcboard/common";
 import { waitFor } from "@testing-library/react";
 
 import { LessonCanvas, validateLesson } from "./lesson";

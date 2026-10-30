@@ -1,6 +1,6 @@
-import { ORIG_ID } from "@excalidraw/common";
+import { ORIG_ID } from "@fcboard/common";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { API } from "../tests/helpers/api";
 import {
   act,
@@ -15,7 +15,7 @@ const { h } = window;
 
 describe("actionDuplicateSelection", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   describe("duplicating frames", () => {

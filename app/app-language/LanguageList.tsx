@@ -1,5 +1,5 @@
-import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { useI18n, languages } from "@excalidraw/excalidraw/i18n";
+import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
+import { useI18n, languages } from "@fcboard/fcboard/i18n";
 import React from "react";
 
 import { useSetAtom, useAtomValue } from "../app-jotai";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import ButtonBase from "@mui/material/ButtonBase";
 import Popover from "@mui/material/Popover";
 import Slider from "@mui/material/Slider";

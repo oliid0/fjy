@@ -1,3 +1,3 @@
-import { DefaultSidebar } from "@excalidraw/excalidraw";
+import { DefaultSidebar } from "@fcboard/fcboard";
 
 export const AppSidebar = () => <DefaultSidebar />;

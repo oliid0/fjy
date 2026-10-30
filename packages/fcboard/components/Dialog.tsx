@@ -1,16 +1,16 @@
 import clsx from "clsx";
 import React, { useEffect, useState } from "react";
 
-import { KEYS, queryFocusableElements } from "@excalidraw/common";
+import { KEYS, queryFocusableElements } from "@fcboard/common";
 
 import { useSetAtom } from "../editor-jotai";
 import { useCallbackRefState } from "../hooks/useCallbackRefState";
 import { t } from "../i18n";
 
 import {
-  useExcalidrawContainer,
+  useFcboardContainer,
   useEditorInterface,
-  useExcalidrawSetAppState,
+  useFcboardSetAppState,
 } from "./App";
 import { Island } from "./Island";
 import { isLibraryMenuOpenAtom } from "./LibraryMenu";
@@ -50,7 +50,7 @@ function getDialogSize(size: DialogSize): number {
 export const Dialog = (props: DialogProps) => {
   const [islandNode, setIslandNode] = useCallbackRefState<HTMLDivElement>();
   const [lastActiveElement] = useState(document.activeElement);
-  const { id } = useExcalidrawContainer();
+  const { id } = useFcboardContainer();
   const isFullscreen = useEditorInterface().formFactor === "phone";
 
   useEffect(() => {
@@ -93,7 +93,7 @@ export const Dialog = (props: DialogProps) => {
     return () => islandNode.removeEventListener("keydown", handleKeyDown);
   }, [islandNode, props.autofocus]);
 
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const setIsLibraryMenuOpen = useSetAtom(isLibraryMenuOpenAtom);
 
   const onClose = () => {

@@ -1,6 +1,6 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import {
   cubeFaces,
@@ -125,7 +125,7 @@ export const solidShapes = (
   settings: SolidSettings,
   size = 1,
   rotation = 0,
-): ExcalidrawElementSkeleton[] => {
+): FcboardElementSkeleton[] => {
   const faces =
     kind === "cube"
       ? cubeFaces(settings.net, settings.unfold)
@@ -163,7 +163,7 @@ export const solidShapes = (
     face: string,
     fill = "transparent",
     hidden = false,
-  ): ExcalidrawElementSkeleton => {
+  ): FcboardElementSkeleton => {
     const p = vertices.map(project);
     const origin = p[0];
     return {

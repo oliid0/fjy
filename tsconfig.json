@@ -20,18 +20,18 @@
     "baseUrl": ".",
     "paths": {
       "@paddleocr/paddleocr-js": ["./node_modules/@paddleocr/paddleocr-js/dist/index.d.ts", "./app/node_modules/@paddleocr/paddleocr-js/dist/index.d.ts"],
-      "@excalidraw/common": ["./packages/common/src/index.ts"],
-      "@excalidraw/common/*": ["./packages/common/src/*"],
-      "@excalidraw/excalidraw": ["./packages/fcboard/index.tsx"],
-      "@excalidraw/excalidraw/*": ["./packages/fcboard/*"],
-      "@excalidraw/element": ["./packages/element/src/index.ts"],
-      "@excalidraw/element/*": ["./packages/element/src/*"],
-      "@excalidraw/math": ["./packages/math/src/index.ts"],
-      "@excalidraw/math/*": ["./packages/math/src/*"],
-      "@excalidraw/utils": ["./packages/utils/src/index.ts"],
-      "@excalidraw/utils/*": ["./packages/utils/src/*"]
+      "@fcboard/common": ["./packages/common/src/index.ts"],
+      "@fcboard/common/*": ["./packages/common/src/*"],
+      "@fcboard/fcboard": ["./packages/fcboard/index.tsx"],
+      "@fcboard/fcboard/*": ["./packages/fcboard/*"],
+      "@fcboard/element": ["./packages/element/src/index.ts"],
+      "@fcboard/element/*": ["./packages/element/src/*"],
+      "@fcboard/math": ["./packages/math/src/index.ts"],
+      "@fcboard/math/*": ["./packages/math/src/*"],
+      "@fcboard/utils": ["./packages/utils/src/index.ts"],
+      "@fcboard/utils/*": ["./packages/utils/src/*"]
     }
   },
   "include": ["packages", "app"],
-  "exclude": ["examples", "dist", "types", "tests"]
+  "exclude": ["examples", "dist", "types", "tests", "**/dist/**", "**/build/**", "**/node_modules/**"]
 }

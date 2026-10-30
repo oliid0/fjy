@@ -1,6 +1,6 @@
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
-export type ChartElements = readonly NonDeletedExcalidrawElement[];
+export type ChartElements = readonly NonDeletedFcboardElement[];
 
 export interface Spreadsheet {
   title: string | null;

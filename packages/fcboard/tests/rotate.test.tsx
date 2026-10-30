@@ -1,9 +1,9 @@
 import React from "react";
 import { expect } from "vitest";
 
-import { reseed } from "@excalidraw/common";
+import { reseed } from "@fcboard/common";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { UI } from "./helpers/ui";
 import { render, unmountComponent } from "./test-utils";
@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 test("unselected bound arrow updates when rotating its target element", async () => {
-  await render(<Excalidraw />);
+  await render(<Fcboard />);
   const rectangle = UI.createElement("rectangle", {
     width: 200,
     height: 100,
@@ -40,7 +40,7 @@ test("unselected bound arrow updates when rotating its target element", async ()
 });
 
 test("unselected bound arrows update when rotating their target elements", async () => {
-  await render(<Excalidraw />);
+  await render(<Fcboard />);
   const ellipse = UI.createElement("ellipse", {
     x: 0,
     y: 80,

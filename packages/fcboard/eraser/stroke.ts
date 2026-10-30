@@ -1,4 +1,4 @@
-import { getSizeFromPoints } from "@excalidraw/common";
+import { getSizeFromPoints } from "@fcboard/common";
 import {
   getElementAbsoluteCoords,
   getElementBounds,
@@ -6,26 +6,26 @@ import {
   isPointInElement,
   shouldTestInside,
   newElementWith,
-} from "@excalidraw/element";
-import { pointFrom, polygonIncludesPointNonZero } from "@excalidraw/math";
+} from "@fcboard/element";
+import { pointFrom, polygonIncludesPointNonZero } from "@fcboard/math";
 import {
   factoryNibControls,
   factoryNibSamples,
-} from "@excalidraw/element/factoryNib";
+} from "@fcboard/element/factoryNib";
 import {
   factoryBrushSamples,
   isFactoryBrush,
-} from "@excalidraw/element/factoryBrush";
+} from "@fcboard/element/factoryBrush";
 import {
   factoryInkSamples,
   isFactoryStroke,
-} from "@excalidraw/element/factoryInk";
+} from "@fcboard/element/factoryInk";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-} from "@excalidraw/element/types";
-import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
+  FcboardElement,
+  FcboardFreeDrawElement,
+} from "@fcboard/element/types";
+import type { GlobalPoint, LocalPoint, Radians } from "@fcboard/math";
 
 import { getLassoSelectedElementIds } from "../lasso/utils";
 
@@ -115,12 +115,12 @@ const insideInterval = (
 
 /** Null means untouched; survivors remain editable, serializable vector strokes. */
 export const eraseStroke = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
   from: Point,
   to: Point,
   width: number,
   height: number,
-): ExcalidrawFreeDrawElement[] | null => {
+): FcboardFreeDrawElement[] | null => {
   if (element.locked || element.isDeleted || !element.points.length) {
     return null;
   }
@@ -305,7 +305,7 @@ export const pointerSamples = (event: PointerEvent) => {
 
 /** The visible rectangular footprint sweeps whole objects, including fast moves. */
 export const eraseSceneObjects = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   from: Point,
   to: Point,
   width: number,

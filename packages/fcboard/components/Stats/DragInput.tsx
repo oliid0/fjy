@@ -1,17 +1,17 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 
-import { EVENT, KEYS, cloneJSON } from "@excalidraw/common";
+import { EVENT, KEYS, cloneJSON } from "@fcboard/common";
 
-import { deepCopyElement } from "@excalidraw/element";
+import { deepCopyElement } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { ElementsMap, FcboardElement } from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
-import { useApp, useExcalidrawSetAppState } from "../App";
+import { useApp, useFcboardSetAppState } from "../App";
 import { InlineIcon } from "../InlineIcon";
 
 import { SMALLEST_DELTA } from "./utils";
@@ -23,7 +23,7 @@ import type { AppState } from "../../types";
 
 export type DragInputCallbackType<
   P extends StatsInputProperty,
-  E = ExcalidrawElement,
+  E = FcboardElement,
 > = (props: {
   accumulatedChange: number;
   instantChange: number;
@@ -37,19 +37,19 @@ export type DragInputCallbackType<
   originalAppState: AppState;
   setInputValue: (value: number) => void;
   app: ReturnType<typeof useApp>;
-  setAppState: ReturnType<typeof useExcalidrawSetAppState>;
+  setAppState: ReturnType<typeof useFcboardSetAppState>;
 }) => void;
 
-export type DragFinishedCallbackType<E = ExcalidrawElement> = (props: {
+export type DragFinishedCallbackType<E = FcboardElement> = (props: {
   app: ReturnType<typeof useApp>;
-  setAppState: ReturnType<typeof useExcalidrawSetAppState>;
+  setAppState: ReturnType<typeof useFcboardSetAppState>;
   originalElements: readonly E[] | null;
   originalAppState: AppState;
 }) => void;
 
 interface StatsDragInputProps<
   T extends StatsInputProperty,
-  E = ExcalidrawElement,
+  E = FcboardElement,
 > {
   label: string | React.ReactNode;
   icon?: React.ReactNode;
@@ -68,7 +68,7 @@ interface StatsDragInputProps<
 
 const StatsDragInput = <
   T extends StatsInputProperty,
-  E extends ExcalidrawElement = ExcalidrawElement,
+  E extends FcboardElement = FcboardElement,
 >({
   label,
   icon,
@@ -84,7 +84,7 @@ const StatsDragInput = <
   dragFinishedCallback,
 }: StatsDragInputProps<T, E>) => {
   const app = useApp();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const inputRef = useRef<HTMLInputElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
 
@@ -220,7 +220,7 @@ const StatsDragInput = <
         ref={labelRef}
         onPointerDown={(event) => {
           if (inputRef.current && editable) {
-            document.body.classList.add("excalidraw-cursor-resize");
+            document.body.classList.add("fcboard-cursor-resize");
 
             let startValue = Number(inputRef.current.value);
             if (isNaN(startValue)) {
@@ -317,7 +317,7 @@ const StatsDragInput = <
               originalElements = null;
               originalElementsMap = null;
 
-              document.body.classList.remove("excalidraw-cursor-resize");
+              document.body.classList.remove("fcboard-cursor-resize");
 
               window.removeEventListener(EVENT.POINTER_UP, onPointerUp, false);
             };

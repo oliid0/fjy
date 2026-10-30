@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import React from "react";
 
-import { composeEventHandlers } from "@excalidraw/common";
+import { composeEventHandlers } from "@fcboard/common";
 
 import "./Button.scss";
 
@@ -19,7 +19,7 @@ interface ButtonProps
 }
 
 /**
- * A generic button component that follows Excalidraw's design system.
+ * A generic button component that follows Fcboard's design system.
  * Style can be customised using `className` or `style` prop.
  * Accepts all props that a regular `button` element accepts.
  */
@@ -37,7 +37,7 @@ export const Button = ({
         onSelect();
       })}
       type={type}
-      className={clsx("excalidraw-button", className, { selected })}
+      className={clsx("fcboard-button", className, { selected })}
       {...rest}
     >
       {children}

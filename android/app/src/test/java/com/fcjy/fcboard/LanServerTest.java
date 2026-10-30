@@ -14,6 +14,50 @@ import static org.junit.Assert.*;
 
 /** Two real socket clients exercise the APK's actual relay, including conflict acknowledgements. */
 public class LanServerTest {
+    @Test public void coursewareRetainsOriginalFileAcrossPagesAndRejectsGuestReplacement() throws Exception {
+        LanServer server = new LanServer(path -> null, ignored -> {}); server.start(5000, true);
+        try {
+            JSONObject document = new JSONObject().put("id", "original").put("name", "lesson.pptx").put("mimeType", "application/octet-stream")
+                .put("page", 0).put("dataURL", "data:application/octet-stream;base64,YQ==");
+            JSONObject first = new JSONObject().put("id", "document:original:0").put("epoch", 0);
+            String token = server.startRoom(scene(element("ink", 1, 1, false)).put("page", first).put("document", document));
+            try (Client guest = new Client(server.getListeningPort(), "/board/" + token)) {
+                assertEquals(document.toString(), new JSONObject(guest.read()).getJSONObject("document").toString());
+                guest.send(scene(element("ink", 2, 1, false)).put("page", first).put("document", new JSONObject(document.toString()).put("name", "forged.pptx")).toString());
+                assertEquals("lesson.pptx", new JSONObject(guest.read()).getJSONObject("document").getString("name"));
+                JSONObject nextDocument = new JSONObject(document.toString()).put("page", 1); nextDocument.remove("dataURL");
+                JSONObject second = new JSONObject().put("id", "document:original:1").put("epoch", 1);
+                server.publish(new JSONObject().put("kind", "scene").put("elements", new JSONArray()).put("files", new JSONObject()).put("page", second).put("document", nextDocument).toString(), null);
+                JSONObject changed = new JSONObject(guest.read());
+                assertEquals(0, changed.getJSONArray("elements").length());
+                assertEquals(1, changed.getJSONObject("document").getInt("page"));
+                assertEquals(document.getString("dataURL"), changed.getJSONObject("document").getString("dataURL"));
+                guest.send(scene(element("late", 9, 1, false)).put("page", first).toString());
+                assertEquals(0, new JSONObject(guest.read()).getJSONArray("elements").length());
+                server.publish(new JSONObject().put("kind", "scene").put("elements", new JSONArray()).put("files", new JSONObject()).put("page", new JSONObject().put("id", "board").put("epoch", 2)).toString(), null);
+                assertFalse(new JSONObject(guest.read()).has("document"));
+            }
+        } finally { server.stop(); }
+    }
+    @Test public void pageEpochsReplaceScenesAndRejectLateOrGuestTransitions() throws Exception {
+        LanServer server = new LanServer(path -> null, ignored -> {}); server.start(5000, true);
+        try {
+            JSONObject first = new JSONObject().put("id", "first").put("epoch", 0);
+            String token = server.startRoom(scene(element("old", 1, 1, false)).put("page", first));
+            try (Client guest = new Client(server.getListeningPort(), "/board/" + token)) {
+                guest.read();
+                JSONObject second = new JSONObject().put("id", "second").put("epoch", 1);
+                server.publish(new JSONObject().put("kind", "scene").put("page", second).put("elements", new JSONArray()).put("files", new JSONObject()).toString(), null);
+                JSONObject switched = new JSONObject(guest.read());
+                assertEquals("initial", switched.getString("kind")); assertEquals(0, switched.getJSONArray("elements").length());
+                guest.send(scene(element("late", 9, 1, false)).put("page", first).toString());
+                assertEquals(0, new JSONObject(guest.read()).getJSONArray("elements").length());
+                guest.send(scene(element("forged", 9, 1, false)).put("page", new JSONObject().put("id", "forged").put("epoch", 99)).toString());
+                assertEquals("second", new JSONObject(guest.read()).getJSONObject("page").getString("id"));
+                assertEquals(0, server.snapshotRoom().getJSONArray("elements").length());
+            }
+        } finally { server.stop(); }
+    }
     private static class Client implements AutoCloseable {
         final Socket socket;
         final DataInputStream input;
@@ -51,6 +95,37 @@ public class LanServerTest {
     }
     private JSONObject scene(JSONObject element) throws Exception {
         return new JSONObject().put("kind", "scene").put("elements", new JSONArray().put(element)).put("files", new JSONObject());
+    }
+    @Test public void passwordSwitchUpdatesTheSameRoomAndCanBeDisabledWhileAGuestIsWaiting() throws Exception {
+        LanServer server=new LanServer(path->new ByteArrayInputStream(new byte[0]),ignored->{});server.start(5000,true);
+        try {
+            String token=server.startRoom(scene(element("private-board",1,5,false)));
+            // Default off: the QR link immediately opens the board.
+            try (Client first = new Client(server.getListeningPort(), "/board/" + token)) {
+                assertEquals("initial", new JSONObject(first.read()).getString("kind"));
+            }
+            server.setPassword("0123");
+            try(Client guest=new Client(server.getListeningPort(),"/board/"+token)){
+                JSONObject required=new JSONObject(guest.read());assertEquals("auth",required.getString("kind"));assertFalse(required.has("elements"));
+                for (int attempt = 0; attempt < 4; attempt++) {
+                    guest.send("{\"kind\":\"join\",\"password\":\"9999\"}");assertTrue(new JSONObject(guest.read()).getBoolean("incorrect"));
+                }
+                server.setPassword("2345");
+                guest.send("{\"kind\":\"join\",\"password\":\"0123\"}");assertTrue(new JSONObject(guest.read()).getBoolean("incorrect"));
+                guest.send("{\"kind\":\"join\",\"password\":\"2345\"}");JSONObject initial=new JSONObject(guest.read());assertEquals("initial",initial.getString("kind"));assertEquals("private-board",initial.getJSONArray("elements").getJSONObject(0).getString("id"));
+                guest.send(scene(element("guest-ink",1,8,false)).toString());assertEquals("guest-ink",new JSONObject(guest.read()).getJSONArray("elements").getJSONObject(0).getString("id"));
+            }
+            try (Client waiting = new Client(server.getListeningPort(), "/board/" + token)) {
+                assertEquals("auth", new JSONObject(waiting.read()).getString("kind"));
+                server.setPassword("");
+                assertEquals("initial", new JSONObject(waiting.read()).getString("kind"));
+            }
+            try (Client next = new Client(server.getListeningPort(), "/board/" + token)) {
+                assertEquals("initial", new JSONObject(next.read()).getString("kind"));
+            }
+            try { server.setPassword("123456"); fail("Four digits only"); }
+            catch (IllegalArgumentException expected) { }
+        }finally{server.stop();}
     }
     @Test public void drawingDeletionBinaryAndLateJoinReachBothDevices() throws Exception {
         List<String> nativeMessages = new CopyOnWriteArrayList<>();

@@ -1,11 +1,11 @@
 import React from "react";
 
-import { EXPORT_DATA_TYPES, MIME_TYPES } from "@excalidraw/common";
+import { EXPORT_DATA_TYPES, MIME_TYPES } from "@fcboard/common";
 
-import type { ExcalidrawTextElement } from "@excalidraw/element/types";
+import type { FcboardTextElement } from "@fcboard/element/types";
 
 import { getDefaultAppState } from "../appState";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "./helpers/api";
 import { Pointer, UI } from "./helpers/ui";
@@ -19,7 +19,7 @@ describe("appState", () => {
     const exportBackground = !defaultAppState.exportBackground;
 
     await render(
-      <Excalidraw
+      <Fcboard
         initialData={{
           appState: {
             exportBackground,
@@ -41,7 +41,7 @@ describe("appState", () => {
         file: new Blob(
           [
             JSON.stringify({
-              type: EXPORT_DATA_TYPES.excalidraw,
+              type: EXPORT_DATA_TYPES.fcboard,
               appState: {
                 viewBackgroundColor: "#000",
               },
@@ -64,7 +64,7 @@ describe("appState", () => {
 
   it("changing fontSize with text tool selected (no element created yet)", async () => {
     const { container } = await render(
-      <Excalidraw
+      <Fcboard
         initialData={{
           appState: {
             currentItemFontSize: 30,
@@ -83,6 +83,6 @@ describe("appState", () => {
 
     mouse.clickAt(100, 100);
 
-    expect((h.elements[0] as ExcalidrawTextElement).fontSize).toBe(16);
+    expect((h.elements[0] as FcboardTextElement).fontSize).toBe(16);
   });
 });

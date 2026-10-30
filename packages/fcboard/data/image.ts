@@ -2,7 +2,7 @@ import tEXt from "png-chunk-text";
 import encodePng from "png-chunks-encode";
 import decodePng from "png-chunks-extract";
 
-import { EXPORT_DATA_TYPES, MIME_TYPES } from "@excalidraw/common";
+import { EXPORT_DATA_TYPES, MIME_TYPES } from "@fcboard/common";
 
 import { blobToArrayBuffer } from "./blob";
 import { encode, decode } from "./encode";
@@ -32,7 +32,7 @@ export const encodePngMetadata = async ({
   const chunks = decodePng(new Uint8Array(await blobToArrayBuffer(blob)));
 
   const metadataChunk = tEXt.encode(
-    MIME_TYPES.excalidraw,
+    MIME_TYPES.fcboard,
     JSON.stringify(
       encode({
         text: metadata,
@@ -48,14 +48,18 @@ export const encodePngMetadata = async ({
 
 export const decodePngMetadata = async (blob: Blob) => {
   const metadata = await getTEXtChunk(blob);
-  if (metadata?.keyword === MIME_TYPES.excalidraw) {
+  if (
+    metadata?.keyword === MIME_TYPES.fcboard ||
+    metadata?.keyword === "application/vnd.excalidraw+json"
+  ) {
     try {
       const encodedData = JSON.parse(metadata.text);
       if (!("encoded" in encodedData)) {
         // legacy, un-encoded scene JSON
         if (
           "type" in encodedData &&
-          encodedData.type === EXPORT_DATA_TYPES.excalidraw
+          (encodedData.type === EXPORT_DATA_TYPES.fcboard ||
+            encodedData.type === "excalidraw")
         ) {
           return metadata.text;
         }

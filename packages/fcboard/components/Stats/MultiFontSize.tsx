@@ -1,18 +1,15 @@
-import {
-  getBoundTextElement,
-  redrawTextBoundingBox,
-} from "@excalidraw/element";
-import { hasBoundTextElement, isTextElement } from "@excalidraw/element";
+import { getBoundTextElement, redrawTextBoundingBox } from "@fcboard/element";
+import { hasBoundTextElement, isTextElement } from "@fcboard/element";
 
-import { isInGroup } from "@excalidraw/element";
+import { isInGroup } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
+  FcboardElement,
+  FcboardTextElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { fontSizeIcon } from "../icons";
 
@@ -23,7 +20,7 @@ import type { DragInputCallbackType } from "./DragInput";
 import type { AppState } from "../../types";
 
 interface MultiFontSizeProps {
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   scene: Scene;
   elementsMap: NonDeletedSceneElementsMap;
   appState: AppState;
@@ -34,11 +31,11 @@ const MIN_FONT_SIZE = 4;
 const STEP_SIZE = 4;
 
 const getApplicableTextElements = (
-  elements: readonly (ExcalidrawElement | undefined)[],
+  elements: readonly (FcboardElement | undefined)[],
   elementsMap: NonDeletedSceneElementsMap,
 ) =>
   elements.reduce(
-    (acc: ExcalidrawTextElement[], el) => {
+    (acc: FcboardTextElement[], el) => {
       if (!el || isInGroup(el)) {
         return acc;
       }
@@ -62,7 +59,7 @@ const getApplicableTextElements = (
 
 const handleFontSizeChange: DragInputCallbackType<
   MultiFontSizeProps["property"],
-  ExcalidrawTextElement
+  FcboardTextElement
 > = ({
   accumulatedChange,
   originalElements,
@@ -73,7 +70,7 @@ const handleFontSizeChange: DragInputCallbackType<
   const elementsMap = scene.getNonDeletedElementsMap();
   const latestTextElements = originalElements.map((el) =>
     elementsMap.get(el.id),
-  ) as ExcalidrawTextElement[];
+  ) as FcboardTextElement[];
 
   let nextFontSize;
 
@@ -94,7 +91,7 @@ const handleFontSizeChange: DragInputCallbackType<
 
     scene.triggerUpdate();
   } else {
-    const originalTextElements = originalElements as ExcalidrawTextElement[];
+    const originalTextElements = originalElements as FcboardTextElement[];
 
     for (let i = 0; i < latestTextElements.length; i++) {
       const latestElement = latestTextElements[i];

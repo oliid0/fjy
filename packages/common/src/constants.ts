@@ -1,8 +1,5 @@
-import type {
-  ExcalidrawElement,
-  FontFamilyValues,
-} from "@excalidraw/element/types";
-import type { AppProps, AppState } from "@excalidraw/excalidraw/types";
+import type { FcboardElement, FontFamilyValues } from "@fcboard/element/types";
+import type { AppProps, AppState } from "@fcboard/fcboard/types";
 
 import { COLOR_PALETTE } from "./colors";
 
@@ -77,7 +74,7 @@ export enum EVENT {
   VISIBILITY_CHANGE = "visibilitychange",
   SCROLL = "scroll",
   // custom events
-  EXCALIDRAW_LINK = "excalidraw-link",
+  EXCALIDRAW_LINK = "fcboard-link",
   MENU_ITEM_SELECT = "menu.itemSelect",
   MESSAGE = "message",
   FULLSCREENCHANGE = "fullscreenchange",
@@ -138,6 +135,7 @@ export const FONT_FAMILY = {
   "Comic Shanns": 8,
   "Liberation Sans": 9,
   Assistant: 10,
+  FactoryHandwriting: 11,
 };
 
 // Segoe UI Emoji fails to properly fallback for some glyphs: ∞, ∫, ≠
@@ -194,13 +192,13 @@ export const THEME = {
 export const DARK_THEME_FILTER = "invert(93%) hue-rotate(180deg)";
 
 export const FRAME_STYLE = {
-  strokeColor: "#bbb" as ExcalidrawElement["strokeColor"],
-  strokeWidth: 2 as ExcalidrawElement["strokeWidth"],
-  strokeStyle: "solid" as ExcalidrawElement["strokeStyle"],
-  fillStyle: "solid" as ExcalidrawElement["fillStyle"],
-  roughness: 0 as ExcalidrawElement["roughness"],
-  roundness: null as ExcalidrawElement["roundness"],
-  backgroundColor: "transparent" as ExcalidrawElement["backgroundColor"],
+  strokeColor: "#bbb" as FcboardElement["strokeColor"],
+  strokeWidth: 2 as FcboardElement["strokeWidth"],
+  strokeStyle: "solid" as FcboardElement["strokeStyle"],
+  fillStyle: "solid" as FcboardElement["fillStyle"],
+  roughness: 0 as FcboardElement["roughness"],
+  roundness: null as FcboardElement["roundness"],
+  backgroundColor: "transparent" as FcboardElement["backgroundColor"],
   radius: 8,
   nameOffsetY: 3,
   nameColorLightTheme: "#999999",
@@ -250,20 +248,20 @@ export const STRING_MIME_TYPES = {
   text: "text/plain",
   html: "text/html",
   json: "application/json",
-  // excalidraw data
-  excalidraw: "application/vnd.excalidraw+json",
-  excalidrawClipboard: "application/vnd.excalidraw.clipboard+json",
+  // fcboard data
+  fcboard: "application/vnd.fcboard+json",
+  excalidrawClipboard: "application/vnd.fcboard.clipboard+json",
   // LEGACY: fully-qualified library JSON data
-  excalidrawlib: "application/vnd.excalidrawlib+json",
-  // list of excalidraw library item ids
-  excalidrawlibIds: "application/vnd.excalidrawlib.ids+json",
+  fcboardlib: "application/vnd.fcboardlib+json",
+  // list of fcboard library item ids
+  fcboardlibIds: "application/vnd.fcboardlib.ids+json",
 } as const;
 
 export const MIME_TYPES = {
   ...STRING_MIME_TYPES,
-  // image-encoded excalidraw data
-  "excalidraw.svg": "image/svg+xml",
-  "excalidraw.png": "image/png",
+  // image-encoded fcboard data
+  "fcboard.svg": "image/svg+xml",
+  "fcboard.png": "image/png",
   // binary
   binary: "application/octet-stream",
   // image
@@ -283,10 +281,10 @@ export const EXPORT_IMAGE_TYPES = {
 } as const;
 
 export const EXPORT_DATA_TYPES = {
-  excalidraw: "excalidraw",
-  excalidrawClipboard: "excalidraw/clipboard",
-  excalidrawLibrary: "excalidrawlib",
-  excalidrawClipboardWithAPI: "excalidraw-api/clipboard",
+  fcboard: "fcboard",
+  excalidrawClipboard: "fcboard/clipboard",
+  fcboardlibrary: "fcboardlib",
+  excalidrawClipboardWithAPI: "fcboard-api/clipboard",
 } as const;
 
 export const getExportSource = () =>
@@ -349,8 +347,8 @@ export const SVG_DOCUMENT_PREAMBLE = `<?xml version="1.0" standalone="no"?>
 export const ENCRYPTION_KEY_BITS = 128;
 
 export const VERSIONS = {
-  excalidraw: 2,
-  excalidrawLibrary: 2,
+  fcboard: 2,
+  fcboardlibrary: 2,
 } as const;
 
 export const BOUND_TEXT_PADDING = 5;
@@ -410,14 +408,14 @@ export const STROKE_WIDTH = {
 } as const;
 
 export const DEFAULT_ELEMENT_PROPS: {
-  strokeColor: ExcalidrawElement["strokeColor"];
-  backgroundColor: ExcalidrawElement["backgroundColor"];
-  fillStyle: ExcalidrawElement["fillStyle"];
-  strokeWidth: ExcalidrawElement["strokeWidth"];
-  strokeStyle: ExcalidrawElement["strokeStyle"];
-  roughness: ExcalidrawElement["roughness"];
-  opacity: ExcalidrawElement["opacity"];
-  locked: ExcalidrawElement["locked"];
+  strokeColor: FcboardElement["strokeColor"];
+  backgroundColor: FcboardElement["backgroundColor"];
+  fillStyle: FcboardElement["fillStyle"];
+  strokeWidth: FcboardElement["strokeWidth"];
+  strokeStyle: FcboardElement["strokeStyle"];
+  roughness: FcboardElement["roughness"];
+  opacity: FcboardElement["opacity"];
+  locked: FcboardElement["locked"];
 } = {
   strokeColor: COLOR_PALETTE.black,
   backgroundColor: COLOR_PALETTE.transparent,
@@ -464,9 +462,9 @@ export const TOOL_TYPE = {
 } as const;
 
 export const EDITOR_LS_KEYS = {
-  OAI_API_KEY: "excalidraw-oai-api-key",
+  OAI_API_KEY: "fcboard-oai-api-key",
   // legacy naming (non)scheme
-  MERMAID_TO_EXCALIDRAW: "mermaid-to-excalidraw",
+  MERMAID_TO_EXCALIDRAW: "mermaid-to-fcboard",
   PUBLISH_LIBRARY: "publish-library-data",
 } as const;
 

@@ -1,4 +1,4 @@
-import { arrayToMap, easeOut, THEME } from "@excalidraw/common";
+import { arrayToMap, easeOut, THEME } from "@fcboard/common";
 
 import {
   computeBoundTextPosition,
@@ -13,25 +13,25 @@ import {
   isFreeDrawElement,
   isLineElement,
   isPointInElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 import {
   lineSegment,
   lineSegmentsDistance,
   pointFrom,
   polygon,
   polygonIncludesPointNonZero,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
-import { getElementsInGroup } from "@excalidraw/element";
+import { getElementsInGroup } from "@fcboard/element";
 
-import { shouldTestInside } from "@excalidraw/element";
-import { hasBoundTextElement, isBoundToContainer } from "@excalidraw/element";
-import { getBoundTextElementId } from "@excalidraw/element";
+import { shouldTestInside } from "@fcboard/element";
+import { hasBoundTextElement, isBoundToContainer } from "@fcboard/element";
+import { getBoundTextElementId } from "@fcboard/element";
 
-import type { Bounds } from "@excalidraw/common";
+import type { Bounds } from "@fcboard/common";
 
-import type { GlobalPoint, LineSegment } from "@excalidraw/math/types";
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { GlobalPoint, LineSegment } from "@fcboard/math/types";
+import type { ElementsMap, FcboardElement } from "@fcboard/element/types";
 
 import { AnimatedTrail } from "../animated-trail";
 
@@ -40,8 +40,8 @@ import type { AnimationFrameHandler } from "../animation-frame-handler";
 import type App from "../components/App";
 
 export class EraserTrail extends AnimatedTrail {
-  private elementsToErase: Set<ExcalidrawElement["id"]> = new Set();
-  private groupsToErase: Set<ExcalidrawElement["id"]> = new Set();
+  private elementsToErase: Set<FcboardElement["id"]> = new Set();
+  private groupsToErase: Set<FcboardElement["id"]> = new Set();
 
   constructor(animationFrameHandler: AnimationFrameHandler, app: App) {
     super(animationFrameHandler, app, {
@@ -197,7 +197,7 @@ export class EraserTrail extends AnimatedTrail {
 
 const eraserTest = (
   pathSegment: LineSegment<GlobalPoint>,
-  element: ExcalidrawElement,
+  element: FcboardElement,
   elementsMap: ElementsMap,
   zoom: number,
 ): boolean => {

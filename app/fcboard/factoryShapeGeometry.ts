@@ -1,7 +1,7 @@
-import { pointFrom } from "@excalidraw/math";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { pointFrom } from "@fcboard/math";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 export const factoryShapeCatalog = [
   ["line", "toolBar.line"],
@@ -86,7 +86,7 @@ export const factoryFlatShape = (
   start: ShapePoint,
   end: ShapePoint,
   style: FactoryShapeStyle,
-): ExcalidrawElementSkeleton[] => {
+): FcboardElementSkeleton[] => {
   const dx = end[0] - start[0];
   const dy = end[1] - start[1];
   const left = Math.min(start[0], end[0]);
@@ -107,7 +107,7 @@ export const factoryFlatShape = (
   const path = (
     points: ShapePoint[],
     close = true,
-  ): ExcalidrawElementSkeleton[] => [
+  ): FcboardElementSkeleton[] => [
     {
       ...common,
       type: "line",
@@ -220,12 +220,12 @@ export const factoryFlatShape = (
 
 /** Persist the drag's two axes, so later solid animations keep the chosen proportions. */
 export const stretchFactoryShapes = (
-  shapes: ExcalidrawElementSkeleton[],
+  shapes: FcboardElementSkeleton[],
   sx: number,
   sy: number,
 ) =>
   shapes.map(
-    (shape): ExcalidrawElementSkeleton => ({
+    (shape): FcboardElementSkeleton => ({
       ...shape,
       x: (shape.x || 0) * sx,
       y: (shape.y || 0) * sy,
@@ -238,7 +238,7 @@ export const stretchFactoryShapes = (
   );
 
 export const rotateFactoryShapes = (
-  shapes: ExcalidrawElementSkeleton[],
+  shapes: FcboardElementSkeleton[],
   rotation: number,
   size: number,
 ) => {
@@ -246,8 +246,8 @@ export const rotateFactoryShapes = (
     return shapes;
   }
   const radians = (rotation * Math.PI) / 180;
-  return convertToExcalidrawElements(shapes).map(
-    (element): ExcalidrawElementSkeleton => {
+  return convertToFcboardElements(shapes).map(
+    (element): FcboardElementSkeleton => {
       const cx = (element.x + element.width / 2) * size;
       const cy = (element.y + element.height / 2) * size;
       return {
@@ -270,7 +270,7 @@ export const rotateFactoryShapes = (
               ),
             }
           : {}),
-      } as ExcalidrawElementSkeleton;
+      } as FcboardElementSkeleton;
     },
   );
 };

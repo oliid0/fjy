@@ -2,7 +2,7 @@
 @use "./variables.module" as *;
 @forward "./variables.module";
 
-.excalidraw {
+.fcboard {
   --theme-filter: none;
   --button-destructive-bg-color: #{$color-red-1};
   --button-destructive-color: #{$color-red-9};

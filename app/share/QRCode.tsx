@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import Spinner from "@excalidraw/excalidraw/components/Spinner";
-import { useI18n } from "@excalidraw/excalidraw/i18n";
+import Spinner from "@fcboard/fcboard/components/Spinner";
+import { useI18n } from "@fcboard/fcboard/i18n";
 
 interface QRCodeProps {
   value: string;

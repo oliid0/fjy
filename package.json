@@ -1,6 +1,7 @@
 {
   "private": true,
-  "name": "fcboard-monorepo",
+  "name": "fcboard",
+  "packageManager": "pnpm@10.28.2",
   "workspaces": [
     "app",
     "packages/*",
@@ -61,9 +62,11 @@
     "build:app": "npm run build:app --prefix ./app",
     "build:common": "npm run build:esm --prefix ./packages/common",
     "build:element": "npm run build:esm --prefix ./packages/element",
-    "build:excalidraw": "npm run build:esm --prefix ./packages/fcboard",
+    "build:fcboard": "npm run build:esm --prefix ./packages/fcboard",
     "build:math": "npm run build:esm --prefix ./packages/math",
-    "build:packages": "npm run build:common && npm run build:math && npm run build:element && npm run build:excalidraw",
+    "build:packages": "npm run build:common && npm run build:math && npm run build:element && npm run build:fcboard",
+    "pack:fcboard": "npm pack ./packages/fcboard/dist/npm --pack-destination ./packages/fcboard/dist",
+    "publish:fcboard": "npm publish ./packages/fcboard/dist/npm --access public",
     "build:version": "npm run build:version --prefix ./app",
     "build": "npm run build --prefix ./app",
     "build:preview": "npm run build:preview --prefix ./app",
@@ -134,7 +137,7 @@
           ],
           "pathGroups": [
             {
-              "pattern": "@excalidraw/**",
+              "pattern": "@fcboard/**",
               "group": "external",
               "position": "after"
             }
@@ -183,7 +186,7 @@
               "patterns": [
                 {
                   "group": [
-                    "@excalidraw/excalidraw"
+                    "@fcboard/fcboard"
                   ],
                   "message": "Do not import from the barrel 'index.tsx' files. Use direct relative imports to the specific module instead.",
                   "allowTypeImports": true

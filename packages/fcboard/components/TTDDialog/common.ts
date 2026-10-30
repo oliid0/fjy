@@ -1,21 +1,14 @@
-import {
-  DEFAULT_EXPORT_PADDING,
-  EDITOR_LS_KEYS,
-  THEME,
-} from "@excalidraw/common";
+import { DEFAULT_EXPORT_PADDING, EDITOR_LS_KEYS, THEME } from "@fcboard/common";
 
-import { convertToExcalidrawElements } from "@excalidraw/element";
+import { convertToFcboardElements } from "@fcboard/element";
 
-import { exportToCanvas } from "@excalidraw/utils";
+import { exportToCanvas } from "@fcboard/utils";
 
-import type {
-  NonDeletedExcalidrawElement,
-  Theme,
-} from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement, Theme } from "@fcboard/element/types";
 
 import { EditorLocalStorage } from "../../data/EditorLocalStorage";
 
-import type { MermaidToExcalidrawLibProps } from "./types";
+import type { MermaidToFcboardLibProps } from "./types";
 
 import type { AppClassProperties, BinaryFiles } from "../../types";
 
@@ -40,20 +33,20 @@ export const resetPreview = ({
   canvasNode.replaceChildren();
 };
 
-export const convertMermaidToExcalidraw = async ({
+export const convertMermaidToFcboard = async ({
   canvasRef,
-  mermaidToExcalidrawLib,
+  mermaidToFcboardLib,
   mermaidDefinition,
   setError,
   data,
   theme,
 }: {
   canvasRef: React.RefObject<HTMLDivElement | null>;
-  mermaidToExcalidrawLib: MermaidToExcalidrawLibProps;
+  mermaidToFcboardLib: MermaidToFcboardLibProps;
   mermaidDefinition: string;
   setError: (error: Error | null) => void;
   data: React.MutableRefObject<{
-    elements: readonly NonDeletedExcalidrawElement[];
+    elements: readonly NonDeletedFcboardElement[];
     files: BinaryFiles | null;
   }>;
   theme: Theme;
@@ -72,10 +65,10 @@ export const convertMermaidToExcalidraw = async ({
 
   let ret;
   try {
-    const api = await mermaidToExcalidrawLib.api;
+    const api = await mermaidToFcboardLib.api;
 
     try {
-      ret = await api.parseMermaidToExcalidraw(mermaidDefinition);
+      ret = await api.parseMermaidToFcboard(mermaidDefinition);
     } catch (err: unknown) {
       const originalParseError = err as Error;
 
@@ -84,7 +77,7 @@ export const convertMermaidToExcalidraw = async ({
       }
 
       try {
-        ret = await api.parseMermaidToExcalidraw(
+        ret = await api.parseMermaidToFcboard(
           mermaidDefinition.replace(/"/g, "'"),
         );
       } catch {
@@ -98,7 +91,7 @@ export const convertMermaidToExcalidraw = async ({
     setError(null);
 
     data.current = {
-      elements: convertToExcalidrawElements(elements, {
+      elements: convertToFcboardElements(elements, {
         regenerateIds: true,
       }),
       files,
@@ -144,7 +137,7 @@ export const insertToEditor = ({
 }: {
   app: AppClassProperties;
   data: React.MutableRefObject<{
-    elements: readonly NonDeletedExcalidrawElement[];
+    elements: readonly NonDeletedFcboardElement[];
     files: BinaryFiles | null;
   }>;
   text?: string;

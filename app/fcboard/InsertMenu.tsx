@@ -1,10 +1,10 @@
-import { getLanguage, t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import { ToolbarExtras } from "@excalidraw/excalidraw";
-import { FactoryIcon } from "@excalidraw/excalidraw/components/FactoryIcon";
+import { ToolbarExtras } from "@fcboard/fcboard";
+import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -17,6 +17,7 @@ import {
   insertionDefaults,
   readInsertions,
   renderInsertion,
+  changeTableTrack,
 } from "./insertObjects";
 import { Classroom } from "./native";
 import { useAnchoredPanel } from "./floating";
@@ -25,6 +26,7 @@ import { InsertionPlacement } from "./InsertionPlacement";
 
 import type { FactoryInsertion } from "./native";
 import type { InsertKind, InsertObject } from "./insertObjects";
+import type { TableTrackAction } from "./insertObjects";
 import type { ContentRect } from "./placement";
 
 const names = {
@@ -39,7 +41,7 @@ const names = {
 } as const;
 type MenuKind = keyof typeof names;
 
-export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const [form, setForm] = useState<InsertKind | null>(null);
   const [draft, setDraft] = useState<InsertObject>(() =>
@@ -293,6 +295,47 @@ export const InsertMenu = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             throw new Error(t("fcboard.this_object_is_unavailable"));
           }
           return create(args.kind as InsertKind, args);
+        },
+      ),
+      classroomCommands.register(
+        "table.track",
+        "Change the last row or column of an existing table. args.action=row.add|row.remove|column.add|column.remove, args.id is the table ID (or use the current selection). Appends a track of the current average size; removes only the last edge and preserves writing. At least one row and column remain. Reads and updates the visible board or courseware and supports undo.",
+        async (args) => {
+          const signal =
+            args.signal instanceof AbortSignal ? args.signal : undefined;
+          signal?.throwIfAborted();
+          if (
+            !["row.add", "row.remove", "column.add", "column.remove"].includes(
+              String(args.action),
+            )
+          ) {
+            throw new Error(t("fcboard.invalid_insertion_data"));
+          }
+          const object =
+            typeof args.id === "string"
+              ? readInsertions(api).find((item) => item.id === args.id)
+              : selectedRef.current;
+          if (!object || object.kind !== "table") {
+            throw new Error(
+              t("fcboard.select_a_table_mind_map_or_four_line_grid_first"),
+            );
+          }
+          const next = changeTableTrack(
+            object,
+            args.action as TableTrackAction,
+          );
+          await renderInsertion(api, next, true, {
+            exact: true,
+            preserveSelection: true,
+          });
+          signal?.throwIfAborted();
+          return {
+            id: next.id,
+            rows: next.rows,
+            columns: next.columns,
+            width: next.width,
+            height: next.height,
+          };
         },
       ),
       classroomCommands.register(

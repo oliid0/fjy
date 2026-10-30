@@ -1,9 +1,22 @@
-import { t, languages, setLanguage } from "@excalidraw/excalidraw/i18n";
-import { factoryResources as sourceResourceNames } from "@excalidraw/excalidraw/locales/zh-CN.json";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+
+import { t, languages, setLanguage } from "@fcboard/fcboard/i18n";
+import { factoryResources as sourceResourceNames } from "@fcboard/fcboard/locales/zh-CN.json";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { Fcboard } from "@fcboard/fcboard";
+
 import { Capacitor } from "@capacitor/core";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 import { classroomCommands } from "./commands";
@@ -13,6 +26,7 @@ import { deleteGeneratedResource } from "./generatedResources";
 import * as resourceStorage from "./generatedResources";
 import { interactiveResource } from "./test/interactiveResource";
 import { Classroom } from "./native";
+import { factoryResourceSubjects, resourceMenuTitle } from "./resourceMenus";
 
 vi.mock("./native", () => ({
   Classroom: {
@@ -22,15 +36,234 @@ vi.mock("./native", () => ({
   },
 }));
 
-const api = {} as ExcalidrawImperativeAPI;
+const api = {} as FcboardImperativeAPI;
 beforeEach(() => {
   vi.mocked(Classroom.addListener).mockResolvedValue({ remove: vi.fn() });
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
   await setLanguage(languages.find((lang) => lang.code === "en")!);
+});
+
+it("navigates every original subject submenu, tab and biological group through visible controls", async () => {
+  const view = render(<TeachingResources api={api} />);
+  await act(async () => {
+    await classroomCommands.execute({ name: "resources.open" });
+  });
+  const nav = within(
+    screen.getByRole("navigation", { name: t("fcboard.subject") }),
+  );
+  const gridCount = () =>
+    document.querySelectorAll(".fc-resource-grid > button").length;
+  for (const subject of factoryResourceSubjects.filter(
+    (subject) => subject.sections,
+  )) {
+    fireEvent.click(
+      nav.getByRole("button", { name: resourceMenuTitle(subject.titleKey) }),
+    );
+    for (const section of subject.sections!) {
+      fireEvent.click(
+        nav.getByRole("button", { name: resourceMenuTitle(section.titleKey) }),
+      );
+      expect(
+        nav.getByRole("button", { name: resourceMenuTitle(section.titleKey) }),
+      ).toHaveAttribute("aria-current", "page");
+      if (section.tabs) {
+        for (const tab of section.tabs) {
+          fireEvent.click(
+            screen.getByRole("tab", { name: resourceMenuTitle(tab.titleKey) }),
+          );
+          expect(gridCount()).toBe(tab.items!.length);
+          expect(
+            screen.getByRole("tab", { name: resourceMenuTitle(tab.titleKey) }),
+          ).toHaveAttribute("aria-selected", "true");
+        }
+      } else if (section.groups) {
+        expect(screen.queryByRole("tablist")).toBeNull();
+        for (const group of section.groups) {
+          const region = screen.getByRole("region", {
+            name: resourceMenuTitle(group.titleKey),
+          });
+          expect(within(region).getAllByRole("button")).toHaveLength(
+            group.items.length,
+          );
+        }
+      } else {
+        expect(gridCount()).toBe(section.items!.length);
+        expect(screen.queryByRole("tablist")).toBeNull();
+      }
+    }
+  }
+  // Parent selection always returns to the first experiment and its first tab.
+  fireEvent.click(
+    nav.getByRole("button", { name: resourceMenuTitle("str_physics") }),
+  );
+  expect(gridCount()).toBe(10);
+  const first = screen.getByRole("tab", {
+    name: resourceMenuTitle("teach_res_tab_physics_electric_circuit"),
+  });
+  expect(first).toHaveAttribute("aria-selected", "true");
+  fireEvent.keyDown(first, { key: "End" });
+  expect(gridCount()).toBe(12);
+  expect(
+    screen.getByRole("tab", {
+      name: resourceMenuTitle("teach_res_tab_physics_motion"),
+    }),
+  ).toHaveFocus();
+  expect(classroomCommands.read("resources")).toMatchObject({
+    navigation: { category: "physics", section: "experiment", tab: "7" },
+  });
+  view.unmount();
+});
+
+it("opens the chemistry quantum experiment at the actual native URL and rejects nonexistent menu IDs", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  vi.mocked(Classroom.openWebResource).mockResolvedValue(undefined);
+  const view = render(<TeachingResources api={api} />);
+  await act(async () => {
+    await expect(
+      classroomCommands.execute({
+        name: "resources.open",
+        args: { category: "chemistry", section: "missing" },
+      }),
+    ).rejects.toThrow("Unknown teaching resource menu");
+    await classroomCommands.execute({
+      name: "resources.open",
+      args: { category: "chemistry", section: "experiment", tab: "2" },
+    });
+  });
+  const card = document.querySelector<HTMLButtonElement>(
+    ".fc-resource-grid > button",
+  )!;
+  expect(card).toHaveTextContent(
+    t("factoryResources.teach_res_item_blackbody_radiation"),
+  );
+  fireEvent.click(card);
+  await waitFor(() =>
+    expect(Classroom.openWebResource).toHaveBeenCalledWith({
+      url: "https://phet.colorado.edu/sims/html/blackbody-spectrum/latest/blackbody-spectrum_all.html?locale=en",
+      language: "en",
+    }),
+  );
+  expect(
+    screen.queryByRole("dialog", { name: t("fcboard.teaching_resources") }),
+  ).toBeNull();
+  view.unmount();
+});
+
+it("keeps the source network PhET home button and standalone function entry operational", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  const view = render(<TeachingResources api={api} />);
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "resources.open",
+      args: { category: "web" },
+    });
+  });
+  expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(
+    6,
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(t("factoryResources.str_geogebra_phet")),
+    }),
+  );
+  await waitFor(() =>
+    expect(Classroom.openWebResource).toHaveBeenCalledWith({
+      url: "https://phet.colorado.edu/",
+      language: "en",
+    }),
+  );
+  await act(async () => {
+    await classroomCommands.execute({ name: "resources.open" });
+  });
+  const nav = screen.getByRole("navigation", { name: t("fcboard.subject") });
+  fireEvent.click(
+    within(nav).getByRole("button", {
+      name: resourceMenuTitle("str_function"),
+    }),
+  );
+  expect(
+    await screen.findByRole("dialog", {
+      name: t("fcboard.functionGraph.title"),
+    }),
+  ).toBeVisible();
+  view.unmount();
+});
+
+it("inserts the chosen biological stage's actual PNG as one saved, undoable board object", async () => {
+  const bytes = readFileSync(
+    "public/factory-resources/cell_division_meiosis2_prophase.png",
+  );
+  const fetchImage = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+    ok: true,
+    blob: async () => new Blob([new Uint8Array(bytes)], { type: "image/png" }),
+  } as Response);
+  vi.stubGlobal(
+    "Image",
+    vi.fn(() => {
+      const image = document.createElement("img");
+      Object.defineProperties(image, {
+        naturalWidth: { value: bytes.readUInt32BE(16) },
+        naturalHeight: { value: bytes.readUInt32BE(20) },
+      });
+      Object.defineProperty(image, "src", {
+        set: (value: string) => {
+          image.setAttribute("src", value);
+          queueMicrotask(() => image.dispatchEvent(new Event("load")));
+        },
+        get: () => image.getAttribute("src") || "",
+      });
+      return image;
+    }),
+  );
+  let boardApi!: FcboardImperativeAPI;
+  const editor = await renderEditor(
+    <Fcboard
+      handleKeyboardGlobally
+      onMount={({ excalidrawAPI }) => {
+        boardApi = excalidrawAPI;
+      }}
+    />,
+  );
+  const panel = render(<TeachingResources api={boardApi} />);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "resources.open",
+        args: { category: "biology", section: "division" },
+      });
+    });
+    const group = screen.getByRole("region", {
+      name: resourceMenuTitle("teach_res_group_meiosis_second_division"),
+    });
+    fireEvent.click(
+      within(group).getByRole("button", {
+        name: new RegExp(t("factoryResources.teach_res_item_prophase")),
+      }),
+    );
+    await waitFor(() => expect(boardApi.getSceneElements()).toHaveLength(1));
+    expect(fetchImage).toHaveBeenCalledWith(
+      "/factory-resources/cell_division_meiosis2_prophase.png",
+    );
+    const image = boardApi.getSceneElements()[0];
+    if (image.type !== "image" || !image.fileId) {
+      throw new Error("Missing biological diagram");
+    }
+    const file = boardApi.getFiles()[image.fileId];
+    expect(file.mimeType).toBe("image/png");
+    expect(file.dataURL.split(",")[1]).toBe(bytes.toString("base64"));
+    Keyboard.undo();
+    expect(boardApi.getSceneElements()).toHaveLength(0);
+    Keyboard.redo();
+    expect(boardApi.getSceneElements()[0].id).toBe(image.id);
+  } finally {
+    panel.unmount();
+    editor.unmount();
+  }
 });
 
 it("routes native web actions through inspected control IDs and reports actual browser state", async () => {
@@ -96,6 +329,8 @@ it("rejects native web selectors, scripts, stale requests and missing inspected 
       { action: "click", version: "v1" },
       { action: "set", control: "w1", value: 12 },
       { action: "run" },
+      { action: "move", version: "v1", x: "bad", y: 20 },
+      { action: "resize", version: "v1", width: 400 },
       { action: "read", signal: request.signal },
     ]) {
       await expect(
@@ -141,6 +376,55 @@ it("keeps the factory resource searchable by its original name when the interfac
       }),
     ]),
   );
+});
+
+it("opens the source math tools submenu and the other-category scoreboard through their visible controls", async () => {
+  render(<TeachingResources api={api} />);
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "resources.open",
+      args: { category: "math", section: "tool" },
+    });
+  });
+  expect(
+    screen.queryByRole("tab", {
+      name: t("fcboard.resourceMenu.teach_res_tab_math_concept"),
+    }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("button", {
+      name: new RegExp(
+        t("factoryResources.teach_res_math_tool_statistics_chart"),
+      ),
+    }),
+  ).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: t("fcboard.resourceMenu.teach_res_sub_math_experiment"),
+    }),
+  );
+  expect(
+    screen.getByRole("tab", {
+      name: t("fcboard.resourceMenu.teach_res_tab_math_concept"),
+    }),
+  ).toBeVisible();
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.other_resources") }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(t("factoryResources.teach_res_other_scoreboard")),
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.scoreBoard.title") }),
+    ).toBeVisible(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
+  expect(
+    screen.getByRole("dialog", { name: t("fcboard.teaching_resources") }),
+  ).toBeVisible();
 });
 
 it("discards a resource if the visible courseware closes while its catalogue is loading", async () => {
@@ -204,7 +488,9 @@ it("retains the selected subject when the query is empty and keeps source IDs st
     await classroomCommands.execute({ name: "resources.open" });
   });
   fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.mathematics") }),
+    screen.getByRole("button", {
+      name: t("fcboard.resourceMenu.teach_res_menu_math"),
+    }),
   );
   expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(
     teachingResources.filter(
@@ -215,7 +501,9 @@ it("retains the selected subject when the query is empty and keeps source IDs st
   );
   expect(screen.getByRole("button", { name: /Number Compare/ })).toBeVisible();
   fireEvent.click(
-    screen.getByRole("tab", { name: t("fcboard.math_applications") }),
+    screen.getByRole("tab", {
+      name: t("fcboard.resourceMenu.teach_res_tab_math_application"),
+    }),
   );
   expect(screen.queryByRole("button", { name: /Number Compare/ })).toBeNull();
   expect(document.querySelectorAll(".fc-resource-grid > button")).toHaveLength(

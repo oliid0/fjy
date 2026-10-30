@@ -1,5 +1,5 @@
-import { newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
 import { boardInk, clipInk } from "./digitalInk";
 

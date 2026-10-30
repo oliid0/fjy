@@ -1,8 +1,8 @@
 import { act, waitFor } from "@testing-library/react";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { Teacher } from "./Teacher";
 import { render } from "./test/render";
@@ -38,7 +38,7 @@ const setup = () => {
         pointer = () => {};
       };
     },
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   localStorage.setItem(
     "fcboard-teaching",
     JSON.stringify({ lens: "captions" }),
@@ -64,7 +64,7 @@ it.each([false, true])(
   async (selectionImages) => {
     saveSettings({ ...defaults, selectionImages }, false);
     const { api, chat, view } = setup();
-    const source = convertToExcalidrawElements([
+    const source = convertToFcboardElements([
       { type: "text", text: "selected question", x: 100, y: 100 },
     ]);
     vi.spyOn(api, "getSceneElements").mockReturnValue(source);

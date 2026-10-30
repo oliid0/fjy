@@ -91,7 +91,7 @@
     "untitled": "Naamloos",
     "name": "Naam",
     "yourName": "Jouw naam",
-    "madeWithExcalidraw": "Gemaakt met Fcboard",
+    "madeWithFcboard": "Gemaakt met Fcboard",
     "group": "Groeperen",
     "ungroup": "Groep opheffen",
     "collaborators": "Deelnemers",
@@ -121,7 +121,7 @@
     "toggleTheme": "Licht-/donkerthema in-/uitschakelen",
     "theme": "Thema",
     "personalLib": "Persoonlijke bibliotheek",
-    "excalidrawLib": "Fcboard bibliotheek",
+    "fcboardlib": "Fcboard bibliotheek",
     "decreaseFontSize": "Letters verkleinen",
     "increaseFontSize": "Letters vergroten",
     "unbindText": "Ontkoppel tekst",
@@ -320,7 +320,7 @@
     "laser": "Laseraanwijzer",
     "hand": "Hand (panning tool)",
     "extraTools": "Meer tools",
-    "mermaidToExcalidraw": "Mermaid naar Fcboard",
+    "mermaidToFcboard": "Mermaid naar Fcboard",
     "convertElementType": "Vorm type in-/uitschakelen"
   },
   "element": {

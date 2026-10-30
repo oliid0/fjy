@@ -1,14 +1,14 @@
 import type {
-  ExcalidrawElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 
-import type { CaptureUpdateActionType } from "@excalidraw/element";
+import type { CaptureUpdateActionType } from "@fcboard/element";
 
 import type {
   AppClassProperties,
   AppState,
-  ExcalidrawProps,
+  FcboardProps,
   BinaryFiles,
   UIAppState,
 } from "../types";
@@ -24,7 +24,7 @@ export type ActionSource =
 /** if false, the action should be prevented */
 export type ActionResult =
   | {
-      elements?: readonly ExcalidrawElement[] | null;
+      elements?: readonly FcboardElement[] | null;
       appState?: Partial<AppState> | null;
       files?: BinaryFiles | null;
       captureUpdate: CaptureUpdateActionType;
@@ -33,7 +33,7 @@ export type ActionResult =
   | false;
 
 type ActionFn<TData = any> = (
-  elements: readonly OrderedExcalidrawElement[],
+  elements: readonly OrderedFcboardElement[],
   appState: Readonly<AppState>,
   formData: TData | undefined,
   app: AppClassProperties,
@@ -147,10 +147,10 @@ export type ActionName =
   | "togglePolygon";
 
 export type PanelComponentProps = {
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   appState: AppState;
   updateData: <T = any>(formData?: T) => void;
-  appProps: ExcalidrawProps;
+  appProps: FcboardProps;
   data?: Record<string, any>;
   app: AppClassProperties;
   renderAction: (
@@ -164,7 +164,7 @@ export interface Action<TData = any> {
   label:
     | string
     | ((
-        elements: readonly ExcalidrawElement[],
+        elements: readonly FcboardElement[],
         appState: Readonly<AppState>,
         app: AppClassProperties,
       ) => string);
@@ -173,7 +173,7 @@ export interface Action<TData = any> {
     | React.ReactNode
     | ((
         appState: UIAppState,
-        elements: readonly ExcalidrawElement[],
+        elements: readonly FcboardElement[],
       ) => React.ReactNode);
   PanelComponent?: React.FC<PanelComponentProps>;
   perform: ActionFn<TData>;
@@ -181,13 +181,13 @@ export interface Action<TData = any> {
   keyTest?: (
     event: React.KeyboardEvent | KeyboardEvent,
     appState: AppState,
-    elements: readonly ExcalidrawElement[],
+    elements: readonly FcboardElement[],
     app: AppClassProperties,
   ) => boolean;
   predicate?: (
-    elements: readonly ExcalidrawElement[],
+    elements: readonly FcboardElement[],
     appState: AppState,
-    appProps: ExcalidrawProps,
+    appProps: FcboardProps,
     app: AppClassProperties,
   ) => boolean;
   checked?: (appState: Readonly<AppState>) => boolean;
@@ -208,7 +208,7 @@ export interface Action<TData = any> {
         action?: string;
         predicate?: (
           appState: Readonly<AppState>,
-          elements: readonly ExcalidrawElement[],
+          elements: readonly FcboardElement[],
           value: any,
         ) => boolean;
       };

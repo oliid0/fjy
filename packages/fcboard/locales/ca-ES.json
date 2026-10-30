@@ -91,7 +91,7 @@
     "untitled": "Sense títol",
     "name": "Nom",
     "yourName": "El vostre nom",
-    "madeWithExcalidraw": "Fet amb Fcboard",
+    "madeWithFcboard": "Fet amb Fcboard",
     "group": "Agrupa la selecció",
     "ungroup": "Desagrupa la selecció",
     "collaborators": "Col·laboradors",
@@ -121,7 +121,7 @@
     "toggleTheme": "Alternar tema clar i fosc",
     "theme": "Tema",
     "personalLib": "Biblioteca personal",
-    "excalidrawLib": "Biblioteca d'Fcboard",
+    "fcboardlib": "Biblioteca d'Fcboard",
     "decreaseFontSize": "Redueix la mida de la lletra",
     "increaseFontSize": "Augmenta la mida de la lletra",
     "unbindText": "Desvincular el text",
@@ -320,7 +320,7 @@
     "laser": "Punter làser",
     "hand": "Mà (eina de desplaçament)",
     "extraTools": "Més eines",
-    "mermaidToExcalidraw": "Mermaid a Fcboard",
+    "mermaidToFcboard": "Mermaid a Fcboard",
     "convertElementType": "Canvia el tipus de forma"
   },
   "element": {

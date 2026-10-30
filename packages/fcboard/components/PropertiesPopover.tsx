@@ -2,7 +2,7 @@ import { Popover } from "radix-ui";
 import clsx from "clsx";
 import React, { type ReactNode } from "react";
 
-import { isInteractive } from "@excalidraw/common";
+import { isInteractive } from "@fcboard/common";
 
 import { useEditorInterface } from "./App";
 import { Island } from "./Island";
@@ -74,7 +74,7 @@ export const PropertiesPopover = React.forwardRef<
             // prevents focusing the trigger
             e.preventDefault();
 
-            // return focus to excalidraw container unless
+            // return focus to fcboard container unless
             // user focuses an interactive element, such as a button, or
             // enters the text editor by clicking on canvas with the text tool
             if (container && !isInteractive(document.activeElement)) {

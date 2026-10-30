@@ -86,7 +86,7 @@ export const ChatMessage: React.FC<{
                         window.open(
                           `${
                             import.meta.env.VITE_APP_PLUS_LP
-                          }/plus?utm_source=excalidraw&utm_medium=app&utm_content=ttdChatBanner#excalidraw-redirect`,
+                          }/plus?utm_source=fcboard&utm_medium=app&utm_content=ttdChatBanner#fcboard-redirect`,
                           "_blank",
                           "noopener",
                         );

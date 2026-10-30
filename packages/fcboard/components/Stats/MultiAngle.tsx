@@ -1,15 +1,15 @@
-import { degreesToRadians, radiansToDegrees } from "@excalidraw/math";
+import { degreesToRadians, radiansToDegrees } from "@fcboard/math";
 
-import { getBoundTextElement } from "@excalidraw/element";
-import { isArrowElement } from "@excalidraw/element";
+import { getBoundTextElement } from "@fcboard/element";
+import { isArrowElement } from "@fcboard/element";
 
-import { isInGroup } from "@excalidraw/element";
+import { isInGroup } from "@fcboard/element";
 
-import type { Degrees } from "@excalidraw/math";
+import type { Degrees } from "@fcboard/math";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { angleIcon } from "../icons";
 
@@ -20,7 +20,7 @@ import type { DragInputCallbackType } from "./DragInput";
 import type { AppState } from "../../types";
 
 interface MultiAngleProps {
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   scene: Scene;
   appState: AppState;
   property: "angle";

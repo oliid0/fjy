@@ -5,10 +5,10 @@ import {
   WINDOWS_EMOJI_FALLBACK_FONT,
   getFontFamilyFallbacks,
   FONT_SIZES,
-} from "@excalidraw/common";
-import { getContainerElement } from "@excalidraw/element";
-import { charWidth } from "@excalidraw/element";
-import { containsCJK } from "@excalidraw/element";
+} from "@fcboard/common";
+import { getContainerElement } from "@fcboard/element";
+import { charWidth } from "@fcboard/element";
+import { containsCJK } from "@fcboard/element";
 
 import {
   FONT_METADATA,
@@ -16,26 +16,27 @@ import {
   getFontString,
   PromisePool,
   promiseTry,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { ShapeCache } from "@excalidraw/element";
+import { ShapeCache } from "@fcboard/element";
 
-import { isTextElement } from "@excalidraw/element";
+import { isTextElement } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
+import type { ValueOf } from "@fcboard/common/utility-types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import { CascadiaFontFaces } from "./Cascadia";
 import { ComicShannsFontFaces } from "./ComicShanns";
 import { EmojiFontFaces } from "./Emoji";
-import { ExcalidrawFontFace } from "./ExcalidrawFontFace";
+import { FcboardFontFace } from "./FcboardFontFace";
 import { ExcalifontFontFaces } from "./Excalifont";
+import { FactoryHandwritingFontFaces } from "./FactoryHandwriting";
 import { HelveticaFontFaces } from "./Helvetica";
 import { LiberationFontFaces } from "./Liberation";
 import { LilitaFontFaces } from "./Lilita";
@@ -53,7 +54,7 @@ export class Fonts {
         number,
         {
           metadata: FontMetadata;
-          fontFaces: ExcalidrawFontFace[];
+          fontFaces: FcboardFontFace[];
         }
       >
     | undefined;
@@ -161,7 +162,7 @@ export class Fonts {
    * Load font faces for passed elements - use when the scene is unavailable (i.e. export).
    */
   public static loadElementsFonts = async (
-    elements: readonly ExcalidrawElement[],
+    elements: readonly FcboardElement[],
   ): Promise<FontFace[]> => {
     const fontFamilies = Fonts.getUniqueFamilies(elements);
     const charsPerFamily = Fonts.getCharsPerFamily(elements);
@@ -173,7 +174,7 @@ export class Fonts {
    * Generate CSS @font-face declarations for the given elements.
    */
   public static async generateFontFaceDeclarations(
-    elements: readonly ExcalidrawElement[],
+    elements: readonly FcboardElement[],
   ) {
     const families = Fonts.getUniqueFamilies(elements);
     const charsPerFamily = Fonts.getCharsPerFamily(elements);
@@ -210,7 +211,7 @@ export class Fonts {
   }
 
   private static async loadFontFaces(
-    fontFamilies: Array<ExcalidrawTextElement["fontFamily"]>,
+    fontFamilies: Array<FcboardTextElement["fontFamily"]>,
     charsPerFamily: Record<number, Set<string>>,
   ) {
     // add all registered font faces into the `document.fonts` (if not added already)
@@ -235,7 +236,7 @@ export class Fonts {
   }
 
   private static *fontFacesLoader(
-    fontFamilies: Array<ExcalidrawTextElement["fontFamily"]>,
+    fontFamilies: Array<FcboardTextElement["fontFamily"]>,
     charsPerFamily: Record<number, Set<string>>,
   ): Generator<Promise<void | readonly [number, FontFace[]]>> {
     for (const [index, fontFamily] of fontFamilies.entries()) {
@@ -329,12 +330,12 @@ export class Fonts {
       | {
           registered: Map<
             number,
-            { metadata: FontMetadata; fontFaces: ExcalidrawFontFace[] }
+            { metadata: FontMetadata; fontFaces: FcboardFontFace[] }
           >;
         },
     family: string,
     metadata: FontMetadata,
-    ...fontFacesDecriptors: ExcalidrawFontFaceDescriptor[]
+    ...fontFacesDecriptors: FcboardFontFaceDescriptor[]
   ) {
     // TODO: likely we will need to abandon number value in order to support custom fonts
     const fontFamily =
@@ -348,7 +349,7 @@ export class Fonts {
         metadata,
         fontFaces: fontFacesDecriptors.map(
           ({ uri, descriptors }) =>
-            new ExcalidrawFontFace(family, uri, descriptors),
+            new FcboardFontFace(family, uri, descriptors),
         ),
       });
     }
@@ -363,13 +364,13 @@ export class Fonts {
     const fonts = {
       registered: new Map<
         ValueOf<typeof FONT_FAMILY | typeof FONT_FAMILY_FALLBACKS>,
-        { metadata: FontMetadata; fontFaces: ExcalidrawFontFace[] }
+        { metadata: FontMetadata; fontFaces: FcboardFontFace[] }
       >(),
     };
 
     const init = (
       family: keyof typeof FONT_FAMILY | keyof typeof FONT_FAMILY_FALLBACKS,
-      ...fontFacesDescriptors: ExcalidrawFontFaceDescriptor[]
+      ...fontFacesDescriptors: FcboardFontFaceDescriptor[]
     ) => {
       const fontFamily =
         FONT_FAMILY[family as keyof typeof FONT_FAMILY] ??
@@ -385,6 +386,7 @@ export class Fonts {
     init("Cascadia", ...CascadiaFontFaces);
     init("Comic Shanns", ...ComicShannsFontFaces);
     init("Excalifont", ...ExcalifontFontFaces);
+    init("FactoryHandwriting", ...FactoryHandwritingFontFaces);
     // keeping for backwards compatibility reasons, uses system font (Helvetica on MacOS, Arial on Win)
     init("Helvetica", ...HelveticaFontFaces);
     // used for server-side pdf & png export instead of helvetica (technically does not need metrics, but kept in for consistency)
@@ -406,8 +408,8 @@ export class Fonts {
    * Get all the unique font families for the given elements.
    */
   private static getUniqueFamilies(
-    elements: ReadonlyArray<ExcalidrawElement>,
-  ): Array<ExcalidrawTextElement["fontFamily"]> {
+    elements: ReadonlyArray<FcboardElement>,
+  ): Array<FcboardTextElement["fontFamily"]> {
     return Array.from(
       elements.reduce((families, element) => {
         if (isTextElement(element)) {
@@ -422,7 +424,7 @@ export class Fonts {
    * Get all the unique characters per font family for the given scene.
    */
   private static getCharsPerFamily(
-    elements: ReadonlyArray<ExcalidrawElement>,
+    elements: ReadonlyArray<FcboardElement>,
   ): Record<number, Set<string>> {
     const charsPerFamily: Record<number, Set<string>> = {};
 
@@ -464,7 +466,7 @@ export class Fonts {
   }
 }
 
-export interface ExcalidrawFontFaceDescriptor {
+export interface FcboardFontFaceDescriptor {
   uri: string;
   descriptors?: FontFaceDescriptors;
 }

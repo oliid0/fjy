@@ -1,7 +1,7 @@
-import { DRAGGING_THRESHOLD } from "@excalidraw/common";
-import { pointFrom } from "@excalidraw/math";
+import { DRAGGING_THRESHOLD } from "@fcboard/common";
+import { pointFrom } from "@fcboard/math";
 
-import type { GlobalPoint } from "@excalidraw/math";
+import type { GlobalPoint } from "@fcboard/math";
 
 import { getLassoBounds } from "./utils";
 

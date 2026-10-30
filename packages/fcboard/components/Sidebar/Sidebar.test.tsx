@@ -1,9 +1,9 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { DEFAULT_SIDEBAR } from "@excalidraw/common";
+import { DEFAULT_SIDEBAR } from "@fcboard/common";
 
-import { Excalidraw, Sidebar } from "../../index";
+import { Fcboard, Sidebar } from "../../index";
 import {
   act,
   fireEvent,
@@ -11,11 +11,11 @@ import {
   queryByTestId,
   render,
   waitFor,
-  withExcalidrawDimensions,
+  withFcboardDimensions,
 } from "../../tests/test-utils";
 
 import {
-  assertExcalidrawWithSidebar,
+  assertFcboardWithSidebar,
   assertSidebarDockButton,
 } from "./siderbar.test.helpers";
 
@@ -31,13 +31,13 @@ describe("Sidebar", () => {
   describe("General behavior", () => {
     it("should render custom sidebar", async () => {
       const { container } = await render(
-        <Excalidraw
+        <Fcboard
           initialData={{ appState: { openSidebar: { name: "customSidebar" } } }}
         >
           <Sidebar name="customSidebar">
             <div id="test-sidebar-content">42</div>
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
       const node = container.querySelector("#test-sidebar-content");
@@ -46,13 +46,13 @@ describe("Sidebar", () => {
 
     it("should render only one sidebar and prefer the custom one", async () => {
       const { container } = await render(
-        <Excalidraw
+        <Fcboard
           initialData={{ appState: { openSidebar: { name: "customSidebar" } } }}
         >
           <Sidebar name="customSidebar">
             <div id="test-sidebar-content">42</div>
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
       await waitFor(() => {
@@ -68,11 +68,11 @@ describe("Sidebar", () => {
 
     it("should toggle sidebar using excalidrawAPI.toggleSidebar()", async () => {
       const { container } = await render(
-        <Excalidraw>
+        <Fcboard>
           <Sidebar name="customSidebar">
             <div id="test-sidebar-content">42</div>
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
       // sidebar isn't rendered initially
@@ -157,7 +157,7 @@ describe("Sidebar", () => {
   describe("<Sidebar.Header/>", () => {
     it("should render custom sidebar header", async () => {
       const { container } = await render(
-        <Excalidraw
+        <Fcboard
           initialData={{ appState: { openSidebar: { name: "customSidebar" } } }}
         >
           <Sidebar name="customSidebar">
@@ -165,7 +165,7 @@ describe("Sidebar", () => {
               <div id="test-sidebar-header-content">42</div>
             </Sidebar.Header>
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
       const node = container.querySelector("#test-sidebar-header-content");
@@ -176,9 +176,9 @@ describe("Sidebar", () => {
     });
 
     it("should not render <Sidebar.Header> for custom sidebars by default", async () => {
-      const CustomExcalidraw = () => {
+      const CustomFcboard = () => {
         return (
-          <Excalidraw
+          <Fcboard
             initialData={{
               appState: { openSidebar: { name: "customSidebar" } },
             }}
@@ -186,11 +186,11 @@ describe("Sidebar", () => {
             <Sidebar name="customSidebar" className="test-sidebar">
               hello
             </Sidebar>
-          </Excalidraw>
+          </Fcboard>
         );
       };
 
-      const { container } = await render(<CustomExcalidraw />);
+      const { container } = await render(<CustomFcboard />);
 
       const sidebar = container.querySelector<HTMLElement>(".test-sidebar");
       expect(sidebar).not.toBe(null);
@@ -200,9 +200,9 @@ describe("Sidebar", () => {
 
     it("<Sidebar.Header> should render close button", async () => {
       const onStateChange = vi.fn();
-      const CustomExcalidraw = () => {
+      const CustomFcboard = () => {
         return (
-          <Excalidraw
+          <Fcboard
             initialData={{
               appState: { openSidebar: { name: "customSidebar" } },
             }}
@@ -214,11 +214,11 @@ describe("Sidebar", () => {
             >
               <Sidebar.Header />
             </Sidebar>
-          </Excalidraw>
+          </Fcboard>
         );
       };
 
-      const { container } = await render(<CustomExcalidraw />);
+      const { container } = await render(<CustomFcboard />);
 
       // initial open
       expect(onStateChange).toHaveBeenCalledWith({ name: "customSidebar" });
@@ -240,7 +240,7 @@ describe("Sidebar", () => {
 
   describe("Docking behavior", () => {
     it("shouldn't be user-dockable if `onDock` not supplied", async () => {
-      await assertExcalidrawWithSidebar(
+      await assertFcboardWithSidebar(
         <Sidebar name="customSidebar">
           <Sidebar.Header />
         </Sidebar>,
@@ -252,7 +252,7 @@ describe("Sidebar", () => {
     });
 
     it("shouldn't be user-dockable if `onDock` not supplied & `docked={true}`", async () => {
-      await assertExcalidrawWithSidebar(
+      await assertFcboardWithSidebar(
         <Sidebar name="customSidebar" docked={true}>
           <Sidebar.Header />
         </Sidebar>,
@@ -264,7 +264,7 @@ describe("Sidebar", () => {
     });
 
     it("shouldn't be user-dockable if `onDock` not supplied & docked={false}`", async () => {
-      await assertExcalidrawWithSidebar(
+      await assertFcboardWithSidebar(
         <Sidebar name="customSidebar" docked={false}>
           <Sidebar.Header />
         </Sidebar>,
@@ -277,7 +277,7 @@ describe("Sidebar", () => {
 
     it("should be user-dockable when both `onDock` and `docked` supplied", async () => {
       await render(
-        <Excalidraw
+        <Fcboard
           initialData={{ appState: { openSidebar: { name: "customSidebar" } } }}
         >
           <Sidebar
@@ -288,15 +288,12 @@ describe("Sidebar", () => {
           >
             <Sidebar.Header />
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
-      await withExcalidrawDimensions(
-        { width: 1920, height: 1080 },
-        async () => {
-          await assertSidebarDockButton(true);
-        },
-      );
+      await withFcboardDimensions({ width: 1920, height: 1080 }, async () => {
+        await assertSidebarDockButton(true);
+      });
     });
 
     it("shouldn't be user-dockable when only `onDock` supplied w/o `docked`", async () => {
@@ -304,7 +301,7 @@ describe("Sidebar", () => {
       const mock = jest.spyOn(console, "warn").mockImplementation(() => {});
 
       await render(
-        <Excalidraw
+        <Fcboard
           initialData={{ appState: { openSidebar: { name: "customSidebar" } } }}
         >
           <Sidebar
@@ -314,15 +311,12 @@ describe("Sidebar", () => {
           >
             <Sidebar.Header />
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
-      await withExcalidrawDimensions(
-        { width: 1920, height: 1080 },
-        async () => {
-          await assertSidebarDockButton(false);
-        },
-      );
+      await withFcboardDimensions({ width: 1920, height: 1080 }, async () => {
+        await assertSidebarDockButton(false);
+      });
 
       mock.mockRestore();
     });
@@ -331,66 +325,63 @@ describe("Sidebar", () => {
   describe("Sidebar.tab", () => {
     it("should toggle sidebars tabs correctly", async () => {
       const { container } = await render(
-        <Excalidraw>
+        <Fcboard>
           <Sidebar name="custom" docked>
             <Sidebar.Tabs>
               <Sidebar.Tab tab="library">Library</Sidebar.Tab>
               <Sidebar.Tab tab="comments">Comments</Sidebar.Tab>
             </Sidebar.Tabs>
           </Sidebar>
-        </Excalidraw>,
+        </Fcboard>,
       );
 
-      await withExcalidrawDimensions(
-        { width: 1920, height: 1080 },
-        async () => {
-          expect(
-            container.querySelector<HTMLElement>(
-              "[role=tabpanel][data-testid=library]",
-            ),
-          ).toBeNull();
+      await withFcboardDimensions({ width: 1920, height: 1080 }, async () => {
+        expect(
+          container.querySelector<HTMLElement>(
+            "[role=tabpanel][data-testid=library]",
+          ),
+        ).toBeNull();
 
-          // open library sidebar
-          expect(await toggleSidebar({ name: "custom", tab: "library" })).toBe(
-            true,
-          );
-          expect(
-            container.querySelector<HTMLElement>(
-              "[role=tabpanel][data-testid=library]",
-            ),
-          ).not.toBeNull();
+        // open library sidebar
+        expect(await toggleSidebar({ name: "custom", tab: "library" })).toBe(
+          true,
+        );
+        expect(
+          container.querySelector<HTMLElement>(
+            "[role=tabpanel][data-testid=library]",
+          ),
+        ).not.toBeNull();
 
-          // switch to comments tab
-          expect(await toggleSidebar({ name: "custom", tab: "comments" })).toBe(
-            true,
-          );
-          expect(
-            container.querySelector<HTMLElement>(
-              "[role=tabpanel][data-testid=comments]",
-            ),
-          ).not.toBeNull();
+        // switch to comments tab
+        expect(await toggleSidebar({ name: "custom", tab: "comments" })).toBe(
+          true,
+        );
+        expect(
+          container.querySelector<HTMLElement>(
+            "[role=tabpanel][data-testid=comments]",
+          ),
+        ).not.toBeNull();
 
-          // toggle sidebar closed
-          expect(await toggleSidebar({ name: "custom", tab: "comments" })).toBe(
-            false,
-          );
-          expect(
-            container.querySelector<HTMLElement>(
-              "[role=tabpanel][data-testid=comments]",
-            ),
-          ).toBeNull();
+        // toggle sidebar closed
+        expect(await toggleSidebar({ name: "custom", tab: "comments" })).toBe(
+          false,
+        );
+        expect(
+          container.querySelector<HTMLElement>(
+            "[role=tabpanel][data-testid=comments]",
+          ),
+        ).toBeNull();
 
-          // toggle sidebar open
-          expect(await toggleSidebar({ name: "custom", tab: "comments" })).toBe(
-            true,
-          );
-          expect(
-            container.querySelector<HTMLElement>(
-              "[role=tabpanel][data-testid=comments]",
-            ),
-          ).not.toBeNull();
-        },
-      );
+        // toggle sidebar open
+        expect(await toggleSidebar({ name: "custom", tab: "comments" })).toBe(
+          true,
+        );
+        expect(
+          container.querySelector<HTMLElement>(
+            "[role=tabpanel][data-testid=comments]",
+          ),
+        ).not.toBeNull();
+      });
     });
   });
 });

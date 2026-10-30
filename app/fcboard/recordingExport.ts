@@ -1,5 +1,5 @@
 import { registerPlugin } from "@capacitor/core";
-import { getDataURL } from "@excalidraw/excalidraw/data/blob";
+import { getDataURL } from "@fcboard/fcboard/data/blob";
 
 import { timestamp } from "./recording";
 

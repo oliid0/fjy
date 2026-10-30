@@ -91,7 +91,7 @@
     "untitled": "بێ ناونیشان",
     "name": "ناو",
     "yourName": "ناوەکەت",
-    "madeWithExcalidraw": "دروستکراوە بە Fcboard",
+    "madeWithFcboard": "دروستکراوە بە Fcboard",
     "group": "دیاریکردنی گروپ",
     "ungroup": "گروپی دیاریکراوەکان لابەرە",
     "collaborators": "هاوکارەکان",
@@ -121,7 +121,7 @@
     "toggleTheme": "Cemuhî - Ronahî/Cemuhî",
     "theme": "Mijar",
     "personalLib": "کتێبخانەی کەسی",
-    "excalidrawLib": "کتێبخانەی Fcboard",
+    "fcboardlib": "کتێبخانەی Fcboard",
     "decreaseFontSize": "کەمکردنەوەی قەبارەی فۆنت",
     "increaseFontSize": "زایدکردنی قەبارەی فۆنت",
     "unbindText": "دەقەکە جیابکەرەوە",
@@ -320,7 +320,7 @@
     "laser": "Laser nîşan bide",
     "hand": "دەست (ئامرازی پانکردن)",
     "extraTools": "ئامرازی زیاتر",
-    "mermaidToExcalidraw": "Peldanka ji bo Fcboard",
+    "mermaidToFcboard": "Peldanka ji bo Fcboard",
     "convertElementType": "Tabloya şêweyê"
   },
   "element": {

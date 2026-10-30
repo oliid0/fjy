@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { Dialog } from "./Dialog";
 import DialogActionButton from "./DialogActionButton";
 import { isLibraryMenuOpenAtom } from "./LibraryMenu";
-import { useExcalidrawContainer, useExcalidrawSetAppState } from "./App";
+import { useFcboardContainer, useFcboardSetAppState } from "./App";
 
 import "./ConfirmDialog.scss";
 
@@ -28,9 +28,9 @@ const ConfirmDialog = (props: Props) => {
     className = "",
     ...rest
   } = props;
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const setIsLibraryMenuOpen = useSetAtom(isLibraryMenuOpenAtom);
-  const { container } = useExcalidrawContainer();
+  const { container } = useFcboardContainer();
 
   return (
     <Dialog

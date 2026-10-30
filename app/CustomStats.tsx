@@ -1,16 +1,16 @@
-import { Stats } from "@excalidraw/excalidraw";
-import { copyTextToSystemClipboard } from "@excalidraw/excalidraw/clipboard";
+import { Stats } from "@fcboard/fcboard";
+import { copyTextToSystemClipboard } from "@fcboard/fcboard/clipboard";
 import {
   DEFAULT_VERSION,
   debounce,
   getVersion,
   nFormatter,
-} from "@excalidraw/common";
-import { t } from "@excalidraw/excalidraw/i18n";
+} from "@fcboard/common";
+import { t } from "@fcboard/fcboard/i18n";
 import { useEffect, useState } from "react";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
-import type { UIAppState } from "@excalidraw/excalidraw/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
+import type { UIAppState } from "@fcboard/fcboard/types";
 
 import {
   getElementsStorageSize,
@@ -30,7 +30,7 @@ const getStorageSizes = debounce((cb: (sizes: StorageSizes) => void) => {
 
 type Props = {
   setToast: (message: string) => void;
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   appState: UIAppState;
 };
 const CustomStats = (props: Props) => {

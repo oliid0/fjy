@@ -91,7 +91,7 @@
     "untitled": "Sem título",
     "name": "Nome",
     "yourName": "O seu nome",
-    "madeWithExcalidraw": "Feito com Fcboard",
+    "madeWithFcboard": "Feito com Fcboard",
     "group": "Agrupar seleção",
     "ungroup": "Desagrupar seleção",
     "collaborators": "Colaboradores",
@@ -121,7 +121,7 @@
     "toggleTheme": "Alternar tema claro/escuro",
     "theme": "Tema",
     "personalLib": "Biblioteca pessoal",
-    "excalidrawLib": "Biblioteca do Fcboard",
+    "fcboardlib": "Biblioteca do Fcboard",
     "decreaseFontSize": "Reduzir o tamanho do tipo de letra",
     "increaseFontSize": "Aumentar o tamanho do tipo de letra",
     "unbindText": "Desligar texto",
@@ -320,7 +320,7 @@
     "laser": "Ponteiro laser",
     "hand": "Mão (ferramenta de deslocar vista)",
     "extraTools": "Mais ferramentas",
-    "mermaidToExcalidraw": "Mermaid para Fcboard",
+    "mermaidToFcboard": "Mermaid para Fcboard",
     "convertElementType": "Alternar tipo de forma"
   },
   "element": {

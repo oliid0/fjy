@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { useTunnels } from "../context/tunnels";
 import { t } from "../i18n";
@@ -32,7 +32,7 @@ type MobileMenuProps = {
   renderJSONExportDialog: () => React.ReactNode;
   renderImageExportDialog: () => React.ReactNode;
   setAppState: React.Component<any, AppState>["setState"];
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   onHandToolToggle: () => void;
   onPenModeToggle: AppClassProperties["togglePenMode"];
 
@@ -75,7 +75,7 @@ export const MobileMenu = ({
     }
 
     const topRightUI = (
-      <div className="excalidraw-ui-top-right">
+      <div className="fcboard-ui-top-right">
         {renderTopRightUI?.(true, appState) ??
           (!appState.viewModeEnabled && (
             <>
@@ -114,7 +114,7 @@ export const MobileMenu = ({
     );
 
     const topLeftUI = (
-      <div className="excalidraw-ui-top-left">
+      <div className="fcboard-ui-top-left">
         {renderTopLeftUI?.(true, appState)}
         <MainMenuTunnel.Out />
       </div>

@@ -3,34 +3,35 @@ import {
   FRAME_STYLE,
   THEME,
   throttleRAF,
-} from "@excalidraw/common";
-import { isElementLink } from "@excalidraw/element";
-import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
-import { getBoundTextElement } from "@excalidraw/element";
+} from "@fcboard/common";
+import { isElementLink } from "@fcboard/element";
+import { createPlaceholderEmbeddableLabel } from "@fcboard/element";
+import { getBoundTextElement } from "@fcboard/element";
 import {
   isEmbeddableElement,
   isIframeLikeElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 import {
   elementOverlapsWithFrame,
   getTargetFrame,
   shouldApplyFrameClip,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { renderElement } from "@excalidraw/element";
+import { renderElement } from "@fcboard/element";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getElementAbsoluteCoords } from "@fcboard/element";
 
 import type {
   ElementsMap,
-  ExcalidrawFrameLikeElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardFrameLikeElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
 import {
   backgroundImage,
   validWhiteboardBackground,
+  backgroundOpacity,
 } from "../whiteboardBackground";
 
 import {
@@ -135,7 +136,7 @@ const strokeGrid = (
 };
 
 export const frameClip = (
-  frame: ExcalidrawFrameLikeElement,
+  frame: FcboardFrameLikeElement,
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
   appState: StaticCanvasAppState,
@@ -171,7 +172,7 @@ const linkIconCanvasCache: {
 };
 
 const renderLinkIcon = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
   context: CanvasRenderingContext2D,
   appState: StaticCanvasAppState,
   elementsMap: ElementsMap,
@@ -267,10 +268,10 @@ const _renderStaticScene = ({
 
   const background = appState.whiteboardBackground;
   if (appState.viewBackgroundColor && validWhiteboardBackground(background)) {
-    const image = backgroundImage(background.pattern);
+    const image = backgroundImage(background);
     if (image) {
       context.save();
-      context.globalAlpha = 150 / 255;
+      context.globalAlpha = backgroundOpacity(background);
       context.drawImage(
         image,
         appState.scrollX,

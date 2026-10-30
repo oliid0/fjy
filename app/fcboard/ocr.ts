@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 import { chat, visualMessage } from "./ai";
 import { recognizeLocalHandwriting } from "./localOcr";
@@ -60,6 +60,14 @@ export const recognizeHandwriting = async (
     } catch (error) {
       signal.throwIfAborted();
       if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "HANDWRITING_MODEL_REQUIRED"
+      ) {
         throw error;
       }
       // Explicit local mode reports the real native failure. Auto can use the

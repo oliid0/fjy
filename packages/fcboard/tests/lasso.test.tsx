@@ -20,13 +20,13 @@ import {
   pointFrom,
   type Radians,
   type ElementsSegmentsMap,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
-import { getElementLineSegments } from "@excalidraw/element";
+import { getElementLineSegments } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { getSelectedElements } from "../scene";
 
@@ -38,7 +38,7 @@ const { h } = window;
 
 beforeEach(async () => {
   localStorage.clear();
-  await render(<Excalidraw handleKeyboardGlobally={true} />);
+  await render(<Fcboard handleKeyboardGlobally={true} />);
   h.state.width = 1000;
   h.state.height = 1000;
 });
@@ -86,7 +86,7 @@ const updatePath = (startPoint: GlobalPoint, points: LocalPoint[]) => {
 
 describe("Basic lasso selection tests", () => {
   beforeEach(() => {
-    const elements: ExcalidrawElement[] = [
+    const elements: FcboardElement[] = [
       {
         id: "FLZN67ISZbMV-RH8SzS9W",
         type: "rectangle",
@@ -359,7 +359,7 @@ describe("Basic lasso selection tests", () => {
           ...e,
           angle: e.angle as Radians,
           index: null,
-        } as ExcalidrawElement),
+        } as FcboardElement),
     );
 
     act(() => {
@@ -1044,7 +1044,7 @@ describe("Special cases", () => {
         ...e,
         index: null,
         angle: e.angle as Radians,
-      })) as ExcalidrawElement[];
+      })) as FcboardElement[];
 
       h.elements = elements;
     });
@@ -1763,7 +1763,7 @@ describe("Special cases", () => {
         ...e,
         index: null,
         angle: e.angle as Radians,
-      })) as ExcalidrawElement[];
+      })) as FcboardElement[];
 
       h.elements = elements;
     });

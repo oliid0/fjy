@@ -1,15 +1,12 @@
 import React from "react";
 import { vi } from "vitest";
-import { KEYS, reseed } from "@excalidraw/common";
-import { bindBindingElement } from "@excalidraw/element";
-import "@excalidraw/utils/test-utils";
+import { KEYS, reseed } from "@fcboard/common";
+import { bindBindingElement } from "@fcboard/element";
+import "@fcboard/utils/test-utils";
 
-import type {
-  ExcalidrawArrowElement,
-  NonDeleted,
-} from "@excalidraw/element/types";
+import type { FcboardArrowElement, NonDeleted } from "@fcboard/element/types";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import * as InteractiveCanvas from "../renderer/interactiveScene";
 import * as StaticScene from "../renderer/staticScene";
 
@@ -35,7 +32,7 @@ const { h } = window;
 
 describe("move element", () => {
   it("rectangle", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     const canvas = container.querySelector("canvas.interactive")!;
 
     {
@@ -73,7 +70,7 @@ describe("move element", () => {
   });
 
   it("rectangles with binding arrow", async () => {
-    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    await render(<Fcboard handleKeyboardGlobally={true} />);
 
     // create elements
     const rectA = UI.createElement("rectangle", { size: 100 });
@@ -83,14 +80,14 @@ describe("move element", () => {
     act(() => {
       // bind line to two rectangles
       bindBindingElement(
-        arrow.get() as NonDeleted<ExcalidrawArrowElement>,
+        arrow.get() as NonDeleted<FcboardArrowElement>,
         rectA.get(),
         "orbit",
         "start",
         h.app.scene,
       );
       bindBindingElement(
-        arrow.get() as NonDeleted<ExcalidrawArrowElement>,
+        arrow.get() as NonDeleted<FcboardArrowElement>,
         rectB.get(),
         "orbit",
         "end",
@@ -144,7 +141,7 @@ describe("move element", () => {
 
 describe("duplicate element on move when ALT is clicked", () => {
   it("rectangle", async () => {
-    const { getByToolName, container } = await render(<Excalidraw />);
+    const { getByToolName, container } = await render(<Fcboard />);
     const canvas = container.querySelector("canvas.interactive")!;
 
     {

@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
 import { useUIAppState } from "../../context/ui-appState";
-import { useExcalidrawSetAppState } from "../App";
+import { useFcboardSetAppState } from "../App";
 
 import "./SidebarTrigger.scss";
 
@@ -17,7 +17,7 @@ export const SidebarTrigger = ({
   className,
   style,
 }: SidebarTriggerProps) => {
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const appState = useUIAppState();
 
   return (

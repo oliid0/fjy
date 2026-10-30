@@ -1,6 +1,6 @@
-import { getGlobalCSSVariable } from "@excalidraw/common";
+import { getGlobalCSSVariable } from "@fcboard/common";
 
-import { getCommonBounds } from "@excalidraw/element";
+import { getCommonBounds } from "@fcboard/element";
 
 import { getLanguage } from "../i18n";
 

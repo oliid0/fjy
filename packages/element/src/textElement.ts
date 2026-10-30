@@ -8,13 +8,13 @@ import {
   getFontString,
   isProdEnv,
   invariant,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
+import { pointFrom, pointRotateRads, type Radians } from "@fcboard/math";
 
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@fcboard/fcboard/types";
 
-import type { ExtractSetType } from "@excalidraw/common/utility-types";
+import type { ExtractSetType } from "@fcboard/common/utility-types";
 
 import {
   resetOriginalContainerCache,
@@ -35,17 +35,17 @@ import type { Scene } from "./Scene";
 import type { MaybeTransformHandleType } from "./transformHandles";
 import type {
   ElementsMap,
-  ExcalidrawElement,
-  ExcalidrawElementType,
-  ExcalidrawTextContainer,
-  ExcalidrawTextElement,
-  ExcalidrawTextElementWithContainer,
-  NonDeletedExcalidrawElement,
+  FcboardElement,
+  FcboardElementType,
+  FcboardTextContainer,
+  FcboardTextElement,
+  FcboardTextElementWithContainer,
+  NonDeletedFcboardElement,
 } from "./types";
 
 export const redrawTextBoundingBox = (
-  textElement: ExcalidrawTextElement,
-  container: ExcalidrawElement | null,
+  textElement: FcboardTextElement,
+  container: FcboardElement | null,
   scene: Scene,
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
@@ -100,7 +100,7 @@ export const redrawTextBoundingBox = (
   if (container) {
     const maxContainerHeight = getBoundTextMaxHeight(
       container,
-      textElement as ExcalidrawTextElementWithContainer,
+      textElement as FcboardTextElementWithContainer,
     );
     const maxContainerWidth = getBoundTextMaxWidth(container, textElement);
 
@@ -124,7 +124,7 @@ export const redrawTextBoundingBox = (
     const updatedTextElement = {
       ...textElement,
       ...boundTextUpdates,
-    } as ExcalidrawTextElementWithContainer;
+    } as FcboardTextElementWithContainer;
 
     const { x, y } = computeBoundTextPosition(
       container,
@@ -140,7 +140,7 @@ export const redrawTextBoundingBox = (
 };
 
 export const handleBindTextResize = (
-  container: NonDeletedExcalidrawElement,
+  container: NonDeletedFcboardElement,
   scene: Scene,
   transformHandleType: MaybeTransformHandleType,
   shouldMaintainAspectRatio = false,
@@ -220,8 +220,8 @@ export const handleBindTextResize = (
 };
 
 export const computeBoundTextPosition = (
-  container: ExcalidrawElement,
-  boundTextElement: ExcalidrawTextElementWithContainer,
+  container: FcboardElement,
+  boundTextElement: FcboardTextElementWithContainer,
   elementsMap: ElementsMap,
 ) => {
   if (isArrowElement(container)) {
@@ -277,14 +277,14 @@ export const computeBoundTextPosition = (
   return { x, y };
 };
 
-export const getBoundTextElementId = (container: ExcalidrawElement | null) => {
+export const getBoundTextElementId = (container: FcboardElement | null) => {
   return container?.boundElements?.length
     ? container?.boundElements?.find((ele) => ele.type === "text")?.id || null
     : null;
 };
 
 export const getBoundTextElement = (
-  element: ExcalidrawElement | null,
+  element: FcboardElement | null,
   elementsMap: ElementsMap,
 ) => {
   if (!element) {
@@ -294,27 +294,27 @@ export const getBoundTextElement = (
 
   if (boundTextElementId) {
     return (elementsMap.get(boundTextElementId) ||
-      null) as ExcalidrawTextElementWithContainer | null;
+      null) as FcboardTextElementWithContainer | null;
   }
   return null;
 };
 
 export const getContainerElement = (
-  element: ExcalidrawTextElement | null,
+  element: FcboardTextElement | null,
   elementsMap: ElementsMap,
-): ExcalidrawTextContainer | null => {
+): FcboardTextContainer | null => {
   if (!element) {
     return null;
   }
   if (element.containerId) {
     return (elementsMap.get(element.containerId) ||
-      null) as ExcalidrawTextContainer | null;
+      null) as FcboardTextContainer | null;
   }
   return null;
 };
 
 export const getContainerCenter = (
-  container: ExcalidrawElement,
+  container: FcboardElement,
   appState: AppState,
   elementsMap: ElementsMap,
 ) => {
@@ -352,16 +352,16 @@ export const getContainerCenter = (
   return { x: midSegmentMidpoint[0], y: midSegmentMidpoint[1] };
 };
 
-export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
+export const getContainerCoords = (container: NonDeletedFcboardElement) => {
   let offsetX = BOUND_TEXT_PADDING;
   let offsetY = BOUND_TEXT_PADDING;
 
   if (container.type === "ellipse") {
-    // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6172
+    // The derivation of coordinates is explained in https://github.com/fcboard/fcboard/pull/6172
     offsetX += (container.width / 2) * (1 - Math.sqrt(2) / 2);
     offsetY += (container.height / 2) * (1 - Math.sqrt(2) / 2);
   }
-  // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6265
+  // The derivation of coordinates is explained in https://github.com/fcboard/fcboard/pull/6265
   if (container.type === "diamond") {
     offsetX += container.width / 4;
     offsetY += container.height / 4;
@@ -373,8 +373,8 @@ export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
 };
 
 export const getTextElementAngle = (
-  textElement: ExcalidrawTextElement,
-  container: ExcalidrawTextContainer | null,
+  textElement: FcboardTextElement,
+  container: FcboardTextContainer | null,
 ) => {
   if (isArrowElement(container)) {
     return 0;
@@ -386,8 +386,8 @@ export const getTextElementAngle = (
 };
 
 export const getBoundTextElementPosition = (
-  container: ExcalidrawElement,
-  boundTextElement: ExcalidrawTextElementWithContainer,
+  container: FcboardElement,
+  boundTextElement: FcboardTextElementWithContainer,
   elementsMap: ElementsMap,
 ) => {
   if (isArrowElement(container)) {
@@ -400,7 +400,7 @@ export const getBoundTextElementPosition = (
 };
 
 export const shouldAllowVerticalAlign = (
-  selectedElements: NonDeletedExcalidrawElement[],
+  selectedElements: NonDeletedFcboardElement[],
   elementsMap: ElementsMap,
 ) => {
   return selectedElements.some((element) => {
@@ -416,7 +416,7 @@ export const shouldAllowVerticalAlign = (
 };
 
 export const suppportsHorizontalAlign = (
-  selectedElements: NonDeletedExcalidrawElement[],
+  selectedElements: NonDeletedFcboardElement[],
   elementsMap: ElementsMap,
 ) => {
   return selectedElements.some((element) => {
@@ -439,9 +439,8 @@ const VALID_CONTAINER_TYPES = new Set([
   "arrow",
 ]);
 
-export const isValidTextContainer = (element: {
-  type: ExcalidrawElementType;
-}) => VALID_CONTAINER_TYPES.has(element.type);
+export const isValidTextContainer = (element: { type: FcboardElementType }) =>
+  VALID_CONTAINER_TYPES.has(element.type);
 
 export const computeContainerDimensionForBoundText = (
   dimension: number,
@@ -463,8 +462,8 @@ export const computeContainerDimensionForBoundText = (
 };
 
 export const getBoundTextMaxWidth = (
-  container: ExcalidrawElement,
-  boundTextElement: ExcalidrawTextElement | null,
+  container: FcboardElement,
+  boundTextElement: FcboardTextElement | null,
 ) => {
   const { width } = container;
   if (isArrowElement(container)) {
@@ -476,20 +475,20 @@ export const getBoundTextMaxWidth = (
   if (container.type === "ellipse") {
     // The width of the largest rectangle inscribed inside an ellipse is
     // Math.round((ellipse.width / 2) * Math.sqrt(2)) which is derived from
-    // equation of an ellipse -https://github.com/excalidraw/excalidraw/pull/6172
+    // equation of an ellipse -https://github.com/fcboard/fcboard/pull/6172
     return Math.round((width / 2) * Math.sqrt(2)) - BOUND_TEXT_PADDING * 2;
   }
   if (container.type === "diamond") {
     // The width of the largest rectangle inscribed inside a rhombus is
-    // Math.round(width / 2) - https://github.com/excalidraw/excalidraw/pull/6265
+    // Math.round(width / 2) - https://github.com/fcboard/fcboard/pull/6265
     return Math.round(width / 2) - BOUND_TEXT_PADDING * 2;
   }
   return width - BOUND_TEXT_PADDING * 2;
 };
 
 export const getBoundTextMaxHeight = (
-  container: ExcalidrawElement,
-  boundTextElement: ExcalidrawTextElementWithContainer,
+  container: FcboardElement,
+  boundTextElement: FcboardTextElementWithContainer,
 ) => {
   const { height } = container;
   if (isArrowElement(container)) {
@@ -502,12 +501,12 @@ export const getBoundTextMaxHeight = (
   if (container.type === "ellipse") {
     // The height of the largest rectangle inscribed inside an ellipse is
     // Math.round((ellipse.height / 2) * Math.sqrt(2)) which is derived from
-    // equation of an ellipse - https://github.com/excalidraw/excalidraw/pull/6172
+    // equation of an ellipse - https://github.com/fcboard/fcboard/pull/6172
     return Math.round((height / 2) * Math.sqrt(2)) - BOUND_TEXT_PADDING * 2;
   }
   if (container.type === "diamond") {
     // The height of the largest rectangle inscribed inside a rhombus is
-    // Math.round(height / 2) - https://github.com/excalidraw/excalidraw/pull/6265
+    // Math.round(height / 2) - https://github.com/fcboard/fcboard/pull/6265
     return Math.round(height / 2) - BOUND_TEXT_PADDING * 2;
   }
   return height - BOUND_TEXT_PADDING * 2;
@@ -515,7 +514,7 @@ export const getBoundTextMaxHeight = (
 
 /** retrieves text from text elements and concatenates to a single string */
 export const getTextFromElements = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   separator = "\n\n",
 ) => {
   const text = elements

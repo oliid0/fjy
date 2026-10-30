@@ -4,9 +4,9 @@ import {
   polygonFromPoints,
   lineSegment,
   polygonIncludesPointNonZero,
-} from "@excalidraw/math";
+} from "@fcboard/math";
 
-import { type Bounds } from "@excalidraw/common";
+import { type Bounds } from "@fcboard/common";
 
 import {
   computeBoundTextPosition,
@@ -14,10 +14,10 @@ import {
   getBoundTextElement,
   getElementBounds,
   intersectElementWithLineSegment,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import type { ElementsSegmentsMap, GlobalPoint } from "@excalidraw/math/types";
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { ElementsSegmentsMap, GlobalPoint } from "@fcboard/math/types";
+import type { ElementsMap, FcboardElement } from "@fcboard/element/types";
 
 export const getLassoBounds = (path: GlobalPoint[], padding = 0): Bounds => {
   const bounds = path.reduce<Bounds>(
@@ -39,11 +39,11 @@ export const getLassoBounds = (path: GlobalPoint[], padding = 0): Bounds => {
 
 export const getLassoSelectedElementIds = (input: {
   lassoPath: GlobalPoint[];
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   elementsMap: ElementsMap;
   elementsSegments: ElementsSegmentsMap;
-  intersectedElements: Set<ExcalidrawElement["id"]>;
-  enclosedElements: Set<ExcalidrawElement["id"]>;
+  intersectedElements: Set<FcboardElement["id"]>;
+  enclosedElements: Set<FcboardElement["id"]>;
   simplifyDistance?: number;
 }): {
   selectedElementIds: string[];
@@ -99,7 +99,7 @@ export const getLassoSelectedElementIds = (input: {
 
 const enclosureTest = (
   lassoPath: GlobalPoint[],
-  element: ExcalidrawElement,
+  element: FcboardElement,
   elementsSegments: ElementsSegmentsMap,
 ): boolean => {
   const lassoPolygon = polygonFromPoints(lassoPath);
@@ -117,7 +117,7 @@ const enclosureTest = (
 
 const intersectionTest = (
   lassoPath: GlobalPoint[],
-  element: ExcalidrawElement,
+  element: FcboardElement,
   elementsMap: ElementsMap,
 ): boolean => {
   const lassoSegments = lassoPath

@@ -44,7 +44,7 @@ for (const viewport of [
         .poll(() =>
           page.evaluate(
             (kind) =>
-              JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+              JSON.parse(localStorage.getItem("fcboard") || "[]").some(
                 (item: {
                   type: string;
                   customData?: { fcInsertion?: { kind: string } };
@@ -57,7 +57,7 @@ for (const viewport of [
         )
         .toBe(true);
       const point = await page.evaluate((kind) => {
-        const elements = JSON.parse(localStorage.getItem("excalidraw") || "[]");
+        const elements = JSON.parse(localStorage.getItem("fcboard") || "[]");
         const body = elements.find(
           (item: {
             type: string;
@@ -67,9 +67,7 @@ for (const viewport of [
             item.customData?.fcInsertion?.kind === kind &&
             item.customData.fcInsertion.textIndex === 0,
         );
-        const state = JSON.parse(
-          localStorage.getItem("excalidraw-state") || "{}",
-        );
+        const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
         const zoom = state.zoom?.value || 1;
         return {
           x: (body.x + body.width / 2 + (state.scrollX || 0)) * zoom,
@@ -103,7 +101,7 @@ for (const viewport of [
       const typed = () =>
         page.evaluate(
           (kind) =>
-            JSON.parse(localStorage.getItem("excalidraw") || "[]").filter(
+            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
               (item: {
                 type: string;
                 isDeleted?: boolean;

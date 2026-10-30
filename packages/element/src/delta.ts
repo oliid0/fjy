@@ -6,32 +6,32 @@ import {
   isShallowEqual,
   isTestEnv,
   randomInteger,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
+  FcboardElement,
+  FcboardFreeDrawElement,
+  FcboardLinearElement,
+  FcboardTextElement,
   NonDeleted,
   Ordered,
-  OrderedExcalidrawElement,
+  OrderedFcboardElement,
   SceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import type {
   DTO,
   Mutable,
   SubtypeOf,
   ValueOf,
-} from "@excalidraw/common/utility-types";
+} from "@fcboard/common/utility-types";
 
 import type {
   AppState,
   ObservedAppState,
   ObservedElementsAppState,
   ObservedStandaloneAppState,
-} from "@excalidraw/excalidraw/types";
+} from "@fcboard/fcboard/types";
 
 import { getObservedAppState } from "./store";
 
@@ -672,7 +672,7 @@ export class AppStateDelta implements DeltaContainer<AppState> {
           ? new LinearElementEditor(
               nextElements.get(
                 insertedSelectedLinearElement.elementId,
-              ) as NonDeleted<ExcalidrawLinearElement>,
+              ) as NonDeleted<FcboardLinearElement>,
               nextElements,
               insertedSelectedLinearElement.isEditing,
             )
@@ -1016,8 +1016,10 @@ export class AppStateDelta implements DeltaContainer<AppState> {
   }
 }
 
-type ElementPartial<TElement extends ExcalidrawElement = ExcalidrawElement> =
-  Omit<Partial<Ordered<TElement>>, "id" | "updated" | "seed">;
+type ElementPartial<TElement extends FcboardElement = FcboardElement> = Omit<
+  Partial<Ordered<TElement>>,
+  "id" | "updated" | "seed"
+>;
 
 export type ApplyToOptions = {
   excludedProperties?: Set<keyof ElementPartial>;
@@ -1164,7 +1166,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
    *
    * @returns `ElementsDelta` instance representing the `Delta` changes between the two sets of elements.
    */
-  public static calculate<T extends OrderedExcalidrawElement>(
+  public static calculate<T extends OrderedFcboardElement>(
     prevElements: Map<string, T>,
     nextElements: Map<string, T>,
   ): ElementsDelta {
@@ -1309,11 +1311,11 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
   ): ElementsDelta {
     const modifier =
       (
-        prevElement: OrderedExcalidrawElement | undefined,
-        nextElement: OrderedExcalidrawElement | undefined,
+        prevElement: OrderedFcboardElement | undefined,
+        nextElement: OrderedFcboardElement | undefined,
       ) =>
       (partial: ElementPartial, partialType: "deleted" | "inserted") => {
-        let element: OrderedExcalidrawElement | undefined;
+        let element: OrderedFcboardElement | undefined;
 
         switch (partialType) {
           case "deleted":
@@ -1395,7 +1397,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     options?: ApplyToOptions,
   ): [SceneElementsMap, boolean] {
     let nextElements = new Map(elements) as SceneElementsMap;
-    let changedElements: Map<string, OrderedExcalidrawElement>;
+    let changedElements: Map<string, OrderedFcboardElement>;
 
     const flags: ApplyToFlags = {
       containsVisibleDifference: false,
@@ -1610,7 +1612,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
         }
 
         return acc;
-      }, new Map<string, OrderedExcalidrawElement>());
+      }, new Map<string, OrderedFcboardElement>());
     };
 
   private static createGetter =
@@ -1637,7 +1639,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
         } else {
           // not in elements, not in snapshot? element might have been added remotely!
           element = newElementWith(
-            { id, version: 1 } as OrderedExcalidrawElement,
+            { id, version: 1 } as OrderedFcboardElement,
             {
               ...partial,
             },
@@ -1649,7 +1651,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     };
 
   private static applyDelta(
-    element: OrderedExcalidrawElement,
+    element: OrderedFcboardElement,
     delta: Delta<ElementPartial>,
     flags: ApplyToFlags,
     options?: ApplyToOptions,
@@ -1713,7 +1715,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
    * Check for visible changes regardless of whether they were removed, added or updated.
    */
   private static checkForVisibleDifference(
-    element: OrderedExcalidrawElement,
+    element: OrderedFcboardElement,
     partial: ElementPartial,
   ) {
     if (element.isDeleted && partial.isDeleted !== false) {
@@ -1748,10 +1750,10 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     nextElements: SceneElementsMap,
     applyDirection: "forward" | "backward" = "forward",
   ) {
-    const nextAffectedElements = new Map<string, OrderedExcalidrawElement>();
+    const nextAffectedElements = new Map<string, OrderedFcboardElement>();
     const updater = (
-      element: ExcalidrawElement,
-      updates: ElementUpdate<ExcalidrawElement>,
+      element: FcboardElement,
+      updates: ElementUpdate<FcboardElement>,
     ) => {
       const nextElement = nextElements.get(element.id); // only ever modify next element!
       if (!nextElement) {
@@ -1764,9 +1766,9 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
           ? nextElement.version + 1
           : nextElement.version - 1;
 
-      const elementUpdates = updates as ElementUpdate<OrderedExcalidrawElement>;
+      const elementUpdates = updates as ElementUpdate<OrderedFcboardElement>;
 
-      let affectedElement: OrderedExcalidrawElement;
+      let affectedElement: OrderedFcboardElement;
 
       if (prevElement === nextElement) {
         // create the new element instance in case we didn't modify the element yet
@@ -1843,8 +1845,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     nextElements: SceneElementsMap,
     id: string,
     updater: (
-      element: ExcalidrawElement,
-      updates: ElementUpdate<ExcalidrawElement>,
+      element: FcboardElement,
+      updates: ElementUpdate<FcboardElement>,
     ) => void,
   ) {
     // the instance could have been updated, so make sure we are passing the latest element to each function below
@@ -1867,8 +1869,8 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
     nextElements: SceneElementsMap,
     id: string,
     updater: (
-      element: ExcalidrawElement,
-      updates: ElementUpdate<ExcalidrawElement>,
+      element: FcboardElement,
+      updates: ElementUpdate<FcboardElement>,
     ) => void,
   ) {
     // the instance could have been updated, so make sure we are passing the latest element to each function below
@@ -1894,7 +1896,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
 
   public static redrawElements(
     nextElements: SceneElementsMap,
-    changedElements: Map<string, OrderedExcalidrawElement>,
+    changedElements: Map<string, OrderedFcboardElement>,
   ) {
     try {
       // we don't have an up-to-date scene, as we can be just in the middle of applying history entry
@@ -1919,23 +1921,23 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
 
   private static redrawTextBoundingBoxes(
     scene: Scene,
-    changed: Map<string, OrderedExcalidrawElement>,
+    changed: Map<string, OrderedFcboardElement>,
   ) {
     const elements = scene.getNonDeletedElementsMap();
     const boxesToRedraw = new Map<
       string,
-      { container: OrderedExcalidrawElement; boundText: ExcalidrawTextElement }
+      { container: OrderedFcboardElement; boundText: FcboardTextElement }
     >();
 
     for (const element of changed.values()) {
       if (isBoundToContainer(element)) {
-        const { containerId } = element as ExcalidrawTextElement;
+        const { containerId } = element as FcboardTextElement;
         const container = containerId ? elements.get(containerId) : undefined;
 
         if (container) {
           boxesToRedraw.set(container.id, {
             container,
-            boundText: element as ExcalidrawTextElement,
+            boundText: element as FcboardTextElement,
           });
         }
       }
@@ -1949,7 +1951,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
         if (boundText) {
           boxesToRedraw.set(element.id, {
             container: element,
-            boundText: boundText as ExcalidrawTextElement,
+            boundText: boundText as FcboardTextElement,
           });
         }
       }
@@ -1967,7 +1969,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
 
   private static redrawBoundArrows(
     scene: Scene,
-    changed: Map<string, OrderedExcalidrawElement>,
+    changed: Map<string, OrderedFcboardElement>,
   ) {
     for (const element of changed.values()) {
       if (!element.isDeleted && isBindableElement(element)) {
@@ -1981,7 +1983,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
 
   private static reorderElements(
     elements: SceneElementsMap,
-    changed: Map<string, OrderedExcalidrawElement>,
+    changed: Map<string, OrderedFcboardElement>,
     flags: {
       containsVisibleDifference: boolean;
       containsZindexDifference: boolean;
@@ -2032,14 +2034,14 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
       const deletedPoints =
         (
           deleted as ElementPartial<
-            ExcalidrawFreeDrawElement | ExcalidrawLinearElement
+            FcboardFreeDrawElement | FcboardLinearElement
           >
         ).points ?? [];
 
       const insertedPoints =
         (
           inserted as ElementPartial<
-            ExcalidrawFreeDrawElement | ExcalidrawLinearElement
+            FcboardFreeDrawElement | FcboardLinearElement
           >
         ).points ?? [];
 
@@ -2061,7 +2063,7 @@ export class ElementsDelta implements DeltaContainer<SceneElementsMap> {
   }
 
   private static stripIrrelevantProps(
-    partial: Partial<OrderedExcalidrawElement>,
+    partial: Partial<OrderedFcboardElement>,
   ): ElementPartial {
     const { id, updated, ...strippedPartial } = partial;
 

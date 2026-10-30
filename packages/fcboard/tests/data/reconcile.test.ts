@@ -1,15 +1,15 @@
-import { syncInvalidIndices } from "@excalidraw/element";
+import { syncInvalidIndices } from "@fcboard/element";
 
-import { randomInteger, cloneJSON } from "@excalidraw/common";
+import { randomInteger, cloneJSON } from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 
 import { reconcileElements } from "../../data/reconcile";
 
-import type { RemoteExcalidrawElement } from "../../data/reconcile";
+import type { RemoteFcboardElement } from "../../data/reconcile";
 
 import type { AppState } from "../../types";
 
@@ -21,7 +21,7 @@ type ElementLike = {
   index: string;
 };
 
-type Cache = Record<string, ExcalidrawElement | undefined>;
+type Cache = Record<string, FcboardElement | undefined>;
 
 const createElement = (opts: { uid: string } | ElementLike) => {
   let uid: string;
@@ -57,12 +57,12 @@ const idsToElements = (ids: (Id | ElementLike)[], cache: Cache = {}) => {
         version: version ?? 0,
         versionNonce,
         ...cached,
-      } as ExcalidrawElement;
+      } as FcboardElement;
       // @ts-ignore
       cache[uid] = elem;
       acc.push(elem);
       return acc;
-    }, [] as ExcalidrawElement[]),
+    }, [] as FcboardElement[]),
   );
 };
 
@@ -77,7 +77,7 @@ const test = <U extends `${string}:${"L" | "R"}`>(
 
   const reconciled = reconcileElements(
     cloneJSON(_local),
-    cloneJSON(_remote) as RemoteExcalidrawElement[],
+    cloneJSON(_remote) as RemoteFcboardElement[],
     {} as AppState,
   );
 
@@ -106,7 +106,7 @@ const test = <U extends `${string}:${"L" | "R"}`>(
     assert.deepEqual(
       reconcileElements(
         cloneJSON(_remote),
-        cloneJSON(_local as RemoteExcalidrawElement[]),
+        cloneJSON(_local as RemoteFcboardElement[]),
         {} as AppState,
       ).map((x) => x.id),
       reconciledIds,
@@ -123,7 +123,7 @@ const test = <U extends `${string}:${"L" | "R"}`>(
     assert.deepEqual(
       reconcileElements(
         cloneJSON(_remote),
-        cloneJSON(reconciled as unknown as RemoteExcalidrawElement[]),
+        cloneJSON(reconciled as unknown as RemoteFcboardElement[]),
         {} as AppState,
       ).map((x) => x.id),
       reconciledIds,
@@ -311,8 +311,8 @@ describe("elements reconciliation", () => {
       expected: Id[],
     ) => {
       const ret = reconcileElements(
-        local as unknown as OrderedExcalidrawElement[],
-        remote as unknown as RemoteExcalidrawElement[],
+        local as unknown as OrderedFcboardElement[],
+        remote as unknown as RemoteFcboardElement[],
         {} as AppState,
       );
 

@@ -1,11 +1,7 @@
-import {
-  DiagramToCodePlugin,
-  exportToBlob,
-  TTDDialog,
-} from "@excalidraw/excalidraw";
-import { getDataURL } from "@excalidraw/excalidraw/data/blob";
+import { DiagramToCodePlugin, exportToBlob, TTDDialog } from "@fcboard/fcboard";
+import { getDataURL } from "@fcboard/fcboard/data/blob";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TTDIndexedDBAdapter } from "../data/TTDStorage";
 import { chat, visualMessage } from "../fcboard/ai";
@@ -13,7 +9,7 @@ import { chat, visualMessage } from "../fcboard/ai";
 export const AIComponents = ({
   excalidrawAPI,
 }: {
-  excalidrawAPI: ExcalidrawImperativeAPI;
+  excalidrawAPI: FcboardImperativeAPI;
 }) => (
   <>
     <DiagramToCodePlugin

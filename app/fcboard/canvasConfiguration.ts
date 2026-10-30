@@ -1,24 +1,26 @@
-import { CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { t } from "@excalidraw/excalidraw/i18n";
-import { canvasStrokeColor } from "@excalidraw/common";
+import { CaptureUpdateAction } from "@fcboard/fcboard";
+import { t } from "@fcboard/fcboard/i18n";
+import { canvasStrokeColor } from "@fcboard/common";
 import {
   factoryBackgrounds,
   validWhiteboardBackground,
-} from "@excalidraw/excalidraw/whiteboardBackground";
-import { switchWhiteboardTip } from "@excalidraw/excalidraw/whiteboardPen";
+  validBackgroundImage,
+} from "@fcboard/fcboard/whiteboardBackground";
+import { switchWhiteboardTip } from "@fcboard/fcboard/whiteboardPen";
 
 import type {
   AppState,
-  ExcalidrawImperativeAPI,
+  FcboardImperativeAPI,
   UIOptions,
-} from "@excalidraw/excalidraw/types";
+} from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 
 const numeric = {
-  thickThreshold: [1, 240, "whiteboardThickThreshold"],
+  thickThreshold: [0.01, 240, "whiteboardThickThreshold"],
+  fineThreshold: [0.01, 240, "whiteboardFineThreshold"],
   brushVariation: [0, 50, "whiteboardBrushVariation"],
-  palmThreshold: [16, 120, "palmEraserThreshold"],
+  palmThreshold: [1, 240, "palmEraserThreshold"],
   eraserSize: [12, 240, "eraserSize"],
 } as const;
 const booleans = {
@@ -27,6 +29,7 @@ const booleans = {
   palmEraser: "palmEraser",
   multiStroke: "multiStroke",
   toolbarReversed: "toolbarReversed",
+  toolbarText: "whiteboardToolbarText",
 } as const;
 const invalid = () => new Error(t("fcboard.invalid_style_parameters"));
 const documentOnly = () =>
@@ -52,6 +55,7 @@ export const canvasConfigurationSnapshot = (
           color: state.viewBackgroundColor,
           pattern: state.whiteboardBackground?.pattern || 0,
           patterns: factoryBackgrounds.map((_, index) => index + 1),
+          custom: state.whiteboardBackground?.pattern === 14,
         },
     pen: {
       tip: state.whiteboardPenTip || "fine",
@@ -63,6 +67,8 @@ export const canvasConfigurationSnapshot = (
       hardNibAvailable: device?.hardNibAvailable !== false,
       dualPen: state.whiteboardDualPen ?? device?.dualPen ?? false,
       thickThreshold: threshold ?? null,
+      fineThreshold:
+        state.whiteboardFineThreshold ?? device?.fineThreshold ?? null,
       autoTipAvailable:
         !!threshold && Number.isFinite(threshold) && threshold > 0,
     },
@@ -76,12 +82,13 @@ export const canvasConfigurationSnapshot = (
     touch: { multiStroke: document ? null : state.multiStroke !== false },
     toolbar: {
       reversed: !!state.toolbarReversed,
+      text: state.whiteboardToolbarText !== false,
       visible: !state.toolbarHidden,
     },
   };
 };
 export const readCanvasConfiguration = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   device?: UIOptions["inkProfile"],
 ) =>
   canvasConfigurationSnapshot(
@@ -92,7 +99,7 @@ export const readCanvasConfiguration = (
 
 /** Validate the whole request before any state changes. No arbitrary AppState writes. */
 export const canvasConfigurationPatch = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   input: Record<string, unknown>,
   device?: UIOptions["inkProfile"],
 ): Partial<AppState> => {
@@ -107,6 +114,7 @@ export const canvasConfigurationPatch = (
           "tip",
           "backgroundColor",
           "backgroundPattern",
+          "backgroundImage",
           "eraserMode",
         ].includes(key),
     )
@@ -166,6 +174,7 @@ export const canvasConfigurationPatch = (
     classroomCommands.read("document") &&
     ("backgroundColor" in input ||
       "backgroundPattern" in input ||
+      "backgroundImage" in input ||
       "multiStroke" in input)
   ) {
     throw documentOnly();
@@ -205,11 +214,30 @@ export const canvasConfigurationPatch = (
     patch.whiteboardBackground = pattern ? background : undefined;
     patch.gridModeEnabled = false;
   }
+  if ("backgroundImage" in input) {
+    if (
+      "backgroundPattern" in input ||
+      !validBackgroundImage(input.backgroundImage)
+    ) {
+      throw invalid();
+    }
+    patch.whiteboardBackground = {
+      pattern: 14,
+      image: input.backgroundImage,
+      width: state.width / state.zoom.value,
+      height: state.height / state.zoom.value,
+    };
+    if (!validWhiteboardBackground(patch.whiteboardBackground)) {
+      throw invalid();
+    }
+    patch.whiteboardCustomBackground = input.backgroundImage;
+    patch.gridModeEnabled = false;
+  }
   return patch;
 };
 
 export const applyCanvasConfiguration = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   patch: Partial<AppState>,
 ) =>
   api.updateScene({
@@ -222,7 +250,7 @@ export const applyCanvasConfiguration = (
 
 /** A tool result is read from the committed editor, including asynchronous React state. */
 export const configureCanvas = async (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   input: Record<string, unknown>,
   device?: UIOptions["inkProfile"],
   signal?: AbortSignal,

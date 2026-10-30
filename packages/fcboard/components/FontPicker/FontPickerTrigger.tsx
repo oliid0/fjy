@@ -1,14 +1,14 @@
 import { Popover } from "radix-ui";
 
-import { MOBILE_ACTION_BUTTON_BG } from "@excalidraw/common";
+import { MOBILE_ACTION_BUTTON_BG } from "@fcboard/common";
 
-import type { FontFamilyValues } from "@excalidraw/element/types";
+import type { FontFamilyValues } from "@fcboard/element/types";
 
 import { t } from "../../i18n";
 import { ButtonIcon } from "../ButtonIcon";
 import { TextIcon } from "../icons";
 
-import { useExcalidrawSetAppState } from "../App";
+import { useFcboardSetAppState } from "../App";
 
 interface FontPickerTriggerProps {
   selectedFontFamily: FontFamilyValues | null;
@@ -21,7 +21,7 @@ export const FontPickerTrigger = ({
   isOpened = false,
   compactMode = false,
 }: FontPickerTriggerProps) => {
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   const compactStyle = compactMode
     ? {

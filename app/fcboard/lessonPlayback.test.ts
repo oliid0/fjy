@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/react";
 
-import type { ResourceControlState } from "@excalidraw/excalidraw/interactiveResourceControls";
+import type { ResourceControlState } from "@fcboard/fcboard/interactiveResourceControls";
 
 import { TeachingEngine, lessonSessions, saveLessonSession } from "./teaching";
 import { validateLesson } from "./lesson";
@@ -1215,10 +1215,8 @@ it("serializes progress saves and lets a new reader observe every queued cursor"
 
 it("pauses a full board before narration and retries layout after space is made", async () => {
   const host = playback();
-  const { convertToExcalidrawElements } = await import(
-    "@excalidraw/excalidraw"
-  );
-  const obstacle = convertToExcalidrawElements([
+  const { convertToFcboardElements } = await import("@fcboard/fcboard");
+  const obstacle = convertToFcboardElements([
     { type: "rectangle", x: 0, y: 0, width: 1600, height: 900 },
   ])[0];
   host.api.updateScene({

@@ -190,7 +190,7 @@ const printRow = (id, locale, coverage) => {
     result += `[${boldIf(
       language,
       isOver,
-    )}](https://crowdin.com/translate/excalidraw/10/${crowdinMap[locale]}) | `;
+    )}](https://crowdin.com/translate/fcboard/10/${crowdinMap[locale]}) | `;
   } else {
     result += `${boldIf(language, isOver)} | `;
   }
@@ -199,7 +199,7 @@ const printRow = (id, locale, coverage) => {
 };
 
 console.info(
-  `Each language must be at least **${THRESSHOLD}%** translated in order to appear on Excalidraw. Join us on [Crowdin](https://crowdin.com/project/excalidraw) and help us translate your own language. **Can't find yours yet?** Open an [issue](https://github.com/excalidraw/excalidraw/issues/new) and we'll add it to the list.`,
+  `Each language must be at least **${THRESSHOLD}%** translated in order to appear on Fcboard. Join us on [Crowdin](https://crowdin.com/project/fcboard) and help us translate your own language. **Can't find yours yet?** Open an [issue](https://github.com/fcboard/fcboard/issues/new) and we'll add it to the list.`,
 );
 console.info("\n\r");
 console.info(printHeader());

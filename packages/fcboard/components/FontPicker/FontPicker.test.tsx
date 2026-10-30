@@ -1,6 +1,6 @@
-import { KEYS } from "@excalidraw/common";
+import { KEYS } from "@fcboard/common";
 
-import { Excalidraw } from "../..";
+import { Fcboard } from "../..";
 import { Keyboard } from "../../tests/helpers/ui";
 import { act, render } from "../../tests/test-utils";
 
@@ -15,7 +15,7 @@ describe("FontPicker", () => {
       };
 
     const { queryByTestId } = await render(
-      <Excalidraw handleKeyboardGlobally={true} />,
+      <Fcboard handleKeyboardGlobally={true} />,
     );
 
     Keyboard.keyPress(KEYS.T);

@@ -1,4 +1,4 @@
-import { round } from "@excalidraw/math";
+import { round } from "@fcboard/math";
 import clsx from "clsx";
 import debounce from "lodash.debounce";
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
@@ -9,35 +9,35 @@ import {
   FONT_FAMILY,
   FRAME_STYLE,
   getLineHeight,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { isElementCompletelyInViewport } from "@excalidraw/element";
+import { isElementCompletelyInViewport } from "@fcboard/element";
 
-import { measureText } from "@excalidraw/element";
+import { measureText } from "@fcboard/element";
 
 import {
   KEYS,
   randomInteger,
   addEventListener,
   getFontString,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { newTextElement } from "@excalidraw/element";
-import { isTextElement, isFrameLikeElement } from "@excalidraw/element";
+import { newTextElement } from "@fcboard/element";
+import { isTextElement, isFrameLikeElement } from "@fcboard/element";
 
-import { getDefaultFrameName } from "@excalidraw/element/frame";
+import { getDefaultFrameName } from "@fcboard/element/frame";
 
 import type {
-  ExcalidrawFrameLikeElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardFrameLikeElement,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
 import { atom, useAtom } from "../editor-jotai";
 
 import { useStable } from "../hooks/useStable";
 import { t } from "../i18n";
 
-import { useApp, useExcalidrawSetAppState } from "./App";
+import { useApp, useFcboardSetAppState } from "./App";
 import { Button } from "./Button";
 import { TextField } from "./TextField";
 import {
@@ -58,7 +58,7 @@ export const searchItemInFocusAtom = atom<number | null>(null);
 const SEARCH_DEBOUNCE = 350;
 
 type SearchMatchItem = {
-  element: ExcalidrawTextElement | ExcalidrawFrameLikeElement;
+  element: FcboardTextElement | FcboardFrameLikeElement;
   searchQuery: SearchQuery;
   index: number;
   preview: {
@@ -79,7 +79,7 @@ type SearchQuery = string & { _brand: "SearchQuery" };
 
 export const SearchMenu = () => {
   const app = useApp();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -633,7 +633,7 @@ const normalizeWrappedText = (
 };
 
 const getMatchedLines = (
-  textElement: ExcalidrawTextElement,
+  textElement: FcboardTextElement,
   searchQuery: SearchQuery,
   index: number,
 ) => {
@@ -740,7 +740,7 @@ const getMatchedLines = (
 };
 
 const getMatchInFrame = (
-  frame: ExcalidrawFrameLikeElement,
+  frame: FcboardFrameLikeElement,
   searchQuery: SearchQuery,
   index: number,
   zoomValue: number,
@@ -798,11 +798,11 @@ const handleSearch = debounce(
     const elements = app.scene.getNonDeletedElements();
     const texts = elements.filter((el) =>
       isTextElement(el),
-    ) as ExcalidrawTextElement[];
+    ) as FcboardTextElement[];
 
     const frames = elements.filter((el) =>
       isFrameLikeElement(el),
-    ) as ExcalidrawFrameLikeElement[];
+    ) as FcboardFrameLikeElement[];
 
     texts.sort((a, b) => a.y - b.y);
     frames.sort((a, b) => a.y - b.y);

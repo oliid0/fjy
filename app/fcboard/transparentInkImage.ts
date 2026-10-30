@@ -1,4 +1,4 @@
-import type { DataURL } from "@excalidraw/excalidraw/types";
+import type { DataURL } from "@fcboard/fcboard/types";
 
 /** Remove only edge-connected white paper, retaining enclosed whites and existing alpha. */
 export const transparentInkPixels = (

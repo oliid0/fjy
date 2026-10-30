@@ -1,10 +1,11 @@
-import { FONT_FAMILY } from "@excalidraw/common";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { getCommonBounds } from "@excalidraw/element";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { FONT_FAMILY } from "@fcboard/common";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { getCommonBounds } from "@fcboard/element";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { contentViewport } from "./board";
 import { classroomCommands } from "./commands";
@@ -24,7 +25,7 @@ export const noWritingSpace = () =>
 export type LessonWritingContext = {
   viewport: ContentRect;
   obstacles: ContentRect[];
-  source: ExcalidrawElement[];
+  source: FcboardElement[];
   bounds?: ContentRect;
   fontSize: number;
   color: string;
@@ -35,7 +36,7 @@ export type LessonWritingContext = {
 
 /** Read the visible document alone; scene coordinates are never mixed with page units. */
 export const lessonWritingContext = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   lesson: string,
   sourceIds: readonly string[] | undefined,
   exclude: ReadonlySet<string>,
@@ -68,7 +69,7 @@ export const lessonWritingContext = (
     : document
     ? document.selection
     : Object.keys(state!.selectedElementIds || {});
-  let source: ExcalidrawElement[];
+  let source: FcboardElement[];
   let obstacles: ContentRect[];
   if (document) {
     const ink = document.ink || [];
@@ -86,9 +87,9 @@ export const lessonWritingContext = (
     );
     source = eligible
       .filter((stroke) => !ids?.length || ids.includes(stroke.id))
-      .flatMap<ExcalidrawElement>((stroke) =>
+      .flatMap<FcboardElement>((stroke) =>
         stroke.text
-          ? convertToExcalidrawElements(
+          ? convertToFcboardElements(
               [
                 {
                   type: "text",
@@ -239,7 +240,7 @@ export const prepareLessonText = (
         y: element.y + point.y - top,
       }));
     }
-    return convertToExcalidrawElements([
+    return convertToFcboardElements([
       {
         type: "text",
         ...layout,

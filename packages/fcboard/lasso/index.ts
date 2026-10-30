@@ -1,29 +1,25 @@
-import {
-  type GlobalPoint,
-  type LineSegment,
-  pointFrom,
-} from "@excalidraw/math";
+import { type GlobalPoint, type LineSegment, pointFrom } from "@fcboard/math";
 
-import { getElementLineSegments, getCommonBounds } from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
+import { getElementLineSegments, getCommonBounds } from "@fcboard/element";
+import { LinearElementEditor } from "@fcboard/element";
 import {
   isFrameLikeElement,
   isLinearElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { getFrameChildren } from "@excalidraw/element";
-import { selectGroupsForSelectedElements } from "@excalidraw/element";
+import { getFrameChildren } from "@fcboard/element";
+import { selectGroupsForSelectedElements } from "@fcboard/element";
 
-import { getContainerElement } from "@excalidraw/element";
+import { getContainerElement } from "@fcboard/element";
 
-import { arrayToMap, easeOut, isShallowEqual } from "@excalidraw/common";
+import { arrayToMap, easeOut, isShallowEqual } from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
+  FcboardElement,
+  FcboardLinearElement,
   NonDeleted,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { type AnimationFrameHandler } from "../animation-frame-handler";
 
@@ -44,8 +40,8 @@ type CanvasTranslate = {
 };
 
 export class LassoTrail extends AnimatedTrail {
-  private intersectedElements: Set<ExcalidrawElement["id"]> = new Set();
-  private enclosedElements: Set<ExcalidrawElement["id"]> = new Set();
+  private intersectedElements: Set<FcboardElement["id"]> = new Set();
+  private enclosedElements: Set<FcboardElement["id"]> = new Set();
   private elementsSegments: Map<string, LineSegment<GlobalPoint>[]> | null =
     null;
   private canvasTranslate: CanvasTranslate | null = null;
@@ -106,7 +102,7 @@ export class LassoTrail extends AnimatedTrail {
       const nextSelectedElementIds = ids.reduce((acc, id) => {
         acc[id] = true;
         return acc;
-      }, {} as Record<ExcalidrawElement["id"], true>);
+      }, {} as Record<FcboardElement["id"], true>);
 
       if (this.keepPreviousSelection) {
         for (const id of Object.keys(prevState.selectedElementIds)) {
@@ -115,7 +111,7 @@ export class LassoTrail extends AnimatedTrail {
       }
 
       if (this.app.props.UIOptions.unifiedToolbar) {
-        const composite = (element: ExcalidrawElement) => {
+        const composite = (element: FcboardElement) => {
           const data = element.customData;
           return data?.fcWidget
             ? `widget:${data.fcWidget.id}`
@@ -217,7 +213,7 @@ export class LassoTrail extends AnimatedTrail {
             ? new LinearElementEditor(
                 this.app.scene.getNonDeletedElement(
                   selectedIds[0],
-                ) as NonDeleted<ExcalidrawLinearElement>,
+                ) as NonDeleted<FcboardLinearElement>,
                 this.app.scene.getNonDeletedElementsMap(),
               )
             : null,

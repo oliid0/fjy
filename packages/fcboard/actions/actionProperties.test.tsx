@@ -5,16 +5,16 @@ import {
   DEFAULT_ELEMENT_BACKGROUND_PICKS,
   FONT_FAMILY,
   STROKE_WIDTH,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { API } from "../tests/helpers/api";
 import { UI } from "../tests/helpers/ui";
 import { render } from "../tests/test-utils";
 
 describe("element locking", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   describe("properties when tool selected", () => {

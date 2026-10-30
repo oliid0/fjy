@@ -2,8 +2,8 @@ import type {
   AppClassProperties,
   AppState,
   InteractiveCanvasAppState,
-} from "@excalidraw/excalidraw/types";
-import type { Mutable } from "@excalidraw/common/utility-types";
+} from "@fcboard/fcboard/types";
+import type { Mutable } from "@fcboard/common/utility-types";
 
 import { getBoundTextElement } from "./textElement";
 
@@ -13,9 +13,9 @@ import { makeNextSelectedElementIds, getSelectedElements } from "./selection";
 
 import type {
   GroupId,
-  ExcalidrawElement,
+  FcboardElement,
   NonDeleted,
-  NonDeletedExcalidrawElement,
+  NonDeletedFcboardElement,
   ElementsMapOrArray,
   ElementsMap,
 } from "./types";
@@ -23,7 +23,7 @@ import type {
 export const selectGroup = (
   groupId: GroupId,
   appState: InteractiveCanvasAppState,
-  elements: readonly NonDeleted<ExcalidrawElement>[],
+  elements: readonly NonDeleted<FcboardElement>[],
 ): Pick<
   InteractiveCanvasAppState,
   "selectedGroupIds" | "selectedElementIds" | "editingGroupId"
@@ -68,14 +68,13 @@ export const selectGroupsForSelectedElements = (function () {
     "selectedGroupIds" | "editingGroupId" | "selectedElementIds"
   >;
 
-  let lastSelectedElements: readonly NonDeleted<ExcalidrawElement>[] | null =
-    null;
-  let lastElements: readonly NonDeleted<ExcalidrawElement>[] | null = null;
+  let lastSelectedElements: readonly NonDeleted<FcboardElement>[] | null = null;
+  let lastElements: readonly NonDeleted<FcboardElement>[] | null = null;
   let lastReturnValue: SelectGroupsReturnType | null = null;
 
   const _selectGroups = (
-    selectedElements: readonly NonDeleted<ExcalidrawElement>[],
-    elements: readonly NonDeleted<ExcalidrawElement>[],
+    selectedElements: readonly NonDeleted<FcboardElement>[],
+    elements: readonly NonDeleted<FcboardElement>[],
     appState: Pick<AppState, "selectedElementIds" | "editingGroupId">,
     prevAppState: InteractiveCanvasAppState,
   ): SelectGroupsReturnType => {
@@ -163,7 +162,7 @@ export const selectGroupsForSelectedElements = (function () {
    */
   const selectGroupsForSelectedElements = (
     appState: Pick<AppState, "selectedElementIds" | "editingGroupId">,
-    elements: readonly NonDeletedExcalidrawElement[],
+    elements: readonly NonDeletedFcboardElement[],
     prevAppState: InteractiveCanvasAppState,
     /**
      * supply null in cases where you don't have access to App instance and
@@ -213,7 +212,7 @@ export const selectGroupsForSelectedElements = (function () {
  */
 export const isSelectedViaGroup = (
   appState: InteractiveCanvasAppState,
-  element: ExcalidrawElement,
+  element: FcboardElement,
 ) => getSelectedGroupForElement(appState, element) != null;
 
 export const getSelectedGroupForElement = (
@@ -221,7 +220,7 @@ export const getSelectedGroupForElement = (
     InteractiveCanvasAppState,
     "editingGroupId" | "selectedGroupIds"
   >,
-  element: ExcalidrawElement,
+  element: FcboardElement,
 ) =>
   element.groupIds
     .filter((groupId) => groupId !== appState.editingGroupId)
@@ -237,7 +236,7 @@ export const getSelectedGroupIds = (
 // given a list of elements, return the the actual group ids that should be selected
 // or used to update the elements
 export const selectGroupsFromGivenElements = (
-  elements: readonly NonDeleted<ExcalidrawElement>[],
+  elements: readonly NonDeleted<FcboardElement>[],
   appState: InteractiveCanvasAppState,
 ) => {
   let nextAppState: InteractiveCanvasAppState = {
@@ -267,7 +266,7 @@ export const selectGroupsFromGivenElements = (
 
 export const editGroupForSelectedElement = (
   appState: AppState,
-  element: NonDeleted<ExcalidrawElement>,
+  element: NonDeleted<FcboardElement>,
 ): AppState => {
   return {
     ...appState,
@@ -279,14 +278,14 @@ export const editGroupForSelectedElement = (
   };
 };
 
-export const isElementInGroup = (element: ExcalidrawElement, groupId: string) =>
+export const isElementInGroup = (element: FcboardElement, groupId: string) =>
   element.groupIds.includes(groupId);
 
 export const getElementsInGroup = (
   elements: ElementsMapOrArray,
   groupId: string,
 ) => {
-  const elementsInGroup: ExcalidrawElement[] = [];
+  const elementsInGroup: FcboardElement[] = [];
   for (const element of elements.values()) {
     if (isElementInGroup(element, groupId)) {
       elementsInGroup.push(element);
@@ -296,12 +295,12 @@ export const getElementsInGroup = (
 };
 
 export const getSelectedGroupIdForElement = (
-  element: ExcalidrawElement,
+  element: FcboardElement,
   selectedGroupIds: { [groupId: string]: boolean },
 ) => element.groupIds.find((groupId) => selectedGroupIds[groupId]);
 
 export const addToGroup = (
-  prevGroupIds: ExcalidrawElement["groupIds"],
+  prevGroupIds: FcboardElement["groupIds"],
   newGroupId: GroupId,
   editingGroupId: AppState["editingGroupId"],
 ) => {
@@ -317,19 +316,19 @@ export const addToGroup = (
 };
 
 export const removeFromSelectedGroups = (
-  groupIds: ExcalidrawElement["groupIds"],
+  groupIds: FcboardElement["groupIds"],
   selectedGroupIds: { [groupId: string]: boolean },
 ) => groupIds.filter((groupId) => !selectedGroupIds[groupId]);
 
 export const getMaximumGroups = (
-  elements: ExcalidrawElement[],
+  elements: FcboardElement[],
   elementsMap: ElementsMap,
-): ExcalidrawElement[][] => {
-  const groups: Map<String, ExcalidrawElement[]> = new Map<
+): FcboardElement[][] => {
+  const groups: Map<String, FcboardElement[]> = new Map<
     String,
-    ExcalidrawElement[]
+    FcboardElement[]
   >();
-  elements.forEach((element: ExcalidrawElement) => {
+  elements.forEach((element: FcboardElement) => {
     const groupId =
       element.groupIds.length === 0
         ? element.id
@@ -366,9 +365,7 @@ export const getNonDeletedGroupIds = (elements: ElementsMap) => {
   return nonDeletedGroupIds;
 };
 
-export const elementsAreInSameGroup = (
-  elements: readonly ExcalidrawElement[],
-) => {
+export const elementsAreInSameGroup = (elements: readonly FcboardElement[]) => {
   const allGroups = elements.flatMap((element) => element.groupIds);
   const groupCount = new Map<string, number>();
   let maxGroup = 0;
@@ -383,12 +380,12 @@ export const elementsAreInSameGroup = (
   return maxGroup === elements.length;
 };
 
-export const isInGroup = (element: NonDeletedExcalidrawElement) => {
+export const isInGroup = (element: NonDeletedFcboardElement) => {
   return element.groupIds.length > 0;
 };
 
 export const getNewGroupIdsForDuplication = (
-  groupIds: ExcalidrawElement["groupIds"],
+  groupIds: FcboardElement["groupIds"],
   editingGroupId: AppState["editingGroupId"],
   mapper: (groupId: GroupId) => GroupId,
 ) => {
@@ -408,19 +405,19 @@ export const getNewGroupIdsForDuplication = (
 // given a list of selected elements, return the element grouped by their immediate group selected state
 // in the case if only one group is selected and all elements selected are within the group, it will respect group hierarchy in accordance to their nested grouping order
 export const getSelectedElementsByGroup = (
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   elementsMap: ElementsMap,
   appState: Readonly<AppState>,
-): ExcalidrawElement[][] => {
+): FcboardElement[][] => {
   const selectedGroupIds = getSelectedGroupIds(appState);
   const unboundElements = selectedElements.filter(
     (element) => !isBoundToContainer(element),
   );
-  const groups: Map<string, ExcalidrawElement[]> = new Map();
-  const elements: Map<string, ExcalidrawElement[]> = new Map();
+  const groups: Map<string, FcboardElement[]> = new Map();
+  const elements: Map<string, FcboardElement[]> = new Map();
 
   // helper function to add an element to the elements map
-  const addToElementsMap = (element: ExcalidrawElement) => {
+  const addToElementsMap = (element: FcboardElement) => {
     // elements
     const currentElementMembers = elements.get(element.id) || [];
     const boundTextElement = getBoundTextElement(element, elementsMap);
@@ -432,7 +429,7 @@ export const getSelectedElementsByGroup = (
   };
 
   // helper function to add an element to the groups map
-  const addToGroupsMap = (element: ExcalidrawElement, groupId: string) => {
+  const addToGroupsMap = (element: FcboardElement, groupId: string) => {
     // groups
     const currentGroupMembers = groups.get(groupId) || [];
     const boundTextElement = getBoundTextElement(element, elementsMap);
@@ -447,7 +444,7 @@ export const getSelectedElementsByGroup = (
   // and all elements selected are within the group, it will respect group hierarchy in accordance to
   // their nested grouping order
   const handleSingleSelectedGroupCase = (
-    element: ExcalidrawElement,
+    element: FcboardElement,
     selectedGroupId: GroupId,
   ) => {
     const indexOfSelectedGroupId = element.groupIds.indexOf(selectedGroupId, 0);

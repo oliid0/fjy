@@ -1,7 +1,7 @@
 import { trackEvent } from "../../analytics";
 import { useTunnels } from "../../context/tunnels";
 import { useI18n } from "../../i18n";
-import { useExcalidrawSetAppState } from "../App";
+import { useFcboardSetAppState } from "../App";
 import DropdownMenu from "../dropdownMenu/DropdownMenu";
 import { brainIcon } from "../icons";
 
@@ -16,7 +16,7 @@ export const TTDDialogTrigger = ({
 }) => {
   const { t } = useI18n();
   const { TTDDialogTriggerTunnel } = useTunnels();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
 
   return (
     <TTDDialogTriggerTunnel.In>

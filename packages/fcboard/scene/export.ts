@@ -13,45 +13,46 @@ import {
   getFontString,
   toBrandedType,
   applyDarkModeFilter,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
+import { getCommonBounds, getElementAbsoluteCoords } from "@fcboard/element";
 
 import {
   getInitializedImageElements,
   updateImageCache,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElementWith } from "@fcboard/element";
 
-import { isFrameLikeElement } from "@excalidraw/element";
+import { isFrameLikeElement } from "@fcboard/element";
 
 import {
   getElementsOverlappingFrame,
   getFrameLikeElements,
   getFrameLikeTitle,
   getRootElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { syncInvalidIndices } from "@excalidraw/element";
+import { syncInvalidIndices } from "@fcboard/element";
 
-import { type Mutable } from "@excalidraw/common/utility-types";
+import { type Mutable } from "@fcboard/common/utility-types";
 
-import { newTextElement } from "@excalidraw/element";
+import { newTextElement } from "@fcboard/element";
 
-import type { Bounds } from "@excalidraw/common";
+import type { Bounds } from "@fcboard/common";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFrameLikeElement,
-  ExcalidrawTextElement,
-  NonDeletedExcalidrawElement,
+  FcboardElement,
+  FcboardFrameLikeElement,
+  FcboardTextElement,
+  NonDeletedFcboardElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import {
   loadBackground,
   validWhiteboardBackground,
+  backgroundOpacity,
 } from "../whiteboardBackground";
 
 import { getDefaultAppState } from "../appState";
@@ -67,7 +68,7 @@ import type { RenderableElementsMap } from "./types";
 
 import type { AppState, BinaryFiles } from "../types";
 
-const truncateText = (element: ExcalidrawTextElement, maxWidth: number) => {
+const truncateText = (element: FcboardTextElement, maxWidth: number) => {
   if (element.width <= maxWidth) {
     return element;
   }
@@ -105,19 +106,19 @@ const truncateText = (element: ExcalidrawTextElement, maxWidth: number) => {
  * proper canvas rendering, even within editor (instead of DOM).
  */
 const addFrameLabelsAsTextElements = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   opts: Pick<AppState, "exportWithDarkMode">,
 ) => {
-  const nextElements: NonDeletedExcalidrawElement[] = [];
+  const nextElements: NonDeletedFcboardElement[] = [];
   for (const element of elements) {
     if (isFrameLikeElement(element)) {
-      let textElement: Mutable<ExcalidrawTextElement> = newTextElement({
+      let textElement: Mutable<FcboardTextElement> = newTextElement({
         x: element.x,
         y: element.y - FRAME_STYLE.nameOffsetY,
         fontFamily: FONT_FAMILY.Helvetica,
         fontSize: FRAME_STYLE.nameFontSize,
         lineHeight:
-          FRAME_STYLE.nameLineHeight as ExcalidrawTextElement["lineHeight"],
+          FRAME_STYLE.nameLineHeight as FcboardTextElement["lineHeight"],
         strokeColor: opts.exportWithDarkMode
           ? FRAME_STYLE.nameColorDarkTheme
           : FRAME_STYLE.nameColorLightTheme,
@@ -136,7 +137,7 @@ const addFrameLabelsAsTextElements = (
 };
 
 const getFrameRenderingConfig = (
-  exportingFrame: ExcalidrawFrameLikeElement | null,
+  exportingFrame: FcboardFrameLikeElement | null,
   frameRendering: AppState["frameRendering"] | null,
 ): AppState["frameRendering"] => {
   frameRendering = frameRendering || getDefaultAppState().frameRendering;
@@ -154,12 +155,12 @@ const prepareElementsForRender = ({
   frameRendering,
   exportWithDarkMode,
 }: {
-  elements: readonly ExcalidrawElement[];
-  exportingFrame: ExcalidrawFrameLikeElement | null | undefined;
+  elements: readonly FcboardElement[];
+  exportingFrame: FcboardFrameLikeElement | null | undefined;
   frameRendering: AppState["frameRendering"];
   exportWithDarkMode: AppState["exportWithDarkMode"];
 }) => {
-  let nextElements: readonly ExcalidrawElement[];
+  let nextElements: readonly FcboardElement[];
 
   if (exportingFrame) {
     nextElements = getElementsOverlappingFrame(elements, exportingFrame);
@@ -175,7 +176,7 @@ const prepareElementsForRender = ({
 };
 
 export const exportToCanvas = async (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   appState: AppState,
   files: BinaryFiles,
   {
@@ -187,7 +188,7 @@ export const exportToCanvas = async (
     exportBackground: boolean;
     exportPadding?: number;
     viewBackgroundColor: string;
-    exportingFrame?: ExcalidrawFrameLikeElement | null;
+    exportingFrame?: FcboardFrameLikeElement | null;
   },
   createCanvas: (
     width: number,
@@ -289,7 +290,7 @@ const createHTMLComment = (text: string) => {
 };
 
 export const exportToSvg = async (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   appState: {
     exportBackground: boolean;
     whiteboardBackground?: AppState["whiteboardBackground"];
@@ -306,7 +307,7 @@ export const exportToSvg = async (
      * if true, all embeddables passed in will be rendered when possible.
      */
     renderEmbeddables?: boolean;
-    exportingFrame?: ExcalidrawFrameLikeElement | null;
+    exportingFrame?: FcboardFrameLikeElement | null;
     skipInliningFonts?: true;
     reuseImages?: boolean;
   },
@@ -364,7 +365,7 @@ export const exportToSvg = async (
     "metadata",
   );
 
-  svgRoot.appendChild(createHTMLComment("svg-source:excalidraw"));
+  svgRoot.appendChild(createHTMLComment("svg-source:fcboard"));
   svgRoot.appendChild(metadataElement);
   svgRoot.appendChild(defsElement);
 
@@ -482,7 +483,7 @@ export const exportToSvg = async (
         image.setAttribute("width", `${background.width}`);
         image.setAttribute("height", `${background.height}`);
         image.setAttribute("preserveAspectRatio", "none");
-        image.setAttribute("opacity", `${150 / 255}`);
+        image.setAttribute("opacity", `${backgroundOpacity(background)}`);
         svgRoot.appendChild(image);
       }
     }
@@ -540,7 +541,7 @@ export const encodeSvgBase64Payload = ({
   );
 
   metadataElement.appendChild(
-    createHTMLComment(`payload-type:${MIME_TYPES.excalidraw}`),
+    createHTMLComment(`payload-type:${MIME_TYPES.fcboard}`),
   );
   metadataElement.appendChild(createHTMLComment("payload-version:2"));
   metadataElement.appendChild(createHTMLComment("payload-start"));
@@ -549,7 +550,10 @@ export const encodeSvgBase64Payload = ({
 };
 
 export const decodeSvgBase64Payload = ({ svg }: { svg: string }) => {
-  if (svg.includes(`payload-type:${MIME_TYPES.excalidraw}`)) {
+  if (
+    svg.includes(`payload-type:${MIME_TYPES.fcboard}`) ||
+    svg.includes("payload-type:application/vnd.excalidraw+json")
+  ) {
     const match = svg.match(
       /<!-- payload-start -->\s*(.+?)\s*<!-- payload-end -->/,
     );
@@ -567,7 +571,8 @@ export const decodeSvgBase64Payload = ({ svg }: { svg: string }) => {
         // legacy, un-encoded scene JSON
         if (
           "type" in encodedData &&
-          encodedData.type === EXPORT_DATA_TYPES.excalidraw
+          (encodedData.type === EXPORT_DATA_TYPES.fcboard ||
+            encodedData.type === "excalidraw")
         ) {
           return json;
         }
@@ -584,7 +589,7 @@ export const decodeSvgBase64Payload = ({ svg }: { svg: string }) => {
 
 // calculate smallest area to fit the contents in
 const getCanvasSize = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   exportPadding: number,
 ): Bounds => {
   const [minX, minY, maxX, maxY] = getCommonBounds(elements);
@@ -595,7 +600,7 @@ const getCanvasSize = (
 };
 
 export const getExportSize = (
-  elements: readonly NonDeletedExcalidrawElement[],
+  elements: readonly NonDeletedFcboardElement[],
   exportPadding: number,
   scale: number,
 ): [number, number] => {

@@ -1,4 +1,4 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 export type Command = { name: string; args?: Record<string, unknown> };
 type Handler = (args: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -183,6 +183,7 @@ export class CommandRouter {
 export const classroomCommands = new CommandRouter();
 
 const cancellable = new Set([
+  "collaboration.start",
   "lesson.ask",
   "lesson.teach",
   "lesson.resume",
@@ -208,11 +209,13 @@ const cancellable = new Set([
   "board.new",
   "board.switch",
   "board.discard",
+  "board.open",
   "math.calculate",
   "math.plot",
   "insert.object",
   "insert.open",
   "insert.configure",
+  "mail.action",
   "signal.action",
   "web.open",
   "web.action",

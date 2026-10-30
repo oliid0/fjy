@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { convertMermaidToExcalidraw } from "./common";
+import { convertMermaidToFcboard } from "./common";
 
-type ConvertMermaidArgs = Parameters<typeof convertMermaidToExcalidraw>[0];
-type ParseMermaidToExcalidraw = Awaited<
-  ConvertMermaidArgs["mermaidToExcalidrawLib"]["api"]
->["parseMermaidToExcalidraw"];
+type ConvertMermaidArgs = Parameters<typeof convertMermaidToFcboard>[0];
+type ParseMermaidToFcboard = Awaited<
+  ConvertMermaidArgs["mermaidToFcboardLib"]["api"]
+>["parseMermaidToFcboard"];
 
 const createConvertArgs = (
   mermaidDefinition: string,
-  parseMermaidToExcalidraw: ParseMermaidToExcalidraw,
+  parseMermaidToFcboard: ParseMermaidToFcboard,
 ): ConvertMermaidArgs => {
   const parent = document.createElement("div");
   const canvas = document.createElement("div");
@@ -17,9 +17,9 @@ const createConvertArgs = (
 
   return {
     canvasRef: { current: canvas },
-    mermaidToExcalidrawLib: {
+    mermaidToFcboardLib: {
       loaded: true,
-      api: Promise.resolve({ parseMermaidToExcalidraw }),
+      api: Promise.resolve({ parseMermaidToFcboard }),
     },
     mermaidDefinition,
     setError: vi.fn(),
@@ -33,29 +33,26 @@ const createConvertArgs = (
   };
 };
 
-describe("convertMermaidToExcalidraw", () => {
+describe("convertMermaidToFcboard", () => {
   it("returns the original parse error when quote-normalized fallback also fails", async () => {
     const originalError = new Error("Parse error on line 9: ...");
     const fallbackError = new Error("Parse error on line 6: ...");
 
-    const parseMermaidToExcalidraw = vi
-      .fn<ParseMermaidToExcalidraw>()
+    const parseMermaidToFcboard = vi
+      .fn<ParseMermaidToFcboard>()
       .mockRejectedValueOnce(originalError)
       .mockRejectedValueOnce(fallbackError);
 
     const mermaidDefinition =
       'graph TD\nA["One"]\nB["Two"]x\nC["Three"]\nD["Four"]';
 
-    const result = await convertMermaidToExcalidraw(
-      createConvertArgs(mermaidDefinition, parseMermaidToExcalidraw),
+    const result = await convertMermaidToFcboard(
+      createConvertArgs(mermaidDefinition, parseMermaidToFcboard),
     );
 
-    expect(parseMermaidToExcalidraw).toHaveBeenCalledTimes(2);
-    expect(parseMermaidToExcalidraw).toHaveBeenNthCalledWith(
-      1,
-      mermaidDefinition,
-    );
-    expect(parseMermaidToExcalidraw).toHaveBeenNthCalledWith(
+    expect(parseMermaidToFcboard).toHaveBeenCalledTimes(2);
+    expect(parseMermaidToFcboard).toHaveBeenNthCalledWith(1, mermaidDefinition);
+    expect(parseMermaidToFcboard).toHaveBeenNthCalledWith(
       2,
       mermaidDefinition.replace(/"/g, "'"),
     );
@@ -68,18 +65,18 @@ describe("convertMermaidToExcalidraw", () => {
 
   it("does not retry quote normalization when the input has no double quotes", async () => {
     const originalError = new Error("Parse error on line 9: ...");
-    const parseMermaidToExcalidraw = vi
-      .fn<ParseMermaidToExcalidraw>()
+    const parseMermaidToFcboard = vi
+      .fn<ParseMermaidToFcboard>()
       .mockRejectedValueOnce(originalError);
 
     const mermaidDefinition = "graph TD\nA[One]\nB[Two]x";
 
-    const result = await convertMermaidToExcalidraw(
-      createConvertArgs(mermaidDefinition, parseMermaidToExcalidraw),
+    const result = await convertMermaidToFcboard(
+      createConvertArgs(mermaidDefinition, parseMermaidToFcboard),
     );
 
-    expect(parseMermaidToExcalidraw).toHaveBeenCalledTimes(1);
-    expect(parseMermaidToExcalidraw).toHaveBeenCalledWith(mermaidDefinition);
+    expect(parseMermaidToFcboard).toHaveBeenCalledTimes(1);
+    expect(parseMermaidToFcboard).toHaveBeenCalledWith(mermaidDefinition);
 
     expect(result.success).toBe(false);
     if (!result.success) {

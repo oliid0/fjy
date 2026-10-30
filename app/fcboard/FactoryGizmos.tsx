@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import {
@@ -46,7 +46,7 @@ const degrees = (value: number) => ((value + 540) % 360) - 180;
 
 /** Native GizmoLayer actions share the existing widget transaction and ink commands.
  * The transparent body moves the tool; its outside edge draws constrained ink. */
-export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [view, setView] = useState({ x: 0, y: 0, scale: 1, hidden: false });
@@ -100,7 +100,7 @@ export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
             .querySelector(".fc-document-stage")
             ?.getBoundingClientRect()
         : undefined;
-      setView({
+      const nextView = {
         x: stage
           ? stage.left - state.offsetLeft
           : state.scrollX * state.zoom.value,
@@ -109,9 +109,22 @@ export const FactoryGizmos = ({ api }: { api: ExcalidrawImperativeAPI }) => {
           : state.scrollY * state.zoom.value,
         scale: stage ? stage.width / 1000 : state.zoom.value,
         hidden: !!state.viewModeEnabled,
-      });
-      setWidgets(
-        readWidgets(api).filter((widget) => factoryGizmoKinds.has(widget.kind)),
+      };
+      setView((previous) =>
+        previous.x === nextView.x &&
+        previous.y === nextView.y &&
+        previous.scale === nextView.scale &&
+        previous.hidden === nextView.hidden
+          ? previous
+          : nextView,
+      );
+      const nextWidgets = readWidgets(api).filter((widget) =>
+        factoryGizmoKinds.has(widget.kind),
+      );
+      setWidgets((previous) =>
+        JSON.stringify(previous) === JSON.stringify(nextWidgets)
+          ? previous
+          : nextWidgets,
       );
     };
     const stop = api.onChange(refresh);

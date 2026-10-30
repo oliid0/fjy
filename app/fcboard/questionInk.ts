@@ -1,7 +1,7 @@
-import { getCommonBounds } from "@excalidraw/element";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { getCommonBounds } from "@fcboard/element";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { contentViewport } from "./board";
 import { classroomCommands } from "./commands";
@@ -11,7 +11,7 @@ import type { InkInput } from "./digitalInk";
 import type { ContentRect } from "./placement";
 
 /** The question paper and its submitted ink share the visible surface's transform. */
-export const questionSurface = (api: ExcalidrawImperativeAPI) => {
+export const questionSurface = (api: FcboardImperativeAPI) => {
   const document = classroomCommands.read("document") as
     | {
         viewport: { left: number; top: number; scroll: number };
@@ -64,7 +64,7 @@ export const questionSurface = (api: ExcalidrawImperativeAPI) => {
   };
 };
 
-export const questionPosition = (api: ExcalidrawImperativeAPI) => {
+export const questionPosition = (api: FcboardImperativeAPI) => {
   const { viewport, obstacles } = questionSurface(api);
   for (const ratio of [1, 0.85, 0.7]) {
     const width = Math.min(600 * ratio, viewport.right - viewport.left);

@@ -1,6 +1,6 @@
 @use "../css/variables.module" as *;
 
-.excalidraw {
+.fcboard {
   .HelpDialog {
     .Modal__content {
       max-width: 960px;
@@ -33,7 +33,7 @@
       font-size: 0.75rem;
       letter-spacing: 0.4px;
 
-      @at-root .excalidraw.theme--dark#{&} {
+      @at-root .fcboard.theme--dark#{&} {
         --background: var(--color-surface-high);
         &:hover {
           --background: #363541;

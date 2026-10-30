@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { useEffect, useState } from "react";
 
-import type { UIOptions } from "@excalidraw/excalidraw/types";
+import type { UIOptions } from "@fcboard/fcboard/types";
 
 import { Classroom } from "./native";
 
@@ -13,6 +13,8 @@ export const cssInkProfile = (
     penWidthMax?: 20 | 40;
     palmThreshold?: number;
     thickThreshold?: number;
+    fineThreshold?: number;
+    factoryThresholds?: { palm?: number; fine?: number; thick?: number };
     dualPen?: boolean;
     hardNibAvailable?: boolean;
     hardNib?: boolean;
@@ -35,6 +37,14 @@ export const cssInkProfile = (
       ? { thickThreshold: native.thickThreshold / scale }
       : {}),
     ...(typeof native.dualPen === "boolean" ? { dualPen: native.dualPen } : {}),
+    ...(native.fineThreshold &&
+    Number.isFinite(native.fineThreshold) &&
+    native.fineThreshold > 0
+      ? { fineThreshold: native.fineThreshold / scale }
+      : {}),
+    ...(native.factoryThresholds
+      ? { factoryThresholds: native.factoryThresholds }
+      : {}),
     ...(typeof native.hardNibAvailable === "boolean"
       ? { hardNibAvailable: native.hardNibAvailable }
       : {}),

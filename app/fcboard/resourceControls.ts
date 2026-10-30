@@ -1,11 +1,11 @@
-import { requestResourceControl } from "@excalidraw/excalidraw/interactiveResourceControls";
+import { requestResourceControl } from "@fcboard/fcboard/interactiveResourceControls";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import type {
   ResourceControlRequest,
   ResourceControlTarget,
   ResourcePoint,
-} from "@excalidraw/excalidraw/interactiveResourceControls";
+} from "@fcboard/fcboard/interactiveResourceControls";
 
 import { classroomCommands } from "./commands";
 
@@ -25,7 +25,7 @@ const isPoint = (value: unknown): value is ResourcePoint => {
 };
 
 /** Resolve by actual object id on the visible page, never by a library resource id. */
-export const registerResourceCommands = (api: ExcalidrawImperativeAPI) => {
+export const registerResourceCommands = (api: FcboardImperativeAPI) => {
   const pending = new Set<AbortController>();
   const target = (id: unknown): ResourceControlTarget & { page: string } => {
     if (typeof id !== "string" || !id || id.length > 300) {

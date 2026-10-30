@@ -91,7 +91,7 @@
     "untitled": "غير معنون",
     "name": "الاسم",
     "yourName": "اسمك",
-    "madeWithExcalidraw": "مصنوعة بواسطة Fcboard",
+    "madeWithFcboard": "مصنوعة بواسطة Fcboard",
     "group": "تحديد مجموعة",
     "ungroup": "إلغاء تحديد مجموعة",
     "collaborators": "المتعاونون",
@@ -121,7 +121,7 @@
     "toggleTheme": "تبديل الوضع الفاتح/الداكن",
     "theme": "السمة",
     "personalLib": "المكتبة الشخصية",
-    "excalidrawLib": "مكتبتنا",
+    "fcboardlib": "مكتبتنا",
     "decreaseFontSize": "تصغير حجم الخط",
     "increaseFontSize": "تكبير حجم الخط",
     "unbindText": "فك ربط النص",
@@ -320,7 +320,7 @@
     "laser": "مؤشر ليزر",
     "hand": "يد (أداة الإزاحة)",
     "extraTools": "المزيد من الأدوات",
-    "mermaidToExcalidraw": "من Mermaid إلى Fcboard",
+    "mermaidToFcboard": "من Mermaid إلى Fcboard",
     "convertElementType": "تبديل نوع الشكل"
   },
   "element": {

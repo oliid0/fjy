@@ -1,14 +1,10 @@
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
-import { ToolbarExtras } from "@excalidraw/excalidraw";
-import {
-  TrashIcon,
-  save,
-  CloseIcon,
-} from "@excalidraw/excalidraw/components/icons";
-import { FactoryIcon } from "@excalidraw/excalidraw/components/FactoryIcon";
+import { ToolbarExtras } from "@fcboard/fcboard";
+import { TrashIcon, save, CloseIcon } from "@fcboard/fcboard/components/icons";
+import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -20,21 +16,24 @@ import { useAnchoredPanel } from "./floating";
 import { classroomCommands, executeBoardCommand } from "./commands";
 
 import { BoardThumbnail } from "./BoardThumbnail";
+import { saveBoardFile, openBoardFile, pickBoardFile } from "./boardFile";
+import { boardCanvasSize } from "./boardExport";
+import { PageNavigation } from "./PageNavigation";
+import { BoardOpen } from "./BoardOpen";
+import { readCloudBzd } from "./cloudTransfers";
+import { loadCloudShare } from "./cloudShare";
 
-export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const leavePresentation = async (source?: AbortSignal) => {
     source?.throwIfAborted();
     if (classroomCommands.has("mindmap.dismiss")) {
       await executeBoardCommand({ name: "mindmap.dismiss" }, source);
     }
-    if (
-      (
-        classroomCommands.read("network") as
-          | { collaborating?: boolean }
-          | undefined
-      )?.collaborating
-    ) {
+    const session = classroomCommands.read("network") as
+      | { collaborating?: boolean; hosting?: boolean }
+      | undefined;
+    if (session?.collaborating && !session.hosting) {
       await executeBoardCommand({ name: "collaboration.stop" }, source);
     }
     if (classroomCommands.has("document.close")) {
@@ -88,7 +87,24 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
         setValue({ ...controller.value });
       }
     });
+    let canvasSize = boardCanvasSize(api.getAppState());
+    const updateCanvasSize = (state = api.getAppState()) => {
+      const nextSize = boardCanvasSize(state);
+      if (
+        nextSize.width !== canvasSize.width ||
+        nextSize.height !== canvasSize.height ||
+        nextSize.pixelRatio !== canvasSize.pixelRatio
+      ) {
+        canvasSize = nextSize;
+        classroomCommands.changed("boards");
+        if (!cancelled) {
+          setValue({ ...controller.value });
+        }
+      }
+    };
+    const resized = () => updateCanvasSize();
     const stopWatch = api.onChange((_elements, state) => {
+      updateCanvasSize(state);
       if (state.toolbarHidden) {
         setOpen(false);
       }
@@ -161,12 +177,67 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       classroomCommands.register("board.save", "保存当前白板到本机", () =>
         controller.flush(),
       ),
+      classroomCommands.register(
+        "board.export",
+        "将全部白板保存为原厂 BZD 文件。显示实际文件保存位置选择；返回 saved=false 表示取消，不能声称成功。",
+        async (args) => {
+          await controller.flush();
+          const source =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : classroomCommands.interactionSource;
+          const saved = await saveBoardFile(
+            controller.value.boards,
+            controller.value.boards.find(
+              (page) => page.id === controller.value.active,
+            )?.name || "Fcboard",
+            source,
+          );
+          return { saved };
+        },
+      ),
+      classroomCommands.register(
+        "board.open",
+        "打开原厂 BZD 白板文件，保留已有页面并导入全部页。args.code 为四位云端提取码，args.endpoint 可选；省略则打开本地文件窗。",
+        async (args) => {
+          const source =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : classroomCommands.interactionSource;
+          source?.throwIfAborted();
+          let xml: string;
+          if (typeof args.code === "string") {
+            xml = await readCloudBzd(
+              typeof args.endpoint === "string"
+                ? args.endpoint
+                : loadCloudShare().endpoint,
+              args.code,
+              source,
+            );
+          } else {
+            const file = await pickBoardFile(source);
+            if (!file) {
+              return { cancelled: true };
+            }
+            xml = await file.text();
+          }
+          const pages = await openBoardFile(xml);
+          source?.throwIfAborted();
+          await leavePresentation(source);
+          await controller.importPages(pages, source);
+          return { pages: pages.length, active: controller.value.active };
+        },
+      ),
       classroomCommands.register("board.pages", "@internal", async () => {
         await controller.flush();
-        return controller.value;
+        return {
+          ...controller.value,
+          canvasSize: boardCanvasSize(api.getAppState()),
+        };
       }),
       classroomCommands.context("boards", () => ({
-        active: controller.value.active,
+        active: controller.visibleActive,
+        canvasSize: boardCanvasSize(api.getAppState()),
         boards: controller.value.boards.map(({ id, name }) => ({ id, name })),
       })),
     ];
@@ -174,9 +245,11 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
       void controller.flush().catch(() => {});
     };
     window.addEventListener("pagehide", persist);
+    window.addEventListener("resize", resized);
     return () => {
       cancelled = true;
       stopWatch();
+      window.removeEventListener("resize", resized);
       unsubscribe();
       registrations.forEach((stop) => stop());
       window.removeEventListener("pagehide", persist);
@@ -224,29 +297,12 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
     const board = book.current!.value.boards.find(
       (item) => item.id === value.active,
     )!;
-    const url = URL.createObjectURL(
-      new Blob(
-        [
-          JSON.stringify({
-            type: "excalidraw",
-            version: 2,
-            source: "Fcboard",
-            elements: board.elements,
-            files: board.files,
-            appState: board.view,
-          }),
-        ],
-        { type: "application/json" },
-      ),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${board.name}.excalidraw`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await saveBoardFile([board], board.name);
   };
   return (
     <>
+      <PageNavigation />
+      <BoardOpen />
       <ToolbarExtras placement="navigation">
         <div className="fc-toolbar-extras fc-board-controls">
           <button
@@ -378,7 +434,10 @@ export const BoardSwitcher = ({ api }: { api: ExcalidrawImperativeAPI }) => {
                   }}
                 >
                   <small>{index + 1}</small>
-                  <BoardThumbnail board={board} />
+                  <BoardThumbnail
+                    board={board}
+                    canvasSize={boardCanvasSize(api.getAppState())}
+                  />
                   <span>
                     {board.elements
                       .filter((el) => el.type === "text")

@@ -8,15 +8,15 @@ import {
   arrayToMap,
   capitalizeString,
   isShallowEqual,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { mutateElement } from "@excalidraw/element";
+import { mutateElement } from "@fcboard/element";
 
-import { showSelectedShapeActions } from "@excalidraw/element";
+import { showSelectedShapeActions } from "@fcboard/element";
 
-import { ShapeCache } from "@excalidraw/element";
+import { ShapeCache } from "@fcboard/element";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { actionToggleStats } from "../actions";
 import { trackEvent } from "../analytics";
@@ -77,7 +77,7 @@ import type { Language } from "../i18n";
 import type {
   AppProps,
   AppState,
-  ExcalidrawProps,
+  FcboardProps,
   BinaryFiles,
   UIAppState,
   AppClassProperties,
@@ -89,15 +89,15 @@ interface LayerUIProps {
   files: BinaryFiles;
   canvas: HTMLCanvasElement;
   setAppState: React.Component<any, AppState>["setState"];
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   onLockToggle: () => void;
   onHandToolToggle: () => void;
   onPenModeToggle: AppClassProperties["togglePenMode"];
   showExitZenModeBtn: boolean;
   langCode: Language["code"];
-  renderTopLeftUI?: ExcalidrawProps["renderTopLeftUI"];
-  renderTopRightUI?: ExcalidrawProps["renderTopRightUI"];
-  renderCustomStats?: ExcalidrawProps["renderCustomStats"];
+  renderTopLeftUI?: FcboardProps["renderTopLeftUI"];
+  renderTopRightUI?: FcboardProps["renderTopRightUI"];
+  renderCustomStats?: FcboardProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
   onExportImage: AppClassProperties["onExportImage"];
   renderWelcomeScreen: boolean;
@@ -124,7 +124,7 @@ const DefaultMainMenu: React.FC<{
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
       <MainMenu.Separator />
-      <MainMenu.Group title="Excalidraw links">
+      <MainMenu.Group title="Fcboard links">
         <MainMenu.DefaultItems.Socials />
       </MainMenu.Group>
       <MainMenu.Separator />
@@ -184,7 +184,7 @@ const LayerUI = ({
   const positionProperties = React.useCallback(
     (anchor: HTMLElement) => {
       const bounds = anchor.getBoundingClientRect();
-      const root = anchor.closest(".excalidraw")!.getBoundingClientRect();
+      const root = anchor.closest(".fcboard")!.getBoundingClientRect();
       const toolbar = anchor
         .closest(".fc-unified-toolbar")
         ?.getBoundingClientRect();

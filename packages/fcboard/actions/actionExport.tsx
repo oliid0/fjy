@@ -3,13 +3,13 @@ import {
   DEFAULT_EXPORT_PADDING,
   EXPORT_SCALES,
   THEME,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawElement, Theme } from "@excalidraw/element/types";
+import type { FcboardElement, Theme } from "@fcboard/element/types";
 
 import { useEditorInterface } from "../components/App";
 import { CheckboxItem } from "../components/CheckboxItem";
@@ -39,7 +39,7 @@ import type {
   AppClassProperties,
   AppState,
   BinaryFiles,
-  ExcalidrawProps,
+  FcboardProps,
   OnExportProgress,
 } from "../types";
 
@@ -154,7 +154,7 @@ export const actionChangeExportEmbedScene = register<
     >
       {t("imageExportDialog.label.embedScene")}
       <Tooltip label={t("imageExportDialog.tooltip.embedScene")} long={true}>
-        <div className="excalidraw-tooltip-icon">{questionCircle}</div>
+        <div className="fcboard-tooltip-icon">{questionCircle}</div>
       </Tooltip>
     </CheckboxItem>
   ),
@@ -192,7 +192,7 @@ const onProgressToast = (
 
 /** awaits host app's onExport result, and renders progress to the UI */
 async function handleOnExportResult(
-  onExportResult: ReturnType<NonNullable<ExcalidrawProps["onExport"]>>,
+  onExportResult: ReturnType<NonNullable<FcboardProps["onExport"]>>,
   opts: {
     signal: AbortSignal;
     app: AppClassProperties;
@@ -234,7 +234,7 @@ async function handleOnExportResult(
 }
 
 function prepareDataForJSONExport(
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: AppState,
   files: BinaryFiles,
   app: AppClassProperties,

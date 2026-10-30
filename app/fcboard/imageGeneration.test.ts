@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { insertGeneratedImage } from "./imageGeneration";
 import { sceneAPI } from "./test/scene";
@@ -24,7 +24,7 @@ it("requires the image model before sending any request", async () => {
   vi.stubGlobal("fetch", fetcher);
   await expect(
     insertGeneratedImage(
-      {} as ExcalidrawImperativeAPI,
+      {} as FcboardImperativeAPI,
       "月球",
       new AbortController().signal,
     ),
@@ -74,7 +74,7 @@ it("uses the independent image endpoint and inserts an ordinary image object wit
     }),
     addFiles: vi.fn(),
     updateScene: vi.fn(),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   await insertGeneratedImage(api, "月球", new AbortController().signal);
   expect(fetcher.mock.calls[0][0]).toBe(
     "https://ark.cn-beijing.volces.com/api/v3/images/generations",
@@ -119,7 +119,7 @@ it("does not import a late generated image after cancellation", async () => {
   const api = {
     addFiles: vi.fn(),
     updateScene: vi.fn(),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const result = insertGeneratedImage(api, "月球", controller.signal);
   controller.abort();
   finish({ status: 200, json: async () => ({ data: [{ b64_json: image }] }) });

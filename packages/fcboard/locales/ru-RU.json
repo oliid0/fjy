@@ -91,7 +91,7 @@
     "untitled": "Безымянный",
     "name": "Имя",
     "yourName": "Ваше имя",
-    "madeWithExcalidraw": "Сделано в Fcboard",
+    "madeWithFcboard": "Сделано в Fcboard",
     "group": "Сгруппировать выделение",
     "ungroup": "Разделить выделение",
     "collaborators": "Участники",
@@ -121,7 +121,7 @@
     "toggleTheme": "Переключить светлую/тёмную тему",
     "theme": "Тема",
     "personalLib": "Личная библиотека",
-    "excalidrawLib": "Библиотека Fcboard",
+    "fcboardlib": "Библиотека Fcboard",
     "decreaseFontSize": "Уменьшить шрифт",
     "increaseFontSize": "Увеличить шрифт",
     "unbindText": "Отвязать текст",
@@ -320,7 +320,7 @@
     "laser": "Лазерная указка",
     "hand": "Рука (перемещение холста)",
     "extraTools": "Дополнительные инструменты",
-    "mermaidToExcalidraw": "Mermaid в Fcboard",
+    "mermaidToFcboard": "Mermaid в Fcboard",
     "convertElementType": "Переключение типа формы"
   },
   "element": {

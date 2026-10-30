@@ -1,4 +1,4 @@
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@fcboard/fcboard/types";
 
 import { updateBoundElements } from "./binding";
 import { getCommonBoundingBox } from "./bounds";
@@ -7,7 +7,7 @@ import { getSelectedElementsByGroup } from "./groups";
 import type { Scene } from "./Scene";
 
 import type { BoundingBox } from "./bounds";
-import type { ExcalidrawElement } from "./types";
+import type { FcboardElement } from "./types";
 
 export interface Alignment {
   position: "start" | "center" | "end";
@@ -15,12 +15,12 @@ export interface Alignment {
 }
 
 export const alignElements = (
-  selectedElements: ExcalidrawElement[],
+  selectedElements: FcboardElement[],
   alignment: Alignment,
   scene: Scene,
   appState: Readonly<AppState>,
-): ExcalidrawElement[] => {
-  const groups: ExcalidrawElement[][] = getSelectedElementsByGroup(
+): FcboardElement[] => {
+  const groups: FcboardElement[][] = getSelectedElementsByGroup(
     selectedElements,
     scene.getNonDeletedElementsMap(),
     appState,
@@ -50,7 +50,7 @@ export const alignElements = (
 };
 
 const calculateTranslation = (
-  group: ExcalidrawElement[],
+  group: FcboardElement[],
   selectionBoundingBox: BoundingBox,
   { axis, position }: Alignment,
 ): { x: number; y: number } => {

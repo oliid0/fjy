@@ -1,10 +1,10 @@
 import { getCommonBounds } from "./bounds";
 import { type ElementUpdate, newElementWith } from "./mutateElement";
 
-import type { ExcalidrawElement } from "./types";
+import type { FcboardElement } from "./types";
 
 // TODO rewrite (mostly vibe-coded)
-export const positionElementsOnGrid = <TElement extends ExcalidrawElement>(
+export const positionElementsOnGrid = <TElement extends FcboardElement>(
   elements: TElement[] | TElement[][],
   centerX: number,
   centerY: number,

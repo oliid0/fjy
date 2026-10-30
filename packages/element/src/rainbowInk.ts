@@ -1,6 +1,6 @@
 import { getElementAbsoluteCoords } from "./bounds";
 
-import type { ExcalidrawFreeDrawElement } from "./types";
+import type { FcboardFreeDrawElement } from "./types";
 
 /** HRainbowCurveObject: one board-wide, clamped horizontal gradient. */
 export const rainbowInkStops = [
@@ -19,7 +19,7 @@ export const rainbowInkStops = [
 ] as const;
 
 export const rainbowInkCoordinates = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
 ): [number, number, number, number] | null => {
   const rainbow = element.customData?.fcInk?.rainbow;
   if (

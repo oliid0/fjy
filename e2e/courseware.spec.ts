@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
-import { dictateQuestion } from "./question";
+import { writeQuestion } from "./question";
 
 import type { Page } from "@playwright/test";
 
@@ -31,7 +31,7 @@ const ask = async (page: Page, text: string) => {
   } else {
     await selectMenu(page, "提问与讲解");
   }
-  await dictateQuestion(page, text);
+  await writeQuestion(page, text);
 };
 
 for (const name of [
@@ -131,7 +131,7 @@ test("new boards preserve previous work and replace the old material library wit
   ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
-  const editor = page.locator("textarea.excalidraw-wysiwyg");
+  const editor = page.locator("textarea.fcboard-wysiwyg");
   await editor.fill("第一块白板");
   await editor.press("Escape");
   await page.getByRole("button", { name: "新建白板", exact: true }).click();
@@ -280,7 +280,7 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   ).toBeEnabled();
   await page.keyboard.press("t");
   await page.mouse.click(180, 160);
-  const editor = page.locator("textarea.excalidraw-wysiwyg");
+  const editor = page.locator("textarea.fcboard-wysiwyg");
   await editor.fill("题目：x+1=3");
   await editor.press("Escape");
   await ask(page, "请讲解一元一次方程");
@@ -301,7 +301,7 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   await expect
     .poll(() =>
       page.evaluate(() =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+        JSON.parse(localStorage.getItem("fcboard") || "[]").some(
           (element: { type: string; text?: string }) =>
             element.type === "text" && element.text === "两边同时减去1",
         ),
@@ -311,7 +311,7 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   await expect
     .poll(() =>
       page.evaluate(() =>
-        JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+        JSON.parse(localStorage.getItem("fcboard") || "[]").some(
           (element: { type: string; opacity?: number }) =>
             element.type === "image" && element.opacity === 100,
         ),

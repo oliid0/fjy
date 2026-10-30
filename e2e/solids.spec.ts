@@ -23,7 +23,7 @@ for (const [kind, width, height, nets, face] of [
     await page.mouse.up();
     const solid = () =>
       page.evaluate(() => {
-        const elements = JSON.parse(localStorage.getItem("excalidraw") || "[]");
+        const elements = JSON.parse(localStorage.getItem("fcboard") || "[]");
         return elements.find(
           (element: {
             isDeleted?: boolean;
@@ -48,7 +48,7 @@ for (const [kind, width, height, nets, face] of [
         customData?: { fcWidget?: { id: string } };
       };
       const elements: Part[] = JSON.parse(
-        localStorage.getItem("excalidraw") || "[]",
+        localStorage.getItem("fcboard") || "[]",
       );
       const id = elements.find(
         (element) => !element.isDeleted && element.customData?.fcWidget,
@@ -87,9 +87,7 @@ for (const [kind, width, height, nets, face] of [
           y: centerY + (x - centerX) * sine + (y - centerY) * cosine,
         }));
       });
-      const state = JSON.parse(
-        localStorage.getItem("excalidraw-state") || "{}",
-      );
+      const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
       const zoom = state.zoom?.value || 1;
       const canvas = document
         .querySelector("canvas.interactive")!
@@ -141,7 +139,7 @@ for (const [kind, width, height, nets, face] of [
       .poll(() =>
         page.evaluate((ids) => {
           const state = JSON.parse(
-            localStorage.getItem("excalidraw-state") || "{}",
+            localStorage.getItem("fcboard-state") || "{}",
           );
           const selected = state.selectedElementIds || {};
           return (
@@ -159,7 +157,7 @@ for (const [kind, width, height, nets, face] of [
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     const doubleClickFace = async () => {
       const point = await page.evaluate((face) => {
-        const elements = JSON.parse(localStorage.getItem("excalidraw") || "[]");
+        const elements = JSON.parse(localStorage.getItem("fcboard") || "[]");
         const element = elements.find(
           (item: {
             isDeleted?: boolean;
@@ -169,9 +167,7 @@ for (const [kind, width, height, nets, face] of [
         if (!element?.points?.length) {
           throw new Error("Solid face not persisted");
         }
-        const state = JSON.parse(
-          localStorage.getItem("excalidraw-state") || "{}",
-        );
+        const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
         const center = element.points.reduce(
           (sum: number[], p: number[]) => [sum[0] + p[0], sum[1] + p[1]],
           [0, 0],

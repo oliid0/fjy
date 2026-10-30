@@ -1,4 +1,4 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -23,24 +23,21 @@ import {
   reduceToCommonValue,
   invariant,
   FONT_SIZES,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import { canBecomePolygon, getNonDeletedElements } from "@excalidraw/element";
+import { canBecomePolygon, getNonDeletedElements } from "@fcboard/element";
 
 import {
   bindBindingElement,
   calculateFixedPointForElbowArrowBinding,
   updateBoundElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { LinearElementEditor } from "@excalidraw/element";
+import { LinearElementEditor } from "@fcboard/element";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElementWith } from "@fcboard/element";
 
-import {
-  getBoundTextElement,
-  redrawTextBoundingBox,
-} from "@excalidraw/element";
+import { getBoundTextElement, redrawTextBoundingBox } from "@fcboard/element";
 
 import {
   isArrowElement,
@@ -50,35 +47,35 @@ import {
   isLineElement,
   isTextElement,
   isUsingAdaptiveRadius,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { hasStrokeColor } from "@excalidraw/element";
+import { hasStrokeColor } from "@fcboard/element";
 
 import {
   updateElbowArrowPoints,
   CaptureUpdateAction,
   toggleLinePolygonState,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { deriveStylesPanelMode } from "@excalidraw/common";
+import { deriveStylesPanelMode } from "@fcboard/common";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@fcboard/math";
 
 import type {
   Arrowhead,
   ElementsMap,
-  ExcalidrawBindableElement,
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
+  FcboardBindableElement,
+  FcboardElement,
+  FcboardLinearElement,
+  FcboardTextElement,
   FontFamilyValues,
   TextAlign,
   VerticalAlign,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
-import type { CaptureUpdateActionType } from "@excalidraw/element";
+import type { CaptureUpdateActionType } from "@fcboard/element";
 
 import { trackEvent } from "../analytics";
 import { RadioSelection } from "../components/RadioSelection";
@@ -161,9 +158,9 @@ const getStylesPanelInfo = (app: AppClassProperties) => {
 };
 
 export const changeProperty = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: AppState,
-  callback: (element: ExcalidrawElement) => ExcalidrawElement,
+  callback: (element: FcboardElement) => FcboardElement,
   includeBoundText = false,
 ) => {
   const selectedElementIds = arrayToMap(
@@ -184,10 +181,10 @@ export const changeProperty = (
 };
 
 export const getFormValue = function <T extends Primitive>(
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   app: AppClassProperties,
-  getAttribute: (element: ExcalidrawElement) => T,
-  isRelevantElement: true | ((element: ExcalidrawElement) => boolean),
+  getAttribute: (element: FcboardElement) => T,
+  isRelevantElement: true | ((element: FcboardElement) => boolean),
   defaultValue: T | ((isSomeElementSelected: boolean) => T),
 ): T {
   const editingTextElement = app.state.editingTextElement;
@@ -224,8 +221,8 @@ export const getFormValue = function <T extends Primitive>(
 };
 
 const offsetElementAfterFontResize = (
-  prevElement: ExcalidrawTextElement,
-  nextElement: ExcalidrawTextElement,
+  prevElement: FcboardTextElement,
+  nextElement: FcboardTextElement,
   scene: Scene,
 ) => {
   if (isBoundToContainer(nextElement) || !nextElement.autoResize) {
@@ -238,18 +235,18 @@ const offsetElementAfterFontResize = (
         : prevElement.x +
           (prevElement.width - nextElement.width) /
             (prevElement.textAlign === "center" ? 2 : 1),
-    // centering vertically is non-standard, but for Excalidraw I think
+    // centering vertically is non-standard, but for Fcboard I think
     // it makes sense
     y: prevElement.y + (prevElement.height - nextElement.height) / 2,
   });
 };
 
 const changeFontSize = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: AppState,
   app: AppClassProperties,
-  getNewFontSize: (element: ExcalidrawTextElement) => number,
-  fallbackValue?: ExcalidrawTextElement["fontSize"],
+  getNewFontSize: (element: FcboardTextElement) => number,
+  fallbackValue?: FcboardTextElement["fontSize"],
 ) => {
   const newFontSizes = new Set<number>();
 
@@ -261,7 +258,7 @@ const changeFontSize = (
         const newFontSize = getNewFontSize(oldElement);
         newFontSizes.add(newFontSize);
 
-        let newElement: ExcalidrawTextElement = newElementWith(oldElement, {
+        let newElement: FcboardTextElement = newElementWith(oldElement, {
           fontSize: newFontSize,
         });
         redrawTextBoundingBox(
@@ -458,7 +455,7 @@ export const actionChangeBackgroundColor = register<
   },
 });
 
-export const actionChangeFillStyle = register<ExcalidrawElement["fillStyle"]>({
+export const actionChangeFillStyle = register<FcboardElement["fillStyle"]>({
   name: "changeFillStyle",
   label: "labels.fill",
   trackEvent: false,
@@ -540,9 +537,7 @@ export const actionChangeFillStyle = register<ExcalidrawElement["fillStyle"]>({
   },
 });
 
-export const actionChangeStrokeWidth = register<
-  ExcalidrawElement["strokeWidth"]
->({
+export const actionChangeStrokeWidth = register<FcboardElement["strokeWidth"]>({
   name: "changeStrokeWidth",
   label: "labels.strokeWidth",
   trackEvent: false,
@@ -598,7 +593,7 @@ export const actionChangeStrokeWidth = register<
   ),
 });
 
-export const actionChangeSloppiness = register<ExcalidrawElement["roughness"]>({
+export const actionChangeSloppiness = register<FcboardElement["roughness"]>({
   name: "changeSloppiness",
   label: "labels.sloppiness",
   trackEvent: false,
@@ -652,9 +647,7 @@ export const actionChangeSloppiness = register<ExcalidrawElement["roughness"]>({
   ),
 });
 
-export const actionChangeStrokeStyle = register<
-  ExcalidrawElement["strokeStyle"]
->({
+export const actionChangeStrokeStyle = register<FcboardElement["strokeStyle"]>({
   name: "changeStrokeStyle",
   label: "labels.strokeStyle",
   trackEvent: false,
@@ -707,7 +700,7 @@ export const actionChangeStrokeStyle = register<
   ),
 });
 
-export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
+export const actionChangeOpacity = register<FcboardElement["opacity"]>({
   name: "changeOpacity",
   label: "labels.opacity",
   trackEvent: false,
@@ -731,100 +724,98 @@ export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
   ),
 });
 
-export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
-  {
-    name: "changeFontSize",
-    label: "labels.fontSize",
-    trackEvent: false,
-    perform: (elements, appState, value, app) => {
-      return changeFontSize(
-        elements,
-        appState,
-        app,
-        () => {
-          invariant(value, "actionChangeFontSize: Expected a font size value");
-          return value;
-        },
-        value,
-      );
-    },
-    PanelComponent: ({ elements, appState, updateData, app, data }) => {
-      const { isCompact } = getStylesPanelInfo(app);
-
-      return (
-        <fieldset>
-          <legend>{t("labels.fontSize")}</legend>
-          <div className="buttonList">
-            <RadioSelection
-              group="font-size"
-              options={[
-                {
-                  value: FONT_SIZES.sm,
-                  text: t("labels.small"),
-                  icon: FontSizeSmallIcon,
-                  testId: "fontSize-small",
-                },
-                {
-                  value: FONT_SIZES.md,
-                  text: t("labels.medium"),
-                  icon: FontSizeMediumIcon,
-                  testId: "fontSize-medium",
-                },
-                {
-                  value: FONT_SIZES.lg,
-                  text: t("labels.large"),
-                  icon: FontSizeLargeIcon,
-                  testId: "fontSize-large",
-                },
-                {
-                  value: FONT_SIZES.xl,
-                  text: t("labels.veryLarge"),
-                  icon: FontSizeExtraLargeIcon,
-                  testId: "fontSize-veryLarge",
-                },
-              ]}
-              value={getFormValue(
-                elements,
-                app,
-                (element) => {
-                  if (isTextElement(element)) {
-                    return element.fontSize;
-                  }
-                  const boundTextElement = getBoundTextElement(
-                    element,
-                    app.scene.getNonDeletedElementsMap(),
-                  );
-                  if (boundTextElement) {
-                    return boundTextElement.fontSize;
-                  }
-                  return null;
-                },
-                (element) =>
-                  isTextElement(element) ||
-                  getBoundTextElement(
-                    element,
-                    app.scene.getNonDeletedElementsMap(),
-                  ) !== null,
-                (hasSelection) =>
-                  hasSelection
-                    ? null
-                    : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
-              )}
-              onChange={(value) => {
-                withCaretPositionPreservation(
-                  () => updateData(value),
-                  isCompact,
-                  !!appState.editingTextElement,
-                  data?.onPreventClose,
-                );
-              }}
-            />
-          </div>
-        </fieldset>
-      );
-    },
+export const actionChangeFontSize = register<FcboardTextElement["fontSize"]>({
+  name: "changeFontSize",
+  label: "labels.fontSize",
+  trackEvent: false,
+  perform: (elements, appState, value, app) => {
+    return changeFontSize(
+      elements,
+      appState,
+      app,
+      () => {
+        invariant(value, "actionChangeFontSize: Expected a font size value");
+        return value;
+      },
+      value,
+    );
   },
-);
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const { isCompact } = getStylesPanelInfo(app);
+
+    return (
+      <fieldset>
+        <legend>{t("labels.fontSize")}</legend>
+        <div className="buttonList">
+          <RadioSelection
+            group="font-size"
+            options={[
+              {
+                value: FONT_SIZES.sm,
+                text: t("labels.small"),
+                icon: FontSizeSmallIcon,
+                testId: "fontSize-small",
+              },
+              {
+                value: FONT_SIZES.md,
+                text: t("labels.medium"),
+                icon: FontSizeMediumIcon,
+                testId: "fontSize-medium",
+              },
+              {
+                value: FONT_SIZES.lg,
+                text: t("labels.large"),
+                icon: FontSizeLargeIcon,
+                testId: "fontSize-large",
+              },
+              {
+                value: FONT_SIZES.xl,
+                text: t("labels.veryLarge"),
+                icon: FontSizeExtraLargeIcon,
+                testId: "fontSize-veryLarge",
+              },
+            ]}
+            value={getFormValue(
+              elements,
+              app,
+              (element) => {
+                if (isTextElement(element)) {
+                  return element.fontSize;
+                }
+                const boundTextElement = getBoundTextElement(
+                  element,
+                  app.scene.getNonDeletedElementsMap(),
+                );
+                if (boundTextElement) {
+                  return boundTextElement.fontSize;
+                }
+                return null;
+              },
+              (element) =>
+                isTextElement(element) ||
+                getBoundTextElement(
+                  element,
+                  app.scene.getNonDeletedElementsMap(),
+                ) !== null,
+              (hasSelection) =>
+                hasSelection
+                  ? null
+                  : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
+            )}
+            onChange={(value) => {
+              withCaretPositionPreservation(
+                () => updateData(value),
+                isCompact,
+                !!appState.editingTextElement,
+                data?.onPreventClose,
+              );
+            }}
+          />
+        </div>
+      </fieldset>
+    );
+  },
+});
 
 export const actionDecreaseFontSize = register({
   name: "decreaseFontSize",
@@ -955,7 +946,7 @@ export const actionChangeFontFamily = register<{
           i < selectedTextElements.length &&
           textLengthAccumulator < 5000
         ) {
-          const textElement = selectedTextElements[i] as ExcalidrawTextElement;
+          const textElement = selectedTextElements[i] as FcboardTextElement;
           textLengthAccumulator += textElement?.originalText.length || 0;
           i++;
         }
@@ -976,8 +967,8 @@ export const actionChangeFontFamily = register<{
 
     if (nextFontFamily && !skipOnHoverRender) {
       const elementContainerMapping = new Map<
-        ExcalidrawTextElement,
-        ExcalidrawElement | null
+        FcboardTextElement,
+        FcboardElement | null
       >();
       let uniqueChars = new Set<string>();
       let skipFontFaceCheck = false;
@@ -1008,7 +999,7 @@ export const actionChangeFontFamily = register<{
               (oldElement.fontFamily !== nextFontFamily ||
                 currentItemFontFamily) // force update on selection
             ) {
-              const newElement: ExcalidrawTextElement = newElementWith(
+              const newElement: FcboardTextElement = newElementWith(
                 oldElement,
                 {
                   fontFamily: nextFontFamily,
@@ -1069,7 +1060,7 @@ export const actionChangeFontFamily = register<{
             if (latestElement) {
               // trigger async redraw
               redrawTextBoundingBox(
-                latestElement as ExcalidrawTextElement,
+                latestElement as FcboardTextElement,
                 latestContainer,
                 app.scene,
               );
@@ -1094,7 +1085,7 @@ export const actionChangeFontFamily = register<{
 
     const selectedFontFamily = useMemo(() => {
       const getFontFamily = (
-        elementsArray: readonly ExcalidrawElement[],
+        elementsArray: readonly FcboardElement[],
         elementsMap: ElementsMap,
       ) =>
         getFormValue(
@@ -1279,10 +1270,9 @@ export const actionChangeTextAlign = register<TextAlign>({
         appState,
         (oldElement) => {
           if (isTextElement(oldElement)) {
-            const newElement: ExcalidrawTextElement = newElementWith(
-              oldElement,
-              { textAlign: value },
-            );
+            const newElement: FcboardTextElement = newElementWith(oldElement, {
+              textAlign: value,
+            });
             redrawTextBoundingBox(
               newElement,
               app.scene.getContainerElement(oldElement),
@@ -1380,10 +1370,9 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
         appState,
         (oldElement) => {
           if (isTextElement(oldElement)) {
-            const newElement: ExcalidrawTextElement = newElementWith(
-              oldElement,
-              { verticalAlign: value },
-            );
+            const newElement: FcboardTextElement = newElementWith(oldElement, {
+              verticalAlign: value,
+            });
 
             redrawTextBoundingBox(
               newElement,
@@ -1642,12 +1631,12 @@ export const actionChangeArrowhead = register<{
           const { position, type } = value;
 
           if (position === "start") {
-            const element: ExcalidrawLinearElement = newElementWith(el, {
+            const element: FcboardLinearElement = newElementWith(el, {
               startArrowhead: type,
             });
             return element;
           } else if (position === "end") {
-            const element: ExcalidrawLinearElement = newElementWith(el, {
+            const element: FcboardLinearElement = newElementWith(el, {
               endArrowhead: type,
             });
             return element;
@@ -1813,12 +1802,12 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
           newElement.startBinding &&
           (elementsMap.get(
             newElement.startBinding.elementId,
-          ) as ExcalidrawBindableElement);
+          ) as FcboardBindableElement);
         const endElement =
           newElement.endBinding &&
           (elementsMap.get(
             newElement.endBinding.elementId,
-          ) as ExcalidrawBindableElement);
+          ) as FcboardBindableElement);
 
         const startBinding =
           startElement && newElement.startBinding
@@ -1868,7 +1857,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
         if (newElement.startBinding) {
           const startElement = elementsMap.get(
             newElement.startBinding.elementId,
-          ) as ExcalidrawBindableElement;
+          ) as FcboardBindableElement;
           if (startElement) {
             bindBindingElement(
               newElement,
@@ -1882,7 +1871,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
         if (newElement.endBinding) {
           const endElement = elementsMap.get(
             newElement.endBinding.elementId,
-          ) as ExcalidrawBindableElement;
+          ) as FcboardBindableElement;
           if (endElement) {
             bindBindingElement(
               newElement,
@@ -1910,7 +1899,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
       const selected = newElements.find((el) => el.id === selectedId);
       if (selected) {
         newState.selectedLinearElement = new LinearElementEditor(
-          selected as ExcalidrawLinearElement,
+          selected as FcboardLinearElement,
           arrayToMap(elements),
         );
       }

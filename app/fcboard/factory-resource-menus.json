@@ -1,0 +1,471 @@
+{
+  "source": {
+    "providerSha256": "09c3169ad54f430f5a3d43fef3579717bb041dc4fc5ea0fbfa24fe874338c5ae",
+    "layoutSha256": "c2fe9552e9071335fc3bf34720c2f111208f9ff7463d2d8f714c28173a186384"
+  },
+  "subjects": [
+    {
+      "id": "math",
+      "titleKey": "teach_res_menu_math",
+      "sections": [
+        {
+          "id": "experiment",
+          "titleKey": "teach_res_sub_math_experiment",
+          "tabs": [
+            {
+              "id": "concept",
+              "titleKey": "teach_res_tab_math_concept",
+              "items": [
+                "math:teach_res_math_concept_number_compare__898f39d4",
+                "math:teach_res_math_concept_number_play__087380cf",
+                "math:teach_res_math_concept_number_line_distance__d5f8e342",
+                "math:teach_res_math_concept_draw_slope_intercept__4afa3545",
+                "math:teach_res_math_concept_number_line_operations__5b860dc7",
+                "math:teach_res_math_concept_number_line_integers__99a6d4ce",
+                "math:teach_res_math_concept_vector_addition_equations__81bc3ace",
+                "math:teach_res_math_concept_vector_addition__3e8971ea",
+                "math:teach_res_math_concept_fractions_mixed_numbers__57484777",
+                "math:teach_res_math_concept_fractions_intro__7b867f4b",
+                "math:teach_res_math_concept_build_a_fraction__495066fc",
+                "math:teach_res_math_concept_fractions_equality__495066fc",
+                "math:teach_res_math_concept_graphing_quadratics__a14d09b2",
+                "math:teach_res_math_concept_equality_explorer_two_variables__80b519e7",
+                "math:teach_res_math_concept_equality_explorer_basics__8742f2fc",
+                "math:teach_res_math_concept_equality_explorer__2d8941ea",
+                "math:teach_res_math_concept_area_model_algebra__d00f1316",
+                "math:teach_res_math_concept_area_model_decimals__dc01b931",
+                "math:teach_res_math_concept_area_model_multiplication__74c4bfcb",
+                "math:teach_res_math_concept_area_model_introduction__18fd32b0",
+                "math:teach_res_math_concept_expression_exchange__dad5cbaa",
+                "math:teach_res_math_concept_graphing_slope_intercept__c732e403",
+                "math:teach_res_math_concept_function_builder_basics__ef33f7d9",
+                "math:teach_res_math_concept_proportion_playground__5648938b",
+                "math:teach_res_math_concept_unit_rates__130ac055",
+                "math:teach_res_math_concept_make_a_ten__0d1f12c0",
+                "math:teach_res_math_concept_plinko_probability__089fea0c",
+                "math:teach_res_math_concept_function_builder__08005a79",
+                "math:teach_res_math_concept_trig_tour__6e913a15",
+                "math:teach_res_math_concept_arithmetic__93f2b489",
+                "math:teach_res_math_concept_least_squares_regression__9d50eb8c",
+                "math:teach_res_math_concept_area_builder__ef9253e8",
+                "math:teach_res_math_concept_fraction_matcher__0346765f",
+                "math:teach_res_math_concept_graphing_lines__d69ebe5e"
+              ]
+            },
+            {
+              "id": "application",
+              "titleKey": "teach_res_tab_math_application",
+              "items": [
+                "math:teach_res_math_application_curve_fitting__61eed959",
+                "math:teach_res_math_application_masses_and_springs__1b326545",
+                "math:teach_res_math_application_pendulum_lab__a39ca5da",
+                "math:teach_res_math_application_projectile_motion__cd0a00a8",
+                "math:teach_res_math_application_wave_on_a_string__2169feb1",
+                "math:teach_res_math_application_balancing_act__2830e4cf",
+                "math:teach_res_math_application_ohms_law__8ee92a45",
+                "math:teach_res_math_application_resistance_in_a_wire__17f410d9"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "tool",
+          "titleKey": "teach_res_sub_math_tool",
+          "items": ["math:teach_res_math_tool_function", "math:teach_res_math_tool_statistics_chart", "math:teach_res_math_tool_random_number"]
+        }
+      ]
+    },
+    {
+      "id": "physics",
+      "titleKey": "str_physics",
+      "sections": [
+        {
+          "id": "experiment",
+          "titleKey": "teach_res_sub_physics_experiment",
+          "tabs": [
+            {
+              "id": "1",
+              "titleKey": "teach_res_tab_physics_electric_circuit",
+              "items": [
+                "physics:teach_res_item_ohms_law__8ee92a45",
+                "physics:teach_res_item_charges_and_fields__34f9f9d2",
+                "physics:teach_res_item_circuit_construction_dc__eb5c0106",
+                "physics:teach_res_item_circuit_construction_dc_virtual__8725bd0c",
+                "physics:teach_res_item_capacitor_lab_basics__45094eee",
+                "physics:teach_res_item_resistance_in_a_wire__17f410d9",
+                "physics:teach_res_item_faradays_law__7a9bc93e",
+                "physics:teach_res_item_john_travoltage__7a1958ff",
+                "physics:teach_res_item_coulombs_law__80737b48",
+                "physics:teach_res_item_balloons_static_electricity__a82653cf"
+              ]
+            },
+            {
+              "id": "2",
+              "titleKey": "teach_res_tab_physics_work_energy_power",
+              "items": [
+                "physics:teach_res_item_hookes_law__ba2fc4ef",
+                "physics:teach_res_item_energy_forms_changes__4ed8405c",
+                "physics:teach_res_item_energy_skate_park__edcb7dfa",
+                "physics:teach_res_item_energy_skate_park_basics__a240afa4",
+                "physics:teach_res_item_gas_properties__39aaddc0",
+                "physics:teach_res_item_masses_and_springs__1b326545",
+                "physics:teach_res_item_pendulum_lab__a39ca5da"
+              ]
+            },
+            {
+              "id": "3",
+              "titleKey": "teach_res_tab_physics_light_radiation",
+              "items": [
+                "physics:teach_res_physics_light_wave_interference__685844bc",
+                "physics:teach_res_physics_light_waves_intro__fa5f853d",
+                "physics:teach_res_physics_light_molecules_and_light__5de94fff",
+                "physics:teach_res_physics_light_color_vision__d8c89f8b",
+                "physics:teach_res_physics_light_bending_light__d15cc06d",
+                "physics:teach_res_physics_light_blackbody_radiation__09de1388",
+                "physics:teach_res_physics_light_geometric_optics__ad01da05"
+              ]
+            },
+            {
+              "id": "4",
+              "titleKey": "teach_res_tab_physics_quantum",
+              "items": ["physics:teach_res_physics_quantum_blackbody_radiation__09de1388", "physics:teach_res_physics_quantum_rutherford_scattering__1bd1c5ee"]
+            },
+            {
+              "id": "5",
+              "titleKey": "teach_res_tab_physics_heat",
+              "items": [
+                "physics:teach_res_physics_heat_plinko_probability__30e10246",
+                "physics:teach_res_physics_heat_diffusion__937cfada",
+                "physics:teach_res_physics_heat_friction__6b780564",
+                "physics:teach_res_physics_heat_energy_forms_changes__4ed8405c",
+                "physics:teach_res_physics_heat_gases_intro__a09d9abd",
+                "physics:teach_res_physics_heat_gas_properties__39aaddc0",
+                "physics:teach_res_physics_heat_states_of_matter__ee513f21",
+                "physics:teach_res_physics_heat_states_of_matter_basics__202988f0",
+                "physics:teach_res_physics_heat_atomic_interactions__6e0c40ef"
+              ]
+            },
+            {
+              "id": "6",
+              "titleKey": "teach_res_tab_physics_sound_wave",
+              "items": ["physics:teach_res_physics_wave_interference__685844bc", "physics:teach_res_physics_wave_waves_intro__fa5f853d", "physics:teach_res_physics_wave_on_a_string__2169feb1"]
+            },
+            {
+              "id": "7",
+              "titleKey": "teach_res_tab_physics_motion",
+              "items": [
+                "physics:teach_res_physics_motion_hookes_law__ba2fc4ef",
+                "physics:teach_res_physics_motion_forces_motion_basics__805815ac",
+                "physics:teach_res_physics_motion_friction__6b780564",
+                "physics:teach_res_physics_motion_energy_skate_park__edcb7dfa",
+                "physics:teach_res_physics_motion_energy_skate_park_basics__a240afa4",
+                "physics:teach_res_physics_motion_collision_lab__d81f0a0b",
+                "physics:teach_res_physics_motion_balancing_act__2830e4cf",
+                "physics:teach_res_physics_motion_gravity_force_lab__5ee9b2ad",
+                "physics:teach_res_physics_motion_vector_addition__2bef2089",
+                "physics:teach_res_physics_motion_projectile_motion__cd0a00a8",
+                "physics:teach_res_physics_motion_gravity_force_lab_basics__d28a0f37",
+                "physics:teach_res_physics_motion_masses_and_springs__1b326545"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "mechanics",
+          "titleKey": "teach_res_sub_mechanics_principle",
+          "items": [
+            "physics:teach_res_mechanics_gravity__force_gravity",
+            "physics:teach_res_mechanics_support_force__force_support",
+            "physics:teach_res_mechanics_friction__force_friction",
+            "physics:teach_res_mechanics_fulcrum__force_fulcrum",
+            "physics:teach_res_mechanics_power_arm__force_power_arm",
+            "physics:teach_res_mechanics_resistance_arm__force_resistance_arm",
+            "physics:teach_res_mechanics_pulley_force__force_pulley"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chemistry",
+      "titleKey": "str_chemistry",
+      "sections": [
+        {
+          "id": "experiment",
+          "titleKey": "teach_res_sub_chemistry_experiment",
+          "tabs": [
+            {
+              "id": "1",
+              "titleKey": "teach_res_tab_chemistry_normal",
+              "items": [
+                "chemistry:teach_res_chemistry_normal_beers_law_lab__d693a621",
+                "chemistry:teach_res_chemistry_normal_gases_intro__a09d9abd",
+                "chemistry:teach_res_chemistry_normal_gas_properties__39aaddc0",
+                "chemistry:teach_res_chemistry_normal_balloons_static_electricity__a82653cf",
+                "chemistry:teach_res_chemistry_normal_concentration__2ed20bb4",
+                "chemistry:teach_res_chemistry_normal_states_of_matter__ee513f21",
+                "chemistry:teach_res_chemistry_normal_states_of_matter_basics__202988f0",
+                "chemistry:teach_res_chemistry_normal_wave_on_a_string__2169feb1",
+                "chemistry:teach_res_chemistry_normal_energy_forms_changes__4ed8405c",
+                "chemistry:teach_res_chemistry_normal_balancing_chemical_equations__4955a18c",
+                "chemistry:teach_res_chemistry_normal_acid_base_solutions__4b0df8a2"
+              ]
+            },
+            {
+              "id": "2",
+              "titleKey": "teach_res_tab_chemistry_quantum",
+              "items": ["chemistry:teach_res_item_blackbody_radiation__09de1388"]
+            }
+          ]
+        },
+        {
+          "id": "equipment",
+          "titleKey": "teach_res_sub_chemistry_equipment",
+          "items": [
+            "chemistry:teach_res_chem_equipment_tube_rack__chem_tool_tube_rack",
+            "chemistry:teach_res_chem_equipment_round_flask__chem_tool_round_flask",
+            "chemistry:teach_res_chem_equipment_beaker__chem_tool_beaker",
+            "chemistry:teach_res_chem_equipment_alcohol_lamp__chem_tool_alcohol_lamp",
+            "chemistry:teach_res_chem_equipment_conical_flask__chem_tool_conical_flask",
+            "chemistry:teach_res_chem_equipment_test_tube__chem_tool_test_tube",
+            "chemistry:teach_res_chem_equipment_dropper__chem_tool_dropper",
+            "chemistry:teach_res_chem_equipment_funnel__chem_tool_funnel"
+          ]
+        },
+        {
+          "id": "molecule",
+          "titleKey": "teach_res_sub_molecule_structure",
+          "items": [
+            "chemistry:teach_res_molecule_methane__molecule_methane",
+            "chemistry:teach_res_molecule_ethylene__molecule_ethylene",
+            "chemistry:teach_res_molecule_benzene__molecule_benzene",
+            "chemistry:teach_res_molecule_acetylene__molecule_acetylene",
+            "chemistry:teach_res_molecule_ethane__molecule_ethane",
+            "chemistry:teach_res_molecule_ethanol__molecule_ethanol",
+            "chemistry:teach_res_molecule_formaldehyde__molecule_formaldehyde"
+          ]
+        },
+        {
+          "id": "tool",
+          "titleKey": "teach_res_sub_chemistry_tool",
+          "items": ["chemistry:str_periodic_table"]
+        }
+      ]
+    },
+    {
+      "id": "biology",
+      "titleKey": "str_biology",
+      "sections": [
+        {
+          "id": "experiment",
+          "titleKey": "teach_res_sub_biology_experiment",
+          "items": [
+            "biology:teach_res_item_ph_value__f36c2f7c",
+            "biology:teach_res_item_color_vision__d8c89f8b",
+            "biology:teach_res_item_molecule_polarity__7b09eca4",
+            "biology:teach_res_item_gene_expression_essentials__4a3a59d5",
+            "biology:teach_res_item_density__05bfb977",
+            "biology:teach_res_item_neuron__3d9b96eb",
+            "biology:teach_res_item_natural_selection__300124db"
+          ]
+        },
+        {
+          "id": "cell",
+          "titleKey": "teach_res_sub_cell_structure",
+          "items": [
+            "biology:teach_res_item_cell_nucleus__cell_structure_nucleus",
+            "biology:teach_res_item_cell_membrane__cell_structure_membrane",
+            "biology:teach_res_item_chloroplast__cell_structure_chloroplast",
+            "biology:teach_res_item_vacuole__cell_structure_vacuole",
+            "biology:teach_res_item_ribosome__cell_structure_ribosome",
+            "biology:teach_res_item_golgi_apparatus__cell_structure_golgi_apparatus",
+            "biology:teach_res_item_mitochondrion__cell_structure_mitochondrion",
+            "biology:teach_res_item_lysosome__cell_structure_lysosome",
+            "biology:teach_res_item_cell_structure_front__cell_structure_front"
+          ]
+        },
+        {
+          "id": "digestive",
+          "titleKey": "teach_res_sub_digestive_system",
+          "items": [
+            "biology:teach_res_item_mouth__digestive_mouth",
+            "biology:teach_res_item_large_intestine__digestive_large_intestine",
+            "biology:teach_res_item_small_intestine__digestive_small_intestine",
+            "biology:teach_res_item_esophagus__digestive_esophagus",
+            "biology:teach_res_item_stomach__digestive_stomach",
+            "biology:teach_res_item_pancreas__digestive_pancreas",
+            "biology:teach_res_item_gallbladder__digestive_gallbladder",
+            "biology:teach_res_item_duodenum__digestive_duodenum"
+          ]
+        },
+        {
+          "id": "organs",
+          "titleKey": "teach_res_sub_body_organs",
+          "items": [
+            "biology:teach_res_item_eyes__body_eyes",
+            "biology:teach_res_item_thyroid__body_thyroid",
+            "biology:teach_res_item_lungs__body_lungs",
+            "biology:teach_res_item_heart__body_heart",
+            "biology:teach_res_item_stomach__body_stomach",
+            "biology:teach_res_item_liver__body_liver",
+            "biology:teach_res_item_intestines__body_intestines",
+            "biology:teach_res_item_bladder__body_bladder",
+            "biology:teach_res_item_male_reproductive_organ__body_male_reproductive_organ",
+            "biology:teach_res_item_female_reproductive_organ__body_female_reproductive_organ"
+          ]
+        },
+        {
+          "id": "division",
+          "titleKey": "teach_res_sub_cell_division",
+          "groups": [
+            {
+              "titleKey": "teach_res_group_mitosis_cell_diagram",
+              "items": [
+                "biology:teach_res_item_interphase__cell_division_mitosis_interphase",
+                "biology:teach_res_item_prophase__cell_division_mitosis_prophase",
+                "biology:teach_res_item_metaphase__cell_division_mitosis_metaphase",
+                "biology:teach_res_item_anaphase__cell_division_mitosis_anaphase",
+                "biology:teach_res_item_telophase__cell_division_mitosis_telophase"
+              ]
+            },
+            {
+              "titleKey": "teach_res_group_meiosis_first_division",
+              "items": [
+                "biology:teach_res_item_interphase__cell_division_meiosis1_interphase",
+                "biology:teach_res_item_prophase__cell_division_meiosis1_prophase",
+                "biology:teach_res_item_metaphase__cell_division_meiosis1_metaphase",
+                "biology:teach_res_item_anaphase__cell_division_meiosis1_anaphase",
+                "biology:teach_res_item_telophase__cell_division_meiosis1_telophase"
+              ]
+            },
+            {
+              "titleKey": "teach_res_group_meiosis_second_division",
+              "items": [
+                "biology:teach_res_item_prophase__cell_division_meiosis2_prophase",
+                "biology:teach_res_item_metaphase__cell_division_meiosis2_metaphase",
+                "biology:teach_res_item_anaphase__cell_division_meiosis2_anaphase",
+                "biology:teach_res_item_telophase__cell_division_meiosis2_telophase"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "natural",
+          "titleKey": "teach_res_sub_natural_biology",
+          "groups": [
+            {
+              "titleKey": "teach_res_group_sunflower_growth_process",
+              "items": [
+                "biology:teach_res_item_seed_germination_stage__natural_sunflower_seed_germination",
+                "biology:teach_res_item_cotyledon_seedling__natural_sunflower_cotyledon_seedling",
+                "biology:teach_res_item_true_leaf_growth_stage__natural_sunflower_true_leaf_growth",
+                "biology:teach_res_item_flower_bud_differentiation__natural_sunflower_flower_bud_differentiation",
+                "biology:teach_res_item_bud_formation__natural_sunflower_bud_formation",
+                "biology:teach_res_item_flowering_stage__natural_sunflower_flowering"
+              ]
+            },
+            {
+              "titleKey": "teach_res_group_moss_life_cycle",
+              "items": [
+                "biology:teach_res_item_young_sporophyte_development__natural_moss_young_sporophyte",
+                "biology:teach_res_item_gametophyte_stage__natural_moss_gametophyte",
+                "biology:teach_res_item_spore_germination__natural_moss_spore_germination",
+                "biology:teach_res_item_sporophyte_stage__natural_moss_sporophyte"
+              ]
+            },
+            {
+              "titleKey": "teach_res_group_frog_metamorphosis",
+              "items": [
+                "biology:teach_res_item_fertilized_egg_stage__natural_frog_fertilized_egg",
+                "biology:teach_res_item_blastula_stage__natural_frog_blastula",
+                "biology:teach_res_item_gastrula_stage__natural_frog_gastrula",
+                "biology:teach_res_item_tadpole_hatching_stage__natural_frog_tadpole",
+                "biology:teach_res_item_limb_development_stage__natural_frog_limb_development",
+                "biology:teach_res_item_young_frog_stage__natural_frog_young_frog",
+                "biology:teach_res_item_adult_frog_stage__natural_frog_adult_frog"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "geography_weather",
+      "titleKey": "teach_res_menu_geography",
+      "sections": [
+        {
+          "id": "experiment",
+          "titleKey": "teach_res_sub_geography_experiment",
+          "items": [
+            "geography_weather:teach_res_item_ph_value__f36c2f7c",
+            "geography_weather:teach_res_item_gravity_force_lab__5ee9b2ad",
+            "geography_weather:teach_res_item_molecules_and_light__5de94fff",
+            "geography_weather:teach_res_item_under_pressure__93eedae6",
+            "geography_weather:teach_res_item_density__05bfb977",
+            "geography_weather:teach_res_item_gravity_force_lab_basics__d28a0f37",
+            "geography_weather:teach_res_item_diffusion__937cfada",
+            "geography_weather:teach_res_item_gases_intro__a09d9abd",
+            "geography_weather:teach_res_item_gas_properties__39aaddc0",
+            "geography_weather:teach_res_item_balloons_static_electricity__a82653cf",
+            "geography_weather:teach_res_item_waves_intro__fa5f853d",
+            "geography_weather:teach_res_item_wave_interference__685844bc",
+            "geography_weather:teach_res_item_wave_on_a_string__2169feb1",
+            "geography_weather:teach_res_item_gravity_and_orbits__8d05dee6",
+            "geography_weather:teach_res_item_blackbody_radiation__09de1388"
+          ]
+        },
+        {
+          "id": "tool",
+          "titleKey": "teach_res_sub_geography_tool",
+          "items": [
+            "geography_weather:teach_res_item_earth__geo_tool_earth",
+            "geography_weather:teach_res_item_sun__geo_tool_sun",
+            "geography_weather:teach_res_item_venus__geo_tool_venus",
+            "geography_weather:teach_res_item_jupiter__geo_tool_jupiter",
+            "geography_weather:teach_res_item_mercury__geo_tool_mercury",
+            "geography_weather:teach_res_item_mars__geo_tool_mars",
+            "geography_weather:teach_res_item_saturn__geo_tool_saturn",
+            "geography_weather:teach_res_item_uranus__geo_tool_uranus",
+            "geography_weather:teach_res_item_neptune__geo_tool_neptune"
+          ]
+        },
+        {
+          "id": "weather",
+          "titleKey": "teach_res_sub_weather",
+          "items": [
+            "geography_weather:teach_res_item_sunny__weather_sunny",
+            "geography_weather:teach_res_item_cloud__weather_cloud",
+            "geography_weather:teach_res_item_overcast__weather_overcast",
+            "geography_weather:teach_res_item_light_rain__weather_light_rain",
+            "geography_weather:teach_res_item_moderate_rain__weather_moderate_rain",
+            "geography_weather:teach_res_item_heavy_rain__weather_heavy_rain",
+            "geography_weather:teach_res_item_rainstorm__weather_rainstorm",
+            "geography_weather:teach_res_item_shower__weather_shower",
+            "geography_weather:teach_res_item_thunderstorm__weather_thunderstorm",
+            "geography_weather:teach_res_item_light_snow__weather_light_snow",
+            "geography_weather:teach_res_item_moderate_snow__weather_moderate_snow",
+            "geography_weather:teach_res_item_heavy_snow__weather_heavy_snow",
+            "geography_weather:teach_res_item_sleet__weather_sleet",
+            "geography_weather:teach_res_item_fog__weather_fog",
+            "geography_weather:teach_res_item_clear_night__weather_clear_night",
+            "geography_weather:teach_res_item_cloudy_night__weather_cloudy_night"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "other",
+      "titleKey": "teach_res_menu_other",
+      "items": ["other:teach_res_other_scoreboard"]
+    },
+    {
+      "id": "function",
+      "titleKey": "str_function",
+      "action": "math:teach_res_math_tool_function"
+    },
+    {
+      "id": "web",
+      "titleKey": "teach_res_title_network_resources",
+      "items": ["web:str_baidu", "web:str_xueke", "web:str_geogebra_phet", "web:str_geogebra_gs", "web:str_geogebra_3d_calculator", "web:str_geogebra_sc_calculator"]
+    }
+  ]
+}

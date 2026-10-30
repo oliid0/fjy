@@ -91,7 +91,7 @@
     "untitled": "Tanpa judul",
     "name": "Nama",
     "yourName": "Nama Anda",
-    "madeWithExcalidraw": "Dibuat dengan Fcboard",
+    "madeWithFcboard": "Dibuat dengan Fcboard",
     "group": "Kelompokan pilihan",
     "ungroup": "Pisahkan pilihan",
     "collaborators": "Kolaborator",
@@ -121,7 +121,7 @@
     "toggleTheme": "Toggle tema terang/gelap",
     "theme": "Tema",
     "personalLib": "Pustaka Pribadi",
-    "excalidrawLib": "Pustaka Fcboard",
+    "fcboardlib": "Pustaka Fcboard",
     "decreaseFontSize": "Kecilkan ukuran font",
     "increaseFontSize": "Besarkan ukuran font",
     "unbindText": "Lepas teks",
@@ -320,7 +320,7 @@
     "laser": "Penunjuk laser",
     "hand": "Tangan (alat panning)",
     "extraTools": "Alat-alat lain",
-    "mermaidToExcalidraw": "Mermaid menjadi Fcboard",
+    "mermaidToFcboard": "Mermaid menjadi Fcboard",
     "convertElementType": "Beralih jenis bentuk"
   },
   "element": {

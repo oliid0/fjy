@@ -11,8 +11,8 @@ import { mockThrottleRAF } from "../packages/fcboard/tests/helpers/mocks";
 import { yellow } from "../packages/fcboard/tests/helpers/colorize";
 import { testPolyfills } from "../packages/fcboard/tests/helpers/polyfills";
 
-vi.mock("@excalidraw/common", async (importOriginal) => {
-  const module = await importOriginal<typeof import("@excalidraw/common")>();
+vi.mock("@fcboard/common", async (importOriginal) => {
+  const module = await importOriginal<typeof import("@fcboard/common")>();
 
   return {
     ...module,
@@ -80,30 +80,27 @@ Object.defineProperty(window, "EXCALIDRAW_ASSET_PATH", {
 });
 
 // mock the font fetch only, so that everything else, as font subsetting, can run inside of the (snapshot) tests
-vi.mock(
-  "../packages/fcboard/fonts/ExcalidrawFontFace",
-  async (importOriginal) => {
-    const mod = await importOriginal<
-      typeof import("../packages/fcboard/fonts/ExcalidrawFontFace")
-    >();
-    const ExcalidrawFontFaceImpl = mod.ExcalidrawFontFace;
+vi.mock("../packages/fcboard/fonts/FcboardFontFace", async (importOriginal) => {
+  const mod = await importOriginal<
+    typeof import("../packages/fcboard/fonts/FcboardFontFace")
+  >();
+  const FcboardFontFaceImpl = mod.FcboardFontFace;
 
-    return {
-      ...mod,
-      ExcalidrawFontFace: class extends ExcalidrawFontFaceImpl {
-        public async fetchFont(url: URL): Promise<ArrayBuffer> {
-          if (!url.toString().startsWith("file://")) {
-            return super.fetchFont(url);
-          }
-
-          // read local assets directly, without running a server
-          const content = await fs.promises.readFile(url);
-          return content.buffer;
+  return {
+    ...mod,
+    FcboardFontFace: class extends FcboardFontFaceImpl {
+      public async fetchFont(url: URL): Promise<ArrayBuffer> {
+        if (!url.toString().startsWith("file://")) {
+          return super.fetchFont(url);
         }
-      },
-    };
-  },
-);
+
+        // read local assets directly, without running a server
+        const content = await fs.promises.readFile(url);
+        return content.buffer;
+      }
+    },
+  };
+});
 
 // ReactDOM is located inside index.tsx file
 // as a result, we need a place for it to render into

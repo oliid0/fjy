@@ -1,4 +1,4 @@
-import { VERSIONS } from "@excalidraw/common";
+import { VERSIONS } from "@fcboard/common";
 
 import {
   diamondFixture,
@@ -7,9 +7,9 @@ import {
 } from "./elementFixture";
 
 export const diagramFixture = {
-  type: "excalidraw",
-  version: VERSIONS.excalidraw,
-  source: "https://excalidraw.com",
+  type: "fcboard",
+  version: VERSIONS.fcboard,
+  source: "https://fcboard.com",
   elements: [diamondFixture, ellipseFixture, rectangleFixture],
   appState: {
     viewBackgroundColor: "#ffffff",

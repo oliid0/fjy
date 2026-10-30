@@ -1,4 +1,4 @@
-import { eraseStroke } from "@excalidraw/excalidraw/eraser/stroke";
+import { eraseStroke } from "@fcboard/fcboard/eraser/stroke";
 
 import { handwritingElements, handwritingText } from "./handwriting";
 

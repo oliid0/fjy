@@ -1,10 +1,10 @@
 import {
   clearAppStateForLocalStorage,
   getDefaultAppState,
-} from "@excalidraw/excalidraw/appState";
+} from "@fcboard/fcboard/appState";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { FcboardElement } from "@fcboard/element/types";
+import type { AppState } from "@fcboard/fcboard/types";
 
 import { STORAGE_KEYS } from "../app_constants";
 
@@ -46,7 +46,7 @@ export const importFromLocalStorage = () => {
     console.error(error);
   }
 
-  let elements: ExcalidrawElement[] = [];
+  let elements: FcboardElement[] = [];
   if (savedElements) {
     try {
       elements = JSON.parse(savedElements);

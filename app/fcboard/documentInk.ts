@@ -1,11 +1,11 @@
-import { getFreeDrawSvgPath, newFreeDrawElement } from "@excalidraw/element";
+import { getFreeDrawSvgPath, newFreeDrawElement } from "@fcboard/element";
 import {
   factoryInkDashes,
   factoryInkSamples,
-} from "@excalidraw/element/factoryInk";
-import { factoryBrushSamples } from "@excalidraw/element/factoryBrush";
-import { factoryNibPath } from "@excalidraw/element/factoryNib";
-import { pointFrom } from "@excalidraw/math";
+} from "@fcboard/element/factoryInk";
+import { factoryBrushSamples } from "@fcboard/element/factoryBrush";
+import { factoryNibPath } from "@fcboard/element/factoryNib";
+import { pointFrom } from "@fcboard/math";
 
 import type { InkStroke } from "./documents";
 

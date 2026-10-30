@@ -1,11 +1,11 @@
-import { t } from "@excalidraw/excalidraw/i18n";
-import { Fonts } from "@excalidraw/excalidraw/fonts/Fonts";
-import { getCommonBounds } from "@excalidraw/element";
-import { getNormalizedZoom } from "@excalidraw/excalidraw/scene";
+import { t } from "@fcboard/fcboard/i18n";
+import { Fonts } from "@fcboard/fcboard/fonts/Fonts";
+import { getCommonBounds } from "@fcboard/element";
+import { getNormalizedZoom } from "@fcboard/fcboard/scene";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { registerCanvasCommands } from "./canvasCommands";
 import { classroomCommands } from "./commands";
@@ -266,7 +266,7 @@ it("exposes the original pen modes to AI and validates the complete style reques
     setActiveTool: vi.fn(),
     updateScene: vi.fn(),
     executeAction: vi.fn(),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const stop = registerCanvasCommands(api);
   try {
     await expect(
@@ -322,7 +322,7 @@ it("routes text, shapes, selection and plots into the visible document instead o
       zoom: { value: 1 },
     }),
     updateScene: vi.fn(),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const stop = registerCanvasCommands(api);
   const text = vi.fn();
   const draw = vi.fn();
@@ -335,7 +335,7 @@ it("routes text, shapes, selection and plots into the visible document instead o
     classroomCommands.register("document.select", "@internal", select),
     classroomCommands.register("document.duplicate", "@internal", duplicate),
     classroomCommands.register("document.plot", "@internal", (args) => {
-      strokes = (args.shapes as ExcalidrawElementSkeleton[]).map((shape) =>
+      strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
         shapeInk(shape, "plot"),
       );
     }),
@@ -392,7 +392,7 @@ it("inspects only the visible document with its actual coordinate space and pen 
     getAppState: vi.fn(() => {
       throw new Error("hidden board");
     }),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   const pen = { color: "#123456", penWidth: 3, fontSize: 18, opacity: 80 };
   const stops = [
     classroomCommands.context("document", () => ({

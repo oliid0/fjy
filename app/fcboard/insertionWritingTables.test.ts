@@ -1,5 +1,5 @@
-import { getCommonBounds, newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
 import {
   insertionDefaults,
@@ -117,4 +117,43 @@ it("does not attach old writing or a stroke that starts outside the table", asyn
   const outside = ink(90, 90, 200, 100);
   const scene = [...api.getSceneElements(), old, outside];
   expect(growBoardTableWriting(scene, new Set([outside.id]))).toBe(scene);
+});
+
+it("expands a document table containing a long completed trajectory without treating its samples as table boundaries", async () => {
+  const api = sceneAPI();
+  await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
+  const shapes = api
+    .getSceneElements()
+    .flatMap((element) =>
+      element.type === "rectangle" ||
+      element.type === "line" ||
+      element.type === "text"
+        ? [shapeInk(element, "insertion")]
+        : [],
+    );
+  const attached = growDocumentTableWriting([
+    ...shapes,
+    shapeInk(ink(245, 185, 20, 10), ""),
+  ]);
+  const neighbor = attached.find((stroke) => stroke.insertion?.inkCell === 4)!;
+  const points = Array.from(
+    { length: 150000 },
+    (_, index): [number, number] => [245 + (index % 20), 185 + (index % 10)],
+  );
+  const writing = shapeInk(ink(125, 125, 225, 90), "");
+  const next = growDocumentTableWriting(
+    [
+      ...attached.filter((stroke) => stroke.id !== neighbor.id),
+      { ...neighbor, points },
+      writing,
+    ],
+    new Set([writing.id]),
+  );
+  const moved = next.find((stroke) => stroke.id === neighbor.id)!;
+  expect(moved.points).toHaveLength(150000);
+  expect(moved.points.at(-1)).toEqual([414, 269]);
+  expect(moved.insertion?.columnWidths).toEqual([270, 120, 120]);
+  expect(next.find((stroke) => stroke.id === writing.id)?.points).toEqual(
+    writing.points,
+  );
 });

@@ -91,7 +91,7 @@
     "untitled": "Χωρίς τίτλο",
     "name": "Όνομα",
     "yourName": "Το όνομά σου",
-    "madeWithExcalidraw": "Φτιαγμένο με Fcboard",
+    "madeWithFcboard": "Φτιαγμένο με Fcboard",
     "group": "Δημιουργία ομάδας από επιλογή",
     "ungroup": "Κατάργηση ομάδας από επιλογή",
     "collaborators": "Συνεργάτες",
@@ -121,7 +121,7 @@
     "toggleTheme": "Εναλλαγή φωτεινού/σκοτεινού θέματος",
     "theme": "Θέμα",
     "personalLib": "Προσωπική Βιβλιοθήκη",
-    "excalidrawLib": "Βιβλιοθήκη Fcboard",
+    "fcboardlib": "Βιβλιοθήκη Fcboard",
     "decreaseFontSize": "Μείωση μεγέθους γραμματοσειράς",
     "increaseFontSize": "Αύξηση μεγέθους γραμματοσειράς",
     "unbindText": "Αποσύνδεση κειμένου",
@@ -320,7 +320,7 @@
     "laser": "Δείκτης λέιζερ",
     "hand": "Χέρι (εργαλείο μετακίνησης)",
     "extraTools": "Περισσότερα εργαλεία",
-    "mermaidToExcalidraw": "Mermaid σε Fcboard",
+    "mermaidToFcboard": "Mermaid σε Fcboard",
     "convertElementType": "Εναλλαγή τύπου σχήματος"
   },
   "element": {

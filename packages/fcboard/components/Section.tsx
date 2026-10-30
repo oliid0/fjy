@@ -2,14 +2,14 @@ import React from "react";
 
 import { t } from "../i18n";
 
-import { useExcalidrawContainer } from "./App";
+import { useFcboardContainer } from "./App";
 
 export const Section: React.FC<{
   heading: "canvasActions" | "selectedShapeActions" | "shapes";
   children?: React.ReactNode | ((heading: React.ReactNode) => React.ReactNode);
   className?: string;
 }> = ({ heading, children, ...props }) => {
-  const { id } = useExcalidrawContainer();
+  const { id } = useFcboardContainer();
   const header = (
     <h2 className="visually-hidden" id={`${id}-${heading}-title`}>
       {t(`headings.${heading}`)}

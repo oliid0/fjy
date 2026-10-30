@@ -14,6 +14,7 @@ it("ships every referenced local resource and retains native subjects and online
       "biology",
       "geography_weather",
       "web",
+      "other",
     ]),
   );
   for (const item of catalogue.items) {

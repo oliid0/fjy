@@ -1,13 +1,14 @@
 import {
   CaptureUpdateAction,
-  convertToExcalidrawElements,
-} from "@excalidraw/excalidraw";
-import { pointFrom } from "@excalidraw/math";
-import { getCommonBounds } from "@excalidraw/element";
-import { t } from "@excalidraw/excalidraw/i18n";
+  convertToFcboardElements,
+} from "@fcboard/fcboard";
+import { pointFrom } from "@fcboard/math";
+import { getCommonBounds } from "@fcboard/element";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { factorySolidOutlines } from "./factorySolidOutlines";
 import { classroomCommands } from "./commands";
@@ -178,7 +179,7 @@ const line = (
   y: number,
   points: number[][],
   color = "#245bd6",
-): ExcalidrawElementSkeleton => ({
+): FcboardElementSkeleton => ({
   type: "line",
   x: x + points[0][0],
   y: y + points[0][1],
@@ -192,7 +193,7 @@ const label = (
   y: number,
   text: string,
   fontSize = 18,
-): ExcalidrawElementSkeleton => ({
+): FcboardElementSkeleton => ({
   type: "text",
   x,
   y,
@@ -205,7 +206,7 @@ const ellipse = (
   y: number,
   width: number,
   height: number,
-): ExcalidrawElementSkeleton => ({
+): FcboardElementSkeleton => ({
   type: "ellipse",
   x,
   y,
@@ -224,9 +225,9 @@ export const projectilePoint = (
 export const widgetShapes = (
   widget: Widget,
   now = Date.now(),
-): ExcalidrawElementSkeleton[] => {
+): FcboardElementSkeleton[] => {
   const { kind, params } = widget;
-  const result: ExcalidrawElementSkeleton[] = [];
+  const result: FcboardElementSkeleton[] = [];
   if (kind === "shape") {
     const shape = params.shape || {
       kind: "rectangle" as const,
@@ -396,7 +397,7 @@ export const widgetShapes = (
   );
 };
 
-export const readWidgets = (api: ExcalidrawImperativeAPI): Widget[] => {
+export const readWidgets = (api: FcboardImperativeAPI): Widget[] => {
   const seen = new Set<string>();
   const document = classroomCommands.read("document") as
     | { ink: InkStroke[] }
@@ -453,7 +454,7 @@ export const readWidgets = (api: ExcalidrawImperativeAPI): Widget[] => {
 };
 
 export const renderWidget = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   widget: Widget,
   remember = true,
   transaction: {
@@ -491,7 +492,7 @@ export const renderWidget = (
       params: { ...widget.params, solid: { ...widget.params.solid, fit: 1 } },
     };
     const [left, top, right, bottom] = getCommonBounds(
-      convertToExcalidrawElements(widgetShapes(widget)),
+      convertToFcboardElements(widgetShapes(widget)),
     );
     const fit = Math.min(
       1,
@@ -507,7 +508,7 @@ export const renderWidget = (
     }
     widget.params.solid.fit = fit;
     const bounds = getCommonBounds(
-      convertToExcalidrawElements(widgetShapes(widget)),
+      convertToFcboardElements(widgetShapes(widget)),
     );
     const width = bounds[2] - bounds[0];
     const height = bounds[3] - bounds[1];
@@ -564,7 +565,7 @@ export const renderWidget = (
     !existing.some((element) => element.customData?.fcWidget?.id === widget.id)
   ) {
     const [left, top, right, bottom] = getCommonBounds(
-      convertToExcalidrawElements(widgetShapes(widget)),
+      convertToFcboardElements(widgetShapes(widget)),
     );
     const point = contentPosition(
       api,
@@ -573,7 +574,7 @@ export const renderWidget = (
     );
     widget = { ...widget, position: { x: point.x - left, y: point.y - top } };
   }
-  const elements = convertToExcalidrawElements(
+  const elements = convertToFcboardElements(
     widgetShapes(widget).map((shape, index) => ({
       strokeColor: document
         ? document.pen?.color

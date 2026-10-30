@@ -1,18 +1,20 @@
-import { CaptureUpdateAction, newElementWith } from "@excalidraw/excalidraw";
+import { CaptureUpdateAction, newElementWith } from "@fcboard/fcboard";
 import {
   createRedoAction,
   createUndoAction,
-} from "@excalidraw/excalidraw/actions/actionHistory";
-import { syncInvalidIndices } from "@excalidraw/element";
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { act, render, waitFor } from "@excalidraw/excalidraw/tests/test-utils";
+} from "@fcboard/fcboard/actions/actionHistory";
+import { syncInvalidIndices } from "@fcboard/element";
+
 import { vi } from "vitest";
 
-import { StoreIncrement } from "@excalidraw/element";
+import { StoreIncrement } from "@fcboard/element";
 
-import type { DurableIncrement, EphemeralIncrement } from "@excalidraw/element";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
+import { act, render, waitFor } from "@fcboard/fcboard/tests/test-utils";
 
-import ExcalidrawApp from "../App";
+import type { DurableIncrement, EphemeralIncrement } from "@fcboard/element";
+
+import FcboardApp from "../App";
 
 const { h } = window;
 
@@ -77,7 +79,7 @@ describe("collaboration", () => {
     const durableIncrements: DurableIncrement[] = [];
     const ephemeralIncrements: EphemeralIncrement[] = [];
 
-    await render(<ExcalidrawApp />);
+    await render(<FcboardApp />);
 
     h.store.onStoreIncrementEmitter.on((increment) => {
       if (StoreIncrement.isDurable(increment)) {
@@ -147,7 +149,7 @@ describe("collaboration", () => {
   });
 
   it("should allow to undo / redo even on force-deleted elements", async () => {
-    await render(<ExcalidrawApp />);
+    await render(<FcboardApp />);
     const rect1Props = {
       type: "rectangle",
       id: "A",

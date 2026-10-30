@@ -1,4 +1,4 @@
-import { reseed } from "@excalidraw/common";
+import { reseed } from "@fcboard/common";
 
 import {
   actionSendBackward,
@@ -6,26 +6,26 @@ import {
   actionBringToFront,
   actionSendToBack,
   actionDuplicateSelection,
-} from "@excalidraw/excalidraw/actions";
+} from "@fcboard/fcboard/actions";
 
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Fcboard } from "@fcboard/fcboard";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { API } from "@fcboard/fcboard/tests/helpers/api";
 import {
   act,
   getCloneByOrigId,
   render,
   unmountComponent,
-} from "@excalidraw/excalidraw/tests/test-utils";
+} from "@fcboard/fcboard/tests/test-utils";
 
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@fcboard/fcboard/types";
 
 import { selectGroupsForSelectedElements } from "../src/groups";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawFrameElement,
-  ExcalidrawSelectionElement,
+  FcboardElement,
+  FcboardFrameElement,
+  FcboardSelectionElement,
 } from "../src/types";
 
 unmountComponent();
@@ -37,15 +37,15 @@ beforeEach(() => {
 
 const { h } = window;
 
-type ExcalidrawElementType = Exclude<
-  ExcalidrawElement,
-  ExcalidrawSelectionElement
+type FcboardElementType = Exclude<
+  FcboardElement,
+  FcboardSelectionElement
 >["type"];
 
 const populateElements = (
   elements: {
     id: string;
-    type?: ExcalidrawElementType;
+    type?: FcboardElementType;
     isDeleted?: boolean;
     isSelected?: boolean;
     groupIds?: string[];
@@ -54,8 +54,8 @@ const populateElements = (
     width?: number;
     height?: number;
     containerId?: string;
-    frameId?: ExcalidrawFrameElement["id"];
-    index?: ExcalidrawElement["index"];
+    frameId?: FcboardFrameElement["id"];
+    index?: FcboardElement["index"];
   }[],
   appState?: Partial<AppState>,
 ) => {
@@ -145,8 +145,8 @@ const assertZindex = ({
     isSelected?: true;
     groupIds?: string[];
     containerId?: string;
-    frameId?: ExcalidrawFrameElement["id"];
-    type?: ExcalidrawElementType;
+    frameId?: FcboardFrameElement["id"];
+    type?: FcboardElementType;
   }[];
   appState?: Partial<AppState>;
   operations: [Actions, string[]][];
@@ -161,7 +161,7 @@ const assertZindex = ({
 
 describe("z-index manipulation", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   it("send back", () => {
@@ -1231,7 +1231,7 @@ describe("z-index manipulation", () => {
 
 describe("z-indexing with frames", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   // naming scheme:

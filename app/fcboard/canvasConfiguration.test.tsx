@@ -1,17 +1,18 @@
 import { fireEvent, screen } from "@testing-library/react";
 import {
-  Excalidraw,
+  Fcboard,
   CaptureUpdateAction,
-  convertToExcalidrawElements,
-} from "@excalidraw/excalidraw";
-import { act, render } from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { t } from "@excalidraw/excalidraw/i18n";
+  convertToFcboardElements,
+} from "@fcboard/fcboard";
 
-import type {
-  ExcalidrawImperativeAPI,
-  UIOptions,
-} from "@excalidraw/excalidraw/types";
+import { t } from "@fcboard/fcboard/i18n";
+import { clearAppStateForLocalStorage } from "@fcboard/fcboard/appState";
+import { restoreAppState } from "@fcboard/fcboard/data/restore";
+
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { act, render } from "@fcboard/fcboard/tests/test-utils";
+
+import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { render as renderSettings } from "./test/render";
 import { BoardSettings } from "./BoardSettings";
@@ -26,9 +27,9 @@ import { runBoardCommands } from "./agent";
 import * as ai from "./ai";
 
 const setup = async (device?: UIOptions["inkProfile"]) => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const view = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       UIOptions={{ unifiedToolbar: true, inkProfile: device }}
       onMount={({ excalidrawAPI }) => {
@@ -57,7 +58,173 @@ const configure = async (args: Record<string, unknown>) => {
 };
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+const contact = (
+  node: Element,
+  type: string,
+  properties: Record<string, number | string> = {},
+) =>
+  fireEvent(
+    node,
+    Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+      pointerId: 7,
+      pointerType: "touch",
+      ...properties,
+    }),
+  );
+
+it.each([1, 2, 3])(
+  "calibrates physical contact sizes at density %s, persists the actual preferences, and restores factory values",
+  async (dpr) => {
+    vi.stubGlobal("devicePixelRatio", dpr);
+    const device = {
+      hardPenWidth: 4 / dpr,
+      brushPenWidth: 15 / dpr,
+      eraserSize: 150 / dpr,
+      palmThreshold: 60 / dpr,
+      fineThreshold: 8 / dpr,
+      thickThreshold: 24 / dpr,
+      factoryThresholds: { palm: 120, fine: 12, thick: 40 },
+    };
+    const { api, close } = await setup(device);
+    const panel = renderSettings(
+      <SettingsNavigation initialPage="touch">
+        <BoardSettings api={api} device={device} />
+      </SettingsNavigation>,
+    );
+    try {
+      const area = screen.getByRole("group", {
+        name: t("fcboard.factorySettings.area"),
+      });
+      const palm = screen.getByRole("textbox", {
+        name: t("fcboard.factorySettings.eraser_label"),
+      });
+      expect(Number((palm as HTMLInputElement).value)).toBeCloseTo(90);
+      contact(area, "pointerdown", { width: 60 / dpr, height: 40 / dpr });
+      expect(api.getAppState().palmEraserThreshold).toBeUndefined();
+      // ThresholdView records DOWN; larger MOVE / UP contacts must not replace it.
+      contact(area, "pointermove", { width: 100 / dpr, height: 80 / dpr });
+      contact(area, "pointerup", { width: 100 / dpr, height: 80 / dpr });
+      expect(api.getAppState().palmEraserThreshold).toBeCloseTo(80 / 3 / dpr);
+      expect(Number((palm as HTMLInputElement).value)).toBeCloseTo(40);
+
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: t("fcboard.factorySettings.fine_label"),
+        }),
+      );
+      contact(area, "pointerdown", {
+        pointerType: "pen",
+        width: 10 / dpr,
+        height: 12 / dpr,
+      });
+      contact(area, "pointerup");
+      expect(api.getAppState().whiteboardFineThreshold).toBeCloseTo(8 / dpr);
+      const thick = screen.getByRole("textbox", {
+        name: t("fcboard.factorySettings.thick_label"),
+      });
+      fireEvent.change(thick, { target: { value: "42.5" } });
+      expect(api.getAppState().whiteboardThickThreshold).toBeCloseTo(34 / dpr);
+      await configure({ toolbarText: false });
+      const saved = clearAppStateForLocalStorage(api.getAppState());
+      expect(restoreAppState(saved, null)).toMatchObject({
+        palmEraserThreshold: api.getAppState().palmEraserThreshold,
+        whiteboardFineThreshold: api.getAppState().whiteboardFineThreshold,
+        whiteboardThickThreshold: api.getAppState().whiteboardThickThreshold,
+        whiteboardToolbarText: false,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: t("fcboard.reset") }));
+      expect(api.getAppState().palmEraserThreshold).toBeCloseTo(80 / dpr);
+      expect(api.getAppState().whiteboardFineThreshold).toBeCloseTo(9.6 / dpr);
+      expect(api.getAppState().whiteboardThickThreshold).toBeCloseTo(32 / dpr);
+      expect(Number((palm as HTMLInputElement).value)).toBeCloseTo(120);
+    } finally {
+      panel.unmount();
+      close();
+    }
+  },
+);
+
+it("ignores cancelled, mouse, invalid and wrong-pointer samples without altering calibration", async () => {
+  const { api, close } = await setup();
+  const panel = renderSettings(
+    <SettingsNavigation initialPage="touch">
+      <BoardSettings api={api} />
+    </SettingsNavigation>,
+  );
+  try {
+    const area = screen.getByRole("group", {
+      name: t("fcboard.factorySettings.area"),
+    });
+    for (const invalid of [
+      { pointerType: "mouse", width: 100, height: 100 },
+      { pointerType: "touch", width: 0, height: 100 },
+      { pointerType: "touch", width: NaN, height: 100 },
+    ]) {
+      contact(area, "pointerdown", invalid);
+      contact(area, "pointerup");
+    }
+    for (const end of ["pointercancel", "lostpointercapture"]) {
+      contact(area, "pointerdown", { width: 50, height: 60 });
+      contact(area, end);
+      contact(area, "pointerup");
+    }
+    contact(area, "pointerdown", { width: 50, height: 60 });
+    contact(area, "pointerup", { pointerId: 99 });
+    expect(api.getAppState().palmEraserThreshold).toBeUndefined();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: t("fcboard.factorySettings.thick_label"),
+      }),
+    );
+    contact(area, "pointerup");
+    expect(api.getAppState().whiteboardThickThreshold).toBeUndefined();
+    expect(api.getAppState().palmEraserThreshold).toBeUndefined();
+    // A fresh gesture still works after the cancelled calibration.
+    contact(area, "pointerdown", { width: 15, height: 20 });
+    contact(area, "pointerup");
+    expect(api.getAppState().whiteboardThickThreshold).toBe(12);
+  } finally {
+    panel.unmount();
+    close();
+  }
+});
+
+it("clears manual overrides when factory properties are unavailable and keeps the device defaults", async () => {
+  const device = {
+    hardPenWidth: 4,
+    brushPenWidth: 15,
+    eraserSize: 150,
+    palmThreshold: 40,
+    fineThreshold: 4,
+    thickThreshold: 12,
+  };
+  const { api, close } = await setup(device);
+  await configure({ palmThreshold: 60, fineThreshold: 8, thickThreshold: 18 });
+  const panel = renderSettings(
+    <SettingsNavigation initialPage="touch">
+      <BoardSettings api={api} device={device} />
+    </SettingsNavigation>,
+  );
+  try {
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.reset") }));
+    expect(api.getAppState().palmEraserThreshold).toBeUndefined();
+    expect(api.getAppState().whiteboardFineThreshold).toBeUndefined();
+    expect(api.getAppState().whiteboardThickThreshold).toBeUndefined();
+    expect(
+      canvasConfigurationSnapshot(api.getAppState(), device),
+    ).toMatchObject({
+      eraser: { palmThreshold: 40 },
+      pen: { fineThreshold: 4, thickThreshold: 12 },
+    });
+  } finally {
+    panel.unmount();
+    close();
+  }
 });
 
 it("applies background and calibrated preferences atomically, reads committed state, and shares tip profiles with the settings controls", async () => {
@@ -72,7 +239,7 @@ it("applies background and calibrated preferences atomically, reads committed st
   const { api, close } = await setup(device);
   let panel: ReturnType<typeof renderSettings> | undefined;
   try {
-    const source = convertToExcalidrawElements([
+    const source = convertToFcboardElements([
       { type: "text", text: "Existing note", x: 100, y: 100 },
     ]);
     act(() => {
@@ -128,7 +295,7 @@ it("applies background and calibrated preferences atomically, reads committed st
     Keyboard.redo();
     expect(api.getAppState().whiteboardBackground?.pattern).toBe(4);
     panel = renderSettings(
-      <SettingsNavigation initialPage="pen">
+      <SettingsNavigation initialPage="recognition">
         <BoardSettings api={api} device={device} />
       </SettingsNavigation>,
     );
@@ -160,6 +327,8 @@ it("rejects a whole invalid batch before changing any preference or background",
       {},
       { backgroundPattern: 3, brushVariation: 51 },
       { backgroundPattern: 14 },
+      { backgroundImage: "https://example.com/background.png" },
+      { backgroundPattern: 1, backgroundImage: "data:image/png;base64,YQ==" },
       { backgroundColor: "red" },
       { dualPen: true },
       { tip: "unknown" },
@@ -222,7 +391,7 @@ it("uses device defaults and refuses hidden-board changes while courseware is vi
     }
     expect(api.getAppState()).toBe(original);
     panel = renderSettings(
-      <SettingsNavigation>
+      <SettingsNavigation initialPage="background">
         <BoardSettings api={api} device={device} />
       </SettingsNavigation>,
     );

@@ -6,7 +6,7 @@ import MenuItem from "@mui/material/MenuItem";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 
 import { t } from "../../i18n";
-import { useExcalidrawContainer } from "../App";
+import { useFcboardContainer } from "../App";
 import { FactoryIcon } from "../FactoryIcon";
 import { chevronLeftIcon, chevronRight } from "../icons";
 import { DropdownMenuContentPropsContext } from "../dropdownMenu/common";
@@ -33,7 +33,7 @@ export const FactoryMenu = ({
   close: () => void;
   onSelect?: (event: Event) => void;
 }) => {
-  const { container } = useExcalidrawContainer();
+  const { container } = useFcboardContainer();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [pages, setPages] = useState<Page[]>([]);

@@ -1,6 +1,6 @@
-import { requestResourceControl } from "@excalidraw/excalidraw/interactiveResourceControls";
+import { requestResourceControl } from "@fcboard/fcboard/interactiveResourceControls";
 
-import type { ResourceControlState } from "@excalidraw/excalidraw/interactiveResourceControls";
+import type { ResourceControlState } from "@fcboard/fcboard/interactiveResourceControls";
 
 import { classroomCommands } from "./commands";
 import { registerCanvasCommands } from "./canvasCommands";

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="skizze_channel">智能笔</string>
+    <string name="skizze_active">智能笔接收器已连接</string>
+    <string name="skizze_stop">断开连接</string>
+</resources>

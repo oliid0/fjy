@@ -83,7 +83,7 @@ test("two separate devices receive live drawing, undo and reconnect without copy
   });
   const scene = (page: Page) =>
     page.evaluate(
-      () => JSON.parse(localStorage.getItem("excalidraw") || "[]") as Element[],
+      () => JSON.parse(localStorage.getItem("fcboard") || "[]") as Element[],
     );
   try {
     const a = await first.newPage();

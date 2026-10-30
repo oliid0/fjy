@@ -1,10 +1,14 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { getLanguage } from "@excalidraw/excalidraw/i18n";
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getLanguage } from "@fcboard/fcboard/i18n";
+import { getElementAbsoluteCoords } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { currentSettings } from "./settings";
+import { packForLocale, openLanguagePacks } from "./languagePacks";
+
+import type { PluginListenerHandle } from "@capacitor/core";
+import type { HandwritingPacks } from "./languagePacks";
 
 export type InkPoint = [number, number];
 export type InkInput = InkPoint[][];
@@ -14,12 +18,19 @@ export type InkRegion = {
   right: number;
   bottom: number;
 };
-const engine = registerPlugin<{
+export const digitalInkEngine = registerPlugin<{
   prepare(): Promise<void>;
   recognize(options: {
     strokes: InkInput;
     language: string;
   }): Promise<{ candidates: string[]; engine: string }>;
+  listPacks(): Promise<HandwritingPacks>;
+  downloadPack(options: { tag: string }): Promise<HandwritingPacks>;
+  deletePack(options: { tag: string }): Promise<HandwritingPacks>;
+  addListener(
+    event: "packsChanged",
+    listener: (state: HandwritingPacks) => void,
+  ): Promise<PluginListenerHandle>;
 }>("FcboardDigitalInk");
 
 // Clip each sampled segment to the selected rectangle, without connecting gaps
@@ -94,7 +105,7 @@ export const clipInk = (input: InkInput, region?: InkRegion): InkInput => {
 
 /** Raw samples, with object movement/rotation applied, in the original stroke order. */
 export const boardInk = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   region?: InkRegion,
 ): InkInput =>
   clipInk(
@@ -118,7 +129,7 @@ export const boardInk = (
 export const hasDigitalInk = () => Capacitor.isNativePlatform();
 let preparation: Promise<void> | undefined;
 export const prepareDigitalInk = () => {
-  preparation ||= engine.prepare().catch((error) => {
+  preparation ||= digitalInkEngine.prepare().catch((error) => {
     preparation = undefined;
     throw error;
   });
@@ -132,22 +143,29 @@ export const recognizeDigitalInk = async (
   languageHint?: "en-US",
 ) => {
   signal.throwIfAborted();
-  const language = currentSettings().inkLanguage;
-  const result = await engine.recognize({
-    strokes,
-    language:
-      kind === "math"
-        ? "en-US"
-        : languageHint
-        ? languageHint
-        : language !== "auto"
-        ? language
-        : !getLanguage().code.startsWith("zh")
-        ? "en-US"
-        : "zh-Hani-CN",
-  });
+  const language = languageHint || currentTextInkLanguage();
+  let result;
+  try {
+    result = await digitalInkEngine.recognize({
+      strokes,
+      language: kind === "math" ? "en-US" : language,
+    });
+  } catch (error) {
+    signal.throwIfAborted();
+    if (
+      !signal.aborted &&
+      (error as { code?: string }).code === "HANDWRITING_MODEL_REQUIRED"
+    ) {
+      openLanguagePacks(kind === "math" ? "en-US" : language, true);
+    }
+    throw error;
+  }
   signal.throwIfAborted();
   return result.candidates.filter(
     (text) => typeof text === "string" && text.trim(),
   );
+};
+export const currentTextInkLanguage = () => {
+  const language = currentSettings().inkLanguage;
+  return language === "auto" ? packForLocale(getLanguage().code) : language;
 };

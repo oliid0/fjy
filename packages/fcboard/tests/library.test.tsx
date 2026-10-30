@@ -2,16 +2,16 @@ import { act, queryByTestId } from "@testing-library/react";
 import React from "react";
 import { vi } from "vitest";
 
-import { MIME_TYPES, ORIG_ID } from "@excalidraw/common";
+import { MIME_TYPES, ORIG_ID } from "@fcboard/common";
 
-import { getCommonBoundingBox } from "@excalidraw/element";
+import { getCommonBoundingBox } from "@fcboard/element";
 
-import type { ExcalidrawGenericElement } from "@excalidraw/element/types";
+import type { FcboardGenericElement } from "@fcboard/element/types";
 
 import { parseLibraryJSON } from "../data/blob";
 import { serializeLibraryAsJSON } from "../data/json";
 import { distributeLibraryItemsOnSquareGrid } from "../data/library";
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "./helpers/api";
 import { UI } from "./helpers/ui";
@@ -22,14 +22,14 @@ import type { LibraryItem, LibraryItems } from "../types";
 const { h } = window;
 
 const libraryJSONPromise = API.readFile(
-  "./fixtures/fixture_library.excalidrawlib",
+  "./fixtures/fixture_library.fcboardlib",
   "utf8",
 );
 
 const mockLibraryFilePromise = new Promise<Blob>(async (resolve, reject) => {
   try {
     resolve(
-      new Blob([await libraryJSONPromise], { type: MIME_TYPES.excalidrawlib }),
+      new Blob([await libraryJSONPromise], { type: MIME_TYPES.fcboardlib }),
     );
   } catch (error) {
     reject(error);
@@ -82,7 +82,7 @@ describe("library items inserting", () => {
       },
     ];
 
-    await render(<Excalidraw initialData={{ libraryItems }} />);
+    await render(<Fcboard initialData={{ libraryItems }} />);
   });
 
   afterEach(async () => {
@@ -102,7 +102,7 @@ describe("library items inserting", () => {
         value: JSON.stringify({
           itemIds: [libraryItems[0].id],
         }),
-        type: MIME_TYPES.excalidrawlibIds,
+        type: MIME_TYPES.fcboardlibIds,
       },
     ]);
 
@@ -140,7 +140,7 @@ describe("library items inserting", () => {
 
 describe("library", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
     await act(() => {
       return h.app.library.resetLibrary();
     });
@@ -151,8 +151,8 @@ describe("library", () => {
     await API.drop([
       {
         kind: "file",
-        type: MIME_TYPES.excalidrawlib,
-        file: await API.loadFile("./fixtures/fixture_library.excalidrawlib"),
+        type: MIME_TYPES.fcboardlib,
+        file: await API.loadFile("./fixtures/fixture_library.fcboardlib"),
       },
     ]);
     await waitFor(async () => {
@@ -175,7 +175,7 @@ describe("library", () => {
       {
         kind: "string",
         value: serializeLibraryAsJSON(libraryItems),
-        type: MIME_TYPES.excalidrawlib,
+        type: MIME_TYPES.fcboardlib,
       },
     ]);
     await waitFor(() => {
@@ -203,7 +203,7 @@ describe("library", () => {
       {
         kind: "string",
         value: serializeLibraryAsJSON([item1, item1]),
-        type: MIME_TYPES.excalidrawlib,
+        type: MIME_TYPES.fcboardlib,
       },
     ]);
 
@@ -228,7 +228,7 @@ describe("library", () => {
       {
         kind: "string",
         value: serializeLibraryAsJSON(libraryItems),
-        type: MIME_TYPES.excalidrawlib,
+        type: MIME_TYPES.fcboardlib,
       },
     ]);
     await waitFor(() => {
@@ -241,7 +241,7 @@ describe("library", () => {
 
 describe("library menu", () => {
   it("should load library from file picker", async () => {
-    const { container } = await render(<Excalidraw />);
+    const { container } = await render(<Fcboard />);
 
     const latestLibrary = await h.app.library.getLatestLibrary();
     expect(latestLibrary.length).toBe(0);
@@ -274,7 +274,7 @@ describe("library menu", () => {
 describe("distributeLibraryItemsOnSquareGrid()", () => {
   it("should distribute items on a grid", async () => {
     const createLibraryItem = (
-      elements: ExcalidrawGenericElement[],
+      elements: FcboardGenericElement[],
     ): LibraryItem => {
       return {
         id: `id-${Date.now()}`,

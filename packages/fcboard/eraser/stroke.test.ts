@@ -1,7 +1,7 @@
-import { pointFrom } from "@excalidraw/math";
-import { factoryBrushSamples } from "@excalidraw/element/factoryBrush";
+import { pointFrom } from "@fcboard/math";
+import { factoryBrushSamples } from "@fcboard/element/factoryBrush";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@fcboard/math";
 
 import { API } from "../tests/helpers/api";
 

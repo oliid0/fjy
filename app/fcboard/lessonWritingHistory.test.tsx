@@ -1,18 +1,20 @@
-import { Excalidraw, CaptureUpdateAction } from "@excalidraw/excalidraw";
-import { act, render } from "@excalidraw/excalidraw/tests/test-utils";
-import { Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import { newFreeDrawElement } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+import { Fcboard, CaptureUpdateAction } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
+
+import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
+import { act, render } from "@fcboard/fcboard/tests/test-utils";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { LessonCanvas, validateLesson } from "./lesson";
 import { handwritingText } from "./handwriting";
 
 it("undoes and redoes a progressively written word as one real editor action", async () => {
-  let api!: ExcalidrawImperativeAPI;
+  let api!: FcboardImperativeAPI;
   const view = await render(
-    <Excalidraw
+    <Fcboard
       handleKeyboardGlobally
       onMount={({ excalidrawAPI }) => {
         api = excalidrawAPI;

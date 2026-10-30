@@ -1,11 +1,11 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 export const sceneAPI = () => {
   let tool = { type: "selection", customType: null };
-  let scene: readonly ExcalidrawElement[] = convertToExcalidrawElements([
+  let scene: readonly FcboardElement[] = convertToFcboardElements([
     { type: "text", text: "学生的题目", x: 10, y: 10 },
   ]);
   const api = {
@@ -28,6 +28,6 @@ export const sceneAPI = () => {
         scene = update.elements;
       }
     }),
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   return api;
 };

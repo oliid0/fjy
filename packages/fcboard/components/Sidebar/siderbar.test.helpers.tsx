@@ -1,11 +1,11 @@
 import React from "react";
 
-import { Excalidraw } from "../..";
+import { Fcboard } from "../..";
 import {
   GlobalTestState,
   queryByTestId,
   render,
-  withExcalidrawDimensions,
+  withFcboardDimensions,
 } from "../../tests/test-utils";
 
 export const assertSidebarDockButton = async <T extends boolean>(
@@ -29,15 +29,15 @@ export const assertSidebarDockButton = async <T extends boolean>(
   return { dockButton: null, sidebar: sidebar! } as any;
 };
 
-export const assertExcalidrawWithSidebar = async (
+export const assertFcboardWithSidebar = async (
   sidebar: React.ReactNode,
   name: string,
   test: () => void,
 ) => {
   await render(
-    <Excalidraw initialData={{ appState: { openSidebar: { name } } }}>
+    <Fcboard initialData={{ appState: { openSidebar: { name } } }}>
       {sidebar}
-    </Excalidraw>,
+    </Fcboard>,
   );
-  await withExcalidrawDimensions({ width: 1920, height: 1080 }, test);
+  await withFcboardDimensions({ width: 1920, height: 1080 }, test);
 };

@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  ToolbarExtras,
-  convertToExcalidrawElements,
-} from "@excalidraw/excalidraw";
-import { getCommonBounds } from "@excalidraw/element";
-import { viewportCoordsToSceneCoords } from "@excalidraw/common";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { ToolbarExtras, convertToFcboardElements } from "@fcboard/fcboard";
+import { getCommonBounds } from "@fcboard/element";
+import { viewportCoordsToSceneCoords } from "@fcboard/common";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 import { factoryShapeCatalog } from "./factoryShapeGeometry";
@@ -36,7 +33,7 @@ const colors = [
   "#510d82",
 ];
 
-const shapeTarget = (api: ExcalidrawImperativeAPI) => {
+const shapeTarget = (api: FcboardImperativeAPI) => {
   const document = classroomCommands.read("document") as
     | { id?: string; page?: number }
     | undefined;
@@ -77,7 +74,7 @@ export const draggedFactoryShape = (
     return widget;
   }
   const bounds = getCommonBounds(
-    convertToExcalidrawElements(widgetShapes(widget)),
+    convertToFcboardElements(widgetShapes(widget)),
   );
   params.stretchX = Math.max(
     0.01,
@@ -101,7 +98,7 @@ export const draggedFactoryShape = (
 };
 
 /** HAutoShapeWindow chooses a tool. Pointer-up commits the drag to one typed widget. */
-export const FactoryShapes = ({ api }: { api: ExcalidrawImperativeAPI }) => {
+export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const [state, setState] = useState(() => api.getAppState());
   const [documentStage, setDocumentStage] = useState<HTMLElement | null>(null);
@@ -258,7 +255,26 @@ export const FactoryShapes = ({ api }: { api: ExcalidrawImperativeAPI }) => {
   }, [api]);
   useEffect(() => {
     const refresh = () => {
-      setState(api.getAppState());
+      const next = api.getAppState();
+      setState((previous) =>
+        previous.activeTool.type === next.activeTool.type &&
+        previous.activeTool.customType === next.activeTool.customType &&
+        previous.scrollX === next.scrollX &&
+        previous.scrollY === next.scrollY &&
+        previous.zoom.value === next.zoom.value &&
+        previous.toolbarHidden === next.toolbarHidden &&
+        (
+          [
+            "currentItemStrokeColor",
+            "currentItemBackgroundColor",
+            "currentItemStrokeWidth",
+            "currentItemPenMode",
+            "currentItemOpacity",
+          ] as const
+        ).every((key) => previous[key] === next[key])
+          ? previous
+          : next,
+      );
       setDocumentStage(
         classroomCommands.read("document")
           ? document.querySelector<HTMLElement>(".fc-document-stage")

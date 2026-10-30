@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { interactiveResource } from "../app/fcboard/test/interactiveResource";
 
 import { selectMenu } from "./menu";
-import { dictateQuestion } from "./question";
+import { writeQuestion } from "./question";
 
 import type { ResourceControlState } from "../packages/fcboard/interactiveResourceControls";
 
@@ -167,7 +167,7 @@ for (const viewport of [
     );
     await expect(experiment.locator("output")).toHaveText("2 m/s²");
     await selectMenu(page, "提问与讲解");
-    await dictateQuestion(page, "请讲解牛顿第二定律，比较四牛顿和十牛顿的力");
+    await writeQuestion(page, "请讲解牛顿第二定律，比较四牛顿和十牛顿的力");
     await expect(page.locator(".fc-live-caption")).toContainText("先观察");
     await page.getByRole("button", { name: "暂停讲解", exact: true }).click();
     await expect(
@@ -187,7 +187,7 @@ for (const viewport of [
     await expect
       .poll(() =>
         page.evaluate(() =>
-          JSON.parse(localStorage.getItem("excalidraw") || "[]").some(
+          JSON.parse(localStorage.getItem("fcboard") || "[]").some(
             (element: {
               isDeleted?: boolean;
               customData?: { fcTutorId?: string };
@@ -199,14 +199,12 @@ for (const viewport of [
       )
       .toBe(true);
     const writing = await page.evaluate(() => {
-      const elements = JSON.parse(localStorage.getItem("excalidraw") || "[]");
+      const elements = JSON.parse(localStorage.getItem("fcboard") || "[]");
       const element = elements.find(
         (item: { isDeleted?: boolean; customData?: { fcTutorId?: string } }) =>
           !item.isDeleted && item.customData?.fcTutorId === "acceleration",
       );
-      const state = JSON.parse(
-        localStorage.getItem("excalidraw-state") || "{}",
-      );
+      const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
       const zoom = state.zoom?.value || 1;
       return {
         type: element.type,

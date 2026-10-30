@@ -1,8 +1,8 @@
 import React from "react";
 
-import { KEYS } from "@excalidraw/common";
+import { KEYS } from "@fcboard/common";
 
-import { Excalidraw } from "../../index";
+import { Fcboard } from "../../index";
 import { Keyboard } from "../../tests/helpers/ui";
 import {
   render,
@@ -13,7 +13,7 @@ import {
 
 describe("Test <DropdownMenu/>", () => {
   it("should", async () => {
-    const { container } = await render(<Excalidraw />);
+    const { container } = await render(<Fcboard />);
 
     expect(window.h.state.openMenu).toBe(null);
 

@@ -1,7 +1,7 @@
-import { pointDistance, pointFrom, type GlobalPoint } from "@excalidraw/math";
-import { invariant } from "@excalidraw/common";
+import { pointDistance, pointFrom, type GlobalPoint } from "@fcboard/math";
+import { invariant } from "@fcboard/common";
 
-import type { AppState, NullableGridSize } from "@excalidraw/excalidraw/types";
+import type { AppState, NullableGridSize } from "@fcboard/fcboard/types";
 
 import {
   bindBindingElement,
@@ -25,8 +25,8 @@ import { moveArrowAboveBindable } from "../zindex";
 
 import type {
   ElementsMap,
-  ExcalidrawArrowElement,
-  ExcalidrawBindableElement,
+  FcboardArrowElement,
+  FcboardBindableElement,
   NonDeletedSceneElementsMap,
   PointsPositionUpdates,
 } from "../types";
@@ -35,8 +35,8 @@ import type { Scene } from "../Scene";
 
 export const isFocusPointVisible = (
   focusPoint: GlobalPoint,
-  arrow: ExcalidrawArrowElement,
-  bindableElement: ExcalidrawBindableElement,
+  arrow: FcboardArrowElement,
+  bindableElement: FcboardBindableElement,
   elementsMap: ElementsMap,
   appState: {
     isBindingEnabled: AppState["isBindingEnabled"];
@@ -100,8 +100,8 @@ export const isFocusPointVisible = (
 
 // Updates the arrow endpoints in "orbit" configuration
 const focusPointUpdate = (
-  arrow: ExcalidrawArrowElement,
-  bindableElement: ExcalidrawBindableElement | null,
+  arrow: FcboardArrowElement,
+  bindableElement: FcboardBindableElement | null,
   isStartBinding: boolean,
   elementsMap: NonDeletedSceneElementsMap,
   scene: Scene,
@@ -153,7 +153,7 @@ const focusPointUpdate = (
   if (adjacentBinding && adjacentBinding.mode === "orbit") {
     const adjacentBindableElement = elementsMap.get(
       adjacentBinding.elementId,
-    ) as ExcalidrawBindableElement;
+    ) as FcboardBindableElement;
 
     if (
       adjacentBindableElement &&
@@ -332,7 +332,7 @@ export const handleFocusPointDrag = (
 };
 
 export const handleFocusPointPointerDown = (
-  arrow: ExcalidrawArrowElement,
+  arrow: FcboardArrowElement,
   pointerDownState: { origin: { x: number; y: number } },
   elementsMap: NonDeletedSceneElementsMap,
   appState: AppState,
@@ -431,7 +431,7 @@ export const handleFocusPointPointerUp = (
     "Must have a dragged focus point at pointer release",
   );
 
-  const arrow = LinearElementEditor.getElement<ExcalidrawArrowElement>(
+  const arrow = LinearElementEditor.getElement<FcboardArrowElement>(
     linearElementEditor.elementId,
     scene.getNonDeletedElementsMap(),
   );
@@ -486,7 +486,7 @@ export const handleFocusPointPointerUp = (
 };
 
 export const handleFocusPointHover = (
-  arrow: ExcalidrawArrowElement,
+  arrow: FcboardArrowElement,
   scenePointerX: number,
   scenePointerY: number,
   scene: Scene,

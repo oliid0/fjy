@@ -1,22 +1,26 @@
-import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { t, useI18n, languages } from "@excalidraw/excalidraw/i18n";
+import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
+import { t, useI18n, languages } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCommonBounds } from "@excalidraw/element";
-import { openConfirmModal } from "@excalidraw/excalidraw/components/OverwriteConfirm/OverwriteConfirmState";
+import { getCommonBounds } from "@fcboard/element";
 
-import type {
-  ExcalidrawImperativeAPI,
-  UIOptions,
-} from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { QRCode } from "../share/QRCode";
 import { LanguageList } from "../app-language/LanguageList";
 
 import { TransientMessage } from "./TransientMessage";
+import settingsCloseIcon from "./factory-setting-icons/close.svg?url";
 
 import { MaterialPanel } from "./MaterialPanel";
-import { SettingsNavigation, SettingsSection } from "./SettingsNavigation";
+import { LanguagePacks } from "./HandwritingLanguagePacks";
+import { openLanguagePacks } from "./languagePacks";
+import {
+  SettingsNavigation,
+  SettingsSection,
+  settingsParent,
+  settingsPageTitle,
+} from "./SettingsNavigation";
 
 import {
   boardContext,
@@ -35,6 +39,7 @@ import {
 } from "./board";
 import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
+import { SkizzePen } from "./SkizzePen";
 import { BoardShare } from "./BoardShare";
 import { InsertMenu } from "./InsertMenu";
 import { TeachingResources } from "./TeachingResources";
@@ -71,6 +76,7 @@ import { VoiceOrb } from "./VoiceOrb";
 import { RecordingPanel } from "./RecordingPanel";
 import { SummaryText } from "./SummaryText";
 import { RecordingWidget } from "./RecordingWidget";
+import { ExitDialog } from "./ExitDialog";
 
 import {
   BoardRecorder,
@@ -78,7 +84,12 @@ import {
   saveRecordings,
   timestamp,
 } from "./recording";
-import { currentSettings, saveSettings, validateEndpoint } from "./settings";
+import {
+  currentSettings,
+  loadSettings,
+  saveSettings,
+  validateEndpoint,
+} from "./settings";
 import { selectionSignature } from "./selection";
 import { SelectionActions } from "./SelectionActions";
 import { LanguagePanel } from "./LanguagePanel";
@@ -92,8 +103,7 @@ import { createVoiceTurns } from "./voiceTurns";
 
 import "./classroom.scss";
 
-import type { ReactNode } from "react";
-
+import type { SettingsPage } from "./SettingsNavigation";
 import type { InkStroke } from "./documents";
 import type { BoardAgentAction } from "./agent";
 import type { Message } from "./ai";
@@ -120,23 +130,33 @@ const errorMessage = (error: unknown) =>
 export const Classroom = ({
   api,
   inkProfile,
-  renderSettingsActions,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   inkProfile?: UIOptions["inkProfile"];
-  renderSettingsActions?: (close: () => void) => ReactNode;
 }) => {
   const { langCode } = useI18n();
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [settings, setSettings] = useState(currentSettings);
-  const [settingsPage, setSettingsPage] = useState<"background" | "models">(
-    "background",
-  );
-  const [remember, setRemember] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
+  const [settings, setSettingsState] = useState(currentSettings);
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>("home");
+  const [remember, setRemember] = useState(() => {
+    const saved = loadSettings();
+    return !!(saved.apiKey || saved.speechKey || saved.ttsKey);
+  });
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const persistSettings = (next: Settings, rememberKeys = remember) => {
+    setSettingsState(next);
+    try {
+      saveSettings(next, rememberKeys);
+      setError("");
+    } catch (failure) {
+      setError(errorMessage(failure));
+    }
+  };
+  const setSettings = (next: Settings) => persistSettings(next);
   useEffect(
     () =>
       observeInkAssistance(
@@ -2132,22 +2152,8 @@ export const Classroom = ({
               ),
             );
           }
-          const confirmed = await openConfirmModal({
-            title: t("fcboard.exit_board"),
-            description: t(
-              "fcboard.save_the_current_board_and_end_any_recording_in_progress",
-            ),
-            actionLabel: t("fcboard.save_and_exit"),
-            color: "warning",
-          });
-          if (!confirmed) {
-            return;
-          }
-          if (recorder.current) {
-            await stopRecording();
-          }
-          await classroomCommands.execute({ name: "board.save" });
-          await NativeClassroom.exitApp();
+          setExitOpen(true);
+          return { awaitingUserChoice: true };
         },
       ),
       classroomCommands.register("ui.invoke", "@internal", async (args) => {
@@ -2402,6 +2408,19 @@ export const Classroom = ({
         },
       ),
       classroomCommands.register(
+        "document.share.open",
+        "@internal",
+        async (args) => {
+          if (!(args.file instanceof File)) {
+            throw new Error(t("fcboard.invalid_sync_data"));
+          }
+          await showPreview(
+            args.file,
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          );
+        },
+      ),
+      classroomCommands.register(
         "files.open",
         "打开已接收的课件，args.id 或 args.name；不指定则显示课件列表",
         async (args) => {
@@ -2441,7 +2460,7 @@ export const Classroom = ({
         "board.settings",
         "打开白板设置：背景、画笔、触控与识别",
         () => {
-          setSettingsPage("background");
+          setSettingsPage("home");
           setPanel("settings");
         },
       ),
@@ -2512,10 +2531,12 @@ export const Classroom = ({
         }}
       />
       <BoardSwitcher api={api} />
+      <SkizzePen api={api} />
       <BoardShare />
       <InsertMenu api={api} />
       <TeachingResources api={api} />
       <LanSession api={api} />
+      <LanguagePacks />
       <Teacher
         api={api}
         onCommand={async (text, signal, sourceIds, whole = false) => {
@@ -2529,6 +2550,26 @@ export const Classroom = ({
         role={error ? "alert" : "status"}
         className={`fc-notice ${error ? "fc-error" : ""}`}
       />
+      {exitOpen && (
+        <ExitDialog
+          onClose={() => setExitOpen(false)}
+          onExit={async (save) => {
+            if (recorder.current) {
+              await stopRecording();
+            }
+            if (save) {
+              const result = (await classroomCommands.execute({
+                name: "board.export",
+              })) as { saved?: boolean };
+              if (!result.saved) {
+                return false;
+              }
+            }
+            await NativeClassroom.exitApp();
+            return true;
+          }}
+        />
+      )}
       {(listening || voicePaused) && (
         <VoiceOrb
           state={voicePaused ? "paused" : voiceState}
@@ -2601,13 +2642,23 @@ export const Classroom = ({
           }}
         >
           <header>
+            {panel === "settings" && settingsPage !== "home" && (
+              <button
+                className="fc-settings-back"
+                type="button"
+                aria-label={t("fcboard.back")}
+                onClick={() => setSettingsPage(settingsParent(settingsPage))}
+              >
+                ‹ {t(settingsPageTitle(settingsParent(settingsPage)))}
+              </button>
+            )}
             <div>
               {panel !== "settings" && <small>{t("fcboard.fcboard")}</small>}
               <h2>
                 {t(
-                  `fcboard.${
-                    panel === "settings" ? "whiteboard_settings" : titles[panel]
-                  }`,
+                  panel === "settings"
+                    ? settingsPageTitle(settingsPage)
+                    : `fcboard.${titles[panel]}`,
                 )}
               </h2>
             </div>
@@ -2619,7 +2670,13 @@ export const Classroom = ({
                   : "fcboard.close_tool_panel",
               )}
             >
-              {panel === "record" ? "−" : "×"}
+              {panel === "settings" ? (
+                <img src={settingsCloseIcon} alt="" />
+              ) : panel === "record" ? (
+                "−"
+              ) : (
+                "×"
+              )}
             </button>
           </header>
           <div className="fc-panel-body">
@@ -2642,16 +2699,18 @@ export const Classroom = ({
                 className="fc-settings-form"
                 onSubmit={(event) => {
                   event.preventDefault();
+                }}
+                onBlur={(event) => {
+                  const input = event.target;
+                  if (
+                    !(input instanceof HTMLInputElement) ||
+                    input.type !== "url" ||
+                    !input.value
+                  ) {
+                    return;
+                  }
                   try {
-                    validateEndpoint(settings.endpoint);
-                    if (settings.speechEndpoint) {
-                      validateEndpoint(settings.speechEndpoint);
-                    }
-                    if (settings.ttsEndpoint) {
-                      validateEndpoint(settings.ttsEndpoint);
-                    }
-                    saveSettings(settings, remember);
-                    setStatus(t("fcboard.settings_saved"));
+                    validateEndpoint(input.value);
                     setError("");
                   } catch (failure) {
                     setError(errorMessage(failure));
@@ -2659,8 +2718,9 @@ export const Classroom = ({
                 }}
               >
                 <SettingsNavigation
-                  initialPage={settingsPage}
-                  hasTools={!!renderSettingsActions}
+                  page={settingsPage}
+                  onPageChange={setSettingsPage}
+                  showHeader={false}
                 >
                   <BoardSettings api={api} device={inkProfile} />
                   <SettingsSection id="language">
@@ -2668,9 +2728,13 @@ export const Classroom = ({
                       {t("labels.language")}
                       <LanguageList />
                     </label>
-                  </SettingsSection>
-                  <SettingsSection id="tools">
-                    {renderSettingsActions?.(() => close(false))}
+                    <button
+                      type="button"
+                      className="fc-language-packs-entry"
+                      onClick={() => openLanguagePacks()}
+                    >
+                      {t("fcboard.languagePacks.title")} ›
+                    </button>
                   </SettingsSection>
                   <SettingsSection id="teaching">
                     <LearningSettings />
@@ -3010,7 +3074,10 @@ export const Classroom = ({
                       <input
                         type="checkbox"
                         checked={remember}
-                        onChange={(event) => setRemember(event.target.checked)}
+                        onChange={(event) => {
+                          setRemember(event.target.checked);
+                          persistSettings(settings, event.target.checked);
+                        }}
                       />
                       {t(
                         "fcboard.remember_keys_on_this_device_avoid_on_shared_displays",
@@ -3060,46 +3127,6 @@ export const Classroom = ({
                       </MaterialSelect>
                     </label>
                   </SettingsSection>
-                  <div className="fc-settings-actions">
-                    <button className="fc-primary" type="submit">
-                      {t("fcboard.save_settings")}
-                    </button>
-                    <SettingsSection id="models">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            const context = await boardContext(api);
-                            const result = await chat(
-                              [
-                                visualMessage(
-                                  context.image
-                                    ? "确认可以读取这张白板截图，只回复识别到的一小段内容。"
-                                    : "连接测试，请回复连接成功。",
-                                  context.image,
-                                ),
-                              ],
-                              undefined,
-                              settings,
-                            );
-                            setStatus(
-                              context.image
-                                ? t("fcboard.image_recognition_result_result", {
-                                    result: result.slice(0, 160),
-                                  })
-                                : t(
-                                    "fcboard.connection_test_result_result_write_on_the_board_to_test_image_recognition",
-                                    { result: result.slice(0, 160) },
-                                  ),
-                            );
-                          })
-                        }
-                      >
-                        {t("fcboard.test_current_settings")}
-                      </button>
-                    </SettingsSection>
-                  </div>
                 </SettingsNavigation>
               </form>
             )}

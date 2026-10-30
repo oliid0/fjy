@@ -1,4 +1,4 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
 import {
   COLOR_PALETTE,
@@ -11,7 +11,7 @@ import {
   getFontString,
   getLineHeight,
   ROUGHNESS,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import {
   getApproxMinLineWidth,
@@ -20,13 +20,10 @@ import {
   newLinearElement,
   newTextElement,
   wrapText,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import type {
-  ChartType,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { ChartType, FcboardTextElement } from "@fcboard/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import {
   BAR_GAP,
@@ -410,7 +407,7 @@ export const createSeriesLegend = (
   const pillWidth = totalLegendWidth + pillPaddingX * 2;
   const pillHeight = maxLegendHalfHeight * 2 + pillPaddingY * 2;
 
-  const legendElements: NonDeletedExcalidrawElement[] = [];
+  const legendElements: NonDeletedFcboardElement[] = [];
 
   // rounded pill background
   legendElements.push(
@@ -476,7 +473,7 @@ const ellipsifyTextToWidth = (
   text: string,
   maxWidth: number,
   fontString: ReturnType<typeof getFontString>,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: FcboardTextElement["lineHeight"],
 ) => {
   if (measureText(text, fontString, lineHeight).width <= maxWidth) {
     return text;
@@ -498,7 +495,7 @@ const wrapOrEllipsifyTextToWidth = (
   text: string,
   maxWidth: number,
   fontString: ReturnType<typeof getFontString>,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: FcboardTextElement["lineHeight"],
 ) => {
   if (measureText(text, fontString, lineHeight).width <= maxWidth) {
     return { wrapped: false, text };
@@ -552,7 +549,7 @@ const getCartesianAxisLabelSpec = (
   maxLabelWidth: number,
   maxRotatedWidth: number,
   fontString: ReturnType<typeof getFontString>,
-  lineHeight: ExcalidrawTextElement["lineHeight"],
+  lineHeight: FcboardTextElement["lineHeight"],
 ): CartesianAxisLabelSpec => {
   const minWidth = Math.max(
     CARTESIAN_LABEL_MIN_WIDTH,
@@ -672,7 +669,7 @@ const getCartesianAxisLabelSpec = (
 };
 
 export const getRotatedTextElementBottom = (
-  element: NonDeletedExcalidrawElement,
+  element: NonDeletedFcboardElement,
 ) => {
   if (element.type !== "text") {
     return element.y + element.height;
@@ -814,7 +811,7 @@ const chartLines = (
   return [xLine, yLine, maxLine];
 };
 
-// For the maths behind it https://excalidraw.com/#json=6320864370884608,O_5xfD-Agh32tytHpRJx1g
+// For the maths behind it https://fcboard.com/#json=6320864370884608,O_5xfD-Agh32tytHpRJx1g
 export const chartBaseElements = (
   spreadsheet: Spreadsheet,
   x: number,

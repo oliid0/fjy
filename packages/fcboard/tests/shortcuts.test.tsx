@@ -1,8 +1,8 @@
 import React from "react";
 
-import { KEYS } from "@excalidraw/common";
+import { KEYS } from "@fcboard/common";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "./helpers/api";
 import { Keyboard } from "./helpers/ui";
@@ -11,7 +11,7 @@ import { fireEvent, render, waitFor } from "./test-utils";
 describe("shortcuts", () => {
   it("Clear canvas shortcut should display confirm dialog", async () => {
     await render(
-      <Excalidraw
+      <Fcboard
         initialData={{ elements: [API.createElement({ type: "rectangle" })] }}
         handleKeyboardGlobally
       />,

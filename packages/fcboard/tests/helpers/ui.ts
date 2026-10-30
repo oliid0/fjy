@@ -1,11 +1,11 @@
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@fcboard/math";
 
 import {
   elementCenterPoint,
   getCommonBounds,
   getElementPointsCoords,
-} from "@excalidraw/element";
-import { cropElement } from "@excalidraw/element";
+} from "@fcboard/element";
+import { cropElement } from "@fcboard/element";
 import {
   getTransformHandles,
   getTransformHandlesFromCoords,
@@ -13,31 +13,31 @@ import {
   OMIT_SIDES_FOR_MULTIPLE_ELEMENTS,
   type TransformHandle,
   type TransformHandleDirection,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 import {
   isLinearElement,
   isFreeDrawElement,
   isTextElement,
   isFrameLikeElement,
-} from "@excalidraw/element";
-import { KEYS, arrayToMap } from "@excalidraw/common";
+} from "@fcboard/element";
+import { KEYS, arrayToMap } from "@fcboard/common";
 
-import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint, Radians } from "@fcboard/math";
 
-import type { TransformHandleType } from "@excalidraw/element";
+import type { TransformHandleType } from "@fcboard/element";
 import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawTextElement,
-  ExcalidrawArrowElement,
-  ExcalidrawRectangleElement,
-  ExcalidrawEllipseElement,
-  ExcalidrawDiamondElement,
-  ExcalidrawTextContainer,
-  ExcalidrawTextElementWithContainer,
-  ExcalidrawImageElement,
+  FcboardElement,
+  FcboardLinearElement,
+  FcboardTextElement,
+  FcboardArrowElement,
+  FcboardRectangleElement,
+  FcboardEllipseElement,
+  FcboardDiamondElement,
+  FcboardTextContainer,
+  FcboardTextElementWithContainer,
+  FcboardImageElement,
   ElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
 import { createTestHook } from "../../components/App";
 import { getTextEditor, TEXT_EDITOR_SELECTOR } from "../queries/dom";
@@ -150,7 +150,7 @@ export class Keyboard {
 }
 
 const getElementPointForSelection = (
-  element: ExcalidrawElement,
+  element: FcboardElement,
   elementsMap: ElementsMap,
 ): GlobalPoint => {
   const { x, y, width, angle } = element;
@@ -297,7 +297,7 @@ export class Pointer {
 
   select(
     /** if multiple elements supplied, they're shift-selected */
-    elements: ExcalidrawElement | ExcalidrawElement[],
+    elements: FcboardElement | FcboardElement[],
   ) {
     API.clearSelection();
 
@@ -317,7 +317,7 @@ export class Pointer {
     this.reset();
   }
 
-  clickOn(element: ExcalidrawElement) {
+  clickOn(element: FcboardElement) {
     this.reset();
     this.click(
       ...getElementPointForSelection(
@@ -328,7 +328,7 @@ export class Pointer {
     this.reset();
   }
 
-  doubleClickOn(element: ExcalidrawElement) {
+  doubleClickOn(element: FcboardElement) {
     this.reset();
     this.doubleClick(
       ...getElementPointForSelection(
@@ -343,7 +343,7 @@ export class Pointer {
 const mouse = new Pointer("mouse");
 
 const transform = (
-  element: ExcalidrawElement | ExcalidrawElement[],
+  element: FcboardElement | FcboardElement[],
   handle: TransformHandleType,
   mouseMove: [deltaX: number, deltaY: number],
   keyboardModifiers: KeyboardModifiers = {},
@@ -397,7 +397,7 @@ const transform = (
   });
 };
 
-const proxy = <T extends ExcalidrawElement>(
+const proxy = <T extends FcboardElement>(
   element: T,
 ): typeof element & {
   /** Returns the actual, current element from the elements array, instead of
@@ -414,7 +414,7 @@ const proxy = <T extends ExcalidrawElement>(
         if (prop === "get") {
           if (currentElement.hasOwnProperty("get")) {
             throw new Error(
-              "trying to get `get` test property, but ExcalidrawElement seems to define its own",
+              "trying to get `get` test property, but FcboardElement seems to define its own",
             );
           }
           return () => currentElement;
@@ -432,18 +432,18 @@ type DrawingToolName = Exclude<
 >;
 
 type Element<T extends DrawingToolName> = T extends "line" | "freedraw"
-  ? ExcalidrawLinearElement
+  ? FcboardLinearElement
   : T extends "arrow"
-  ? ExcalidrawArrowElement
+  ? FcboardArrowElement
   : T extends "text"
-  ? ExcalidrawTextElement
+  ? FcboardTextElement
   : T extends "rectangle"
-  ? ExcalidrawRectangleElement
+  ? FcboardRectangleElement
   : T extends "ellipse"
-  ? ExcalidrawEllipseElement
+  ? FcboardEllipseElement
   : T extends "diamond"
-  ? ExcalidrawDiamondElement
-  : ExcalidrawElement;
+  ? FcboardDiamondElement
+  : FcboardElement;
 
 export class UI {
   static clickTool = (toolName: ToolType | "lock") => {
@@ -472,7 +472,7 @@ export class UI {
   };
 
   /**
-   * Creates an Excalidraw element, and returns a proxy that wraps it so that
+   * Creates an Fcboard element, and returns a proxy that wraps it so that
    * accessing props will return the latest ones from the object existing in
    * the app's elements array. This is because across the app lifecycle we tend
    * to recreate element objects and the returned reference will become stale.
@@ -550,9 +550,10 @@ export class UI {
     return proxy(origElement);
   }
 
-  static async editText<
-    T extends ExcalidrawTextElement | ExcalidrawTextContainer,
-  >(element: T, text: string) {
+  static async editText<T extends FcboardTextElement | FcboardTextContainer>(
+    element: T,
+    text: string,
+  ) {
     const openedEditor =
       document.querySelector<HTMLTextAreaElement>(TEXT_EDITOR_SELECTOR);
 
@@ -574,9 +575,7 @@ export class UI {
     return isTextElement(element)
       ? element
       : proxy(
-          h.elements[
-            h.elements.length - 1
-          ] as ExcalidrawTextElementWithContainer,
+          h.elements[h.elements.length - 1] as FcboardTextElementWithContainer,
         );
   }
 
@@ -589,7 +588,7 @@ export class UI {
   };
 
   static resize(
-    element: ExcalidrawElement | ExcalidrawElement[],
+    element: FcboardElement | FcboardElement[],
     handle: TransformHandleDirection,
     mouseMove: [deltaX: number, deltaY: number],
     keyboardModifiers: KeyboardModifiers = {},
@@ -598,7 +597,7 @@ export class UI {
   }
 
   static crop(
-    element: ExcalidrawImageElement,
+    element: FcboardImageElement,
     handle: TransformHandleDirection,
     naturalWidth: number,
     naturalHeight: number,
@@ -631,21 +630,21 @@ export class UI {
   }
 
   static rotate(
-    element: ExcalidrawElement | ExcalidrawElement[],
+    element: FcboardElement | FcboardElement[],
     mouseMove: [deltaX: number, deltaY: number],
     keyboardModifiers: KeyboardModifiers = {},
   ) {
     return transform(element, "rotation", mouseMove, keyboardModifiers);
   }
 
-  static group(elements: ExcalidrawElement[]) {
+  static group(elements: FcboardElement[]) {
     mouse.select(elements);
     Keyboard.withModifierKeys({ ctrl: true }, () => {
       Keyboard.keyPress(KEYS.G);
     });
   }
 
-  static ungroup(elements: ExcalidrawElement[]) {
+  static ungroup(elements: FcboardElement[]) {
     mouse.select(elements);
     Keyboard.withModifierKeys({ ctrl: true, shift: true }, () => {
       Keyboard.keyPress(KEYS.G);

@@ -3,13 +3,9 @@ import Slider from "@mui/material/Slider";
 import Switch from "@mui/material/Switch";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import { t, useI18n } from "@excalidraw/excalidraw/i18n";
-import { factoryBackgrounds } from "@excalidraw/excalidraw/whiteboardBackground";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 
-import type {
-  ExcalidrawImperativeAPI,
-  UIOptions,
-} from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { SettingsSection } from "./SettingsNavigation";
 import {
@@ -18,21 +14,14 @@ import {
 } from "./canvasConfiguration";
 import { classroomCommands } from "./commands";
 import { TransientMessage } from "./TransientMessage";
-
-// HDataSet.patternColorList, preserving the original five backgrounds.
-const backgroundColors = [
-  "#212121",
-  "#576269",
-  "#000000",
-  "#253a35",
-  "#60a96c",
-];
+import { ThresholdSettings } from "./ThresholdSettings";
+import { BackgroundSettings } from "./BackgroundSettings";
 
 export const BoardSettings = ({
   api,
   device,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   device?: UIOptions["inkProfile"];
 }) => {
   useI18n();
@@ -56,6 +45,7 @@ export const BoardSettings = ({
         api,
         canvasConfigurationPatch(api, input, device),
       );
+      setError("");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
     }
@@ -70,75 +60,30 @@ export const BoardSettings = ({
             )}
           </p>
         ) : (
-          <>
-            <label>
-              {t("fcboard.background")}
-              <input
-                type="color"
-                value={
-                  /^#[\da-f]{6}$/i.test(state.viewBackgroundColor)
-                    ? state.viewBackgroundColor
-                    : "#ffffff"
-                }
-                onChange={(event) =>
-                  update({ backgroundColor: event.target.value })
-                }
-              />
-            </label>
-            <div
-              className="fc-background-colors"
-              role="group"
-              aria-label={t("fcboard.background")}
-            >
-              {backgroundColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  aria-label={`${t("fcboard.background")} ${color}`}
-                  aria-pressed={
-                    state.viewBackgroundColor?.toLowerCase() === color
-                  }
-                  style={{ backgroundColor: color }}
-                  onClick={() => update({ backgroundColor: color })}
-                />
-              ))}
-            </div>
-            <div
-              className="fc-background-picker"
-              role="group"
-              aria-label={t("fcboard.background")}
-            >
-              <button
-                type="button"
-                aria-label={t("fcboard.no_background_pattern")}
-                aria-pressed={!state.whiteboardBackground}
-                onClick={() => update({ backgroundPattern: 0 })}
-              >
-                <span aria-hidden="true">∅</span>
-              </button>
-              {factoryBackgrounds.map((url, index) => (
-                <button
-                  type="button"
-                  key={url}
-                  aria-label={t("fcboard.background_pattern_number", {
-                    number: index + 1,
-                  })}
-                  aria-pressed={
-                    state.whiteboardBackground?.pattern === index + 1
-                  }
-                  onClick={() => update({ backgroundPattern: index + 1 })}
-                >
-                  <img src={url} alt="" />
-                </button>
-              ))}
-            </div>
-          </>
+          <BackgroundSettings state={state} onChange={update} />
         )}
       </SettingsSection>
-      <SettingsSection id="pen">
+      <SettingsSection id="home">
         <>
           <label>
-            {t("fcboard.hard_pen_nib")}
+            {t("fcboard.factorySettings.dual_pen")}
+            <Switch
+              checked={state.whiteboardDualPen ?? device?.dualPen ?? false}
+              disabled={
+                !(state.whiteboardThickThreshold ?? device?.thickThreshold)
+              }
+              onChange={(_, value) => update({ dualPen: value })}
+            />
+          </label>
+          <label>
+            {t("fcboard.toolbar_text")}
+            <Switch
+              checked={state.whiteboardToolbarText !== false}
+              onChange={(_, checked) => update({ toolbarText: checked })}
+            />
+          </label>
+          <label>
+            {t("fcboard.factorySettings.nib")}
             <Switch
               checked={
                 device?.hardNibAvailable !== false &&
@@ -148,6 +93,44 @@ export const BoardSettings = ({
               onChange={(_, checked) => update({ hardNib: checked })}
             />
           </label>
+          <label>
+            {t("fcboard.factorySettings.variation")}
+            <Slider
+              aria-label={t("fcboard.factorySettings.variation")}
+              min={0}
+              max={50}
+              valueLabelDisplay="auto"
+              value={state.whiteboardBrushVariation ?? 45}
+              onChange={(_, value) => update({ brushVariation: value })}
+            />
+            <output>{state.whiteboardBrushVariation ?? 45}</output>
+          </label>
+        </>
+      </SettingsSection>
+      <SettingsSection id="touch">
+        <ThresholdSettings
+          state={state}
+          device={device}
+          onChange={update}
+          onReset={() => {
+            const scale = window.devicePixelRatio || 1;
+            const defaults = device?.factoryThresholds;
+            applyCanvasConfiguration(api, {
+              palmEraserThreshold: defaults?.palm
+                ? ((defaults.palm / scale) * 2) / 3
+                : undefined,
+              whiteboardFineThreshold: defaults?.fine
+                ? ((defaults.fine / scale) * 4) / 5
+                : undefined,
+              whiteboardThickThreshold: defaults?.thick
+                ? ((defaults.thick / scale) * 4) / 5
+                : undefined,
+            });
+          }}
+        />
+      </SettingsSection>
+      <SettingsSection id="recognition">
+        <>
           <div className="fc-settings-choice">
             <span>{t("fcboard.pen_tip")}</span>
             <ToggleButtonGroup
@@ -193,32 +176,6 @@ export const BoardSettings = ({
               }}
             />
           </label>
-          <label>
-            {t("fcboard.detect_pen_tip_automatically")}
-            <Switch
-              checked={state.whiteboardDualPen ?? device?.dualPen ?? false}
-              disabled={
-                !(state.whiteboardThickThreshold ?? device?.thickThreshold)
-              }
-              onChange={(_, value) => update({ dualPen: value })}
-            />
-          </label>
-          <label>
-            {t("fcboard.stroke_width_variation")}
-            <Slider
-              aria-label={t("fcboard.stroke_width_variation")}
-              min={0}
-              max={50}
-              valueLabelDisplay="auto"
-              value={state.whiteboardBrushVariation ?? 45}
-              onChange={(_, value) => update({ brushVariation: value })}
-            />
-            <output>{state.whiteboardBrushVariation ?? 45}</output>
-          </label>
-        </>
-      </SettingsSection>
-      <SettingsSection id="touch">
-        <>
           <label>
             {t("fcboard.palm_erasing")}
             <Switch

@@ -1,6 +1,6 @@
-import { getLanguage, t } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
-import type { ResourceControlState } from "@excalidraw/excalidraw/interactiveResourceControls";
+import type { ResourceControlState } from "@fcboard/fcboard/interactiveResourceControls";
 
 import { chat, parseJSON } from "./ai";
 import { agentContext, runBoardCommands } from "./agent";

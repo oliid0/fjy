@@ -1,32 +1,32 @@
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@fcboard/math";
 
 import {
   getBoundTextElement,
   isBindingElement,
   unbindBindingElement,
-} from "@excalidraw/element";
-import { isFrameLikeElement } from "@excalidraw/element";
+} from "@fcboard/element";
+import { isFrameLikeElement } from "@fcboard/element";
 
 import {
   getSelectedGroupIds,
   getElementsInGroup,
   isInGroup,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { getFrameChildren } from "@excalidraw/element";
+import { getFrameChildren } from "@fcboard/element";
 
-import { updateBindings } from "@excalidraw/element";
-import { DRAGGING_THRESHOLD } from "@excalidraw/common";
+import { updateBindings } from "@fcboard/element";
+import { DRAGGING_THRESHOLD } from "@fcboard/common";
 
-import type { Radians } from "@excalidraw/math";
+import type { Radians } from "@fcboard/math";
 
 import type {
   ElementsMap,
-  ExcalidrawElement,
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  NonDeletedFcboardElement,
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import type { AppState } from "../../types";
 
@@ -43,8 +43,8 @@ export const SMALLEST_DELTA = 0.01;
 export const STEP_SIZE = 10;
 
 export const isPropertyEditable = (
-  element: ExcalidrawElement,
-  property: keyof ExcalidrawElement,
+  element: FcboardElement,
+  property: keyof FcboardElement,
 ) => {
   if (property === "angle" && isFrameLikeElement(element)) {
     return false;
@@ -69,8 +69,8 @@ export const getElementsInAtomicUnit = (
       latest: elementsMap.get(id),
     }))
     .filter((el) => el.original !== undefined && el.latest !== undefined) as {
-    original: NonDeletedExcalidrawElement;
-    latest: NonDeletedExcalidrawElement;
+    original: NonDeletedFcboardElement;
+    latest: NonDeletedFcboardElement;
   }[];
 };
 
@@ -113,7 +113,7 @@ export const newOrigin = (
 export const moveElement = (
   newTopLeftX: number,
   newTopLeftY: number,
-  originalElement: ExcalidrawElement,
+  originalElement: FcboardElement,
   scene: Scene,
   appState: AppState,
   originalElementsMap: ElementsMap,
@@ -232,7 +232,7 @@ export const moveElement = (
 };
 
 export const getAtomicUnits = (
-  targetElements: readonly ExcalidrawElement[],
+  targetElements: readonly FcboardElement[],
   appState: AppState,
 ) => {
   const selectedGroupIds = getSelectedGroupIds(appState);

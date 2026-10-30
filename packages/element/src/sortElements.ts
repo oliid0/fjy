@@ -1,17 +1,17 @@
-import { arrayToMapWithIndex } from "@excalidraw/common";
+import { arrayToMapWithIndex } from "@fcboard/common";
 
-import type { ExcalidrawElement } from "./types";
+import type { FcboardElement } from "./types";
 
-const normalizeGroupElementOrder = (elements: readonly ExcalidrawElement[]) => {
-  const origElements: ExcalidrawElement[] = elements.slice();
-  const sortedElements = new Set<ExcalidrawElement>();
+const normalizeGroupElementOrder = (elements: readonly FcboardElement[]) => {
+  const origElements: FcboardElement[] = elements.slice();
+  const sortedElements = new Set<FcboardElement>();
 
   const orderInnerGroups = (
-    elements: readonly ExcalidrawElement[],
-  ): ExcalidrawElement[] => {
+    elements: readonly FcboardElement[],
+  ): FcboardElement[] => {
     const firstGroupSig = elements[0]?.groupIds?.join("");
-    const aGroup: ExcalidrawElement[] = [elements[0]];
-    const bGroup: ExcalidrawElement[] = [];
+    const aGroup: FcboardElement[] = [elements[0]];
+    const bGroup: FcboardElement[] = [];
     for (const element of elements.slice(1)) {
       if (element.groupIds?.join("") === firstGroupSig) {
         aGroup.push(element);
@@ -65,13 +65,11 @@ const normalizeGroupElementOrder = (elements: readonly ExcalidrawElement[]) => {
  * original z-index of container (i.e. it moves bound text elements after
  * containers).
  */
-const normalizeBoundElementsOrder = (
-  elements: readonly ExcalidrawElement[],
-) => {
+const normalizeBoundElementsOrder = (elements: readonly FcboardElement[]) => {
   const elementsMap = arrayToMapWithIndex(elements);
 
-  const origElements: (ExcalidrawElement | null)[] = elements.slice();
-  const sortedElements = new Set<ExcalidrawElement>();
+  const origElements: (FcboardElement | null)[] = elements.slice();
+  const sortedElements = new Set<FcboardElement>();
 
   origElements.forEach((element, idx) => {
     if (!element) {
@@ -114,8 +112,6 @@ const normalizeBoundElementsOrder = (
   return [...sortedElements];
 };
 
-export const normalizeElementOrder = (
-  elements: readonly ExcalidrawElement[],
-) => {
+export const normalizeElementOrder = (elements: readonly FcboardElement[]) => {
   return normalizeBoundElementsOrder(normalizeGroupElementOrder(elements));
 };

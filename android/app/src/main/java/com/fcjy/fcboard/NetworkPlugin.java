@@ -70,6 +70,15 @@ public class NetworkPlugin extends Plugin {
             } catch (Exception error) { releaseIfIdle(); call.reject("无法开启协作：" + error.getMessage()); }
         });
     }
+    /** QRHttpPopu changes the existing share's password; it does not create a new room/link. */
+    @PluginMethod public void setCollaborationPassword(PluginCall call) {
+        worker.execute(() -> {
+            try {
+                if (server == null || !sharing) throw new IllegalStateException("协作已结束");
+                server.setPassword(call.getString("password", "")); call.resolve();
+            } catch (Exception error) { call.reject(error.getMessage()); }
+        });
+    }
     @PluginMethod public void sendScene(PluginCall call) {
         worker.execute(() -> {
             try { if (server == null) throw new IllegalStateException("协作未开启"); server.publish(call.getString("message", ""), null); call.resolve(); }

@@ -1,0 +1,11 @@
+{
+  "name": "fcboard-live-share-service",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ws": "8.22.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

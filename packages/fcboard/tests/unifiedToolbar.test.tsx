@@ -1,18 +1,18 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { within } from "@testing-library/react";
 
-import { Excalidraw, ToolbarExtras } from "../index";
+import { Fcboard, ToolbarExtras } from "../index";
 
 import { render, screen, fireEvent } from "./test-utils";
 
 describe("unified bottom toolbar", () => {
   it("contains the original tools, menus, zoom, history and host controls in a single container", async () => {
     const { container } = await render(
-      <Excalidraw UIOptions={{ unifiedToolbar: true }}>
+      <Fcboard UIOptions={{ unifiedToolbar: true }}>
         <ToolbarExtras>
           <button>{t("fcboard.voice_commands")}</button>
         </ToolbarExtras>
-      </Excalidraw>,
+      </Fcboard>,
     );
     const toolbar = screen.getByRole("toolbar", {
       name: t("fcboard.whiteboard_toolbar"),

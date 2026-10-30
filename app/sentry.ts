@@ -1,10 +1,10 @@
-import { getFeatureFlag } from "@excalidraw/common";
+import { getFeatureFlag } from "@fcboard/common";
 import * as Sentry from "@sentry/browser";
 import callsites from "callsites";
 
 const SentryEnvHostnameMap: { [key: string]: string } = {
-  "excalidraw.com": "production",
-  "staging.excalidraw.com": "staging",
+  "fcboard.com": "production",
+  "staging.fcboard.com": "staging",
   "vercel.app": "staging",
 };
 

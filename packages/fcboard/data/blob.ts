@@ -5,10 +5,10 @@ import {
   MIME_TYPES,
   bytesToHexString,
   isPromiseLike,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
-import type { ExcalidrawElement, FileId } from "@excalidraw/element/types";
+import type { ValueOf } from "@fcboard/common/utility-types";
+import type { FcboardElement, FileId } from "@fcboard/element/types";
 
 import { cleanAppStateForExport } from "../appState";
 
@@ -18,7 +18,7 @@ import { decodeSvgBase64Payload } from "../scene/export";
 
 import { base64ToString, stringToBase64, toByteString } from "./encode";
 import { nativeFileSystemSupported } from "./filesystem";
-import { isValidExcalidrawData, isValidLibrary } from "./json";
+import { isValidFcboardData, isValidLibrary } from "./json";
 import {
   restoreAppState,
   restoreElements,
@@ -89,7 +89,7 @@ export const getMimeType = (blob: Blob | string): string => {
     }
     name = blob.name || "";
   }
-  if (/\.(excalidraw|json)$/.test(name)) {
+  if (/\.(fcboard|excalidraw|json)$/.test(name)) {
     return MIME_TYPES.json;
   } else if (/\.png$/.test(name)) {
     return MIME_TYPES.png;
@@ -97,8 +97,8 @@ export const getMimeType = (blob: Blob | string): string => {
     return MIME_TYPES.jpg;
   } else if (/\.svg$/.test(name)) {
     return MIME_TYPES.svg;
-  } else if (/\.excalidrawlib$/.test(name)) {
-    return MIME_TYPES.excalidrawlib;
+  } else if (/\.(fcboardlib|excalidrawlib)$/.test(name)) {
+    return MIME_TYPES.fcboardlib;
   }
   return "";
 };
@@ -108,7 +108,7 @@ export const getFileHandleType = (handle: FileSystemFileHandle | null) => {
     return null;
   }
 
-  return handle.name.match(/\.(json|excalidraw|png|svg)$/)?.[1] || null;
+  return handle.name.match(/\.(json|fcboard|png|svg)$/)?.[1] || null;
 };
 
 export const isImageFileHandleType = (
@@ -139,7 +139,7 @@ export const loadSceneOrLibraryFromBlob = async (
   blob: Blob | File,
   /** @see restore.localAppState */
   localAppState: AppState | null,
-  localElements: readonly ExcalidrawElement[] | null,
+  localElements: readonly FcboardElement[] | null,
   /** FileSystemFileHandle. Defaults to `blob.handle` if defined, otherwise null. */
   fileHandle?: FileSystemFileHandle | null,
 ) => {
@@ -157,9 +157,9 @@ export const loadSceneOrLibraryFromBlob = async (
       }
       throw error;
     }
-    if (isValidExcalidrawData(data)) {
+    if (isValidFcboardData(data)) {
       return {
-        type: MIME_TYPES.excalidraw,
+        type: MIME_TYPES.fcboard,
         data: {
           elements: restoreElements(data.elements, localElements, {
             repairBindings: true,
@@ -181,7 +181,7 @@ export const loadSceneOrLibraryFromBlob = async (
       };
     } else if (isValidLibrary(data)) {
       return {
-        type: MIME_TYPES.excalidrawlib,
+        type: MIME_TYPES.fcboardlib,
         data,
       };
     }
@@ -198,7 +198,7 @@ export const loadFromBlob = async (
   blob: Blob,
   /** @see restore.localAppState */
   localAppState: AppState | null,
-  localElements: readonly ExcalidrawElement[] | null,
+  localElements: readonly FcboardElement[] | null,
   /** FileSystemFileHandle. Defaults to `blob.handle` if defined, otherwise null. */
   fileHandle?: FileSystemFileHandle | null,
 ) => {
@@ -208,7 +208,7 @@ export const loadFromBlob = async (
     localElements,
     fileHandle,
   );
-  if (ret.type !== MIME_TYPES.excalidraw) {
+  if (ret.type !== MIME_TYPES.fcboard) {
     throw new Error("Error: invalid file");
   }
   return ret.data;
@@ -315,7 +315,7 @@ export const resizeImageFile = async (
   file: File,
   opts: {
     /** undefined indicates auto */
-    outputType?: typeof MIME_TYPES["jpg"];
+    outputType?: typeof MIME_TYPES["jpg"] | typeof MIME_TYPES["png"];
     maxWidthOrHeight: number;
   },
 ): Promise<File> => {
@@ -463,17 +463,17 @@ const normalizedFileSymbol = Symbol("fileNormalized");
 
 /** attempts to detect correct mimeType if none is set, or if an image
  * has an incorrect extension.
- * Note: doesn't handle missing .excalidraw/.excalidrawlib extension  */
+ * Note: doesn't handle missing .fcboard/.fcboardlib extension  */
 export const normalizeFile = async (file: File) => {
   // to prevent double normalization (perf optim)
   if ((file as any)[normalizedFileSymbol]) {
     return file;
   }
 
-  if (file?.name?.endsWith(".excalidrawlib")) {
-    file = createFile(file, MIME_TYPES.excalidrawlib, file.name);
-  } else if (file?.name?.endsWith(".excalidraw")) {
-    file = createFile(file, MIME_TYPES.excalidraw, file.name);
+  if (/\.(fcboardlib|excalidrawlib)$/.test(file?.name || "")) {
+    file = createFile(file, MIME_TYPES.fcboardlib, file.name);
+  } else if (/\.(fcboard|excalidraw)$/.test(file?.name || "")) {
+    file = createFile(file, MIME_TYPES.fcboard, file.name);
   } else if (!file.type || file.type?.startsWith("image/")) {
     // when the file is an image, make sure the extension corresponds to the
     // actual mimeType (this is an edge case, but happens - especially

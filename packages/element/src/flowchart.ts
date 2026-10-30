@@ -1,11 +1,8 @@
-import { KEYS, invariant, toBrandedType } from "@excalidraw/common";
+import { KEYS, invariant, toBrandedType } from "@fcboard/common";
 
-import { type GlobalPoint, pointFrom, type LocalPoint } from "@excalidraw/math";
+import { type GlobalPoint, pointFrom, type LocalPoint } from "@fcboard/math";
 
-import type {
-  AppState,
-  PendingExcalidrawElements,
-} from "@excalidraw/excalidraw/types";
+import type { AppState, PendingFcboardElements } from "@fcboard/fcboard/types";
 
 import { bindBindingElement } from "./binding";
 import { updateElbowArrowPoints } from "./elbowArrow";
@@ -31,12 +28,12 @@ import {
 } from "./typeChecks";
 import {
   type ElementsMap,
-  type ExcalidrawBindableElement,
-  type ExcalidrawElement,
-  type ExcalidrawFlowchartNodeElement,
+  type FcboardBindableElement,
+  type FcboardElement,
+  type FcboardFlowchartNodeElement,
   type NonDeletedSceneElementsMap,
   type Ordered,
-  type OrderedExcalidrawElement,
+  type OrderedFcboardElement,
 } from "./types";
 
 import type { Scene } from "./Scene";
@@ -63,12 +60,12 @@ export const getLinkDirectionFromKey = (key: string): LinkDirection => {
 
 const getNodeRelatives = (
   type: "predecessors" | "successors",
-  node: ExcalidrawBindableElement,
+  node: FcboardBindableElement,
   elementsMap: ElementsMap,
   direction: LinkDirection,
 ) => {
   const items = [...elementsMap.values()].reduce(
-    (acc: { relative: ExcalidrawBindableElement; heading: Heading }[], el) => {
+    (acc: { relative: FcboardBindableElement; heading: Heading }[], el) => {
       let oppositeBinding;
       if (
         isElbowArrow(el) &&
@@ -86,10 +83,7 @@ const getNodeRelatives = (
           return acc;
         }
 
-        invariant(
-          isBindableElement(relative),
-          "not an ExcalidrawBindableElement",
-        );
+        invariant(isBindableElement(relative), "not an FcboardBindableElement");
 
         const edgePoint = (
           type === "predecessors" ? el.points[el.points.length - 1] : [0, 0]
@@ -132,7 +126,7 @@ const getNodeRelatives = (
 };
 
 const getSuccessors = (
-  node: ExcalidrawBindableElement,
+  node: FcboardBindableElement,
   elementsMap: ElementsMap,
   direction: LinkDirection,
 ) => {
@@ -140,7 +134,7 @@ const getSuccessors = (
 };
 
 export const getPredecessors = (
-  node: ExcalidrawBindableElement,
+  node: FcboardBindableElement,
   elementsMap: ElementsMap,
   direction: LinkDirection,
 ) => {
@@ -148,8 +142,8 @@ export const getPredecessors = (
 };
 
 const getOffsets = (
-  element: ExcalidrawFlowchartNodeElement,
-  linkedNodes: ExcalidrawElement[],
+  element: FcboardFlowchartNodeElement,
+  linkedNodes: FcboardElement[],
   direction: LinkDirection,
 ) => {
   const _HORIZONTAL_OFFSET = HORIZONTAL_OFFSET + element.width;
@@ -238,7 +232,7 @@ const getOffsets = (
 };
 
 const addNewNode = (
-  element: ExcalidrawFlowchartNodeElement,
+  element: FcboardFlowchartNodeElement,
   appState: AppState,
   direction: LinkDirection,
   scene: Scene,
@@ -272,7 +266,7 @@ const addNewNode = (
 
   invariant(
     isFlowchartNodeElement(nextNode),
-    "not an ExcalidrawFlowchartNodeElement",
+    "not an FcboardFlowchartNodeElement",
   );
 
   const bindingArrow = createBindingArrow(
@@ -290,14 +284,14 @@ const addNewNode = (
 };
 
 export const addNewNodes = (
-  startNode: ExcalidrawFlowchartNodeElement,
+  startNode: FcboardFlowchartNodeElement,
   appState: AppState,
   direction: LinkDirection,
   scene: Scene,
   numberOfNodes: number,
 ) => {
   // always start from 0 and distribute evenly
-  const newNodes: ExcalidrawElement[] = [];
+  const newNodes: FcboardElement[] = [];
 
   for (let i = 0; i < numberOfNodes; i++) {
     let nextX: number;
@@ -350,7 +344,7 @@ export const addNewNodes = (
 
     invariant(
       isFlowchartNodeElement(nextNode),
-      "not an ExcalidrawFlowchartNodeElement",
+      "not an FcboardFlowchartNodeElement",
     );
 
     const bindingArrow = createBindingArrow(
@@ -369,8 +363,8 @@ export const addNewNodes = (
 };
 
 const createBindingArrow = (
-  startBindingElement: ExcalidrawFlowchartNodeElement,
-  endBindingElement: ExcalidrawFlowchartNodeElement,
+  startBindingElement: FcboardFlowchartNodeElement,
+  endBindingElement: FcboardFlowchartNodeElement,
   direction: LinkDirection,
   appState: AppState,
   scene: Scene,
@@ -455,19 +449,16 @@ const createBindingArrow = (
   );
   bindBindingElement(bindingArrow, endBindingElement, "orbit", "end", scene);
 
-  const changedElements = new Map<string, OrderedExcalidrawElement>();
+  const changedElements = new Map<string, OrderedFcboardElement>();
   changedElements.set(
     startBindingElement.id,
-    startBindingElement as OrderedExcalidrawElement,
+    startBindingElement as OrderedFcboardElement,
   );
   changedElements.set(
     endBindingElement.id,
-    endBindingElement as OrderedExcalidrawElement,
+    endBindingElement as OrderedFcboardElement,
   );
-  changedElements.set(
-    bindingArrow.id,
-    bindingArrow as OrderedExcalidrawElement,
-  );
+  changedElements.set(bindingArrow.id, bindingArrow as OrderedFcboardElement);
 
   LinearElementEditor.movePoints(
     bindingArrow,
@@ -490,7 +481,7 @@ const createBindingArrow = (
         [startBindingElement.id, startBindingElement],
         [endBindingElement.id, endBindingElement],
         [bindingArrow.id, bindingArrow],
-      ] as [string, Ordered<ExcalidrawElement>][]),
+      ] as [string, Ordered<FcboardElement>][]),
     ),
     { points: bindingArrow.points },
   );
@@ -504,12 +495,12 @@ const createBindingArrow = (
 export class FlowChartNavigator {
   isExploring: boolean = false;
   // nodes that are ONE link away (successor and predecessor both included)
-  private sameLevelNodes: ExcalidrawElement[] = [];
+  private sameLevelNodes: FcboardElement[] = [];
   private sameLevelIndex: number = 0;
   // set it to the opposite of the defalut creation direction
   private direction: LinkDirection | null = null;
   // for speedier navigation
-  private visitedNodes: Set<ExcalidrawElement["id"]> = new Set();
+  private visitedNodes: Set<FcboardElement["id"]> = new Set();
 
   clear() {
     this.isExploring = false;
@@ -520,10 +511,10 @@ export class FlowChartNavigator {
   }
 
   exploreByDirection(
-    element: ExcalidrawElement,
+    element: FcboardElement,
     elementsMap: ElementsMap,
     direction: LinkDirection,
-  ): ExcalidrawElement["id"] | null {
+  ): FcboardElement["id"] | null {
     if (!isBindableElement(element)) {
       return null;
     }
@@ -636,10 +627,10 @@ export class FlowChartCreator {
   isCreatingChart: boolean = false;
   private numberOfNodes: number = 0;
   private direction: LinkDirection | null = "right";
-  pendingNodes: PendingExcalidrawElements | null = null;
+  pendingNodes: PendingFcboardElements | null = null;
 
   createNodes(
-    startNode: ExcalidrawFlowchartNodeElement,
+    startNode: FcboardFlowchartNodeElement,
     appState: AppState,
     direction: LinkDirection,
     scene: Scene,
@@ -677,10 +668,7 @@ export class FlowChartCreator {
     if (startNode.frameId) {
       const frame = elementsMap.get(startNode.frameId);
 
-      invariant(
-        frame && isFrameElement(frame),
-        "not an ExcalidrawFrameElement",
-      );
+      invariant(frame && isFrameElement(frame), "not an FcboardFrameElement");
 
       if (
         frame &&
@@ -708,7 +696,7 @@ export class FlowChartCreator {
 }
 
 export const isNodeInFlowchart = (
-  element: ExcalidrawFlowchartNodeElement,
+  element: FcboardFlowchartNodeElement,
   elementsMap: ElementsMap,
 ) => {
   for (const [, el] of elementsMap) {

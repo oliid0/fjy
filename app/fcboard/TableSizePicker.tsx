@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 
 /** HTableSettingWindow / WhiteTableSquareView: a 10 × 7 rectangle of cells. */
 export const TableSizePicker = ({

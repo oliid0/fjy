@@ -1,11 +1,8 @@
 import React, { useCallback, useContext, useEffect, useState } from "react";
 
-import { DEFAULT_UI_OPTIONS, isShallowEqual } from "@excalidraw/common";
+import { DEFAULT_UI_OPTIONS, isShallowEqual } from "@fcboard/common";
 
-import App, {
-  ExcalidrawAPIContext,
-  ExcalidrawAPISetContext,
-} from "./components/App";
+import App, { FcboardAPIContext, FcboardAPISetContext } from "./components/App";
 import { InitializeApp } from "./components/InitializeApp";
 import Footer from "./components/footer/FooterCenter";
 import LiveCollaborationTrigger from "./components/live-collaboration/LiveCollaborationTrigger";
@@ -23,39 +20,39 @@ import "./fonts/fonts.css";
 import type {
   AppProps,
   AppState,
-  ExcalidrawImperativeAPI,
-  ExcalidrawProps,
+  FcboardImperativeAPI,
+  FcboardProps,
 } from "./types";
 
 polyfill();
 
 /**
- * Stateless provider that allows `useExcalidrawAPI()` (and hooks built
- * on it, such as `useAppStateValue()`) to work outside the <Excalidraw>
+ * Stateless provider that allows `useFcboardAPI()` (and hooks built
+ * on it, such as `useAppStateValue()`) to work outside the <Fcboard>
  * component tree.
  */
-export const ExcalidrawAPIProvider = ({
+export const FcboardAPIProvider = ({
   children,
 }: {
   children: React.ReactNode;
 }) => {
-  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
+  const [api, setApi] = useState<FcboardImperativeAPI | null>(null);
   return (
-    <ExcalidrawAPIContext.Provider value={api}>
-      <ExcalidrawAPISetContext.Provider value={setApi}>
+    <FcboardAPIContext.Provider value={api}>
+      <FcboardAPISetContext.Provider value={setApi}>
         {children}
-      </ExcalidrawAPISetContext.Provider>
-    </ExcalidrawAPIContext.Provider>
+      </FcboardAPISetContext.Provider>
+    </FcboardAPIContext.Provider>
   );
 };
 
-const ExcalidrawBase = (props: ExcalidrawProps) => {
+const FcboardBase = (props: FcboardProps) => {
   const {
     onExport,
     onChange,
     onIncrement,
     initialData,
-    onExcalidrawAPI,
+    onFcboardAPI,
     onMount,
     onInitialize,
     isCollaborating = false,
@@ -71,6 +68,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     name,
     renderCustomStats,
     onPaste,
+    onImagePick,
     detectScroll = true,
     handleKeyboardGlobally = false,
     onLibraryChange,
@@ -119,13 +117,13 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     UIOptions.canvasActions.toggleTheme = true;
   }
 
-  const setExcalidrawAPI = useContext(ExcalidrawAPISetContext);
-  const handleExcalidrawAPI = useCallback(
-    (api: ExcalidrawImperativeAPI) => {
-      setExcalidrawAPI?.(api);
-      onExcalidrawAPI?.(api);
+  const setFcboardAPI = useContext(FcboardAPISetContext);
+  const handleFcboardAPI = useCallback(
+    (api: FcboardImperativeAPI) => {
+      setFcboardAPI?.(api);
+      onFcboardAPI?.(api);
     },
-    [onExcalidrawAPI, setExcalidrawAPI],
+    [onFcboardAPI, setFcboardAPI],
   );
 
   useEffect(() => {
@@ -161,7 +159,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onChange={onChange}
           onIncrement={onIncrement}
           initialData={initialData}
-          onExcalidrawAPI={handleExcalidrawAPI}
+          onFcboardAPI={handleFcboardAPI}
           onMount={onMount}
           onInitialize={onInitialize}
           isCollaborating={isCollaborating}
@@ -178,6 +176,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderCustomStats={renderCustomStats}
           UIOptions={UIOptions}
           onPaste={onPaste}
+          onImagePick={onImagePick}
           detectScroll={detectScroll}
           handleKeyboardGlobally={handleKeyboardGlobally}
           onLibraryChange={onLibraryChange}
@@ -203,7 +202,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
   );
 };
 
-const areEqual = (prevProps: ExcalidrawProps, nextProps: ExcalidrawProps) => {
+const areEqual = (prevProps: FcboardProps, nextProps: FcboardProps) => {
   // short-circuit early
   if (prevProps.children !== nextProps.children) {
     return false;
@@ -263,18 +262,25 @@ const areEqual = (prevProps: ExcalidrawProps, nextProps: ExcalidrawProps) => {
   return isUIOptionsSame && isShallowEqual(prev, next);
 };
 
-export const Excalidraw = React.memo(ExcalidrawBase, areEqual);
-Excalidraw.displayName = "Excalidraw";
+export const Fcboard = React.memo(FcboardBase, areEqual);
+Fcboard.displayName = "Fcboard";
+export type {
+  FcboardProps,
+  FcboardImperativeAPI,
+  BinaryFiles,
+  BinaryFileData,
+  AppState,
+} from "./types";
 
 export {
   getSceneVersion,
   hashElementsVersion,
   hashString,
   getNonDeletedElements,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-export { getTextFromElements } from "@excalidraw/element";
-export { isInvisiblySmallElement } from "@excalidraw/element";
+export { getTextFromElements } from "@fcboard/element";
+export { isInvisiblySmallElement } from "@fcboard/element";
 
 export { defaultLang, useI18n, languages } from "./i18n";
 export {
@@ -291,7 +297,7 @@ export {
   exportToBlob,
   exportToSvg,
   exportToClipboard,
-} from "@excalidraw/utils/export";
+} from "@fcboard/utils/export";
 
 export { serializeAsJSON, serializeLibraryAsJSON } from "./data/json";
 export {
@@ -300,7 +306,7 @@ export {
   loadLibraryFromBlob,
 } from "./data/blob";
 export { mergeLibraryItems, getLibraryItemsHash } from "./data/library";
-export { isLinearElement } from "@excalidraw/element";
+export { isLinearElement } from "@fcboard/element";
 
 export {
   FONT_FAMILY,
@@ -314,15 +320,11 @@ export {
   viewportCoordsToSceneCoords,
   getFormFactor,
   throttleRAF,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
-export {
-  mutateElement,
-  newElementWith,
-  bumpVersion,
-} from "@excalidraw/element";
+export { mutateElement, newElementWith, bumpVersion } from "@fcboard/element";
 
-export { CaptureUpdateAction } from "@excalidraw/element";
+export { CaptureUpdateAction } from "@fcboard/element";
 
 export { parseLibraryTokensFromUrl, useHandleLibrary } from "./data/library";
 
@@ -335,8 +337,8 @@ export { Ellipsify } from "./components/Ellipsify";
 export {
   useEditorInterface,
   useStylesPanelMode,
-  useExcalidrawAPI,
-  ExcalidrawAPIContext,
+  useFcboardAPI,
+  FcboardAPIContext,
 } from "./components/App";
 
 export { WelcomeScreen };
@@ -357,20 +359,20 @@ export { zoomToFitBounds } from "./actions/actionCanvas";
 export {
   getCommonBounds,
   getVisibleSceneBounds,
-  convertToExcalidrawElements,
-} from "@excalidraw/element";
+  convertToFcboardElements,
+} from "@fcboard/element";
 
 export {
   elementsOverlappingBBox,
   isElementInsideBBox,
   elementPartiallyOverlapsWithOrContainsBBox,
-} from "@excalidraw/utils/withinBounds";
+} from "@fcboard/utils/withinBounds";
 
 export { DiagramToCodePlugin } from "./components/DiagramToCodePlugin/DiagramToCodePlugin";
 export { getDataURL } from "./data/blob";
-export { isElementLink } from "@excalidraw/element";
+export { isElementLink } from "@fcboard/element";
 
-export { setCustomTextMetricsProvider } from "@excalidraw/element";
+export { setCustomTextMetricsProvider } from "@fcboard/element";
 
 export { CommandPalette } from "./components/CommandPalette/CommandPalette";
 

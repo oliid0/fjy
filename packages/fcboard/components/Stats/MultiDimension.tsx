@@ -1,30 +1,27 @@
-import { pointFrom, type GlobalPoint } from "@excalidraw/math";
+import { pointFrom, type GlobalPoint } from "@fcboard/math";
 import { useMemo } from "react";
 
-import { MIN_WIDTH_OR_HEIGHT } from "@excalidraw/common";
+import { MIN_WIDTH_OR_HEIGHT } from "@fcboard/common";
 import {
   getElementsInResizingFrame,
   isFrameLikeElement,
   replaceAllElementsInFrame,
   updateBoundElements,
-} from "@excalidraw/element";
-import {
-  rescalePointsInElement,
-  resizeSingleElement,
-} from "@excalidraw/element";
-import { getBoundTextElement, handleBindTextResize } from "@excalidraw/element";
+} from "@fcboard/element";
+import { rescalePointsInElement, resizeSingleElement } from "@fcboard/element";
+import { getBoundTextElement, handleBindTextResize } from "@fcboard/element";
 
-import { isTextElement } from "@excalidraw/element";
+import { isTextElement } from "@fcboard/element";
 
-import { getCommonBounds } from "@excalidraw/utils";
+import { getCommonBounds } from "@fcboard/utils";
 
 import type {
   ElementsMap,
-  ExcalidrawElement,
+  FcboardElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@fcboard/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@fcboard/element";
 
 import DragInput from "./DragInput";
 import { getAtomicUnits, getStepSizedValue, isPropertyEditable } from "./utils";
@@ -39,7 +36,7 @@ import type { AppState } from "../../types";
 
 interface MultiDimensionProps {
   property: "width" | "height";
-  elements: readonly ExcalidrawElement[];
+  elements: readonly FcboardElement[];
   elementsMap: NonDeletedSceneElementsMap;
   atomicUnits: AtomicUnit[];
   scene: Scene;
@@ -52,7 +49,7 @@ const getResizedUpdates = (
   anchorX: number,
   anchorY: number,
   scale: number,
-  origElement: ExcalidrawElement,
+  origElement: FcboardElement,
 ) => {
   const offsetX = origElement.x - anchorX;
   const offsetY = origElement.y - anchorY;
@@ -78,8 +75,8 @@ const resizeElementInGroup = (
   anchorY: number,
   property: MultiDimensionProps["property"],
   scale: number,
-  latestElement: ExcalidrawElement,
-  origElement: ExcalidrawElement,
+  latestElement: FcboardElement,
+  origElement: FcboardElement,
   originalElementsMap: ElementsMap,
   scene: Scene,
 ) => {
@@ -117,8 +114,8 @@ const resizeGroup = (
   aspectRatio: number,
   anchor: GlobalPoint,
   property: MultiDimensionProps["property"],
-  latestElements: ExcalidrawElement[],
-  originalElements: ExcalidrawElement[],
+  latestElements: FcboardElement[],
+  originalElements: FcboardElement[],
   originalElementsMap: ElementsMap,
   scene: Scene,
 ) => {
@@ -277,7 +274,7 @@ const handleDimensionChange: DragInputCallbackType<
 
   const changeInWidth = property === "width" ? accumulatedChange : 0;
   const changeInHeight = property === "height" ? accumulatedChange : 0;
-  const elementsToHighlight: ExcalidrawElement[] = [];
+  const elementsToHighlight: FcboardElement[] = [];
 
   for (const atomicUnit of atomicUnits) {
     const elementsInUnit = getElementsInAtomicUnit(

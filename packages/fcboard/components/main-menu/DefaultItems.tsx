@@ -1,8 +1,8 @@
 import clsx from "clsx";
 
-import { THEME } from "@excalidraw/common";
+import { THEME } from "@fcboard/common";
 
-import type { Theme } from "@excalidraw/element/types";
+import type { Theme } from "@fcboard/element/types";
 
 import {
   actionClearCanvas,
@@ -27,9 +27,9 @@ import { useSetAtom } from "../../editor-jotai";
 import { useI18n } from "../../i18n";
 import { activeConfirmDialogAtom } from "../ActiveConfirmDialog";
 import {
-  useExcalidrawSetAppState,
-  useExcalidrawActionManager,
-  useExcalidrawElements,
+  useFcboardSetAppState,
+  useFcboardActionManager,
+  useFcboardElements,
   useAppProps,
   useApp,
 } from "../App";
@@ -62,8 +62,8 @@ import "./DefaultItems.scss";
 export const LoadScene = () => {
   const { t } = useI18n();
   const { UIOptions } = useAppProps();
-  const actionManager = useExcalidrawActionManager();
-  const elements = useExcalidrawElements();
+  const actionManager = useFcboardActionManager();
+  const elements = useFcboardElements();
 
   if (!actionManager.isActionEnabled(actionLoadScene)) {
     return null;
@@ -106,7 +106,7 @@ LoadScene.displayName = "LoadScene";
 export const SaveToActiveFile = () => {
   const { t } = useI18n();
   const { UIOptions } = useAppProps();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   // Factory boards must allow their first save before a file handle exists.
   const action =
@@ -132,7 +132,7 @@ export const SaveToActiveFile = () => {
 SaveToActiveFile.displayName = "SaveToActiveFile";
 
 export const SaveAsImage = () => {
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const { t } = useI18n();
   return (
     <DropdownMenuItem
@@ -149,7 +149,7 @@ export const SaveAsImage = () => {
 SaveAsImage.displayName = "SaveAsImage";
 
 export const CommandPalette = (opts?: { className?: string }) => {
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   const { t } = useI18n();
 
   return (
@@ -172,7 +172,7 @@ CommandPalette.displayName = "CommandPalette";
 
 export const SearchMenu = (opts?: { className?: string }) => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   return (
     <DropdownMenuItem
@@ -194,7 +194,7 @@ SearchMenu.displayName = "SearchMenu";
 export const Help = () => {
   const { t } = useI18n();
 
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   return (
     <DropdownMenuItem
@@ -214,7 +214,7 @@ export const ClearCanvas = () => {
   const { t } = useI18n();
 
   const setActiveConfirmDialog = useSetAtom(activeConfirmDialogAtom);
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   if (!actionManager.isActionEnabled(actionClearCanvas)) {
     return null;
@@ -247,7 +247,7 @@ export const ToggleTheme = (
 ) => {
   const { t } = useI18n();
   const appState = useUIAppState();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const shortcut = getShortcutFromShortcutName("toggleTheme");
 
   if (!actionManager.isActionEnabled(actionToggleTheme)) {
@@ -317,7 +317,7 @@ ToggleTheme.displayName = "ToggleTheme";
 export const ChangeCanvasBackground = () => {
   const { t } = useI18n();
   const appState = useUIAppState();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appProps = useAppProps();
 
   if (
@@ -348,7 +348,7 @@ ChangeCanvasBackground.displayName = "ChangeCanvasBackground";
 
 export const Export = () => {
   const { t } = useI18n();
-  const setAppState = useExcalidrawSetAppState();
+  const setAppState = useFcboardSetAppState();
   return (
     <DropdownMenuItem
       icon={ExportIcon}
@@ -419,7 +419,7 @@ const PreferencesToggleToolLockItem = () => {
 
 const PreferencesToggleSnapModeItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
   return (
     <DropdownMenuItemCheckbox
@@ -437,7 +437,7 @@ const PreferencesToggleSnapModeItem = () => {
 
 const PreferencesToggleArrowBindingItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
   return (
     <DropdownMenuItemCheckbox
@@ -454,7 +454,7 @@ const PreferencesToggleArrowBindingItem = () => {
 
 const PreferencesToggleMidpointSnappingItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
   return (
     <DropdownMenuItemCheckbox
@@ -471,7 +471,7 @@ const PreferencesToggleMidpointSnappingItem = () => {
 
 export const PreferencesToggleGridModeItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
 
   return (
@@ -490,7 +490,7 @@ export const PreferencesToggleGridModeItem = () => {
 
 export const PreferencesToggleZenModeItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
   return (
     <DropdownMenuItemCheckbox
@@ -508,7 +508,7 @@ export const PreferencesToggleZenModeItem = () => {
 
 const PreferencesToggleViewModeItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
   return (
     <DropdownMenuItemCheckbox
@@ -526,7 +526,7 @@ const PreferencesToggleViewModeItem = () => {
 
 const PreferencesToggleElementPropertiesItem = () => {
   const { t } = useI18n();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
   const appState = useUIAppState();
   return (
     <DropdownMenuItemCheckbox
@@ -555,7 +555,7 @@ export const Preferences = ({
       <DropdownMenuSub.Trigger icon={settingsIcon}>
         {t("labels.preferences")}
       </DropdownMenuSub.Trigger>
-      <DropdownMenuSub.Content className="excalidraw-main-menu-preferences-submenu">
+      <DropdownMenuSub.Content className="fcboard-main-menu-preferences-submenu">
         {children || (
           <>
             <PreferencesToggleToolLockItem />

@@ -1,30 +1,30 @@
-import { MaterialSelect } from "@excalidraw/excalidraw/components/MaterialSelect";
-import { InteractiveResourceFrame } from "@excalidraw/excalidraw/components/InteractiveResourceFrame";
-import { validateInteractiveResource } from "@excalidraw/excalidraw/interactiveHtml";
-import { newIframeElement } from "@excalidraw/element";
-import { getLanguage, t, useI18n } from "@excalidraw/excalidraw/i18n";
+import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
+import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
+import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import { newIframeElement } from "@fcboard/element";
+import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Popper from "@mui/material/Popper";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 import Slider from "@mui/material/Slider";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import { FactoryPenSettings } from "@excalidraw/excalidraw/components/FactoryPenSettings";
+import { FactoryPenSettings } from "@fcboard/fcboard/components/FactoryPenSettings";
 import {
   switchWhiteboardPen,
   whiteboardInkStyle,
-} from "@excalidraw/excalidraw/whiteboardPen";
-import { rainbowInkStops } from "@excalidraw/element/rainbowInk";
-import { finishFactoryInk } from "@excalidraw/element/factoryInk";
-import factoryEraser from "@excalidraw/excalidraw/components/FactoryEraser.png?url";
-import { pointFrom } from "@excalidraw/math";
+} from "@fcboard/fcboard/whiteboardPen";
+import { rainbowInkStops } from "@fcboard/element/rainbowInk";
+import { finishFactoryInk } from "@fcboard/element/factoryInk";
+import factoryEraser from "@fcboard/fcboard/components/FactoryEraser.png?url";
+import { pointFrom } from "@fcboard/math";
 import {
   circleRegion,
   hasRegionArea,
   regionPath,
   regionHandleAt,
   resizeRegion,
-} from "@excalidraw/excalidraw/lasso/region";
+} from "@fcboard/fcboard/lasso/region";
 import {
   CloseIcon,
   chevronLeftIcon,
@@ -38,26 +38,23 @@ import {
   RedoIcon,
   MagicIcon,
   gridIcon,
-} from "@excalidraw/excalidraw/components/icons";
+} from "@fcboard/fcboard/components/icons";
 import { Capacitor } from "@capacitor/core";
-import { FONT_FAMILY, getFontFamilyString } from "@excalidraw/common";
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { Fonts } from "@excalidraw/excalidraw/fonts";
-import {
-  isPalmContact,
-  pointerSamples,
-} from "@excalidraw/excalidraw/eraser/stroke";
+import { FONT_FAMILY, getFontFamilyString } from "@fcboard/common";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { Fonts } from "@fcboard/fcboard/fonts";
+import { isPalmContact, pointerSamples } from "@fcboard/fcboard/eraser/stroke";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
-import type {
-  RegionBounds,
-  RegionHandle,
-} from "@excalidraw/excalidraw/lasso/region";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
+
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands, commandObjectIds } from "./commands";
+import { documentSharing } from "./documentSharing";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
 import { latestFunctionInk } from "./functionInk";
@@ -97,7 +94,12 @@ import {
   insertionWritingText,
   insertionWritingTextIds,
 } from "./insertionWriting";
-import { growDocumentTableWriting } from "./insertionWritingTables";
+import {
+  growDocumentTableWriting,
+  tableWritingContact,
+  tableWritingNeedsGrowth,
+} from "./insertionWritingTables";
+
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { drawPlot } from "./board";
 import { insertGeneratedImage } from "./imageGeneration";
@@ -110,10 +112,16 @@ import {
 } from "./canvasConfiguration";
 import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
 
+import { carryDocumentTableContents } from "./tableContents";
+import { insertionLabelParts } from "./insertionLabels";
+
+import type { TableWritingTarget } from "./insertionWritingTables";
+
 import type { Viewer } from "@web-ppt/viewer-core";
 import type { Presentation } from "@web-ppt/core";
 
 import type { DocumentInk, InkStroke } from "./documents";
+import type { SharedDocumentSource } from "./documentSharing";
 
 import type { LessonCommand } from "./lesson";
 
@@ -217,7 +225,7 @@ export const FilePreview = ({
   onReady,
   onTools,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   file: File;
   onClose: (advance?: boolean, source?: AbortSignal) => void;
   onVoice?: () => void;
@@ -282,6 +290,10 @@ export const FilePreview = ({
   const animationBefore = useRef(new Map<string, InkStroke[]>());
   const gestureBefore = useRef<InkStroke[]>([]);
   const gesturePage = useRef(0);
+  const tableWriting = useRef<{
+    target: TableWritingTarget;
+    preview?: readonly InkStroke[];
+  } | null>(null);
   const activePointer = useRef<{ id: number; target: SVGSVGElement } | null>(
     null,
   );
@@ -329,6 +341,12 @@ export const FilePreview = ({
   );
   const [ready, setReady] = useState(false);
   const announced = useRef(false);
+  const sharedSource = useRef<SharedDocumentSource | null>(null);
+  const [following, setFollowing] = useState(documentSharing.following);
+  useEffect(
+    () => documentSharing.watch(() => setFollowing(documentSharing.following)),
+    [],
+  );
   const isSlides = /\.(pptx?|ppsx?)$/i.test(file.name);
   const isImage = /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name);
   const commitInk = useCallback((next: DocumentInk, remember = true) => {
@@ -350,6 +368,26 @@ export const FilePreview = ({
     setInk(next);
     classroomCommands.changed("document");
   }, []);
+  const savedInk = useCallback(() => {
+    const table = tableWriting.current;
+    return table?.preview &&
+      inkRef.current[gesturePage.current] === table.preview
+      ? { ...inkRef.current, [gesturePage.current]: gestureBefore.current }
+      : inkRef.current;
+  }, []);
+  const restoreTableWriting = useCallback(() => {
+    const table = tableWriting.current;
+    tableWriting.current = null;
+    if (
+      table?.preview &&
+      inkRef.current[gesturePage.current] === table.preview
+    ) {
+      commitInk(
+        { ...inkRef.current, [gesturePage.current]: gestureBefore.current },
+        false,
+      );
+    }
+  }, [commitInk]);
   useEffect(() => {
     dialog.current?.focus();
   }, []);
@@ -406,8 +444,10 @@ export const FilePreview = ({
             setPage(index);
             setPendingAnimation(instance.hasPendingAnimation);
           };
-          instance.onAnimStep = () =>
+          instance.onAnimStep = () => {
             setPendingAnimation(instance.hasPendingAnimation);
+            documentSharing.changed();
+          };
           setPages(
             pres.slides.map((_, index) => ({ index, name: String(index + 1) })),
           );
@@ -512,7 +552,7 @@ export const FilePreview = ({
       saveTimer.current = undefined;
       saveQueue.current = saveQueue.current
         .catch(() => {})
-        .then(() => saveInk(key, inkRef.current))
+        .then(() => saveInk(key, savedInk()))
         .catch((failure) => {
           setNotice(
             t(
@@ -526,7 +566,7 @@ export const FilePreview = ({
         });
       void saveQueue.current.catch(() => {});
     }, 1000);
-  }, [key, ink, ready]);
+  }, [key, ink, ready, savedInk]);
   useEffect(() => () => clearTimeout(saveTimer.current), []);
   useEffect(() => {
     const parent = stage.current?.parentElement;
@@ -544,8 +584,11 @@ export const FilePreview = ({
     return () => observer.disconnect();
   }, [ratio]);
   const navigate = useCallback(
-    (index: number, source?: AbortSignal) => {
+    (index: number, source?: AbortSignal, shared = false) => {
       const task = (async () => {
+        if (documentSharing.following && !shared) {
+          throw new Error(t("fcboard.syncing_live"));
+        }
         source?.throwIfAborted();
         if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
           throw new Error(t("fcboard.page_number_out_of_range"));
@@ -620,6 +663,9 @@ export const FilePreview = ({
 
   const next = useCallback(
     async (source?: AbortSignal) => {
+      if (documentSharing.following) {
+        throw new Error(t("fcboard.syncing_live"));
+      }
       source?.throwIfAborted();
       if (!source && classroomCommands.has("lesson.pause")) {
         void classroomCommands.execute({ name: "lesson.pause" });
@@ -640,6 +686,9 @@ export const FilePreview = ({
   );
   const previous = useCallback(
     async (source?: AbortSignal) => {
+      if (documentSharing.following) {
+        throw new Error(t("fcboard.syncing_live"));
+      }
       source?.throwIfAborted();
       if (!source && classroomCommands.has("lesson.pause")) {
         void classroomCommands.execute({ name: "lesson.pause" });
@@ -659,8 +708,15 @@ export const FilePreview = ({
     [navigate],
   );
   const close = useCallback(
-    async (advance = true, source?: AbortSignal) => {
+    async (advance = true, source?: AbortSignal, shared = false) => {
       try {
+        if (
+          documentSharing.following &&
+          !shared &&
+          classroomCommands.has("collaboration.stop")
+        ) {
+          await classroomCommands.execute({ name: "collaboration.stop" });
+        }
         source?.throwIfAborted();
         if (classroomCommands.has("mindmap.dismiss")) {
           await classroomCommands.execute({ name: "mindmap.dismiss" });
@@ -670,7 +726,7 @@ export const FilePreview = ({
         }
         await saveQueue.current.catch(() => {});
         if (key && ready) {
-          await saveInk(key, inkRef.current);
+          await saveInk(key, savedInk());
         }
         source?.throwIfAborted();
         onClose(advance, source);
@@ -683,7 +739,7 @@ export const FilePreview = ({
         );
       }
     },
-    [onClose, key, ready],
+    [onClose, key, ready, savedInk],
   );
   const undoInk = useCallback(
     (redo = false) => {
@@ -700,6 +756,91 @@ export const FilePreview = ({
       commitInk({ ...inkRef.current, [index]: previous }, false);
     },
     [commitInk],
+  );
+  sharedSource.current = {
+    id: documentId.current,
+    file,
+    page: pageRef.current,
+    ready: ready && !loading && !error,
+    ink:
+      draftRef.current && gesturePage.current === pageRef.current && !selecting
+        ? [...(inkRef.current[pageRef.current] || []), draftRef.current]
+        : inkRef.current[pageRef.current] || [],
+    draft: draftRef.current?.id,
+    view: { zoom: zoomRef.current, scroll, animation: 0, animate: false },
+    present: (view) => {
+      zoomRef.current = view.zoom;
+      setZoom(view.zoom);
+      setScroll(view.scroll);
+      frame.current?.contentWindow?.postMessage(
+        { fcDocumentScrollTo: view.scroll },
+        "*",
+      );
+      const instance = viewer.current;
+      if (instance) {
+        if (instance.state.animate !== view.animate) {
+          instance.setAnimate(view.animate);
+        }
+        if (view.animate && instance.animationDone !== view.animation) {
+          if (instance.animationDone > view.animation) {
+            instance.setAnimate(false);
+            instance.setAnimate(true);
+          }
+          const step = Math.min(view.animation, instance.animationTotal);
+          while (
+            instance.animationDone < step &&
+            instance.playNextAnimation()
+          ) {
+            /* Advance the actual viewer state. */
+          }
+          instance.refresh();
+        }
+      }
+    },
+    apply: (strokes, reset) => {
+      const index = pageRef.current;
+      const local = new Set(
+        (inkRef.current[index] || []).map((stroke) => stroke.id),
+      );
+      strokes.forEach((stroke) => {
+        if (!local.has(stroke.id) && stroke.id !== draftRef.current?.id) {
+          recognized.current.add(stroke.id);
+        }
+      });
+      if (reset) {
+        past.current[index] = [];
+        future.current[index] = [];
+        selectedInkRef.current = [];
+        setLasso([]);
+      }
+      commitInk(
+        {
+          ...inkRef.current,
+          [index]: strokes.filter(
+            (stroke) => stroke.id !== draftRef.current?.id,
+          ),
+        },
+        false,
+      );
+    },
+    navigate: (index) => navigate(index, undefined, true),
+    close: () => close(false, undefined, true),
+  };
+  useEffect(
+    () =>
+      documentSharing.attach(() => ({
+        ...sharedSource.current!,
+        view: {
+          ...sharedSource.current!.view,
+          animation: viewer.current?.animationDone || 0,
+          animate: viewer.current?.state.animate || false,
+        },
+      })),
+    [file],
+  );
+  useEffect(
+    () => documentSharing.changed(),
+    [ink, page, ready, loading, error, draft, zoom, scroll],
   );
   useEffect(() => {
     const registrations = [
@@ -1199,7 +1340,7 @@ export const FilePreview = ({
             };
         const targetPage = pageRef.current;
         await Fonts.loadElementsFonts(
-          convertToExcalidrawElements([
+          convertToFcboardElements([
             {
               type: "text",
               x: 0,
@@ -1556,7 +1697,7 @@ export const FilePreview = ({
         if (!Array.isArray(shapes) || !shapes.length || shapes.length > 20000) {
           throw new Error(t("fcboard.invalid_lesson_command"));
         }
-        const strokes = (shapes as ExcalidrawElementSkeleton[]).map((shape) =>
+        const strokes = (shapes as FcboardElementSkeleton[]).map((shape) =>
           shapeInk(
             shape,
             lesson,
@@ -1616,11 +1757,7 @@ export const FilePreview = ({
           zoomRef.current,
           scroll,
         );
-        const position = resourcePlacement(
-          viewport,
-          current.map(documentStrokeBounds),
-          scale,
-        );
+        const position = resourcePlacement(viewport, scale);
         const element = newIframeElement({
           type: "iframe",
           ...position,
@@ -1642,8 +1779,8 @@ export const FilePreview = ({
         if (typeof args.id !== "string" || !Array.isArray(args.shapes)) {
           throw new Error(t("fcboard.invalid_insertion_data"));
         }
-        const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
-          (shape) => shapeInk(shape, "insertion"),
+        const strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
+          shapeInk(shape, "insertion"),
         );
         const before = args.before as InkStroke[] | undefined;
         if (
@@ -1655,34 +1792,41 @@ export const FilePreview = ({
           throw new Error(t("fcboard.invalid_insertion_data"));
         }
         const table = strokes[0]?.insertion;
-        const handwriting = (inkRef.current[page] || []).flatMap((stroke) => {
-          const owner = stroke.insertion;
-          if (
-            !table ||
-            !owner ||
-            owner.id !== args.id ||
-            owner.inkCell === undefined
-          ) {
-            return [];
-          }
-          const dx = table.position.x - owner.position.x;
-          const dy = table.position.y - owner.position.y;
-          return [
-            {
-              ...stroke,
-              points: stroke.points.map(([x, y]): [number, number] => [
-                x + dx,
-                y + dy,
-              ]),
-              insertion: {
-                ...owner,
-                ...table,
-                inkCell: owner.inkCell,
-                origin: { x: owner.origin.x + dx, y: owner.origin.y + dy },
-              },
-            },
-          ];
-        });
+        const previousSelection = new Set(selectedInkRef.current);
+        const handwriting =
+          table?.kind === "table"
+            ? carryDocumentTableContents(inkRef.current[page] || [], table)
+            : (inkRef.current[page] || []).flatMap((stroke) => {
+                const owner = stroke.insertion;
+                if (
+                  !table ||
+                  !owner ||
+                  owner.id !== args.id ||
+                  owner.inkCell === undefined
+                ) {
+                  return [];
+                }
+                const dx = table.position.x - owner.position.x;
+                const dy = table.position.y - owner.position.y;
+                return [
+                  {
+                    ...stroke,
+                    points: stroke.points.map(([x, y]): [number, number] => [
+                      x + dx,
+                      y + dy,
+                    ]),
+                    insertion: {
+                      ...owner,
+                      ...table,
+                      inkCell: owner.inkCell,
+                      origin: {
+                        x: owner.origin.x + dx,
+                        y: owner.origin.y + dy,
+                      },
+                    },
+                  },
+                ];
+              });
         commitInk(
           {
             ...inkRef.current,
@@ -1711,9 +1855,47 @@ export const FilePreview = ({
           refreshHistory((value) => value + 1);
         }
         if (args.select !== false) {
-          selectedInkRef.current = [...strokes, ...handwriting].map(
-            (stroke) => stroke.id,
-          );
+          selectedInkRef.current = [
+            ...new Set(
+              [
+                ...strokes,
+                ...handwriting.filter(
+                  (stroke) =>
+                    stroke.insertion?.id === args.id ||
+                    (args.preserveSelection &&
+                      (previousSelection.has(stroke.id) || !!stroke.text)),
+                ),
+                ...(args.preserveSelection
+                  ? (inkRef.current[page] || []).filter(
+                      (stroke) =>
+                        stroke.insertion?.id !== args.id &&
+                        previousSelection.has(stroke.id),
+                    )
+                  : []),
+              ].map((stroke) => stroke.id),
+            ),
+          ];
+          if (table?.kind === "table" && lasso.length) {
+            const selectedIds = new Set(selectedInkRef.current);
+            const boxes = (inkRef.current[page] || [])
+              .filter((stroke) => selectedIds.has(stroke.id))
+              .map(documentStrokeBounds);
+            const area = visibleDocumentArea(
+              stage.current,
+              size,
+              zoomRef.current,
+              scroll,
+            );
+            const padding = 20 / area.scale;
+            setLasso(
+              regionPath({
+                left: Math.min(...boxes.map((box) => box.left)) - padding,
+                top: Math.min(...boxes.map((box) => box.top)) - padding,
+                right: Math.max(...boxes.map((box) => box.right)) + padding,
+                bottom: Math.max(...boxes.map((box) => box.bottom)) + padding,
+              }),
+            );
+          }
         }
         classroomCommands.changed("document");
       }),
@@ -1722,8 +1904,8 @@ export const FilePreview = ({
         if (!widget?.id || !Array.isArray(args.shapes)) {
           throw new Error(t("fcboard.invalid_teaching_tool_data"));
         }
-        const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
-          (shape) => shapeInk(shape, "widget"),
+        const strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
+          shapeInk(shape, "widget"),
         );
         const page = pageRef.current;
         const current = inkRef.current[page] || [];
@@ -1773,8 +1955,8 @@ export const FilePreview = ({
         }
         setErase(false);
         const remove = new Set(args.replaceIds as string[]);
-        const strokes = (args.shapes as ExcalidrawElementSkeleton[]).map(
-          (shape) => shapeInk(shape, "plot"),
+        const strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
+          shapeInk(shape, "plot"),
         );
         selectedInkRef.current = strokes.map((stroke) => stroke.id);
         commitInk({
@@ -1962,7 +2144,10 @@ export const FilePreview = ({
               ...inkRef.current,
               [page]: [
                 ...current.filter((stroke) => !remove.has(stroke.id)),
-                shapeInk(shape, "insertion"),
+                ...insertionLabelParts(
+                  shape,
+                  shape.customData?.fcInsertion?.textRuns?.[target.index],
+                ).map((part) => shapeInk(part, "insertion")),
               ],
             });
           } else if (result.kind === "language") {
@@ -2034,7 +2219,7 @@ export const FilePreview = ({
             const height = Math.max(1, bottom - top);
             const first = source[0].points[0];
             const last = source.at(-1)!.points.at(-1)!;
-            const shape: ExcalidrawElementSkeleton =
+            const shape: FcboardElementSkeleton =
               result.shape === "triangle"
                 ? {
                     type: "line",
@@ -2145,6 +2330,7 @@ export const FilePreview = ({
   };
   const cancelInkGesture = useCallback(() => {
     assistRequest.current?.abort();
+    restoreTableWriting();
     const owner = activePointer.current;
     activePointer.current = null;
     if (erasing.current) {
@@ -2172,7 +2358,7 @@ export const FilePreview = ({
     if (owner?.target.hasPointerCapture(owner.id)) {
       owner.target.releasePointerCapture(owner.id);
     }
-  }, [commitInk]);
+  }, [commitInk, restoreTableWriting]);
   useEffect(() => {
     cancelInkGesture();
     setPenAnchor(null);
@@ -2223,6 +2409,7 @@ export const FilePreview = ({
     position: [number, number],
     contact = event.nativeEvent,
   ) => {
+    restoreTableWriting();
     const scale = 1000 / event.currentTarget.getBoundingClientRect().width;
     const size = Math.max(
       12,
@@ -2307,6 +2494,21 @@ export const FilePreview = ({
           false,
         );
       } else {
+        const ids = new Set(selection.ids);
+        const blocked = gestureBefore.current.some(
+          (stroke) => ids.has(stroke.id) && stroke.insertion?.kind === "table",
+        );
+        if (blocked) {
+          setNotice(t("fcboard.table_zoom_instructions"));
+          if (
+            !gestureBefore.current.some(
+              (stroke) =>
+                ids.has(stroke.id) && stroke.insertion?.kind !== "table",
+            )
+          ) {
+            return true;
+          }
+        }
         const requested = resizeRegion(
           selection.bounds,
           selection.handle,
@@ -2334,21 +2536,33 @@ export const FilePreview = ({
           right: anchor.x + (selection.bounds.right - anchor.x) * scale,
           bottom: anchor.y + (selection.bounds.bottom - anchor.y) * scale,
         };
+        const next =
+          scale === 1
+            ? gestureBefore.current
+            : gestureBefore.current.map((stroke) =>
+                ids.has(stroke.id) && stroke.insertion?.kind !== "table"
+                  ? scaleDocumentStroke(stroke, anchor, scale)
+                  : stroke,
+              );
+        if (blocked) {
+          const boxes = next
+            .filter((stroke) => ids.has(stroke.id))
+            .map(documentStrokeBounds);
+          const padding = 20 / area.scale;
+          Object.assign(bounds, {
+            left: Math.min(...boxes.map((box) => box.left)) - padding,
+            top: Math.min(...boxes.map((box) => box.top)) - padding,
+            right: Math.max(...boxes.map((box) => box.right)) + padding,
+            bottom: Math.max(...boxes.map((box) => box.bottom)) + padding,
+          });
+        }
         selection.transformed = bounds;
         setLasso(regionPath(bounds));
-        const ids = new Set(selection.ids);
         if (scale !== 1 || inkRef.current[page] !== gestureBefore.current) {
           commitInk(
             {
               ...inkRef.current,
-              [page]:
-                scale === 1
-                  ? gestureBefore.current
-                  : gestureBefore.current.map((stroke) =>
-                      ids.has(stroke.id)
-                        ? scaleDocumentStroke(stroke, anchor, scale)
-                        : stroke,
-                    ),
+              [page]: next,
             },
             false,
           );
@@ -2381,6 +2595,43 @@ export const FilePreview = ({
       };
       draftRef.current = stroke;
       setDraft(stroke);
+      const table = tableWriting.current;
+      if (table) {
+        if (
+          table.preview &&
+          inkRef.current[gesturePage.current] !== table.preview
+        ) {
+          tableWriting.current = null;
+        } else {
+          for (const [x, y] of samples) {
+            const bounds = table.target.bounds;
+            bounds.left = Math.min(bounds.left, x);
+            bounds.right = Math.max(bounds.right, x);
+            bounds.top = Math.min(bounds.top, y);
+            bounds.bottom = Math.max(bounds.bottom, y);
+          }
+          if (
+            table.target.bounds.right - table.target.bounds.left > 1 &&
+            tableWritingNeedsGrowth(
+              documentWritingParts(inkRef.current[gesturePage.current] || []),
+              table.target,
+            )
+          ) {
+            const ids = new Set([stroke.id]);
+            const next = growDocumentTableWriting(
+              [...gestureBefore.current, stroke],
+              ids,
+              { targets: new Map([[stroke.id, table.target]]), active: ids },
+            );
+            const preview = next.filter((item) => item.id !== stroke.id);
+            table.preview = preview;
+            commitInk(
+              { ...inkRef.current, [gesturePage.current]: preview },
+              false,
+            );
+          }
+        }
+      }
     }
     return true;
   };
@@ -2466,9 +2717,15 @@ export const FilePreview = ({
                 ref={frame}
                 title={file.name}
                 sandbox="allow-scripts"
+                onLoad={() =>
+                  frame.current?.contentWindow?.postMessage(
+                    { fcDocumentScrollTo: scroll },
+                    "*",
+                  )
+                }
                 srcDoc={html.replace(
                   "</body>",
-                  "<script>addEventListener('scroll',function(e){var t=e.target;parent.postMessage({fcDocumentScroll:(t.scrollTop||scrollY)/innerWidth*1000},'*')},true)</script></body>",
+                  "<script>(function(){var target=document.scrollingElement;addEventListener('scroll',function(e){target=e.target.nodeType===9?document.scrollingElement:e.target;parent.postMessage({fcDocumentScroll:(target.scrollTop||scrollY)/innerWidth*1000},'*')},true);addEventListener('message',function(e){if(e.source===parent&&Number.isFinite(e.data&&e.data.fcDocumentScrollTo)){target.scrollTop=e.data.fcDocumentScrollTo/1000*innerWidth}})})()</script></body>",
                 )}
               />
             )}
@@ -2612,6 +2869,26 @@ export const FilePreview = ({
                 };
                 draftRef.current = stroke;
                 setDraft(stroke);
+                const start = stroke.points[0];
+                const target =
+                  !selecting &&
+                  tableWritingContact(
+                    documentWritingParts(gestureBefore.current),
+                    start,
+                  );
+                tableWriting.current = target
+                  ? {
+                      target: {
+                        ...target,
+                        bounds: {
+                          left: start[0],
+                          right: start[0],
+                          top: start[1],
+                          bottom: start[1],
+                        },
+                      },
+                    }
+                  : null;
               }
             }}
             onPointerMove={updateInkGesture}
@@ -2703,15 +2980,36 @@ export const FilePreview = ({
                   ...draftRef.current,
                   fcInk: finishFactoryInk(draftRef.current.fcInk),
                 };
-                commitInk({
-                  ...inkRef.current,
-                  [page]: [
-                    ...growDocumentTableWriting(
-                      [...(inkRef.current[page] || []), stroke],
-                      new Set([stroke.id]),
-                    ),
+                const table = tableWriting.current;
+                const ids = new Set([stroke.id]);
+                const next = growDocumentTableWriting(
+                  [
+                    ...(table
+                      ? gestureBefore.current
+                      : inkRef.current[page] || []),
+                    stroke,
                   ],
-                });
+                  ids,
+                  table
+                    ? {
+                        targets: new Map([[stroke.id, table.target]]),
+                        active: ids,
+                      }
+                    : undefined,
+                );
+                if (table) {
+                  (past.current[page] ||= []).push(gestureBefore.current);
+                  future.current[page] = [];
+                  refreshHistory((value) => value + 1);
+                }
+                tableWriting.current = null;
+                commitInk(
+                  {
+                    ...inkRef.current,
+                    [page]: [...next],
+                  },
+                  !table,
+                );
               } else if (
                 erasing.current &&
                 gestureBefore.current !== inkRef.current[page]
@@ -2770,6 +3068,7 @@ export const FilePreview = ({
                   height={stroke.resource.height}
                   opacity={(stroke.opacity ?? 100) / 100}
                   style={{
+                    overflow: "visible",
                     pointerEvents:
                       (inkOn && !selecting) || activePointer.current
                         ? "none"
@@ -2780,6 +3079,63 @@ export const FilePreview = ({
                     resource={stroke.resource}
                     objectId={stroke.id}
                     surface="document"
+                    window={{
+                      bounds: {
+                        x: stroke.points[0][0],
+                        y: stroke.points[0][1],
+                        width: stroke.resource.width,
+                        height: stroke.resource.height,
+                      },
+                      scale:
+                        (stage.current?.getBoundingClientRect().width || 1000) /
+                        1000,
+                      viewport: {
+                        left: 0,
+                        top: 0,
+                        right: 1000,
+                        bottom: (size.height / size.width) * 1000,
+                      },
+                      onCommit: (bounds) => {
+                        if (pageRef.current !== page) {
+                          return;
+                        }
+                        const all = inkRef.current[page] || [];
+                        if (
+                          !all.some(
+                            (item) => item.id === stroke.id && item.resource,
+                          )
+                        ) {
+                          return;
+                        }
+                        commitInk({
+                          ...inkRef.current,
+                          [page]: all.map((item) =>
+                            item.id === stroke.id && item.resource
+                              ? {
+                                  ...item,
+                                  points: [[bounds.x, bounds.y]],
+                                  resource: {
+                                    ...item.resource,
+                                    width: bounds.width,
+                                    height: bounds.height,
+                                  },
+                                }
+                              : item,
+                          ),
+                        });
+                      },
+                      onClose: () => {
+                        if (pageRef.current !== page) {
+                          return;
+                        }
+                        commitInk({
+                          ...inkRef.current,
+                          [page]: (inkRef.current[page] || []).filter(
+                            (item) => item.id !== stroke.id,
+                          ),
+                        });
+                      },
+                    }}
                   />
                 </foreignObject>
               ) : stroke.image ? (
@@ -2993,7 +3349,7 @@ export const FilePreview = ({
         </span>
         <button
           aria-label={t("fcboard.previous_page")}
-          disabled={page === 0 || loading}
+          disabled={following || page === 0 || loading}
           onClick={() => {
             void previous(classroomCommands.interactionSource).catch(
               (failure) => setError(String(failure)),
@@ -3006,7 +3362,7 @@ export const FilePreview = ({
         <MaterialSelect
           aria-label={t("fcboard.document_page")}
           value={page}
-          disabled={loading}
+          disabled={following || loading}
           onChange={(event) => {
             void navigate(
               Number(event.target.value),
@@ -3025,7 +3381,11 @@ export const FilePreview = ({
         </MaterialSelect>
         <button
           aria-label={t("fcboard.next_page")}
-          disabled={loading || (page >= pages.length - 1 && !pendingAnimation)}
+          disabled={
+            following ||
+            loading ||
+            (page >= pages.length - 1 && !pendingAnimation)
+          }
           onClick={() => {
             void next(classroomCommands.interactionSource).catch((failure) =>
               setError(String(failure)),

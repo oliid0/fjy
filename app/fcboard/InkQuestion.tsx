@@ -1,14 +1,11 @@
 import { IconButton } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
-import { t } from "@excalidraw/excalidraw/i18n";
-import {
-  searchIcon,
-  chevronRight,
-} from "@excalidraw/excalidraw/components/icons";
+import { t } from "@fcboard/fcboard/i18n";
+import { searchIcon, chevronRight } from "@fcboard/fcboard/components/icons";
 
-import { isPalmContact } from "@excalidraw/excalidraw/eraser/stroke";
+import { isPalmContact } from "@fcboard/fcboard/eraser/stroke";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 import { MaterialPanel } from "./MaterialPanel";
@@ -31,7 +28,7 @@ export const InkQuestion = ({
   onSubmit,
   onClose,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   placement: ReturnType<typeof questionPosition>;
   onSubmit: (
     text: string,

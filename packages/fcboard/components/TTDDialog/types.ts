@@ -1,10 +1,10 @@
-import type { RequestError } from "@excalidraw/excalidraw/errors";
+import type { RequestError } from "@fcboard/fcboard/errors";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import type { MermaidConfig } from "@excalidraw/mermaid-to-excalidraw";
 
-import type { MermaidToExcalidrawResult } from "@excalidraw/mermaid-to-excalidraw/dist/interfaces";
+import type { MermaidToExcalidrawResult as MermaidToFcboardResult } from "@excalidraw/mermaid-to-excalidraw/dist/interfaces";
 
 import type { BinaryFiles } from "../../types";
 
@@ -14,7 +14,7 @@ export type LLMMessage = {
 };
 
 export type MermaidData = {
-  elements: readonly NonDeletedExcalidrawElement[];
+  elements: readonly NonDeletedFcboardElement[];
   files: BinaryFiles | null;
 };
 
@@ -71,13 +71,13 @@ export interface TTDPersistenceAdapter {
   saveChats(chats: SavedChats): Promise<void>;
 }
 
-export interface MermaidToExcalidrawLibProps {
+export interface MermaidToFcboardLibProps {
   loaded: boolean;
   api: Promise<{
-    parseMermaidToExcalidraw: (
+    parseMermaidToFcboard: (
       definition: string,
       config?: MermaidConfig,
-    ) => Promise<MermaidToExcalidrawResult>;
+    ) => Promise<MermaidToFcboardResult>;
   }>;
 }
 

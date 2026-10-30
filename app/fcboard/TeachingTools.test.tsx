@@ -1,9 +1,11 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
 import { Capacitor } from "@capacitor/core";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 
@@ -22,6 +24,7 @@ const emptyApi = () =>
   ({
     getSceneElements: () => [],
     getAppState: () => ({
+      ...getDefaultAppState(),
       selectedElementIds: {},
       scrollX: 0,
       scrollY: 0,
@@ -32,10 +35,10 @@ const emptyApi = () =>
     onChange: () => () => {},
     setActiveTool: vi.fn(),
     updateScene: vi.fn(),
-  } as unknown as ExcalidrawImperativeAPI);
+  } as unknown as FcboardImperativeAPI);
 
-vi.mock("@excalidraw/excalidraw", async (original) => ({
-  ...(await original<typeof import("@excalidraw/excalidraw")>()),
+vi.mock("@fcboard/fcboard", async (original) => ({
+  ...(await original<typeof import("@fcboard/fcboard")>()),
   ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
@@ -269,10 +272,11 @@ it("closes the tool picker with the toolbar and allows the AI to show it again",
 });
 
 it("executes one AI request that inserts, configures and starts a timer before React commits the selection", async () => {
-  let scene: readonly ExcalidrawElement[] = [];
+  let scene: readonly FcboardElement[] = [];
   const api = {
     getSceneElements: () => scene,
     getAppState: () => ({
+      ...getDefaultAppState(),
       selectedElementIds: {},
       scrollX: 0,
       scrollY: 0,
@@ -282,12 +286,12 @@ it("executes one AI request that inserts, configures and starts a timer before R
     }),
     onChange: () => () => {},
     setActiveTool: vi.fn(),
-    updateScene: (value: { elements?: readonly ExcalidrawElement[] }) => {
+    updateScene: (value: { elements?: readonly FcboardElement[] }) => {
       if (value.elements) {
         scene = value.elements;
       }
     },
-  } as unknown as ExcalidrawImperativeAPI;
+  } as unknown as FcboardImperativeAPI;
   render(<TeachingTools api={api} />);
   await act(async () => {
     await classroomCommands.execute({

@@ -1,24 +1,33 @@
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { interactiveHtml } from "../interactiveHtml";
 import { t } from "../i18n";
 import { attachResourceControls } from "../interactiveResourceControls";
 
+import { ResourceWindow } from "./ResourceWindow";
+
 import type { InteractiveResource } from "../interactiveHtml";
 import type { Ref } from "react";
 import type { ResourceSurface } from "../interactiveResourceControls";
+import type { ComponentProps } from "react";
 
 export const InteractiveResourceFrame = ({
   resource,
   iframeRef,
   objectId,
   surface,
+  window,
 }: {
   resource: InteractiveResource;
   objectId: string;
   surface: ResourceSurface;
   iframeRef?: Ref<HTMLIFrameElement>;
+  window?: Omit<
+    ComponentProps<typeof ResourceWindow>,
+    "title" | "children" | "onReload"
+  >;
 }) => {
+  const [revision, setRevision] = useState(0);
   const controls = useRef<ReturnType<typeof attachResourceControls> | null>(
     null,
   );
@@ -49,7 +58,7 @@ export const InteractiveResourceFrame = ({
         iframeRef.current = null;
       }
     };
-  }, [iframeRef, resource.html]);
+  }, [iframeRef, resource.html, revision]);
   const html = useMemo(() => {
     try {
       return interactiveHtml(resource.html);
@@ -64,11 +73,12 @@ export const InteractiveResourceFrame = ({
       </p>
     );
   }
-  return (
+  const content = (
     <iframe
+      key={revision}
       ref={ref}
       onLoad={() => controls.current?.loaded()}
-      className="excalidraw__embeddable"
+      className="fcboard__embeddable"
       title={resource.title}
       srcDoc={html}
       sandbox="allow-scripts"
@@ -76,5 +86,16 @@ export const InteractiveResourceFrame = ({
       allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"
       style={{ width: "100%", height: "100%", border: 0, display: "block" }}
     />
+  );
+  return window ? (
+    <ResourceWindow
+      {...window}
+      title={resource.title}
+      onReload={() => setRevision((value) => value + 1)}
+    >
+      {content}
+    </ResourceWindow>
+  ) : (
+    content
   );
 };

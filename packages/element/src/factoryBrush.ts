@@ -1,14 +1,14 @@
 import { factoryInkUnit } from "./factoryInk";
 
-import type { ExcalidrawFreeDrawElement } from "./types";
+import type { FcboardFreeDrawElement } from "./types";
 
 export type BrushSample = { x: number; y: number; width: number };
 
-export const isFactoryBrush = (element: ExcalidrawFreeDrawElement) =>
+export const isFactoryBrush = (element: FcboardFreeDrawElement) =>
   element.customData?.fcInk?.version === 3 &&
   element.customData.fcInk.pen === "brush";
 
-const storedWidths = (element: ExcalidrawFreeDrawElement): number[] | null => {
+const storedWidths = (element: FcboardFreeDrawElement): number[] | null => {
   const saved = element.customData?.fcInk?.brushWidths;
   if (
     Array.isArray(saved) &&
@@ -30,9 +30,9 @@ type WidthTrace = {
   states: { width: number; velocity: number }[];
   finished: boolean;
 };
-const widthTraces = new WeakMap<ExcalidrawFreeDrawElement, WidthTrace>();
+const widthTraces = new WeakMap<FcboardFreeDrawElement, WidthTrace>();
 const sampleTraces = new WeakMap<
-  ExcalidrawFreeDrawElement,
+  FcboardFreeDrawElement,
   {
     unit: number;
     nodes: BrushSample[];
@@ -44,7 +44,7 @@ const sampleTraces = new WeakMap<
 
 /** HBezierObject.calcInitialWidth / calcNewWidth; distances are physical pixels. */
 export const factoryBrushWidths = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
 ): number[] => {
   const saved = storedWidths(element);
   if (saved) {
@@ -155,7 +155,7 @@ export const factoryBrushWidths = (
 
 /** Bezier.init/addNode: midpoint quadratics with linearly interpolated widths. */
 export const factoryBrushSamples = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
 ): BrushSample[] => {
   const widths = factoryBrushWidths(element);
   const count = element.points.length;
@@ -238,7 +238,7 @@ export const factoryBrushSamples = (
 
 /** HBezierObject.drawLine: a filled union of horizontal 2:1 ellipses, every 2px. */
 export const traceFactoryBrush = (
-  element: ExcalidrawFreeDrawElement,
+  element: FcboardFreeDrawElement,
   stamp: (point: BrushSample, angle: number) => void,
   samples = factoryBrushSamples(element),
   from = 0,
@@ -272,7 +272,7 @@ export const traceFactoryBrush = (
   }
 };
 
-export const factoryBrushPath = (element: ExcalidrawFreeDrawElement) => {
+export const factoryBrushPath = (element: FcboardFreeDrawElement) => {
   const path: string[] = [];
   traceFactoryBrush(element, (point, angle) => {
     const rx = point.width / 2;

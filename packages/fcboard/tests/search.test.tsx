@@ -5,14 +5,14 @@ import {
   CLASSES,
   DEFAULT_SIDEBAR,
   KEYS,
-} from "@excalidraw/common";
+} from "@fcboard/common";
 
 import type {
-  ExcalidrawFrameLikeElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+  FcboardFrameLikeElement,
+  FcboardTextElement,
+} from "@fcboard/element/types";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 
 import { API } from "./helpers/api";
 import { Keyboard } from "./helpers/ui";
@@ -32,7 +32,7 @@ const querySearchInput = async () => {
 
 describe("search", () => {
   beforeEach(async () => {
-    await render(<Excalidraw handleKeyboardGlobally />);
+    await render(<Fcboard handleKeyboardGlobally />);
     API.setAppState({
       openSidebar: null,
     });
@@ -124,7 +124,7 @@ describe("search", () => {
       }),
     ]);
 
-    API.updateElement(h.elements[0] as ExcalidrawTextElement, {
+    API.updateElement(h.elements[0] as FcboardTextElement, {
       text: "t\ne\ns\nt \nt\ne\nx\nt \ns\np\nli\nt \ni\nn\nt\no\nm\nu\nlt\ni\np\nl\ne \nli\nn\ne\ns",
       originalText: "test text split into multiple lines",
     });
@@ -171,7 +171,7 @@ describe("search", () => {
       }),
     ]);
 
-    API.updateElement(h.elements[0] as ExcalidrawFrameLikeElement, {
+    API.updateElement(h.elements[0] as FcboardFrameLikeElement, {
       name: "Frame: name test for frame, yes, frame!",
     });
 

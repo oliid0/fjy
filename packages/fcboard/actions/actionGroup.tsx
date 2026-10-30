@@ -1,8 +1,8 @@
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElementWith } from "@fcboard/element";
 
-import { isBoundToContainer } from "@excalidraw/element";
+import { isBoundToContainer } from "@fcboard/element";
 
 import {
   frameAndChildrenSelectedTogether,
@@ -12,9 +12,9 @@ import {
   groupByFrameLikes,
   removeElementsFromFrame,
   replaceAllElementsInFrame,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { KEYS, randomId, arrayToMap } from "@excalidraw/common";
+import { KEYS, randomId, arrayToMap } from "@fcboard/common";
 
 import {
   getSelectedGroupIds,
@@ -24,17 +24,17 @@ import {
   addToGroup,
   removeFromSelectedGroups,
   isElementInGroup,
-} from "@excalidraw/element";
+} from "@fcboard/element";
 
-import { syncMovedIndices } from "@excalidraw/element";
+import { syncMovedIndices } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
 import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
-  OrderedExcalidrawElement,
-} from "@excalidraw/element/types";
+  FcboardElement,
+  FcboardTextElement,
+  OrderedFcboardElement,
+} from "@fcboard/element/types";
 
 import { ToolButton } from "../components/ToolButton";
 import { UngroupIcon, GroupIcon } from "../components/icons";
@@ -49,7 +49,7 @@ import { register } from "./register";
 
 import type { AppClassProperties, AppState } from "../types";
 
-const allElementsInSameGroup = (elements: readonly ExcalidrawElement[]) => {
+const allElementsInSameGroup = (elements: readonly FcboardElement[]) => {
   if (elements.length >= 2) {
     const groupIds = elements[0].groupIds;
     for (const groupId of groupIds) {
@@ -67,7 +67,7 @@ const allElementsInSameGroup = (elements: readonly ExcalidrawElement[]) => {
 };
 
 const enableActionGroup = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: AppState,
   app: AppClassProperties,
 ) => {
@@ -168,7 +168,7 @@ export const actionGroup = register({
     const elementsInGroup = getElementsInGroup(nextElements, newGroupId);
     const lastElementInGroup = elementsInGroup[elementsInGroup.length - 1];
     const lastGroupElementIndex = nextElements.lastIndexOf(
-      lastElementInGroup as OrderedExcalidrawElement,
+      lastElementInGroup as OrderedFcboardElement,
     );
     const elementsAfterGroup = nextElements.slice(lastGroupElementIndex + 1);
     const elementsBeforeGroup = nextElements
@@ -230,7 +230,7 @@ export const actionUngroup = register({
 
     let nextElements = [...elements];
 
-    const boundTextElementIds: ExcalidrawTextElement["id"][] = [];
+    const boundTextElementIds: FcboardTextElement["id"][] = [];
     nextElements = nextElements.map((element) => {
       if (isBoundToContainer(element)) {
         boundTextElementIds.push(element.id);
@@ -285,15 +285,12 @@ export const actionUngroup = register({
     // remove binded text elements from selection
     updateAppState.selectedElementIds = Object.entries(
       updateAppState.selectedElementIds,
-    ).reduce(
-      (acc: { [key: ExcalidrawElement["id"]]: true }, [id, selected]) => {
-        if (selected && !boundTextElementIds.includes(id)) {
-          acc[id] = true;
-        }
-        return acc;
-      },
-      {},
-    );
+    ).reduce((acc: { [key: FcboardElement["id"]]: true }, [id, selected]) => {
+      if (selected && !boundTextElementIds.includes(id)) {
+        acc[id] = true;
+      }
+      return acc;
+    }, {});
 
     return {
       appState: { ...appState, ...updateAppState },

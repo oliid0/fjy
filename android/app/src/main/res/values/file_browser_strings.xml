@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="factory_fb_btn_cancle">Cancel</string>
+  <string name="factory_fb_btn_ok">Confirm</string>
+  <string name="factory_fb_file_bzd">BZD</string>
+  <string name="factory_fb_file_jpg">JPG</string>
+  <string name="factory_fb_file_name">Name</string>
+  <string name="factory_fb_file_size">Size</string>
+  <string name="factory_fb_file_time">Date</string>
+  <string name="factory_fb_local_storage">Local Storage</string>
+  <string name="factory_fb_open_file">Open file</string>
+  <string name="factory_fb_save_file">Save file</string>
+  <string name="factory_fb_save_file_name">Name:</string>
+  <string name="factory_fb_save_file_type">Type:</string>
+  <string name="factory_fb_sd_storage">SD Storage</string>
+  <string name="factory_fb_usb_storage">Removable Storage</string>
+  <string name="factory_fb_access">Allow file access</string>
+  <string name="factory_fb_failed">Cannot read or save this folder. Check file access and try again.</string>
+  <string name="factory_fb_replace">Replace the existing file?</string>
+  <string name="factory_fb_filename_required">Enter a file name</string>
+  <string name="factory_fb_file_pdf">PDF</string>
+  <string name="factory_fb_record">Whiteboard Record</string>
+</resources>

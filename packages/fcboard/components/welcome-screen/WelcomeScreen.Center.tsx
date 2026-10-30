@@ -3,8 +3,8 @@ import { getShortcutFromShortcutName } from "../../actions/shortcuts";
 import { useTunnels } from "../../context/tunnels";
 import { useUIAppState } from "../../context/ui-appState";
 import { t, useI18n } from "../../i18n";
-import { useEditorInterface, useExcalidrawActionManager } from "../App";
-import { ExcalidrawLogo } from "../ExcalidrawLogo";
+import { useEditorInterface, useFcboardActionManager } from "../App";
+import { FcboardLogo } from "../FcboardLogo";
 import { HelpIcon, LoadIcon, usersIcon } from "../icons";
 
 import type { JSX } from "react";
@@ -112,7 +112,7 @@ Center.displayName = "Center";
 const Logo = ({ children }: { children?: React.ReactNode }) => {
   return (
     <div className="welcome-screen-center__logo excalifont welcome-screen-decor">
-      {children || <ExcalidrawLogo withText />}
+      {children || <FcboardLogo withText />}
     </div>
   );
 };
@@ -133,7 +133,7 @@ const Menu = ({ children }: { children?: React.ReactNode }) => {
 Menu.displayName = "Menu";
 
 const MenuItemHelp = () => {
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   return (
     <WelcomeScreenMenuItem
@@ -149,7 +149,7 @@ MenuItemHelp.displayName = "MenuItemHelp";
 
 const MenuItemLoadScene = () => {
   const appState = useUIAppState();
-  const actionManager = useExcalidrawActionManager();
+  const actionManager = useFcboardActionManager();
 
   if (appState.viewModeEnabled) {
     return null;

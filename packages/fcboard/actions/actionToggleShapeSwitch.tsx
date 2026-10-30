@@ -1,6 +1,6 @@
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import {
   getConversionTypeFromElements,
@@ -31,5 +31,5 @@ export const actionToggleShapeSwitch = register({
   },
   checked: (appState) => appState.gridModeEnabled,
   predicate: (elements, appState, props) =>
-    getConversionTypeFromElements(elements as ExcalidrawElement[]) !== null,
+    getConversionTypeFromElements(elements as FcboardElement[]) !== null,
 });

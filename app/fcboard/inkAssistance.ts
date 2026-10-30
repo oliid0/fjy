@@ -1,13 +1,14 @@
-import { getLanguage, t } from "@excalidraw/excalidraw/i18n";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 import {
   CaptureUpdateAction,
-  convertToExcalidrawElements,
-} from "@excalidraw/excalidraw";
-import { getCommonBounds } from "@excalidraw/element";
-import { pointFrom } from "@excalidraw/math";
+  convertToFcboardElements,
+} from "@fcboard/fcboard";
+import { getCommonBounds } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { insertGeneratedImage } from "./imageGeneration";
 
@@ -18,7 +19,7 @@ import { selectionSignature } from "./selection";
 import { boardInk } from "./digitalInk";
 import { insertText } from "./board";
 import { languageInkSignature } from "./languageStudy";
-import { growBoardTableWriting } from "./insertionWritingTables";
+import { LiveTableWriting } from "./liveTableWriting";
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { latestFunctionInk } from "./functionInk";
 import {
@@ -28,6 +29,7 @@ import {
   insertionWritingText,
   insertionWritingTextIds,
 } from "./insertionWriting";
+import { insertionLabelParts } from "./insertionLabels";
 import {
   inkAssistMode,
   recognizeInkContent,
@@ -36,7 +38,7 @@ import {
 
 /** Smart pen modes keep the real ink until a complete, still-current recognition is ready. */
 export const observeInkAssistance = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   onBusy: (busy: boolean) => void,
   onError: (failure: unknown) => void,
 ) => {
@@ -306,7 +308,7 @@ export const observeInkAssistance = (
               fcRecognizedSource: source.map((element) => element.id),
             },
           };
-          let shape: ExcalidrawElementSkeleton;
+          let shape: FcboardElementSkeleton;
           if (result.kind === "text") {
             if (target) {
               const ids = source.map((element) => element.id);
@@ -332,9 +334,15 @@ export const observeInkAssistance = (
                   ...api
                     .getSceneElements()
                     .filter((element) => !remove.has(element.id)),
-                  ...convertToExcalidrawElements([text], {
-                    regenerateIds: false,
-                  }),
+                  ...convertToFcboardElements(
+                    insertionLabelParts(
+                      text,
+                      text.customData?.fcInsertion?.textRuns?.[target.index],
+                    ),
+                    {
+                      regenerateIds: false,
+                    },
+                  ),
                 ],
                 captureUpdate: CaptureUpdateAction.IMMEDIATELY,
               });
@@ -407,7 +415,7 @@ export const observeInkAssistance = (
               ...api
                 .getSceneElements()
                 .filter((element) => !ids.has(element.id)),
-              ...convertToExcalidrawElements([shape]),
+              ...convertToFcboardElements([shape]),
             ],
             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
           });
@@ -437,18 +445,22 @@ export const observeInkAssistance = (
     );
   };
   const stop = api.onChange(refresh);
+  const tables = new LiveTableWriting(api);
+  const inkProgress = api.onInkProgress?.((stroke, phase) => {
+    if (!classroomCommands.has("document.draw")) {
+      tables.progress(stroke, phase);
+    }
+  });
   const inkCommit = api.onInkCommit?.((stroke) => {
     if (classroomCommands.has("document.draw")) {
       return;
     }
-    const scene = api.getSceneElements();
-    const tableScene = growBoardTableWriting(scene, new Set([stroke.id]));
-    if (tableScene !== scene) {
+    tables.commit(stroke);
+    if (
+      api.getSceneElements().find((item) => item.id === stroke.id)?.customData
+        ?.fcInsertion
+    ) {
       seen.add(stroke.id);
-      api.updateScene({
-        elements: tableScene,
-        captureUpdate: CaptureUpdateAction.EVENTUALLY,
-      });
     }
   });
   const invalidate = classroomCommands.onInvalidate(() => {
@@ -509,6 +521,8 @@ export const observeInkAssistance = (
     controller?.abort();
     stop();
     inkCommit?.();
+    inkProgress?.();
+    tables.clear();
     invalidate();
     boards();
     command();

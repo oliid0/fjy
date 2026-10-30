@@ -1,6 +1,6 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@fcboard/math";
 
-import type { LocalPoint } from "@excalidraw/math";
+import type { LocalPoint } from "@fcboard/math";
 
 /** Split by travelled distance, matching HDashedCurveObject's DashPathEffect. */
 export const dashedInk = (

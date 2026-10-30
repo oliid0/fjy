@@ -1,14 +1,14 @@
-import { getNonDeletedElements } from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
-import { isLinearElement, isTextElement } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
+import { LinearElementEditor } from "@fcboard/element";
+import { isLinearElement, isTextElement } from "@fcboard/element";
 
-import { arrayToMap, KEYS } from "@excalidraw/common";
+import { arrayToMap, KEYS } from "@fcboard/common";
 
-import { selectGroupsForSelectedElements } from "@excalidraw/element";
+import { selectGroupsForSelectedElements } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
 import { selectAllIcon } from "../components/icons";
 
@@ -32,7 +32,7 @@ export const actionSelectAll = register({
           !(isTextElement(element) && element.containerId) &&
           !element.locked,
       )
-      .reduce((map: Record<ExcalidrawElement["id"], true>, element) => {
+      .reduce((map: Record<FcboardElement["id"], true>, element) => {
         map[element.id] = true;
         return map;
       }, {});

@@ -91,7 +91,7 @@
     "untitled": "بدون عنوان",
     "name": "نام",
     "yourName": "نام شما",
-    "madeWithExcalidraw": "ساخته شده با Fcboard",
+    "madeWithFcboard": "ساخته شده با Fcboard",
     "group": "گروهبندی انتخابها",
     "ungroup": "حذف گروهبندی انتخابها",
     "collaborators": "همکاران",
@@ -121,7 +121,7 @@
     "toggleTheme": "تغییر وضعیت پوسته روشن/تیره",
     "theme": "پوسته",
     "personalLib": "کتابخانه شخصی",
-    "excalidrawLib": "کتابخانه Fcboard",
+    "fcboardlib": "کتابخانه Fcboard",
     "decreaseFontSize": "کاهش اندازه فونت",
     "increaseFontSize": "افزایش دادن اندازه فونت",
     "unbindText": "بازکردن نوشته",
@@ -320,7 +320,7 @@
     "laser": "اشاره گر لیزری",
     "hand": "دست (ابزار پانینگ)",
     "extraTools": "ابزارهای بیشتر",
-    "mermaidToExcalidraw": "مرمید به excalidraw",
+    "mermaidToFcboard": "مرمید به fcboard",
     "convertElementType": "نوع شکل را تغییر دهید"
   },
   "element": {
@@ -618,7 +618,7 @@
     }
   },
   "mermaid": {
-    "title": "مرمید به excalidraw",
+    "title": "مرمید به fcboard",
     "button": "درج",
     "description": "فعلا فقط <flowchartLink> فلوچارت </flowchartLink> ، <sequenceLink> توالی </sequenceLink> و <classLink> کلاس </classLink> نمودارها پشتیبانی می شوند. انواع دیگر به صورت تصویر در Fcboard ارائه خواهند شد.",
     "syntax": "مرمید syntax",

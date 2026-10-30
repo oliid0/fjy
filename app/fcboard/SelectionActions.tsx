@@ -1,12 +1,13 @@
-import { t, useI18n, getLanguage } from "@excalidraw/excalidraw/i18n";
+import { t, useI18n, getLanguage } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
 import Paper from "@mui/material/Paper";
 import ButtonBase from "@mui/material/ButtonBase";
 
-import { getCommonBounds } from "@excalidraw/element";
+import { getCommonBounds } from "@fcboard/element";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -30,22 +31,30 @@ import { SolidActions } from "./SolidActions";
 import { boardInk, clipInk } from "./digitalInk";
 import { recognizeMath } from "./mathRecognition";
 import { updateQuestionAnswer } from "./questionAnswer";
+import { readInsertions } from "./insertObjects";
+import { TableActions } from "./TableActions";
+import copyIcon from "./factory-table-icons/copy.svg";
+import deleteIcon from "./factory-table-icons/delete.svg";
+import searchIcon from "./factory-table-icons/search.svg";
 
 import type { Plot } from "./math";
 import type { InkStroke } from "./documents";
 import type { Widget } from "./widgets";
+import type { InsertObject } from "./insertObjects";
 
 type Action = "auto" | "search";
 type Region = { left: number; top: number; right: number; bottom: number };
 type Target = {
-  source: readonly ExcalidrawElement[];
+  source: readonly FcboardElement[];
   signature: string;
   canSearch: boolean;
   left: number;
   top: number;
+  width: number;
   region?: Region;
   document?: { crop: Region; hasObjects: boolean };
   solid?: Widget;
+  table?: InsertObject;
   answer?: { anchor: string; collapsed: boolean };
 };
 type DocumentContext = {
@@ -70,7 +79,7 @@ export const SelectionActions = ({
   onPlot,
   onRequest,
 }: {
-  api: ExcalidrawImperativeAPI;
+  api: FcboardImperativeAPI;
   onPlot: (plot: Plot, source: string) => void;
   onRequest: (
     text: string,
@@ -117,6 +126,21 @@ export const SelectionActions = ({
         const selected = doc.ink.filter((stroke) =>
           doc.selection.includes(stroke.id),
         );
+        const tableIds = new Set(
+          selected
+            .filter(
+              (stroke) =>
+                stroke.insertion?.kind === "table" &&
+                stroke.insertion.inkCell === undefined,
+            )
+            .map((stroke) => stroke.insertion!.id),
+        );
+        const table =
+          tableIds.size === 1
+            ? readInsertions(api).find(
+                (item) => item.kind === "table" && tableIds.has(item.id),
+              )
+            : undefined;
         const answerAnchor = selected.find(
           (stroke) =>
             stroke.questionAnswer?.ids.length &&
@@ -158,15 +182,16 @@ export const SelectionActions = ({
           return;
         }
         const canSearch =
-          !selected.length ||
-          selected.some(
-            (stroke) =>
-              stroke.text ||
-              (!stroke.image &&
-                !stroke.widget &&
-                !stroke.plot &&
-                !stroke.insertion),
-          );
+          !table &&
+          (!selected.length ||
+            selected.some(
+              (stroke) =>
+                stroke.text ||
+                (!stroke.image &&
+                  !stroke.widget &&
+                  !stroke.plot &&
+                  !stroke.insertion),
+            ));
         const signature = JSON.stringify([
           doc.name,
           doc.page,
@@ -208,6 +233,7 @@ export const SelectionActions = ({
                 signature,
                 canSearch,
                 solid,
+                table,
                 answer: answerAnchor
                   ? {
                       anchor: answerAnchor.id,
@@ -237,6 +263,7 @@ export const SelectionActions = ({
                   1,
                   (canSearch ? 4 : 3) +
                     (solid ? 6 : 0) +
+                    (table ? 4 : 0) +
                     (answerAnchor ? 1 : 0),
                 ),
                 document: {
@@ -248,6 +275,21 @@ export const SelectionActions = ({
         return;
       }
       let source = selectedBoardElements(api);
+      const tableIds = new Set(
+        source
+          .filter(
+            (item) =>
+              item.customData?.fcInsertion?.kind === "table" &&
+              item.customData.fcInsertion.inkCell === undefined,
+          )
+          .map((item) => item.customData!.fcInsertion.id),
+      );
+      const table =
+        tableIds.size === 1
+          ? readInsertions(api).find(
+              (item) => item.kind === "table" && tableIds.has(item.id),
+            )
+          : undefined;
       const owner = source[0]?.customData?.fcWidget;
       const solid =
         owner &&
@@ -287,13 +329,12 @@ export const SelectionActions = ({
       const [left, top, right, bottom] = region
         ? [region.left, region.top, region.right, region.bottom]
         : getCommonBounds(source);
-      const unit = Math.max(
-        0.85,
-        Math.min(1, state.width / 1280, state.height / 688),
-      );
-      const canSearch = source.some(
-        (element) => element.type === "text" || element.type === "freedraw",
-      );
+      const unit = 1; // Native 44dp targets wrap on small screens instead of shrinking.
+      const canSearch =
+        !table &&
+        source.some(
+          (element) => element.type === "text" || element.type === "freedraw",
+        );
       const offsetLeft = state.offsetLeft || 0;
       const offsetTop = state.offsetTop || 0;
       const answerAnchor = source.find(
@@ -315,12 +356,16 @@ export const SelectionActions = ({
           bottom: offsetTop + state.height - 68 * unit,
         },
         unit,
-        (canSearch ? 4 : 3) + (solid ? 6 : 0) + (answerAnchor ? 1 : 0),
+        (canSearch ? 4 : 3) +
+          (solid ? 6 : 0) +
+          (table ? 4 : 0) +
+          (answerAnchor ? 1 : 0),
       );
       setTarget((old) =>
         old?.signature === signature &&
         old.left === position.left &&
-        old.top === position.top
+        old.top === position.top &&
+        old.width === position.width
           ? old
           : {
               source,
@@ -329,6 +374,7 @@ export const SelectionActions = ({
               ...position,
               region,
               solid,
+              table,
               answer: answerAnchor
                 ? {
                     anchor: answerAnchor.id,
@@ -734,7 +780,7 @@ export const SelectionActions = ({
   return (
     <div
       className="fc-selection-actions"
-      style={{ left: target.left, top: target.top }}
+      style={{ left: target.left, top: target.top, width: target.width }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <Paper
@@ -791,14 +837,7 @@ export const SelectionActions = ({
               .catch((failure) => setError(String(failure)));
           }}
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-          >
-            <path d="M8 8h12v12H8zM4 16V4h12" />
-          </svg>
+          <img src={copyIcon} alt="" draggable={false} />
         </ButtonBase>
         <ButtonBase
           aria-label={t("labels.delete")}
@@ -814,30 +853,22 @@ export const SelectionActions = ({
               .catch((failure) => setError(String(failure)));
           }}
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-          >
-            <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7" />
-          </svg>
+          <img src={deleteIcon} alt="" draggable={false} />
         </ButtonBase>
+        {target.table && (
+          <TableActions
+            table={target.table}
+            disabled={pending}
+            onError={setError}
+          />
+        )}
         {target.canSearch && (
           <ButtonBase
             aria-label={t("fcboard.search")}
             disabled={pending}
             onClick={() => void act("search")}
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            >
-              <circle cx="10" cy="10" r="6" />
-              <path d="m15 15 6 6" />
-            </svg>
+            <img src={searchIcon} alt="" draggable={false} />
           </ButtonBase>
         )}
         <ButtonBase

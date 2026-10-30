@@ -91,7 +91,7 @@
     "untitled": "ไม่มีชื่อ",
     "name": "ชื่อ",
     "yourName": "ชื่อของคุณ",
-    "madeWithExcalidraw": "เพิ่มลายน้ำ \"สร้างด้วย Fcboard\"",
+    "madeWithFcboard": "เพิ่มลายน้ำ \"สร้างด้วย Fcboard\"",
     "group": "จัดกลุ่ม",
     "ungroup": "ยกเลิกการจัดกลุ่ม",
     "collaborators": "ผู้ทำงานร่วมกัน",
@@ -121,7 +121,7 @@
     "toggleTheme": "สลับธีมสว่าง/มืด",
     "theme": "ธีม",
     "personalLib": "คลังของฉัน",
-    "excalidrawLib": "คลังของ Fcboard",
+    "fcboardlib": "คลังของ Fcboard",
     "decreaseFontSize": "ลดขนาดตัวอักษร",
     "increaseFontSize": "เพิ่มขนาดตัวอักษร",
     "unbindText": "ยกเลิกการผูกติด",
@@ -320,7 +320,7 @@
     "laser": "ตัวชี้เลเซอร์",
     "hand": "มือ (เครื่องมือเลื่อน)",
     "extraTools": "เครื่องมืออื่นๆ",
-    "mermaidToExcalidraw": "เมอร์เมดเป็นเอกซ์คาลิดรอว์",
+    "mermaidToFcboard": "เมอร์เมดเป็นเอกซ์คาลิดรอว์",
     "convertElementType": "สลับประเภทรูปร่าง"
   },
   "element": {

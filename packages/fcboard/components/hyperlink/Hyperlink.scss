@@ -1,6 +1,6 @@
 @use "../../css/variables.module" as *;
 
-.excalidraw-hyperlinkContainer {
+.fcboard-hyperlinkContainer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,7 +50,7 @@
     color: $color-blue-6;
     background-color: transparent !important;
     font-weight: 500;
-    &.excalidraw-hyperlinkContainer--remove {
+    &.fcboard-hyperlinkContainer--remove {
       color: $color-red-9;
     }
   }

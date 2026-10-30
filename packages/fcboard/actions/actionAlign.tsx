@@ -1,20 +1,20 @@
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@fcboard/element";
 
-import { isFrameLikeElement } from "@excalidraw/element";
+import { isFrameLikeElement } from "@fcboard/element";
 
-import { updateFrameMembershipOfSelectedElements } from "@excalidraw/element";
+import { updateFrameMembershipOfSelectedElements } from "@fcboard/element";
 
-import { KEYS, arrayToMap } from "@excalidraw/common";
+import { KEYS, arrayToMap } from "@fcboard/common";
 
-import { alignElements } from "@excalidraw/element";
+import { alignElements } from "@fcboard/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@fcboard/element";
 
-import { getSelectedElementsByGroup } from "@excalidraw/element";
+import { getSelectedElementsByGroup } from "@fcboard/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { FcboardElement } from "@fcboard/element/types";
 
-import type { Alignment } from "@excalidraw/element";
+import type { Alignment } from "@fcboard/element";
 
 import { ToolButton } from "../components/ToolButton";
 import {
@@ -53,7 +53,7 @@ export const alignActionsPredicate = (
 };
 
 const alignSelectedElements = (
-  elements: readonly ExcalidrawElement[],
+  elements: readonly FcboardElement[],
   appState: Readonly<AppState>,
   app: AppClassProperties,
   alignment: Alignment,

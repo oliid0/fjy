@@ -1,6 +1,6 @@
 @use "../css/variables.module" as *;
 
-.excalidraw {
+.fcboard {
   .layer-ui__search {
     flex: 1 0 auto;
     display: flex;
@@ -19,7 +19,7 @@
 
     .ExcTextField__input {
       background-color: #f5f5f9;
-      @at-root .excalidraw.theme--dark#{&} {
+      @at-root .fcboard.theme--dark#{&} {
         background-color: #31303b;
       }
 

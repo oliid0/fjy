@@ -91,7 +91,7 @@
     "untitled": "ਬੇ-ਸਿਰਨਾਵਾਂ",
     "name": "ਨਾਂ",
     "yourName": "ਤੁਹਾਡਾ ਨਾਂ",
-    "madeWithExcalidraw": "Fcboard ਨਾਲ ਬਣਾਇਆ",
+    "madeWithFcboard": "Fcboard ਨਾਲ ਬਣਾਇਆ",
     "group": "ਚੋਣ ਦਾ ਗਰੁੱਪ ਬਣਾਓ",
     "ungroup": "ਚੋਣ ਦਾ ਗਰੁੱਪ ਤੋੜੋ",
     "collaborators": "ਸਹਿਯੋਗੀ",
@@ -121,7 +121,7 @@
     "toggleTheme": "ਟੌਗਲ ਲਾਈਟ/ਡਾਰਕ ਥੀਮ",
     "theme": "ਥੀਮ",
     "personalLib": "ਨਿੱਜੀ ਲਾਇਬ੍ਰੇਰੀ",
-    "excalidrawLib": "ਐਕਸਕਲੀਡਰਾਅ ਲਾਇਬ੍ਰੇਰੀ",
+    "fcboardlib": "ਐਕਸਕਲੀਡਰਾਅ ਲਾਇਬ੍ਰੇਰੀ",
     "decreaseFontSize": "ਫੌਂਟ ਦਾ ਅਕਾਰ ਘਟਾਓ",
     "increaseFontSize": "ਫੌਂਟ ਦਾ ਅਕਾਰ ਵਧਾਓ",
     "unbindText": "ਪਾਠ ਨੂੰ ਵੱਖ ਕਰੋ",
@@ -320,7 +320,7 @@
     "laser": "ਲੇਜ਼ਰ ਪੁਆਇੰਟਰ",
     "hand": "ਹੱਥ (ਪੈਨਿੰਗ ਟੂਲ)",
     "extraTools": "ਹੋਰ ਸੰਦ",
-    "mermaidToExcalidraw": "Mermaid ਨੂੰ Fcboard",
+    "mermaidToFcboard": "Mermaid ਨੂੰ Fcboard",
     "convertElementType": "ਟੌਗਲ ਸ਼ਕਲ ਦੀ ਕਿਸਮ"
   },
   "element": {

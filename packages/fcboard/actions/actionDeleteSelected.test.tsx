@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Excalidraw } from "../index";
+import { Fcboard } from "../index";
 import { API } from "../tests/helpers/api";
 import { act, assertElements, render } from "../tests/test-utils";
 
@@ -10,7 +10,7 @@ const { h } = window;
 
 describe("deleting selected elements when frame selected should keep children + select them", () => {
   beforeEach(async () => {
-    await render(<Excalidraw />);
+    await render(<Fcboard />);
   });
 
   it("frame only", async () => {

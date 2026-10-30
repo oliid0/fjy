@@ -1,6 +1,6 @@
 @use "../../css/variables.module" as *;
 
-.excalidraw {
+.fcboard {
   .sidebar-trigger {
     @include outlineButtonStyles;
     @include filledButtonOnCanvas;
@@ -32,7 +32,7 @@
     white-space: nowrap;
   }
 
-  &.excalidraw--mobile .default-sidebar-trigger .sidebar-trigger__label {
+  &.fcboard--mobile .default-sidebar-trigger .sidebar-trigger__label {
     display: none;
   }
 }

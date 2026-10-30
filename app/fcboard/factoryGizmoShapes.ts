@@ -1,7 +1,7 @@
-import { convertToExcalidrawElements } from "@excalidraw/excalidraw";
-import { pointFrom } from "@excalidraw/math";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { pointFrom } from "@fcboard/math";
 
-import type { ExcalidrawElementSkeleton } from "@excalidraw/element/transform";
+import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import type { Widget, WidgetKind } from "./widgets";
 
@@ -44,8 +44,8 @@ export const gizmoPoint = (
  * The reference screenshot's transparent body and two protractor scales are retained. */
 export const factoryGizmoShapes = (
   widget: Widget,
-): ExcalidrawElementSkeleton[] => {
-  const shapes: ExcalidrawElementSkeleton[] = [];
+): FcboardElementSkeleton[] => {
+  const shapes: FcboardElementSkeleton[] = [];
   const color = widget.params.solid.stroke || "#ffffff";
   const path = (points: number[][], width = 1.5, strokeColor = color) =>
     shapes.push({
@@ -247,7 +247,7 @@ export const factoryGizmoShapes = (
   }
   const radians = (widget.params.rotation * Math.PI) / 180;
   const size = widget.params.size;
-  return convertToExcalidrawElements(shapes).map((element) => {
+  return convertToFcboardElements(shapes).map((element) => {
     const cx = (element.x + element.width / 2) * size;
     const cy = (element.y + element.height / 2) * size;
     return {
@@ -271,6 +271,6 @@ export const factoryGizmoShapes = (
           }
         : {}),
       ...(element.type === "text" ? { fontSize: element.fontSize * size } : {}),
-    } as ExcalidrawElementSkeleton;
+    } as FcboardElementSkeleton;
   });
 };

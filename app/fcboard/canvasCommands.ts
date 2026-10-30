@@ -1,18 +1,16 @@
-import { t } from "@excalidraw/excalidraw/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import {
   CaptureUpdateAction,
-  convertToExcalidrawElements,
-} from "@excalidraw/excalidraw";
-import { getCommonBounds, newIframeElement } from "@excalidraw/element";
-import { validateInteractiveResource } from "@excalidraw/excalidraw/interactiveHtml";
-import { FONT_FAMILY } from "@excalidraw/common";
-import { switchWhiteboardPen } from "@excalidraw/excalidraw/whiteboardPen";
+  convertToFcboardElements,
+} from "@fcboard/fcboard";
+import { getCommonBounds, newIframeElement } from "@fcboard/element";
+import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import { FONT_FAMILY } from "@fcboard/common";
+import { switchWhiteboardPen } from "@fcboard/fcboard/whiteboardPen";
 
-import type {
-  ExcalidrawImperativeAPI,
-  UIOptions,
-} from "@excalidraw/excalidraw/types";
-import type { ActionName } from "@excalidraw/excalidraw/actions/types";
+import type { ActionName } from "@fcboard/fcboard/actions/types";
+
+import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { selectedBoardElements } from "./ai";
 import {
@@ -95,7 +93,7 @@ const actions = new Set<ActionName>([
   "stats",
 ]);
 export const registerCanvasCommands = (
-  api: ExcalidrawImperativeAPI,
+  api: FcboardImperativeAPI,
   inkProfile: () => UIOptions["inkProfile"] = () => undefined,
 ) => {
   const animations = new Set<LessonCanvas>();
@@ -605,7 +603,7 @@ export const registerCanvasCommands = (
           throw new Error(t("fcboard.text_to_edit_not_found"));
         }
         if (existing?.type === "text") {
-          const next = convertToExcalidrawElements(
+          const next = convertToFcboardElements(
             [
               {
                 ...existing,
@@ -677,11 +675,7 @@ export const registerCanvasCommands = (
         }
         const viewport = contentViewport(api);
         const scale = api.getAppState().zoom.value;
-        const obstacles = api.getSceneElements().map((element) => {
-          const [left, top, right, bottom] = getCommonBounds([element]);
-          return { left, top, right, bottom };
-        });
-        const position = resourcePlacement(viewport, obstacles, scale);
+        const position = resourcePlacement(viewport, scale);
         const ids = insertElements(api, [
           newIframeElement({
             type: "iframe",

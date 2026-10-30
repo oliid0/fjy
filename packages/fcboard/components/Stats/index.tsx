@@ -1,22 +1,22 @@
-import { round } from "@excalidraw/math";
+import { round } from "@fcboard/math";
 import clsx from "clsx";
 import throttle from "lodash.throttle";
 import { useEffect, useMemo, useState, memo } from "react";
 
-import { STATS_PANELS } from "@excalidraw/common";
-import { getCommonBounds } from "@excalidraw/element";
-import { getUncroppedWidthAndHeight } from "@excalidraw/element";
-import { isImageElement } from "@excalidraw/element";
+import { STATS_PANELS } from "@fcboard/common";
+import { getCommonBounds } from "@fcboard/element";
+import { getUncroppedWidthAndHeight } from "@fcboard/element";
+import { isImageElement } from "@fcboard/element";
 
-import { frameAndChildrenSelectedTogether } from "@excalidraw/element";
+import { frameAndChildrenSelectedTogether } from "@fcboard/element";
 
-import { elementsAreInSameGroup } from "@excalidraw/element";
+import { elementsAreInSameGroup } from "@fcboard/element";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedFcboardElement } from "@fcboard/element/types";
 
 import { t } from "../../i18n";
 import { isGridModeEnabled } from "../../snapping";
-import { useExcalidrawAppState, useExcalidrawSetAppState } from "../App";
+import { useFcboardAppState, useFcboardSetAppState } from "../App";
 import { Island } from "../Island";
 import { CloseIcon } from "../icons";
 
@@ -34,22 +34,18 @@ import { getAtomicUnits } from "./utils";
 
 import "./Stats.scss";
 
-import type {
-  AppClassProperties,
-  AppState,
-  ExcalidrawProps,
-} from "../../types";
+import type { AppClassProperties, AppState, FcboardProps } from "../../types";
 
 interface StatsProps {
   app: AppClassProperties;
   onClose: () => void;
-  renderCustomStats: ExcalidrawProps["renderCustomStats"];
+  renderCustomStats: FcboardProps["renderCustomStats"];
 }
 
 const STATS_TIMEOUT = 50;
 
 export const Stats = (props: StatsProps) => {
-  const appState = useExcalidrawAppState();
+  const appState = useFcboardAppState();
   const sceneNonce = props.app.scene.getSceneNonce() || 1;
   const selectedElements = props.app.scene.getSelectedElements({
     selectedElementIds: appState.selectedElementIds,
@@ -123,14 +119,14 @@ export const StatsInner = memo(
     gridModeEnabled,
   }: StatsProps & {
     sceneNonce: number;
-    selectedElements: readonly NonDeletedExcalidrawElement[];
+    selectedElements: readonly NonDeletedFcboardElement[];
     appState: AppState;
     gridModeEnabled: boolean;
   }) => {
     const scene = app.scene;
     const elements = scene.getNonDeletedElements();
     const elementsMap = scene.getNonDeletedElementsMap();
-    const setAppState = useExcalidrawSetAppState();
+    const setAppState = useFcboardSetAppState();
 
     const singleElement =
       selectedElements.length === 1 ? selectedElements[0] : null;
@@ -155,7 +151,7 @@ export const StatsInner = memo(
 
     const throttledSetSceneDimension = useMemo(
       () =>
-        throttle((elements: readonly NonDeletedExcalidrawElement[]) => {
+        throttle((elements: readonly NonDeletedFcboardElement[]) => {
           const boundingBox = getCommonBounds(elements);
           setSceneDimension({
             width: Math.round(boundingBox[2]) - Math.round(boundingBox[0]),

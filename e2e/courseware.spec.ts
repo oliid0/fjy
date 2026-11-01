@@ -122,7 +122,7 @@ test("transparent PPT ink survives closing, can be erased, and undo restores it"
   await page.screenshot({ path: info.outputPath("ppt-transparent-ink.png") });
 });
 
-test("new boards preserve previous work and replace the old material library with working tools", async ({
+test("new boards preserve previous work and offer the original teaching tools", async ({
   page,
 }, info) => {
   await page.goto("/");
@@ -143,17 +143,24 @@ test("new boards preserve previous work and replace the old material library wit
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
   await page.getByRole("button", { name: "教学工具", exact: true }).click();
-  await page.getByRole("button", { name: "下一页", exact: true }).click();
-  await page.getByRole("button", { name: "插入单摆", exact: true }).click();
-  const length = page.getByRole("slider", { name: "摆长 L（m）", exact: true });
-  await expect(length).toBeVisible();
-  await length.focus();
-  await length.press("ArrowRight");
-  await expect(length).toHaveValue("1.6");
-  await page.getByRole("button", { name: "播放工具", exact: true }).click();
+  for (const name of ["直尺", "量角器", "圆规", "三角板"]) {
+    await expect(
+      page.getByRole("button", { name: `插入${name}`, exact: true }),
+    ).toBeVisible();
+  }
   await expect(
-    page.getByRole("button", { name: "暂停工具", exact: true }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "打开计时器", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
+  for (const name of ["骰子", "随机抽取", "单摆", "抛体运动"]) {
+    await expect(
+      page.getByRole("button", { name: `插入${name}`, exact: true }),
+    ).toHaveCount(0);
+  }
+  await page.getByRole("button", { name: "上一页", exact: true }).click();
+  await page.getByRole("button", { name: "插入直尺", exact: true }).click();
+  await expect(page.locator("[data-gizmo]")).toHaveCount(1);
+  await expect(page.locator("[data-gizmo] rect").first()).toBeVisible();
   await expect(page.locator('[data-testid="library-button"]')).toHaveCount(0);
   await page.screenshot({ path: info.outputPath("teaching-tools.png") });
 });

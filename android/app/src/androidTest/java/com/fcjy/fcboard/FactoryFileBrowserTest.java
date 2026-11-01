@@ -62,6 +62,7 @@ public class FactoryFileBrowserTest {
         AtomicReference<FactoryFileBrowserDialog> ref=new AtomicReference<>();
         AtomicReference<File> selected=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+          try{
             scenario.onActivity(activity->{FactoryFileBrowserDialog browser=new FactoryFileBrowserDialog(activity,false,"en",worker,file->{BoardFilePlugin.readXml(file);},file->{selected.set(file);done.countDown();},root,initial);ref.set(browser);browser.show();});
             boolean ready=false;
             for(int attempt=0;attempt<40 && !ready;attempt++){
@@ -82,7 +83,8 @@ public class FactoryFileBrowserTest {
                 assertTrue(browser.findViewById(R.id.factory_fb_confirm).isEnabled());browser.findViewById(R.id.factory_fb_confirm).performClick();
             });
             assertTrue(done.await(5,TimeUnit.SECONDS));assertEquals(board,selected.get());
-        }finally{if(ref.get()!=null)InstrumentationRegistry.getInstrumentation().runOnMainSync(()->ref.get().dismiss());worker.shutdownNow();remove(root);}
+        }finally{scenario.onActivity(activity->{if(ref.get()!=null)ref.get().dismiss();});}
+        }finally{worker.shutdownNow();remove(root);}
     }
     @Test public void originalSaveUsesAnEditableTimestampNameAndReportsOnlyAfterTheFileIsWritten() throws Exception {
         File root=temporary(),initial=new File(root,"Whiteboard/xml");assertTrue(initial.mkdirs());
@@ -90,6 +92,7 @@ public class FactoryFileBrowserTest {
         ExecutorService worker=Executors.newSingleThreadExecutor();
         AtomicReference<FactoryFileBrowserDialog> ref=new AtomicReference<>();AtomicReference<File> saved=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+          try{
             scenario.onActivity(activity->{FactoryFileBrowserDialog browser=new FactoryFileBrowserDialog(activity,true,"en",worker,file->FactoryFileAccess.copyAtomic(staged,file),file->{saved.set(file);done.countDown();},root,initial);ref.set(browser);browser.show();});
             boolean ready=false;
             for(int attempt=0;attempt<40 && !ready;attempt++){
@@ -99,7 +102,8 @@ public class FactoryFileBrowserTest {
             scenario.onActivity(activity->{EditText name=ref.get().findViewById(R.id.factory_fb_file_name);assertTrue(name.getText().toString().matches("\\d{14}"));name.setText("保存课件");ref.get().findViewById(R.id.factory_fb_confirm).performClick();});
             assertTrue(done.await(5,TimeUnit.SECONDS));assertEquals(new File(initial,"保存课件.bzd"),saved.get());
             assertEquals("bzd",BoardFilePlugin.readXml(saved.get()).getDocumentElement().getTagName());
-        }finally{if(ref.get()!=null)InstrumentationRegistry.getInstrumentation().runOnMainSync(()->ref.get().dismiss());worker.shutdownNow();remove(root);}
+        }finally{scenario.onActivity(activity->{if(ref.get()!=null)ref.get().dismiss();});}
+        }finally{worker.shutdownNow();remove(root);}
     }
     @Test public void imageModeShowsTheActualThumbnailAndSelectsOnlyTheRequestedFileType() throws Exception {
         File root=temporary(),initial=new File(root,"Whiteboard/image");assertTrue(initial.mkdirs());
@@ -108,6 +112,7 @@ public class FactoryFileBrowserTest {
         write(new File(initial,"board.bzd"),"<bzd/>");write(new File(initial,"document.pdf"),"not an image");
         ExecutorService worker=Executors.newSingleThreadExecutor();AtomicReference<FactoryFileBrowserDialog> ref=new AtomicReference<>();AtomicReference<File> selected=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+          try{
             scenario.onActivity(activity->{FactoryFileBrowserDialog browser=new FactoryFileBrowserDialog(activity,false,"en",worker,file->{assertEquals(picture,file);},file->{selected.set(file);done.countDown();},root,initial,FactoryFileAccess.Kind.IMAGE);ref.set(browser);browser.show();});
             boolean ready=false;
             for(int attempt=0;attempt<60 && !ready;attempt++){
@@ -116,6 +121,7 @@ public class FactoryFileBrowserTest {
             assertTrue(ready);
             scenario.onActivity(activity->{GridView grid=ref.get().findViewById(R.id.factory_fb_file_path_grid);grid.performItemClick(grid.getChildAt(0),0,0);ref.get().findViewById(R.id.factory_fb_confirm).performClick();});
             assertTrue(done.await(5,TimeUnit.SECONDS));assertEquals(picture,selected.get());
-        }finally{if(ref.get()!=null)InstrumentationRegistry.getInstrumentation().runOnMainSync(()->ref.get().dismiss());worker.shutdownNow();remove(root);}
+        }finally{scenario.onActivity(activity->{if(ref.get()!=null)ref.get().dismiss();});}
+        }finally{worker.shutdownNow();remove(root);}
     }
 }

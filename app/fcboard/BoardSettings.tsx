@@ -93,7 +93,7 @@ export const BoardSettings = ({
               onChange={(_, checked) => update({ hardNib: checked })}
             />
           </label>
-          <label>
+          <label className="fc-settings-brush-variation">
             {t("fcboard.factorySettings.variation")}
             <Slider
               aria-label={t("fcboard.factorySettings.variation")}

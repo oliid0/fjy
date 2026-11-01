@@ -1,8 +1,8 @@
 // layout_new_email.xml / layout_delete_mailbox_pop.xml and their drawables.
 .fc-classroom .fc-share-dialog.fc-share-mail-dialog {
-  width: min(433px, calc(100dvw - 24px));
-  height: min(339px, calc(100dvh - 24px));
-  max-height: calc(100dvh - 24px);
+  width: min(433px, calc(var(--fc-viewport-width, 100vw) - 24px));
+  height: min(339px, calc(var(--fc-viewport-height, 100vh) - 24px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
   padding: 16px 23px 19px;
   margin: 12px;
   border: 1px solid #00000038;
@@ -312,7 +312,7 @@
     color: #b42318;
   }
   .fc-mail-delete.MuiPaper-root {
-    width: min(300px, calc(100dvw - 24px));
+    width: min(300px, calc(var(--fc-viewport-width, 100vw) - 24px));
     margin: 12px;
     padding: 10px 16px 25px;
     border-radius: 8px;
@@ -356,7 +356,7 @@
   inset-inline: 12px;
   bottom: 96px;
   width: max-content;
-  max-width: calc(100dvw - 48px);
+  max-width: calc(var(--fc-viewport-width, 100vw) - 48px);
   margin-inline: auto;
   padding: 10px 16px;
   border-radius: 8px;

@@ -51,8 +51,7 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       .click();
     const settings = page.locator(".fc-settings-dialog");
     await settings
-      .locator(".fc-settings-navigation .MuiListItemButton-root")
-      .first()
+      .getByRole("button", { name: labels.background, exact: true })
       .click();
     const background = settings.locator(".fc-background-picker button").nth(3);
     await background.click();
@@ -60,16 +59,11 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       await page.setViewportSize(viewport);
       await contained(page, settings);
       await expect(background).toHaveAttribute("aria-pressed", "true");
-      const nav = (await settings
-        .locator(".fc-settings-navigation")
-        .boundingBox())!;
       const content = (await settings
         .locator(".fc-settings-content")
         .boundingBox())!;
-      expect(
-        nav.x + nav.width <= content.x + 1 ||
-          content.x + content.width <= nav.x + 1,
-      ).toBe(true);
+      const header = (await settings.locator(":scope > header").boundingBox())!;
+      expect(header.y + header.height).toBeLessThanOrEqual(content.y + 1);
       expect(
         await settings
           .locator(".fc-settings-content")

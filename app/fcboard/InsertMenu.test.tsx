@@ -214,7 +214,8 @@ it("places new document insertions in the actual scrolled viewport and sizes fou
         api,
         expect.objectContaining({
           kind,
-          position: { x: 260, y: 960 },
+          position:
+            kind === "fourline" ? { x: 400, y: 1060 } : { x: 260, y: 960 },
           ...(kind === "fourline" ? { width: 100, height: 80 } : {}),
         }),
       );

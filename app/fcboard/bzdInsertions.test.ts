@@ -222,7 +222,9 @@ it.each([
     expect(paper.kind).toBe("fourline");
     expect(paper.position.x).toBeCloseTo(x);
     expect(paper.position.y).toBeCloseTo(y);
-    expect(paper.width).toBeCloseTo(width);
+    const written = board.elements.find((element) => element.type === "text")!;
+    // HAlphabetObject.calcTextRect expands the saved matrix bounds for words.
+    expect(paper.width).toBeCloseTo(Math.max(width, 320 + written.width));
     expect(paper.height).toBeCloseTo(height);
     expect(paper.text).toBe("Hello");
     const native = nativeOnly(serializeBzd([board]));

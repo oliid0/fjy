@@ -8,15 +8,20 @@ import type { Page } from "@playwright/test";
 
 const setBackground = async (page: Page, color: string) => {
   await openSettingsMenu(page);
-  await page
-    .locator('.fc-board-settings input[type="color"]')
-    .evaluate((input, value) => {
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value",
-      )!.set!.call(input, value);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    }, color);
+  await page.getByRole("button", { name: "背景", exact: true }).click();
+  if (color === "#ffffff") {
+    await page.getByRole("button", { name: "自定义颜色", exact: true }).click();
+    await page.locator('.fc-factory-color-wheel input[type="range"]').fill("0");
+    const disc = page.getByRole("slider", { name: "自定义颜色", exact: true });
+    const bounds = (await disc.boundingBox())!;
+    await disc.click({
+      position: { x: bounds.width / 2, y: bounds.height / 2 },
+    });
+  } else {
+    await page
+      .getByRole("button", { name: `背景 ${color}`, exact: true })
+      .click();
+  }
   await page
     .getByRole("dialog", { name: "白板设置", exact: true })
     .press("Escape");
@@ -220,6 +225,10 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
 test("the save menu confirms pages and exports the chosen saved page as an actual JPEG", async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    Reflect.deleteProperty(window, "showOpenFilePicker");
+    Reflect.deleteProperty(window, "showSaveFilePicker");
+  });
   await page.goto("/");
   await expect(
     page.getByRole("button", { name: "新建白板", exact: true }),
@@ -237,7 +246,7 @@ test("the save menu confirms pages and exports the chosen saved page as an actua
   const downloaded = page.waitForEvent("download");
   await share.getByRole("button", { name: "下载选中页面" }).click();
   const file = await downloaded;
-  expect(file.suggestedFilename()).toBe("Fcboard-1.jpg");
+  expect(file.suggestedFilename()).toBe("Fcboard_01.jpg");
   const data = await readFile((await file.path())!);
   expect(Array.from(data.subarray(0, 3))).toEqual([255, 216, 255]);
   expect(Array.from(data.subarray(-2))).toEqual([255, 217]);
@@ -506,7 +515,7 @@ test("green and black chalkboards use visible white ink and restore dark ink on 
   await expect(
     page.getByRole("button", { name: "新建白板", exact: true }),
   ).toBeEnabled();
-  for (const [index, color] of ["#123d32", "#000000", "#ffffff"].entries()) {
+  for (const [index, color] of ["#253a35", "#000000", "#ffffff"].entries()) {
     await setBackground(page, color);
     await page.keyboard.press("t");
     await page.mouse.click(180 + index * 260, 200);

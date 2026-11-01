@@ -47,6 +47,9 @@ export type InsertObject = {
   opacity?: number;
   columnWidths?: number[];
   rowHeights?: number[];
+  /** HAlphabetObject's fixed 80/50/4 physical-pixel metrics in scene units. */
+  alphabetScale?: number;
+  alphabetBaseWidth?: number;
   /** Raw handwriting belongs to a cell; it is never OCR-replaced. */
   inkCell?: number;
   nodePositions?: ({ x: number; y: number } | null)[];
@@ -66,6 +69,19 @@ export const configureInsertion = (
   args: Record<string, unknown>,
 ): InsertObject => {
   const next = { ...object };
+  for (const metric of ["alphabetScale", "alphabetBaseWidth"] as const) {
+    if (args[metric] !== undefined) {
+      if (
+        typeof args[metric] !== "number" ||
+        !Number.isFinite(args[metric]) ||
+        args[metric] <= 0 ||
+        args[metric] > (metric === "alphabetScale" ? 1000 : 100000)
+      ) {
+        throw new Error(t("fcboard.invalid_insertion_data"));
+      }
+      next[metric] = args[metric] as number;
+    }
+  }
   if (args.color !== undefined) {
     if (
       typeof args.color !== "string" ||
@@ -492,41 +508,57 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
       : [];
   };
   if (object.kind === "fourline") {
+    const unit = object.alphabetScale ?? 1;
+    const labels = label(
+      object.text || "",
+      0,
+      0,
+      0,
+      width,
+      height,
+      object.textColors?.[0] || "#333333",
+    );
+    const paperWidth =
+      labels[0]?.customData?.fcInsertion?.width ??
+      object.alphabetBaseWidth ??
+      width;
+    const paperData = {
+      fcInsertion: {
+        width: paperWidth,
+        alphabetBaseWidth: object.alphabetBaseWidth ?? width,
+      },
+    };
+    const inset = Math.min(80 * unit, paperWidth / 2);
     // HAlphabetObject draws four lines at fifths inside its green rounded panel.
     return [
       {
         type: "rectangle",
         x: 0,
         y: 0,
-        width,
+        width: paperWidth,
         height,
         backgroundColor: object.color || "#0ed49f",
         fillStyle: "solid",
         strokeColor: "transparent",
         roughness: 0,
         opacity: object.opacity ?? 100,
-        roundness: { type: 3 },
+        roundness: { type: 3, value: 50 * unit },
         insertionText: 0,
+        customData: paperData,
       },
-      ...Array.from({ length: 4 }, (_, index) =>
-        line(
+      ...Array.from({ length: 4 }, (_, index) => ({
+        ...line(
           [
-            [width * 0.104, (height * (index + 1)) / 5],
-            [width * 0.896, (height * (index + 1)) / 5],
+            [inset, (height * (index + 1)) / 5],
+            [paperWidth - inset, (height * (index + 1)) / 5],
           ],
           "#8aedd2",
-          78,
+          (200 / 255) * 100,
         ),
-      ),
-      ...label(
-        object.text || "",
-        0,
-        0,
-        0,
-        width,
-        height,
-        object.textColors?.[0] || "#333333",
-      ),
+        strokeWidth: 4 * unit,
+        customData: paperData,
+      })),
+      ...labels,
     ];
   }
   if (object.kind === "table") {
@@ -891,6 +923,7 @@ export const renderInsertion = async (
     select?: boolean;
     exact?: boolean;
     preserveSelection?: boolean;
+    removeIds?: readonly string[];
   } = {},
 ) => {
   object = configureInsertion(object, object);
@@ -953,6 +986,7 @@ export const renderInsertion = async (
         before: transaction.before,
         select: transaction.select,
         preserveSelection: transaction.preserveSelection,
+        removeIds: transaction.removeIds,
       },
     });
     return;
@@ -998,7 +1032,9 @@ export const renderInsertion = async (
       : [];
   let nextScene = [
     ...existing.filter(
-      (element) => element.customData?.fcInsertion?.id !== object.id,
+      (element) =>
+        element.customData?.fcInsertion?.id !== object.id &&
+        !transaction.removeIds?.includes(element.id),
     ),
     ...replacement,
   ];

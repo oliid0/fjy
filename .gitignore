@@ -38,3 +38,6 @@ playwright-report/
 __pycache__/
 ss/*
 ss*
+*.md
+docs/*
+docs

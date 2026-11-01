@@ -290,7 +290,10 @@ for (const viewport of [
     await expect(random.getByRole("textbox")).toHaveCount(0);
     await random.getByRole("button", { name: "关闭", exact: true }).click();
     library = await openMathTools();
-    await library.getByRole("button", { name: /^函数/ }).click();
+    await library
+      .locator(".fc-resource-grid")
+      .getByRole("button", { name: /^函数/ })
+      .click();
     const graph = page.getByRole("dialog", { name: "函数预览", exact: true });
     await graph.getByRole("button", { name: "一次函数", exact: true }).click();
     const input = graph.getByRole("textbox", {

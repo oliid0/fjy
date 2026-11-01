@@ -21,6 +21,7 @@ import { insertText } from "./board";
 import { languageInkSignature } from "./languageStudy";
 import { LiveTableWriting } from "./liveTableWriting";
 import { chooseInsertionCandidate } from "./InsertionCandidates";
+import { renderInsertion } from "./insertObjects";
 import { latestFunctionInk } from "./functionInk";
 import {
   boardWritingParts,
@@ -318,7 +319,23 @@ export const observeInkAssistance = (
                 source[0].strokeColor,
                 ids,
               );
-              if (!text || !current()) {
+              if (!text || text.type !== "text" || !current()) {
+                return;
+              }
+              if (target.insertion.kind === "fourline") {
+                ids.forEach((id) => seen.add(id));
+                await renderInsertion(
+                  api,
+                  {
+                    ...text.customData!.fcInsertion,
+                    position: { x: target.x, y: target.y },
+                    height: target.height,
+                    text: text.originalText,
+                    textColors: [source[0].strokeColor],
+                  },
+                  true,
+                  { select: false, removeIds: ids, exact: true },
+                );
                 return;
               }
               const remove = new Set([

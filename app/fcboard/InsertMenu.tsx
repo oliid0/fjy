@@ -159,27 +159,43 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       document ? { x: 60, y: 60 } : insertionPoint(api),
     );
     base.color =
-      (
-        classroomCommands.read("document") as
-          | { pen?: { color: string } }
-          | undefined
-      )?.pen?.color ||
-      api.getAppState().currentItemStrokeColor ||
-      "#333333";
+      kind === "fourline"
+        ? "#0ed49f"
+        : (
+            classroomCommands.read("document") as
+              | { pen?: { color: string } }
+              | undefined
+          )?.pen?.color ||
+          api.getAppState().currentItemStrokeColor ||
+          "#333333";
     if (kind === "fourline") {
+      const state = api.getAppState();
+      const scale =
+        document && visible
+          ? (classroomCommands.read("document.layout") as { scale?: number })
+              .scale || 1
+          : document
+          ? 1
+          : state.zoom.value;
+      base.alphabetScale = 1 / ((window.devicePixelRatio || 1) * scale);
       if (visible) {
         base.width = Math.max(
-          80,
+          0.1,
           Math.min(1600, (visible.right - visible.left) / 5),
         );
         base.height = Math.max(
-          40,
+          0.1,
           Math.min(1200, (visible.bottom - visible.top) / 5),
         );
       } else if (!document) {
-        const state = api.getAppState();
-        base.width = Math.max(80, state.width / state.zoom.value / 5);
-        base.height = Math.max(40, state.height / state.zoom.value / 5);
+        base.width = state.width / state.zoom.value / 5;
+        base.height = state.height / state.zoom.value / 5;
+        base.position = {
+          x: -state.scrollX + (state.width / state.zoom.value - base.width) / 2,
+          y:
+            -state.scrollY +
+            (state.height / state.zoom.value - base.height) / 2,
+        };
       }
     }
     if (visible) {
@@ -191,6 +207,12 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
           visible.top +
           Math.min(60, Math.max(0, visible.bottom - visible.top - base.height)),
       };
+      if (kind === "fourline") {
+        base.position = {
+          x: (visible.left + visible.right - base.width) / 2,
+          y: (visible.top + visible.bottom - base.height) / 2,
+        };
+      }
     }
     return base;
   };

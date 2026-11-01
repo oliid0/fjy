@@ -789,7 +789,6 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
   );
   return (
     <>
-      {scoreboard && <ScoreBoard onClose={() => setScoreboard(false)} />}
       {random && <RandomNumber onClose={() => setRandom(false)} />}
       {resourceTool?.kind === "function-graph" && (
         <FactoryFunctionGraph
@@ -1180,6 +1179,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
           </ResourceWindow>
         </MaterialPanel>
       )}
+      {scoreboard && <ScoreBoard onClose={() => setScoreboard(false)} />}
     </>
   );
 };

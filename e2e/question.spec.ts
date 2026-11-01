@@ -88,19 +88,25 @@ for (const viewport of [
     expect(source.type).toBe("freedraw");
     expect(source.points.length).toBeGreaterThan(2);
     const root = (await page.locator(".fcboard").boundingBox())!;
-    const left = root.x + (source.x + state.scrollX) * state.zoom.value;
-    const top = root.y + (source.y + state.scrollY) * state.zoom.value;
+    const xs = source.points.map((point: number[]) => point[0]);
+    const ys = source.points.map((point: number[]) => point[1]);
+    const width = Math.max(...xs) - Math.min(...xs);
+    const height = Math.max(...ys) - Math.min(...ys);
+    const left =
+      root.x + (source.x + Math.min(...xs) + state.scrollX) * state.zoom.value;
+    const top =
+      root.y + (source.y + Math.min(...ys) + state.scrollY) * state.zoom.value;
     expect(left).toBeGreaterThanOrEqual(frame.x - 1);
     expect(top).toBeGreaterThanOrEqual(frame.y - 1);
-    expect(left + source.width * state.zoom.value).toBeLessThanOrEqual(
+    expect(left + width * state.zoom.value).toBeLessThanOrEqual(
       frame.x + frame.width + 1,
     );
-    expect(top + source.height * state.zoom.value).toBeLessThanOrEqual(
+    expect(top + height * state.zoom.value).toBeLessThanOrEqual(
       frame.y + frame.height + 1,
     );
-    expect(source.height * state.zoom.value).toBeGreaterThanOrEqual(6);
-    expect(answer[0].fontSize).toBeLessThanOrEqual(source.height);
-    expect(answer[0].y).toBeGreaterThanOrEqual(source.y + source.height);
+    expect(height * state.zoom.value).toBeGreaterThanOrEqual(6);
+    expect(answer[0].fontSize).toBeLessThanOrEqual(height);
+    expect(answer[0].y).toBeGreaterThanOrEqual(source.y + Math.max(...ys));
     expect(
       await page.evaluate(
         ({ x, y }) =>

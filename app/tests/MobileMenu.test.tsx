@@ -52,6 +52,23 @@ describe("Test MobileMenu", () => {
       screen.queryByRole("button", { name: t("fcboard.toolbox") }),
     ).toBeNull();
     fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.language") }),
+    );
+    expect(
+      screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${t("fcboard.languagePacks.title")} ›`,
+      }),
+    );
+    const packs = screen.getByRole("dialog", {
+      name: t("fcboard.languagePacks.title"),
+    });
+    expect(packs).toBeVisible();
+    fireEvent.click(packs.querySelector("header button")!);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
+    fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.background") }),
     );
     expect(screen.queryByTestId("image-export-button")).toBeNull();
@@ -72,6 +89,18 @@ describe("Test MobileMenu", () => {
       screen.getByRole("button", { name: t("fcboard.ai_and_speech_settings") }),
     );
     expect(document.querySelector("[data-settings-page='ai']")).not.toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: t("fcboard.handwriting_and_insertion"),
+      }),
+    );
+    expect(
+      screen.queryByRole("combobox", { name: t("buttons.selectLanguage") }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.languagePacks.title") }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.models_and_connection") }),
     );

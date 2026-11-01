@@ -1,4 +1,4 @@
-import { Children, isValidElement, useState } from "react";
+import { Children, isValidElement, useRef, useState } from "react";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 
@@ -30,6 +30,7 @@ export const MaterialSelect = ({
   "aria-label": string;
 }) => {
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
   const choices = Children.toArray(children).filter(
     (child): child is ReactElement<ChoiceProps> =>
       isValidElement<ChoiceProps>(child),
@@ -42,6 +43,7 @@ export const MaterialSelect = ({
     : "";
   return (
     <Select<string>
+      ref={root}
       fullWidth
       size="small"
       displayEmpty
@@ -70,11 +72,15 @@ export const MaterialSelect = ({
       }}
       onPointerDown={(event) => event.stopPropagation()}
       MenuProps={{
-        disablePortal: true,
+        // A dialog's backdrop-filter creates a containing block for fixed
+        // descendants. Keep the menu in the editor root, outside that block.
+        container: () => root.current?.closest(".fcboard") || document.body,
+        transitionDuration: 0,
         slotProps: {
           paper: {
             sx: {
-              maxHeight: "min(320px, calc(100dvh - 32px))",
+              maxHeight:
+                "min(320px, calc(var(--fc-viewport-height, 100vh) - 32px))",
               color: "var(--fc-ink, #17243c)",
               backgroundColor: "var(--fc-surface, #fff)",
               border: "1px solid var(--fc-border, #dce3ec)",

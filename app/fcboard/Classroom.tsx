@@ -2603,6 +2603,7 @@ export const Classroom = ({
         <MaterialPanel
           id="fc-panel"
           ref={panelRef}
+          data-settings-page={panel === "settings" ? settingsPage : undefined}
           className={`fc-panel${
             panel === "settings" ? " fc-settings-dialog fc-board-settings" : ""
           }${
@@ -2740,7 +2741,7 @@ export const Classroom = ({
                     <LearningSettings />
                   </SettingsSection>
                   <SettingsSection id="models">
-                    <label>
+                    <label className="fc-settings-input">
                       {t("fcboard.ai_endpoint")}
                       <input
                         type="url"
@@ -2754,7 +2755,7 @@ export const Classroom = ({
                         }
                       />
                     </label>
-                    <label>
+                    <label className="fc-settings-input">
                       {t("fcboard.model_id_volcengine_endpoint_id")}
                       <input
                         value={settings.model}
@@ -2767,7 +2768,7 @@ export const Classroom = ({
                         placeholder={t("fcboard.enter_a_vision_model_id")}
                       />
                     </label>
-                    <label>
+                    <label className="fc-settings-input">
                       {t("fcboard.api_key")}
                       <input
                         type="password"
@@ -2848,7 +2849,7 @@ export const Classroom = ({
                       </MaterialSelect>
                     </label>
                     {settings.ocr !== "local" && (
-                      <label>
+                      <label className="fc-settings-input">
                         {t("fcboard.ocr_model_id_blank_to_use_the_main_model")}
                         <input
                           value={settings.ocrModel}
@@ -2863,7 +2864,7 @@ export const Classroom = ({
                     )}
                   </SettingsSection>
                   <SettingsSection id="models">
-                    <label>
+                    <label className="fc-settings-input">
                       {t(
                         "fcboard.fast_answer_model_id_blank_to_use_the_main_model",
                       )}
@@ -2877,7 +2878,7 @@ export const Classroom = ({
                         }
                       />
                     </label>
-                    <label>
+                    <label className="fc-settings-input">
                       {t("fcboard.image_generation_model_id")}
                       <input
                         value={settings.imageModel}
@@ -2927,7 +2928,7 @@ export const Classroom = ({
                     </label>
                     {settings.speech === "cloud" && (
                       <>
-                        <label>
+                        <label className="fc-settings-input">
                           {t("fcboard.speech_api_key")}
                           <input
                             type="password"
@@ -2984,7 +2985,7 @@ export const Classroom = ({
                     )}
                     {settings.speech === "custom" && (
                       <>
-                        <label>
+                        <label className="fc-settings-input">
                           {t("fcboard.transcription_endpoint")}
                           <input
                             type="url"
@@ -2999,7 +3000,7 @@ export const Classroom = ({
                             placeholder="https://…/v1/audio/transcriptions"
                           />
                         </label>
-                        <label>
+                        <label className="fc-settings-input">
                           {t("fcboard.transcription_model")}
                           <input
                             value={settings.speechModel}
@@ -3011,7 +3012,7 @@ export const Classroom = ({
                             }
                           />
                         </label>
-                        <label>
+                        <label className="fc-settings-input">
                           {t("fcboard.speech_api_key")}
                           <input
                             type="password"
@@ -3034,7 +3035,7 @@ export const Classroom = ({
                     )}
                     <section aria-label={t("fcboard.spoken_playback_optional")}>
                       <h3>{t("fcboard.spoken_playback_optional")}</h3>
-                      <label>
+                      <label className="fc-settings-input">
                         {t("fcboard.custom_speech_endpoint_optional")}
                         <input
                           type="url"
@@ -3048,7 +3049,7 @@ export const Classroom = ({
                           }
                         />
                       </label>
-                      <label>
+                      <label className="fc-settings-input">
                         {t("fcboard.speech_playback_key")}
                         <input
                           type="password"
@@ -3137,7 +3138,7 @@ export const Classroom = ({
                     {plot.surface ? "z" : "y"} = {plot.expression}
                   </strong>
                 </p>
-                <label>
+                <label className="fc-settings-input">
                   {t("fcboard.coordinate_range")}
                   <input
                     type="number"

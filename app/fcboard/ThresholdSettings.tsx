@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "@fcboard/fcboard/i18n";
 
 import type { AppState, UIOptions } from "@fcboard/fcboard/types";
 
 import infoIcon from "./factory-setting-icons/threshold-info.svg?url";
+import { MaterialPanel } from "./MaterialPanel";
 
 const contacts = [
   {
@@ -88,6 +90,7 @@ export const ThresholdSettings = ({
 }) => {
   const [selected, setSelected] =
     useState<typeof contacts[number]["id"]>("palm");
+  const [help, setHelp] = useState(false);
   const sample = useRef<
     { id: number; value: number; kind: typeof selected } | undefined
   >(undefined);
@@ -167,17 +170,40 @@ export const ThresholdSettings = ({
       >
         <p>{t(`fcboard.factorySettings.${contact.hint}`)}</p>
       </div>
-      <details className="fc-threshold-info">
-        <summary aria-label={t("fcboard.factorySettings.help_title")}>
+      <div className="fc-threshold-info">
+        <button
+          type="button"
+          onClick={() => setHelp(true)}
+          aria-label={t("fcboard.factorySettings.help_title")}
+        >
           <img src={infoIcon} alt="" />
-        </summary>
-        <p>{t("fcboard.factorySettings.help")}</p>
-      </details>
+        </button>
+      </div>
       <footer>
         <button type="button" onClick={onReset}>
           {t("fcboard.reset")}
         </button>
       </footer>
+      {help &&
+        createPortal(
+          <MaterialPanel
+            centered
+            className="fc-threshold-help"
+            role="dialog"
+            aria-label={t("fcboard.factorySettings.help_title")}
+            onDismiss={() => setHelp(false)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Escape") {
+                setHelp(false);
+              }
+            }}
+          >
+            <strong>{t("fcboard.factorySettings.help_title")}</strong>
+            <p>{t("fcboard.factorySettings.help")}</p>
+          </MaterialPanel>,
+          document.querySelector(".fc-classroom") || document.body,
+        )}
     </div>
   );
 };

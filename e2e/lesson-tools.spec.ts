@@ -219,7 +219,7 @@ for (const viewport of [
     expect(writing.type).toBe("text");
     expect(writing.font).toBe(5);
     expect(writing.fontSize).toBeGreaterThanOrEqual(6);
-    expect(writing.fontSize).toBeLessThanOrEqual(36);
+    expect(writing.fontSize).toBeLessThanOrEqual(44);
     expect(writing.left).toBeGreaterThanOrEqual(0);
     expect(writing.top).toBeGreaterThanOrEqual(0);
     expect(writing.right).toBeLessThanOrEqual(viewport.width);

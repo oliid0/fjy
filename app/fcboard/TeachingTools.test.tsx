@@ -115,9 +115,14 @@ it("does not advertise unavailable device actions to the AI", async () => {
   expect(classroomCommands.has("tools.factory")).toBe(false);
   expect(
     screen.getByRole("button", {
+      name: t("fcboard.open_name", { name: t("fcboard.timer") }),
+    }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByRole("button", {
       name: t("fcboard.insert_name", { name: t("fcboard.timer") }),
     }),
-  ).toBeEnabled();
+  ).toBeNull();
 });
 
 it("uses one internal transfer entry even when a factory transfer application is available", async () => {

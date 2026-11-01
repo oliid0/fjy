@@ -1,7 +1,7 @@
 .fc-classroom .fc-network-panel {
   position: relative;
   inset: auto;
-  max-height: calc(100dvh - 24px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
   &.fc-live-share-picker {
     width: 250px;
     min-height: 151px;
@@ -76,7 +76,7 @@
   &.fc-live-share-config {
     padding: 20px;
     width: min(373px, calc(100vw - 24px));
-    max-height: calc(100dvh - 24px);
+    max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
     overflow: auto;
     box-sizing: border-box;
     border-radius: 22px;

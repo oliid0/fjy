@@ -711,7 +711,6 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   const entries = Object.entries(teachingTools).filter(
     ([kind]) => kind !== "shape",
   ) as [WidgetKind, string][];
-  const solids = solidWidgetKinds;
   return (
     <>
       <FactoryGizmos api={api} />
@@ -804,12 +803,24 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
                 </>
               )}
               {entries
-                .filter(
-                  ([kind]) =>
-                    (factoryGizmoKinds.has(kind) || kind === "timer") &&
-                    (kind !== "timer" || !factory.includes("timer")),
-                )
+                .filter(([kind]) => factoryGizmoKinds.has(kind))
                 .map(widgetButton)}
+              {!factory.includes("timer") && (
+                <ButtonBase
+                  type="button"
+                  disabled
+                  style={{ order: 9 }}
+                  aria-label={t("fcboard.open_name", {
+                    name: t("fcboard.timer"),
+                  })}
+                  title={t(
+                    "fcboard.this_tool_is_not_installed_on_this_display",
+                  )}
+                >
+                  {factoryTools.timer.icon}
+                  <span>{t("fcboard.timer")}</span>
+                </ButtonBase>
+              )}
               {(
                 [
                   [
@@ -834,14 +845,6 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           )}
           {toolPage === 1 && (
             <div className="fc-tools-grid">
-              {entries
-                .filter(
-                  ([kind]) =>
-                    !solids.has(kind) &&
-                    !factoryGizmoKinds.has(kind) &&
-                    kind !== "timer",
-                )
-                .map(widgetButton)}
               {(
                 [
                   [t("fcboard.ai_summary"), "canvas.summary", TextIcon],

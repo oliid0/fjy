@@ -1,6 +1,8 @@
 import { pointFrom } from "@fcboard/math";
 import { CaptureUpdateAction } from "@fcboard/element";
 
+import type { FileId } from "@fcboard/element/types";
+
 import { interactiveResource } from "../../../app/fcboard/test/interactiveResource";
 import {
   insertionDefaults,
@@ -296,6 +298,38 @@ const regionPointer = (canvas: Element, type: string, x: number, y: number) =>
       buttons: type === "pointerup" ? 0 : 1,
     }),
   );
+
+it.each(["rectangle", "ellipse", "text", "image"] as const)(
+  "moves a directly selected %s before any lasso gesture and restores it on undo",
+  async (type) => {
+    const view = await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    h.state.width = 1600;
+    h.state.height = 900;
+    const element = API.createElement({
+      type,
+      ...(type === "image" ? { fileId: "selected-image" as FileId } : {}),
+      x: 100,
+      y: 100,
+      width: 120,
+      height: 80,
+    });
+    API.updateScene({
+      elements: [element],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    act(() => h.app.setActiveTool({ type: "lasso" }));
+    API.setSelectedElements([element]);
+    expect(h.state.whiteboardSelection).toBeUndefined();
+    const canvas = view.container.querySelector("canvas.interactive")!;
+    regionPointer(canvas, "pointerdown", 160, 140);
+    regionPointer(canvas, "pointermove", 200, 170);
+    regionPointer(canvas, "pointerup", 200, 170);
+    expect(h.elements[0]).toMatchObject({ x: 140, y: 130 });
+    expect(h.state.selectedElementIds[element.id]).toBe(true);
+    fireEvent.click(document.querySelector('[data-testid="button-undo"]')!);
+    expect(h.elements[0]).toMatchObject({ x: 100, y: 100 });
+  },
+);
 
 const selectedRegion = async () => {
   const view = await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);

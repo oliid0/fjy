@@ -114,11 +114,15 @@ for (const viewport of [
     await expect(
       page.getByRole("button", { name: "绘制函数", exact: true }),
     ).toHaveCount(0);
-    await selectMenu(page, "AI 与语音设置");
-    await expect(page.getByRole("dialog", { name: "白板设置" })).toBeVisible();
-    const panelBounds = (await page.locator(".fc-panel").boundingBox())!;
-    expect(panelBounds.width).toBeLessThanOrEqual(672);
-    expect(panelBounds.height).toBeLessThanOrEqual(420);
+    await selectMenu(page, "白板设置");
+    const settings = page.getByRole("dialog", {
+      name: "白板设置",
+      exact: true,
+    });
+    await expect(settings).toBeVisible();
+    const panelBounds = (await settings.boundingBox())!;
+    expect(panelBounds.width).toBeLessThanOrEqual(373);
+    expect(panelBounds.height).toBeLessThanOrEqual(viewport.height - 24);
     expect(
       Math.abs(panelBounds.x + panelBounds.width / 2 - viewport.width / 2),
     ).toBeLessThanOrEqual(2);
@@ -127,39 +131,34 @@ for (const viewport of [
     ).toBeLessThanOrEqual(2);
     expect(panelBounds.y).toBeGreaterThanOrEqual(12);
     expect(panelBounds.x).toBeGreaterThanOrEqual(12);
-    if (viewport.width >= viewport.height) {
-      expect(panelBounds.width).toBeGreaterThan(panelBounds.height);
-    }
-    const navBounds = (await page
-      .getByRole("navigation", { name: "设置导航" })
-      .boundingBox())!;
-    const contentBounds = (await page
-      .locator(".fc-settings-content")
-      .boundingBox())!;
-    await page.getByRole("button", { name: "语言", exact: true }).click();
-    const language = page.getByRole("combobox", {
-      name: "选择语言",
-      exact: true,
-    });
-    await expect(language).toBeVisible();
-    expect(navBounds.x + navBounds.width).toBeLessThanOrEqual(
-      contentBounds.x + 1,
-    );
-    await page
-      .getByRole("button", { name: "画笔", exact: true })
-      .last()
+    await expect(
+      settings.getByRole("slider", { name: "笔锋变化率", exact: true }),
+    ).toBeVisible();
+    await settings.getByRole("button", { name: "语言", exact: true }).click();
+    await expect(
+      settings.getByRole("combobox", { name: "选择语言", exact: true }),
+    ).toBeVisible();
+    await expect(
+      settings.getByRole("button", { name: "手写识别语言包", exact: true }),
+    ).toBeVisible();
+    await expect(settings.locator(".fc-settings-navigation")).toHaveCount(0);
+    await settings.locator(".fc-settings-back").click();
+    await settings
+      .getByRole("button", { name: "AI 与语音设置", exact: true })
       .click();
     await expect(
-      page.getByRole("slider", { name: "笔锋变化率", exact: true }),
+      settings.getByRole("navigation", { name: "设置导航" }),
     ).toBeVisible();
+    await settings
+      .getByRole("button", { name: "手写与插入", exact: true })
+      .click();
     await expect(
-      page.getByRole("navigation", { name: "设置导航" }),
-    ).toBeVisible();
-    await page.screenshot({
-      path: testInfo.outputPath(`settings-${viewport.width}.png`),
-    });
-    await page.getByRole("button", { name: "手写与插入", exact: true }).click();
-    const recognition = page.getByRole("combobox", {
+      settings.getByRole("combobox", { name: "选择语言", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      settings.getByRole("button", { name: "手写识别语言包", exact: true }),
+    ).toHaveCount(0);
+    const recognition = settings.getByRole("combobox", {
       name: "手写识别",
       exact: true,
     });
@@ -167,24 +166,26 @@ for (const viewport of [
     await expect(page.getByRole("listbox")).toBeVisible();
     await page.getByRole("listbox").press("Escape");
     await expect(page.getByRole("listbox")).toBeHidden();
-    await expect(
-      page.getByRole("dialog", { name: "白板设置", exact: true }),
-    ).toBeVisible();
+    await expect(settings).toBeVisible();
     await recognition.click();
     await page
       .locator(".MuiMenu-root .MuiBackdrop-root")
       .click({ position: { x: 4, y: 4 } });
     await expect(page.getByRole("listbox")).toBeHidden();
-    await page.getByRole("button", { name: "模型与连接", exact: true }).click();
-    const endpoint = page.getByRole("textbox", {
+    await settings.locator(".fc-settings-back").click();
+    await settings
+      .getByRole("button", { name: "模型与连接", exact: true })
+      .click();
+    await page.screenshot({
+      path: testInfo.outputPath(`settings-${viewport.width}.png`),
+    });
+    const endpoint = settings.getByRole("textbox", {
       name: "AI 接口地址",
       exact: true,
     });
     await endpoint.focus();
     await endpoint.press("Escape");
-    await expect(
-      page.getByRole("dialog", { name: "白板设置", exact: true }),
-    ).toBeHidden();
+    await expect(settings).toBeHidden();
     await toolbar.evaluate((element) => {
       element.scrollLeft = 0;
     });

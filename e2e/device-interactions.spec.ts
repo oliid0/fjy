@@ -87,6 +87,10 @@ for (const width of [390, 1920]) {
         )
         .first();
       const box = (await body.boundingBox())!;
+      const scale = await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("fcboard-state") || "{}").zoom.value,
+      );
       const from = {
         x: box.x + box.width * (kind === "setSquare" ? 0.2 : 0.5),
         y: box.y + box.height * (kind === "setSquare" ? 0.2 : 0.6),
@@ -104,10 +108,10 @@ for (const width of [390, 1920]) {
       await dragTouch(page, from, { x: from.x + 24, y: from.y + 28 });
       await expect
         .poll(async () => (await current()).position.x)
-        .toBeCloseTo(before.position.x + 24, 0);
+        .toBeCloseTo(before.position.x + 24 / scale, 0);
       await expect
         .poll(async () => (await current()).position.y)
-        .toBeCloseTo(before.position.y + 28, 0);
+        .toBeCloseTo(before.position.y + 28 / scale, 0);
       // Use the real delete handle so the next tool has no overlapping hit layer.
       await group.getByRole("button", { name: "删除", exact: true }).click();
       await expect.poll(current).toBeUndefined();

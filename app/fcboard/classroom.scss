@@ -4,14 +4,29 @@
   --fc-ink: #17243c;
   --fc-border: #dce3ec;
   --fc-blue: #0b6ff3;
+  // Android WebView 101 has no dynamic viewport units. Keep a valid size for
+  // every toolbar and dialog, then use dynamic units where they are supported.
+  --fc-viewport-height: 100vh;
+  --fc-viewport-width: 100vw;
+  @supports (height: 100dvh) {
+    --fc-viewport-height: 100dvh;
+  }
+  @supports (width: 100dvw) {
+    --fc-viewport-width: 100dvw;
+  }
   // Chrome has a bounded CSS size; extra pixels belong to the writing area.
   --fc-unit: clamp(
     0.85px,
-    min(0.078125vw, calc((100dvh - env(safe-area-inset-bottom)) / 688)),
+    min(
+      0.078125vw,
+      calc(
+        (var(--fc-viewport-height, 100vh) - env(safe-area-inset-bottom)) / 688
+      )
+    ),
     1px
   );
 
-  &:has(.theme--dark) {
+  &.fc-theme-dark {
     --fc-surface: #20232c;
     --fc-ink: #eef2ff;
     --fc-border: #444b5a;
@@ -270,7 +285,7 @@
     z-index: 20;
     pointer-events: auto;
     width: min(420px, calc(100vw - 24px));
-    max-height: calc(100dvh - 96px);
+    max-height: calc(var(--fc-viewport-height, 100vh) - 96px);
     overflow: auto;
     padding: 12px;
     border: 1px solid var(--fc-border);
@@ -351,8 +366,11 @@
   }
   .main-menu .dropdown-menu-container {
     max-height: min(
-      calc(100dvh - 104px),
-      var(--radix-dropdown-menu-content-available-height, calc(100dvh - 104px))
+      calc(var(--fc-viewport-height, 100vh) - 104px),
+      var(
+        --radix-dropdown-menu-content-available-height,
+        calc(var(--fc-viewport-height, 100vh) - 104px)
+      )
     );
   }
   .fc-factory-menu {
@@ -395,7 +413,7 @@
   }
   .fc-material-menu {
     padding: calc(7 * var(--fc-unit)) calc(5 * var(--fc-unit));
-    max-height: calc(100dvh - 104px);
+    max-height: calc(var(--fc-viewport-height, 100vh) - 104px);
     overflow-y: auto;
     border-radius: calc(6 * var(--fc-unit));
     background: #fafafa;
@@ -437,7 +455,7 @@
     max-width: none;
     .dropdown-menu-container {
       max-height: min(
-        70dvh,
+        calc(var(--fc-viewport-height, 100vh) * 0.7),
         var(--radix-dropdown-menu-content-available-height)
       );
       overflow: auto;
@@ -725,6 +743,11 @@
     }
   }
   @media (max-width: 1000px) {
+    // On compact cards, centered line-clamping can clip the last glyph past
+    // the text box for long translated titles. Keep their two-line limit.
+    .fc-resource-grid button.fc-resource-card-experiment span {
+      text-align: start;
+    }
     .fc-unified-toolbar {
       grid-template-columns: minmax(0, 1fr) max-content;
       row-gap: calc(2 * var(--fc-unit));
@@ -808,7 +831,7 @@
     box-shadow: 0 4px 24px #17243c22;
     pointer-events: auto;
     width: calc(280 * var(--fc-unit));
-    animation: fc-panel-enter 110ms ease-out;
+    animation: none;
     > .ToolIcon {
       margin-left: auto;
       display: block;
@@ -839,13 +862,13 @@
 }
 
 .fc-panel {
-  animation: fc-panel-enter 110ms ease-out;
+  animation: none;
   position: absolute;
   z-index: 9;
   right: 16px;
   bottom: calc(84px + env(safe-area-inset-bottom));
   width: min(480px, calc(100% - 32px));
-  max-height: calc(100dvh - 104px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 104px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--fc-border);
@@ -896,9 +919,9 @@
   bottom: calc(130px + env(safe-area-inset-bottom));
 }
 .fc-classroom .fc-centered-content-dialog.fc-recording-dialog {
-  width: min(960px, calc(100dvw - 32px));
-  height: min(580px, calc(100dvh - 32px));
-  max-height: calc(100dvh - 32px);
+  width: min(960px, calc(var(--fc-viewport-width, 100vw) - 32px));
+  height: min(580px, calc(var(--fc-viewport-height, 100vh) - 32px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 32px);
   border-radius: 12px;
   > header {
     padding: 10px 16px;
@@ -1256,7 +1279,7 @@
 }
 .fc-recording-share {
   width: min(640px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 32px);
   padding: 16px 24px;
   .ShareDialog__active__qrcode {
     width: 176px;
@@ -1637,7 +1660,7 @@
   overflow: auto;
   pointer-events: auto;
   padding-bottom: 12px;
-  animation: fc-panel-enter 110ms ease-out;
+  animation: none;
   > p,
   > output,
   > div,
@@ -1687,7 +1710,7 @@
 .fc-tools-picker,
 .fc-widget-panel,
 .fc-teacher {
-  animation: fc-panel-enter 110ms ease-out;
+  animation: none;
 }
 .fc-board-picker {
   position: absolute;
@@ -1811,8 +1834,8 @@
   display: flex;
   flex-direction: column;
   width: min(900px, calc(100vw - 32px));
-  height: min(560px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
+  height: min(560px, calc(var(--fc-viewport-height, 100vh) - 48px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 48px);
   margin: 16px;
   overflow: hidden;
   background: #fafafaf5;
@@ -1950,7 +1973,7 @@
   }
   &.fc-share-dialog--formats {
     width: min(640px, calc(100vw - 32px));
-    height: min(360px, calc(100dvh - 48px));
+    height: min(360px, calc(var(--fc-viewport-height, 100vh) - 48px));
   }
   @media (max-width: 600px) {
     padding: 16px;
@@ -1989,8 +2012,8 @@
   margin: 16px;
   width: min(487px, calc(100vw - 32px));
   height: auto;
-  min-height: min(380px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
+  min-height: min(380px, calc(var(--fc-viewport-height, 100vh) - 48px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 48px);
   overflow: auto;
   padding: 35px 47px 33px;
   border: 1px solid #00000038;
@@ -2159,7 +2182,7 @@
 .fc-document-eraser-settings {
   box-sizing: border-box;
   width: min(280px, calc(100vw - 24px));
-  max-height: calc(100dvh - 32px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 32px);
   overflow: auto;
   padding: 16px;
   label {
@@ -2219,8 +2242,8 @@
   margin-right: auto;
 }
 
-.fc-presentation-toolbar button:has(svg),
-.fc-presentation-toolbar a:has(svg) {
+.fc-presentation-toolbar button,
+.fc-presentation-toolbar a {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2253,7 +2276,7 @@
   height: 20px;
   border-radius: 50%;
 }
-.app:has(.fc-presentation) .fc-unified-toolbar {
+.app.fc-has-presentation .fc-unified-toolbar {
   visibility: hidden;
 }
 @media (max-width: 760px) {
@@ -2379,9 +2402,9 @@
   position: relative;
   inset: auto;
   transform: none;
-  width: min(760px, calc(100dvw - 32px));
+  width: min(760px, calc(var(--fc-viewport-width, 100vw) - 32px));
   max-width: none;
-  max-height: min(560px, calc(100dvh - 32px));
+  max-height: min(560px, calc(var(--fc-viewport-height, 100vh) - 32px));
   margin: 16px;
   .fc-panel-body {
     overflow-y: auto;
@@ -2415,8 +2438,8 @@
   transform: none;
   margin: 0;
   border-radius: 0;
-  width: 100dvw;
-  height: 100dvh;
+  width: var(--fc-viewport-width, 100vw);
+  height: var(--fc-viewport-height, 100vh);
   max-width: none;
   max-height: none;
   overflow: auto;
@@ -2526,8 +2549,8 @@
   position: relative;
   inset: auto;
   margin: 16px;
-  height: min(560px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
+  height: min(560px, calc(var(--fc-viewport-height, 100vh) - 48px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 48px);
   border-radius: 10px;
   background: #fff;
   backdrop-filter: blur(16px);
@@ -2809,8 +2832,8 @@
   transform: none;
   animation: none;
   width: min(672px, calc(100vw - 32px));
-  height: min(420px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
+  height: min(420px, calc(var(--fc-viewport-height, 100vh) - 48px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 48px);
   margin: 24px 16px;
   overflow: hidden;
   border-radius: 22px;
@@ -3243,7 +3266,7 @@
   transform: translate(-50%, -50%);
   width: min(960px, calc(100% - 32px));
   height: min(640px, calc(100% - 110px));
-  max-height: calc(100dvh - 110px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 110px);
   border-radius: 18px;
   overflow: hidden;
   display: flex;
@@ -3369,7 +3392,7 @@
   font-variant-numeric: tabular-nums;
   opacity: 0.7;
 }
-.app:has(.fc-presentation) .fc-notice {
+.app.fc-has-presentation .fc-notice {
   z-index: 40;
 }
 @media (max-width: 600px) {
@@ -3421,7 +3444,7 @@
     max-height: 50%;
   }
 }
-.app:has(.fc-presentation) .fc-panel {
+.app.fc-has-presentation .fc-panel {
   z-index: 32;
 }
 .app:has(.fc-tools-picker, .fc-board-picker) .fc-teacher {
@@ -3724,21 +3747,21 @@
   }
 }
 .fc-document-pen-settings {
-  max-height: calc(100dvh - 104px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 104px);
   max-width: calc(100vw - 24px);
   overflow: auto;
 }
 
 /* Settings follow the factory's pages. Advanced AI choices live one level down. */
 .fc-classroom .fc-settings-dialog {
-  width: min(373px, calc(100dvw - 24px));
+  width: min(373px, calc(var(--fc-viewport-width, 100vw) - 24px));
   height: auto;
-  max-height: calc(100dvh - 24px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
   margin: 12px;
   padding: 20px 28px 27px;
   border: 1px solid #00000038;
-  &:has([data-settings-page]:not([data-settings-page="home"])) {
-    width: min(620px, calc(100dvw - 24px));
+  &:not([data-settings-page="home"]) {
+    width: min(620px, calc(var(--fc-viewport-width, 100vw) - 24px));
   }
   > header {
     display: grid;
@@ -3868,7 +3891,7 @@
   }
   .fc-settings-layout[data-settings-page="home"]
     .fc-settings-fields
-    label:has(.MuiSlider-root) {
+    label.fc-settings-brush-variation {
     grid-template-columns: minmax(100px, 1fr) minmax(70px, 140px) 32px;
     gap: 5px;
     output {
@@ -3921,8 +3944,7 @@
     .fc-settings-content {
       padding: 0;
     }
-    .fc-settings-fields
-      label:not(.fc-check):has(input:not([type="checkbox"]):not([type="color"]):not([type="range"])) {
+    .fc-settings-fields label.fc-settings-input {
       grid-template-columns: minmax(0, 1fr);
       gap: 6px;
     }
@@ -3936,7 +3958,8 @@
   }
 }
 .fc-classroom .fc-settings-dialog {
-  &:has([data-settings-page="touch"]) {
+  &[data-settings-page="touch"] {
+    height: min(430px, calc(var(--fc-viewport-height, 100vh) - 24px));
     padding-top: 18px;
     padding-bottom: 24px;
     > header {
@@ -4023,13 +4046,14 @@
   .fc-threshold-info {
     margin-top: 10px;
     min-height: 24px;
-    summary {
+    button {
       width: 24px;
+      height: 24px;
+      min-height: 24px;
+      padding: 0;
+      border: 0;
+      background: transparent;
       cursor: pointer;
-      list-style: none;
-    }
-    summary::-webkit-details-marker {
-      display: none;
     }
     img {
       width: 18px;
@@ -4068,8 +4092,25 @@
     }
   }
 }
-.fc-classroom .fc-settings-dialog:has([data-settings-page="background"]) {
-  width: min(520px, calc(100dvw - 24px));
+.fc-classroom .fc-threshold-help {
+  width: min(400px, calc(var(--fc-viewport-width, 100vw) - 24px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
+  margin: 12px;
+  padding: 10px 25px;
+  border-radius: 12px;
+  overflow: auto;
+  text-align: center;
+  font-size: 16px;
+  > strong {
+    font-weight: 400;
+  }
+  > p {
+    margin: 10px 0 0;
+    line-height: 1.5;
+  }
+}
+.fc-classroom .fc-settings-dialog[data-settings-page="background"] {
+  width: min(520px, calc(var(--fc-viewport-width, 100vw) - 24px));
   padding: 12px 26px;
   > header {
     min-height: 40px;
@@ -4239,7 +4280,7 @@
   border: 1px solid #00000038;
   border-radius: 16px;
   margin: 12px;
-  max-height: calc(100dvh - 24px);
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
   color: #1f2937;
   h2 {
     font-size: 16px;
@@ -4267,8 +4308,8 @@
   }
 }
 .fc-classroom .fc-language-pack-dialog {
-  width: min(480px, calc(100dvw - 24px));
-  height: min(374px, calc(100dvh - 24px));
+  width: min(480px, calc(var(--fc-viewport-width, 100vw) - 24px));
+  height: min(374px, calc(var(--fc-viewport-height, 100vh) - 24px));
   padding: 13px 16px;
   display: flex;
   flex-direction: column;
@@ -4375,7 +4416,7 @@
   }
 }
 .fc-classroom .fc-language-pack-confirm {
-  width: min(320px, calc(100dvw - 24px));
+  width: min(320px, calc(var(--fc-viewport-width, 100vw) - 24px));
   padding: 18px 20px;
   overflow: auto;
   p {
@@ -4419,7 +4460,7 @@
   }
 }
 .fc-exit-dialog {
-  width: min(560px, calc(100dvw - 24px));
+  width: min(560px, calc(var(--fc-viewport-width, 100vw) - 24px));
   padding: 20px;
   border-radius: 24px;
   header,
@@ -4444,9 +4485,9 @@
 }
 
 .fc-classroom .fc-periodic-table-dialog {
-  width: min(1120px, calc(100dvw - 40px));
-  height: min(640px, calc(100dvh - 40px));
-  max-height: calc(100dvh - 40px);
+  width: min(1120px, calc(var(--fc-viewport-width, 100vw) - 40px));
+  height: min(640px, calc(var(--fc-viewport-height, 100vh) - 40px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 40px);
   margin: 20px;
   display: flex;
   flex-direction: column;
@@ -4593,14 +4634,16 @@
     }
   }
   @media (max-width: 800px) {
-    width: calc(100dvw - 24px);
-    height: calc(100dvh - 24px);
-    max-height: calc(100dvh - 24px);
+    width: calc(var(--fc-viewport-width, 100vw) - 24px);
+    height: calc(var(--fc-viewport-height, 100vh) - 24px);
+    max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
     margin: 12px;
     .fc-periodic-body {
       grid-template-columns: minmax(0, 1fr);
       overflow: auto;
-      grid-template-rows: minmax(320px, 55dvh) minmax(360px, auto);
+      grid-template-rows:
+        minmax(320px, calc(var(--fc-viewport-height, 100vh) * 0.55))
+        minmax(360px, auto);
     }
     .fc-periodic-board {
       min-height: 320px;

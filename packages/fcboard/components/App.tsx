@@ -8365,7 +8365,7 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       const region =
         this.props.UIOptions.unifiedToolbar &&
-        this.state.whiteboardSelection?.bounds;
+        pointerDownState.regionSelection.selection?.bounds;
       const handle = region
         ? regionHandleAt(
             region,
@@ -8381,6 +8381,11 @@ class App extends React.Component<AppProps, AppState> {
           selectedLinearElement: null,
           editingGroupId: null,
           selectedGroupIds: {},
+          ...(handle && !this.state.whiteboardSelection
+            ? {
+                whiteboardSelection: pointerDownState.regionSelection.selection,
+              }
+            : {}),
         });
       }
       const hitSelectedElement =
@@ -8882,7 +8887,28 @@ class App extends React.Component<AppProps, AppState> {
 
     return {
       regionSelection: {
-        selection: this.state.whiteboardSelection,
+        // Insertion and API selection do not travel through the lasso. Give
+        // those selected objects the same movable operation frame as a lasso
+        // selection, instead of treating their first drag as another lasso.
+        selection:
+          this.state.whiteboardSelection ||
+          (this.props.UIOptions.unifiedToolbar &&
+          this.isRegionSelectionTool() &&
+          selectedElements.length &&
+          origin.x >= minX &&
+          origin.x <= maxX &&
+          origin.y >= minY &&
+          origin.y <= maxY
+            ? {
+                bounds: {
+                  left: minX - 12 / this.state.zoom.value,
+                  top: minY - 12 / this.state.zoom.value,
+                  right: maxX + 12 / this.state.zoom.value,
+                  bottom: maxY + 12 / this.state.zoom.value,
+                },
+                elementIds: selectedElements.map((element) => element.id),
+              }
+            : undefined),
         selectedElementIds: this.state.selectedElementIds,
         selectedGroupIds: this.state.selectedGroupIds,
         handle: null,

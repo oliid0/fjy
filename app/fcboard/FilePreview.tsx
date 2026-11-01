@@ -55,6 +55,7 @@ import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands, commandObjectIds } from "./commands";
 import { documentSharing } from "./documentSharing";
+import { renderInsertion } from "./insertObjects";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
 import { latestFunctionInk } from "./functionInk";
@@ -251,6 +252,14 @@ export const FilePreview = ({
   );
   const host = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!file) {
+      return;
+    }
+    const app = dialog.current?.closest(".app");
+    app?.classList.add("fc-has-presentation");
+    return () => app?.classList.remove("fc-has-presentation");
+  }, [file]);
   const stage = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const viewer = useRef<Viewer | null>(null);
@@ -1782,6 +1791,13 @@ export const FilePreview = ({
         const strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
           shapeInk(shape, "insertion"),
         );
+        const remove = new Set(
+          commandObjectIds(
+            args.removeIds ?? [],
+            inkRef.current[page] || [],
+            true,
+          ),
+        );
         const before = args.before as InkStroke[] | undefined;
         if (
           before !== undefined &&
@@ -1832,7 +1848,8 @@ export const FilePreview = ({
             ...inkRef.current,
             [page]: [
               ...(inkRef.current[page] || []).filter(
-                (stroke) => stroke.insertion?.id !== args.id,
+                (stroke) =>
+                  stroke.insertion?.id !== args.id && !remove.has(stroke.id),
               ),
               ...strokes,
               ...handwriting,
@@ -2131,25 +2148,44 @@ export const FilePreview = ({
               source[0].color,
               sourceIds,
             );
-            if (!shape) {
+            if (!shape || shape.type !== "text") {
               return;
             }
-            const current = inkRef.current[page] || [];
-            const remove = new Set([
-              ...sourceIds,
-              ...insertionWritingTextIds(target, documentWritingParts(current)),
-            ]);
-            sourceIds.forEach((id) => recognized.current.add(id));
-            commitInk({
-              ...inkRef.current,
-              [page]: [
-                ...current.filter((stroke) => !remove.has(stroke.id)),
-                ...insertionLabelParts(
-                  shape,
-                  shape.customData?.fcInsertion?.textRuns?.[target.index],
-                ).map((part) => shapeInk(part, "insertion")),
-              ],
-            });
+            if (target.insertion.kind === "fourline") {
+              sourceIds.forEach((id) => recognized.current.add(id));
+              await renderInsertion(
+                api,
+                {
+                  ...shape.customData!.fcInsertion,
+                  position: { x: target.x, y: target.y },
+                  height: target.height,
+                  text: shape.originalText,
+                  textColors: [source[0].color],
+                },
+                true,
+                { select: false, removeIds: sourceIds },
+              );
+            } else {
+              const current = inkRef.current[page] || [];
+              const remove = new Set([
+                ...sourceIds,
+                ...insertionWritingTextIds(
+                  target,
+                  documentWritingParts(current),
+                ),
+              ]);
+              sourceIds.forEach((id) => recognized.current.add(id));
+              commitInk({
+                ...inkRef.current,
+                [page]: [
+                  ...current.filter((stroke) => !remove.has(stroke.id)),
+                  ...insertionLabelParts(
+                    shape,
+                    shape.customData?.fcInsertion?.textRuns?.[target.index],
+                  ).map((part) => shapeInk(part, "insertion")),
+                ],
+              });
+            }
           } else if (result.kind === "language") {
             sourceIds.forEach((id) => recognized.current.add(id));
             await classroomCommands.execute({

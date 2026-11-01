@@ -859,6 +859,7 @@ const FcboardWrapper = () => {
       style={{ height: "100%" }}
       className={clsx("app", {
         "is-collaborating": isCollaborating,
+        "fc-theme-dark": editorTheme === "dark",
       })}
     >
       <Fcboard

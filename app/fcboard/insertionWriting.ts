@@ -1,4 +1,10 @@
-import { randomId, FONT_FAMILY, getLineHeight } from "@fcboard/common";
+import {
+  randomId,
+  FONT_FAMILY,
+  getLineHeight,
+  getFontString,
+} from "@fcboard/common";
+import { measureText } from "@fcboard/element/textMeasurements";
 
 import type { FcboardElement } from "@fcboard/element/types";
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
@@ -195,13 +201,26 @@ export const insertionWritingText = (
     ? FONT_FAMILY.FactoryHandwriting
     : FONT_FAMILY.Helvetica;
   const inset = alphabet
-    ? target.width * 0.104
+    ? 80 * (target.insertion.alphabetScale ?? 1)
     : Math.min(nativeNode ? 30 : 8, target.width * 0.1);
   const top = target.y + target.height * (alphabet ? 0.13 : 0.1);
   const left = target.x + inset;
   const fontSize =
     target.height *
     (alphabet || nativeNode ? 0.66 / getLineHeight(fontFamily) : 20 / 48);
+  // HAlphabetObject.calcTextRect grows horizontally and keeps one line at
+  // 3.3 fifths of the paper height. It never shrinks a word into the old box.
+  const width = alphabet
+    ? Math.max(
+        target.insertion.alphabetBaseWidth ?? target.width,
+        4 * inset +
+          measureText(
+            text,
+            getFontString({ fontSize, fontFamily }),
+            getLineHeight(fontFamily),
+          ).width,
+      )
+    : target.width;
   const layout = layoutBoardText(
     text,
     fontSize,
@@ -209,7 +228,7 @@ export const insertionWritingText = (
     {
       left,
       top,
-      right: target.x + target.width - inset,
+      right: target.x + width - inset,
       bottom: target.y + target.height * 0.88,
     },
     [],
@@ -220,7 +239,7 @@ export const insertionWritingText = (
   if (!layout) {
     return;
   }
-  const cx = target.x + target.width / 2;
+  const cx = target.x + width / 2;
   const cy = target.y + target.height / 2;
   const dx = layout.x + layout.width / 2 - cx;
   const dy = -target.height / 25;
@@ -257,6 +276,13 @@ export const insertionWritingText = (
       fcRecognizedSource: sourceIds,
       fcInsertion: {
         ...target.insertion,
+        ...(alphabet
+          ? {
+              width,
+              alphabetBaseWidth:
+                target.insertion.alphabetBaseWidth ?? target.width,
+            }
+          : {}),
         textRuns,
         origin: { x, y },
         textIndex: target.index,

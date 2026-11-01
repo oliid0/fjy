@@ -434,6 +434,9 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
           height: "100%",
           overflow: "visible",
           pointerEvents: "none",
+          // SVG paths are not CSS layout boxes. Disable native panning on the
+          // SVG viewport so a real touch drag is not cancelled after its slop.
+          touchAction: "none",
           zIndex: 22,
           visibility: view.hidden ? "hidden" : "visible",
         }}

@@ -448,6 +448,7 @@ export const MindMapControls = ({
           ).map(([action, icon, label, left, top]) => (
             <ButtonBase
               key={action}
+              style={{ touchAction: "none" }}
               aria-label={t(`fcboard.${label}`)}
               title={t(`fcboard.${label}`)}
               disabled={action === "add" && !view.canAdd}

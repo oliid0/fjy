@@ -83,6 +83,7 @@ const setup = (
       currentItemInkAssist: mode,
       cursorButton: "up",
       activeTool: { type: "freedraw" },
+      selectedElementIds: {},
     }),
     onChange: (callback: () => void) => {
       refresh = callback;

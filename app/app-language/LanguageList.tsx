@@ -13,7 +13,7 @@ export const LanguageList = ({ style }: { style?: React.CSSProperties }) => {
 
   return (
     <MaterialSelect
-      className="dropdown-select dropdown-select__language"
+      className="fc-language-choice"
       onChange={({ target }) => setLangCode(target.value)}
       value={preference}
       aria-label={t("buttons.selectLanguage")}

@@ -64,7 +64,10 @@ final class FactoryFileBrowserDialog extends Dialog {
         View outer=LayoutInflater.from(text).inflate(R.layout.factory_file_browser,null);
         panel=((ViewGroup)outer).getChildAt(0);
         ((ViewGroup)outer).removeView(panel);
-        viewport=new ScrollView(text);viewport.setFillViewport(false);viewport.setClipToPadding(false);viewport.setVerticalScrollBarEnabled(false);
+        // A weighted GridView needs a bounded height. ScrollView first measures
+        // its child without a height limit; fillViewport remeasures the panel
+        // against the actual window so file rows and thumbnails get laid out.
+        viewport=new ScrollView(text);viewport.setFillViewport(true);viewport.setClipToPadding(false);viewport.setVerticalScrollBarEnabled(false);
         viewport.addView(panel,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(387)));
         RelativeLayout.LayoutParams position=new RelativeLayout.LayoutParams(dp(580),dp(387));position.addRule(RelativeLayout.CENTER_IN_PARENT);((ViewGroup)outer).addView(viewport,position);
         outer.setBackgroundColor(Color.argb(100,47,47,47));
@@ -178,7 +181,8 @@ final class FactoryFileBrowserDialog extends Dialog {
         if(footerSize.height!=footerHeight){footerSize.height=footerHeight;footer.setLayoutParams(footerSize);}
         panel.findViewById(R.id.factory_fb_file_type_label).setVisibility(compact?View.GONE:View.VISIBLE);
         panel.findViewById(R.id.factory_fb_file_type).setVisibility(compact?View.GONE:View.VISIBLE);
-        grid.setNumColumns(Math.max(1,Math.min(6,(width-dp(127+24))/dp(65))));
+        int columns=Math.max(1,Math.min(6,(width-dp(127+24))/dp(65)));
+        if(grid.getNumColumns()!=columns)grid.setNumColumns(columns);
         int fieldWidth=Math.max(dp(44),Math.min(dp(154),width-dp(127+96)));
         for(int id:new int[]{R.id.factory_fb_file_name,R.id.factory_fb_file_type}){
             View input=panel.findViewById(id);ViewGroup.LayoutParams layout=input.getLayoutParams();

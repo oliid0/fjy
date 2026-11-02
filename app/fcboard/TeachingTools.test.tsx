@@ -102,6 +102,97 @@ it("uses the same native tool command for touch and AI, reports failure and rest
   ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
 });
 
+it.each(["ltr", "rtl"])(
+  "swipes tool pages in %s without activating tools, wrapping, or consuming the next tap",
+  async (direction) => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+    const invoke = vi.fn();
+    const release = classroomCommands.register(
+      "ui.invoke",
+      "@internal",
+      invoke,
+    );
+    render(<TeachingTools api={emptyApi()} />);
+    try {
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+      );
+      const panel = screen.getByRole("dialog", {
+        name: t("fcboard.teaching_tools"),
+      });
+      panel.style.direction = direction;
+      const previous = () =>
+        screen.getByRole("button", { name: t("fcboard.previous_page") });
+      const next = () =>
+        screen.getByRole("button", { name: t("fcboard.next_page") });
+      const pointer = (
+        type: string,
+        x: number,
+        y: number,
+        id = 1,
+        primary = true,
+      ) =>
+        fireEvent(
+          panel,
+          Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+            pointerId: id,
+            isPrimary: primary,
+            pointerType: "touch",
+            button: 0,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      const end = direction === "ltr" ? 120 : 280;
+      pointer("pointerdown", 200, 150);
+      pointer("pointermove", 205, 151);
+      pointer("pointerup", 205, 151);
+      expect(previous()).toHaveAttribute("aria-pressed", "true");
+      pointer("pointerdown", 200, 150);
+      pointer("pointermove", 205, 210);
+      pointer("pointerup", 205, 210);
+      expect(previous()).toHaveAttribute("aria-pressed", "true");
+      pointer("pointerdown", 200, 150);
+      pointer("pointermove", end, 153);
+      pointer("pointercancel", end, 153);
+      expect(previous()).toHaveAttribute("aria-pressed", "true");
+      pointer("pointerdown", 200, 150);
+      pointer("pointerdown", 190, 150, 2, false);
+      pointer("pointermove", end, 153);
+      pointer("pointerup", end, 153);
+      expect(previous()).toHaveAttribute("aria-pressed", "true");
+      pointer("pointerdown", 200, 150);
+      pointer("pointermove", end, 153);
+      pointer("pointerup", end, 153);
+      expect(next()).toHaveAttribute("aria-pressed", "true");
+      expect(
+        screen.getByRole("button", { name: t("fcboard.recording") }),
+      ).toBeVisible();
+      pointer("pointerdown", 200, 150);
+      pointer("pointermove", end, 153);
+      pointer("pointerup", end, 153);
+      expect(next()).toHaveAttribute("aria-pressed", "true");
+      pointer("pointerdown", end, 150);
+      pointer("pointermove", 200, 153);
+      pointer("pointerup", 200, 153);
+      expect(previous()).toHaveAttribute("aria-pressed", "true");
+      expect(invoke).not.toHaveBeenCalled();
+      const transfer = screen.getByRole("button", {
+        name: t("fcboard.file_transfer"),
+      });
+      pointer("pointerdown", 200, 150);
+      pointer("pointerup", 200, 150);
+      fireEvent.click(transfer, { detail: 1 });
+      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+      expect(invoke).toHaveBeenCalledWith(
+        expect.objectContaining({ command: "files.open", origin: "tools" }),
+      );
+    } finally {
+      release();
+    }
+  },
+);
+
 it("does not advertise unavailable device actions to the AI", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.getFactoryTools).mockResolvedValue({ available: [] });

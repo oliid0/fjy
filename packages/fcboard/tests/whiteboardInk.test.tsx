@@ -752,6 +752,66 @@ describe("APK-style whiteboard ink", () => {
     fireEvent.click(screen.getByTestId("button-undo"));
     expect(live()).toHaveLength(1);
   });
+  it("swipes only the pen choices while lower thickness, color and preview controls retain their behavior", async () => {
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
+    const settings = document.querySelector(".fc-factory-pen-settings")!;
+    const types = settings.querySelector(".fc-pen-types")!;
+    const next = () =>
+      within(settings as HTMLElement).getByRole("button", {
+        name: t("fcboard.next_page"),
+      });
+    const previous = () =>
+      within(settings as HTMLElement).getByRole("button", {
+        name: t("fcboard.previous_page"),
+      });
+    const selected = () => ({
+      mode: h.state.currentItemPenMode,
+      assist: h.state.currentItemInkAssist,
+      width: h.state.currentItemStrokeWidth,
+      color: h.state.currentItemStrokeColor,
+    });
+    const before = selected();
+    const swipe = (target: Element, from = 200, to = 120) => {
+      pointer(target, "pointerdown", from, 150, { isPrimary: true });
+      pointer(target, "pointermove", to, 152, { isPrimary: true });
+      pointer(target, "pointerup", to, 152, { isPrimary: true });
+    };
+    swipe(types);
+    expect(next()).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(types as HTMLElement).getByRole("button", {
+        name: t("fcboard.function_pen"),
+      }),
+    ).toBeVisible();
+    expect(selected()).toEqual(before);
+    const slider = screen.getByRole("slider", {
+      name: t("fcboard.pen_thickness"),
+    });
+    for (const target of [
+      slider,
+      settings.querySelector(".fc-pen-colors")!,
+      screen.getByRole("img", { name: t("fcboard.current_pen_preview") }),
+    ]) {
+      swipe(target, 120, 200);
+      expect(next()).toHaveAttribute("aria-pressed", "true");
+    }
+    expect(selected()).toEqual(before);
+    fireEvent.change(slider, { target: { value: "12" } });
+    expect(h.state.currentItemStrokeWidth).not.toBe(before.width);
+    expect(next()).toHaveAttribute("aria-pressed", "true");
+    swipe(types, 120, 200);
+    expect(previous()).toHaveAttribute("aria-pressed", "true");
+    const brush = screen.getByRole("button", { name: t("fcboard.fountain") });
+    pointer(brush, "pointerdown", 180, 150, { isPrimary: true });
+    pointer(brush, "pointerup", 180, 150, { isPrimary: true });
+    fireEvent.click(brush, { detail: 1 });
+    expect(h.state.currentItemPenMode).toBe("brush");
+    expect(document.querySelector(".fc-factory-pen-settings")).toBeNull();
+    expect(live()).toHaveLength(0);
+  });
+
   it("offers working fountain, highlighter, dashed and rainbow pens without replacing the canvas", async () => {
     const { container } = await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }} />,

@@ -6,6 +6,7 @@ import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 import { t, useI18n } from "../i18n";
 
 import { switchWhiteboardPen, switchWhiteboardTip } from "../whiteboardPen";
+import { useSwipePages } from "../hooks/useSwipePages";
 
 import hard from "./factory-pen-icons/hard.svg?url";
 import hardSelected from "./factory-pen-icons/hard-selected.svg?url";
@@ -173,6 +174,7 @@ export const FactoryPenSettings = ({
   const [page, setPage] = useState(
     pens.slice(8).some(([mode]) => mode === active) ? 1 : 0,
   );
+  const pageSwipe = useSwipePages(setPage, 2);
   return (
     <div className="fc-factory-pen-settings">
       {state.whiteboardDualPen && (
@@ -219,6 +221,8 @@ export const FactoryPenSettings = ({
         role="group"
         aria-label={t("fcboard.pen_type")}
         className="fc-pen-types"
+        style={{ touchAction: "pan-y" }}
+        {...pageSwipe}
       >
         {pens
           .slice(page === 0 ? 0 : 8, page === 0 ? 8 : undefined)

@@ -39,6 +39,106 @@ const dragTouch = async (
 };
 
 for (const width of [390, 1920]) {
+  test(`native pen swipes stay inside pen choices and leave lower controls working at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const pen = page
+      .getByRole("toolbar", { name: "白板工具栏", exact: true })
+      .getByRole("button", { name: "笔", exact: true });
+    await pen.click();
+    const settings = page.locator(".fc-factory-pen-settings");
+    if (!(await settings.isVisible())) {
+      await pen.click();
+    }
+    const types = settings.locator(".fc-pen-types");
+    const lowerBounds = () =>
+      settings.locator(".fc-pen-mode,.fc-pen-colors").evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const { x, y, width, height } = node.getBoundingClientRect();
+          return { x, y, width, height };
+        }),
+      );
+    const lowerBefore = await lowerBounds();
+    const first = await types.getByRole("button").nth(2).boundingBox();
+    const from = {
+      x: first!.x + first!.width / 2,
+      y: first!.y + first!.height / 2,
+    };
+    await dragTouch(page, from, { x: from.x - 60, y: from.y + 2 });
+    const next = settings.getByRole("button", { name: "下一页", exact: true });
+    await expect(next).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      types.getByRole("button", { name: "函数笔", exact: true }),
+    ).toBeVisible();
+    expect(await lowerBounds()).toEqual(lowerBefore);
+    const preview = await settings.locator("svg").last().boundingBox();
+    const point = {
+      x: preview!.x + preview!.width / 2,
+      y: preview!.y + preview!.height / 2,
+    };
+    await dragTouch(page, point, { x: point.x + 50, y: point.y });
+    await expect(next).toHaveAttribute("aria-pressed", "true");
+    const slider = settings.getByRole("slider");
+    const value = await slider.inputValue();
+    const bar = await slider.boundingBox();
+    await dragTouch(
+      page,
+      { x: bar!.x + bar!.width * 0.25, y: bar!.y + bar!.height / 2 },
+      { x: bar!.x + bar!.width * 0.8, y: bar!.y + bar!.height / 2 },
+    );
+    await expect(slider).not.toHaveValue(value);
+    await expect(next).toHaveAttribute("aria-pressed", "true");
+    const changed = await slider.inputValue();
+    const back = await types.getByRole("button").first().boundingBox();
+    const start = {
+      x: back!.x + back!.width / 2,
+      y: back!.y + back!.height / 2,
+    };
+    await dragTouch(page, start, { x: start.x + 60, y: start.y + 2 });
+    await expect(
+      settings.getByRole("button", { name: "上一页", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(slider).toHaveValue(changed);
+  });
+
+  test(`native touch swipes tool pages and preserves the next tool tap at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "教学工具", exact: true }).click();
+    const menu = page.getByRole("dialog", { name: "教学工具", exact: true });
+    const transfer = await menu
+      .getByRole("button", { name: "快传", exact: true })
+      .boundingBox();
+    const from = {
+      x: transfer!.x + transfer!.width / 2,
+      y: transfer!.y + transfer!.height / 2,
+    };
+    await dragTouch(page, from, { x: from.x - 70, y: from.y + 2 });
+    await expect(menu).toBeVisible();
+    await expect(
+      menu.getByRole("button", { name: "下一页", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const recording = await menu
+      .getByRole("button", { name: "录制", exact: true })
+      .boundingBox();
+    const back = {
+      x: recording!.x + recording!.width / 2,
+      y: recording!.y + recording!.height / 2,
+    };
+    await dragTouch(page, back, { x: back.x + 70, y: back.y + 2 });
+    await expect(
+      menu.getByRole("button", { name: "上一页", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".fc-recording-dialog")).toHaveCount(0);
+    await menu.getByRole("button", { name: "插入直尺", exact: true }).tap();
+    await expect(menu).toBeHidden();
+    await expect(page.locator("[data-gizmo]")).toHaveCount(1);
+  });
+
   test(`native touch moves all four teaching tools after choosing selection at ${width}`, async ({
     page,
   }) => {

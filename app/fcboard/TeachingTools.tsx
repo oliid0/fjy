@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import ButtonBase from "@mui/material/ButtonBase";
 import { ToolbarExtras } from "@fcboard/fcboard";
 import { getCommonBounds } from "@fcboard/element";
+import { useSwipePages } from "@fcboard/fcboard/hooks/useSwipePages";
 import {
   CloseIcon,
   playerPlayIcon,
@@ -84,6 +85,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const [open, setOpen] = useState(false);
   const [toolPage, setToolPage] = useState(0);
+  const pageSwipe = useSwipePages(setToolPage, 2);
   const [selected, setSelected] = useState<Widget | null>(null);
   const [lassoActive, setLassoActive] = useState(false);
   const selectedRef = useRef<Widget | null>(null);
@@ -739,9 +741,10 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
         <MaterialPanel
           ref={panel}
           className="fc-tools-picker fc-surface"
-          style={pickerStyle}
+          style={{ ...pickerStyle, touchAction: "pan-y" }}
           role="dialog"
           aria-label={t("fcboard.teaching_tools")}
+          {...pageSwipe}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {

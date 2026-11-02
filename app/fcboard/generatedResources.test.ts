@@ -86,3 +86,21 @@ it("repairs invalid form output once before storing a reusable interactive exper
   expect(item.html).toContain("<svg");
   expect(await generatedResources()).toEqual([item]);
 });
+
+it("stores direct HTML with a CSS car animation instead of rejecting it for missing SVG or interaction", async () => {
+  const chat = vi.spyOn(ai, "chat")
+    .mockResolvedValue(`<!doctype html><html><head>
+<title>牛顿第一定律演示</title><style>@keyframes travel{to{transform:translateX(250px)}}</style>
+</head><body><h1>无摩擦轨道上的小车</h1><p>推力撤去后，小车保持匀速直线运动。</p>
+<div class="car" style="width:40px;height:20px;background:teal;animation:travel 4s linear infinite"></div>
+</body></html>`);
+  const item = await generateTeachingResource(
+    "牛顿第一定律演示",
+    new AbortController().signal,
+  );
+  expect(chat).toHaveBeenCalledTimes(1);
+  expect(item.title).toBe("牛顿第一定律演示");
+  expect(item.html).toContain('class="car"');
+  expect(item.html).toContain("animation:travel");
+  expect(await generatedResources()).toEqual([item]);
+});

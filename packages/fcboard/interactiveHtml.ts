@@ -22,15 +22,30 @@ export const interactiveHtml = (value: unknown): string => {
     node.removeAttribute("action");
     node.removeAttribute("target");
   });
+  const styles = [
+    ...Array.from(
+      document.querySelectorAll("style"),
+      (node) => node.textContent || "",
+    ),
+    ...Array.from(
+      document.querySelectorAll("[style]"),
+      (node) => node.getAttribute("style") || "",
+    ),
+  ];
+  const animated =
+    document.querySelector(
+      "svg animate,svg animateTransform,svg animateMotion",
+    ) ||
+    (styles.some((css) => /@(?:-webkit-)?keyframes\s/i.test(css)) &&
+      styles.some((css) =>
+        /(?:^|[;{])\s*(?:-webkit-)?animation(?:-name)?\s*:/i.test(css),
+      ));
   if (
-    !document.querySelector("script") ||
-    !document.querySelector("canvas,svg") ||
+    (!document.querySelector("canvas,svg") && !animated) ||
     document.querySelector("form") ||
     !(document.body.textContent || "").trim()
   ) {
-    throw new Error(
-      "An interactive lesson needs a scripted graphical demonstration",
-    );
+    throw new Error("A lesson needs a graphical demonstration or animation");
   }
   const policy = document.createElement("meta");
   policy.httpEquiv = "Content-Security-Policy";

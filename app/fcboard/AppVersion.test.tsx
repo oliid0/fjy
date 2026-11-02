@@ -32,7 +32,7 @@ it("shows the installed version and opens system debug settings only on the thir
   );
 });
 
-it("expires old taps and exposes a real system settings failure", async () => {
+it("expires old taps and leaves the entry usable without a popup if system settings are unavailable", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.getAppVersion).mockResolvedValue({
     name: "1.3",
@@ -53,5 +53,12 @@ it("expires old taps and exposes a real system settings failure", async () => {
   fireEvent.click(button);
   expect(Classroom.openDebugSettings).not.toHaveBeenCalled();
   fireEvent.click(button);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Unavailable");
+  await waitFor(() => expect(button).not.toBeDisabled());
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(button);
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(Classroom.openDebugSettings).toHaveBeenCalledTimes(2),
+  );
 });

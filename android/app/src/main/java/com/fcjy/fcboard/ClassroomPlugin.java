@@ -44,31 +44,43 @@ public class ClassroomPlugin extends Plugin {
         } catch (Exception error) { call.reject("Could not read app version", error); }
     }
 
-    /** System installations can enable developer mode; debugging stays in the system Settings UI. */
+    /** Settings owns developer-mode consent and the wireless-debugging switch. */
     @PluginMethod
     public void openDebugSettings(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
                 android.content.ContentResolver resolver = getContext().getContentResolver();
-                if (getContext().checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS)
-                    == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    if (!android.provider.Settings.Global.putInt(resolver,
-                        android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 1)) {
-                        call.reject("Could not enable developer settings");
+                boolean enabled = android.provider.Settings.Global.getInt(resolver,
+                    android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
+                String[] actions = enabled ? new String[] {
+                    android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS,
+                    android.provider.Settings.ACTION_DEVICE_INFO_SETTINGS,
+                    android.provider.Settings.ACTION_SETTINGS
+                } : new String[] {
+                    android.provider.Settings.ACTION_DEVICE_INFO_SETTINGS,
+                    android.provider.Settings.ACTION_SETTINGS
+                };
+                for (String action : actions) {
+                    android.content.Intent intent = android.content.Intent.parseUri(
+                        "intent:#Intent;action=" + action + ";end", android.content.Intent.URI_INTENT_SCHEME);
+                    if (android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS.equals(action)) {
+                        // AOSP DevelopmentSettingsDashboardFragment scrolls to/highlights this preference.
+                        // Android exposes no public action for the nested WirelessDebuggingFragment.
+                        android.os.Bundle args = new android.os.Bundle();
+                        args.putString(":settings:fragment_args_key", "toggle_adb_wireless");
+                        intent.putExtra(":settings:show_fragment_args", args);
+                        intent.putExtra(":settings:fragment_args_key", "toggle_adb_wireless");
+                    }
+                    try {
+                        getActivity().startActivity(intent);
+                        JSObject result = new JSObject(); result.put("enabled", enabled);
+                        call.resolve(result);
                         return;
+                    } catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
+                        // OEM settings may omit a page; continue to the next system entry.
                     }
                 }
-                android.content.Intent intent = new android.content.Intent(
-                    android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
-                if (intent.resolveActivity(getContext().getPackageManager()) == null) {
-                    call.reject("Developer settings are unavailable on this device");
-                    return;
-                }
-                getActivity().startActivity(intent);
-                JSObject result = new JSObject();
-                result.put("enabled", android.provider.Settings.Global.getInt(resolver,
-                    android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1);
-                call.resolve(result);
+                call.reject("System settings are unavailable on this device");
             } catch (Exception error) { call.reject("Could not open developer settings", error); }
         });
     }

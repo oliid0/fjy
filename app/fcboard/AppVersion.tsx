@@ -5,12 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { version } from "../package.json";
 
 import { Classroom } from "./native";
-import { TransientMessage } from "./TransientMessage";
 
 export const AppVersion = () => {
   const [label, setLabel] = useState(version);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const taps = useRef<number[]>([]);
   const native = Capacitor.isNativePlatform();
   useEffect(() => {
@@ -40,11 +38,10 @@ export const AppVersion = () => {
     }
     taps.current = [];
     setBusy(true);
-    setError("");
     try {
       await Classroom.openDebugSettings();
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+    } catch {
+      // A missing OEM settings page must not leave the version entry disabled.
     } finally {
       setBusy(false);
     }
@@ -54,7 +51,6 @@ export const AppVersion = () => {
       <button type="button" disabled={busy} onClick={() => void tap()}>
         {t("stats.version")} {label}
       </button>
-      <TransientMessage message={error} role="alert" />
     </div>
   );
 };

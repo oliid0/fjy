@@ -495,14 +495,16 @@ test("whole board summary sends a real board image and returns to an editable ca
   expect(
     Math.abs(summaryRect.y + summaryRect.height / 2 - viewport.height / 2),
   ).toBeLessThan(2);
-  expect(
-    await page.evaluate(
-      () =>
-        JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
-          (element: { isDeleted?: boolean }) => !element.isDeleted,
-        ).length,
-    ),
-  ).toBe(1);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
+            (element: { isDeleted?: boolean }) => !element.isDeleted,
+          ).length,
+      ),
+    )
+    .toBe(1);
   expect(imageSent).toBe(true);
   await page.getByRole("button", { name: "全屏查看总结", exact: true }).click();
   await expect(

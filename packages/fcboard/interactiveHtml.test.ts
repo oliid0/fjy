@@ -30,6 +30,27 @@ it("removes remote loading, nested documents and redirects before the iframe par
 });
 
 it.each([
+  '<h1>匀速运动</h1><svg viewBox="0 0 400 100"><circle cy="50" r="10"><animate attributeName="cx" from="20" to="380" dur="4s" repeatCount="indefinite" /></circle></svg>',
+  '<style>@keyframes travel{to{transform:translateX(300px)}}circle{animation:travel 4s linear infinite}</style><h1>匀速运动</h1><svg viewBox="0 0 400 100"><circle cx="20" cy="50" r="10" /></svg>',
+  '<style>@keyframes travel{to{transform:translateX(300px)}}.car{width:40px;height:20px;background:teal;animation:travel 4s linear infinite}</style><h1>匀速运动</h1><div class="car"></div>',
+])(
+  "retains a self-contained graphical animation without requiring authored JavaScript",
+  (source) => {
+    const html = interactiveHtml(source);
+    expect(html).toContain("匀速运动");
+    expect(html).toContain("Content-Security-Policy");
+    expect(html).toContain(source.includes(".car") ? 'class="car"' : "<svg");
+    expect(interactiveHtml(html)).toBe(html);
+  },
+);
+
+it("accepts a visual explanation without inventing a mandatory interaction", () => {
+  const source =
+    '<h1>平衡力</h1><svg viewBox="0 0 200 100"><rect x="80" y="30" width="40" height="40"/><path d="M20 50H80M120 50H180" stroke="teal"/></svg>';
+  expect(interactiveHtml(source)).toContain('<rect x="80"');
+});
+
+it.each([
   "<h1>Static diagram</h1>",
   "<button>Dead button</button><output>1</output>",
   "<input><output>2</output><script>document.querySelector('input').oninput=()=>{};</script>",

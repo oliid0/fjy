@@ -31,39 +31,50 @@ export const insertWebSelection = async (
       },
     });
   }
-  const url = new URL(selection.value);
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    url.username ||
-    url.password
-  ) {
+  if (selection.value.length > 28_000_000) {
     throw new Error("Invalid selected webpage image");
   }
-  const response = await CapacitorHttp.get({
-    url: url.href,
-    responseType: "arraybuffer",
-    connectTimeout: 15000,
-    readTimeout: 30000,
-  });
-  signal.throwIfAborted();
-  const contentType = Object.entries(response.headers)
-    .find(([key]) => key.toLowerCase() === "content-type")?.[1]
-    ?.split(";")[0];
-  if (
-    response.status < 200 ||
-    response.status >= 300 ||
-    !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(
-      contentType || "",
-    ) ||
-    typeof response.data !== "string" ||
-    response.data.length > 28_000_000
-  ) {
-    throw new Error("Could not load the selected webpage image");
+  const inline =
+    /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+      selection.value,
+    );
+  let contentType = inline?.[1];
+  let dataURL = selection.value as DataURL;
+  if (!inline) {
+    const url = new URL(selection.value);
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password
+    ) {
+      throw new Error("Invalid selected webpage image");
+    }
+    const response = await CapacitorHttp.get({
+      url: url.href,
+      responseType: "arraybuffer",
+      connectTimeout: 15000,
+      readTimeout: 30000,
+    });
+    signal.throwIfAborted();
+    contentType = Object.entries(response.headers)
+      .find(([key]) => key.toLowerCase() === "content-type")?.[1]
+      ?.split(";")[0];
+    if (
+      response.status < 200 ||
+      response.status >= 300 ||
+      !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(
+        contentType || "",
+      ) ||
+      typeof response.data !== "string" ||
+      response.data.length > 28_000_000
+    ) {
+      throw new Error("Could not load the selected webpage image");
+    }
+    dataURL = `data:${contentType};base64,${response.data.replace(
+      /\s/g,
+      "",
+    )}` as DataURL;
   }
-  const dataURL = `data:${contentType};base64,${response.data.replace(
-    /\s/g,
-    "",
-  )}` as DataURL;
   const image = new Image();
   image.src = dataURL;
   await image.decode();

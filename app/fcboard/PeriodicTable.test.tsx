@@ -120,9 +120,11 @@ it("opens through the real resource command and inserts one saved, undoable elem
       screen.getByRole("button", { name: t("fcboard.periodic.insert") }),
     );
     await waitFor(() => expect(api.getSceneElements()).toHaveLength(1));
-    expect(
-      screen.queryByRole("dialog", { name: t("fcboard.periodic.title") }),
-    ).toBeNull();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: t("fcboard.periodic.title") }),
+      ).toBeNull(),
+    );
     const element = api.getSceneElements()[0];
     expect(element).toMatchObject({ type: "image", width: 220, height: 180 });
     expect(element.type).toBe("image");

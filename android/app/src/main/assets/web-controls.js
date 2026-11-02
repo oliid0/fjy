@@ -4,6 +4,57 @@
     return;
   }
   const session = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  // HMinWebWindow imports the image/text under a long press. Search results
+  // also use inline or blob images that cannot be fetched by the host app.
+  window.fcNativeWebSelection = (x, y) => {
+    try {
+      const node = document.elementFromPoint(x, y);
+      if (!node) {
+        return "null";
+      }
+      const image =
+        node.closest("img") ||
+        node.querySelector("img") ||
+        node.closest("a,button,[role=link]")?.querySelector("img") ||
+        document.elementsFromPoint(x, y).find((item) => item.tagName === "IMG");
+      if (image) {
+        let value = image.currentSrc || image.src;
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        if (!width || !height) {
+          throw Error("WEB_IMAGE_UNAVAILABLE");
+        }
+        // Drawing the displayed image preserves inline/blob pixels and avoids
+        // a second request for same-origin or CORS-enabled images.
+        if (!/^data:image\/(png|jpeg|webp|gif);base64,/i.test(value)) {
+          try {
+            const canvas = document.createElement("canvas");
+            // Match DEFAULT_MAX_IMAGE_WIDTH_OR_HEIGHT in the image importer.
+            const scale = Math.min(1, 1440 / Math.max(width, height));
+            canvas.width = Math.max(1, Math.round(width * scale));
+            canvas.height = Math.max(1, Math.round(height * scale));
+            canvas
+              .getContext("2d")
+              .drawImage(image, 0, 0, canvas.width, canvas.height);
+            value = canvas.toDataURL("image/png");
+          } catch (error) {
+            // Cross-origin images without CORS can still use native HTTP.
+            if (!/^https?:\/\//i.test(value)) {
+              throw error;
+            }
+          }
+        }
+        if (value.length > 28000000) {
+          throw Error("WEB_IMAGE_TOO_LARGE");
+        }
+        return JSON.stringify({ kind: "image", value });
+      }
+      const value = (node.innerText || "").trim().slice(0, 10000);
+      return value ? JSON.stringify({ kind: "text", value }) : "null";
+    } catch (error) {
+      return JSON.stringify({ error: "WEB_SELECTION_FAILED" });
+    }
+  };
   const ids = new WeakMap();
   let count = 0;
   let revision = 0;

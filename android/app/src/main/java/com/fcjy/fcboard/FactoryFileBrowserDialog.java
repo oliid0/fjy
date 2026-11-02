@@ -126,6 +126,9 @@ final class FactoryFileBrowserDialog extends Dialog {
         panel.findViewById(R.id.factory_fb_usb_store).setOnClickListener(view->{if(busy)return;volumes=true;selected=null;storageSelection(true);refresh();});
         confirm.setOnClickListener(view->confirm());cancel.setOnClickListener(view->cancel());
         setOnCancelListener(ignored->deliver(null));
+        // Dialog.show assigns its decor after onStart; isShowing is false in
+        // onStart, so the initial directory must load from the shown event.
+        setOnShowListener(ignored->refresh());
         setOnDismissListener(ignored->{generation++;thumbnails.shutdownNow();pendingThumbnails.clear();thumbnailCache.evictAll();if(registered){activity.unregisterReceiver(receiver);registered=false;}deliver(null);});
         Window window=getWindow();
         if(window!=null){window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE|WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);}
@@ -185,7 +188,7 @@ final class FactoryFileBrowserDialog extends Dialog {
         super.onStart();if(getWindow()!=null)getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT);resize();
         IntentFilter filter=new IntentFilter();filter.addAction(Intent.ACTION_MEDIA_MOUNTED);filter.addAction(Intent.ACTION_MEDIA_UNMOUNTED);filter.addAction(Intent.ACTION_MEDIA_REMOVED);filter.addDataScheme("file");
         if(Build.VERSION.SDK_INT>=33)activity.registerReceiver(receiver,filter,Context.RECEIVER_NOT_EXPORTED);else activity.registerReceiver(receiver,filter);
-        registered=true;refresh();
+        registered=true;
     }
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);if(focus && awaitingStorageAccess && grid!=null){awaitingStorageAccess=false;refresh();}}
     private void storageSelection(boolean removable){

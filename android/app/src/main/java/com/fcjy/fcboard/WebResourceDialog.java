@@ -149,16 +149,27 @@ final class WebResourceDialog extends Dialog {
             final int expectedPage = pageEpoch;
             if (loading || touchPage[0] != expectedPage) return true;
             float scale = Math.max(0.1f, web.getScale());
-            String script = "(function(){var e=document.elementFromPoint(" + (touch[0] / scale) + "," + (touch[1] / scale) + ");if(!e)return null;var i=e.closest('img')||e.querySelector('img');if(i)return {kind:'image',value:i.currentSrc||i.src};var t=(e.innerText||'').trim();return t?{kind:'text',value:t.slice(0,10000)}:null;})()";
+            String script = controlRuntime + "\nwindow.fcNativeWebSelection(" + (touch[0] / scale) + "," + (touch[1] / scale) + ")";
             web.evaluateJavascript(script, raw -> {
                 if (!isShowing() || expectedPage != pageEpoch) return;
                 try {
-                    JSONObject value = new JSONObject(raw);
+                    Object decoded = new JSONTokener(raw).nextValue();
+                    if (!(decoded instanceof String)) return;
+                    if ("null".equals(decoded)) return;
+                    JSONObject value = new JSONObject((String)decoded);
+                    if (value.has("error")) throw new IllegalArgumentException("Web selection is unavailable");
                     String kind = value.optString("kind"), content = value.optString("value");
                     if (content.isEmpty() || !("image".equals(kind) || "text".equals(kind))) return;
-                    if ("image".equals(kind)) checkedUrl(content);
+                    if ("image".equals(kind)) {
+                        if (content.length()>28000000) throw new IllegalArgumentException("Web image is too large");
+                        if (!content.matches("^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]*={0,2}$")) checkedUrl(content);
+                    }
                     selected.accept(new JSObject().put("kind", kind).put("value", content));
-                } catch (Exception ignored) { /* A navigation can remove the pressed node. */ }
+                    status.setVisibility(android.view.View.GONE);
+                } catch (Exception unavailable) {
+                    status.setText(text.getString(R.string.web_selection_failed));
+                    status.setVisibility(android.view.View.VISIBLE);
+                }
             });
             return true;
         });

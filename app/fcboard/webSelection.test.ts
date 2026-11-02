@@ -34,9 +34,14 @@ it("inserts long-pressed webpage text using the visible canvas text command", as
     release();
   }
 });
-it.each([false, true])(
-  "imports a real webpage image into document=%s while preserving other objects",
-  async (document) => {
+it.each([
+  [false, false],
+  [true, false],
+  [false, true],
+  [true, true],
+])(
+  "imports a webpage image into document=%s inline=%s while preserving other objects",
+  async (document, inline) => {
     const api = sceneAPI();
     const before = [...api.getSceneElements()];
     vi.spyOn(CapacitorHttp, "get").mockResolvedValue({
@@ -45,6 +50,7 @@ it.each([false, true])(
       url: "https://images.example.test/item.png",
       data: "aW1hZ2U=",
     });
+    vi.mocked(CapacitorHttp.get).mockClear();
     vi.stubGlobal(
       "Image",
       class {
@@ -66,9 +72,15 @@ it.each([false, true])(
     try {
       await insertWebSelection(
         api,
-        { kind: "image", value: "https://images.example.test/item.png" },
+        {
+          kind: "image",
+          value: inline
+            ? "data:image/png;base64,aW1hZ2U="
+            : "https://images.example.test/item.png",
+        },
         new AbortController().signal,
       );
+      expect(CapacitorHttp.get).toHaveBeenCalledTimes(inline ? 0 : 1);
       if (document) {
         expect(draw).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -93,6 +105,26 @@ it.each([false, true])(
     } finally {
       stops.reverse().forEach((stop) => stop());
     }
+  },
+);
+it.each([
+  "data:text/html;base64,aW1hZ2U=",
+  "file:///tmp/not-an-image.png",
+  "blob:https://example.test/expired",
+])(
+  "rejects unconverted or non-image data %s without adding an object",
+  async (value) => {
+    const api = sceneAPI();
+    const before = [...api.getSceneElements()];
+    await expect(
+      insertWebSelection(
+        api,
+        { kind: "image", value },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("Invalid selected webpage image");
+    expect(api.addFiles).not.toHaveBeenCalled();
+    expect(api.getSceneElements()).toEqual(before);
   },
 );
 it("rejects a late image after a manual surface change", async () => {

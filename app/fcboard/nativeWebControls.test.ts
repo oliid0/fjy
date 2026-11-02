@@ -10,6 +10,7 @@ const { JSDOM } = createRequire(import.meta.url)("jsdom") as {
     window: Window &
       typeof globalThis & {
         fcNativeWebControls: (args: Record<string, unknown>) => string;
+        fcNativeWebSelection: (x: number, y: number) => string;
       };
   };
 };
@@ -68,6 +69,68 @@ const page = () => {
     dispose: () => window.close(),
   };
 };
+
+it.each([
+  ["data:image/png;base64,aW1hZ2U=", false],
+  ["blob:https://example.test/image", false],
+  ["https://images.example.test/image.png", true],
+])(
+  "imports an image beneath a search-result overlay: %s tainted=%s",
+  (source, tainted) => {
+    const browser = page();
+    try {
+      const { window } = browser;
+      const link = window.document.createElement("a");
+      const overlay = window.document.createElement("span");
+      const image = window.document.createElement("img");
+      image.src = source;
+      Object.defineProperties(image, {
+        naturalWidth: { value: 2400 },
+        naturalHeight: { value: 1200 },
+      });
+      link.append(image, overlay);
+      window.document.body.append(link);
+      window.document.elementFromPoint = () => overlay;
+      const drawImage = vi.fn();
+      Object.defineProperty(window.HTMLCanvasElement.prototype, "getContext", {
+        value: () => ({ drawImage }),
+      });
+      Object.defineProperty(window.HTMLCanvasElement.prototype, "toDataURL", {
+        value: () => {
+          if (tainted) {
+            throw new Error("Tainted canvas");
+          }
+          return "data:image/png;base64,aW1hZ2U=";
+        },
+      });
+      expect(JSON.parse(window.fcNativeWebSelection(20, 20))).toEqual({
+        kind: "image",
+        value: tainted ? source : "data:image/png;base64,aW1hZ2U=",
+      });
+      if (source.startsWith("blob:")) {
+        expect(drawImage).toHaveBeenCalledWith(image, 0, 0, 1440, 720);
+      }
+    } finally {
+      browser.dispose();
+    }
+  },
+);
+
+it("reports an unavailable long-pressed image and ignores an empty point", () => {
+  const browser = page();
+  try {
+    const image = browser.window.document.createElement("img");
+    browser.window.document.body.append(image);
+    browser.window.document.elementFromPoint = () => image;
+    expect(JSON.parse(browser.window.fcNativeWebSelection(20, 20))).toEqual({
+      error: "WEB_SELECTION_FAILED",
+    });
+    browser.window.document.elementFromPoint = () => null;
+    expect(browser.window.fcNativeWebSelection(20, 20)).toBe("null");
+  } finally {
+    browser.dispose();
+  }
+});
 
 it("uses actual DOM controls and reports the measured result after set, select and click", () => {
   const browser = page();

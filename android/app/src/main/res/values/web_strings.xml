@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="web_selection_failed">Could not insert the selected content. Open the image and try again.</string>
     <string name="web_back">Back</string>
     <string name="web_forward">Forward</string>
     <string name="web_reload">Reload</string>

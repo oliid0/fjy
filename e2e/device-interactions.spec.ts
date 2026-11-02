@@ -46,7 +46,7 @@ for (const width of [390, 1920]) {
     await page.goto("/");
     const pen = page
       .getByRole("toolbar", { name: "白板工具栏", exact: true })
-      .getByRole("button", { name: "笔", exact: true });
+      .getByRole("button", { name: "画笔", exact: true });
     await pen.click();
     const settings = page.locator(".fc-factory-pen-settings");
     if (!(await settings.isVisible())) {

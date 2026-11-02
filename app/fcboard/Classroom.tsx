@@ -2732,6 +2732,7 @@ export const Classroom = ({
                     <button
                       type="button"
                       className="fc-language-packs-entry"
+                      aria-label={t("fcboard.languagePacks.title")}
                       onClick={() => openLanguagePacks()}
                     >
                       {t("fcboard.languagePacks.title")} ›

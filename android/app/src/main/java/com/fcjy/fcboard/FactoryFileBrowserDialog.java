@@ -32,7 +32,6 @@ final class FactoryFileBrowserDialog extends Dialog {
     private final Operation operation;
     private final Result result;
     final View panel;
-    private final ScrollView viewport;
     private final GridView grid;
     private final TextView path;
     private final EditText name;
@@ -63,13 +62,9 @@ final class FactoryFileBrowserDialog extends Dialog {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         View outer=LayoutInflater.from(text).inflate(R.layout.factory_file_browser,null);
         panel=((ViewGroup)outer).getChildAt(0);
-        ((ViewGroup)outer).removeView(panel);
-        // A weighted GridView needs a bounded height. ScrollView first measures
-        // its child without a height limit; fillViewport remeasures the panel
-        // against the actual window so file rows and thumbnails get laid out.
-        viewport=new ScrollView(text);viewport.setFillViewport(true);viewport.setClipToPadding(false);viewport.setVerticalScrollBarEnabled(false);
-        viewport.addView(panel,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(387)));
-        RelativeLayout.LayoutParams position=new RelativeLayout.LayoutParams(dp(580),dp(387));position.addRule(RelativeLayout.CENTER_IN_PARENT);((ViewGroup)outer).addView(viewport,position);
+        // Keep the factory's bounded RelativeLayout. Wrapping its weighted
+        // GridView in ScrollView gives it an unbounded measurement pass and
+        // leaves open-file rows and image thumbnails without usable bounds.
         outer.setBackgroundColor(Color.argb(100,47,47,47));
         setContentView(outer);
         grid=panel.findViewById(R.id.factory_fb_file_path_grid);
@@ -171,11 +166,8 @@ final class FactoryFileBrowserDialog extends Dialog {
         if(visible.width()<1 || visible.height()<1)return;
         int width=Math.min(dp(580),Math.max(1,visible.width()-dp(24)));
         int height=Math.min(dp(387),Math.max(1,visible.height()-dp(24)));
-        ViewGroup.LayoutParams viewportSize=viewport.getLayoutParams();
-        if(viewportSize.width!=width || viewportSize.height!=height){viewportSize.width=width;viewportSize.height=height;viewport.setLayoutParams(viewportSize);}
-        int contentHeight=Math.max(dp(saving?147:124),height);
         ViewGroup.LayoutParams panelSize=panel.getLayoutParams();
-        if(panelSize.height!=contentHeight){panelSize.height=contentHeight;panel.setLayoutParams(panelSize);}
+        if(panelSize.width!=width || panelSize.height!=height){panelSize.width=width;panelSize.height=height;panel.setLayoutParams(panelSize);}
         boolean compact=height<dp(280) || width<dp(500);
         View footer=(View)confirm.getParent();ViewGroup.LayoutParams footerSize=footer.getLayoutParams();int footerHeight=dp(compact?(saving?73:50):99);
         if(footerSize.height!=footerHeight){footerSize.height=footerHeight;footer.setLayoutParams(footerSize);}

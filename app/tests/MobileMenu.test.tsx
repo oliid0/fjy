@@ -59,7 +59,7 @@ describe("Test MobileMenu", () => {
     ).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", {
-        name: `${t("fcboard.languagePacks.title")} ›`,
+        name: t("fcboard.languagePacks.title"),
       }),
     );
     const packs = screen.getByRole("dialog", {

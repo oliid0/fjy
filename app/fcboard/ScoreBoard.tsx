@@ -117,10 +117,6 @@ export const ScoreBoard = ({ onClose }: { onClose: () => void }) => {
               autoFocus
               aria-label={t("fcboard.scoreBoard.editName")}
               value={editing.name}
-              onFocus={(event) => {
-                const input = event.currentTarget;
-                input.setSelectionRange(input.value.length, input.value.length);
-              }}
               onChange={(event) =>
                 setEditing({ ...editing, name: event.target.value })
               }

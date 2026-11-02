@@ -743,11 +743,6 @@
     }
   }
   @media (max-width: 1000px) {
-    // On compact cards, centered line-clamping can clip the last glyph past
-    // the text box for long translated titles. Keep their two-line limit.
-    .fc-resource-grid button.fc-resource-card-experiment span {
-      text-align: start;
-    }
     .fc-unified-toolbar {
       grid-template-columns: minmax(0, 1fr) max-content;
       row-gap: calc(2 * var(--fc-unit));
@@ -3180,6 +3175,10 @@
   &:active {
     background: #f3f8ff;
     border-color: #bfd7ff;
+  }
+  // Two-line experiment names can also overflow desktop cards in translations.
+  &.fc-resource-card-experiment span {
+    text-align: start;
   }
   &.fc-resource-card-image {
     height: 112px;

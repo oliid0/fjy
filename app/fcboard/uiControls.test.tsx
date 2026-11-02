@@ -21,7 +21,7 @@ const Harness = () => {
   const [mode, setMode] = useState("local");
   const [count, setCount] = useState(0);
   return (
-    <div data-testid="editor-root">
+    <div data-testid="editor-root" className="fcboard">
       <label>
         Title
         <input

@@ -54,8 +54,10 @@ public class ClassroomPlugin extends Plugin {
                         calculator.show();
                         call.resolve(calculator.snapshot());
                     } catch (Exception error) { call.reject("原版计算器打开失败：" + error.getMessage(), error); }
+                    catch (LinkageError error) { call.reject("原版计算器组件不兼容：" + error, new Exception(error)); }
                 });
             } catch (Exception error) { call.reject("原版计算器加载失败：" + error.getMessage(), error); }
+            catch (LinkageError error) { call.reject("原版计算器DEX不兼容：" + error, new Exception(error)); }
         });
         });
     }

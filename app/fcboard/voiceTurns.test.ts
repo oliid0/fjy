@@ -44,6 +44,31 @@ it("queues later commands in order and continues after a failure", async () => {
   turns.stop();
 });
 
+it("reports cancellation for running and queued speech tasks instead of leaving stale execution indicators", async () => {
+  let finish!: () => void;
+  const execute = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const onState = vi.fn();
+  const turns = createVoiceTurns(execute, vi.fn(), 700, { onState });
+  turns.push("写标题");
+  await vi.advanceTimersByTimeAsync(700);
+  turns.push("插入表格");
+  await vi.advanceTimersByTimeAsync(700);
+  turns.reset();
+  expect(onState).toHaveBeenCalledWith("写标题", "cancelled");
+  expect(onState).toHaveBeenCalledWith("插入表格", "cancelled");
+  finish();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(onState).not.toHaveBeenCalledWith("写标题", "completed");
+  expect(onState).not.toHaveBeenCalledWith("插入表格", "running");
+  turns.stop();
+});
+
 it("waits for ongoing interim speech without executing or committing its unstable text", async () => {
   const execute = vi.fn().mockResolvedValue(undefined);
   const turns = createVoiceTurns(execute, vi.fn());

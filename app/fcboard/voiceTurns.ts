@@ -9,7 +9,7 @@ export const createVoiceTurns = (
     onInterruption?: () => void;
     onState?: (
       text: string,
-      state: "queued" | "running" | "completed" | "failed",
+      state: "queued" | "running" | "completed" | "failed" | "cancelled",
     ) => void;
   } = {},
 ) => {
@@ -36,6 +36,11 @@ export const createVoiceTurns = (
       return;
     }
     const request = new AbortController();
+    request.signal.addEventListener(
+      "abort",
+      () => options.onState?.(text, "cancelled"),
+      { once: true },
+    );
     requests.add(request);
     options.onState?.(text, "queued");
     queued = queued

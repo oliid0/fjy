@@ -3,6 +3,7 @@
   <string name="factory_fb_btn_cancle">取消</string>
   <string name="factory_fb_btn_ok">確定</string>
   <string name="factory_fb_file_bzd">BZD</string>
+  <string name="factory_fb_file_content">課件 / 多媒體檔案</string>
   <string name="factory_fb_file_jpg">JPG</string>
   <string name="factory_fb_file_name">名稱</string>
   <string name="factory_fb_file_size">大小</string>

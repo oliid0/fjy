@@ -2684,6 +2684,7 @@ export const Classroom = ({
                       running: "正在执行",
                       completed: "已执行",
                       failed: "执行失败",
+                      cancelled: "已取消",
                     } as Record<string, string>
                   )[task.state]
                 }

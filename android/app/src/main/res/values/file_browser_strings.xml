@@ -3,6 +3,7 @@
   <string name="factory_fb_btn_cancle">Cancel</string>
   <string name="factory_fb_btn_ok">Confirm</string>
   <string name="factory_fb_file_bzd">BZD</string>
+  <string name="factory_fb_file_content">Courseware / media files</string>
   <string name="factory_fb_file_jpg">JPG</string>
   <string name="factory_fb_file_name">Name</string>
   <string name="factory_fb_file_size">Size</string>

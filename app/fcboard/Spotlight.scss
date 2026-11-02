@@ -1,9 +1,12 @@
 .fc-classroom .fc-spotlight {
+  .fc-spotlight-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
   .fc-spotlight-ring {
     position: absolute;
     box-sizing: border-box;
-    border: 2px solid #fff;
-    border-radius: 50%;
     pointer-events: none;
   }
   .fc-spotlight-controls {
@@ -14,6 +17,19 @@
     padding: 10px 8px;
     border-radius: 32px;
     background: #8c8c8caa;
+    max-width: 120px;
+    select {
+      width: 108px;
+      color: #fff;
+      background: #444;
+    }
+    .fc-spotlight-opacity {
+      color: #fff;
+      font-size: 12px;
+    }
+    .fc-spotlight-opacity input {
+      width: 100%;
+    }
   }
   button,
   .fc-spotlight-color {

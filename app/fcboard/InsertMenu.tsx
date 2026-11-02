@@ -11,7 +11,7 @@ import { TransientMessage } from "./TransientMessage";
 import { MaterialPanel } from "./MaterialPanel";
 
 import { classroomCommands } from "./commands";
-import { insertionPoint } from "./board";
+import { contentViewport, insertionPoint } from "./board";
 import {
   configureInsertion,
   insertionDefaults,
@@ -20,7 +20,6 @@ import {
   changeTableTrack,
 } from "./insertObjects";
 import { Classroom } from "./native";
-import { useAnchoredPanel } from "./floating";
 import { TableSizePicker } from "./TableSizePicker";
 import { InsertionPlacement } from "./InsertionPlacement";
 
@@ -57,7 +56,6 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
   const selectedRef = useRef<InsertObject | undefined>(undefined);
   const previousSelection = useRef("");
   const panel = useRef<HTMLElement>(null);
-  const style = useAnchoredPanel(panel, "[data-board-insert]", !!form);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) {
       return;
@@ -168,6 +166,39 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
           )?.pen?.color ||
           api.getAppState().currentItemStrokeColor ||
           "#333333";
+    if (kind === "mindmap") {
+      const area = visible || contentViewport(api);
+      const scale = document
+        ? (
+            classroomCommands.read("document.layout") as
+              | { scale?: number }
+              | undefined
+          )?.scale || 1
+        : api.getAppState().zoom.value;
+      // HNodeObject: 300×150 physical pixels; HMindMappingOBject: 400px
+      // between columns and 200px between child nodes.
+      const factor = Math.min(
+        1 / ((window.devicePixelRatio || 1) * scale),
+        (area.right - area.left) / 700,
+        (area.bottom - area.top) / 550,
+      );
+      base.nodeSize = { width: 300 * factor, height: 150 * factor };
+      base.nodePositions = [
+        { x: 0, y: 200 * factor },
+        { x: 400 * factor, y: 0 },
+        { x: 400 * factor, y: 200 * factor },
+        { x: 400 * factor, y: 400 * factor },
+      ];
+      base.nodeStyles = Array.from({ length: 4 }, (_, index) => ({
+        ...base.nodeSize!,
+        color: "#0ed49f",
+        opacity: 100,
+        direction: "right",
+        columns: index ? 2 : 1,
+      }));
+      base.width = 700 * factor;
+      base.height = 550 * factor;
+    }
     if (kind === "fourline") {
       const state = api.getAppState();
       const scale =
@@ -284,9 +315,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
             language: getLanguage().code,
           });
         }
-        throw new Error(
-          t("fcboard.the_signal_app_is_not_installed_on_this_display"),
-        );
+        throw new Error("当前环境未开放Android信号输入接口");
       }
       return classroomCommands.execute({
         name: "files.open",
@@ -302,7 +331,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
     const stops = [
       classroomCommands.register(
         "insert.open",
-        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents and media open in the internal file viewer; signal uses the available display input app.",
+        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents and media open in the internal file viewer; signal opens the embedded display-input viewer and reports actual hardware input availability.",
         (args) =>
           open(
             args.kind,
@@ -391,7 +420,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       stops.push(
         classroomCommands.register(
           "signal.action",
-          "Inspect or control the embedded display input: args.action=read|select|reload|reset|close (default read). Read lists real input IDs, connection states and video state. Select requires an exact id from read. Open first with insert.open kind=signal. External OEM signal apps cannot be controlled by this command; an unopened input rejects select/reload/reset.",
+          "Inspect or control the embedded display input: args.action=read|select|reload|reset|close (default read). Read lists real input IDs, connection states and video state. Select requires an exact id from read. Open first with insert.open kind=signal. An unopened input rejects select/reload/reset.",
           async (args) => {
             const action = args.action ?? "read";
             if (
@@ -461,7 +490,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
             }
             title={
               kind === "signal" && !available.includes("signal")
-                ? t("fcboard.no_signal_app_is_available_on_this_display")
+                ? "当前环境未开放Android信号输入接口"
                 : t(`fcboard.${names[kind]}`)
             }
             onClick={() =>
@@ -485,6 +514,8 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       />
       {form && (
         <MaterialPanel
+          centered
+          onDismiss={() => setForm(null)}
           ref={panel}
           className={`fc-insertion-properties fc-surface${
             form === "table" && selected?.id !== draft.id
@@ -493,7 +524,6 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
           }`}
           role="dialog"
           aria-label={t(`fcboard.${names[form]}`)}
-          style={style}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {

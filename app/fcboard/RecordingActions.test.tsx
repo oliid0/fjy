@@ -22,6 +22,7 @@ afterEach(() => vi.restoreAllMocks());
 it("saves and shares one complete package, then revokes its QR session on dismissal", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   const session = {
+    saveDevice: vi.fn(),
     save: vi.fn().mockResolvedValue({ saved: true }),
     share: vi
       .fn()
@@ -82,6 +83,7 @@ it("closes a late package when its recording panel is removed during preparation
       }),
   );
   const session = {
+    saveDevice: vi.fn(),
     save: vi.fn(),
     share: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),

@@ -1,0 +1,74 @@
+.fc-classroom {
+  .fc-split-board {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    background: #fff;
+  }
+  .fc-split-panes {
+    display: grid;
+    height: 100%;
+  }
+  .fc-split-pane {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    border-right: 1.5px dashed #000;
+  }
+  .fc-split-pane:last-child {
+    border-right: 0;
+  }
+  .fc-split-pane .layer-ui__wrapper {
+    display: none;
+  }
+  .fc-split-pane > .fcboard {
+    height: calc(100% - 68px);
+  }
+  .fc-split-toolbar {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    height: 68px;
+    background: #f6f6f6;
+  }
+  .fc-split-toolbar button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    min-height: 42px;
+    padding: 4px;
+    font-size: 12px;
+  }
+  .fc-split-toolbar button[aria-pressed="true"] {
+    background: #dce9f9;
+    border-radius: 8px;
+  }
+  .fc-split-toolbar svg {
+    width: 26px;
+    height: 26px;
+  }
+  .fc-split-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+  .fc-split-settings {
+    padding: 20px;
+    width: 380px;
+  }
+  .fc-split-settings div {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .fc-split-settings button {
+    margin-right: 8px;
+  }
+  .fc-split-settings button[aria-pressed="true"] {
+    outline: 2px solid #2879eb;
+  }
+}

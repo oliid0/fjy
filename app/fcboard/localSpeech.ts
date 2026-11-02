@@ -88,7 +88,7 @@ export const startPCMSpeech = async (
     );
   }
   // Resume in the initiating click, before model loading can consume activation.
-  const context = new AudioContext(cloud ? { sampleRate: 16000 } : undefined);
+  const context = new AudioContext();
   const resumed = context.resume();
   void resumed.catch(() => {});
   let session: string;
@@ -166,7 +166,10 @@ export const startPCMSpeech = async (
       `${import.meta.env.BASE_URL}fc-pcm-worklet.js`,
     );
     node = new AudioWorkletNode(context, "fcboard-pcm", {
-      processorOptions: { blockDuration: cloud ? 0.1 : 0.5 },
+      processorOptions: {
+        blockDuration: cloud ? 0.1 : 0.5,
+        targetSampleRate: cloud ? 16000 : context.sampleRate,
+      },
     });
     source = context.createMediaStreamSource(media);
     node.port.onmessage = ({

@@ -44,62 +44,38 @@ vi.mock("@fcboard/fcboard", async (original) => ({
   ),
 }));
 
-it("uses the same native tool command for touch and AI, reports failure and restores the control", async () => {
+it("uses internal tools even when vendor APKs are installed", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.getFactoryTools).mockResolvedValue({
-    available: ["calculator", "split"],
+    available: ["calculator", "split", "vote", "timer", "spotlight"],
   });
-  let rejectOpen: (reason: Error) => void;
-  vi.mocked(Classroom.openFactoryTool)
-    .mockReturnValueOnce(
-      new Promise((_, reject) => {
-        rejectOpen = reject;
-      }),
-    )
-    .mockResolvedValue(undefined);
-  render(<TeachingTools api={emptyApi()} />);
-  await waitFor(() =>
-    expect(classroomCommands.has("tools.factory")).toBe(true),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-  );
-  const calculator = screen.getByRole("button", {
-    name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
-  });
-  expect(
-    screen.queryByRole("button", {
-      name: t("fcboard.open_name", { name: t("fcboard.signal") }),
-    }),
-  ).not.toBeInTheDocument();
-  fireEvent.click(calculator);
-  expect(calculator).toBeDisabled();
-  await act(async () => rejectOpen(new Error("系统拒绝启动")));
-  await waitFor(() =>
-    expect(screen.getByRole("alert")).toHaveTextContent("系统拒绝启动"),
-  );
-  expect(calculator).toBeEnabled();
-  await act(async () => {
-    await classroomCommands.execute({
-      name: "tools.factory",
-      args: { tool: "calculator" },
-    });
-  });
-  expect(Classroom.openFactoryTool).toHaveBeenNthCalledWith(1, {
-    tool: "calculator",
-  });
-  expect(Classroom.openFactoryTool).toHaveBeenNthCalledWith(2, {
-    tool: "calculator",
-  });
-  expect(
-    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
-  ).not.toBeInTheDocument();
-  await expect(
-    classroomCommands.execute({
-      name: "tools.factory",
-      args: { tool: "signal" },
-    }),
-  ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
+  const invoke = vi.fn();
+  const release = classroomCommands.register("ui.invoke", "@internal", invoke);
+  const view = render(<TeachingTools api={emptyApi()} />);
+  try {
+    for (const [label, command] of [
+      ["calculator", "tools.calculator"],
+      ["split_screen", "tools.split"],
+      ["vote", "tools.vote"],
+      ["timer", "tools.timer"],
+      ["spotlight", "tools.spotlight"],
+    ] as const) {
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: t(`fcboard.${label}`) }),
+      );
+      await waitFor(() =>
+        expect(invoke).toHaveBeenLastCalledWith({ command, origin: "tools" }),
+      );
+    }
+    expect(classroomCommands.has("tools.factory")).toBe(false);
+    expect(Classroom.openFactoryTool).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    release();
+  }
 });
 
 it.each(["ltr", "rtl"])(
@@ -206,14 +182,13 @@ it("does not advertise unavailable device actions to the AI", async () => {
   expect(classroomCommands.has("tools.factory")).toBe(false);
   expect(
     screen.getByRole("button", {
-      name: t("fcboard.open_name", { name: t("fcboard.timer") }),
+      name: t("fcboard.timer"),
     }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   expect(
-    screen.queryByRole("button", {
-      name: t("fcboard.insert_name", { name: t("fcboard.timer") }),
-    }),
-  ).toBeNull();
+    screen.getByRole("button", { name: t("fcboard.calculator") }),
+  ).toBeEnabled();
+  expect(screen.getByRole("button", { name: t("fcboard.vote") })).toBeEnabled();
 });
 
 it("uses one internal transfer entry even when a factory transfer application is available", async () => {
@@ -253,7 +228,7 @@ it.each([
   ["ai_summary", "canvas.summary"],
   ["recording", "record.open"],
   ["file_transfer", "files.open"],
-  ["ai_questions", "assistant.open"],
+  ["ai_questions", "quiz.open"],
 ] as const)(
   "runs %s from the toolbox through the existing UI command route",
   async (label, command) => {
@@ -275,15 +250,17 @@ it.each([
         );
       }
       if (label === "ai_questions") {
-        expect(
-          screen.getAllByRole("button", { name: t("fcboard.ai_questions") }),
-        ).toHaveLength(1);
+        expect(screen.getAllByRole("button", { name: "AI出题" })).toHaveLength(
+          1,
+        );
         expect(
           screen.queryByRole("button", { name: t("fcboard.capture") }),
         ).toBeNull();
       }
       fireEvent.click(
-        screen.getByRole("button", { name: t(`fcboard.${label}`) }),
+        screen.getByRole("button", {
+          name: label === "ai_questions" ? "AI出题" : t(`fcboard.${label}`),
+        }),
       );
       await waitFor(() =>
         expect(invoke).toHaveBeenCalledWith({ command, origin: "tools" }),

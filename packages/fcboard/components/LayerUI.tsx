@@ -603,7 +603,19 @@ const LayerUI = ({
           }`}
           role="dialog"
           aria-label={t("fcboard.pen_and_object_properties")}
-          style={propertiesAnchor}
+          style={
+            appState.activeTool.type === "custom" &&
+            appState.activeTool.customType?.startsWith("factory-shape:")
+              ? {
+                  left: "50%",
+                  top: "50%",
+                  bottom: "auto",
+                  transform: "translate(-50%, -50%)",
+                  maxHeight: "calc(100% - 32px)",
+                  maxWidth: "calc(100% - 32px)",
+                }
+              : propertiesAnchor
+          }
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.stopPropagation();

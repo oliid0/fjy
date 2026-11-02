@@ -23,7 +23,7 @@ import {
   supportsHandwriting,
 } from "./handwriting";
 import { findContentPosition, findVisibleContentPosition } from "./placement";
-import { layoutBoardText } from "./textLayout";
+import { answerFontSize, layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
 
 import type { TextPlacement } from "./textLayout";
@@ -330,7 +330,14 @@ export const insertText = (
             : Infinity,
         ) / (inkOutput ? 1.25 : 1)
       : (state.currentItemFontSize || 24) / state.zoom.value;
-  const size = sourceSize * (inkSource ? 0.9 : 1);
+  const size =
+    placement.fontSize ??
+    answerFontSize(
+      sourceSize * (inkSource ? 0.9 : 1),
+      state.zoom.value,
+      viewport,
+      placement.mode,
+    );
   const fontFamily =
     presentation === "handwritten"
       ? FONT_FAMILY.Excalifont

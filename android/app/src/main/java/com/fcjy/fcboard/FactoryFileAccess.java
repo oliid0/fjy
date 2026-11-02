@@ -11,18 +11,18 @@ import java.util.*;
 /** FileBrowserPopu / HDataSet: real public Whiteboard/xml and removable volumes. */
 final class FactoryFileAccess {
     enum Kind {
-        BOARD("xml","bzd",R.string.factory_fb_file_bzd), IMAGE("image","jpg",R.string.factory_fb_file_jpg), PDF("pdf","pdf",R.string.factory_fb_file_pdf);
+        BOARD("xml","bzd",R.string.factory_fb_file_bzd), IMAGE("image","jpg",R.string.factory_fb_file_jpg), PDF("pdf","pdf",R.string.factory_fb_file_pdf), CONTENT("content","",R.string.factory_fb_file_content);
         final String folder,extension;final int label;
         Kind(String folder,String extension,int label){this.folder=folder;this.extension=extension;this.label=label;}
         static Kind read(String value) throws IOException {
-            if("bzd".equals(value))return BOARD;if("jpg".equals(value) || "image".equals(value))return IMAGE;if("pdf".equals(value))return PDF;
+            if("bzd".equals(value))return BOARD;if("jpg".equals(value) || "image".equals(value))return IMAGE;if("pdf".equals(value))return PDF;if("content".equals(value))return CONTENT;
             throw new IOException("Unsupported whiteboard file type");
         }
     }
     static final long MAX_BYTES = 64L * 1024 * 1024;
     static File primary() { return Environment.getExternalStorageDirectory(); }
     static File initial() { return initial(Kind.BOARD); }
-    static File initial(Kind kind) { return new File(primary(), "Whiteboard/"+kind.folder); }
+    static File initial(Kind kind) { return kind == Kind.CONTENT ? Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) : new File(primary(), "Whiteboard/"+kind.folder); }
     static List<File> removable(Context context) {
         List<File> roots = new ArrayList<>();
         if (Build.VERSION.SDK_INT >= 30) {
@@ -64,6 +64,7 @@ final class FactoryFileAccess {
     static boolean accepts(File file,Kind kind){
         if(kind==Kind.BOARD)return boardFile(file);
         String name=file.getName().toLowerCase(Locale.ROOT);
+        if(kind==Kind.CONTENT)return true; // The manager must also rename/copy files the classroom viewer cannot render.
         return kind==Kind.PDF?name.endsWith(".pdf"):name.matches(".*\\.(jpg|jpeg|bmp|png|webp|gif)$");
     }
     static List<File> list(File root, File directory) throws IOException {

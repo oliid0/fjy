@@ -8,9 +8,20 @@ import type { FcboardElement } from "@fcboard/element/types";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { AIStream, postAI, readAIResult } from "./aiTransport";
-import { currentSettings, validateEndpoint } from "./settings";
+import {
+  AIStream,
+  AIProviderError,
+  postAI,
+  readAIResult,
+  readAICompletion,
+  readAISearchEvidence,
+} from "./aiTransport";
+
+import { currentSettings, defaults, validateEndpoint } from "./settings";
 import { handwritingText } from "./handwriting";
+
+import type { AISearchEvidence } from "./aiTransport";
+import type { AICompletion } from "./aiTransport";
 
 import type { Settings } from "./settings";
 
@@ -21,13 +32,22 @@ type Content =
       | { type: "image_url"; image_url: { url: string } }
     )[];
 export type Message = {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: Content;
+  tool_call_id?: string;
+  providerMessage?: Record<string, unknown>;
+  responseOutput?: Record<string, unknown>[];
+};
+export type AIFunctionTool = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
 };
 
 // A short, stable system prefix allows provider-side KV reuse without reusing
 // answers or mixing a previous selection into the current request.
 const cacheRoutes = new Map<string, string>();
+const ordinaryRoutes = new Map<string, number>();
 const cacheRoute = (url: string, settings: Settings, messages: Message[]) => {
   const scope = JSON.stringify([
     url,
@@ -54,8 +74,24 @@ export const chat = async (
     maxTokens?: number;
     onDelta?: (text: string) => void;
     timeoutMs?: number;
+    webSearch?: boolean;
+    onSearch?: (evidence: AISearchEvidence) => void;
+    functionTools?: AIFunctionTool[];
+    onCompletion?: (completion: AICompletion) => void;
   } = {},
 ): Promise<string> => {
+  const vision = messages.some(
+    (message) =>
+      Array.isArray(message.content) &&
+      message.content.some((part) => part.type === "image_url"),
+  );
+  settings = {
+    ...settings,
+    model: (vision
+      ? settings.ocrModel.trim() || settings.model
+      : settings.model
+    ).trim(),
+  };
   if (!settings.apiKey || !settings.model.trim()) {
     throw new Error(
       t(
@@ -64,34 +100,79 @@ export const chat = async (
     );
   }
   const url = validateEndpoint(settings.endpoint);
+  if (options.webSearch && options.functionTools?.length) {
+    throw new Error("联网搜索和白板工具应分成独立请求");
+  }
   const responses = new URL(url).pathname.endsWith("/responses");
   const ark = new URL(url).hostname === "ark.cn-beijing.volces.com";
+  // Fast inference is configured only for the built-in text model. Vision and
+  // user-selected models use the provider's standard request defaults.
+  const fast =
+    ark && !vision && !options.webSearch && settings.model === defaults.model;
+  const route = JSON.stringify([url, settings.model, settings.apiKey]);
+  const requestFast = fast && (ordinaryRoutes.get(route) || 0) <= Date.now();
   const streaming =
-    !Capacitor.isNativePlatform() ||
-    Capacitor.isPluginAvailable("FcboardClassroom");
+    !options.webSearch &&
+    (!Capacitor.isNativePlatform() ||
+      Capacitor.isPluginAvailable("FcboardClassroom"));
   const body = {
     model: settings.model.trim(),
     ...(responses
       ? {
-          input: messages.map((message) => ({
-            role: message.role,
-            content:
-              typeof message.content === "string"
-                ? message.content
-                : message.content.map((part) =>
-                    part.type === "text"
-                      ? { type: "input_text", text: part.text }
-                      : { type: "input_image", image_url: part.image_url.url },
-                  ),
-          })),
+          input: messages.flatMap(
+            (message): Record<string, unknown>[] =>
+              message.responseOutput ||
+              (message.role === "tool"
+                ? [
+                    {
+                      type: "function_call_output",
+                      call_id: message.tool_call_id,
+                      output: message.content,
+                    },
+                  ]
+                : [
+                    {
+                      role: message.role,
+                      content:
+                        typeof message.content === "string"
+                          ? message.content
+                          : message.content.map((part) =>
+                              part.type === "text"
+                                ? { type: "input_text", text: part.text }
+                                : {
+                                    type: "input_image",
+                                    image_url: part.image_url.url,
+                                  },
+                            ),
+                    },
+                  ]),
+          ),
         }
-      : { messages }),
+      : {
+          messages: messages.map(
+            ({ providerMessage, responseOutput: _output, ...message }) =>
+              providerMessage || message,
+          ),
+        }),
     stream: streaming,
-    temperature: 0.2,
+    ...(options.webSearch
+      ? responses
+        ? { tools: [{ type: "web_search" }] }
+        : { web_search_options: {} }
+      : {}),
+    ...(options.functionTools?.length
+      ? {
+          tools: options.functionTools.map((tool) =>
+            responses
+              ? { type: "function", ...tool }
+              : { type: "function", function: tool },
+          ),
+        }
+      : {}),
     ...(options.maxTokens
       ? { [responses ? "max_output_tokens" : "max_tokens"]: options.maxTokens }
       : {}),
-    ...(ark
+    ...(requestFast
       ? {
           ...(responses
             ? { reasoning: { effort: "minimal" } }
@@ -126,21 +207,64 @@ export const chat = async (
       controller.signal.addEventListener("abort", abort, { once: true });
       unsubscribe = () => controller.signal.removeEventListener("abort", abort);
     });
-    const request = async () => {
+    const ordinaryBody: Record<string, unknown> = { ...body };
+    delete ordinaryBody.service_tier;
+    delete ordinaryBody.thinking;
+    delete ordinaryBody.reasoning;
+    delete ordinaryBody.prompt_cache_key;
+    const rememberOrdinary = (status: number) => {
+      if (ordinaryRoutes.size >= 16) {
+        ordinaryRoutes.delete(ordinaryRoutes.keys().next().value!);
+      }
+      // Capability/permission failures persist for this session window; temporary
+      // capacity failures have a short cooldown so a busy agent cannot retry fast on every turn.
+      ordinaryRoutes.set(
+        route,
+        Date.now() +
+          ([429, 500, 502, 503, 504].includes(status) ? 30000 : 600000),
+      );
+    };
+    const request = async (
+      payload: Record<string, unknown> = body,
+      usingFast = requestFast,
+    ): Promise<string> => {
+      let emitted = false;
       const output = new AIStream(responses, (delta) => {
         if (!controller.signal.aborted) {
+          emitted = true;
           options.onDelta?.(delta);
         }
       });
-      const response = await postAI(
-        url,
-        settings.apiKey,
-        body,
-        controller.signal,
-        (chunk) => output.push(chunk),
-      );
+      const canFallback = (failure: unknown) =>
+        usingFast &&
+        !emitted &&
+        failure instanceof AIProviderError &&
+        !/auth|api.?key|unauthorized|invalidkey/i.test(
+          `${failure.code} ${failure.message}`,
+        );
+      let response;
+      try {
+        response = await postAI(
+          url,
+          settings.apiKey,
+          payload,
+          controller.signal,
+          (chunk) => output.push(chunk),
+        );
+      } catch (failure) {
+        controller.signal.throwIfAborted();
+        if (canFallback(failure)) {
+          rememberOrdinary(400);
+          return request(ordinaryBody, false);
+        }
+        throw failure;
+      }
       controller.signal.throwIfAborted();
       if (response.status < 200 || response.status >= 300) {
+        if (usingFast && response.status >= 400 && response.status !== 401) {
+          rememberOrdinary(response.status);
+          return request(ordinaryBody, false);
+        }
         let detail = t("fcboard.check_the_endpoint_model_and_api_key");
         try {
           detail = JSON.parse(response.data).error?.message || detail;
@@ -154,9 +278,34 @@ export const chat = async (
           }),
         );
       }
-      return response.stream
-        ? output.finish()
-        : readAIResult(response.data, responses);
+      if (options.webSearch) {
+        const evidence = readAISearchEvidence(response.data);
+        if (!evidence.count || !evidence.sources.length) {
+          throw new Error(
+            "当前模型未返回实际联网搜索及引用来源，请选择支持联网搜索的模型后重试",
+          );
+        }
+        options.onSearch?.(evidence);
+      }
+      try {
+        if (options.functionTools?.length) {
+          const completion = response.stream
+            ? output.finishCompletion()
+            : readAICompletion(response.data, responses);
+          options.onCompletion?.(completion);
+          return completion.text;
+        }
+        return response.stream
+          ? output.finish()
+          : readAIResult(response.data, responses);
+      } catch (failure) {
+        controller.signal.throwIfAborted();
+        if (canFallback(failure)) {
+          rememberOrdinary(400);
+          return request(ordinaryBody, false);
+        }
+        throw failure;
+      }
     };
     return await Promise.race([request(), cancelled]);
   } finally {

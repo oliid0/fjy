@@ -33,7 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Real TIF passthrough inputs; proprietary source apps remain an explicit external fallback. */
+/** Embedded TIF passthrough inputs; the player does not require an external TV APK. */
 final class SignalResourceDialog extends Dialog {
     private final Context text;
     private final TvInputManager manager;

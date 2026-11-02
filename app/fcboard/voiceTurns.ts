@@ -7,6 +7,10 @@ export const createVoiceTurns = (
     interrupt?: boolean;
     immediate?: (text: string) => boolean;
     onInterruption?: () => void;
+    onState?: (
+      text: string,
+      state: "queued" | "running" | "completed" | "failed",
+    ) => void;
   } = {},
 ) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -33,14 +37,20 @@ export const createVoiceTurns = (
     }
     const request = new AbortController();
     requests.add(request);
+    options.onState?.(text, "queued");
     queued = queued
       .then(async () => {
         if (!request.signal.aborted) {
+          options.onState?.(text, "running");
           await execute(text, request.signal);
+          if (!request.signal.aborted) {
+            options.onState?.(text, "completed");
+          }
         }
       })
       .catch((failure) => {
         if (!request.signal.aborted) {
+          options.onState?.(text, "failed");
           onError(failure);
         }
       })

@@ -206,7 +206,9 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
               : classroomCommands.interactionSource;
           source?.throwIfAborted();
           let xml: string;
-          if (typeof args.code === "string") {
+          if (args.file instanceof File) {
+            xml = await args.file.text();
+          } else if (typeof args.code === "string") {
             xml = await readCloudBzd(
               typeof args.endpoint === "string"
                 ? args.endpoint

@@ -17,7 +17,6 @@ import {
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 import { finishFactoryInk } from "@fcboard/element/factoryInk";
 import factoryEraser from "@fcboard/fcboard/components/FactoryEraser.png?url";
-import { pointFrom } from "@fcboard/math";
 import {
   circleRegion,
   hasRegionArea,
@@ -51,6 +50,8 @@ import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
+import { recognizedShapeGeometry } from "./shapeRecognition";
+
 import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands, commandObjectIds } from "./commands";
@@ -79,7 +80,7 @@ import {
 
 import { rememberPage } from "./materials";
 import { currentSettings } from "./settings";
-import { layoutBoardText } from "./textLayout";
+import { answerFontSize, layoutBoardText } from "./textLayout";
 import { prepareQuestionWriting } from "./questionWriting";
 import { MaterialPanel } from "./MaterialPanel";
 import { documentStrokeGeometry } from "./documentInk";
@@ -1274,6 +1275,7 @@ export const FilePreview = ({
           scroll,
         );
         const measuredSize =
+          existing?.fontSize ||
           source?.fontSize ||
           (bounds && selected.some((stroke) => !stroke.text && !stroke.image)
             ? (bounds.bottom - bounds.top) /
@@ -1285,7 +1287,22 @@ export const FilePreview = ({
             : pen.current.fontSize / scale);
         const layout = layoutBoardText(
           args.text,
-          measuredSize * (source && !source.text && !source.image ? 0.9 : 1),
+          (typeof args.fontSize === "number" ? args.fontSize : undefined) ??
+            answerFontSize(
+              measuredSize *
+                (source && !source.text && !source.image ? 0.9 : 1),
+              scale,
+              viewport,
+              existing
+                ? "replace"
+                : (args.placement as
+                    | "inline"
+                    | "below"
+                    | "column"
+                    | "replace"
+                    | "center"
+                    | undefined),
+            ),
           fontFamily,
           viewport,
           strokes
@@ -2136,9 +2153,42 @@ export const FilePreview = ({
                   );
                 }
               : undefined,
+            currentInk
+              .filter(
+                (stroke) =>
+                  stroke.lesson === "recognized" ||
+                  stroke.widget?.kind === "shape",
+              )
+              .map((stroke) => ({ id: stroke.id, points: stroke.points })),
           );
           await settleInkRecognition(assistMode, since, request.signal);
           if (!current()) {
+            return;
+          }
+          if (result.kind === "angles") {
+            const labels = result.labels.map((label) =>
+              shapeInk(
+                {
+                  type: "text",
+                  id: crypto.randomUUID(),
+                  x: label.x,
+                  y: label.y,
+                  text: label.text,
+                  fontSize:
+                    18 /
+                    ((stage.current?.getBoundingClientRect().width || 1000) /
+                      1000),
+                  fontFamily: 2,
+                  strokeColor: source[0].color,
+                },
+                "recognized-angle",
+              ),
+            );
+            sourceIds.forEach((id) => recognized.current.add(id));
+            commitInk({
+              ...inkRef.current,
+              [page]: [...(inkRef.current[page] || []), ...labels],
+            });
             return;
           }
           if (target && result.kind === "text") {
@@ -2251,34 +2301,10 @@ export const FilePreview = ({
               sourcePage: page + 1,
             });
           } else {
-            const width = Math.max(1, right - left);
-            const height = Math.max(1, bottom - top);
-            const first = source[0].points[0];
-            const last = source.at(-1)!.points.at(-1)!;
-            const shape: FcboardElementSkeleton =
-              result.shape === "triangle"
-                ? {
-                    type: "line",
-                    x: left + width / 2,
-                    y: top,
-                    points: [
-                      pointFrom(0, 0),
-                      pointFrom(width / 2, height),
-                      pointFrom(-width / 2, height),
-                      pointFrom(0, 0),
-                    ],
-                  }
-                : result.shape === "line" || result.shape === "arrow"
-                ? {
-                    type: result.shape,
-                    x: first[0],
-                    y: first[1],
-                    points: [
-                      pointFrom(0, 0),
-                      pointFrom(last[0] - first[0], last[1] - first[1]),
-                    ],
-                  }
-                : { type: result.shape, x: left, y: top, width, height };
+            const shape = recognizedShapeGeometry(
+              result.shape,
+              source.map((stroke) => stroke.points),
+            );
             const stroke = shapeInk(
               {
                 ...shape,
@@ -2315,6 +2341,8 @@ export const FilePreview = ({
         ? 350
         : assistMode === "magic"
         ? 1600
+        : assistMode === "shape"
+        ? 250
         : 700,
     );
     return () => {

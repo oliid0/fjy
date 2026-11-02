@@ -19,6 +19,7 @@ export const RecordingWidget = ({
   pauseDisabled,
   hidden = false,
   caption,
+  transcript = [],
   onPause,
   onStop,
   onRestore,
@@ -29,6 +30,7 @@ export const RecordingWidget = ({
   pauseDisabled: boolean;
   hidden?: boolean;
   caption?: TranscriptLine;
+  transcript?: readonly TranscriptLine[];
   onPause: () => void;
   onStop: () => void;
   onRestore: () => void;
@@ -38,6 +40,7 @@ export const RecordingWidget = ({
     y: Math.max(8, innerHeight - 150),
   });
   const panel = useRef<HTMLDivElement>(null);
+  const captions = useRef<HTMLDivElement>(null);
   const size = useRef({ width: 280, height: 52 });
   const gesture = useRef<
     { id: number; x: number; y: number; before: typeof position } | undefined
@@ -70,14 +73,26 @@ export const RecordingWidget = ({
       window.removeEventListener("blur", cancel);
     };
   }, [bounded, hidden, caption?.text]);
+  useEffect(() => {
+    if (captions.current) {
+      captions.current.scrollTop = captions.current.scrollHeight;
+    }
+  }, [caption?.text, transcript.length]);
   const label = t(
     paused ? "fcboard.recording_resume" : "fcboard.recording_pause",
   );
+  const lines = transcript.slice(-3);
+  if (
+    caption &&
+    (lines.at(-1)?.text !== caption.text || lines.at(-1)?.time !== caption.time)
+  ) {
+    lines.push(caption);
+  }
   return (
     <Paper
       ref={panel}
       className="fc-recording-widget"
-      data-caption={!!caption || undefined}
+      data-caption={!!lines.length || undefined}
       elevation={5}
       role="toolbar"
       aria-label={t("fcboard.recording")}
@@ -203,9 +218,13 @@ export const RecordingWidget = ({
           </svg>
         </IconButton>
       </Tooltip>
-      {caption && (
-        <div className="fc-recording-caption" role="log">
-          <time>{timestamp(caption.time)}</time> {caption.text}
+      {!!lines.length && (
+        <div ref={captions} className="fc-recording-caption" role="log">
+          {lines.map((line, index) => (
+            <div key={index}>
+              <time>{timestamp(line.time)}</time> {line.text}
+            </div>
+          ))}
         </div>
       )}
     </Paper>

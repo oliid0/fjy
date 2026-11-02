@@ -6,7 +6,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import fi.iki.elonen.NanoHTTPD;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,10 +18,13 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class GeneratedResourceTest {
     private String title;
+    private android.webkit.WebView web;
     private String evaluate(ActivityScenario<MainActivity> scenario, String script) throws Exception {
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<String> value = new AtomicReference<>();
-        scenario.onActivity(activity -> activity.getBridge().getWebView().evaluateJavascript(script, result -> {
+        // Animated WebViews need not become idle. Post a bounded UI task rather
+        // than ActivityScenario.onActivity's unbounded waitForIdleSync.
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> web.evaluateJavascript(script, result -> {
             value.set(result); done.countDown();
         }));
         assertTrue("WebView evaluation must complete", done.await(5, TimeUnit.SECONDS));
@@ -46,6 +48,16 @@ public class GeneratedResourceTest {
         return reply.getJSONObject("state");
     }
 
+    private void storedLesson(ActivityScenario<MainActivity> scenario, boolean present) throws Exception {
+        for (int attempt=0;attempt<60;attempt++) {
+            evaluate(scenario,"window.__fcStoredLesson=null;(()=>{const r=indexedDB.open('fcboard-boards');r.onerror=()=>window.__fcStoredLesson='error';r.onsuccess=()=>{const db=r.result;const q=db.transaction('workspace').objectStore('workspace').get('workspace');q.onsuccess=()=>{const v=q.result;const b=v?.boards.find(b=>b.id===v.active);window.__fcStoredLesson=!!b?.elements.some(e=>!e.isDeleted&&e.customData?.fcInteractiveResource?.title==="+JSONObject.quote(title)+");db.close()};q.onerror=()=>{window.__fcStoredLesson='error';db.close()}}})();true");
+            until(scenario,"window.__fcStoredLesson!==null");
+            if (Boolean.toString(present).equals(evaluate(scenario,"window.__fcStoredLesson"))) return;
+            Thread.sleep(100);
+        }
+        fail("The actual stored board must " + (present?"contain":"remove") + " the generated lesson");
+    }
+
     @Test public void generatedStreamedHtmlRunsAndItsControlsChangeTheActualExperiment() throws Exception { generate(false); }
     @Test public void generatedCssAnimationPlaysWithoutAuthoredJavaScript() throws Exception { generate(true); }
 
@@ -63,8 +75,13 @@ public class GeneratedResourceTest {
         NanoHTTPD server = new NanoHTTPD("127.0.0.1", 0) {
             @Override public Response serve(IHTTPSession session) {
                 try {
-                    HashMap<String, String> body = new HashMap<>();
-                    session.parseBody(body); sent.set(new JSONObject(body.get("postData")));
+                    // JSON bytes are UTF-8. NanoHTTPD.parseBody defaults to ASCII
+                    // when a valid application/json header omits charset.
+                    int length = Integer.parseInt(session.getHeaders().getOrDefault("content-length", "0"));
+                    if (length < 1 || length > 500000) throw new java.io.IOException("Invalid fixture request size");
+                    byte[] body = new byte[length];
+                    new java.io.DataInputStream(session.getInputStream()).readFully(body);
+                    sent.set(new JSONObject(new String(body, StandardCharsets.UTF_8)));
                     return newChunkedResponse(Response.Status.OK, "text/event-stream; charset=utf-8", new ByteArrayInputStream(frames.getBytes(StandardCharsets.UTF_8)));
                 } catch (Exception error) {
                     serverError.set(error);
@@ -74,6 +91,7 @@ public class GeneratedResourceTest {
         };
         server.start();
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            scenario.onActivity(activity -> web = activity.getBridge().getWebView());
             try {
                 until(scenario, "!!document.querySelector('.fc-unified-toolbar')");
                 JSONObject settings = new JSONObject().put("endpoint", "http://127.0.0.1:" + server.getListeningPort() + "/chat")
@@ -107,9 +125,13 @@ public class GeneratedResourceTest {
                     JSONObject changed = requestFrame(scenario, new JSONObject().put("type", "set").put("version", state.getString("version")).put("control", control).put("value", 10));
                     assertEquals("5 m/s²", changed.getJSONArray("outputs").getString(0));
                 }
+                storedLesson(scenario,true);
                 evaluate(scenario, "window.__fcBeforeReload=true;location.reload();true");
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('iframe[title=\"" + title + "\"]')");
             } finally {
+                evaluate(scenario, "Array.from(document.querySelectorAll('.fc-resource-window')).filter(w=>w.querySelector('iframe')?.title.startsWith('Native ')).forEach(w=>w.querySelector('footer button:last-child')?.click());true");
+                until(scenario, "!Array.from(document.querySelectorAll('.fc-resource-window iframe')).some(f=>f.title.startsWith('Native '))");
+                storedLesson(scenario,false);
                 evaluate(scenario, "localStorage.removeItem('fcboard-settings');sessionStorage.removeItem('fcboard-keys');true");
             }
         } finally { server.stop(); }

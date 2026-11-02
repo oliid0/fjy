@@ -23,6 +23,8 @@ export const Spotlight = () => {
     ),
   });
   const [maskColor, setMaskColor] = useState("#000000");
+  const [shape, setShape] = useState("circle");
+  const [opacity, setOpacity] = useState(0);
   const dragging = useRef<{ id: number; resize: boolean } | undefined>(
     undefined,
   );
@@ -84,6 +86,27 @@ export const Spotlight = () => {
   if (!state.open) {
     return null;
   }
+  const { x, y, radius } = state;
+  const hole =
+    shape === "circle"
+      ? `M${x - radius},${y}a${radius},${radius} 0 1,0 ${
+          radius * 2
+        },0a${radius},${radius} 0 1,0 ${-radius * 2},0Z`
+      : shape === "square"
+      ? `M${x - radius},${y - radius}h${radius * 2}v${radius * 2}h${
+          -radius * 2
+        }Z`
+      : shape === "triangle"
+      ? `M${x},${y - radius}L${x + radius},${y + radius}L${x - radius},${
+          y + radius
+        }Z`
+      : `${Array.from({ length: 10 }, (_, index) => {
+          const angle = -Math.PI / 2 + (index * Math.PI) / 5;
+          const length = radius * (index % 2 ? 0.382 : 1);
+          return `${index ? "L" : "M"}${x + Math.cos(angle) * length},${
+            y + Math.sin(angle) * length
+          }`;
+        }).join("")}Z`;
   return (
     <div
       className="fc-spotlight"
@@ -95,7 +118,6 @@ export const Spotlight = () => {
         zIndex: 90,
         pointerEvents: "auto",
         touchAction: "none",
-        background: `radial-gradient(circle ${state.radius}px at ${state.x}px ${state.y}px, transparent 99.5%, ${maskColor}c7 100%)`,
       }}
       onPointerDown={(event) => {
         if (event.target !== event.currentTarget) {
@@ -147,6 +169,27 @@ export const Spotlight = () => {
         dragging.current = undefined;
       }}
     >
+      <svg
+        className="fc-spotlight-mask"
+        width="100%"
+        height="100%"
+        aria-hidden="true"
+      >
+        <path
+          d={`M0,0H${window.innerWidth}V${window.innerHeight}H0Z${hole}`}
+          fill={maskColor}
+          fillOpacity={0.78}
+          fillRule="evenodd"
+        />
+        <path
+          d={hole}
+          fill={maskColor}
+          fillOpacity={opacity / 100}
+          stroke="#fff"
+          strokeWidth={2}
+          data-spotlight-shape={shape}
+        />
+      </svg>
       <div
         className="fc-spotlight-ring"
         style={{
@@ -161,11 +204,32 @@ export const Spotlight = () => {
         style={{
           left: Math.max(
             12,
-            Math.min(window.innerWidth - 60, state.x + state.radius + 16),
+            Math.min(window.innerWidth - 148, state.x + state.radius + 16),
           ),
-          top: Math.max(12, Math.min(window.innerHeight - 132, state.y)),
+          top: Math.max(12, Math.min(window.innerHeight - 240, state.y)),
         }}
       >
+        <select
+          aria-label="聚光灯形状"
+          value={shape}
+          onChange={(event) => setShape(event.target.value)}
+        >
+          <option value="circle">圆形</option>
+          <option value="square">方形</option>
+          <option value="triangle">三角形</option>
+          <option value="star">五角星</option>
+        </select>
+        <label className="fc-spotlight-opacity">
+          遮光
+          <input
+            aria-label="聚光灯遮光程度"
+            type="range"
+            min={0}
+            max={100}
+            value={opacity}
+            onChange={(event) => setOpacity(Number(event.target.value))}
+          />
+        </label>
         <label className="fc-spotlight-color" title={t("fcboard.colour")}>
           {palette}
           <input

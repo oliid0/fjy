@@ -15,6 +15,10 @@ const engine = registerPlugin<{
   append(options: { id: string; offset: number; data: string }): Promise<void>;
   complete(options: { id: string }): Promise<void>;
   save(options: { id: string }): Promise<{ saved: boolean }>;
+  saveDevice(options: {
+    id: string;
+    name: string;
+  }): Promise<{ files: string[]; location: string }>;
   share(options: { id: string }): Promise<{ urls: string[] }>;
   close(options: { id: string }): Promise<void>;
 }>("FcboardRecordingExport");
@@ -70,12 +74,26 @@ export const prepareRecordingPackage = async (
     signal.throwIfAborted();
     return {
       save: () => engine.save({ id }),
+      saveDevice: () =>
+        engine.saveDevice({ id, name: `Fcboard-${recording.id}` }),
       share: () => engine.share({ id }),
       close: () => engine.close({ id }),
     };
   } catch (error) {
     await engine.close({ id }).catch(() => {});
     throw error;
+  }
+};
+
+export const saveRecordingToDevice = async (recording: Recording) => {
+  const resource = await prepareRecordingPackage(
+    recording,
+    new AbortController().signal,
+  );
+  try {
+    return await resource.saveDevice();
+  } finally {
+    await resource.close();
   }
 };
 

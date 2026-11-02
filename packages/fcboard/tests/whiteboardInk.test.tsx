@@ -433,7 +433,7 @@ describe("APK-style whiteboard ink", () => {
       expect(live()).toHaveLength(0);
     },
   );
-  it("uses every coalesced screen sample to lock single-touch writing at the APK threshold", async () => {
+  it("preserves every coalesced screen sample before transitioning a completed stroke to pinch", async () => {
     const { container } = await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
@@ -459,7 +459,7 @@ describe("APK-style whiteboard ink", () => {
       pointerId: 2,
       pointerType: "touch",
     });
-    expect(h.state.zoom.value).toBe(1);
+    expect(h.state.zoom.value).toBeGreaterThan(1);
     expect(live()).toHaveLength(1);
     pointer(canvas, "pointerup", 500, 100, {
       pointerId: 2,
@@ -895,8 +895,8 @@ describe("APK-style whiteboard ink", () => {
       pointerId: 1,
     });
     expect(live()).toHaveLength(1);
-    expect(live()[0].width).toBe(300);
-    expect(h.state.zoom.value).toBe(zoom);
+    expect(live()[0].width).toBe(50);
+    expect(h.state.zoom.value).toBeGreaterThan(zoom);
   });
   it.each([false, true])(
     "undoes each completed stroke separately with batched lifts: %s",

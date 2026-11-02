@@ -6,13 +6,20 @@ import type { SolidSettings } from "./solids";
 
 /** HShapeObject cases 11/13/14/17/18: factory silhouettes and hidden edges. */
 export const factorySolidOutlines = (
-  kind: "sphere" | "pyramid" | "cone" | "frustum" | "prism" | "hemisphere",
+  kind:
+    | "cube"
+    | "sphere"
+    | "pyramid"
+    | "cone"
+    | "frustum"
+    | "prism"
+    | "hemisphere",
   settings: SolidSettings,
   size: number,
   rotation: number,
 ): FcboardElementSkeleton[] => {
   type Point = [number, number];
-  const paths: { points: Point[]; hidden?: boolean }[] = [];
+  const paths: { points: Point[]; hidden?: boolean; face?: string }[] = [];
   const arc = (
     cx: number,
     cy: number,
@@ -31,7 +38,75 @@ export const factorySolidOutlines = (
       }),
     });
   };
-  if (kind === "sphere") {
+  if (kind === "cube") {
+    // HShapeObject case 12: one front square and two receding visible faces.
+    paths.push(
+      {
+        points: [
+          [0, 60],
+          [120, 60],
+          [120, 180],
+          [0, 180],
+          [0, 60],
+          [60, 0],
+          [180, 0],
+          [180, 120],
+          [120, 180],
+          [120, 60],
+          [180, 0],
+        ],
+      },
+      {
+        points: [
+          [60, 0],
+          [60, 120],
+          [0, 180],
+        ],
+        hidden: true,
+      },
+      {
+        points: [
+          [60, 120],
+          [180, 120],
+        ],
+        hidden: true,
+      },
+    );
+    // Real face hit areas preserve the existing coloring/unfolding controls
+    // while the visible outline remains the APK's three wire paths.
+    paths.push(
+      {
+        face: "front",
+        points: [
+          [0, 60],
+          [120, 60],
+          [120, 180],
+          [0, 180],
+          [0, 60],
+        ],
+      },
+      {
+        face: "top",
+        points: [
+          [0, 60],
+          [120, 60],
+          [180, 0],
+          [60, 0],
+          [0, 60],
+        ],
+      },
+      {
+        face: "right",
+        points: [
+          [120, 60],
+          [180, 0],
+          [180, 120],
+          [120, 180],
+          [120, 60],
+        ],
+      },
+    );
+  } else if (kind === "sphere") {
     arc(90, 90, 90, 90, 0, 2 * Math.PI);
     arc(90, 90, 90, 45, 0, Math.PI);
     arc(90, 90, 90, 45, 0, -Math.PI, true);
@@ -123,7 +198,7 @@ export const factorySolidOutlines = (
     2;
   const angle = (rotation * Math.PI) / 180;
   const scale = size * settings.fit;
-  return paths.map(({ points, hidden }) => {
+  return paths.map(({ points, hidden, face }) => {
     const transformed = points.map(
       ([x, y]): Point => [
         (cx + (x - cx) * Math.cos(angle) - (y - cy) * Math.sin(angle)) * scale,
@@ -136,10 +211,11 @@ export const factorySolidOutlines = (
       x,
       y,
       points: transformed.map(([px, py]) => pointFrom(px - x, py - y)),
-      strokeColor: settings.border ? settings.stroke : "transparent",
+      strokeColor: !face && settings.border ? settings.stroke : "transparent",
       strokeStyle: hidden ? "dashed" : "solid",
-      strokeWidth: 2,
+      strokeWidth: face ? 0 : 2,
       roughness: 0,
+      ...(face ? { customData: { fcSolidFace: face } } : {}),
     };
   });
 };

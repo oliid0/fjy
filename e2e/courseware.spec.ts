@@ -149,8 +149,8 @@ test("new boards preserve previous work and offer the original teaching tools", 
     ).toBeVisible();
   }
   await expect(
-    page.getByRole("button", { name: "打开计时器", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: "计时器", exact: true }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "下一页", exact: true }).click();
   for (const name of ["骰子", "随机抽取", "单摆", "抛体运动"]) {
     await expect(

@@ -31,7 +31,7 @@ import type { Plot } from "./math";
 import type { LanguageInk } from "./languageStudy";
 
 export const DOCUMENT_ACCEPT =
-  ".ppt,.pptx,.pps,.ppsx,.pdf,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.png,.jpg,.jpeg,.webp,.gif";
+  ".ppt,.pptx,.pps,.ppsx,.pdf,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.mkv,.mov,.avi,.mp3,.wav,.m4a,.ogg";
 export type InkStroke = {
   id: string;
   color: string;

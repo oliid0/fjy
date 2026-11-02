@@ -39,7 +39,12 @@ export const recognizeHandwriting = async (
   let raster: Promise<string> | undefined;
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
-  if (settings.ocr !== "cloud" && hasDigitalInk() && strokes?.length) {
+  const localMath = kind === "math";
+  if (
+    (localMath || settings.ocr !== "cloud") &&
+    hasDigitalInk() &&
+    strokes?.length
+  ) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
       const candidates = await recognizeDigitalInk(
@@ -66,13 +71,14 @@ export const recognizeHandwriting = async (
         error &&
         typeof error === "object" &&
         "code" in error &&
-        error.code === "HANDWRITING_MODEL_REQUIRED"
+        error.code === "HANDWRITING_MODEL_REQUIRED" &&
+        !localMath
       ) {
         throw error;
       }
       // Explicit local mode reports the real native failure. Auto can use the
       // separately configured raster/cloud fallback; never call it Digital Ink.
-      if (settings.ocr === "local") {
+      if (settings.ocr === "local" && !localMath) {
         throw error;
       }
     }
@@ -114,15 +120,22 @@ export const recognizeHandwriting = async (
     }
     return text;
   };
-  const text =
-    settings.ocr === "local" || !settings.apiKey
-      ? await local(signal)
-      : (() => {
-          progress(t("fcboard.recognizing_handwriting"));
-          return settings.ocr === "cloud"
-            ? cloud(signal)
-            : preferredRace(cloud, local, signal);
-        })();
+  const text = localMath
+    ? local(signal).catch((failure) => {
+        signal.throwIfAborted();
+        if (!settings.apiKey || settings.ocr === "local") {
+          throw failure;
+        }
+        return cloud(signal);
+      })
+    : settings.ocr === "local" || !settings.apiKey
+    ? await local(signal)
+    : (() => {
+        progress(t("fcboard.recognizing_handwriting"));
+        return settings.ocr === "cloud"
+          ? cloud(signal)
+          : preferredRace(cloud, local, signal);
+      })();
   const value = await text;
   signal.throwIfAborted();
   return chooseCandidate ? chooseCandidate([value]) : value;

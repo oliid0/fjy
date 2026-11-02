@@ -5,7 +5,14 @@ class FcboardPCM extends AudioWorkletProcessor {
     super();
     const duration =
       options?.processorOptions?.blockDuration === 0.1 ? 0.1 : 0.5;
-    this.buffer = new Float32Array(Math.round(sampleRate * duration));
+    this.targetRate =
+      options?.processorOptions?.targetSampleRate === 16000
+        ? 16000
+        : sampleRate;
+    this.phase = 0;
+    this.sum = 0;
+    this.count = 0;
+    this.buffer = new Float32Array(Math.round(this.targetRate * duration));
     this.offset = 0;
     this.port.onmessage = ({ data }) => {
       if (data === "flush") {
@@ -19,7 +26,7 @@ class FcboardPCM extends AudioWorkletProcessor {
       return;
     }
     const pcm = this.buffer.slice(0, this.offset);
-    this.port.postMessage({ pcm, sampleRate }, [pcm.buffer]);
+    this.port.postMessage({ pcm, sampleRate: this.targetRate }, [pcm.buffer]);
     this.offset = 0;
   }
   process(inputs) {
@@ -32,9 +39,20 @@ class FcboardPCM extends AudioWorkletProcessor {
       for (const channel of channels) {
         value += channel[i];
       }
-      this.buffer[this.offset++] = value / channels.length;
-      if (this.offset === this.buffer.length) {
-        this.flush();
+      this.sum += value / channels.length;
+      this.count++;
+      this.phase += this.targetRate;
+      if (this.phase >= sampleRate) {
+        const averaged = this.sum / this.count;
+        while (this.phase >= sampleRate) {
+          this.buffer[this.offset++] = averaged;
+          this.phase -= sampleRate;
+          if (this.offset === this.buffer.length) {
+            this.flush();
+          }
+        }
+        this.sum = 0;
+        this.count = 0;
       }
     }
     return true;

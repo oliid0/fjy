@@ -31,6 +31,65 @@ import java.io.ByteArrayOutputStream;
 @CapacitorPlugin(name = "FcboardClassroom")
 public class ClassroomPlugin extends Plugin {
     private final AIStreamTransport aiTransport = new AIStreamTransport();
+    private ClassroomPollServer poll;
+    private final java.util.concurrent.ExecutorService bundledTools = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private EmbeddedCalculatorDialog calculator;
+    private EmbeddedCalculatorDialog.Runtime calculatorRuntime;
+
+    @PluginMethod public void openBundledCalculator(PluginCall call) {
+        // The supplied, unchanged DEX is version 039 (Android 9+). Older devices
+        // retain the local web calculator instead of attempting an invalid load.
+        if (android.os.Build.VERSION.SDK_INT < 28) { call.resolve(new JSObject().put("open", false).put("supported", false)); return; }
+        getActivity().runOnUiThread(() -> {
+        if (calculator != null && calculator.isShowing()) { call.resolve(calculator.snapshot()); return; }
+        bundledTools.execute(() -> {
+            try {
+                if (calculatorRuntime == null) calculatorRuntime = EmbeddedCalculatorDialog.prepare(getContext());
+                EmbeddedCalculatorDialog.Runtime runtime = calculatorRuntime;
+                getActivity().runOnUiThread(() -> {
+                    try {
+                        if (getActivity().isFinishing() || getActivity().isDestroyed()) { call.reject("白板已关闭"); return; }
+                        if (calculator != null && calculator.isShowing()) { call.resolve(calculator.snapshot()); return; }
+                        calculator = new EmbeddedCalculatorDialog(getActivity(), runtime, state -> notifyListeners("calculatorState", state));
+                        calculator.show();
+                        call.resolve(calculator.snapshot());
+                    } catch (Exception error) { call.reject("原版计算器打开失败：" + error.getMessage(), error); }
+                });
+            } catch (Exception error) { call.reject("原版计算器加载失败：" + error.getMessage(), error); }
+        });
+        });
+    }
+    @PluginMethod public void bundledCalculatorAction(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            try {
+                if (calculator == null) { if ("read".equals(call.getString("action", "read"))) { call.resolve(new JSObject().put("open", false).put("supported", android.os.Build.VERSION.SDK_INT >= 28).put("controls", new JSArray())); return; } throw new IllegalStateException("请先打开计算器"); }
+                call.resolve(calculator.action(call.getData()));
+            } catch (Exception error) { call.reject(error.getMessage(), error); }
+        });
+    }
+
+    @PluginMethod public synchronized void startPoll(PluginCall call) {
+        try {
+            ClassroomPollServer next = new ClassroomPollServer(call.getString("question"), call.getArray("options"));
+            next.start(15000, true);
+            JSArray urls = new JSArray();
+            for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!network.isUp() || network.isLoopback()) continue;
+                for (InetAddress address : Collections.list(network.getInetAddresses())) if (address instanceof Inet4Address && address.isSiteLocalAddress()) urls.put("http://" + address.getHostAddress() + ":" + next.getListeningPort() + "/" + next.token + "/");
+            }
+            if (urls.length() == 0) { next.stop(); throw new IOException("请先连接局域网"); }
+            if (poll != null) poll.stop(); poll = next;
+            call.resolve(new JSObject().put("urls", urls));
+        } catch (Exception error) { call.reject(error.getMessage(), error); }
+    }
+    @PluginMethod public synchronized void pollStatus(PluginCall call) {
+        try {
+            if (poll == null) throw new IOException("投票尚未开启");
+            if (call.getBoolean("close", false)) poll.closeVoting();
+            call.resolve(JSObject.fromJSONObject(poll.snapshot()));
+        } catch (Exception error) { call.reject(error.getMessage(), error); }
+    }
+    @PluginMethod public synchronized void stopPoll(PluginCall call) { if (poll != null) { poll.stop(); poll = null; } call.resolve(); }
 
     @PluginMethod
     public void getAppVersion(PluginCall call) {
@@ -161,13 +220,9 @@ public class ClassroomPlugin extends Plugin {
     public void getFactoryInsertions(PluginCall call) {
         try {
             JSArray available = new JSArray();
-            boolean embeddedSignal = !SignalResourceDialog.availableInputs(getContext()).isEmpty();
-            for (String insertion : FactoryTools.INSERTIONS.keySet()) {
-                if (("signal".equals(insertion) && embeddedSignal)
-                    || FactoryTools.resolveInsertion(getContext(), insertion) != null) available.put(insertion);
-            }
-            JSArray embedded = new JSArray();
-            if (embeddedSignal) embedded.put("signal");
+            // Signal UI is embedded even when hardware currently exposes no inputs.
+            available.put("document"); available.put("media"); available.put("signal");
+            JSArray embedded = new JSArray(); embedded.put("document"); embedded.put("media"); embedded.put("signal");
             JSObject result = new JSObject(); result.put("available", available); result.put("embedded", embedded); call.resolve(result);
         } catch (Exception error) { call.reject("无法读取插入应用", error); }
     }
@@ -177,18 +232,14 @@ public class ClassroomPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 String insertion = call.getString("insertion");
-                if ("signal".equals(insertion) && !SignalResourceDialog.availableInputs(getContext()).isEmpty()) {
+                if ("signal".equals(insertion)) {
                     closeSignalResource();
                     signalResource = new SignalResourceDialog(getActivity(), call.getString("language", java.util.Locale.getDefault().toLanguageTag()));
                     signalResource.show();
                     JSObject result = new JSObject(); result.put("embedded", true); call.resolve(result);
                     return;
                 }
-                android.content.Intent intent = FactoryTools.resolveInsertion(getContext(), insertion);
-                if (intent == null) { call.reject("当前设备未安装或未开放这项插入应用"); return; }
-                if ("signal".equals(insertion)) android.widget.Toast.makeText(getContext(), R.string.signal_external, android.widget.Toast.LENGTH_LONG).show();
-                getActivity().startActivity(intent);
-                JSObject result = new JSObject(); result.put("embedded", false); call.resolve(result);
+                call.reject("请通过白板内置文件管理器打开课件或多媒体");
             } catch (Exception error) { closeSignalResource(); call.reject("无法打开插入应用：" + error.getMessage(), error); }
         });
     }
@@ -495,6 +546,11 @@ public class ClassroomPlugin extends Plugin {
 
     @Override
     protected synchronized void handleOnDestroy() {
+        bundledTools.shutdownNow();
+        EmbeddedCalculatorDialog embedded = calculator;
+        calculator = null;
+        if (embedded != null) getActivity().runOnUiThread(() -> { if (embedded.isShowing()) embedded.dismiss(); });
+        if (poll != null) { poll.stop(); poll = null; }
         aiTransport.close();
         closeSignalResource();
         WebResourceDialog resource = webResource;
@@ -528,11 +584,11 @@ public class ClassroomPlugin extends Plugin {
             String base = "/" + token + "/";
             if (!session.getUri().equals(base) && !session.getUri().equals(base + "upload")) { return reply(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "接收地址无效或已关闭"); }
             if (session.getMethod() == Method.GET && session.getUri().equals(base)) {
-                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcboard · 方成教育</h1><h2>局域网课件快传</h2><p>手机与白板连同一网络，选好课件立即上屏。支持 PowerPoint、Word、Excel、PDF 和图片，单个文件上限 100 MB。</p><input id='files' type='file' hidden multiple accept='.ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>选择文件上屏</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');const picker=document.getElementById('files');button.onclick=()=>picker.click();picker.onchange=async()=>{const files=picker.files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='已发送到白板，课件将自动上屏';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;picker.value='';}};</script></html>");
+                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>方成教育快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcboard · 方成教育</h1><h2>局域网课件快传</h2><p>手机与白板连同一网络，选好课件立即上屏。支持 PowerPoint、Word、Excel、PDF、图片和音视频，单个文件上限 100 MB。</p><input id='files' type='file' hidden multiple accept='.ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif,.mp4,.webm,.mkv,.mov,.avi,.mp3,.wav,.m4a,.ogg'><p><button id='send'>选择文件上屏</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');const picker=document.getElementById('files');button.onclick=()=>picker.click();picker.onchange=async()=>{const files=picker.files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='已发送到白板，课件将自动上屏';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;picker.value='';}};</script></html>");
             }
             if (session.getMethod() != Method.POST || !session.getUri().equals(base + "upload")) { return reply(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "不支持此操作"); }
             String name = session.getParms().get("name");
-            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(ppt|pptx|pps|ppsx|doc|docx|xls|xlsx|csv|odt|ods|odp|rtf|txt|pdf|png|jpg|jpeg|webp|gif)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件名或格式不支持"); }
+            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(ppt|pptx|pps|ppsx|doc|docx|xls|xlsx|csv|odt|ods|odp|rtf|txt|pdf|png|jpg|jpeg|webp|gif|mp4|webm|mkv|mov|avi|mp3|wav|m4a|ogg)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件名或格式不支持"); }
             long length;
             try { length = Long.parseLong(session.getHeaders().getOrDefault("content-length", "0")); } catch (NumberFormatException error) { length = 0; }
             if (length <= 0 || length > 104857600) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件为空或超过 100 MB"); }

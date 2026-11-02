@@ -12,14 +12,8 @@ import { InkQuestion } from "./InkQuestion";
 
 import { useAnchoredPanel } from "./floating";
 
-import {
-  boardContext,
-  chat,
-  parseJSON,
-  selectedBoardElements,
-  visualMessage,
-} from "./ai";
-import { agentContext, runBoardCommands } from "./agent";
+import { boardContext, selectedBoardElements, visualMessage } from "./ai";
+import { agentContext, runBoardCommands, requestBoardAgent } from "./agent";
 import { classroomCommands } from "./commands";
 import { LESSON_FORMAT, LESSON_TOOLS_FORMAT, validateLesson } from "./lesson";
 import { searchMaterials } from "./materials";
@@ -345,7 +339,7 @@ export const Teacher = ({
           role: "system",
           content: `你是方成教育的现场教师。默认用当前界面语言 ${
             getLanguage().code
-          } 讲述和板书，用户明确要求的语言优先。${LESSON_FORMAT}\n${LESSON_TOOLS_FORMAT}\n如需先观察或准备工具，返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}],"continue":true}，系统执行后返回真实结果和最新状态，你再决定下一步。可用 canvas.inspect 读取当前可见画布，math.evaluate 本地核算而不写板，其余工具按需要使用；不得编造结果、对象id或能力。准备完成返回 {"action":"lesson","lesson":上述课程JSON}，也可直接返回课程JSON。讲解准备阶段禁止递归调用 lesson.ask、lesson.teach 或另开 assistant.open；只有用户明确要求才删除、清空、录制或退出。已注册工具：\n${classroomCommands.describe()}\n${
+          } 讲述和板书，用户明确要求的语言优先。${LESSON_FORMAT}\n${LESSON_TOOLS_FORMAT}\n如需先观察或准备工具，优先调用execute_whiteboard Function Calling；不支持函数调用时兼容返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}],"continue":true}，系统执行后返回真实结果和最新状态，你再决定下一步。可用 canvas.inspect 读取当前可见画布，math.evaluate 本地核算而不写板，其余工具按需要使用；不得编造结果、对象id或能力。准备完成返回 {"action":"lesson","lesson":上述课程JSON}，也可直接返回课程JSON。讲解准备阶段禁止递归调用 lesson.ask、lesson.teach 或另开 assistant.open；只有用户明确要求才删除、清空、录制或退出。已注册工具：\n${classroomCommands.describe()}\n${
             document
               ? "当前在课件透明板书层，坐标相对课件左上角，范围0..900宽、0..480高。优先用圈线和箭头解释现有课件，板书简短并避开原文；不可擦除原课件。"
               : ""
@@ -391,13 +385,16 @@ export const Teacher = ({
             : undefined,
         ),
       ];
-      const result = await chat(messages, abort.signal, undefined, {
+      const agentSettings = currentSettings();
+      const result = await requestBoardAgent(messages, abort.signal, {
+        settings: agentSettings,
         maxTokens: 8192,
+        exclude: ["lesson.ask", "lesson.teach", "assistant.open"],
       });
       if (!classroomCommands.isCurrent(revision, abort.signal)) {
         return;
       }
-      let response = parseJSON(result) as BoardAgentAction;
+      let response = result as BoardAgentAction;
       if (response?.action === "commands") {
         response = await runBoardCommands(
           response,
@@ -411,6 +408,7 @@ export const Teacher = ({
               '准备完成后返回 {"action":"lesson","lesson":课程JSON}；仍需工具时继续返回 commands。课程必须遵循原系统提示的步骤 / 绘图 / 语音格式，禁止用 done 或聊天文本代替课程。',
             exclude: ["lesson.ask", "lesson.teach", "assistant.open"],
             maxTokens: 8192,
+            settings: agentSettings,
             verify: true,
           },
         );

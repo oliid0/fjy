@@ -35,6 +35,15 @@ it("moves and resizes one spotlight, cancels interrupted dragging and retains ke
   const resize = screen.getByRole("slider", {
     name: t("fcboard.spotlight_size"),
   });
+  fireEvent.change(screen.getByRole("combobox", { name: "聚光灯形状" }), {
+    target: { value: "star" },
+  });
+  fireEvent.change(screen.getByRole("slider", { name: "聚光灯遮光程度" }), {
+    target: { value: "45" },
+  });
+  expect(
+    overlay.querySelector('[data-spotlight-shape="star"]'),
+  ).toHaveAttribute("fill-opacity", "0.45");
   send(resize, "pointerdown", 350, 370);
   send(resize, "pointermove", 460, 300);
   expect(resize).toHaveAttribute("aria-valuenow", "180");

@@ -3,10 +3,11 @@ import {
   CaptureUpdateAction,
   convertToFcboardElements,
 } from "@fcboard/fcboard";
-import { getCommonBounds } from "@fcboard/element";
-import { pointFrom } from "@fcboard/math";
-
-import type { FcboardElementSkeleton } from "@fcboard/element/transform";
+import {
+  getCommonBounds,
+  getElementAbsoluteCoords,
+  newElementWith,
+} from "@fcboard/element";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
@@ -14,7 +15,7 @@ import { insertGeneratedImage } from "./imageGeneration";
 
 import { boardContext } from "./ai";
 import { classroomCommands } from "./commands";
-import { currentSettings } from "./settings";
+import { recognizedShapeGeometry } from "./shapeRecognition";
 import { selectionSignature } from "./selection";
 import { boardInk } from "./digitalInk";
 import { insertText } from "./board";
@@ -166,13 +167,6 @@ export const observeInkAssistance = (
     const since = Date.now();
     timer = setTimeout(
       () => {
-        if (
-          mode === "shape" &&
-          (!currentSettings().apiKey || !currentSettings().model.trim())
-        ) {
-          failed.add(requestKey);
-          return;
-        }
         const current = () =>
           !request.signal.aborted &&
           !classroomCommands.has("document.draw") &&
@@ -216,9 +210,92 @@ export const observeInkAssistance = (
                   );
                 }
               : undefined,
+            api.getSceneElements().flatMap((element) => {
+              if (element.type !== "line" || element.points.length < 4) {
+                return [];
+              }
+              const [, , , , cx, cy] = getElementAbsoluteCoords(
+                element,
+                new Map(),
+              );
+              const cos = Math.cos(element.angle);
+              const sin = Math.sin(element.angle);
+              return [
+                {
+                  id: element.id,
+                  points: element.points.map(([x, y]): [number, number] => {
+                    const dx = element.x + x - cx;
+                    const dy = element.y + y - cy;
+                    return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
+                  }),
+                },
+              ];
+            }),
           );
           await settleInkRecognition(mode, since, request.signal);
           if (!current()) {
+            return;
+          }
+          if (result.kind === "angles") {
+            const groups = new Map(
+              result.labels.map((label) => [
+                label.shapeId,
+                api
+                  .getSceneElements()
+                  .find((element) => element.id === label.shapeId)
+                  ?.groupIds.at(-1) || crypto.randomUUID(),
+              ]),
+            );
+            source.forEach((element) => seen.add(element.id));
+            const marks = new Set(source.map((element) => element.id));
+            api.updateScene({
+              elements: [
+                ...api
+                  .getSceneElements()
+                  .filter(
+                    (element) =>
+                      !result.labels.some(
+                        (label) =>
+                          element.customData?.fcAngle?.shapeId ===
+                            label.shapeId &&
+                          element.customData?.fcAngle?.vertex === label.vertex,
+                      ),
+                  )
+                  .map((element) =>
+                    groups.has(element.id) || marks.has(element.id)
+                      ? newElementWith(element, {
+                          groupIds: [
+                            groups.get(element.id) ||
+                              groups.values().next().value!,
+                          ],
+                          customData: {
+                            ...element.customData,
+                            ...(marks.has(element.id)
+                              ? { fcGenerated: true }
+                              : {}),
+                          },
+                        })
+                      : element,
+                  ),
+                ...convertToFcboardElements(
+                  result.labels.map((label) => ({
+                    type: "text" as const,
+                    x: label.x,
+                    y: label.y,
+                    text: label.text,
+                    fontSize: 18 / api.getAppState().zoom.value,
+                    fontFamily: 2,
+                    strokeColor: source[0].strokeColor,
+                    groupIds: [groups.get(label.shapeId)!],
+                    customData: {
+                      fcGenerated: true,
+                      fcAngle: { shapeId: label.shapeId, vertex: label.vertex },
+                    },
+                  })),
+                ),
+              ],
+              captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+            });
             return;
           }
           if (result.kind === "language") {
@@ -309,7 +386,6 @@ export const observeInkAssistance = (
               fcRecognizedSource: source.map((element) => element.id),
             },
           };
-          let shape: FcboardElementSkeleton;
           if (result.kind === "text") {
             if (target) {
               const ids = source.map((element) => element.id);
@@ -376,52 +452,10 @@ export const observeInkAssistance = (
             );
             return;
           }
-          const width = Math.max(1, right - left);
-          const height = Math.max(1, bottom - top);
-          if (result?.shape === "triangle") {
-            shape = {
-              ...style,
-              type: "line",
-              x: left + width / 2,
-              y: top,
-              points: [
-                pointFrom(0, 0),
-                pointFrom(width / 2, height),
-                pointFrom(-width / 2, height),
-                pointFrom(0, 0),
-              ],
-            };
-          } else if (result?.shape === "line" || result?.shape === "arrow") {
-            const first = source[0];
-            const last = source[source.length - 1];
-            const end = last.points[last.points.length - 1];
-            shape = {
-              ...style,
-              type: result.shape,
-              x: first.x,
-              y: first.y,
-              points: [
-                pointFrom(0, 0),
-                pointFrom(last.x + end[0] - first.x, last.y + end[1] - first.y),
-              ],
-            };
-          } else if (
-            result?.shape === "rectangle" ||
-            result?.shape === "ellipse"
-          ) {
-            shape = {
-              ...style,
-              type: result.shape,
-              x: left,
-              y: top,
-              width,
-              height,
-            };
-          } else {
-            throw new Error(
-              t("fcboard.invalid_shape_pen_response_your_ink_is_preserved"),
-            );
-          }
+          const shape = {
+            ...recognizedShapeGeometry(result.shape, boardInk(source)),
+            ...style,
+          };
 
           if (!current()) {
             return;
@@ -458,6 +492,8 @@ export const observeInkAssistance = (
         ? 350
         : mode === "magic"
         ? 1600
+        : mode === "shape"
+        ? 250
         : 700,
     );
   };

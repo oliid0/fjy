@@ -42,9 +42,7 @@ export const gizmoPoint = (
 
 /** RulerLayer / TrianglePlateLayer use 14 px ticks and a 600 px body.
  * The reference screenshot's transparent body and two protractor scales are retained. */
-export const factoryGizmoShapes = (
-  widget: Widget,
-): FcboardElementSkeleton[] => {
+const buildGizmoShapes = (widget: Widget) => {
   const shapes: FcboardElementSkeleton[] = [];
   const color = widget.params.solid.stroke || "#ffffff";
   const path = (points: number[][], width = 1.5, strokeColor = color) =>
@@ -245,9 +243,30 @@ export const factoryGizmoShapes = (
       }
     }
   }
+  return convertToFcboardElements(shapes);
+};
+
+const templates = new Map<string, ReturnType<typeof buildGizmoShapes>>();
+export const factoryGizmoShapes = (
+  widget: Widget,
+): FcboardElementSkeleton[] => {
+  const key = JSON.stringify([
+    widget.kind,
+    widget.params.length,
+    widget.params.sweep,
+    widget.params.solid.stroke,
+  ]);
+  let shapes = templates.get(key);
+  if (!shapes) {
+    shapes = buildGizmoShapes(widget);
+    if (templates.size >= 24) {
+      templates.delete(templates.keys().next().value!);
+    }
+    templates.set(key, shapes);
+  }
   const radians = (widget.params.rotation * Math.PI) / 180;
   const size = widget.params.size;
-  return convertToFcboardElements(shapes).map((element) => {
+  return shapes.map((element) => {
     const cx = (element.x + element.width / 2) * size;
     const cy = (element.y + element.height / 2) * size;
     return {

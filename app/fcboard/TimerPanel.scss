@@ -1,0 +1,65 @@
+.fc-classroom .fc-timer-panel {
+  position: fixed;
+  z-index: 96;
+  width: min(340px, calc(100vw - 24px));
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: #f8f9fb;
+  color: #20232b;
+  box-shadow: 0 4px 24px #0004;
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    touch-action: none;
+  }
+  output {
+    display: block;
+    text-align: center;
+    font: 44px monospace;
+    font-variant-numeric: tabular-nums;
+    margin: 12px 0;
+  }
+  .fc-timer-duration {
+    display: flex;
+    gap: 8px;
+  }
+  label {
+    flex: 1;
+    min-width: 0;
+  }
+  input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .fc-timer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 12px;
+  }
+  p {
+    text-align: center;
+    color: #b3261e;
+  }
+  &.fc-timer-full {
+    inset: 0;
+    width: 100%;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  &.fc-timer-full header {
+    position: absolute;
+    top: 12px;
+    left: 20px;
+    right: 20px;
+  }
+  &.fc-timer-full output {
+    font-size: clamp(48px, 16vw, 200px);
+  }
+}

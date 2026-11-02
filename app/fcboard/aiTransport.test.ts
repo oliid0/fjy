@@ -1,7 +1,12 @@
 import { Capacitor } from "@capacitor/core";
 
 import { chat } from "./ai";
-import { AIStream, postAI } from "./aiTransport";
+import {
+  AIStream,
+  postAI,
+  readAISearchEvidence,
+  readAICompletion,
+} from "./aiTransport";
 import { defaults } from "./settings";
 import { Classroom } from "./native";
 
@@ -20,6 +25,144 @@ const stop = `${frame({
 })}data: [DONE]\r\n\r\n`;
 
 describe("incremental AI transport", () => {
+  it("coalesces interleaved function arguments by index and preserves encrypted reasoning", () => {
+    const stream = new AIStream(false, vi.fn());
+    const packet = (delta: unknown) => frame({ choices: [{ delta }] });
+    stream.push(
+      packet({ reasoning_content: "first", encrypted_content: "encrypted-" }),
+    );
+    stream.push(
+      packet({
+        tool_calls: [
+          {
+            index: 1,
+            id: "call_b",
+            type: "function",
+            function: {
+              name: "execute_whiteboard",
+              arguments: '{"name":"canvas.tool",',
+            },
+          },
+          {
+            index: 0,
+            id: "call_a",
+            type: "function",
+            function: {
+              name: "execute_whiteboard",
+              arguments: '{"name":"canvas.text",',
+            },
+          },
+        ],
+      }),
+    );
+    stream.push(
+      packet({
+        reasoning_content: " second",
+        encrypted_content: "context",
+        tool_calls: [
+          { index: 0, function: { arguments: '"args":{"text":"牛顿定律"}}' } },
+          { index: 1, function: { arguments: '"args":{"tool":"eraser"}}' } },
+        ],
+      }),
+    );
+    stream.push(
+      `${frame({
+        choices: [{ delta: {}, finish_reason: "tool_calls" }],
+      })}data: [DONE]\n\n`,
+    );
+    const completion = stream.finishCompletion();
+    expect(completion.text).toBe("");
+    expect(completion.toolCalls.map((call) => call.id)).toEqual([
+      "call_a",
+      "call_b",
+    ]);
+    expect(JSON.parse(completion.toolCalls[0].function.arguments)).toEqual({
+      name: "canvas.text",
+      args: { text: "牛顿定律" },
+    });
+    expect(completion.assistant).toMatchObject({
+      reasoning_content: "first second",
+      encrypted_content: "encrypted-context",
+    });
+  });
+  it("refuses malformed, duplicate, truncated and non-object function calls before execution", () => {
+    const call = {
+      id: "call_one",
+      type: "function",
+      function: {
+        name: "execute_whiteboard",
+        arguments: '{"name":"canvas.text"}',
+      },
+    };
+    const completion = (calls: unknown[]) =>
+      readAICompletion(
+        JSON.stringify({
+          choices: [{ message: { content: null, tool_calls: calls } }],
+        }),
+        false,
+      );
+    expect(completion([call]).toolCalls).toHaveLength(1);
+    expect(() => completion([call, call])).toThrow();
+    expect(() =>
+      completion([
+        { ...call, function: { ...call.function, arguments: "[]" } },
+      ]),
+    ).toThrow();
+    expect(() =>
+      completion([
+        { ...call, function: { ...call.function, arguments: '{"name":' } },
+      ]),
+    ).toThrow();
+    const interrupted = new AIStream(false, vi.fn());
+    interrupted.push(
+      frame({ choices: [{ delta: { tool_calls: [{ ...call, index: 0 }] } }] }),
+    );
+    expect(() => interrupted.finishCompletion()).toThrow();
+  });
+  it("reads actual search counts and citations from both provider response formats", () => {
+    const source = { title: "课程标准", url: "https://example.com/curriculum" };
+    expect(
+      readAISearchEvidence(
+        JSON.stringify({
+          usage: { tool_usage: { web_search: 1 } },
+          choices: [
+            {
+              message: {
+                annotations: [{ type: "url_citation", url_citation: source }],
+              },
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ count: 1, sources: [source] });
+    expect(
+      readAISearchEvidence(
+        JSON.stringify({
+          output: [
+            { type: "web_search_call", status: "completed" },
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  annotations: [{ type: "url_citation", ...source }],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ count: 1, sources: [source] });
+    expect(
+      readAISearchEvidence(
+        JSON.stringify({
+          choices: [
+            { message: { content: JSON.stringify({ sources: [source] }) } },
+          ],
+        }),
+      ),
+    ).toEqual({ count: 0, sources: [] });
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -138,7 +281,15 @@ describe("incremental AI transport", () => {
       thinking: { type: "disabled" },
     });
     expect(bodies[0].prompt_cache_key).toBe(bodies[1].prompt_cache_key);
-    expect(bodies[0].prompt_cache_key).not.toBe(bodies[2].prompt_cache_key);
+    for (const key of [
+      "service_tier",
+      "thinking",
+      "reasoning",
+      "prompt_cache_key",
+      "temperature",
+    ]) {
+      expect(bodies[2]).not.toHaveProperty(key);
+    }
     expect(bodies[0].prompt_cache_key).not.toContain("test-secret");
   });
   it("reads Android chunks incrementally and removes the listener after completion", async () => {

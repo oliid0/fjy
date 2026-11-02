@@ -159,7 +159,7 @@ it.each([
     presentation: "text",
     expected: { sourceIds: ["question"], presentation: "text" },
   },
-  { style: true, presentation: undefined, expected: {} },
+  { style: true, presentation: undefined, expected: { fontSize: 40 } },
 ])(
   "preserves explicit text style after tools while ordinary answers retain their question anchor: %j",
   async ({ style, presentation, expected }) => {

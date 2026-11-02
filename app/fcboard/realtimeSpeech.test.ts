@@ -69,7 +69,8 @@ it("releases a broken cloud session before one local restart, retaining the reco
   const localHandle = capture();
   const start = vi
     .spyOn(cloud, "startCloudSpeech")
-    .mockResolvedValue(cloudHandle);
+    .mockResolvedValueOnce(cloudHandle)
+    .mockRejectedValue(new Error("cloud reconnect unavailable"));
   const offline = vi
     .spyOn(local, "startLocalSpeech")
     .mockResolvedValue(localHandle);
@@ -97,6 +98,8 @@ it("releases a broken cloud session before one local restart, retaining the reco
   start.mock.calls[0][4]?.({ time: 9, text: "stale cloud partial" });
   offline.mock.calls[0][4]?.({ time: 0.5, text: "offline partial" });
   expect(interim.mock.calls.map(([line]) => line)).toEqual([
+    null,
+    null,
     null,
     { time: 5.5, text: "offline partial" },
   ]);

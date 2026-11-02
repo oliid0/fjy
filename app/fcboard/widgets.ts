@@ -5,6 +5,7 @@ import {
 import { pointFrom } from "@fcboard/math";
 import { getCommonBounds } from "@fcboard/element";
 import { t } from "@fcboard/fcboard/i18n";
+import { randomInteger } from "@fcboard/common";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
@@ -79,6 +80,7 @@ export type WidgetParams = {
   strokeWidth: number;
   opacity: number;
   shape?: FactoryFlatShapeData;
+  factoryOutline?: boolean;
   solid: SolidSettings;
 };
 export type Widget = {
@@ -116,6 +118,12 @@ export const configureWidget = (
   changes: Record<string, unknown>,
 ): WidgetParams => {
   const next = { ...params };
+  if (changes.factoryOutline !== undefined) {
+    if (typeof changes.factoryOutline !== "boolean") {
+      throw new Error("Invalid factory outline setting");
+    }
+    next.factoryOutline = changes.factoryOutline;
+  }
   if (changes.shape !== undefined) {
     next.shape = validatedFactoryShape(changes.shape);
   }
@@ -372,7 +380,17 @@ export const widgetShapes = (
     );
   } else {
     result.push(
-      ...(kind === "cube" || kind === "cylinder"
+      ...(kind === "cube" &&
+      params.factoryOutline &&
+      !params.solid.unfold &&
+      !Object.keys(params.solid.colors).length
+        ? factorySolidOutlines(
+            "cube",
+            params.solid,
+            params.size,
+            params.rotation,
+          )
+        : kind === "cube" || kind === "cylinder"
         ? solidShapes(
             kind,
             params.solid || solidDefaults(),
@@ -587,6 +605,7 @@ export const renderWidget = (
       version:
         (existing.find((el) => el.id === `${widget.id}-${index}`)?.version ||
           0) + 1,
+      versionNonce: randomInteger(),
       customData: {
         ...shape.customData,
         fcGenerated: true,

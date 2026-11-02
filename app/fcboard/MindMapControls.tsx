@@ -238,16 +238,12 @@ export const MindMapControls = ({
         refresh();
         return;
       }
-      const same =
-        selected.current?.id === target.insertion.id &&
-        selected.current.index === target.index &&
-        selected.current.surface === current.key;
       selected.current = {
         id: target.insertion.id,
         index: target.index,
         surface: current.key,
       };
-      if (!same || tool !== "freedraw") {
+      if (tool !== "freedraw") {
         event.preventDefault();
         event.stopPropagation();
         if (current.document) {

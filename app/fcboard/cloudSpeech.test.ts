@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn().mockResolvedValue({ session: "cloud" }),
   push: vi.fn().mockResolvedValue({ lines: [] }),
   stop: vi.fn().mockResolvedValue({}),
+  addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
   native: true,
 }));
 vi.mock("./localSpeech", () => ({ startPCMSpeech: mocks.capture }));
@@ -33,7 +34,7 @@ it("uses cloud by default on Android and keeps the speech credential separate fr
     },
     false,
   );
-  startCloudSpeech(vi.fn(), vi.fn());
+  startCloudSpeech(vi.fn(), vi.fn(), {} as MediaStream);
   const [transport] = mocks.capture.mock.calls[0];
   await transport.start();
   expect(mocks.start).toHaveBeenCalledWith({
@@ -45,6 +46,39 @@ it("uses cloud by default on Android and keeps the speech credential separate fr
   expect(JSON.parse(localStorage.getItem("fcboard-settings")!).speechKey).toBe(
     "",
   );
+});
+
+it("captures voice directly in native code and isolates late session events", async () => {
+  saveSettings({ ...defaults, speechKey: "native-speech" }, false);
+  const lines = vi.fn();
+  const interim = vi.fn();
+  const remove = vi.fn();
+  let receive!: (event: {
+    session: string;
+    lines?: { time: number; text: string }[];
+  }) => void;
+  mocks.addListener.mockImplementation(async (_name, callback) => {
+    receive = callback;
+    return { remove };
+  });
+  const handle = await startCloudSpeech(
+    lines,
+    vi.fn(),
+    undefined,
+    undefined,
+    interim,
+  );
+  expect(mocks.capture).not.toHaveBeenCalled();
+  expect(mocks.start).toHaveBeenCalledWith(
+    expect.objectContaining({ capture: true, key: "native-speech" }),
+  );
+  receive({ session: "old", lines: [{ time: 1, text: "ignored" }] });
+  receive({ session: "cloud", lines: [{ time: 1, text: "写一个标题" }] });
+  expect(lines).toHaveBeenCalledTimes(1);
+  await handle.cancel();
+  expect(remove).toHaveBeenCalledTimes(1);
+  receive({ session: "cloud", lines: [{ time: 2, text: "late" }] });
+  expect(lines).toHaveBeenCalledTimes(1);
 });
 
 it("does not open capture using the model key when the speech key is missing", () => {

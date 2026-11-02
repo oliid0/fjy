@@ -10,9 +10,27 @@ import type { ContentRect } from "./placement";
 
 export type TextPlacement = {
   mode?: "inline" | "below" | "column" | "replace" | "center";
+  fontSize?: number;
   bounds?: ContentRect;
   sourceLines?: number;
 };
+
+/** Answers use screen-sized writing, even when the selected question is a large
+ * sketch. Inline arithmetic and replacement transcription retain their scale.
+ */
+export const answerFontSize = (
+  sourceSize: number,
+  scale: number,
+  viewport: ContentRect,
+  mode?: TextPlacement["mode"],
+) =>
+  mode === "inline" || mode === "column" || mode === "replace"
+    ? sourceSize
+    : Math.min(
+        sourceSize * 0.5,
+        24 / scale,
+        (viewport.bottom - viewport.top) / 18,
+      );
 
 /** Reflow at the source's size first; shrink only when the visible area requires it.
  * Measurement and wrapping use the editor's font metrics, also used by SVG export.

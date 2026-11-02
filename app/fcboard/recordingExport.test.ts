@@ -4,6 +4,7 @@ import {
   prepareRecordingPackage,
   recordingFiles,
   saveRecordingFiles,
+  saveRecordingToDevice,
 } from "./recordingExport";
 
 import type { Recording } from "./recording";
@@ -13,6 +14,7 @@ const engine = vi.hoisted(() => ({
   append: vi.fn(),
   complete: vi.fn(),
   save: vi.fn(),
+  saveDevice: vi.fn(),
   share: vi.fn(),
   close: vi.fn(),
 }));
@@ -35,6 +37,20 @@ beforeEach(() => {
   engine.append.mockResolvedValue(undefined);
   engine.complete.mockResolvedValue(undefined);
   engine.close.mockResolvedValue(undefined);
+});
+it("persists real device files after packaging and closes the temporary export", async () => {
+  engine.saveDevice.mockResolvedValue({
+    files: ["content://downloads/1", "content://downloads/2"],
+    location: "Download/Fcboard",
+  });
+  expect(await saveRecordingToDevice(recording)).toMatchObject({
+    location: "Download/Fcboard",
+  });
+  expect(engine.saveDevice).toHaveBeenCalledWith({
+    id: "export",
+    name: "Fcboard-test",
+  });
+  expect(engine.close).toHaveBeenCalledWith({ id: "export" });
 });
 afterEach(() => {
   vi.restoreAllMocks();

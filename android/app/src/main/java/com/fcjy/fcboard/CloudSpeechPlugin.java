@@ -1,12 +1,19 @@
 package com.fcjy.fcboard;
 
 import android.util.Base64;
+import android.Manifest;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -22,9 +29,12 @@ import okio.ByteString;
 import org.json.JSONArray;
 
 /** Native WebSocket carries auth headers; PCM capture is shared with recording. */
-@CapacitorPlugin(name = "FcboardCloudSpeech")
+@CapacitorPlugin(name = "FcboardCloudSpeech", permissions = {
+    @Permission(strings = {Manifest.permission.RECORD_AUDIO}, alias = "microphone")
+})
 public class CloudSpeechPlugin extends Plugin {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService microphone = Executors.newSingleThreadExecutor();
     private final OkHttpClient client = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(0, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS).pingInterval(20, TimeUnit.SECONDS).build();
@@ -41,9 +51,14 @@ public class CloudSpeechPlugin extends Plugin {
         org.json.JSONObject interim;
         WebSocket socket;
         int sequence = 1;
+        volatile AudioRecord recorder;
+        boolean capture;
     }
 
     @PluginMethod public void start(PluginCall call) {
+        if (call.getBoolean("capture", false) && getPermissionState("microphone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("microphone", call, "microphonePermission"); return;
+        }
         worker.execute(() -> {
             if (active != null) { call.reject("已有云端语音任务正在运行"); return; }
             String key = call.getString("key", "").trim();
@@ -52,7 +67,7 @@ public class CloudSpeechPlugin extends Plugin {
                     || !resource.matches("volc\\.(seedasr|bigasr)\\.sauc\\.(duration|concurrent)")) {
                 call.reject("请在语音设置中填写豆包语音 API Key 与已开通的资源 ID"); return;
             }
-            Session session = new Session(); active = session;
+            Session session = new Session(); session.capture = call.getBoolean("capture", false); active = session;
             try {
                 Request request = new Request.Builder()
                     .url("wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async")
@@ -76,6 +91,7 @@ public class CloudSpeechPlugin extends Plugin {
                                 session.activity |= session.interim != null;
                                 if (session.pending.length() + lines.length() > 1000) { throw new IOException("语音文稿接收过慢"); }
                                 for (int i = 0; i < lines.length(); i++) { session.pending.put(lines.get(i)); }
+                                if (session.capture) notifyListeners("transcript", drain(session).put("session", session.id));
                             }
                             session.opened.countDown();
                             if (response.last) {
@@ -95,6 +111,7 @@ public class CloudSpeechPlugin extends Plugin {
                 });
                 if (!session.opened.await(12, TimeUnit.SECONDS)) { throw new IOException("豆包语音连接超时"); }
                 if (session.error != null) { throw new IOException(session.error); }
+                if (session.capture) startMicrophone(session);
                 JSObject result = new JSObject(); result.put("session", session.id); call.resolve(result);
             } catch (Exception error) {
                 release(session); call.reject(error.getMessage());
@@ -102,8 +119,46 @@ public class CloudSpeechPlugin extends Plugin {
         });
     }
 
+    @PermissionCallback private void microphonePermission(PluginCall call) {
+        if (getPermissionState("microphone") == PermissionState.GRANTED) start(call);
+        else call.reject("请允许麦克风权限后开启语音助手");
+    }
+
+    /** Voice-only capture runs independently of WebView rendering and agent work.
+     * Recording sessions retain the shared PCM input supplied by the web recorder.
+     */
+    @android.annotation.SuppressLint("MissingPermission") // start() and microphonePermission() check RECORD_AUDIO before capture.
+    private void startMicrophone(Session session) throws Exception {
+        int minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        if (minimum <= 0) throw new IOException("设备不支持16kHz麦克风采集");
+        AudioRecord input = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
+            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(12800, minimum * 2));
+        session.recorder = input;
+        if (input.getState() != AudioRecord.STATE_INITIALIZED) throw new IOException("无法初始化麦克风");
+        input.startRecording();
+        if (input.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) throw new IOException("麦克风没有开始录音");
+        microphone.execute(() -> {
+            byte[] block = new byte[3200];
+            try {
+                while (!session.stopping && session.error == null && active == session) {
+                    int count = input.read(block, 0, block.length, AudioRecord.READ_BLOCKING);
+                    if (session.stopping) break;
+                    if (count <= 0 || count % 2 != 0) throw new IOException("麦克风采集失败 (" + count + ")");
+                    synchronized (session) {
+                        if (!session.stopping && (session.socket.queueSize() > 320000 || !session.socket.send(ByteString.of(
+                            DoubaoSpeechProtocol.frame(2, ++session.sequence, java.util.Arrays.copyOf(block, count)))))) {
+                            throw new IOException("语音网络发送过慢，请检查连接");
+                        }
+                    }
+                }
+            } catch (Exception error) { if (!session.stopping) fail(session, error.getMessage()); }
+        });
+    }
+
     private void fail(Session session, String message) {
+        if (session.error != null || session.stopping) return;
         session.error = message; session.opened.countDown(); session.ended.countDown();
+        if (session.capture) notifyListeners("transcript", new JSObject().put("session", session.id).put("error", message));
         if (session.socket != null) { session.socket.cancel(); }
     }
     private Session require(PluginCall call) throws IOException {
@@ -141,9 +196,12 @@ public class CloudSpeechPlugin extends Plugin {
             if (session == null || !session.id.equals(call.getString("session"))) { call.reject("云端语音任务已结束"); return; }
             try {
                 session.stopping = true;
+                stopMicrophone(session);
                 if (call.getBoolean("discard", false)) { call.resolve(); return; }
                 if (session.error != null) { throw new IOException(session.error); }
-                if (!session.socket.send(ByteString.of(DoubaoSpeechProtocol.frame(2, -(++session.sequence), new byte[0])))
+                boolean sent;
+                synchronized (session) { sent = session.socket.send(ByteString.of(DoubaoSpeechProtocol.frame(2, -(++session.sequence), new byte[0]))); }
+                if (!sent
                         || !session.ended.await(5, TimeUnit.SECONDS)) { throw new IOException("云端文稿收尾超时"); }
                 if (session.error != null) { throw new IOException(session.error); }
                 call.resolve(drain(session));
@@ -153,12 +211,20 @@ public class CloudSpeechPlugin extends Plugin {
     }
     private void release(Session session) {
         session.stopping = true;
+        stopMicrophone(session);
         if (session.socket != null) { session.socket.cancel(); }
         if (active == session) { active = null; }
+    }
+    private void stopMicrophone(Session session) {
+        AudioRecord input = session.recorder; session.recorder = null;
+        if (input != null) {
+            try { input.stop(); } catch (Exception ignored) { }
+            input.release();
+        }
     }
     @Override protected void handleOnDestroy() {
         Session session = active;
         if (session != null) { release(session); }
-        worker.shutdownNow(); client.dispatcher().executorService().shutdown(); client.connectionPool().evictAll();
+        worker.shutdownNow(); microphone.shutdownNow(); client.dispatcher().executorService().shutdown(); client.connectionPool().evictAll();
     }
 }

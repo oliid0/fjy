@@ -16,6 +16,8 @@ export type Recording = {
   blob: Blob;
   transcript: TranscriptLine[];
   summary: string;
+  savedLocation?: string;
+  savedFiles?: string[];
 };
 const store = createStore("fcboard-recordings", "sessions");
 type BinaryRecording = Omit<Recording, "blob"> & {

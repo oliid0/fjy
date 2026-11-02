@@ -267,6 +267,11 @@ export const RecordingPanel = (props: {
                 <Tab value="summary" label={t("fcboard.ai_summary")} />
               </Tabs>
             )}
+            {!live && active?.savedLocation && (
+              <p className="fc-recording-saved-location" role="status">
+                媒体和文稿已保存到 {active.savedLocation}
+              </p>
+            )}
             <div className={`fc-recording-panes${live ? " is-live" : ""}`}>
               <section
                 className="fc-recording-transcript-pane"

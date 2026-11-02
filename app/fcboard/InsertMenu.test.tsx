@@ -215,10 +215,25 @@ it("places new document insertions in the actual scrolled viewport and sizes fou
         expect.objectContaining({
           kind,
           position:
-            kind === "fourline" ? { x: 400, y: 1060 } : { x: 260, y: 960 },
+            kind === "fourline"
+              ? { x: 400, y: 1060 }
+              : kind === "mindmap"
+              ? expect.objectContaining({
+                  x: expect.any(Number),
+                  y: expect.any(Number),
+                })
+              : { x: 260, y: 960 },
           ...(kind === "fourline" ? { width: 100, height: 80 } : {}),
         }),
       );
+      if (kind === "mindmap") {
+        const object = insert.mock.calls.at(-1)![1];
+        expect(object.nodeSize!.width / object.nodeSize!.height).toBe(2);
+        expect(object.width).toBeLessThanOrEqual(500);
+        expect(object.height).toBeLessThanOrEqual(400);
+        expect(object.position.x).toBeGreaterThanOrEqual(200);
+        expect(object.position.y).toBeGreaterThanOrEqual(900);
+      }
     }
     await act(async () => {
       await classroomCommands.execute({

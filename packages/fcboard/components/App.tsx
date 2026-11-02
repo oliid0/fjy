@@ -596,16 +596,6 @@ export const useFcboardActionManager = () =>
  */
 export const useFcboardAPI = () => useContext(FcboardAPIContext);
 
-let didTapTwice: boolean = false;
-let tappedTwiceTimer = 0;
-let firstTapPosition: { x: number; y: number } | null = null;
-let isHoldingSpace: boolean = false;
-let isPanning: boolean = false;
-let isDraggingScrollBar: boolean = false;
-let currentScrollBars: ScrollBars = { horizontal: null, vertical: null };
-let touchTimeout = 0;
-let invalidateContextMenu = false;
-
 /**
  * Map of youtube embed video states
  */
@@ -618,15 +608,26 @@ let IS_PLAIN_PASTE = false;
 let IS_PLAIN_PASTE_TIMER = 0;
 let PLAIN_PASTE_TOAST_SHOWN = false;
 
-let lastPointerUp: (() => void) | null = null;
-const gesture: Gesture = {
-  pointers: new Map(),
-  lastCenter: null,
-  initialDistance: null,
-  initialScale: null,
-};
-
 class App extends React.Component<AppProps, AppState> {
+  // Pointer state belongs to this canvas: split writing regions can be used simultaneously.
+  private didTapTwice: boolean = false;
+  private tappedTwiceTimer = 0;
+  private firstTapPosition: { x: number; y: number } | null = null;
+  private isHoldingSpace: boolean = false;
+  private isPanning: boolean = false;
+  private isDraggingScrollBar: boolean = false;
+  private currentScrollBars: ScrollBars = { horizontal: null, vertical: null };
+  private touchTimeout = 0;
+  private invalidateContextMenu = false;
+
+  private lastPointerUp: (() => void) | null = null;
+  private gesture: Gesture = {
+    pointers: new Map(),
+    lastCenter: null,
+    initialDistance: null,
+    initialScale: null,
+  };
+
   canvas: AppClassProperties["canvas"];
   interactiveCanvas: AppClassProperties["interactiveCanvas"] = null;
   public sessionExportThemeOverride: AppState["theme"] | undefined;
@@ -1337,7 +1338,7 @@ class App extends React.Component<AppProps, AppState> {
       // middle-click or something other than primary
       this.lastPointerDownEvent.button !== POINTER_BUTTON.MAIN ||
       // panning
-      isHoldingSpace ||
+      this.isHoldingSpace ||
       // wrong tool
       !oneOf(this.state.activeTool.type, ["laser", "selection", "lasso"])
     ) {
@@ -1381,7 +1382,7 @@ class App extends React.Component<AppProps, AppState> {
       hitElement &&
       this.lastPointerUpEvent.timeStamp - this.lastPointerDownEvent.timeStamp <=
         300 &&
-      gesture.pointers.size < 2 &&
+      this.gesture.pointers.size < 2 &&
       isIframeLikeElement(hitElement) &&
       (this.state.viewModeEnabled ||
         this.state.activeTool.type === "laser" ||
@@ -2963,12 +2964,12 @@ class App extends React.Component<AppProps, AppState> {
   // Lifecycle
 
   private onBlur = withBatchedUpdates(() => {
-    isHoldingSpace = false;
+    this.isHoldingSpace = false;
     if (this.props.UIOptions.unifiedToolbar) {
-      gesture.pointers.clear();
+      this.gesture.pointers.clear();
       this.rebaseGesture();
       this.resetContextMenuTimer();
-      lastPointerUp?.();
+      this.lastPointerUp?.();
     }
     this.setState({
       isBindingEnabled: this.state.bindingPreference === "enabled",
@@ -3311,9 +3312,9 @@ class App extends React.Component<AppProps, AppState> {
     this.resizeObserver?.disconnect();
     this.unmounted = true;
     if (this.props.UIOptions.unifiedToolbar) {
-      gesture.pointers.clear();
+      this.gesture.pointers.clear();
       this.rebaseGesture();
-      lastPointerUp?.();
+      this.lastPointerUp?.();
     }
     this.removeEventListeners();
     this.library.destroy();
@@ -3328,10 +3329,10 @@ class App extends React.Component<AppProps, AppState> {
     this.editorLifecycleEvents.clear();
     ShapeCache.destroy();
     SnapCache.destroy();
-    clearTimeout(touchTimeout);
+    clearTimeout(this.touchTimeout);
     isSomeElementSelected.clearCache();
     selectGroupsForSelectedElements.clearCache();
-    touchTimeout = 0;
+    this.touchTimeout = 0;
     document.documentElement.style.overscrollBehaviorX = "";
   }
 
@@ -3664,7 +3665,7 @@ class App extends React.Component<AppProps, AppState> {
     elementsMap,
   }: RenderInteractiveSceneCallback) => {
     if (scrollBars) {
-      currentScrollBars = scrollBars;
+      this.currentScrollBars = scrollBars;
     }
     const scrolledOutside =
       // hide when editing text
@@ -3714,10 +3715,10 @@ class App extends React.Component<AppProps, AppState> {
     event.stopPropagation();
   });
 
-  private static resetTapTwice() {
-    didTapTwice = false;
-    firstTapPosition = null;
-  }
+  private resetTapTwice = () => {
+    this.didTapTwice = false;
+    this.firstTapPosition = null;
+  };
 
   private onTouchStart = (event: TouchEvent) => {
     if (
@@ -3734,18 +3735,18 @@ class App extends React.Component<AppProps, AppState> {
       event.preventDefault();
     }
 
-    if (!didTapTwice) {
-      didTapTwice = true;
+    if (!this.didTapTwice) {
+      this.didTapTwice = true;
 
       if (event.touches.length === 1) {
-        firstTapPosition = {
+        this.firstTapPosition = {
           x: event.touches[0].clientX,
           y: event.touches[0].clientY,
         };
       }
-      clearTimeout(tappedTwiceTimer);
-      tappedTwiceTimer = window.setTimeout(
-        App.resetTapTwice,
+      clearTimeout(this.tappedTwiceTimer);
+      this.tappedTwiceTimer = window.setTimeout(
+        this.resetTapTwice,
         TAP_TWICE_TIMEOUT,
       );
       return;
@@ -3753,11 +3754,15 @@ class App extends React.Component<AppProps, AppState> {
 
     // insert text only if we tapped twice with a single finger at approximately the same position
     // event.touches.length === 1 will also prevent inserting text when user's zooming
-    if (didTapTwice && event.touches.length === 1 && firstTapPosition) {
+    if (
+      this.didTapTwice &&
+      event.touches.length === 1 &&
+      this.firstTapPosition
+    ) {
       const touch = event.touches[0];
       const distance = pointDistance(
         pointFrom(touch.clientX, touch.clientY),
-        pointFrom(firstTapPosition.x, firstTapPosition.y),
+        pointFrom(this.firstTapPosition.x, this.firstTapPosition.y),
       );
 
       // only create text if the second tap is within the threshold of the first tap
@@ -3773,8 +3778,8 @@ class App extends React.Component<AppProps, AppState> {
           clientY: touch.clientY,
         });
       }
-      didTapTwice = false;
-      clearTimeout(tappedTwiceTimer);
+      this.didTapTwice = false;
+      clearTimeout(this.tappedTwiceTimer);
     }
 
     if (event.touches.length === 2) {
@@ -3796,7 +3801,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
       });
     } else {
-      gesture.pointers.clear();
+      this.gesture.pointers.clear();
       this.rebaseGesture();
     }
   };
@@ -4350,12 +4355,12 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   removePointer = (event: React.PointerEvent<HTMLElement> | PointerEvent) => {
-    if (touchTimeout) {
+    if (this.touchTimeout) {
       this.resetContextMenuTimer();
     }
 
     if (
-      gesture.pointers.delete(event.pointerId) &&
+      this.gesture.pointers.delete(event.pointerId) &&
       this.props.UIOptions.unifiedToolbar
     ) {
       this.rebaseGesture();
@@ -4365,29 +4370,29 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerCancel = (
     event: React.PointerEvent<HTMLElement> | PointerEvent,
   ) => {
-    const tracked = gesture.pointers.has(event.pointerId);
+    const tracked = this.gesture.pointers.has(event.pointerId);
     this.removePointer(event);
     if (tracked && this.props.UIOptions.unifiedToolbar) {
-      lastPointerUp?.();
+      this.lastPointerUp?.();
     }
   };
 
   private gestureMetrics = () =>
     this.props.UIOptions.unifiedToolbar
-      ? getFactoryGesture(gesture.pointers)
-      : gesture.pointers.size === 2
+      ? getFactoryGesture(this.gesture.pointers)
+      : this.gesture.pointers.size === 2
       ? {
-          center: getCenter(gesture.pointers),
-          distance: getDistance(Array.from(gesture.pointers.values())),
+          center: getCenter(this.gesture.pointers),
+          distance: getDistance(Array.from(this.gesture.pointers.values())),
         }
       : null;
 
   /** Rebase membership changes; adding/lifting a finger must not change the view. */
   private rebaseGesture = () => {
     const metrics = this.gestureMetrics();
-    gesture.lastCenter = metrics?.center ?? null;
-    gesture.initialDistance = metrics?.distance ?? null;
-    gesture.initialScale = metrics ? this.state.zoom.value : null;
+    this.gesture.lastCenter = metrics?.center ?? null;
+    this.gesture.initialDistance = metrics?.distance ?? null;
+    this.gesture.initialScale = metrics ? this.state.zoom.value : null;
   };
 
   toggleLock = (source: "keyboard" | "ui" = "ui") => {
@@ -5392,8 +5397,8 @@ class App extends React.Component<AppProps, AppState> {
         }
       }
 
-      if (event.key === KEYS.SPACE && gesture.pointers.size === 0) {
-        isHoldingSpace = true;
+      if (event.key === KEYS.SPACE && this.gesture.pointers.size === 0) {
+        this.isHoldingSpace = true;
         setCursor(this.interactiveCanvas, CURSOR_TYPE.GRAB);
         event.preventDefault();
       }
@@ -5498,7 +5503,7 @@ class App extends React.Component<AppProps, AppState> {
           activeEmbeddable: null,
         });
       }
-      isHoldingSpace = false;
+      this.isHoldingSpace = false;
     }
 
     if (event.key === KEYS.ALT) {
@@ -5695,7 +5700,7 @@ class App extends React.Component<AppProps, AppState> {
     const nextActiveTool = updateActiveTool(this.state, tool);
     if (nextActiveTool.type === "hand") {
       setCursor(this.interactiveCanvas, CURSOR_TYPE.GRAB);
-    } else if (!isHoldingSpace) {
+    } else if (!this.isHoldingSpace) {
       setCursorForShape(this.interactiveCanvas, {
         ...this.state,
         activeTool: nextActiveTool,
@@ -5780,7 +5785,7 @@ class App extends React.Component<AppProps, AppState> {
     // we don't want to deselect when using trackpad, and multi-point gestures
     // only work on touch screens, so checking for >= pointers means we're on a
     // touchscreen
-    return gesture.pointers.size >= 2;
+    return this.gesture.pointers.size >= 2;
   };
 
   public getName = () => {
@@ -5803,7 +5808,7 @@ class App extends React.Component<AppProps, AppState> {
         activeEmbeddable: null,
       });
     }
-    gesture.initialScale = this.state.zoom.value;
+    this.gesture.initialScale = this.state.zoom.value;
   });
 
   // fires only on Safari
@@ -5823,7 +5828,7 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
-    const initialScale = gesture.initialScale;
+    const initialScale = this.gesture.initialScale;
     if (initialScale) {
       this.setState((state) => ({
         ...getStateForZoom(
@@ -5851,7 +5856,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
       });
     }
-    gesture.initialScale = null;
+    this.gesture.initialScale = null;
   });
 
   private handleTextWysiwyg(
@@ -6816,33 +6821,33 @@ class App extends React.Component<AppProps, AppState> {
       y: scenePointerY,
     };
 
-    if (gesture.pointers.has(event.pointerId)) {
-      gesture.pointers.set(event.pointerId, {
+    if (this.gesture.pointers.has(event.pointerId)) {
+      this.gesture.pointers.set(event.pointerId, {
         x: event.clientX,
         y: event.clientY,
       });
     }
 
-    const initialScale = gesture.initialScale;
+    const initialScale = this.gesture.initialScale;
     const metrics = this.gestureMetrics();
     if (
       metrics &&
-      gesture.lastCenter &&
+      this.gesture.lastCenter &&
       initialScale &&
-      gesture.initialDistance
+      this.gesture.initialDistance
     ) {
       const { center, distance } = metrics;
-      const previousCenter = gesture.lastCenter;
-      const deltaX = center.x - gesture.lastCenter.x;
-      const deltaY = center.y - gesture.lastCenter.y;
-      gesture.lastCenter = center;
+      const previousCenter = this.gesture.lastCenter;
+      const deltaX = center.x - this.gesture.lastCenter.x;
+      const deltaY = center.y - this.gesture.lastCenter.y;
+      this.gesture.lastCenter = center;
 
       const scaleFactor =
         this.state.activeTool.type === "freedraw" &&
         this.state.penMode &&
         !this.props.UIOptions.unifiedToolbar
           ? 1
-          : distance / gesture.initialDistance;
+          : distance / this.gesture.initialDistance;
 
       const factoryGesture = this.props.UIOptions.unifiedToolbar;
       const nextZoom = scaleFactor
@@ -6855,8 +6860,8 @@ class App extends React.Component<AppProps, AppState> {
       if (factoryGesture) {
         // HCanvas.doScaleWithTwo/More use incremental distances, also at 50/200%.
         // Reversing at a limit must respond immediately instead of crossing an old baseline.
-        gesture.initialScale = nextZoom;
-        gesture.initialDistance = distance;
+        this.gesture.initialScale = nextZoom;
+        this.gesture.initialDistance = distance;
       }
 
       this.translateCanvas((state) => {
@@ -6887,16 +6892,16 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     if (
-      isHoldingSpace ||
-      isPanning ||
-      isDraggingScrollBar ||
+      this.isHoldingSpace ||
+      this.isPanning ||
+      this.isDraggingScrollBar ||
       isHandToolActive(this.state)
     ) {
       return;
     }
 
     const isPointerOverScrollBars = isOverScrollBars(
-      currentScrollBars,
+      this.currentScrollBars,
       event.clientX - this.state.offsetLeft,
       event.clientY - this.state.offsetTop,
     );
@@ -7564,7 +7569,10 @@ class App extends React.Component<AppProps, AppState> {
           contact.x = sample.clientX;
           contact.y = sample.clientY;
         }
-        gesture.pointers.set(event.pointerId, { x: contact.x, y: contact.y });
+        this.gesture.pointers.set(event.pointerId, {
+          x: contact.x,
+          y: contact.y,
+        });
       }
       samples.push(...incoming);
       append();
@@ -7887,7 +7895,7 @@ class App extends React.Component<AppProps, AppState> {
 
   // set touch moving for mobile context menu
   private handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    invalidateContextMenu = true;
+    this.invalidateContextMenu = true;
   };
 
   handleHoverSelectedLinearElement(
@@ -8071,7 +8079,7 @@ class App extends React.Component<AppProps, AppState> {
       if (
         this.state.activeTool.type === "freedraw" &&
         event.button === 0 &&
-        !isHoldingSpace
+        !this.isHoldingSpace
       ) {
         const singleTouch =
           this.state.multiStroke === false && event.pointerType === "touch";
@@ -8080,10 +8088,11 @@ class App extends React.Component<AppProps, AppState> {
         // Before that, HCanvas clears the provisional stroke when a second
         // finger starts its two/more-contact transform. Multi-write stays ink.
         const pinch =
-          singleTouch &&
-          (contact ? contact.length < 40 : gesture.pointers.size > 0);
+          singleTouch && (contact ? true : this.gesture.pointers.size > 0);
         if (pinch && contact) {
-          this.parallelInk.get(contact.pointerId)?.(true);
+          // Preserve committed writing when a second finger begins zooming;
+          // only the short provisional contact is discarded.
+          this.parallelInk.get(contact.pointerId)?.(contact.length < 40);
         } else if (this.state.multiStroke === false && this.parallelInk.size) {
           event.preventDefault();
           return;
@@ -8244,7 +8253,7 @@ class App extends React.Component<AppProps, AppState> {
       });
     }
 
-    if (isPanning) {
+    if (this.isPanning) {
       return;
     }
 
@@ -8322,7 +8331,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     // don't select while panning
-    if (gesture.pointers.size > 1) {
+    if (this.gesture.pointers.size > 1) {
       return;
     }
 
@@ -8683,19 +8692,19 @@ class App extends React.Component<AppProps, AppState> {
     }
     // deal with opening context menu on touch devices
     if (event.pointerType === "touch") {
-      invalidateContextMenu = false;
+      this.invalidateContextMenu = false;
 
-      if (touchTimeout) {
-        // If there's already a touchTimeout, this means that there's another
+      if (this.touchTimeout) {
+        // If there's already a this.touchTimeout, this means that there's another
         // touch down and we are doing another touch, so we shouldn't open the
         // context menu.
-        invalidateContextMenu = true;
+        this.invalidateContextMenu = true;
       } else {
         // open the context menu with the first touch's clientX and clientY
         // if the touch is not moving
-        touchTimeout = window.setTimeout(() => {
-          touchTimeout = 0;
-          if (!invalidateContextMenu) {
+        this.touchTimeout = window.setTimeout(() => {
+          this.touchTimeout = 0;
+          if (!this.invalidateContextMenu) {
             this.handleCanvasContextMenu(event);
           }
         }, TOUCH_CTX_MENU_TIMEOUT);
@@ -8704,9 +8713,9 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private resetContextMenuTimer = () => {
-    clearTimeout(touchTimeout);
-    touchTimeout = 0;
-    invalidateContextMenu = false;
+    clearTimeout(this.touchTimeout);
+    this.touchTimeout = 0;
+    this.invalidateContextMenu = false;
   };
 
   /**
@@ -8715,10 +8724,10 @@ class App extends React.Component<AppProps, AppState> {
    * pointerup handlers manually
    */
   private maybeCleanupAfterMissingPointerUp = (event: PointerEvent | null) => {
-    lastPointerUp?.();
+    this.lastPointerUp?.();
     this.missingPointerEventCleanupEmitter.trigger(event).clear();
     if (!event && this.props.UIOptions.unifiedToolbar) {
-      gesture.pointers.clear();
+      this.gesture.pointers.clear();
       this.rebaseGesture();
       this.resetContextMenuTimer();
     }
@@ -8730,9 +8739,9 @@ class App extends React.Component<AppProps, AppState> {
   ): boolean => {
     if (
       !(
-        gesture.pointers.size <= 1 &&
+        this.gesture.pointers.size <= 1 &&
         (event.button === POINTER_BUTTON.WHEEL ||
-          (event.button === POINTER_BUTTON.MAIN && isHoldingSpace) ||
+          (event.button === POINTER_BUTTON.MAIN && this.isHoldingSpace) ||
           isHandToolActive(this.state) ||
           (this.state.viewModeEnabled &&
             this.state.activeTool.type !== "laser"))
@@ -8740,7 +8749,7 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       return false;
     }
-    isPanning = true;
+    this.isPanning = true;
 
     // due to event.preventDefault below, container wouldn't get focus
     // automatically
@@ -8809,10 +8818,10 @@ class App extends React.Component<AppProps, AppState> {
       });
     });
     const teardown = withBatchedUpdates(
-      (lastPointerUp = () => {
-        lastPointerUp = null;
-        isPanning = false;
-        if (!isHoldingSpace) {
+      (this.lastPointerUp = () => {
+        this.lastPointerUp = null;
+        this.isPanning = false;
+        if (!this.isHoldingSpace) {
           if (
             this.state.viewModeEnabled &&
             this.state.activeTool.type !== "laser"
@@ -8847,12 +8856,15 @@ class App extends React.Component<AppProps, AppState> {
   private updateGestureOnPointerDown(
     event: React.PointerEvent<HTMLElement>,
   ): void {
-    gesture.pointers.set(event.pointerId, {
+    this.gesture.pointers.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
     });
 
-    if (gesture.pointers.size === 2 || this.props.UIOptions.unifiedToolbar) {
+    if (
+      this.gesture.pointers.size === 2 ||
+      this.props.UIOptions.unifiedToolbar
+    ) {
       this.rebaseGesture();
     }
   }
@@ -8927,7 +8939,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
       ),
       scrollbars: isOverScrollBars(
-        currentScrollBars,
+        this.currentScrollBars,
         event.clientX - this.state.offsetLeft,
         event.clientY - this.state.offsetTop,
       ),
@@ -8985,7 +8997,7 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       return false;
     }
-    isDraggingScrollBar = true;
+    this.isDraggingScrollBar = true;
     pointerDownState.lastCoords.x = event.clientX;
     pointerDownState.lastCoords.y = event.clientY;
     const onPointerMove = withBatchedUpdatesThrottled((event: PointerEvent) => {
@@ -8997,8 +9009,8 @@ class App extends React.Component<AppProps, AppState> {
       this.handlePointerMoveOverScrollbars(event, pointerDownState);
     });
     const onPointerUp = withBatchedUpdates(() => {
-      lastPointerUp = null;
-      isDraggingScrollBar = false;
+      this.lastPointerUp = null;
+      this.isDraggingScrollBar = false;
       setCursorForShape(this.interactiveCanvas, this.state);
       this.setState({
         cursorButton: "up",
@@ -9009,7 +9021,7 @@ class App extends React.Component<AppProps, AppState> {
       onPointerMove.flush();
     });
 
-    lastPointerUp = onPointerUp;
+    this.lastPointerUp = onPointerUp;
 
     window.addEventListener(EVENT.POINTER_MOVE, onPointerMove);
     window.addEventListener(EVENT.POINTER_UP, onPointerUp);
@@ -11426,7 +11438,7 @@ class App extends React.Component<AppProps, AppState> {
       this.translateCanvas({
         scrollX:
           this.state.scrollX -
-          (dx * (currentScrollBars.horizontal?.deltaMultiplier || 1)) /
+          (dx * (this.currentScrollBars.horizontal?.deltaMultiplier || 1)) /
             this.state.zoom.value,
       });
       pointerDownState.lastCoords.x = x;
@@ -11439,7 +11451,7 @@ class App extends React.Component<AppProps, AppState> {
       this.translateCanvas({
         scrollY:
           this.state.scrollY -
-          (dy * (currentScrollBars.vertical?.deltaMultiplier || 1)) /
+          (dy * (this.currentScrollBars.vertical?.deltaMultiplier || 1)) /
             this.state.zoom.value,
       });
       pointerDownState.lastCoords.y = y;
@@ -13734,7 +13746,7 @@ class App extends React.Component<AppProps, AppState> {
 
       event.preventDefault();
 
-      if (isPanning) {
+      if (this.isPanning) {
         return;
       }
 
@@ -13845,7 +13857,7 @@ class App extends React.Component<AppProps, AppState> {
     this.props.onPointerUpdate?.({
       pointer,
       button,
-      pointersMap: gesture.pointers,
+      pointersMap: this.gesture.pointers,
     });
   };
 

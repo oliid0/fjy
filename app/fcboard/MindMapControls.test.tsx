@@ -86,6 +86,7 @@ const setup = async (scale = 1) => {
 
 it("selects a single node without adding ink, then clears, adds and deletes its complete branch", async () => {
   const { api, select } = await setup();
+  act(() => api.setActiveTool({ type: "selection" }));
   select(1);
   expect(
     api.getSceneElements().some((element) => element.type === "freedraw"),
@@ -233,4 +234,17 @@ it("lets palm and pen-side-button erasing reach the canvas without selecting a n
       screen.queryByRole("button", { name: t("fcboard.mindmap_move_node") }),
     ).toBeNull();
   }
+});
+
+it("writes the first stroke in a node immediately in pen mode", async () => {
+  const { api, canvas, pointer, targets } = await setup();
+  const node = targets()[1];
+  pointer(canvas, "pointerdown", node.x + 20, node.y + 20);
+  pointer(canvas, "pointermove", node.x + 50, node.y + 25);
+  pointer(canvas, "pointerup", node.x + 60, node.y + 25);
+  const ink = api
+    .getSceneElements()
+    .filter((element) => element.type === "freedraw");
+  expect(ink).toHaveLength(1);
+  expect(ink[0].width).toBeGreaterThan(20);
 });

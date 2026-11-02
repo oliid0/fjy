@@ -573,7 +573,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.text",
-      "插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区",
+      "插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入，回答默认适应可见空间；用户明确指定大小时args.fontSize=8..200；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区",
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -590,6 +590,15 @@ export const registerCanvasCommands = (
           !["match", "handwritten", "text"].includes(String(args.presentation))
         ) {
           throw new Error(t("fcboard.unknown_answer_style"));
+        }
+        if (
+          args.fontSize !== undefined &&
+          (typeof args.fontSize !== "number" ||
+            !Number.isFinite(args.fontSize) ||
+            args.fontSize < 8 ||
+            args.fontSize > 200)
+        ) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
         }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });
@@ -648,6 +657,7 @@ export const registerCanvasCommands = (
             args.placement === "center" ? undefined : source,
             args.presentation as "match" | "handwritten" | "text" | undefined,
             {
+              fontSize: args.fontSize as number | undefined,
               mode:
                 args.placement === "center"
                   ? "center"

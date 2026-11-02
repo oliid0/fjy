@@ -111,6 +111,12 @@ export class CommandRouter {
       ([name, value]) => `${name}: ${value.description}`,
     ).join("\n");
   }
+  catalog() {
+    return Array.from(this.commands, ([name, value]) => ({
+      name,
+      description: value.description,
+    })).filter((entry) => entry.description !== "@internal");
+  }
   touch(source?: AbortSignal) {
     source?.throwIfAborted();
     const before = this.revision;
@@ -215,6 +221,7 @@ const cancellable = new Set([
   "insert.object",
   "insert.open",
   "insert.configure",
+  "quiz.generate",
   "mail.action",
   "signal.action",
   "web.open",

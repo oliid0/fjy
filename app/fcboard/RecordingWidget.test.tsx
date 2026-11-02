@@ -12,6 +12,30 @@ const pointer = (node: Element, type: string, x: number, y: number) =>
       clientY: y,
     }),
   );
+it("shows the recent real transcript and current partial below the recording controls", () => {
+  render(
+    <RecordingWidget
+      paused={false}
+      elapsed={10}
+      disabled={false}
+      pauseDisabled={false}
+      transcript={[
+        { time: 1, text: "旧句" },
+        { time: 3, text: "第一句" },
+        { time: 5, text: "第二句" },
+        { time: 7, text: "第三句" },
+      ]}
+      caption={{ time: 9, text: "正在说的话" }}
+      onPause={vi.fn()}
+      onStop={vi.fn()}
+      onRestore={vi.fn()}
+    />,
+  );
+  expect(screen.queryByText("旧句")).not.toBeInTheDocument();
+  const log = screen.getByRole("log");
+  expect(log).toHaveTextContent("00:03 第一句");
+  expect(log).toHaveTextContent("00:09 正在说的话");
+});
 it("drags within the screen, rolls back cancellation and keeps the three controls independent", () => {
   const pause = vi.fn();
   const stop = vi.fn();

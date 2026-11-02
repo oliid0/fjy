@@ -15,6 +15,7 @@ export const startRealtimeSpeech = async (
   stream?: MediaStream,
   onActivity?: () => void,
   onInterim?: (line: TranscriptLine | null) => void,
+  onState?: (state: { engine: "cloud" | "local"; message?: string }) => void,
 ): Promise<LocalSpeechHandle> => {
   type Attempt = {
     cloud: boolean;
@@ -29,6 +30,7 @@ export const startRealtimeSpeech = async (
   let finishing: Promise<void> | undefined;
   let latestTime = 0;
   let transition: Promise<void>;
+  let reconnects = 0;
   const report = (error: unknown) => {
     if (!closed) {
       onError(error instanceof Error ? error.message : String(error));
@@ -47,11 +49,27 @@ export const startRealtimeSpeech = async (
       return attempt.recovery;
     }
     onInterim?.(null);
+    onState?.({
+      engine: "cloud",
+      message: error instanceof Error ? error.message : String(error),
+    });
     attempt.recovery = (async () => {
       const handle = await attempt.opening.catch(() => undefined);
       await handle?.cancel().catch(() => {});
       if (!closed) {
-        await open(false);
+        if (currentSettings().speechKey.trim() && reconnects++ < 2) {
+          try {
+            await open(true);
+          } catch (failure) {
+            await recover(current, failure);
+          }
+        } else {
+          onState?.({
+            engine: "local",
+            message: error instanceof Error ? error.message : String(error),
+          });
+          await open(false);
+        }
       }
     })();
     transition = attempt.recovery;
@@ -63,6 +81,9 @@ export const startRealtimeSpeech = async (
     current = attempt;
     const deliver = (line: TranscriptLine) => {
       if (!cancelled && !finished && current === attempt && !attempt.recovery) {
+        if (cloud) {
+          reconnects = 0;
+        }
         latestTime = Math.max(latestTime, offset + line.time);
         onLine({ ...line, time: latestTime });
       }
@@ -108,7 +129,9 @@ export const startRealtimeSpeech = async (
         },
       );
     });
-    return attempt.opening.then(() => {});
+    return attempt.opening.then(() => {
+      onState?.({ engine: cloud ? "cloud" : "local" });
+    });
   };
   const cloud =
     currentSettings().speech === "cloud" && navigator.onLine !== false;

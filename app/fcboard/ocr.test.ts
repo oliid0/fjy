@@ -62,7 +62,7 @@ describe("explicit handwriting actions", () => {
     expect(capture).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("starts specialized cloud OCR and local OCR together, with bounded output", async () => {
+  it("keeps successful local math independent of cloud credentials and results", async () => {
     backend.cloud.mockResolvedValue("1+1=");
     backend.local.mockResolvedValue("1+1=");
     const result = await recognizeHandwriting(
@@ -72,12 +72,8 @@ describe("explicit handwriting actions", () => {
       "math",
     );
     expect(result).toBe("1+1=");
-    expect(backend.cloud).toHaveBeenCalledTimes(1);
+    expect(backend.cloud).not.toHaveBeenCalled();
     expect(backend.local).toHaveBeenCalledTimes(1);
-    expect(backend.cloud.mock.calls[0][3]).toEqual({
-      maxTokens: 256,
-      timeoutMs: 6000,
-    });
   });
   it("silently uses local recognition when cloud errors instead of asking for another selection", async () => {
     backend.cloud.mockRejectedValue(new Error("network"));
@@ -139,6 +135,65 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
+  it("uses bundled math strokes even when cloud OCR is selected and the token is empty", async () => {
+    backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["y=x^2"]);
+    saveSettings({ ...defaults, ocr: "cloud", apiKey: "" }, false);
+    const capture = vi.fn();
+    expect(
+      await recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        [
+          [
+            [0, 0],
+            [10, 20],
+          ],
+        ],
+      ),
+    ).toBe("y=x^2");
+    expect(backend.cloud).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+  });
+  it.each(["local", "cloud"] as const)(
+    "uses bundled Paddle OCR if native math model preparation fails with %s settings and no token",
+    async (ocr) => {
+      backend.nativeAvailable = true;
+      backend.native.mockRejectedValue(
+        Object.assign(new Error("model not registered"), {
+          code: "HANDWRITING_MODEL_REQUIRED",
+        }),
+      );
+      backend.local.mockResolvedValue("y=x^2");
+      saveSettings({ ...defaults, ocr, apiKey: "" }, false);
+      const capture = vi.fn().mockResolvedValue("local-math-image");
+      expect(
+        await recognizeHandwriting(
+          capture,
+          new AbortController().signal,
+          vi.fn(),
+          "math",
+          undefined,
+          [
+            [
+              [0, 0],
+              [20, 30],
+            ],
+          ],
+        ),
+      ).toBe("y=x^2");
+      expect(capture).toHaveBeenCalledTimes(1);
+      expect(backend.local).toHaveBeenCalledWith(
+        "local-math-image",
+        expect.any(AbortSignal),
+        expect.any(Function),
+      );
+      expect(backend.cloud).not.toHaveBeenCalled();
+    },
+  );
   it("passes actual ranked native alternatives to the writing surface and waits for its choice", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["你好", "你号"]);

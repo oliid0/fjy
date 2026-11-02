@@ -108,7 +108,7 @@ it("offers exactly the photographed twenty shapes and commits each drag as one g
   }
 });
 
-it("keeps a shape tool ready for rapid taps and retains the last dragged aspect ratio", async () => {
+it("keeps consecutive cubes independent and preserves the APK's square projection on rapid taps", async () => {
   const { api, choose, surface, close } = await setup();
   try {
     choose("cube");
@@ -128,8 +128,8 @@ it("keeps a shape tool ready for rapid taps and retains the last dragged aspect 
           .getSceneElements()
           .filter((element) => element.customData?.fcWidget?.id === widget.id),
       );
-      expect(bounds[2] - bounds[0]).toBeCloseTo(300);
-      expect(bounds[3] - bounds[1]).toBeCloseTo(60);
+      expect(bounds[2] - bounds[0]).toBeCloseTo(450);
+      expect(bounds[3] - bounds[1]).toBeCloseTo(450);
     }
     expect(api.getAppState().activeTool.type).toBe("custom");
     Keyboard.undo();
@@ -227,7 +227,7 @@ it("uses the chosen fill and real hemisphere hidden edge, and retains cube unfol
     pointer(surface(), "pointerup", 600, 580);
     const cube = readWidgets(api).find((widget) => widget.kind === "cube")!;
     expect(cube.params.solid.unfold).toBe(0);
-    expect(cube.params.stretchX).not.toBe(cube.params.stretchY);
+    expect(cube.params.stretchX).toBe(cube.params.stretchY);
     expect(
       api
         .getSceneElements()

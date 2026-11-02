@@ -1,0 +1,84 @@
+.fc-quiz-panel {
+  width: min(900px, calc(100vw - 32px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 32px);
+  overflow: auto;
+  padding: 20px;
+  font-size: 16px;
+  header,
+  footer,
+  form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header {
+    justify-content: space-between;
+  }
+  form {
+    margin: 16px 0;
+    flex-wrap: wrap;
+  }
+  form label {
+    flex: 1;
+    min-width: 200px;
+  }
+  form input,
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  input,
+  textarea {
+    font: inherit;
+    padding: 8px;
+  }
+  textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+  fieldset {
+    margin: 16px 0;
+    border: 1px solid #8885;
+    border-radius: 8px;
+    padding: 16px;
+    min-width: 0;
+  }
+  fieldset label {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+  }
+  .fc-quiz-solution {
+    color: var(--fc-ink);
+    background: #37a57a15;
+    padding: 12px;
+    border-radius: 6px;
+  }
+  footer {
+    flex-wrap: wrap;
+    position: sticky;
+    bottom: 0;
+    background: var(--fc-surface);
+    padding: 12px 0;
+  }
+  aside a {
+    display: block;
+    margin: 8px 0;
+  }
+}
+
+.fc-classroom .fc-quiz-panel fieldset input[type="radio"],
+.fc-classroom .fc-quiz-panel fieldset input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  flex: none;
+}

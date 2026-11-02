@@ -22,6 +22,27 @@ const viewport = { left: 16, top: 16, right: 1264, bottom: 604 };
 const overlaps = (a: readonly number[], b: readonly number[]) =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
+it("honors a teacher's explicit writing size while still fitting the actual viewport", () => {
+  const api = sceneAPI();
+  const ids = insertText(
+    api,
+    "明确要求40号板书",
+    undefined,
+    undefined,
+    undefined,
+    "text",
+    { fontSize: 40 },
+  );
+  const writing = api
+    .getSceneElements()
+    .filter((element) => ids.includes(element.id));
+  expect(writing[0]).toMatchObject({ type: "text", fontSize: 40 });
+  const bounds = getCommonBounds(writing);
+  const viewport = contentViewport(api);
+  expect(bounds[2]).toBeLessThanOrEqual(viewport.right);
+  expect(bounds[3]).toBeLessThanOrEqual(viewport.bottom);
+});
+
 it("right-aligns a vertical arithmetic result below the bar at the original handwriting size", () => {
   const api = sceneAPI();
   const source = [
@@ -62,7 +83,7 @@ it("right-aligns a vertical arithmetic result below the bar at the original hand
   expect(bounds[3] - bounds[1]).toBeCloseTo(36);
 });
 
-it("inserts Chinese answers at 90% of measured handwriting without applying ink-glyph scaling twice", () => {
+it("inserts Chinese answers at half the former handwriting size without applying ink-glyph scaling twice", () => {
   const api = sceneAPI();
   const source = newFreeDrawElement({
     type: "freedraw",
@@ -86,7 +107,7 @@ it("inserts Chinese answers at 90% of measured handwriting without applying ink-
     .find((element) => ids.includes(element.id));
   expect(answer).toMatchObject({
     type: "text",
-    fontSize: 36,
+    fontSize: 18,
     strokeColor: "#dc2626",
   });
   expect(answer!.y).toBeGreaterThanOrEqual(220);
@@ -111,7 +132,7 @@ it("keeps answer text legible near an edge by using nearby empty space before sh
   const result = api
     .getSceneElements()
     .filter((element) => answer.includes(element.id));
-  expect(result[0]).toMatchObject({ type: "text", fontSize: 40 });
+  expect(result[0]).toMatchObject({ type: "text", fontSize: 20 });
   const bounds = getCommonBounds(result);
   const viewport = contentViewport(api);
   expect(bounds[0]).toBeGreaterThanOrEqual(viewport.left);
@@ -260,7 +281,7 @@ it("preserves the question and reports a full visible board instead of inserting
   expect(api.scrollToContent).not.toHaveBeenCalled();
 });
 
-it("keeps the selected text alignment and size when inserting the next answer", () => {
+it("keeps the selected alignment and color while halving the next answer size", () => {
   const api = sceneAPI();
   insertElements(api, [
     {
@@ -284,7 +305,7 @@ it("keeps the selected text alignment and size when inserting the next answer", 
     .find((element) => ids.includes(element.id));
   expect(answer).toMatchObject({
     type: "text",
-    fontSize: 40,
+    fontSize: 20,
     strokeColor: "#dc2626",
     textAlign: "center",
   });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
+import { throttleRAF } from "@fcboard/common";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
@@ -53,6 +54,27 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
   const [preview, setPreview] = useState<[number, number][]>([]);
   const [error, setError] = useState("");
   const gesture = useRef<Gesture | undefined>(undefined);
+  const previewFrame = useRef<ReturnType<typeof throttleRAF> | undefined>(
+    undefined,
+  );
+  if (!previewFrame.current) {
+    previewFrame.current = throttleRAF(() => {
+      const active = gesture.current;
+      if (
+        !active ||
+        active.target !== identity() ||
+        active.revision !== classroomCommands.revision
+      ) {
+        return;
+      }
+      try {
+        renderWidget(api, active.next, false, { preview: true });
+      } catch (failure) {
+        restore();
+        setError(String(failure));
+      }
+    });
+  }
   const layer = useRef<SVGSVGElement>(null);
   const handlers = useRef<
     | {
@@ -73,6 +95,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
       : `board:${board?.active || api.id}`;
   };
   const restore = () => {
+    previewFrame.current?.cancel();
     const active = gesture.current;
     gesture.current = undefined;
     setPreview([]);
@@ -372,12 +395,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
         setPreview([...active.points]);
       }
     }
-    try {
-      renderWidget(api, active.next, false, { preview: true });
-    } catch (failure) {
-      restore();
-      setError(String(failure));
-    }
+    previewFrame.current?.();
   };
   const finish = (event: ReactPointerEvent) => {
     const active = gesture.current;
@@ -385,6 +403,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
       return;
     }
     move(event);
+    previewFrame.current?.cancel();
     if (gesture.current !== active) {
       return;
     }

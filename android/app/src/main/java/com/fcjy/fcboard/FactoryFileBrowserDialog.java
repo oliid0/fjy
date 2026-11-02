@@ -40,6 +40,8 @@ final class FactoryFileBrowserDialog extends Dialog {
     private final ArrayList<File> files = new ArrayList<>();
     private final File primaryRoot, initialFolder;
     private File root, directory, selected;
+    private File clipboardRoot, clipboardFile;
+    private boolean clipboardCut;
     private boolean volumes, busy, delivered, registered, refreshing, awaitingStorageAccess;
     private int generation;
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
@@ -75,6 +77,19 @@ final class FactoryFileBrowserDialog extends Dialog {
         usb=panel.findViewById(R.id.factory_fb_usb_store_layout);
         ((TextView)panel.findViewById(R.id.factory_fb_title)).setText(saving?R.string.factory_fb_save_file:R.string.factory_fb_open_file);
         ((TextView)panel.findViewById(R.id.factory_fb_file_type)).setText(kind.label);
+        if (!saving && kind == FactoryFileAccess.Kind.CONTENT) {
+            ((TextView)panel.findViewById(R.id.factory_fb_title)).setText("文件管理器");
+            TextView operations = panel.findViewById(R.id.factory_fb_file_type);
+            operations.setText("文件操作 ▾");
+            operations.setContentDescription("文件操作：新建文件夹、粘贴；长按文件可复制剪切重命名删除");
+            operations.setOnClickListener(view -> fileMenu(null));
+            path.setOnClickListener(view -> fileMenu(null));
+            path.setContentDescription("文件夹路径；点击可新建文件夹或粘贴文件");
+            grid.setOnItemLongClickListener((parent, view, index, id) -> {
+                if (busy || volumes || index >= files.size()) return false;
+                fileMenu(files.get(index)); return true;
+            });
+        }
         panel.findViewById(R.id.factory_fb_file_save_layout).setVisibility(saving?View.VISIBLE:View.GONE);
         name.setText(new java.text.SimpleDateFormat("yyyyMMddHHmmss",Locale.getDefault()).format(new Date()));
         // Opening a browser does not request the keyboard; only a deliberate filename edit does.
@@ -135,6 +150,43 @@ final class FactoryFileBrowserDialog extends Dialog {
         panel.getViewTreeObserver().addOnGlobalLayoutListener(this::resize);
     }
     private int dp(int value){return Math.round(value*activity.getResources().getDisplayMetrics().density);}
+    private interface FileJob { void run() throws Exception; }
+    private void fileJob(FileJob action) {
+        busy=true; updateEnabled(); path.setText("正在处理文件…");
+        worker.execute(() -> {
+            Exception failure=null;
+            try { action.run(); } catch(Exception error) { failure=error; }
+            final Exception result=failure;
+            activity.runOnUiThread(() -> {
+                busy=false;
+                if (!isShowing()) return;
+                if (result != null) failure(result);
+                selected=null; refresh();
+            });
+        });
+    }
+    private void fileName(String title, String value, java.util.function.Consumer<String> action) {
+        EditText input=new EditText(text); input.setSingleLine(); input.setText(value); input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(activity).setTitle(title).setView(input).setPositiveButton(android.R.string.ok,(dialog,which)->action.accept(input.getText().toString())).setNegativeButton(android.R.string.cancel,null).show();
+    }
+    private void fileMenu(File file) {
+        if (busy || refreshing || volumes || kind != FactoryFileAccess.Kind.CONTENT) return;
+        final File activeRoot=root, activeFolder=directory;
+        List<String> choices=new ArrayList<>();
+        if (file != null) Collections.addAll(choices,"复制","剪切","重命名","删除");
+        choices.add("新建文件夹");
+        if (clipboardFile != null) choices.add("粘贴");
+        new AlertDialog.Builder(activity).setTitle(file == null ? "文件操作" : file.getName()).setItems(choices.toArray(new String[0]),(dialog,index)->{
+            String action=choices.get(index);
+            switch(action) {
+                case "复制": case "剪切": clipboardRoot=activeRoot; clipboardFile=file; clipboardCut="剪切".equals(action); Toast.makeText(activity,"请选择目标文件夹，再点击“文件操作 → 粘贴”",Toast.LENGTH_LONG).show(); break;
+                case "重命名": fileName("重命名",file.getName(),name->fileJob(()->FactoryFileOperations.rename(activeRoot,file,name))); break;
+                case "新建文件夹": fileName("新建文件夹","",name->fileJob(()->FactoryFileOperations.createFolder(activeRoot,activeFolder,name))); break;
+                case "删除": new AlertDialog.Builder(activity).setTitle("删除文件").setMessage("确定删除“"+file.getName()+"”？此操作无法撤销。").setNegativeButton(android.R.string.cancel,null).setPositiveButton(android.R.string.ok,(confirm,which)->fileJob(()->FactoryFileOperations.delete(activeRoot,file))).show(); break;
+                case "粘贴": final File sourceRoot=clipboardRoot, source=clipboardFile; final boolean cut=clipboardCut; fileJob(()->{FactoryFileOperations.paste(sourceRoot,source,activeRoot,activeFolder,cut);if(cut){clipboardFile=null;clipboardRoot=null;}}); break;
+            }
+        }).show();
+    }
     /** HFileGridAdapter's Glide thumbnails, decoded off the UI and file-operation workers. */
     private void loadThumbnail(ImageView icon,File file){
         String key=file.getAbsolutePath()+":"+file.lastModified()+":"+file.length();icon.setTag(key);

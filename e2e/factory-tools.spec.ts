@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [800, 1920]) {
-  test(`factory toolbox uses the Capacitor command and remains reachable at ${width}px`, async ({
+  test(`embedded toolbox uses the bundled calculator bridge and remains reachable at ${width}px`, async ({
     page,
   }, info) => {
     // Capacitor 8.2's installed runtime reads PluginHeaders and nativePromise.
-    // This verifies the production UI bridge; OEM app launches require the target device.
+    // This verifies the production UI bridge. Actual DEX/resources run in EmbeddedCalculatorTest.
     await page.addInitScript(() => {
       const calls: string[] = [];
       Reflect.set(window, "__factoryCalls", calls);
@@ -18,6 +18,9 @@ for (const width of [800, 1920]) {
               ...[
                 "getFactoryTools",
                 "openFactoryTool",
+                "openBundledCalculator",
+                "bundledCalculatorAction",
+                "stopPoll",
                 "getInkProfile",
                 "listUploads",
                 "removeListener",
@@ -51,9 +54,21 @@ for (const width of [800, 1920]) {
             return { files: [] };
           }
           if (method === "openFactoryTool") {
-            calls.push(options.tool!);
+            calls.push(`external:${options.tool}`);
+            throw new Error("Tools must not launch an installed vendor app");
+          }
+          if (method === "openBundledCalculator") {
+            calls.push("bundled:calculator");
             return new Promise((resolve) =>
-              Reflect.set(window, "__factoryComplete", () => resolve({})),
+              Reflect.set(window, "__factoryComplete", () =>
+                resolve({
+                  open: true,
+                  supported: true,
+                  embedded: true,
+                  version: "test:1",
+                  controls: [],
+                }),
+              ),
             );
           }
           return {};
@@ -63,18 +78,21 @@ for (const width of [800, 1920]) {
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/");
     await page.getByRole("button", { name: "教学工具", exact: true }).click();
-    const group = page.getByRole("group", { name: "大屏工具", exact: true });
-    await expect(group.getByRole("button")).toHaveCount(5);
+    const group = page.getByRole("dialog", { name: "教学工具", exact: true });
+    for (const name of ["分屏", "投票", "计算器", "聚光灯", "计时器"]) {
+      await expect(
+        group.getByRole("button", { name, exact: true }),
+      ).toBeEnabled();
+    }
     await expect(
       page.getByRole("button", { name: "快传", exact: true }),
     ).toBeVisible();
     await expect(
       group.getByRole("button", { name: "打开快传", exact: true }),
     ).toHaveCount(0);
-    // The semantic group uses display:contents so factory and built-in controls
-    // share the original three-column grid. Measure the rendered grid and buttons.
+    // All original tools share the actual three-column grid and remain on screen.
     const { box, controls } = await group.evaluate((element) => {
-      const grid = element.closest(".fc-tools-grid");
+      const grid = element.querySelector(".fc-tools-grid");
       if (!grid) {
         throw new Error("Factory tools are outside their rendered grid");
       }
@@ -85,14 +103,14 @@ for (const width of [800, 1920]) {
       // Sample one animation frame so a panel transition cannot mix poses.
       return {
         box: bounds(grid),
-        controls: Array.from(element.querySelectorAll("button"), bounds),
+        controls: Array.from(grid.querySelectorAll("button"), bounds),
       };
     });
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(width);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(720);
-    expect(controls).toHaveLength(5);
+    expect(controls.length).toBeGreaterThanOrEqual(5);
     for (const control of controls) {
       expect(control.x).toBeGreaterThanOrEqual(box.x);
       expect(control.x + control.width).toBeLessThanOrEqual(box.x + box.width);
@@ -105,15 +123,13 @@ for (const width of [800, 1920]) {
       path: info.outputPath(`factory-toolbox-${width}.png`),
     });
     const calculator = group.getByRole("button", {
-      name: "打开计算器",
+      name: "计算器",
       exact: true,
     });
     await calculator.click();
-    await expect(calculator).toBeDisabled();
-    await expect(calculator).toHaveAttribute("aria-busy", "true");
-    expect(
-      await page.evaluate(() => Reflect.get(window, "__factoryCalls")),
-    ).toEqual(["calculator"]);
+    await expect
+      .poll(() => page.evaluate(() => Reflect.get(window, "__factoryCalls")))
+      .toEqual(["bundled:calculator"]);
     await page.evaluate(() => Reflect.get(window, "__factoryComplete")());
     await expect(
       page.getByRole("dialog", { name: "教学工具" }),

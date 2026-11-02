@@ -54,6 +54,9 @@ export const draggedFactoryShape = (
   const kind = factoryShapeCatalog[index][0];
   const params = widgetDefaults();
   params.solid.stroke = style.color;
+  if (kind === "cube") {
+    params.factoryOutline = true;
+  }
   params.strokeWidth = style.width;
   params.opacity = style.opacity;
   const widget: Widget = {
@@ -76,23 +79,32 @@ export const draggedFactoryShape = (
   const bounds = getCommonBounds(
     convertToFcboardElements(widgetShapes(widget)),
   );
+  const cubeExtent =
+    kind === "cube"
+      ? Math.max(Math.abs(end[0] - start[0]), Math.abs(end[1] - start[1])) * 1.5
+      : undefined;
   params.stretchX = Math.max(
     0.01,
     Math.min(
       100,
-      Math.abs(end[0] - start[0]) / Math.max(1, bounds[2] - bounds[0]),
+      (cubeExtent ?? Math.abs(end[0] - start[0])) /
+        Math.max(1, bounds[2] - bounds[0]),
     ),
   );
   params.stretchY = Math.max(
     0.01,
     Math.min(
       100,
-      Math.abs(end[1] - start[1]) / Math.max(1, bounds[3] - bounds[1]),
+      (cubeExtent ?? Math.abs(end[1] - start[1])) /
+        Math.max(1, bounds[3] - bounds[1]),
     ),
   );
   widget.position = {
     x: Math.min(start[0], end[0]) - bounds[0] * params.stretchX,
-    y: Math.min(start[1], end[1]) - bounds[1] * params.stretchY,
+    y:
+      Math.min(start[1], end[1]) -
+      (cubeExtent ? cubeExtent / 3 : 0) -
+      bounds[1] * params.stretchY,
   };
   return widget;
 };

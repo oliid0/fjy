@@ -2,6 +2,8 @@
 
 # Built application files
 *.apk
+# Reviewed, pinned original calculator core; generated application APKs remain ignored.
+!app/src/main/assets/factory/calculator-core.apk
 *.aar
 *.ap_
 *.aab

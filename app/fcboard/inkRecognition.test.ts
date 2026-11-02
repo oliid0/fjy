@@ -7,6 +7,33 @@ afterEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
+it("uses vision only for ambiguous ink and rejects unsupported visual guesses", async () => {
+  const provider = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce('{"shape":"star"}')
+    .mockResolvedValueOnce('{"shape":"octagon"}');
+  const capture = vi.fn().mockResolvedValue("data:image/png;base64,ambiguous");
+  const signal = new AbortController().signal;
+  expect(await recognizeInkContent("shape", capture, [], signal)).toEqual({
+    kind: "shape",
+    shape: "star",
+  });
+  expect(provider.mock.calls[0][0][0].content).toEqual(
+    expect.arrayContaining([
+      {
+        type: "image_url",
+        image_url: { url: "data:image/png;base64,ambiguous" },
+      },
+    ]),
+  );
+  expect(provider.mock.calls[0][3]).toMatchObject({
+    maxTokens: 512,
+    timeoutMs: 12000,
+  });
+  await expect(
+    recognizeInkContent("shape", capture, [], signal),
+  ).rejects.toThrow("No recognized ink object");
+});
 it.each(["text", "drawing"])(
   "routes magic %s ink to the requested generation style",
   async (kind) => {

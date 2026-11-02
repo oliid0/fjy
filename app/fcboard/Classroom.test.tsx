@@ -517,11 +517,11 @@ describe("selection-driven classroom controls", () => {
         });
         act(() => deliver("清空"));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(2000);
+          await vi.advanceTimersByTimeAsync(200);
         });
         act(() => deliver("白板"));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(2999);
+          await vi.advanceTimersByTimeAsync(699);
         });
         expect(clear).not.toHaveBeenCalled();
         await act(async () => {
@@ -916,7 +916,7 @@ describe("selection-driven classroom controls", () => {
       });
       act(() => deliver("清空白板"));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
+        await vi.advanceTimersByTimeAsync(200);
       });
       act(() => {
         release[1]();
@@ -933,7 +933,7 @@ describe("selection-driven classroom controls", () => {
       expect(clear).toHaveBeenCalledTimes(1);
       act(() => deliver("清空白板"));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
+        await vi.advanceTimersByTimeAsync(200);
       });
       act(() => {
         page = 2;
@@ -1712,13 +1712,13 @@ describe("selection-driven classroom controls", () => {
           ),
         );
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(3000);
+          await vi.advanceTimersByTimeAsync(700);
         });
       };
       try {
         act(() => callbacks[0].line("开始录制", 0));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(3000);
+          await vi.advanceTimersByTimeAsync(700);
         });
         expect(start).toHaveBeenCalledTimes(2);
         if (provider !== "system") {
@@ -1748,9 +1748,9 @@ describe("selection-driven classroom controls", () => {
           await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(3));
         });
         const saved = (await loadRecordings())[0];
-        expect(saved.transcript.filter((line) => line.text === "清屏")).toEqual(
-          [expect.objectContaining({ text: "清屏", time: 5 })],
-        );
+        const spoken = saved.transcript.filter((line) => line.text === "清屏");
+        expect(spoken).toHaveLength(1);
+        expect(spoken[0].time).toBeCloseTo(2.7);
         expect(saved.transcript.some((line) => line.text === "继续录制")).toBe(
           false,
         );

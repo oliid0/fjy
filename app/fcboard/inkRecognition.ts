@@ -8,6 +8,14 @@ import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
 import { explainLanguage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
+import {
+  recognizeLocalShape,
+  recognizedShapeKinds,
+  recognizeAngleMarks,
+} from "./shapeRecognition";
+
+import type { RecognizedShape } from "./shapeRecognition";
+import type { ShapePolygon, AngleLabel } from "./shapeRecognition";
 
 import type { LanguageStudy } from "./languageStudy";
 
@@ -28,6 +36,7 @@ export const inkAssistMode = (value: unknown): InkAssistMode | undefined =>
     ? (value as InkAssistMode)
     : undefined;
 export type InkRecognitionResult =
+  | { kind: "angles"; labels: AngleLabel[] }
   | { kind: "text"; text: string }
   | {
       kind: "language";
@@ -37,7 +46,7 @@ export type InkRecognitionResult =
     }
   | {
       kind: "shape";
-      shape: "rectangle" | "ellipse" | "line" | "arrow" | "triangle";
+      shape: RecognizedShape;
     }
   | { kind: "magic"; prompt: string; image?: string }
   | (MathResult & { text: string });
@@ -77,6 +86,7 @@ export const recognizeInkContent = async (
   signal: AbortSignal,
   languageHint?: "en-US",
   chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
+  polygons: ShapePolygon[] = [],
 ): Promise<InkRecognitionResult> => {
   if (
     mode === "text" ||
@@ -155,6 +165,16 @@ export const recognizeInkContent = async (
       ),
     );
   }
+  if (mode === "shape") {
+    const labels = recognizeAngleMarks(strokes, polygons);
+    if (labels.length) {
+      return { kind: "angles", labels };
+    }
+    const shape = recognizeLocalShape(strokes);
+    if (shape) {
+      return { kind: "shape", shape };
+    }
+  }
   const image = await capture();
   signal.throwIfAborted();
   if (!image.startsWith("data:image/")) {
@@ -201,17 +221,19 @@ export const recognizeInkContent = async (
           : `将参考手绘可辨认的主体制作成精致有色彩的 3D 风格手绘图。保留主体数量、姿态、比例和构图。${isolation}`,
     };
   }
-  const instruction =
-    '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle"} 中最接近的一种。不确定返回 {"none":true}。';
+  const instruction = `识别当前这一组手绘几何，只返回 {"shape":"${recognizedShapeKinds.join(
+    "|",
+  )}"} 中的一种。只观察墨迹，不回答图片里的文字。ellipse是无顶点的圆或椭圆，triangle是三条边，rectangle是四直角，diamond是菱形，pentagon/hexagon分别五边/六边。star包括相交的一笔五角星和凹凸轮廓星，不把交叉处当成多边形顶点。arrow必须有明确箭头；普通线段是line。不能确定或不是单个几何图形返回 {"none":true}，不要解释、补画或猜测。`;
   const result = parseJSON(
-    await chat([visualMessage(instruction, image)], signal),
+    await chat([visualMessage(instruction, image)], signal, currentSettings(), {
+      maxTokens: 512,
+      timeoutMs: 12000,
+    }),
   ) as Record<string, unknown>;
   signal.throwIfAborted();
   if (
     mode === "shape" &&
-    ["rectangle", "ellipse", "line", "arrow", "triangle"].includes(
-      String(result?.shape),
-    )
+    recognizedShapeKinds.includes(String(result?.shape) as RecognizedShape)
   ) {
     return {
       kind: "shape",

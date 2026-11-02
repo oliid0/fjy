@@ -206,7 +206,8 @@ public class BoardFilePlugin extends Plugin {
             if(file==null){call.resolve(new JSObject().put("cancelled",true));return;}
             opened=file;readId=UUID.randomUUID().toString();readSize=file.length();readModified=file.lastModified();
             String extension=file.getName().substring(file.getName().lastIndexOf('.')+1).toLowerCase(java.util.Locale.ROOT);
-            String mime=kind==FactoryFileAccess.Kind.BOARD?"application/xml":"image/"+("jpg".equals(extension)?"jpeg":extension);
+            String mime=kind==FactoryFileAccess.Kind.BOARD?"application/xml":kind==FactoryFileAccess.Kind.CONTENT?android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension):"image/"+("jpg".equals(extension)?"jpeg":extension);
+            if(mime==null)mime="application/octet-stream";
             call.resolve(new JSObject().put("id",readId).put("name",file.getName()).put("size",readSize).put("mimeType",mime));
         });},kind);
         try{browser.show();}catch(Exception error){browser=null;browserOwner=null;call.reject(error.getMessage(),error);}

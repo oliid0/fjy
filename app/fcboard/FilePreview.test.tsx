@@ -657,6 +657,12 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
     "freedraw",
   );
   const chooseNode = vi.spyOn(classroomCommands, "execute");
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.tool",
+      args: { tool: "selection" },
+    });
+  });
   pointer("pointerdown", selected.x + 60, selected.y + 20);
   pointer("pointerup", selected.x + 60, selected.y + 20);
   expect(chooseNode).toHaveBeenCalledWith({
@@ -664,6 +670,12 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
     args: { ids: [] },
   });
   expect(currentInk().some((stroke) => stroke.fcInk)).toBe(false);
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.tool",
+      args: { tool: "freedraw" },
+    });
+  });
   const move = (target: Element | Window, type: string, x: number, y: number) =>
     fireEvent(
       target,

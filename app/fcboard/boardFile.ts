@@ -5,6 +5,7 @@ import { getLanguage } from "@fcboard/fcboard/i18n";
 
 import { serializeBzd, parseBzd } from "./bzd";
 import { classroomCommands } from "./commands";
+import { DOCUMENT_ACCEPT } from "./documents";
 
 import type { Board } from "./boards";
 import type { BzdAssetLoader } from "./bzd";
@@ -27,7 +28,7 @@ const engine = registerPlugin<{
   choose(options: {
     requestId: string;
     language: string;
-    kind?: "image";
+    kind?: "image" | "content";
   }): Promise<{
     cancelled?: boolean;
     id?: string;
@@ -43,6 +44,8 @@ const engine = registerPlugin<{
   close(options: { id: string }): Promise<void>;
 }>("FcboardBoardFile");
 const MAX_FILE = 64 * 1024 * 1024;
+export const pickContentFile = (signal?: AbortSignal) =>
+  pickFile("content", signal);
 const isAbort = (error: unknown) =>
   error !== null &&
   typeof error === "object" &&
@@ -51,7 +54,7 @@ const isAbort = (error: unknown) =>
 
 /** FileBrowserPopu on Android; received bytes still enter the same BZD parser. */
 const pickFile = async (
-  kind: "bzd" | "image",
+  kind: "bzd" | "image" | "content",
   signal?: AbortSignal,
 ): Promise<File | undefined> => {
   signal?.throwIfAborted();
@@ -61,10 +64,14 @@ const pickFile = async (
         extensions:
           kind === "bzd"
             ? [".bzd", ".bz", ".bnf"]
+            : kind === "content"
+            ? DOCUMENT_ACCEPT.split(",")
             : [".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif"],
         mimeTypes:
           kind === "bzd"
             ? ["application/xml", "text/xml", "application/octet-stream"]
+            : kind === "content"
+            ? ["*/*"]
             : [
                 "image/jpeg",
                 "image/png",
@@ -99,7 +106,7 @@ const pickFile = async (
     selected = await engine.choose({
       requestId,
       language: getLanguage().code,
-      ...(kind === "image" ? { kind } : {}),
+      ...(kind === "image" || kind === "content" ? { kind } : {}),
     });
   } catch (error) {
     signal?.throwIfAborted();

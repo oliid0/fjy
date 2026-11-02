@@ -11,6 +11,134 @@ import {
 } from "./settings";
 
 describe("AI configuration and transport", () => {
+  it("falls back once when fast returns a structured provider error inside HTTP 200", async () => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "ServiceTierUnavailable",
+              message: "resource unavailable",
+            },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "ordinary answer" } }],
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    expect(
+      await chat([{ role: "user", content: "hello" }], undefined, {
+        ...defaults,
+        apiKey: "structured-fast-error-only",
+      }),
+    ).toBe("ordinary answer");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).service_tier).toBe("fast");
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).not.toHaveProperty(
+      "service_tier",
+    );
+  });
+  it("does not replay an authentication failure or an already-started streamed answer", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: "invalid key" } }), {
+        status: 401,
+      }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      chat([{ role: "user", content: "hello" }], undefined, {
+        ...defaults,
+        apiKey: "no-replay-key",
+      }),
+    ).rejects.toThrow("invalid key");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const onDelta = vi.fn();
+    fetcher.mockResolvedValueOnce(
+      new Response(
+        'data: {"choices":[{"delta":{"content":"partial"}}]}\n\ndata: {"error":{"message":"fast unavailable"}}\n\n',
+        { headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+    await expect(
+      chat(
+        [{ role: "user", content: "hello" }],
+        undefined,
+        { ...defaults, apiKey: "no-replay-key" },
+        { onDelta },
+      ),
+    ).rejects.toThrow("fast unavailable");
+    expect(onDelta).toHaveBeenCalledWith("partial");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("requires real provider search evidence before reporting a web-assisted answer", async () => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+    const source = { title: "课程标准", url: "https://example.com/curriculum" };
+    const fetcher = vi.fn().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: "answer",
+                  annotations: [{ type: "url_citation", url_citation: source }],
+                },
+              },
+            ],
+            usage: { tool_usage: { web_search: 1 } },
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const evidence = vi.fn();
+    expect(
+      await chat(
+        [{ role: "user", content: "search" }],
+        undefined,
+        { ...defaults, apiKey: "test" },
+        { webSearch: true, onSearch: evidence },
+      ),
+    ).toBe("answer");
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+      stream: false,
+      web_search_options: {},
+    });
+    for (const field of [
+      "service_tier",
+      "thinking",
+      "reasoning",
+      "prompt_cache_key",
+    ]) {
+      expect(JSON.parse(fetcher.mock.calls[0][1].body)).not.toHaveProperty(
+        field,
+      );
+    }
+    expect(evidence).toHaveBeenCalledWith({ count: 1, sources: [source] });
+    fetcher.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "answer with invented URL" } }],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    await expect(
+      chat(
+        [{ role: "user", content: "search" }],
+        undefined,
+        { ...defaults, apiKey: "test", model: "search-model" },
+        { webSearch: true },
+      ),
+    ).rejects.toThrow("未返回实际联网搜索");
+  });
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -108,7 +236,7 @@ describe("AI configuration and transport", () => {
     });
     await expect(chat([])).rejects.toThrow("invalid key");
   });
-  it("uses Ark Responses input blocks and reads output_text without thinking for quick actions", async () => {
+  it("uses standard Ark Responses image blocks without model-specific inference overrides", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       status: 200,
       text: async () =>
@@ -149,8 +277,6 @@ describe("AI configuration and transport", () => {
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(body).toMatchObject({
       model: "doubao-seed-evolving",
-      reasoning: { effort: "minimal" },
-      service_tier: "fast",
       stream: true,
       max_output_tokens: 256,
       input: [
@@ -164,7 +290,63 @@ describe("AI configuration and transport", () => {
       ],
     });
     expect(body.messages).toBeUndefined();
+    for (const key of [
+      "reasoning",
+      "thinking",
+      "service_tier",
+      "prompt_cache_key",
+      "temperature",
+    ]) {
+      expect(body).not.toHaveProperty(key);
+    }
   });
+
+  it.each(["chat/completions", "responses"])(
+    "routes images to the configured vision model over %s",
+    async (path) => {
+      const fetcher = vi.fn().mockResolvedValue({
+        status: 200,
+        text: async () =>
+          JSON.stringify(
+            path === "responses"
+              ? {
+                  output: [
+                    {
+                      type: "message",
+                      content: [{ type: "output_text", text: "star" }],
+                    },
+                  ],
+                }
+              : { choices: [{ message: { content: "star" } }] },
+          ),
+      });
+      vi.stubGlobal("fetch", fetcher);
+      await chat(
+        [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: "data:image/png;base64,test" },
+              },
+            ],
+          },
+        ],
+        undefined,
+        {
+          ...defaults,
+          apiKey: "test",
+          ocrModel: "configured-vision",
+          endpoint: `https://ark.cn-beijing.volces.com/api/v3/${path}`,
+        },
+      );
+      const body = JSON.parse(fetcher.mock.calls[0][1].body);
+      expect(body.model).toBe("configured-vision");
+      expect(body).not.toHaveProperty("service_tier");
+      expect(body).not.toHaveProperty("prompt_cache_key");
+    },
+  );
 
   it("parses fenced JSON and refuses malformed responses", () => {
     expect(parseJSON('```json\n{"action":"plot"}\n```')).toEqual({

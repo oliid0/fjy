@@ -33,7 +33,26 @@ export type SignalSourceState = {
     selected: boolean;
   }[];
 };
+export type CalculatorState = {
+  open: boolean;
+  supported: boolean;
+  embedded?: boolean;
+  version?: string;
+  expression?: string;
+  result?: string;
+  controls?: { id: string; label: string; enabled: boolean }[];
+};
 export const Classroom = registerPlugin<{
+  openBundledCalculator(): Promise<CalculatorState>;
+  bundledCalculatorAction(options: {
+    action: "read" | "press" | "close";
+    version?: string;
+    controls?: string[];
+  }): Promise<CalculatorState>;
+  addListener(
+    event: "calculatorState",
+    listener: (state: CalculatorState) => void,
+  ): Promise<PluginListenerHandle>;
   getAppVersion(): Promise<{ name: string; code: number }>;
   openDebugSettings(): Promise<{ enabled: boolean }>;
   postAIStream(options: {
@@ -116,6 +135,18 @@ export const Classroom = registerPlugin<{
     language?: string;
   }): Promise<SignalSourceState>;
   getFactoryTools(): Promise<{ available: FactoryTool[] }>;
+  startPoll(options: {
+    question: string;
+    options: string[];
+  }): Promise<{ urls: string[] }>;
+  pollStatus(options?: { close?: boolean }): Promise<{
+    question: string;
+    options: string[];
+    counts: number[];
+    total: number;
+    closed: boolean;
+  }>;
+  stopPoll(): Promise<void>;
   openFactoryTool(options: { tool: FactoryTool }): Promise<void>;
   startShare(options: { pages: string[] }): Promise<{ urls: string[] }>;
   setSharePassword(options: { password: string }): Promise<void>;

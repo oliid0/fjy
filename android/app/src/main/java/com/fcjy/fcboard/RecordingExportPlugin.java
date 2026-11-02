@@ -2,6 +2,11 @@ package com.fcjy.fcboard;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.ContentValues;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
@@ -14,6 +19,11 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.FileInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.io.OutputStream;
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -102,6 +112,69 @@ public class RecordingExportPlugin extends Plugin {
                 });
             } catch (Exception error) { call.reject(error.getMessage(), error); }
         });
+    }
+    /** A finished capture must exist as a real file without another picker step. */
+    @PluginMethod public void saveDevice(PluginCall call) {
+        worker.execute(() -> {
+            java.util.List<Uri> pending = new java.util.ArrayList<>();
+            try {
+                RecordingPackage item = current(call);
+                String name = call.getString("name", "");
+                if (!item.isComplete() || !name.matches("Fcboard-[A-Za-z0-9-]{1,80}")) throw new Exception("Recording export is not ready");
+                JSArray files = new JSArray();
+                try (InputStream media = new FileInputStream(item.media)) {
+                    files.put(writeDevice(name + (item.mime.endsWith("mp4") ? ".mp4" : ".webm"), item.mime, media, pending));
+                }
+                try (InputStream text = new ByteArrayInputStream(item.transcript.getBytes(StandardCharsets.UTF_8))) {
+                    files.put(writeDevice(name + "-transcript.txt", "text/plain", text, pending));
+                }
+                if (!item.summary.isEmpty()) try (InputStream text = new ByteArrayInputStream(item.summary.getBytes(StandardCharsets.UTF_8))) {
+                    files.put(writeDevice(name + "-summary.txt", "text/plain", text, pending));
+                }
+                if (Build.VERSION.SDK_INT >= 29) for (Uri uri : pending) {
+                    ContentValues ready = new ContentValues(); ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                    getContext().getContentResolver().update(uri, ready, null, null);
+                }
+                call.resolve(new JSObject().put("files", files).put("location", Build.VERSION.SDK_INT >= 29 ? "Download/Fcboard" : "Android/data/com.fcjy.fcboard/files/Movies/Fcboard"));
+            } catch (Exception error) {
+                for (Uri uri : pending) {
+                    try {
+                        if ("file".equals(uri.getScheme())) new File(uri.getPath()).delete();
+                        else getContext().getContentResolver().delete(uri, null, null);
+                    } catch (Exception ignored) { }
+                }
+                call.reject("无法保存录制文件：" + error.getMessage(), error);
+            }
+        });
+    }
+    private String writeDevice(String name, String mime, InputStream input, java.util.List<Uri> pending) throws Exception {
+        Uri uri;
+        OutputStream output;
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+            values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Fcboard");
+            values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+            uri = getContext().getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) throw new Exception("Cannot create recording file");
+            pending.add(uri);
+            output = getContext().getContentResolver().openOutputStream(uri);
+        } else {
+            File root = getContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+            if (root == null) throw new Exception("Storage unavailable");
+            File directory = new File(root, "Fcboard");
+            if (!directory.isDirectory() && !directory.mkdirs()) throw new Exception("Cannot create recording folder");
+            File file = new File(directory, name);
+            uri = Uri.fromFile(file); pending.add(uri); output = new FileOutputStream(file);
+        }
+        if (output == null) throw new Exception("Cannot open recording file");
+        try (OutputStream target = output) {
+            byte[] buffer = new byte[65536]; int count;
+            while ((count = input.read(buffer)) != -1) target.write(buffer, 0, count);
+            target.flush();
+        }
+        return uri.toString();
     }
     @ActivityCallback private void saved(PluginCall call, ActivityResult result) {
         worker.execute(() -> {

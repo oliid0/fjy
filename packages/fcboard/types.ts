@@ -553,6 +553,13 @@ export type Gesture = {
   initialScale: number | null;
 };
 
+export type ViewportGesture = {
+  active: boolean;
+  zoom: number;
+  center: { x: number; y: number };
+  pointers: { x: number; y: number }[];
+};
+
 export declare class GestureEvent extends UIEvent {
   readonly rotation: number;
   readonly scale: number;
@@ -1066,6 +1073,9 @@ export interface FcboardImperativeAPI {
   ) => UnsubscribeCallback;
   onScrollChange: (
     callback: (scrollX: number, scrollY: number, zoom: Zoom) => void,
+  ) => UnsubscribeCallback;
+  onViewportGesture: (
+    callback: (gesture: ViewportGesture) => void,
   ) => UnsubscribeCallback;
   onUserFollow: (
     callback: (payload: OnUserFollowedPayload) => void,

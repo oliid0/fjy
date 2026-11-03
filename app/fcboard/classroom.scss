@@ -121,25 +121,42 @@
 }
 
 .fc-board-zoom {
-  position: absolute;
-  right: 16px;
-  bottom: 96px;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(170 * var(--fc-unit, 1px));
+  height: calc(40 * var(--fc-unit, 1px));
   z-index: 24;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: var(--fc-surface);
-  box-shadow: 0 2px 12px #0002;
-  border-radius: 8px;
-  padding: 4px;
-  button {
-    min-width: 40px;
-    min-height: 40px;
-    font-size: 16px;
-  }
-  output {
+  background: #fff;
+  border-radius: calc(2 * var(--fc-unit, 1px));
+  span {
+    flex: 2;
+    text-align: center;
+    color: #00bfff;
+    font-size: calc(18 * var(--fc-unit, 1px));
     font-variant-numeric: tabular-nums;
   }
+  button {
+    flex: 1;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: #778899;
+    font-size: calc(15 * var(--fc-unit, 1px));
+    &:active {
+      opacity: 0.5;
+    }
+  }
+}
+.fc-board-gesture-points {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 23;
 }
 
 .fc-voice-feedback {

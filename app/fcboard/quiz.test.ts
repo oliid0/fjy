@@ -63,12 +63,46 @@ it("refuses missing sources, inconsistent choices, duplicate ids and incomplete 
   expect(() =>
     parseQuiz({
       ...paper(),
+      questions: [
+        { ...paper().questions[0], type: "multiple", answer: ["4", "4"] },
+      ],
+    }),
+  ).toThrow("选项与答案不一致");
+  expect(() =>
+    parseQuiz({
+      ...paper(),
+      questions: [{ ...paper().questions[0], type: "short" }],
+    }),
+  ).toThrow("非选择题");
+  expect(() =>
+    parseQuiz({
+      ...paper(),
       sources: [{ title: "invalid", url: "data:text/html,invalid" }],
     }),
   ).toThrow();
 });
 
+it("uses actual search annotations even if the model omits its own sources field", async () => {
+  const { sources, ...questions } = paper();
+  vi.spyOn(ai, "chat").mockImplementation(
+    async (_messages, _signal, _settings, options) => {
+      options?.onSearch?.({ count: 1, sources });
+      return JSON.stringify(questions);
+    },
+  );
+  expect(
+    (await generateQuiz("出1道数学选择题", new AbortController().signal))
+      .sources,
+  ).toEqual(sources);
+});
+
 it("grades multiple choice as a complete set and leaves subjective answers for review", () => {
+  expect(
+    parseQuiz({
+      ...paper(),
+      questions: [{ ...paper().questions[0], type: "short", options: [] }],
+    }).questions[0].options,
+  ).toBeUndefined();
   const question = {
     ...parseQuiz(paper()).questions[0],
     type: "multiple" as const,

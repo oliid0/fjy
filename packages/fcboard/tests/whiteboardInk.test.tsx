@@ -433,46 +433,51 @@ describe("APK-style whiteboard ink", () => {
       expect(live()).toHaveLength(0);
     },
   );
-  it("preserves every coalesced screen sample before transitioning a completed stroke to pinch", async () => {
-    const { container } = await render(
-      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
-    );
-    const canvas = container.querySelector("canvas.interactive")!;
-    act(() => {
-      API.setAppState({ multiStroke: false });
-      h.app.setActiveTool({ type: "freedraw" });
-    });
-    pointer(canvas, "pointerdown", 100, 100, { pointerType: "touch" });
-    // Endpoint displacement is zero; the full travelled path is 40 pixels.
-    pointer(canvas, "pointermove", 100, 100, {
-      pointerType: "touch",
-      getCoalescedEvents: () => [
-        { clientX: 120, clientY: 100, pressure: 0.5 },
-        { clientX: 100, clientY: 100, pressure: 0.5 },
-      ],
-    });
-    pointer(canvas, "pointerdown", 300, 100, {
-      pointerId: 2,
-      pointerType: "touch",
-    });
-    pointer(canvas, "pointermove", 500, 100, {
-      pointerId: 2,
-      pointerType: "touch",
-    });
-    expect(h.state.zoom.value).toBeGreaterThan(1);
-    expect(live()).toHaveLength(1);
-    pointer(canvas, "pointerup", 500, 100, {
-      pointerId: 2,
-      pointerType: "touch",
-    });
-    pointer(canvas, "pointerup", 150, 100, { pointerType: "touch" });
-    expect(live()).toHaveLength(1);
-    expect((live()[0] as FcboardFreeDrawElement).points).toContainEqual([
-      20, 0,
-    ]);
-    fireEvent.click(screen.getByTestId("button-undo"));
-    expect(live()).toHaveLength(0);
-  });
+  it.each([1, 2, 3])(
+    "preserves coalesced writing at the original 40 physical pixel threshold at DPR %s",
+    async (dpr) => {
+      vi.stubGlobal("devicePixelRatio", dpr);
+      const { container } = await render(
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+      );
+      const canvas = container.querySelector("canvas.interactive")!;
+      act(() => {
+        API.setAppState({ multiStroke: false });
+        h.app.setActiveTool({ type: "freedraw" });
+      });
+      pointer(canvas, "pointerdown", 100, 100, { pointerType: "touch" });
+      // Endpoint displacement is zero; the full travelled path is 40 pixels.
+      pointer(canvas, "pointermove", 100, 100, {
+        pointerType: "touch",
+        getCoalescedEvents: () => [
+          { clientX: 100 + 20 / dpr, clientY: 100, pressure: 0.5 },
+          { clientX: 100, clientY: 100, pressure: 0.5 },
+        ],
+      });
+      pointer(canvas, "pointerdown", 300, 100, {
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      pointer(canvas, "pointermove", 500, 100, {
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      expect(h.state.zoom.value).toBe(1);
+      expect(live()).toHaveLength(1);
+      pointer(canvas, "pointerup", 500, 100, {
+        pointerId: 2,
+        pointerType: "touch",
+      });
+      pointer(canvas, "pointerup", 150, 100, { pointerType: "touch" });
+      expect(live()).toHaveLength(1);
+      expect((live()[0] as FcboardFreeDrawElement).points[1][0]).toBeCloseTo(
+        20 / dpr,
+      );
+      fireEvent.click(screen.getByTestId("button-undo"));
+      expect(live()).toHaveLength(0);
+      vi.unstubAllGlobals();
+    },
+  );
   it.each(["pointercancel", "lostpointercapture", "blur"])(
     "recovers single-touch writing after an early pinch is interrupted by %s",
     async (type) => {
@@ -541,9 +546,9 @@ describe("APK-style whiteboard ink", () => {
     expect(view()).toEqual(beforeThird);
     touch("pointermove", 33, 100, 500);
     expect(h.state.zoom.value).toBeCloseTo(1.5);
-    // The same scene point remains below the old/new first-last midpoint.
+    // HCanvas keeps the initial anchor while only one contact moves.
     expect(100 / h.state.zoom.value - h.state.scrollX).toBeCloseTo(100);
-    expect(300 / h.state.zoom.value - h.state.scrollY).toBeCloseTo(200);
+    expect(200 / h.state.zoom.value - h.state.scrollY).toBeCloseTo(200);
     const beforeFourth = view();
     touch("pointerdown", 34, 500, 500);
     expect(view()).toEqual(beforeFourth);
@@ -895,8 +900,47 @@ describe("APK-style whiteboard ink", () => {
       pointerId: 1,
     });
     expect(live()).toHaveLength(1);
-    expect(live()[0].width).toBe(50);
-    expect(h.state.zoom.value).toBeGreaterThan(zoom);
+    expect(live()[0].width).toBe(300);
+    expect(h.state.zoom.value).toBe(zoom);
+    const penWidth = live()[0].strokeWidth;
+    pointer(canvas, "pointerdown", 100, 400, {
+      pointerId: 3,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointerdown", 300, 400, {
+      pointerId: 4,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointermove", 400, 400, {
+      pointerId: 4,
+      pointerType: "touch",
+    });
+    expect(h.state.zoom.value).toBeCloseTo(zoom * 1.5);
+    expect(live()).toHaveLength(1);
+    pointer(canvas, "pointerup", 100, 400, {
+      pointerId: 3,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointerup", 400, 400, {
+      pointerId: 4,
+      pointerType: "touch",
+    });
+    // No pause or asynchronous recognition is required before writing again.
+    pointer(canvas, "pointerdown", 100, 500, {
+      pointerId: 5,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointermove", 250, 500, {
+      pointerId: 5,
+      pointerType: "touch",
+    });
+    pointer(canvas, "pointerup", 250, 500, {
+      pointerId: 5,
+      pointerType: "touch",
+    });
+    expect(live()).toHaveLength(2);
+    expect(live()[1].strokeWidth).toBeCloseTo(penWidth);
+    expect(live()[1].width * h.state.zoom.value).toBeCloseTo(150);
   });
   it.each([false, true])(
     "undoes each completed stroke separately with batched lifts: %s",

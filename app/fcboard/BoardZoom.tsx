@@ -1,83 +1,149 @@
 import { useEffect, useRef, useState } from "react";
 import { getStateForZoom } from "@fcboard/fcboard/scene/zoom";
 import { getNormalizedZoom } from "@fcboard/fcboard/scene/normalize";
+import { scaleWhiteboardPen } from "@fcboard/fcboard/whiteboardPen";
 
-import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type {
+  FcboardImperativeAPI,
+  ViewportGesture,
+  UIOptions,
+} from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
 
-export const BoardZoom = ({ api }: { api: FcboardImperativeAPI }) => {
-  const [percent, setPercent] = useState(() =>
-    Math.round(api.getAppState().zoom.value * 100),
-  );
-  const [hidden, setHidden] = useState(false);
+/** main.xml scale_layout + showScalePercent: percentage/reset, one idle second. */
+export const BoardZoom = ({
+  api,
+  inkProfile,
+}: {
+  api: FcboardImperativeAPI;
+  inkProfile?: UIOptions["inkProfile"];
+}) => {
+  const [gesture, setGesture] = useState<ViewportGesture>();
+  const [visible, setVisible] = useState(false);
+  const [bottom, setBottom] = useState(70);
   const frame = useRef<number | undefined>(undefined);
+  const hide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const latest = useRef<ViewportGesture | undefined>(undefined);
   useEffect(() => {
-    const refresh = () => {
-      if (frame.current !== undefined) {
-        return;
+    const receive = (value: ViewportGesture) => {
+      latest.current = value;
+      if (value.active) {
+        setVisible(true);
+        clearTimeout(hide.current);
+        hide.current = setTimeout(() => setVisible(false), 1000);
       }
-      frame.current = requestAnimationFrame(() => {
-        frame.current = undefined;
-        const state = api.getAppState();
-        setPercent(Math.round(state.zoom.value * 100));
-        setHidden(
-          !!state.toolbarHidden || !!classroomCommands.read("document"),
-        );
-      });
+      if (frame.current === undefined) {
+        frame.current = requestAnimationFrame(() => {
+          frame.current = undefined;
+          setGesture(latest.current);
+        });
+      }
     };
-    const stop = api.onChange(refresh);
-    const document = classroomCommands.watch("document", refresh);
-    refresh();
+    const conceal = () => {
+      if (
+        api.getAppState().toolbarHidden ||
+        classroomCommands.read("document")
+      ) {
+        setVisible(false);
+        latest.current = undefined;
+        setGesture(undefined);
+      }
+    };
+    const stop = api.onViewportGesture?.(receive);
+    const change = api.onChange(conceal);
+    const document = classroomCommands.watch("document", conceal);
+    const toolbar = window.document.querySelector<HTMLElement>(
+      ".fc-unified-toolbar",
+    );
+    const place = () => {
+      const rect = toolbar?.getBoundingClientRect();
+      if (rect?.height) {
+        setBottom(Math.max(70, innerHeight - rect.top + 6));
+      }
+    };
+    place();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(place);
+    if (toolbar) {
+      observer?.observe(toolbar);
+    }
+    window.addEventListener("resize", place);
     return () => {
-      stop();
+      stop?.();
+      change();
       document();
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
+      clearTimeout(hide.current);
       if (frame.current !== undefined) {
         cancelAnimationFrame(frame.current);
       }
     };
   }, [api]);
-  const zoom = (value: number) => {
+  const reset = () => {
     const state = api.getAppState();
-    api.updateScene({
-      appState: getStateForZoom(
-        {
-          viewportX: state.offsetLeft + state.width / 2,
-          viewportY: state.offsetTop + state.height / 2,
-          nextZoom: getNormalizedZoom(Math.max(0.5, Math.min(2, value))),
+    const center = latest.current?.center;
+    if (center) {
+      api.updateScene({
+        appState: {
+          ...getStateForZoom(
+            {
+              viewportX: center.x,
+              viewportY: center.y,
+              nextZoom: getNormalizedZoom(1),
+            },
+            state,
+          ),
+          ...scaleWhiteboardPen(
+            state,
+            1 / state.zoom.value,
+            inkProfile?.penWidthMax,
+          ),
         },
-        state,
-      ),
-    });
+      });
+    }
+    clearTimeout(hide.current);
+    setVisible(false);
   };
-  return hidden ? null : (
-    <div
-      className="fc-board-zoom"
-      role="group"
-      aria-label="白板缩放"
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <button
-        aria-label="缩小白板"
-        disabled={percent <= 50}
-        onClick={() => zoom(api.getAppState().zoom.value - 0.1)}
-      >
-        −
-      </button>
-      <button
-        aria-label="恢复白板100%"
-        title="恢复100%"
-        onClick={() => zoom(1)}
-      >
-        <span>{percent}%</span>
-      </button>
-      <button
-        aria-label="放大白板"
-        disabled={percent >= 200}
-        onClick={() => zoom(api.getAppState().zoom.value + 0.1)}
-      >
-        +
-      </button>
-    </div>
+  const gradient = `fc-gesture-${api.id}`;
+  return (
+    <>
+      {!!gesture?.pointers.length && (
+        <svg className="fc-board-gesture-points" aria-hidden="true">
+          <defs>
+            <radialGradient id={gradient}>
+              <stop offset="0" stopColor="#fff" stopOpacity="0.7" />
+              <stop offset="1" stopColor="#fff" stopOpacity="0.047" />
+            </radialGradient>
+          </defs>
+          {gesture.pointers.map((point, index) => (
+            <circle
+              key={index}
+              cx={point.x}
+              cy={point.y}
+              r={50}
+              fill={`url(#${gradient})`}
+            />
+          ))}
+        </svg>
+      )}
+      {visible && gesture && (
+        <div
+          className="fc-board-zoom"
+          role="group"
+          aria-label="白板缩放"
+          style={{ bottom }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <span>缩放{Math.round(gesture.zoom * 100)}%</span>
+          <button aria-label="恢复白板100%" onClick={reset}>
+            重置
+          </button>
+        </div>
+      )}
+    </>
   );
 };

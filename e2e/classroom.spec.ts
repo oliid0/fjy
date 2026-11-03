@@ -216,21 +216,16 @@ for (const viewport of [
     const table = page.getByRole("dialog", { name: "表格", exact: true });
     await expect(table.locator(".fc-table-picker-grid")).toBeVisible();
     const tableBounds = (await table.boundingBox())!;
-    const insertBounds = (await toolbar
-      .getByRole("button", { name: "插入", exact: true })
-      .boundingBox())!;
     expect(tableBounds.y).toBeGreaterThanOrEqual(0);
     expect(tableBounds.y + tableBounds.height).toBeLessThanOrEqual(
-      bounds.y + 4,
+      viewport.height,
     );
     expect(
-      Math.abs(
-        tableBounds.x +
-          tableBounds.width / 2 -
-          insertBounds.x -
-          insertBounds.width / 2,
-      ),
-    ).toBeLessThanOrEqual(tableBounds.width / 2 + 12);
+      Math.abs(tableBounds.x + tableBounds.width / 2 - viewport.width / 2),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(tableBounds.y + tableBounds.height / 2 - viewport.height / 2),
+    ).toBeLessThanOrEqual(2);
     await page.screenshot({
       path: testInfo.outputPath(`table-picker-${viewport.width}.png`),
     });

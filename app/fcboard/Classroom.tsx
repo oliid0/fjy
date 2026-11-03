@@ -3540,7 +3540,7 @@ export const Classroom = ({
       {mediaFile && (
         <MediaViewer file={mediaFile} onClose={() => setMediaFile(null)} />
       )}
-      <BoardZoom api={api} />
+      <BoardZoom api={api} inkProfile={inkProfile} />
       {preview && (
         <FilePreview
           api={api}

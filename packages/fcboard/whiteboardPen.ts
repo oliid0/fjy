@@ -59,6 +59,48 @@ export const switchWhiteboardTip = (
   };
 };
 
+/** HCanvas scales the current fine-pen width along with the objects.
+ * HDataSet.setPenWidth clamps the nominal device pixels, not the scene units.
+ */
+export const scaleWhiteboardPen = (
+  state: PenPreferences,
+  ratio: number,
+  maximum = 40,
+): Partial<Pick<AppState, "currentItemStrokeWidth" | "whiteboardPenTips">> => {
+  if (ratio === 1) {
+    return {};
+  }
+  const fine = { ...state, ...switchWhiteboardTip(state, "fine") };
+  const base = fine.currentItemPenMode === "brush" ? 15 : 4;
+  const width =
+    (Math.max(
+      1,
+      Math.min(
+        maximum,
+        (fine.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) *
+          base *
+          ratio,
+      ),
+    ) /
+      base) *
+    DEFAULT_ELEMENT_PROPS.strokeWidth;
+  if (state.whiteboardPenTip === "thick") {
+    return {
+      whiteboardPenTips: {
+        ...state.whiteboardPenTips,
+        fine: {
+          mode: fine.currentItemPenMode || "hard",
+          color: fine.currentItemStrokeColor,
+          width,
+          widths: fine.whiteboardPenWidths,
+          assist: fine.currentItemInkAssist,
+        },
+      },
+    };
+  }
+  return { currentItemStrokeWidth: width };
+};
+
 export const contactPenPreferences = <T extends PenPreferences>(
   state: T,
   contact: { width: number; height: number },

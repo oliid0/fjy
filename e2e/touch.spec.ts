@@ -66,6 +66,16 @@ test("real touch input distinguishes a single-mode pinch from committed and mult
     { id: 1, x: 420, y: 180 },
     { id: 2, x: 720, y: 180 },
   ]);
+  const percentage = page.getByRole("group", { name: "白板缩放" });
+  await expect(percentage).toContainText("缩放150%");
+  const percentageBounds = (await percentage.boundingBox())!;
+  const toolbarBounds = (await toolbar.boundingBox())!;
+  expect(percentageBounds.y + percentageBounds.height).toBeLessThan(
+    toolbarBounds.y,
+  );
+  expect(
+    Math.abs(percentageBounds.x + percentageBounds.width / 2 - 640),
+  ).toBeLessThanOrEqual(2);
   await touch("touchEnd", []);
   await expect.poll(zoom).toBeCloseTo(1.5);
   await expect.poll(inkCount).toBe(0);
@@ -85,6 +95,19 @@ test("real touch input distinguishes a single-mode pinch from committed and mult
   await touch("touchEnd", []);
   await expect.poll(inkCount).toBe(1);
   await expect.poll(zoom).toBeCloseTo(1.5);
+  // Release the completed word, then immediately pinch: no handwriting timeout.
+  await touch("touchStart", [{ id: 7, x: 400, y: 280 }]);
+  await touch("touchStart", [
+    { id: 7, x: 400, y: 280 },
+    { id: 8, x: 600, y: 280 },
+  ]);
+  await touch("touchMove", [
+    { id: 7, x: 400, y: 280 },
+    { id: 8, x: 800, y: 280 },
+  ]);
+  await touch("touchEnd", []);
+  await expect.poll(inkCount).toBe(1);
+  await expect.poll(zoom).toBeCloseTo(2);
   await toolbar.getByRole("button", { name: "单点书写", exact: true }).click();
   const before = await zoom();
   await touch("touchStart", [{ id: 5, x: 400, y: 380 }]);

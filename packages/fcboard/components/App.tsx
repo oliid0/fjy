@@ -295,7 +295,7 @@ import type {
 
 import type { Mutable, ValueOf } from "@fcboard/common/utility-types";
 
-import { whiteboardInkStyle } from "../whiteboardPen";
+import { scaleWhiteboardPen, whiteboardInkStyle } from "../whiteboardPen";
 
 import {
   actionAddToLibrary,
@@ -494,6 +494,7 @@ import type {
   FcboardImperativeAPI,
   BinaryFiles,
   Gesture,
+  ViewportGesture,
   GestureEvent,
   LibraryItems,
   PointerDownState,
@@ -766,6 +767,10 @@ class App extends React.Component<AppProps, AppState> {
   onScrollChangeEmitter = new Emitter<
     [scrollX: number, scrollY: number, zoom: AppState["zoom"]]
   >();
+  onViewportGestureEmitter = new Emitter<[gesture: ViewportGesture]>();
+  private factoryGesturePositions: Gesture["pointers"] = new Map();
+  private factoryGestureCenter = { x: 0, y: 0 };
+  private viewportGestureActive = false;
 
   missingPointerEventCleanupEmitter = new Emitter<
     [event: PointerEvent | null]
@@ -879,6 +884,7 @@ class App extends React.Component<AppProps, AppState> {
       onInkCommit: (cb) => this.onInkCommitEmitter.on(cb),
       onInkProgress: (cb) => this.onInkProgressEmitter.on(cb),
       onScrollChange: (cb) => this.onScrollChangeEmitter.on(cb),
+      onViewportGesture: (cb) => this.onViewportGestureEmitter.on(cb),
       onUserFollow: (cb) => this.onUserFollowEmitter.on(cb),
       onStateChange: this.onStateChange,
       onEvent: this.onEvent,
@@ -3321,6 +3327,7 @@ class App extends React.Component<AppProps, AppState> {
     this.laserTrails.stop();
     this.eraserTrail.stop();
     this.onChangeEmitter.clear();
+    this.onViewportGestureEmitter.clear();
     this.inkFrameEmitter.clear();
     this.onInkProgressEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
@@ -4379,7 +4386,9 @@ class App extends React.Component<AppProps, AppState> {
 
   private gestureMetrics = () =>
     this.props.UIOptions.unifiedToolbar
-      ? getFactoryGesture(this.gesture.pointers)
+      ? this.isRegionSelectionTool()
+        ? null
+        : getFactoryGesture(this.gesture.pointers)
       : this.gesture.pointers.size === 2
       ? {
           center: getCenter(this.gesture.pointers),
@@ -4393,6 +4402,27 @@ class App extends React.Component<AppProps, AppState> {
     this.gesture.lastCenter = metrics?.center ?? null;
     this.gesture.initialDistance = metrics?.distance ?? null;
     this.gesture.initialScale = metrics ? this.state.zoom.value : null;
+    this.factoryGesturePositions = new Map(this.gesture.pointers);
+    if (metrics) {
+      this.factoryGestureCenter = metrics.center;
+    }
+    this.publishViewportGesture(this.state.zoom.value, !!metrics);
+  };
+
+  private publishViewportGesture = (zoom: number, active: boolean) => {
+    if (
+      !this.props.UIOptions.unifiedToolbar ||
+      (!active && !this.viewportGestureActive)
+    ) {
+      return;
+    }
+    this.viewportGestureActive = active;
+    this.onViewportGestureEmitter.trigger({
+      active,
+      zoom,
+      center: this.factoryGestureCenter,
+      pointers: active ? Array.from(this.gesture.pointers.values()) : [],
+    });
   };
 
   toggleLock = (source: "keyboard" | "ui" = "ui") => {
@@ -6838,9 +6868,24 @@ class App extends React.Component<AppProps, AppState> {
     ) {
       const { center, distance } = metrics;
       const previousCenter = this.gesture.lastCenter;
-      const deltaX = center.x - this.gesture.lastCenter.x;
-      const deltaY = center.y - this.gesture.lastCenter.y;
-      this.gesture.lastCenter = center;
+      const deltaX = center.x - previousCenter.x;
+      const deltaY = center.y - previousCenter.y;
+      const factoryGesture = this.props.UIOptions.unifiedToolbar;
+      const deltas = Array.from(this.gesture.pointers, ([id, point]) => {
+        const previous = this.factoryGesturePositions.get(id) || point;
+        return { x: point.x - previous.x, y: point.y - previous.y };
+      });
+      // HCanvas.doScaleWithTwo: translate only when the first two contacts move
+      // in the same direction. A stationary finger anchors an ordinary pinch.
+      const translate =
+        !factoryGesture ||
+        deltas[0].x * deltas[1].x > 0 ||
+        deltas[0].y * deltas[1].y > 0;
+      const anchor = translate ? center : previousCenter;
+      if (translate) {
+        this.gesture.lastCenter = center;
+        this.factoryGesturePositions = new Map(this.gesture.pointers);
+      }
 
       const scaleFactor =
         this.state.activeTool.type === "freedraw" &&
@@ -6849,7 +6894,6 @@ class App extends React.Component<AppProps, AppState> {
           ? 1
           : distance / this.gesture.initialDistance;
 
-      const factoryGesture = this.props.UIOptions.unifiedToolbar;
       const nextZoom = scaleFactor
         ? getNormalizedZoom(
             factoryGesture
@@ -6862,11 +6906,13 @@ class App extends React.Component<AppProps, AppState> {
         // Reversing at a limit must respond immediately instead of crossing an old baseline.
         this.gesture.initialScale = nextZoom;
         this.gesture.initialDistance = distance;
+        this.factoryGestureCenter = anchor;
+        this.publishViewportGesture(nextZoom, true);
       }
 
       this.translateCanvas((state) => {
         const zoomState = factoryGesture
-          ? getStateForPinch(previousCenter, center, nextZoom, state)
+          ? getStateForPinch(previousCenter, anchor, nextZoom, state)
           : getStateForZoom(
               {
                 viewportX: center.x,
@@ -6877,6 +6923,15 @@ class App extends React.Component<AppProps, AppState> {
             );
 
         return {
+          currentItemStrokeWidth: state.currentItemStrokeWidth,
+          whiteboardPenTips: state.whiteboardPenTips,
+          ...(factoryGesture
+            ? scaleWhiteboardPen(
+                state,
+                nextZoom / state.zoom.value,
+                this.props.UIOptions.inkProfile?.penWidthMax,
+              )
+            : {}),
           zoom: zoomState.zoom,
           // Keep the legacy editor behavior outside the factory whiteboard.
           scrollX:
@@ -7602,6 +7657,13 @@ class App extends React.Component<AppProps, AppState> {
       if (this.singleTouchStroke?.pointerId === event.pointerId) {
         this.singleTouchStroke = null;
       }
+      if (lastEvent) {
+        // The window up handler appends its final sample after the canvas's
+        // React up handler. Remove that contact again so it cannot survive
+        // into the next pinch. Clearing provisional ink has no terminal event:
+        // that still-held finger must remain available to the gesture.
+        this.removePointer(lastEvent);
+      }
       if (cancelled) {
         this.onInkProgressEmitter.trigger(element, "cancel");
         this.scene.replaceAllElements(
@@ -8088,11 +8150,12 @@ class App extends React.Component<AppProps, AppState> {
         // Before that, HCanvas clears the provisional stroke when a second
         // finger starts its two/more-contact transform. Multi-write stays ink.
         const pinch =
-          singleTouch && (contact ? true : this.gesture.pointers.size > 0);
+          singleTouch &&
+          (contact
+            ? contact.length * window.devicePixelRatio < 40
+            : this.gesture.pointers.size > 0);
         if (pinch && contact) {
-          // Preserve committed writing when a second finger begins zooming;
-          // only the short provisional contact is discarded.
-          this.parallelInk.get(contact.pointerId)?.(contact.length < 40);
+          this.parallelInk.get(contact.pointerId)?.(true);
         } else if (this.state.multiStroke === false && this.parallelInk.size) {
           event.preventDefault();
           return;

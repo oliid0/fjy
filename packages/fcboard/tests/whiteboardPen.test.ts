@@ -2,9 +2,37 @@ import { getDefaultAppState } from "../appState";
 import { restoreAppState } from "../data/restore";
 import {
   contactPenPreferences,
+  scaleWhiteboardPen,
   switchWhiteboardTip,
   whiteboardInkStyle,
 } from "../whiteboardPen";
+
+it("scales the original fine pen with zoom, clips its physical range, and keeps the thick pen independent", () => {
+  const fine = { ...getDefaultAppState(), currentItemStrokeWidth: 2 };
+  expect(scaleWhiteboardPen(fine, 1.5)).toMatchObject({
+    currentItemStrokeWidth: 3,
+  });
+  // A hard pen's nominal 4px is represented by DEFAULT_ELEMENT_PROPS width 2.
+  expect(scaleWhiteboardPen(fine, 0.1)).toMatchObject({
+    currentItemStrokeWidth: 0.5,
+  });
+  expect(scaleWhiteboardPen(fine, 10, 20)).toMatchObject({
+    currentItemStrokeWidth: 10,
+  });
+  const brush = { ...fine, currentItemPenMode: "brush" as const };
+  expect(scaleWhiteboardPen(brush, 2, 20).currentItemStrokeWidth).toBeCloseTo(
+    8 / 3,
+  );
+  const thick = { ...fine, ...switchWhiteboardTip(fine, "thick") };
+  const update = scaleWhiteboardPen(thick, 1.5);
+  expect(update.currentItemStrokeWidth).toBeUndefined();
+  expect({ ...thick, ...update }.currentItemStrokeWidth).toBe(
+    thick.currentItemStrokeWidth,
+  );
+  expect(
+    switchWhiteboardTip({ ...thick, ...update }, "fine").currentItemStrokeWidth,
+  ).toBe(3);
+});
 
 it("retains distinct fine/thick modes, widths, colours and assistance across saving and switching", () => {
   const fine = {

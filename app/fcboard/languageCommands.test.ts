@@ -3,7 +3,7 @@ import { getDefaultAppState } from "@fcboard/fcboard/appState";
 import { newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
-import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import type { FcboardElement } from "@fcboard/element/types";
 
@@ -92,11 +92,14 @@ it("captures only the circled document word with the actual ink snapshot and nor
   }));
   const snapshot = vi
     .spyOn(documents, "inkSnapshot")
-    .mockResolvedValue("data:image/png;base64,source");
+    .mockResolvedValue("data:image/png;base64,source" as DataURL);
   const crop = vi
     .spyOn(ai, "cropImage")
     .mockResolvedValue("data:image/png;base64,cropped");
   host.recognize.mockImplementationOnce(async (capture) => {
+    if (typeof capture !== "function") {
+      throw new Error("Expected a lazy document selection capture");
+    }
     expect(await capture()).toBe("data:image/png;base64,cropped");
     return "inertia";
   });

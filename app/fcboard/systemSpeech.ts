@@ -17,6 +17,7 @@ export const startAndroidSpeech = async (
   onError: (message: string) => void,
   continuous: boolean,
   language: string,
+  automatic = false,
 ): Promise<() => void> => {
   if (
     language.toLowerCase().startsWith("zh") &&
@@ -113,7 +114,12 @@ export const startAndroidSpeech = async (
       return;
     }
     void provider
-      .start({ language, maxResults: 1, partialResults: false, popup: false })
+      .start({
+        language: automatic && provider === system ? "auto" : language,
+        maxResults: 1,
+        partialResults: false,
+        popup: false,
+      })
       .then(async ({ matches }) => {
         if (stopped) {
           return;

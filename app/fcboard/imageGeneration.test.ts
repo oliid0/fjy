@@ -100,6 +100,27 @@ it("uses the independent image endpoint and inserts an ordinary image object wit
   );
 });
 
+it("preserves source ink and sends no unsupported decomposition request for explicit transparency on a custom model", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test", imageModel: "custom-illustrator" },
+    false,
+  );
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const api = sceneAPI();
+  const before = api.getSceneElements();
+  await expect(
+    insertGeneratedImage(api, "透明小推车", new AbortController().signal, {
+      transparent: true,
+      replaceIds: before.map((element) => element.id),
+    }),
+  ).rejects.toThrow("Seedream 5.0");
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(api.getSceneElements()).toBe(before);
+  expect(api.addFiles).not.toHaveBeenCalled();
+  expect(api.updateScene).not.toHaveBeenCalled();
+});
+
 it("does not import a late generated image after cancellation", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
   saveSettings(

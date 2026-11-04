@@ -53,6 +53,50 @@ it("researches online before generating the exact requested batch and retries in
   expect(chat.mock.calls[1][2]).toMatchObject({ model: "chosen-model" });
   expect(chat.mock.calls[2][0].at(-1)?.content).toContain("选择题");
 });
+
+it.each([
+  ["出十道初中物理题", 10],
+  ["根据第一道题出二十道选择题", 20],
+  ["出两道数学题", 2],
+])(
+  "validates the exact Chinese requested count for %s",
+  async (prompt, count) => {
+    const value = quiz();
+    value.questions = Array.from({ length: count }, (_, index) => ({
+      ...value.questions[0],
+      question: `独立题目${index + 1}`,
+    }));
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValueOnce("教材资料 https://www.moe.gov.cn/")
+      .mockResolvedValueOnce(JSON.stringify(value));
+    await expect(
+      generateQuiz(
+        prompt,
+        new AbortController().signal,
+        "真实板书",
+        "data:image/png;base64,actual-board",
+      ),
+    ).resolves.toMatchObject({ questions: value.questions });
+    expect(chat.mock.calls[1][0][0].content).toContain(
+      `必须恰好生成${count}题`,
+    );
+    expect(JSON.stringify(chat.mock.calls[1][0][1].content)).toContain(
+      "data:image/png;base64,actual-board",
+    );
+  },
+);
+it.each(["出零道题", "出0道题", "出五十一道题", "出一百道题"])(
+  "rejects invalid explicit count before requesting a model: %s",
+  async (prompt) => {
+    const chat = vi.spyOn(ai, "chat");
+    await expect(
+      generateQuiz(prompt, new AbortController().signal),
+    ).rejects.toThrow("最多50题");
+    expect(chat).not.toHaveBeenCalled();
+  },
+);
+
 it("rejects truncated counts, duplicate questions, invalid choice keys and missing sources", () => {
   expect(() => validateQuiz(quiz(), 10)).toThrow();
   const duplicate = quiz();

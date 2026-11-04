@@ -13,6 +13,18 @@ import { transparentInkImage } from "./transparentInkImage";
 
 import type { ContentRect } from "./placement";
 
+/** The supplied Ark documentation confirms layer decomposition for these models. */
+export const supportsImageLayers = (model: string) =>
+  /^doubao-seedream-5-0-(?:flash|pro)-/.test(model.trim());
+
+export const requireImageLayers = (model: string) => {
+  if (!supportsImageLayers(model)) {
+    throw new Error(
+      t("fcboard.image_model_does_not_support_transparent_subjects"),
+    );
+  }
+};
+
 export const insertGeneratedImage = async (
   api: FcboardImperativeAPI,
   prompt: string,
@@ -35,6 +47,9 @@ export const insertGeneratedImage = async (
         "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
       ),
     );
+  }
+  if (placement.transparent) {
+    requireImageLayers(settings.imageModel);
   }
   const endpoint = validateEndpoint(settings.endpoint);
   if (!/\/(chat\/completions|responses)\/?$/.test(endpoint)) {

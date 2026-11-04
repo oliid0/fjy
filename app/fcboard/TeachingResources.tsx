@@ -38,7 +38,7 @@ import {
 } from "./resourceMenus";
 
 import catalogue from "./factory-resources.json";
-import { classroomCommands } from "./commands";
+import { classroomCommands, executeBoardCommand } from "./commands";
 import { insertionPoint, insertElements } from "./board";
 import { Classroom } from "./native";
 import { insertWebSelection } from "./webSelection";
@@ -133,7 +133,8 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
   const [error, setError] = useState("");
   const [generated, setGenerated] = useState<GeneratedResource[]>([]);
   const [generating, setGenerating] = useState(false);
-  const generation = useRef<AbortController | undefined>(undefined);
+  const generation = useRef(new Set<AbortController>());
+  const foregroundGeneration = useRef(new Set<AbortController>());
   const panel = useRef<HTMLElement>(null);
   const native = Capacitor.isNativePlatform();
   const webUrl = web?.url;
@@ -192,8 +193,10 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
   }, [api, native]);
   useEffect(() => {
     let alive = true;
+    const requests = generation.current;
+    const foreground = foregroundGeneration.current;
     const invalidate = classroomCommands.onInvalidate(() =>
-      generation.current?.abort(),
+      foreground.forEach((request) => request.abort()),
     );
     void generatedResources()
       .then((items) => {
@@ -208,23 +211,26 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       });
     return () => {
       alive = false;
-      generation.current?.abort();
+      requests.forEach((request) => request.abort());
       invalidate();
     };
   }, []);
-  const generate = async (prompt: string, signal?: AbortSignal) => {
+  const generate = async (
+    prompt: string,
+    signal?: AbortSignal,
+    prepare = false,
+  ) => {
     signal?.throwIfAborted();
-    if (pending.current) {
-      throw new Error(t("fcboard.processing"));
-    }
-    pending.current = true;
     const controller = new AbortController();
     const cancel = () => controller.abort();
     signal?.addEventListener("abort", cancel, { once: true });
-    generation.current = controller;
-    setBusy(true);
-    setGenerating(true);
-    setError("");
+    generation.current.add(controller);
+    if (!prepare) {
+      foregroundGeneration.current.add(controller);
+      setBusy(true);
+      setGenerating(true);
+      setError("");
+    }
     const target = JSON.stringify([
       (classroomCommands.read("boards") as { active?: string } | undefined)
         ?.active,
@@ -237,10 +243,28 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
         ?.page,
     ]);
     try {
-      const item = await generateTeachingResource(prompt, controller.signal);
+      const context = classroomCommands.has("canvas.snapshot")
+        ? ((await classroomCommands.execute({
+            name: "canvas.snapshot",
+            args: { signal: controller.signal },
+          })) as {
+            text?: string;
+            image?: string;
+            name?: string;
+            page?: number;
+          })
+        : undefined;
+      const item = await generateTeachingResource(
+        prompt,
+        controller.signal,
+        context,
+      );
       controller.signal.throwIfAborted();
       setGenerated(await generatedResources());
       controller.signal.throwIfAborted();
+      if (prepare) {
+        return { id: item.id, title: item.title };
+      }
       if (
         JSON.stringify([
           (classroomCommands.read("boards") as { active?: string } | undefined)
@@ -261,15 +285,17 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       return { id: item.id, title: item.title, ids: inserted.ids };
     } finally {
       signal?.removeEventListener("abort", cancel);
-      pending.current = false;
-      if (generation.current === controller) {
-        generation.current = undefined;
-        setBusy(false);
-        setGenerating(false);
-      }
+      generation.current.delete(controller);
+      foregroundGeneration.current.delete(controller);
+      setBusy(pending.current || foregroundGeneration.current.size > 0);
+      setGenerating(foregroundGeneration.current.size > 0);
     }
   };
-  const openWeb = async (url: unknown, title = t("fcboard.website")) => {
+  const openWeb = async (
+    url: unknown,
+    title = t("fcboard.website"),
+    teaching = false,
+  ) => {
     if (typeof url !== "string") {
       throw new Error(t("fcboard.enter_a_website_address"));
     }
@@ -287,15 +313,16 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       await Classroom.openWebResource({
         url: parsed.href,
         language: getLanguage().code,
+        teaching,
       });
     } else {
-      const width = Math.min(400, innerWidth - 32);
+      const width = Math.min(teaching ? 900 : 400, innerWidth - 32);
       const height = Math.min(600, innerHeight - 24);
       setWeb({
         url: parsed.href,
         title,
         bounds: {
-          x: innerWidth - width - 12,
+          x: teaching ? (innerWidth - width) / 2 : innerWidth - width - 12,
           y: (innerHeight - height) / 2,
           width,
           height,
@@ -396,6 +423,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
             ? "https://phet.colorado.edu/zh_CN/"
             : "https://phet.colorado.edu/",
           resourceTitle(resource),
+          true,
         );
       }
       const url = new URL(resource.url);
@@ -410,7 +438,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
             : language.split("-")[0],
         );
       }
-      return openWeb(url.href, resourceTitle(resource));
+      return openWeb(url.href, resourceTitle(resource), true);
     }
     let blob: Blob;
     if (resource.action === "periodic-table") {
@@ -568,6 +596,16 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
           ),
       ),
       classroomCommands.register(
+        "resources.prepare",
+        "Prepare and save a reusable interactive teaching resource from args.prompt without inserting it. Return its real id and title; call resources.use at the intended lesson step.",
+        (args) =>
+          generate(
+            typeof args.prompt === "string" ? args.prompt : "",
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+            true,
+          ),
+      ),
+      classroomCommands.register(
         "resources.open",
         "Open teaching resources. args.query searches names; args.category is math|physics|chemistry|biology|geography_weather|web|other|generated. Inspect resources context for actual section/tab IDs and use args.section and args.tab to navigate the original menus. Parent selection resets to its first section and tab.",
         (args) => {
@@ -625,8 +663,29 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.use",
-        "使用教学资源，args.id 必须来自 resources 清单；本地图示插入可编辑白板对象，在线实验在应用内打开",
-        (args) => insertResource(args.id, args),
+        "使用教学资源，args.id 必须来自 resources 清单；或args.taskId等待真实后台准备任务并插入它的资源。只传id或taskId其中之一。本地图示插入可编辑白板对象，在线实验在应用内打开",
+        async (args) => {
+          if (args.taskId === undefined) {
+            return insertResource(args.id, args);
+          }
+          if (
+            typeof args.taskId !== "string" ||
+            !args.taskId.trim() ||
+            args.id !== undefined
+          ) {
+            throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
+          }
+          const task = (await executeBoardCommand(
+            { name: "agent.wait", args: { id: args.taskId } },
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          )) as { result?: { id?: unknown } };
+          if (typeof task?.result?.id !== "string" || !task.result.id.trim()) {
+            throw new Error(
+              t("fcboard.resource_not_found_load_the_resource_list_first"),
+            );
+          }
+          return insertResource(task.result.id, args);
+        },
       ),
       classroomCommands.register(
         "web.open",
@@ -639,10 +698,12 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
           new Set(teachingResources.map((item) => item.category)),
         ),
         navigation: { category, section: menu.section?.id, tab: menu.tab?.id },
-        menus: factoryResourceSubjects.map((subject) => ({
-          ...subject,
-          title: resourceMenuTitle(subject.titleKey),
-        })),
+        menus: factoryResourceSubjects
+          .filter((subject) => subject.id !== "function")
+          .map((subject) => ({
+            ...subject,
+            title: resourceMenuTitle(subject.titleKey),
+          })),
         web: webState.current,
       })),
       ...(native
@@ -722,7 +783,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       setError(String(failure));
     } finally {
       pending.current = false;
-      setBusy(false);
+      setBusy(foregroundGeneration.current.size > 0);
     }
   };
   const visibleIds =
@@ -885,10 +946,12 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
               aria-label={t("fcboard.subject")}
             >
               {[
-                ...factoryResourceSubjects.map((subject) => ({
-                  ...subject,
-                  title: resourceMenuTitle(subject.titleKey),
-                })),
+                ...factoryResourceSubjects
+                  .filter((subject) => subject.id !== "function")
+                  .map((subject) => ({
+                    ...subject,
+                    title: resourceMenuTitle(subject.titleKey),
+                  })),
                 {
                   id: "",
                   titleKey: "",
@@ -909,9 +972,6 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
                   : []),
               ].map(({ id, title, action, sections }) => (
                 <Fragment key={id}>
-                  {id === "function" && (
-                    <hr className="fc-resource-menu-divider" />
-                  )}
                   <ListItemButton
                     component="button"
                     selected={category === id}
@@ -1064,7 +1124,13 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
                     : t("fcboard.generate_teaching_resource_with_ai")}
                 </button>
                 {generating && (
-                  <button onClick={() => generation.current?.abort()}>
+                  <button
+                    onClick={() =>
+                      foregroundGeneration.current.forEach((request) =>
+                        request.abort(),
+                      )
+                    }
+                  >
                     {t("fcboard.cancel_recognition")}
                   </button>
                 )}

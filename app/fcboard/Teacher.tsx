@@ -28,7 +28,7 @@ import { LESSON_FORMAT, LESSON_TOOLS_FORMAT, validateLesson } from "./lesson";
 import { searchMaterials } from "./materials";
 import { lessonSessions, saveLessonSession, TeachingEngine } from "./teaching";
 import { questionPosition } from "./questionInk";
-import { observeLesson } from "./lessonObserver";
+import { observeTeachingStep } from "./lessonObserver";
 import { currentSettings } from "./settings";
 
 import type { Quiz } from "./quiz";
@@ -107,8 +107,10 @@ export const LearningSettings = () => {
 export const Teacher = ({
   api,
   onCommand,
+  voiceActive = false,
 }: {
   api: FcboardImperativeAPI;
+  voiceActive?: boolean;
   onCommand: (
     text: string,
     signal: AbortSignal,
@@ -119,7 +121,7 @@ export const Teacher = ({
   useI18n();
   const engine = useRef<TeachingEngine | null>(null);
   if (!engine.current) {
-    engine.current = new TeachingEngine(api, observeLesson);
+    engine.current = new TeachingEngine(api, observeTeachingStep);
   }
   const controller = engine.current;
   const [state, setState] = useState(controller.state);
@@ -139,7 +141,11 @@ export const Teacher = ({
   const [quizBusy, setQuizBusy] = useState(false);
   const [quizError, setQuizError] = useState("");
   const quizRequest = useRef<AbortController | null>(null);
-  useEffect(() => () => quizRequest.current?.abort(), []);
+  const quizRequests = useRef(new Set<AbortController>());
+  useEffect(() => {
+    const requests = quizRequests.current;
+    return () => requests.forEach((request) => request.abort());
+  }, []);
   const createQuiz = async (
     text: string,
     signal: AbortSignal,
@@ -161,8 +167,8 @@ export const Teacher = ({
     ) {
       return onCommand(text, signal, sourceIds, questionWhole);
     }
-    quizRequest.current?.abort();
     const request = new AbortController();
+    quizRequests.current.add(request);
     quizRequest.current = request;
     const releaseOwner = classroomCommands.registerOwner(
       request.signal,
@@ -179,25 +185,40 @@ export const Teacher = ({
     setQuizBusy(true);
     setQuizOpen(true);
     try {
-      const document = classroomCommands.read("document") as
-        | { text?: string }
-        | undefined;
-      const context = document
-        ? document.text || ""
-        : (await boardContext(api, questionWhole)).text;
+      const visible = classroomCommands.has("canvas.snapshot")
+        ? ((await classroomCommands.execute({
+            name: "canvas.snapshot",
+            args: { signal: request.signal },
+          })) as { text?: string; image?: string })
+        : classroomCommands.has("document.snapshot")
+        ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
+            text?: string;
+            image?: string;
+          })
+        : await boardContext(api, questionWhole);
+      const context = visible.text || "";
       request.signal.throwIfAborted();
-      const result = await generateQuiz(text, request.signal, context);
+      const result = await generateQuiz(
+        text,
+        request.signal,
+        context,
+        visible.image,
+      );
       request.signal.throwIfAborted();
-      quizValue.current = result;
-      setQuiz(result);
+      if (quizRequest.current === request) {
+        quizValue.current = result;
+        setQuiz(result);
+      }
+      return result;
     } catch (failure) {
-      if (!request.signal.aborted) {
+      if (!request.signal.aborted && quizRequest.current === request) {
         setQuizError((failure as Error).message);
       }
       throw failure;
     } finally {
       releaseOwner();
       signal.removeEventListener("abort", cancel);
+      quizRequests.current.delete(request);
       if (quizRequest.current === request) {
         quizRequest.current = null;
         setQuizBusy(false);
@@ -208,7 +229,7 @@ export const Teacher = ({
   const floatingStyle = useAnchoredPanel(
     surface,
     "[data-testid='main-menu-trigger']",
-    active || !!error,
+    !voiceActive && (active || !!error),
   );
 
   useEffect(() => {
@@ -271,14 +292,16 @@ export const Teacher = ({
       !!source &&
       !source.aborted &&
       (classroomCommands.isOwnedBy(source, request.current?.signal) ||
-        classroomCommands.isOwnedBy(source, quizRequest.current?.signal) ||
+        [...quizRequests.current].some((request) =>
+          classroomCommands.isOwnedBy(source, request.signal),
+        ) ||
         controller.ownsSignal(source));
     const invalidate = classroomCommands.onInvalidate((source) => {
       if (owned(source) && classroomCommands.isExpectedTransition(source)) {
         return;
       }
       request.current?.abort();
-      quizRequest.current?.abort();
+      quizRequests.current.forEach((request) => request.abort());
       setQuizOpen(false);
       controller.cancel();
       setAsking(false);
@@ -471,7 +494,12 @@ export const Teacher = ({
             : undefined,
         ),
       ];
-      const result = await chat(messages, abort.signal, undefined, {
+      const configured = currentSettings();
+      const modelSettings = {
+        ...configured,
+        model: configured.textModel || configured.model,
+      };
+      const result = await chat(messages, abort.signal, modelSettings, {
         maxTokens: 8192,
       });
       if (!classroomCommands.isCurrent(revision, abort.signal)) {
@@ -491,6 +519,7 @@ export const Teacher = ({
               '准备完成后返回 {"action":"lesson","lesson":课程JSON}；仍需工具时继续返回 commands。课程必须遵循原系统提示的步骤 / 绘图 / 语音格式，禁止用 done 或聊天文本代替课程。',
             exclude: ["lesson.ask", "lesson.teach", "assistant.open"],
             maxTokens: 8192,
+            settings: modelSettings,
             verify: true,
           },
         );
@@ -564,12 +593,12 @@ export const Teacher = ({
             args.signal instanceof AbortSignal
               ? args.signal
               : new AbortController().signal;
-          await createQuiz(args.prompt, signal, undefined, true);
+          const result = await createQuiz(args.prompt, signal, undefined, true);
           signal.throwIfAborted();
-          return {
-            title: quizValue.current!.title,
-            count: quizValue.current!.questions.length,
-          };
+          if (!result) {
+            throw new Error(t("fcboard.generate_a_quiz_first"));
+          }
+          return { title: result.title, count: result.questions.length };
         },
       ),
       classroomCommands.register(
@@ -676,6 +705,9 @@ export const Teacher = ({
               ? args.sourceIds
               : undefined,
           ),
+      ),
+      classroomCommands.register("lesson.audio", "@internal", (args) =>
+        controller.conversation(args.conversation === true),
       ),
       classroomCommands.register(
         "lesson.pause",
@@ -800,7 +832,9 @@ export const Teacher = ({
           key={questionId}
           api={api}
           placement={questionPlacement}
-          onSubmit={createQuiz}
+          onSubmit={async (...args) => {
+            await createQuiz(...args);
+          }}
           hasResult={!!quiz}
           resultOpen={quizOpen}
           onClearResult={() => {
@@ -828,7 +862,20 @@ export const Teacher = ({
       {(active || error) && (
         <section
           ref={surface}
-          style={floatingStyle}
+          style={
+            voiceActive
+              ? {
+                  position: "fixed",
+                  top: 12,
+                  left: 12,
+                  bottom: "auto",
+                  transform: "none",
+                  width: 360,
+                  maxWidth: "calc(62vw - 36px)",
+                  maxHeight: "28vh",
+                }
+              : floatingStyle
+          }
           className={`fc-teacher fc-surface fc-lens-${state.lens}`}
           aria-label={t("fcboard.ai_teacher")}
           onKeyDown={(event) => {

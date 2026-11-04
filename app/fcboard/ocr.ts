@@ -39,11 +39,7 @@ export const recognizeHandwriting = async (
   let raster: Promise<string> | undefined;
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
-  if (
-    (kind === "math" || settings.ocr !== "cloud") &&
-    hasDigitalInk() &&
-    strokes?.length
-  ) {
+  if (settings.ocr !== "cloud" && hasDigitalInk() && strokes?.length) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
       const candidates = await recognizeDigitalInk(
@@ -92,7 +88,7 @@ export const recognizeHandwriting = async (
               languageHint === "en-US"
                 ? " The writing surface is for English letters and words."
                 : kind === "math"
-                ? " Use calculable math syntax: ^ for powers, * for multiplication, integrate(expr,x), defint(expr,a,b,x), diff(expr,x), limit(expr,x,a), solve(expr,x). Preserve values and structure; do not calculate the answer."
+                ? " Use calculable math syntax: ^ for powers, * for multiplication, integrate(expr,x), defint(expr,a,b,x), diff(expr,x), limit(expr,x,a), solve(expr,x). Preserve complete function definitions such as fx=1/x^2+x, denominators, superscripts, and distinguish variable x from multiplication. Preserve operand rows and horizontal bars in vertical arithmetic; long division is divisor)dividend. Preserve values and structure; do not calculate the answer."
                 : ""
             }`,
           },
@@ -124,10 +120,10 @@ export const recognizeHandwriting = async (
       ? await local(signal)
       : (() => {
           progress(t("fcboard.recognizing_handwriting"));
-          return kind === "math"
-            ? preferredRace(local, cloud, signal, 0)
-            : settings.ocr === "cloud"
+          return settings.ocr === "cloud"
             ? cloud(signal)
+            : kind === "math"
+            ? preferredRace(local, cloud, signal, 0)
             : preferredRace(cloud, local, signal);
         })();
   const value = await text;

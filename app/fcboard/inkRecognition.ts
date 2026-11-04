@@ -10,6 +10,7 @@ import { explainLanguage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
 import { fitInkShape, isShapeClosed } from "./shapeRecognition";
 import { hasDigitalInk, digitalInkEngine } from "./digitalInk";
+import { requireImageLayers, supportsImageLayers } from "./imageGeneration";
 
 import type { RecognizedShape } from "./shapeRecognition";
 
@@ -79,6 +80,24 @@ export const recognizeInkContent = async (
   languageHint?: "en-US",
   chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
 ): Promise<InkRecognitionResult> => {
+  if (
+    mode === "language" &&
+    currentSettings().ocr !== "local" &&
+    currentSettings().apiKey.trim()
+  ) {
+    const targetLanguage = getLanguage().code;
+    const image = await capture();
+    signal.throwIfAborted();
+    if (!image.startsWith("data:image/")) {
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
+    }
+    const study = await explainLanguage("", signal, targetLanguage, image);
+    signal.throwIfAborted();
+    if (targetLanguage !== getLanguage().code) {
+      throw new DOMException("Language changed", "AbortError");
+    }
+    return { kind: "language", text: study.term, study, targetLanguage };
+  }
   if (
     mode === "text" ||
     mode === "language" ||
@@ -192,7 +211,7 @@ export const recognizeInkContent = async (
           {
             role: "system",
             content:
-              '辨别魔法笔墨迹是文字要求还是绘画。只返回 {"version":1,"kind":"text","text":"逐字转录的完整要求"} 或 {"version":1,"kind":"drawing"}。完整可读的词句是 text，逐字保留主体、风格和背景要求，例如“一个二次元女孩”；人物、动物、物体草图是 drawing，例如手绘小狗。不能把绘画猜成文字，不能补写未写完的句子；“一个二次”等未完成描述返回 {"none":true}。混合且无法确定也返回 {"none":true}。',
+              '辨别魔法笔墨迹是文字要求还是绘画。只返回 {"version":1,"kind":"text","text":"逐字转录的完整要求","transparent":false} 或 {"version":1,"kind":"drawing","transparent":false}。完整可读的词句是 text，逐字保留原语种的主体、风格和背景要求，例如“一个二次元女孩”；用户明确要求透明、去背景或同义要求时 transparent=true，未要求则false。人物、动物、物体草图是 drawing，例如手绘小狗。不能把绘画猜成文字，不能补写未写完的句子；“一个二次”等未完成描述返回 {"none":true}。混合且无法确定也返回 {"none":true}。',
           },
           visualMessage(
             "辨别已经停笔的墨迹，不生成图片、不回答文字内容。",
@@ -208,6 +227,8 @@ export const recognizeInkContent = async (
     if (
       intent?.version !== 1 ||
       !["text", "drawing"].includes(String(intent.kind)) ||
+      (intent.transparent !== undefined &&
+        typeof intent.transparent !== "boolean") ||
       (intent.kind === "text" &&
         (typeof intent.text !== "string" ||
           !intent.text.trim() ||
@@ -215,12 +236,23 @@ export const recognizeInkContent = async (
     ) {
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
-    const background =
-      "主体完整、轮廓清晰，保留主体自身的颜色与白色细节。后续会拆出主体透明图层放到白板上，背景保持简洁，不要纸张、边框、投影或额外装饰。";
+    const transparent = supportsImageLayers(currentSettings().imageModel);
+    if (
+      intent.transparent === true ||
+      (intent.kind === "text" &&
+        /透明|无背景|不要背景|去(?:掉|除)?背景|transparent|backgroundless|(?:without|no)\s+(?:a\s+)?background|remove\s+(?:the\s+)?background/i.test(
+          String(intent.text),
+        ))
+    ) {
+      requireImageLayers(currentSettings().imageModel);
+    }
+    const background = transparent
+      ? "主体完整、轮廓清晰，保留主体自身的颜色与白色细节。后续会拆出主体透明图层放到白板上，背景保持简洁，不要纸张、边框、投影或额外装饰。"
+      : "主体完整、轮廓清晰，保留主体自身的颜色与白色细节，背景简洁，不要纸张、边框或额外装饰。";
     return {
       kind: "magic",
       ...(intent.kind === "drawing" ? { image } : {}),
-      transparent: true,
+      transparent,
       prompt:
         intent.kind === "text"
           ? `严格按手写描述中的主体、画风、颜色、动作与背景要求生成图片。用户原文：${intent.text}。${background}不要把描述文字本身画成图片中的文字。`

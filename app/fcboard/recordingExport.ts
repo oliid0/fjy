@@ -17,7 +17,7 @@ const engine = registerPlugin<{
   saveDownloads(options: {
     id: string;
   }): Promise<{ saved: boolean; uri: string }>;
-  save(options: { id: string }): Promise<{ saved: boolean }>;
+  save(options: { id: string; media?: boolean }): Promise<{ saved: boolean }>;
   share(options: { id: string }): Promise<{ urls: string[] }>;
   close(options: { id: string }): Promise<void>;
 }>("FcboardRecordingExport");
@@ -72,7 +72,8 @@ export const prepareRecordingPackage = async (
     await engine.complete({ id });
     signal.throwIfAborted();
     return {
-      save: () => engine.save({ id }),
+      save: (media = false) =>
+        engine.save({ id, ...(media ? { media: true } : {}) }),
       saveDownloads: () => engine.saveDownloads({ id }),
       share: () => engine.share({ id }),
       close: () => engine.close({ id }),
@@ -146,4 +147,36 @@ export const autoSaveRecording = async (recording: Recording) => {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
   return { saved: true };
+};
+
+/** A media download opens an actual file destination chooser when supported. */
+export const saveRecordingMedia = async (recording: Recording) => {
+  const file = recordingFiles(recording)[0];
+  const picker = (
+    window as Window & {
+      showSaveFilePicker?: (options: {
+        suggestedName: string;
+      }) => Promise<FileSystemFileHandle>;
+    }
+  ).showSaveFilePicker;
+  if (picker) {
+    const handle = await picker.call(window, { suggestedName: file.name });
+    const output = await handle.createWritable();
+    try {
+      await output.write(file);
+      await output.close();
+    } catch (error) {
+      await output.abort().catch(() => {});
+      throw error;
+    }
+  } else {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
 };

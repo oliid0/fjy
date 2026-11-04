@@ -66,3 +66,65 @@ it("keeps a failed function on an earlier row separate from the next function an
     ].sort(),
   ).toEqual([1, 2]);
 });
+
+const vertical = [
+  [
+    [20, 10],
+    [30, 30],
+  ],
+  [
+    [30, 50],
+    [40, 70],
+  ],
+  [
+    [0, 85],
+    [80, 85],
+  ],
+];
+it.each([
+  ["12\n+3\n---", "15"],
+  ["12\n-3\n---", "9"],
+  ["12\n×3\n---", "36"],
+  ["12\n÷3\n---", "4"],
+])(
+  "calculates explicit vertical %s with a separate below-bar result layout",
+  (text, answer) => {
+    expect(columnCalculation(vertical, text)).toEqual({
+      mode: "column",
+      lines: 2,
+    });
+    expect(localMathResult(text, "calculation")).toMatchObject({ answer });
+  },
+);
+it("recognizes explicit long division and does not turn an ordinary minus into a column", () => {
+  const division = [
+    [
+      [20, 30],
+      [30, 50],
+    ],
+    [
+      [70, 30],
+      [80, 50],
+    ],
+    [
+      [0, 20],
+      [100, 20],
+    ],
+  ];
+  expect(columnCalculation(division, "3⟌12")).toEqual({
+    mode: "column",
+    lines: 2,
+  });
+  expect(localMathResult("3⟌12", "calculation")).toMatchObject({ answer: "4" });
+  expect(
+    columnCalculation(
+      [
+        [
+          [0, 10],
+          [30, 10],
+        ],
+      ],
+      "12-3",
+    ),
+  ).toBeUndefined();
+});

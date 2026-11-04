@@ -379,14 +379,6 @@ export const RecordingPanel = (props: {
                   aria-label={t("fcboard.recording_playback")}
                   className={active.mode === "audio" ? "is-audio" : ""}
                 />
-                <a
-                  href={url}
-                  download={`Fcboard-${active.id}.${
-                    active.blob.type.includes("mp4") ? "mp4" : "webm"
-                  }`}
-                >
-                  {t("fcboard.download_recording")}
-                </a>
               </div>
             )}
           </>

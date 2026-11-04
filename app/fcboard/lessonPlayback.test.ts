@@ -11,7 +11,7 @@ import { sceneAPI } from "./test/scene";
 import { BoardBook } from "./boards";
 import { resourceFrame } from "./test/resourceFrame";
 import { interactiveResource } from "./test/interactiveResource";
-import { observeLesson } from "./lessonObserver";
+import { observeLesson, observeTeachingStep } from "./lessonObserver";
 import { registerUICommands } from "./uiControls";
 import * as ai from "./ai";
 
@@ -75,6 +75,80 @@ const experiment = async (host: ReturnType<typeof playback>) => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it.each([false, true])(
+  "keeps actual board drawing active during a conversation and respects explicit pause=%s",
+  async (manualPause) => {
+    const host = playback();
+    const voice = vi.mocked(narration.createNarrator).mock.results[0]
+      .value as ReturnType<typeof narration.createNarrator>;
+    host.engine.conversation(true);
+    const finished = host.engine.start(
+      validateLesson({
+        steps: [
+          {
+            say: "继续讲解",
+            commands: [
+              {
+                type: "draw_rectangle",
+                id: "drawing",
+                x: 0,
+                y: 0,
+                width: 80,
+                height: 40,
+                duration: 0,
+              },
+            ],
+          },
+        ],
+        quiz: [],
+      }),
+    );
+    try {
+      await waitFor(() =>
+        expect(
+          host.api
+            .getSceneElements()
+            .some((element) => element.customData?.fcTutorId === "drawing"),
+        ).toBe(true),
+      );
+      expect(host.engine.state.mode).toBe("teaching");
+      expect(host.speak).not.toHaveBeenCalled();
+      if (manualPause) {
+        host.engine.pause();
+      }
+      host.engine.conversation(false);
+      if (manualPause) {
+        expect(host.engine.state.mode).toBe("paused");
+        expect(voice.resume).not.toHaveBeenCalled();
+        host.engine.resume();
+      }
+      await finished;
+      expect(host.speak).toHaveBeenCalledWith("继续讲解", expect.anything());
+      expect(host.engine.state.mode).toBe("complete");
+    } finally {
+      host.stop();
+      await finished.catch(() => {});
+    }
+  },
+);
+
+it("plays ordinary validated lecture writing without an extra model request for every step", async () => {
+  const host = playback(observeTeachingStep);
+  const model = vi
+    .spyOn(ai, "chat")
+    .mockRejectedValue(new Error("must not need a network observation"));
+  try {
+    await host.engine.start(
+      validateLesson({ steps: [{ say: "普通板书", commands: [] }], quiz: [] }),
+    );
+    expect(host.engine.state.mode).toBe("complete");
+    expect(host.speak).toHaveBeenCalled();
+    expect(model).not.toHaveBeenCalled();
+  } finally {
+    host.stop();
+  }
 });
 
 it("repairs an outdated experiment check from real controls before speaking, without repeating the completed mutation", async () => {
@@ -1258,62 +1332,76 @@ it("pauses a full board before narration and retries layout after space is made"
   }
 });
 
-it("saves a full page and continues the same narrated step on a real new BoardBook page", async () => {
-  const host = playback();
-  const { convertToFcboardElements } = await import("@fcboard/fcboard");
-  const [obstacle] = convertToFcboardElements([
-    { type: "rectangle", x: 0, y: 0, width: 1600, height: 900 },
-  ]);
-  host.api.updateScene({ elements: [obstacle] });
-  Object.assign(host.api, {
-    getFiles: () => ({}),
-    onChange: () => () => {},
-    resetScene: () => host.api.updateScene({ elements: [] }),
-    history: { clear: vi.fn() },
-  });
-  const save = vi.fn().mockResolvedValue(undefined);
-  const book = new BoardBook(host.api, vi.fn(), async () => undefined, save);
-  await book.initialize();
-  const first = book.value.active;
-  const unbooks = classroomCommands.context("boards", () => ({
-    active: book.visibleActive,
-    boards: book.value.boards.map(({ id, name }) => ({ id, name })),
-  }));
-  const unnew = classroomCommands.register(
-    "board.new",
-    "Create the next page",
-    (args) => book.create(undefined, args.signal as AbortSignal),
-  );
-  try {
-    await host.engine.start(
-      validateLesson({
-        steps: [
-          {
-            say: "第二页继续牛顿定律。",
-            commands: [{ type: "write_text", text: "F=ma", duration: 0 }],
-          },
-        ],
-      }),
+it.each([
+  { height: 900, text: "F=ma" },
+  { height: 800, text: "第二页继续牛顿定律" },
+])(
+  "saves a page filled to $height and continues the same narrated step on a real new BoardBook page",
+  async ({ height, text }) => {
+    const host = playback();
+    const { convertToFcboardElements } = await import("@fcboard/fcboard");
+    const [obstacle] = convertToFcboardElements([
+      { type: "rectangle", x: 0, y: 0, width: 1600, height },
+    ]);
+    host.api.updateScene({ elements: [obstacle] });
+    Object.assign(host.api, {
+      getFiles: () => ({}),
+      onChange: () => () => {},
+      resetScene: () => host.api.updateScene({ elements: [] }),
+      history: { clear: vi.fn() },
+    });
+    const save = vi.fn().mockResolvedValue(undefined);
+    const book = new BoardBook(host.api, vi.fn(), async () => undefined, save);
+    await book.initialize();
+    const first = book.value.active;
+    const unbooks = classroomCommands.context("boards", () => ({
+      active: book.visibleActive,
+      boards: book.value.boards.map(({ id, name }) => ({ id, name })),
+    }));
+    const unnew = classroomCommands.register(
+      "board.new",
+      "Create the next page",
+      (args) => book.create(undefined, args.signal as AbortSignal),
     );
-    expect(book.value.boards).toHaveLength(2);
-    expect(book.value.boards[0].elements).toContainEqual(obstacle);
-    expect(book.value.active).not.toBe(first);
-    expect(
-      host.api
+    try {
+      await host.engine.start(
+        validateLesson({
+          steps: [
+            {
+              say: "第二页继续牛顿定律。",
+              commands: [{ type: "write_text", text, duration: 0 }],
+            },
+          ],
+        }),
+      );
+      expect(book.value.boards).toHaveLength(2);
+      expect(book.value.boards[0].elements).toContainEqual(obstacle);
+      expect(book.value.active).not.toBe(first);
+      expect(
+        host.api
+          .getSceneElements()
+          .some(
+            (element) =>
+              element.customData?.fcLessonId === host.engine.canvas?.id,
+          ),
+      ).toBe(true);
+      expect(host.engine.canvas?.boards).toEqual([first, book.value.active]);
+      expect(host.speak).toHaveBeenCalledTimes(1);
+      expect(host.engine.state.mode).toBe("complete");
+      const title = host.api
         .getSceneElements()
-        .some(
-          (element) =>
-            element.customData?.fcLessonId === host.engine.canvas?.id,
-        ),
-    ).toBe(true);
-    expect(host.engine.canvas?.boards).toEqual([first, book.value.active]);
-    expect(host.speak).toHaveBeenCalledTimes(1);
-    expect(host.engine.state.mode).toBe("complete");
-    expect(save).toHaveBeenCalled();
-  } finally {
-    unnew();
-    unbooks();
-    host.stop();
-    book.dispose();
-  }
-});
+        .find((element) => element.type === "text");
+      if (height === 800) {
+        expect(title?.type === "text" && title.fontSize).toBeGreaterThanOrEqual(
+          12,
+        );
+      }
+      expect(save).toHaveBeenCalled();
+    } finally {
+      unnew();
+      unbooks();
+      host.stop();
+      book.dispose();
+    }
+  },
+);

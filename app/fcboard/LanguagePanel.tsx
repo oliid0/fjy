@@ -12,6 +12,7 @@ import { MaterialPanel } from "./MaterialPanel";
 import { TransientMessage } from "./TransientMessage";
 import { classroomCommands } from "./commands";
 import { boardInk } from "./digitalInk";
+import { selectedBoardElements } from "./ai";
 import { selectionSignature } from "./selection";
 import {
   explainLanguage,
@@ -230,6 +231,60 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
     ];
     return () => stops.forEach((stop) => stop());
   }, [api, card]);
+  useEffect(() => {
+    let previous = "";
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      const state = api.getAppState();
+      if (
+        state.currentItemInkAssist !== "language" ||
+        state.cursorButton === "down"
+      ) {
+        return;
+      }
+      const doc = classroomCommands.read("document") as
+        | { tool?: string; selection?: string[] }
+        | undefined;
+      if (
+        !["selection", "lasso"].includes(doc?.tool || state.activeTool.type)
+      ) {
+        return;
+      }
+      const ids = doc
+        ? doc.selection || []
+        : selectedBoardElements(api).map((element) => element.id);
+      const token = selectionToken(api, ids);
+      if (!token) {
+        previous = "";
+        return;
+      }
+      if (token === previous) {
+        return;
+      }
+      previous = token;
+      void classroomCommands
+        .execute({ name: "language.card", args: { sourceIds: ids } })
+        .catch((failure) => {
+          if ((failure as Error).name !== "AbortError") {
+            setError(
+              failure instanceof Error ? failure.message : String(failure),
+            );
+          }
+        });
+    };
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(refresh, 120);
+    };
+    const stops = [
+      api.onChange(schedule),
+      classroomCommands.watch("document", schedule),
+    ];
+    return () => {
+      clearTimeout(timer);
+      stops.forEach((stop) => stop());
+    };
+  }, [api]);
   return (
     <>
       {card && (

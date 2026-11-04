@@ -12,7 +12,7 @@ import type { ActionName } from "@fcboard/fcboard/actions/types";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
-import { selectedBoardElements } from "./ai";
+import { boardContext, selectedBoardElements } from "./ai";
 import {
   insertElements,
   insertionPoint,
@@ -22,6 +22,11 @@ import {
   objectSelection,
 } from "./board";
 import { documentStrokeBounds } from "./documents";
+import {
+  alignmentOffset,
+  resizeAnchor,
+  transformBoardElement,
+} from "./canvasTransform";
 import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
 import { prepareQuestionWriting } from "./questionWriting";
@@ -218,6 +223,25 @@ export const registerCanvasCommands = (
     };
   };
   const registrations = [
+    classroomCommands.register("canvas.snapshot", "@internal", async (args) => {
+      const signal =
+        args.signal instanceof AbortSignal ? args.signal : undefined;
+      signal?.throwIfAborted();
+      const snapshot = classroomCommands.has("document.snapshot")
+        ? await classroomCommands.execute({
+            name: "document.snapshot",
+            args: { capture: args.capture !== false },
+          })
+        : await boardContext(
+            api,
+            true,
+            undefined,
+            contentViewport(api),
+            args.capture !== false,
+          );
+      signal?.throwIfAborted();
+      return snapshot;
+    }),
     registerResourceCommands(api),
     registerLanguageCommands(api),
     classroomCommands.register(
@@ -838,6 +862,84 @@ export const registerCanvasCommands = (
           },
         });
         return { ids: [...ids] };
+      },
+    ),
+    classroomCommands.register(
+      "canvas.resize",
+      "等比例放大/缩小选区或args.ids指定对象，支持真实手写笔迹与文本；args.scale=0.1..10，args.anchor=center（默认）|top-left。先canvas.inspect查真实id，完整选择标题所有笔画/组合及绑定文字。保留位置关系、笔型和可编辑参数，返回实际bounds。",
+      (args) => {
+        if (classroomCommands.has("document.resize")) {
+          return classroomCommands.execute({ name: "document.resize", args });
+        }
+        const elements = api.getSceneElements();
+        const ids = commandObjectIds(
+          args.ids === undefined
+            ? selectedBoardElements(api).map((element) => element.id)
+            : args.ids,
+          elements,
+        );
+        const selected = elements.filter((element) => ids.has(element.id));
+        const [left, top, right, bottom] = getCommonBounds(selected);
+        const anchor = resizeAnchor(args, { left, top, right, bottom });
+        const next = elements.map((element) =>
+          ids.has(element.id)
+            ? transformBoardElement(element, anchor, args.scale as number)
+            : element,
+        );
+        api.updateScene({
+          elements: next,
+          appState: { whiteboardSelection: undefined },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+        return {
+          ids: [...ids],
+          scale: args.scale,
+          bounds: getCommonBounds(
+            next.filter((element) => ids.has(element.id)),
+          ),
+        };
+      },
+    ),
+    classroomCommands.register(
+      "canvas.align",
+      "把选区或args.ids指定对象作为整体对齐可见画布，保留内部布局。args.horizontal=left|center|right，args.vertical=top|center|bottom，至少一项；返回真实位移与bounds。",
+      (args) => {
+        if (classroomCommands.has("document.align")) {
+          return classroomCommands.execute({ name: "document.align", args });
+        }
+        const elements = api.getSceneElements();
+        const ids = commandObjectIds(
+          args.ids === undefined
+            ? selectedBoardElements(api).map((element) => element.id)
+            : args.ids,
+          elements,
+        );
+        const [left, top, right, bottom] = getCommonBounds(
+          elements.filter((element) => ids.has(element.id)),
+        );
+        const { dx, dy } = alignmentOffset(
+          args,
+          { left, top, right, bottom },
+          contentViewport(api),
+        );
+        const next = elements.map((element) =>
+          ids.has(element.id)
+            ? transformBoardElement(element, { x: 0, y: 0 }, 1, dx, dy)
+            : element,
+        );
+        api.updateScene({
+          elements: next,
+          appState: { whiteboardSelection: undefined },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+        return {
+          ids: [...ids],
+          dx,
+          dy,
+          bounds: getCommonBounds(
+            next.filter((element) => ids.has(element.id)),
+          ),
+        };
       },
     ),
     classroomCommands.register(

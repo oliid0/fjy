@@ -287,7 +287,7 @@ it("hides a loading card on double click and ignores a late translation", async 
   }
 });
 
-it("opens a card for a circled word in ordinary text without inserting a translation, and can pronounce the actual term", async () => {
+it("opens a language card through the selection tool without drawing a language-pen circle, and pronounces the actual term", async () => {
   vi.useFakeTimers();
   const host = setup();
   const stopTranslate = registerLanguageCommands(host.api);
@@ -300,25 +300,16 @@ it("opens a card for a circled word in ordinary text without inserting a transla
   const [word] = convertToFcboardElements([
     { type: "text", text: languageStudy.term, x: 220, y: 150, fontSize: 28 },
   ]);
-  const circle = newFreeDrawElement({
-    type: "freedraw",
-    x: 180,
-    y: 110,
-    points: Array.from({ length: 65 }, (_, i) =>
-      pointFrom(
-        130 + 130 * Math.cos((i * Math.PI) / 32),
-        65 + 65 * Math.sin((i * Math.PI) / 32),
-      ),
-    ),
-    simulatePressure: true,
-    customData: { fcInk: { version: 2, pen: "hard", assist: "language" } },
-  });
   host.chat.mockResolvedValue(
     JSON.stringify({ ...languageStudy, synonyms: ["a similar expression"] }),
   );
   const view = render(<LanguagePanel api={host.api} />);
   try {
-    act(() => host.api.updateScene({ elements: [word, circle] }));
+    Object.assign(host.api.getAppState(), {
+      activeTool: { type: "lasso" },
+      selectedElementIds: { [word.id]: true },
+    });
+    act(() => host.api.updateScene({ elements: [word] }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
@@ -326,7 +317,7 @@ it("opens a card for a circled word in ordinary text without inserting a transla
       screen.getByRole("dialog", { name: t("fcboard.language_study") }),
     ).toBeVisible();
     expect(screen.getByText(/a similar expression/)).toBeVisible();
-    expect(host.recognize).toHaveBeenCalledTimes(1);
+    expect(host.recognize).not.toHaveBeenCalled();
     expect(host.api.getSceneElements()).toEqual([word]);
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.pronunciation") }),

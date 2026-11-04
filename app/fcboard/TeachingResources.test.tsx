@@ -20,6 +20,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
 import { classroomCommands } from "./commands";
+import { registerBoardAgents } from "./boardAgents";
 import { TeachingResources, teachingResources } from "./TeachingResources";
 import * as ai from "./ai";
 import { deleteGeneratedResource } from "./generatedResources";
@@ -146,6 +147,7 @@ it("opens the chemistry quantum experiment at the actual native URL and rejects 
     expect(Classroom.openWebResource).toHaveBeenCalledWith({
       url: "https://phet.colorado.edu/sims/html/blackbody-spectrum/latest/blackbody-spectrum_all.html?locale=en",
       language: "en",
+      teaching: true,
     }),
   );
   expect(
@@ -154,7 +156,7 @@ it("opens the chemistry quantum experiment at the actual native URL and rejects 
   view.unmount();
 });
 
-it("keeps the source network PhET home button and standalone function entry operational", async () => {
+it("keeps the network PhET home button and removes the redundant function menu entry", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   const view = render(<TeachingResources api={api} />);
   await act(async () => {
@@ -175,22 +177,23 @@ it("keeps the source network PhET home button and standalone function entry oper
     expect(Classroom.openWebResource).toHaveBeenCalledWith({
       url: "https://phet.colorado.edu/",
       language: "en",
+      teaching: true,
     }),
   );
   await act(async () => {
     await classroomCommands.execute({ name: "resources.open" });
   });
   const nav = screen.getByRole("navigation", { name: t("fcboard.subject") });
-  fireEvent.click(
-    within(nav).getByRole("button", {
+  expect(
+    within(nav).queryByRole("button", {
       name: resourceMenuTitle("str_function"),
     }),
-  );
-  expect(
-    await screen.findByRole("dialog", {
-      name: t("fcboard.functionGraph.title"),
-    }),
-  ).toBeVisible();
+  ).toBeNull();
+  expect(classroomCommands.read("resources")).toMatchObject({
+    menus: expect.not.arrayContaining([
+      expect.objectContaining({ id: "function" }),
+    ]),
+  });
   view.unmount();
 });
 
@@ -586,5 +589,170 @@ it("opens Insert Website at the original right-hand margin and vertical center w
     );
   } finally {
     view.unmount();
+  }
+});
+
+it("opens an online teaching experiment in a centered window separate from ordinary website placement", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+  const view = render(<TeachingResources api={api} />);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "resources.open",
+        args: { category: "web" },
+      });
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: new RegExp(t("factoryResources.str_geogebra_phet")),
+      }),
+    );
+    await waitFor(() =>
+      expect(document.querySelector(".fc-web-resource")).not.toBeNull(),
+    );
+    const width = Math.min(900, innerWidth - 32);
+    expect(document.querySelector(".fc-web-resource")).toHaveStyle({
+      left: `${(innerWidth - width) / 2}px`,
+      width: `${width}px`,
+    });
+  } finally {
+    view.unmount();
+  }
+});
+
+it("generates independent teaching resources concurrently from the actual visible page image", async () => {
+  const finishes: ((value: string) => void)[] = [];
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockImplementation(() => new Promise((resolve) => finishes.push(resolve)));
+  const insert = vi.fn().mockReturnValue({ ids: ["actual-resource"] });
+  const releases = [
+    classroomCommands.register("canvas.resource", "@internal", insert),
+    classroomCommands.register("canvas.snapshot", "@internal", () => ({
+      text: "Newton second law",
+      image: "data:image/png;base64,current-page",
+      name: "forces.pdf",
+      page: 2,
+    })),
+  ];
+  const view = render(<TeachingResources api={api} />);
+  const ids: string[] = [];
+  try {
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    act(() => {
+      first = classroomCommands.execute({
+        name: "resources.generate",
+        args: { prompt: "first force demonstration" },
+      });
+      second = classroomCommands.execute({
+        name: "resources.generate",
+        args: { prompt: "second acceleration demonstration" },
+      });
+    });
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(2));
+    expect(chat.mock.calls[0][1]?.aborted).toBe(false);
+    for (const call of chat.mock.calls) {
+      expect(JSON.stringify(call[0][1].content)).toContain(
+        "data:image/png;base64,current-page",
+      );
+      expect(JSON.stringify(call[0][1].content)).toContain("forces.pdf");
+    }
+    await act(async () => {
+      finishes[1](JSON.stringify(interactiveResource));
+      const result = (await second) as { id: string };
+      ids.push(result.id);
+    });
+    expect(chat.mock.calls[0][1]?.aborted).toBe(false);
+    expect(insert).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishes[0](JSON.stringify(interactiveResource));
+      const result = (await first) as { id: string };
+      ids.push(result.id);
+    });
+    expect(new Set(ids).size).toBe(2);
+    expect(insert).toHaveBeenCalledTimes(2);
+  } finally {
+    view.unmount();
+    releases.forEach((release) => release());
+    await Promise.all(ids.map(deleteGeneratedResource));
+  }
+});
+
+it("prepares a reusable resource without drawing and waits for its actual task before use", async () => {
+  let finish!: (value: string) => void;
+  const chat = vi.spyOn(ai, "chat").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const insert = vi.fn().mockReturnValue({ ids: ["prepared-resource-object"] });
+  const stopAgents = registerBoardAgents();
+  const releases = [
+    classroomCommands.register("canvas.resource", "@internal", insert),
+    classroomCommands.register("canvas.snapshot", "@internal", () => ({
+      text: "current actual physics notes",
+      image: "data:image/png;base64,prepare-source",
+    })),
+  ];
+  const view = render(<TeachingResources api={api} />);
+  let id = "";
+  try {
+    let task!: { id: string };
+    await act(async () => {
+      task = (await classroomCommands.execute({
+        name: "agent.start",
+        args: {
+          role: "resource",
+          prompt: "prepare force animation",
+          command: {
+            name: "resources.prepare",
+            args: { prompt: "force animation" },
+          },
+        },
+      })) as { id: string };
+    });
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
+    expect(insert).not.toHaveBeenCalled();
+    expect(JSON.stringify(chat.mock.calls[0][0][1].content)).toContain(
+      "data:image/png;base64,prepare-source",
+    );
+    let use!: Promise<unknown>;
+    let finished = false;
+    act(() => {
+      use = classroomCommands
+        .execute({ name: "resources.use", args: { taskId: task.id } })
+        .then((value) => {
+          finished = true;
+          return value;
+        });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(finished).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+    await act(async () => {
+      finish(JSON.stringify(interactiveResource));
+      const result = (await use) as { inserted: string; ids: string[] };
+      id = result.inserted;
+      expect(result.ids).toEqual(["prepared-resource-object"]);
+    });
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert.mock.calls[0][0].resource.id).toBe(id);
+    expect(
+      await classroomCommands.execute({
+        name: "agent.inspect",
+        args: { id: task.id },
+      }),
+    ).toMatchObject({ state: "completed", result: { id } });
+  } finally {
+    view.unmount();
+    stopAgents();
+    releases.forEach((release) => release());
+    if (id) {
+      await deleteGeneratedResource(id);
+    }
   }
 });

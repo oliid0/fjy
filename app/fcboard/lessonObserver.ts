@@ -183,3 +183,18 @@ You may return {"action":"commands","commands":[...],"continue":true} to read mo
     quiz: candidate?.quiz === undefined ? input.lesson.quiz : candidate.quiz,
   });
 };
+
+/** Ordinary validated board writing can play immediately; experiments still observe live state. */
+export const observeTeachingStep: LessonObserver = async (input, signal) => {
+  signal.throwIfAborted();
+  const canvas = classroomCommands.read("canvas") as Canvas | undefined;
+  if (
+    canvas &&
+    !input.error &&
+    !input.lesson.steps[input.step].tools?.length &&
+    !canvas.elements?.some((element) => element.interactive)
+  ) {
+    return undefined;
+  }
+  return observeLesson(input, signal);
+};

@@ -5,6 +5,7 @@ export const createVoiceTurns = (
   delay = 3000,
   options: {
     interrupt?: boolean;
+    concurrent?: boolean | ((text: string) => boolean);
     immediate?: (text: string) => boolean;
     onInterruption?: () => void;
   } = {},
@@ -33,7 +34,12 @@ export const createVoiceTurns = (
     }
     const request = new AbortController();
     requests.add(request);
-    queued = queued
+    const concurrent =
+      typeof options.concurrent === "function"
+        ? options.concurrent(text)
+        : options.concurrent;
+    const previous = concurrent ? Promise.resolve() : queued;
+    const task = previous
       .then(async () => {
         if (!request.signal.aborted) {
           await execute(text, request.signal);
@@ -45,6 +51,7 @@ export const createVoiceTurns = (
         }
       })
       .finally(() => requests.delete(request));
+    queued = Promise.all([queued, task]).then(() => {});
   };
   return {
     activity() {

@@ -1957,6 +1957,7 @@
     },
     "no_subject_layers_returned": "图片服务未返回有效主体图层，原笔迹已保留",
     "subject_layer_requires_transparency": "主体图层没有有效透明背景，原笔迹已保留",
+    "image_model_does_not_support_transparent_subjects": "当前图像模型未确认支持透明主体图层，请使用 Seedream 5.0 pro 或 flash；原笔迹已保留",
     "synonyms": "同义词与近义表达"
   },
   "factoryResources": {

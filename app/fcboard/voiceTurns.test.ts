@@ -155,3 +155,52 @@ it("executes an explicit stop immediately and discards fragments from an abandon
   expect(execute.mock.calls.map(([text]) => text)).toEqual(["stop", "write 3"]);
   turns.stop();
 });
+
+it("runs independent confirmed turns concurrently while retaining cancellation of all active requests", async () => {
+  const execute = vi.fn(
+    (_text: string, _signal: AbortSignal) => new Promise<void>(() => {}),
+  );
+  const turns = createVoiceTurns(execute, vi.fn(), 450, { concurrent: true });
+  turns.push("first");
+  await vi.advanceTimersByTimeAsync(450);
+  turns.push("second");
+  await vi.advanceTimersByTimeAsync(450);
+  expect(execute.mock.calls.map(([text]) => text)).toEqual(["first", "second"]);
+  turns.reset();
+  expect(
+    execute.mock.calls.every(([, signal]) => (signal as AbortSignal).aborted),
+  ).toBe(true);
+  turns.stop();
+});
+
+it("holds a dependent correction until all preceding independent turns finish", async () => {
+  let finish!: () => void;
+  const execute = vi.fn(async (text: string, _signal: AbortSignal) => {
+    if (text === "first") {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    }
+  });
+  const turns = createVoiceTurns(execute, vi.fn(), 450, {
+    concurrent: (text) => text !== "correct",
+  });
+  turns.push("first");
+  await vi.advanceTimersByTimeAsync(450);
+  turns.push("independent");
+  await vi.advanceTimersByTimeAsync(450);
+  turns.push("correct");
+  await vi.advanceTimersByTimeAsync(450);
+  expect(execute.mock.calls.map(([text]) => text)).toEqual([
+    "first",
+    "independent",
+  ]);
+  finish();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(execute.mock.calls.map(([text]) => text)).toEqual([
+    "first",
+    "independent",
+    "correct",
+  ]);
+  turns.stop();
+});

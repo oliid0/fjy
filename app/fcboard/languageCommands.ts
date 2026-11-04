@@ -13,6 +13,9 @@ import { documentStrokeBounds, inkSnapshot } from "./documents";
 import { handwritingText } from "./handwriting";
 import { explainLanguage } from "./languageStudy";
 import { recognizeHandwriting } from "./ocr";
+import { currentSettings } from "./settings";
+
+import type { LanguageStudy } from "./languageStudy";
 
 import type { InkStroke } from "./documents";
 
@@ -138,6 +141,7 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
       ];
       try {
         let text = args.text as string | undefined;
+        let visualStudy: LanguageStudy | undefined;
         if (text === undefined) {
           const known: string[] = [];
           let capture: (() => Promise<string>) | undefined;
@@ -240,7 +244,20 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
               strokes = boardInk(boardSource, region);
             }
           }
-          if (capture) {
+          if (
+            capture &&
+            currentSettings().ocr !== "local" &&
+            currentSettings().apiKey.trim()
+          ) {
+            visualStudy = await explainLanguage(
+              known.join("\n"),
+              request.signal,
+              targetLanguage,
+              await capture(),
+            );
+            known.length = 0;
+            known.push(visualStudy.term);
+          } else if (capture) {
             const recognized = await recognizeHandwriting(
               capture,
               request.signal,
@@ -259,11 +276,9 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
             t("fcboard.circle_the_word_or_sentence_to_study_first"),
           );
         }
-        const study = await explainLanguage(
-          text.trim(),
-          request.signal,
-          targetLanguage,
-        );
+        const study =
+          visualStudy ||
+          (await explainLanguage(text.trim(), request.signal, targetLanguage));
         assertCurrent();
         const before = new Set(
           (doc ? readDocument()?.ink || [] : api.getSceneElements()).map(

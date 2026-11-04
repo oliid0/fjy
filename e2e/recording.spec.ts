@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
@@ -17,11 +19,16 @@ for (const viewport of [
   { width: 3080, height: 1240 },
   { width: 390, height: 844 },
 ]) {
-  test(`recording minimizes while writing, pauses, restores and stops at ${viewport.width}`, async ({
+  test(`audio recording shows live transcript, minimizes on request, restores and saves at ${viewport.width}`, async ({
     page,
   }, info) => {
     await page.setViewportSize(viewport);
     await page.addInitScript(() => {
+      // Verify the real download fallback for browsers without a destination picker.
+      Object.defineProperty(window, "showSaveFilePicker", {
+        configurable: true,
+        value: undefined,
+      });
       localStorage.setItem(
         "fcboard-settings",
         JSON.stringify({ speech: "system", autoSummary: false }),
@@ -61,6 +68,11 @@ for (const viewport of [
     }
     await dialog.getByRole("button", { name: "仅麦克风", exact: true }).click();
     await dialog.getByRole("button", { name: "开始录制", exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("log")).toContainText("Recording sample");
+    await dialog
+      .getByRole("button", { name: "收起录制窗口", exact: true })
+      .click();
     await expect(dialog).toBeHidden();
     const widget = page.getByRole("toolbar", { name: "录制", exact: true });
     await expect(widget).toBeVisible();
@@ -118,9 +130,13 @@ for (const viewport of [
     await expect(
       dialog.getByText("Recording sample", { exact: true }),
     ).toHaveCount(2);
-    await expect(
-      dialog.getByRole("link", { name: "下载录制", exact: true }),
-    ).toHaveAttribute("href", /^blob:/);
+    const downloading = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "下载录制", exact: true }).click();
+    const downloaded = await downloading;
+    expect(downloaded.suggestedFilename()).toMatch(/\.webm$/);
+    const bytes = await readFile((await downloaded.path())!);
+    expect(bytes.byteLength).toBeGreaterThan(44);
+    expect(Array.from(bytes.subarray(0, 4))).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
     await page.screenshot({ path: info.outputPath("recording-workspace.png") });
   });
 }

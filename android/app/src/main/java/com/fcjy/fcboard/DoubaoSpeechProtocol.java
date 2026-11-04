@@ -33,7 +33,7 @@ final class DoubaoSpeechProtocol {
             .put("audio", new JSONObject().put("format", "pcm").put("codec", "raw")
                 .put("rate", 16000).put("bits", 16).put("channel", 1))
             .put("request", new JSONObject().put("model_name", "bigmodel")
-                .put("enable_nonstream", true).put("enable_itn", true)
+                .put("enable_nonstream", true).put("enable_itn", true).put("enable_lid", true)
                 .put("show_utterances", true).put("result_type", "full")
                 .put("end_window_size", 800))
             .toString().getBytes(StandardCharsets.UTF_8);

@@ -183,6 +183,10 @@ export class CommandRouter {
 export const classroomCommands = new CommandRouter();
 
 const cancellable = new Set([
+  "agent.start",
+  "agent.wait",
+  "quiz.generate",
+  "canvas.snapshot",
   "collaboration.start",
   "lesson.ask",
   "lesson.teach",
@@ -194,6 +198,7 @@ const cancellable = new Set([
   "canvas.animate",
   "resources.use",
   "resources.generate",
+  "resources.prepare",
   "resources.inspect",
   "resources.interact",
   "canvas.resource",
@@ -338,7 +343,7 @@ export const directCommand = (text: string): Command | null => {
     !/(?:然后|接着|随后|并且|之后|并讲解|同时(?:打开|使用|开始|插入|录制))/.test(
       request,
     ) &&
-    /^(?:请|帮我)?(?:生成|制作|创建).*(?:html|教学动画|交互(?:动画|实验|图形|资源)|可交互|教学资源)/i.test(
+    /^(?:请|帮我)?(?:生成|制作|创建).*(?:html|动画|交互(?:实验|图形|资源)|可交互|教学资源)/i.test(
       request,
     )
   ) {

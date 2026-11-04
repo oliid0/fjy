@@ -1,6 +1,7 @@
 import { t, setLanguage, languages } from "@fcboard/fcboard/i18n";
 
-import { startSystemSpeech } from "./speech";
+import { startSystemSpeech, transcribe } from "./speech";
+import { defaults, saveSettings } from "./settings";
 
 const offline = vi.hoisted(() => ({
   start: vi.fn(),
@@ -27,6 +28,7 @@ describe("Android system speech", () => {
   afterEach(() => vi.useRealTimers());
   beforeEach(async () => {
     vi.clearAllMocks();
+    saveSettings({ ...defaults, speechLanguage: "zh-CN" }, false);
     await setLanguage(languages.find((lang) => lang.code === "zh-CN")!);
     native.start.mockReset();
     native.start.mockResolvedValue({ matches: [] });
@@ -143,12 +145,40 @@ describe("Android system speech", () => {
     );
     stop();
   });
-  it("passes the selected interface language to Android rather than forcing Chinese", async () => {
-    await setLanguage(languages.find((lang) => lang.code === "en")!);
+  it("uses the configured spoken language independently of the interface language", async () => {
+    saveSettings({ ...defaults, speechLanguage: "en-US" }, false);
     const stop = await startSystemSpeech(vi.fn(), vi.fn());
     expect(native.start).toHaveBeenCalledWith(
-      expect.objectContaining({ language: "en" }),
+      expect.objectContaining({ language: "en-US" }),
     );
     stop();
   });
 });
+
+it.each(["auto", "ja-JP"])(
+  "uses transcription language %s independently of the UI",
+  async (speechLanguage) => {
+    saveSettings(
+      {
+        ...defaults,
+        speech: "custom",
+        speechEndpoint: "https://voice.example.test/transcribe",
+        speechLanguage,
+      },
+      false,
+    );
+    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ text: "spoken original" }),
+    } as Response);
+    try {
+      await transcribe(new Blob(["audio"], { type: "audio/webm" }));
+      const form = fetcher.mock.calls[0][1]!.body as FormData;
+      expect(form.get("language")).toBe(
+        speechLanguage === "auto" ? null : "ja",
+      );
+    } finally {
+      fetcher.mockRestore();
+    }
+  },
+);

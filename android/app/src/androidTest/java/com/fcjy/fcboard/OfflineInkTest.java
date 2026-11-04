@@ -2,13 +2,22 @@ package com.fcjy.fcboard;
 
 import android.content.Context;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.google.android.gms.tasks.Tasks;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.TaskCompletionSource;
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.PluginCall;
 import com.google.mlkit.common.model.RemoteModelManager;
 import com.google.mlkit.vision.digitalink.*;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.text.Normalizer;
 import java.util.stream.Collectors;
 import org.json.JSONArray;
@@ -109,6 +118,180 @@ public class OfflineInkTest {
             .addStroke(dot.build())
             .build();
         assertTopRecognition("en-US", ink, "Hi");
+    }
+
+    private static final class InkCall extends PluginCall {
+        final CountDownLatch done = new CountDownLatch(1);
+        final AtomicReference<JSObject> result = new AtomicReference<>();
+        final AtomicReference<String> error = new AtomicReference<>();
+        final AtomicReference<String> code = new AtomicReference<>();
+        final AtomicReference<JSObject> errorData = new AtomicReference<>();
+        final AtomicInteger completions = new AtomicInteger();
+        InkCall(String method, JSObject options) { super(null, "FcboardDigitalInk", "ink-test", method, options); }
+        @Override public void resolve(JSObject value) { result.set(value); completions.incrementAndGet(); done.countDown(); }
+        @Override public void resolve() { resolve(new JSObject()); }
+        @Override public void reject(String message, String code, Exception exception, JSObject data) {
+            error.set(message); this.code.set(code); errorData.set(data); completions.incrementAndGet(); done.countDown();
+        }
+    }
+
+    /** Real SDK clients and native inference remain in use; only one Task is held
+     * to reproduce a slow model check or recognition without blocking a thread. */
+    private static final class ControlledInkPlugin extends DigitalInkPlugin {
+        final boolean holdModel, holdRecognition;
+        final TaskCompletionSource<Boolean> firstModel = new TaskCompletionSource<>();
+        final TaskCompletionSource<RecognitionResult> firstRecognition = new TaskCompletionSource<>();
+        final AtomicInteger checks = new AtomicInteger(), clients = new AtomicInteger(), closes = new AtomicInteger();
+        final CountDownLatch recognitionStarted = new CountDownLatch(1);
+        final CountDownLatch firstClosed = new CountDownLatch(1);
+        ControlledInkPlugin(boolean holdModel, boolean holdRecognition) {
+            this.holdModel = holdModel; this.holdRecognition = holdRecognition;
+        }
+        @Override Task<Boolean> modelDownloaded(DigitalInkRecognitionModel model) {
+            if (checks.incrementAndGet() == 1 && holdModel) return firstModel.getTask();
+            return super.modelDownloaded(model);
+        }
+        @Override DigitalInkRecognizer createRecognizer(DigitalInkRecognitionModel model) {
+            DigitalInkRecognizer actual = super.createRecognizer(model);
+            boolean first = clients.incrementAndGet() == 1;
+            return new DigitalInkRecognizer() {
+                @Override public Task<RecognitionResult> recognize(Ink ink) {
+                    if (first && holdRecognition) { recognitionStarted.countDown(); return firstRecognition.getTask(); }
+                    return actual.recognize(ink);
+                }
+                @Override public Task<RecognitionResult> recognize(Ink ink, RecognitionContext context) { return actual.recognize(ink, context); }
+                @Override public void close() {
+                    actual.close(); closes.incrementAndGet();
+                    if (first) firstClosed.countDown();
+                }
+            };
+        }
+    }
+
+    private JSObject chineseSelection() {
+        JSArray strokes = new JSArray();
+        for (int direction = 0; direction < 2; direction++) {
+            JSArray points = new JSArray();
+            for (int i = 0; i <= 20; i++) {
+                points.put(new JSArray().put(direction == 0 ? 20 + i * 4 : 60).put(direction == 0 ? 60 : 20 + i * 4));
+            }
+            strokes.put(points);
+        }
+        return new JSObject().put("language", "zh-Hani-CN").put("strokes", strokes);
+    }
+
+    private void assertChineseResult(InkCall call) throws Exception {
+        assertTrue("Independent native recognition must finish without waiting for an earlier Task", call.done.await(15, TimeUnit.SECONDS));
+        assertNull(call.error.get(), call.error.get());
+        assertEquals("mlkit-digital-ink-18.1.0", call.result.get().getString("engine"));
+        assertEquals("十", call.result.get().getJSONArray("candidates").getString(0).trim());
+        assertEquals(1, call.completions.get());
+    }
+
+    @Test public void pendingModelCheckDoesNotBlockLaterRecognitionAndRetainsTheMissingPackCode() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(true, false);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            InkCall first = new InkCall("recognize", chineseSelection());
+            InkCall second = new InkCall("recognize", chineseSelection());
+            try {
+                plugin.recognize(first);
+                plugin.recognize(second);
+                assertChineseResult(second);
+                assertEquals(1, first.done.getCount());
+                plugin.firstModel.setResult(false);
+                assertTrue(first.done.await(5, TimeUnit.SECONDS));
+                assertEquals("HANDWRITING_MODEL_REQUIRED", first.code.get());
+                assertEquals("zh-Hani-CN", first.errorData.get().getString("tag"));
+                assertEquals(1, first.completions.get());
+            } finally {
+                plugin.firstModel.trySetResult(false);
+                plugin.handleOnDestroy();
+            }
+        }
+    }
+
+    @Test public void aRecognitionTimeoutAffectsOnlyItsOwnCallAndClosesItsClientAfterActualCompletion() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(false, true);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            InkCall first = new InkCall("recognize", chineseSelection());
+            InkCall second = new InkCall("recognize", chineseSelection());
+            try {
+                plugin.recognize(first);
+                assertTrue(plugin.recognitionStarted.await(15, TimeUnit.SECONDS));
+                plugin.recognize(second);
+                assertChineseResult(second);
+                assertEquals(1, first.done.getCount());
+                assertTrue("The first call must retain its own bounded timeout", first.done.await(30, TimeUnit.SECONDS));
+                assertNotNull(first.error.get());
+                assertEquals(1, first.completions.get());
+                assertEquals("Do not close a client whose underlying Task is still running", 1, plugin.firstClosed.getCount());
+                plugin.firstRecognition.setException(new IllegalStateException("late SDK completion"));
+                assertTrue(plugin.firstClosed.await(5, TimeUnit.SECONDS));
+                assertEquals(2, plugin.closes.get());
+                assertEquals(1, first.completions.get());
+                assertEquals(1, second.completions.get());
+            } finally {
+                plugin.firstRecognition.trySetException(new IllegalStateException("test cleanup"));
+                plugin.handleOnDestroy();
+            }
+        }
+    }
+
+    @Test public void deletedPackInvalidatesOnlyItsPendingResultAndLateCompletionCannotDeliverIt() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(false, true);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            InkCall first = new InkCall("recognize", chineseSelection());
+            try {
+                plugin.recognize(first);
+                assertTrue(plugin.recognitionStarted.await(15, TimeUnit.SECONDS));
+                // Exercise the actual successful-pack-deletion callback without
+                // deleting the bundled language assets that other tests require.
+                plugin.retireLanguage("zh-Hani-CN");
+                assertTrue(first.done.await(5, TimeUnit.SECONDS));
+                assertEquals("HANDWRITING_MODEL_REQUIRED", first.code.get());
+                assertEquals(1, plugin.firstClosed.getCount());
+                InkCall later = new InkCall("recognize", chineseSelection());
+                plugin.recognize(later);
+                assertChineseResult(later);
+                plugin.firstRecognition.setException(new IllegalStateException("late SDK completion"));
+                assertTrue(plugin.firstClosed.await(5, TimeUnit.SECONDS));
+                assertEquals(1, first.completions.get());
+                assertNull(first.result.get());
+            } finally {
+                plugin.firstRecognition.trySetException(new IllegalStateException("test cleanup"));
+                plugin.handleOnDestroy();
+            }
+        }
+    }
+
+    @Test public void unloadingRejectsPendingCallsButStillReleasesTheirClientsOnActualCompletion() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(false, true);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            InkCall first = new InkCall("recognize", chineseSelection());
+            try {
+                plugin.recognize(first);
+                assertTrue(plugin.recognitionStarted.await(15, TimeUnit.SECONDS));
+                plugin.handleOnDestroy();
+                assertTrue(first.done.await(5, TimeUnit.SECONDS));
+                assertTrue(first.error.get().contains("closed"));
+                plugin.firstRecognition.setException(new IllegalStateException("late SDK completion"));
+                assertTrue(plugin.firstClosed.await(5, TimeUnit.SECONDS));
+                assertEquals(1, first.completions.get());
+                assertEquals(1, plugin.closes.get());
+                InkCall late = new InkCall("recognize", chineseSelection());
+                plugin.recognize(late);
+                assertTrue(late.done.await(5, TimeUnit.SECONDS));
+                assertTrue(late.error.get().contains("closed"));
+                assertEquals(1, plugin.clients.get());
+            } finally {
+                plugin.firstRecognition.trySetException(new IllegalStateException("test cleanup"));
+                plugin.handleOnDestroy();
+            }
+        }
     }
 
     private Ink.Stroke line(float x1, float y1, float x2, float y2) {

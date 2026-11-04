@@ -12,6 +12,8 @@ import { classroomCommands } from "./commands";
 import { contentViewport, drawPlot, selectedPlot } from "./board";
 import { defaultPlot } from "./math";
 import { shapeInk } from "./documents";
+import { handwritingElements, handwritingText } from "./handwriting";
+import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
 
 import { sceneAPI } from "./test/scene";
 import { interactiveResource } from "./test/interactiveResource";
@@ -519,3 +521,222 @@ it("reports new whiteboard objects after a real command so an agent can verify i
     stop();
   }
 });
+
+it.each([0.5, 1, 2])(
+  "resizes actual handwriting and centers the complete title in the visible board at zoom %s",
+  async (zoom) => {
+    const api = sceneAPI();
+    const original = api.getAppState();
+    api.getAppState = () => ({
+      ...original,
+      zoom: { value: getNormalizedZoom(zoom) },
+      scrollX: 120,
+      scrollY: 50,
+    });
+    const ink = handwritingElements("F=ma", {
+      x: 100,
+      y: 120,
+      height: 36,
+      width: 2,
+      color: "#123456",
+      opacity: 100,
+      maxWidth: 500,
+    })!;
+    expect(ink.length).toBeGreaterThan(1);
+    const question = api.getSceneElements()[0];
+    api.updateScene({ elements: [question, ...ink] });
+    const before = getCommonBounds(ink);
+    const stop = registerCanvasCommands(api);
+    try {
+      const result = await classroomCommands.execute({
+        name: "canvas.resize",
+        args: { ids: ink.map((stroke) => stroke.id), scale: 1.5 },
+      });
+      const resized = api
+        .getSceneElements()
+        .filter((element) => element.id !== question.id);
+      const after = getCommonBounds(resized);
+      expect(result).toMatchObject({
+        ids: ink.map((stroke) => stroke.id),
+        scale: 1.5,
+        bounds: after,
+      });
+      expect(after[2] - after[0]).toBeCloseTo((before[2] - before[0]) * 1.5);
+      expect(after[3] - after[1]).toBeCloseTo((before[3] - before[1]) * 1.5);
+      expect((after[0] + after[2]) / 2).toBeCloseTo(
+        (before[0] + before[2]) / 2,
+      );
+      expect(resized[0].strokeWidth).toBeCloseTo(ink[0].strokeWidth * 1.5);
+      expect(resized[0].customData?.fcInk.unit).toBeCloseTo(
+        ink[0].customData!.fcInk.unit * 1.5,
+      );
+      expect(handwritingText(resized)).toEqual(["F=ma"]);
+      await classroomCommands.execute({
+        name: "canvas.align",
+        args: {
+          ids: ink.map((stroke) => stroke.id),
+          horizontal: "center",
+          vertical: "top",
+        },
+      });
+      const aligned = getCommonBounds(
+        api.getSceneElements().filter((element) => element.id !== question.id),
+      );
+      const viewport = contentViewport(api);
+      expect((aligned[0] + aligned[2]) / 2).toBeCloseTo(
+        (viewport.left + viewport.right) / 2,
+      );
+      expect(aligned[1]).toBeCloseTo(viewport.top);
+      expect(aligned[2] - aligned[0]).toBeCloseTo(after[2] - after[0]);
+      expect(
+        api.getSceneElements().find((element) => element.id === question.id),
+      ).toBe(question);
+      expect(handwritingText(api.getSceneElements())).toEqual(["F=ma"]);
+    } finally {
+      stop();
+    }
+  },
+);
+
+it("resizes an existing CJK title font and moves it left without reinserting text", async () => {
+  const api = sceneAPI();
+  api.updateScene({ elements: [] });
+  const stop = registerCanvasCommands(api);
+  try {
+    await classroomCommands.execute({
+      name: "canvas.text",
+      args: {
+        text: "牛顿第二定律",
+        role: "title",
+        presentation: "handwritten",
+        placement: "center",
+        sourceIds: [],
+      },
+    });
+    const title = api.getSceneElements()[0];
+    expect(title.type).toBe("text");
+    if (title.type !== "text") {
+      throw new Error("Expected editable CJK title");
+    }
+    await classroomCommands.execute({
+      name: "canvas.resize",
+      args: { ids: [title.id], scale: 2, anchor: "top-left" },
+    });
+    await classroomCommands.execute({
+      name: "canvas.align",
+      args: { ids: [title.id], horizontal: "left" },
+    });
+    expect(api.getSceneElements()).toHaveLength(1);
+    expect(api.getSceneElements()[0]).toMatchObject({
+      id: title.id,
+      text: title.text,
+      fontSize: title.fontSize * 2,
+      x: contentViewport(api).left,
+      y: title.y,
+    });
+  } finally {
+    stop();
+  }
+});
+
+it("keeps an aligned and resized cube editable at its new visible position", async () => {
+  const api = sceneAPI();
+  api.updateScene({ elements: [] });
+  renderWidget(
+    api,
+    {
+      id: "cube",
+      kind: "cube",
+      position: { x: 200, y: 200 },
+      params: widgetDefaults(),
+    },
+    false,
+    { exact: true },
+  );
+  const ids = api.getSceneElements().map((element) => element.id);
+  const stop = registerCanvasCommands(api);
+  try {
+    await classroomCommands.execute({
+      name: "canvas.resize",
+      args: { ids, scale: 1.5, anchor: "top-left" },
+    });
+    await classroomCommands.execute({
+      name: "canvas.align",
+      args: { ids, horizontal: "center" },
+    });
+    const before = getCommonBounds(api.getSceneElements());
+    const editable = readWidgets(api)[0];
+    expect(editable.params.size).toBeCloseTo(1.5);
+    renderWidget(
+      api,
+      {
+        ...editable,
+        params: {
+          ...editable.params,
+          solid: { ...editable.params.solid, stroke: "#245bd6" },
+        },
+      },
+      false,
+      { exact: true },
+    );
+    const after = getCommonBounds(api.getSceneElements());
+    after.forEach((coordinate, index) =>
+      expect(coordinate).toBeCloseTo(before[index]),
+    );
+  } finally {
+    stop();
+  }
+});
+
+it.each([
+  ["canvas.resize", { scale: 0 }],
+  ["canvas.resize", { scale: Number.NaN }],
+  ["canvas.resize", { scale: 2, anchor: "missing" }],
+  ["canvas.align", {}],
+  ["canvas.align", { horizontal: "missing" }],
+])(
+  "rejects invalid %s parameters before changing a target",
+  async (name, args) => {
+    const api = sceneAPI();
+    const before = api.getSceneElements();
+    const stop = registerCanvasCommands(api);
+    try {
+      await expect(
+        classroomCommands.execute({
+          name,
+          args: { ...args, ids: [before[0].id] },
+        }),
+      ).rejects.toThrow();
+      expect(api.getSceneElements()).toBe(before);
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+  },
+);
+
+it.each(["canvas.resize", "canvas.align"])(
+  "rejects a stale target set atomically for %s",
+  async (name) => {
+    const api = sceneAPI();
+    const before = api.getSceneElements();
+    const stop = registerCanvasCommands(api);
+    try {
+      await expect(
+        classroomCommands.execute({
+          name,
+          args: {
+            ids: [before[0].id, "missing"],
+            ...(name === "canvas.resize"
+              ? { scale: 2 }
+              : { horizontal: "left" }),
+          },
+        }),
+      ).rejects.toThrow("missing");
+      expect(api.getSceneElements()).toBe(before);
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+  },
+);

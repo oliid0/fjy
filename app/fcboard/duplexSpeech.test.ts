@@ -2,6 +2,8 @@ import { startDuplexSpeech } from "./duplexSpeech";
 import { startPCMSpeech } from "./localSpeech";
 import { classroomCommands } from "./commands";
 import { defaults, saveSettings } from "./settings";
+import { registerBoardAgents } from "./boardAgents";
+import * as ai from "./ai";
 
 const mocks = vi.hoisted(() => ({
   engine: {
@@ -82,6 +84,9 @@ it("uses the documented duplex configuration and batches bridge transfers for na
       key: "speech-key",
       configuration: {
         type: "session.create",
+        extension: expect.objectContaining({
+          asr: { extra: expect.objectContaining({ enable_asr_twopass: true }) },
+        }),
         session: expect.objectContaining({
           model: "1.2.6.1",
           audio: {
@@ -304,4 +309,545 @@ it("runs explicit interruption immediately instead of waiting behind unfinished 
     release();
     stop();
   }
+});
+
+it("executes an independent later tool while an earlier call is unfinished, preserving dependent batch order", async () => {
+  let finish!: () => void;
+  const order: string[] = [];
+  const releases = [
+    classroomCommands.register(
+      "canvas.text",
+      "Write",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+    classroomCommands.register("canvas.select", "Select", () => {
+      order.push("select");
+    }),
+    classroomCommands.register("canvas.style", "Style", () => {
+      order.push("style");
+    }),
+  ];
+  const handle = await startDuplexSpeech(callbacks());
+  try {
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("slow", "canvas.text")],
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [
+        call("selection", "canvas.select"),
+        call("style", "canvas.style"),
+      ],
+    });
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+    expect(order).toEqual(["select", "style"]);
+    expect(toolReplies()[0].items[0].call_id).toBe("selection");
+    finish();
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(2));
+  } finally {
+    await handle.cancel();
+    releases.forEach((release) => release());
+  }
+});
+
+it("acknowledges long lesson preparation immediately and keeps typed drawing and conversation live", async () => {
+  let finish!: () => void;
+  const releases = [
+    classroomCommands.register(
+      "lesson.ask",
+      "Teach",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+    classroomCommands.register("canvas.ink", "Draw", (args) => ({
+      strokes: args.strokes,
+    })),
+    registerBoardAgents(),
+  ];
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("lesson", "lesson.ask", { prompt: "讲解电流" })],
+    });
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+    const result = JSON.parse(toolReplies()[0].items[0].content[0].text);
+    expect(result).toMatchObject({
+      ok: true,
+      result: { state: "running", id: expect.any(String) },
+    });
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "再画苹果",
+    });
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [
+        {
+          name: "board_draw",
+          call_id: "draw",
+          arguments: JSON.stringify({
+            strokes: [
+              [
+                [20, 30],
+                [40, 50],
+              ],
+            ],
+            select: false,
+          }),
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(2));
+    expect(JSON.parse(toolReplies()[1].items[0].content[0].text)).toMatchObject(
+      {
+        ok: true,
+        result: {
+          strokes: [
+            [
+              [20, 30],
+              [40, 50],
+            ],
+          ],
+        },
+      },
+    );
+    expect(view.line).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "再画苹果" }),
+    );
+    expect(capture.cancel).not.toHaveBeenCalled();
+    finish();
+  } finally {
+    await handle.cancel();
+    releases.forEach((release) => release());
+  }
+});
+
+it("yields only lesson audio during a conversation and restores it after the response", async () => {
+  const pause = vi.fn();
+  const audio = vi.fn();
+  const releases = [
+    classroomCommands.register("lesson.pause", "Pause", pause),
+    classroomCommands.register("lesson.audio", "@internal", audio),
+    classroomCommands.context("teacher", () => ({ mode: "teaching" })),
+  ];
+  const handle = await startDuplexSpeech(callbacks());
+  try {
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    expect(audio).toHaveBeenCalledWith({ conversation: true });
+    expect(pause).not.toHaveBeenCalled();
+    emit({ type: "response.canceled" });
+    expect(audio).toHaveBeenLastCalledWith({ conversation: true });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "继续画图",
+    });
+    emit({ type: "response.done" });
+    expect(audio).toHaveBeenLastCalledWith({ conversation: false });
+    expect(capture.cancel).not.toHaveBeenCalled();
+  } finally {
+    await handle.cancel();
+    releases.forEach((release) => release());
+  }
+});
+
+it("delivers a strong backend research answer through the same realtime synthesis connection after the user finishes", async () => {
+  let finish!: (answer: string) => void;
+  vi.spyOn(ai, "chat").mockImplementation(
+    () =>
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const release = registerBoardAgents();
+  const handle = await startDuplexSpeech(callbacks());
+  try {
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [
+        {
+          name: "board_task",
+          call_id: "research",
+          arguments: JSON.stringify({
+            role: "research",
+            prompt: "联网核实牛顿第一定律",
+          }),
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    finish("依据教材，无外力时物体保持静止或匀速直线运动。");
+    await vi.waitFor(() =>
+      expect(
+        (classroomCommands.read("agents") as { state: string }[])[0].state,
+      ).toBe("completed"),
+    );
+    expect(
+      mocks.engine.send.mock.calls.some(
+        ([value]) =>
+          value.event.type === "speech_text_buffer.replacement.append",
+      ),
+    ).toBe(false);
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "继续",
+    });
+    emit({ type: "response.done" });
+    await vi.waitFor(() =>
+      expect(mocks.engine.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: {
+            type: "speech_text_buffer.replacement.append",
+            text: "依据教材，无外力时物体保持静止或匀速直线运动。",
+          },
+        }),
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(mocks.engine.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: { type: "speech_text_buffer.replacement.commit" },
+        }),
+      ),
+    );
+    expect(capture.cancel).not.toHaveBeenCalled();
+  } finally {
+    await handle.cancel();
+    release();
+  }
+});
+
+it("commits one final transcript per utterance while retaining a repeated sentence in a new turn", async () => {
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "conversation.item.input_audio_transcription.delta",
+      text: "你好",
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "你好",
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "你好",
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "你好",
+      event_id: "final-repeat",
+    });
+    expect(view.line).toHaveBeenCalledTimes(1);
+    emit({ type: "response.output_text.done", text: "你好，请讲。" });
+    emit({ type: "response.output_text.done", text: "你好，请讲。" });
+    expect(classroomCommands.read("conversation")).toEqual([
+      { role: "user", content: "你好" },
+      { role: "assistant", content: "你好，请讲。" },
+    ]);
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "你好",
+    });
+    expect(view.line).toHaveBeenCalledTimes(2);
+  } finally {
+    await handle.cancel();
+  }
+});
+
+it("deduplicates replayed events and cumulative captions without removing genuine repeated delta words", async () => {
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({
+      type: "response.output_text.delta",
+      text: "正在",
+      event_id: "text-1",
+    });
+    emit({
+      type: "response.output_text.delta",
+      text: "正在板书",
+      event_id: "text-2",
+    });
+    emit({
+      type: "response.output_text.delta",
+      text: "正在板书",
+      event_id: "text-2",
+    });
+    expect(view.caption).toHaveBeenLastCalledWith("正在板书");
+    emit({ type: "response.output_text.done", text: "正在板书" });
+    emit({
+      type: "response.output_text.delta",
+      delta: "哈",
+      event_id: "word-1",
+    });
+    emit({
+      type: "response.output_text.delta",
+      delta: "哈",
+      event_id: "word-1",
+    });
+    emit({
+      type: "response.output_text.delta",
+      delta: "哈",
+      event_id: "word-2",
+    });
+    expect(view.caption).toHaveBeenLastCalledWith("哈哈");
+  } finally {
+    await handle.cancel();
+  }
+});
+
+it("recovers a temporary disconnect using the server dialog id without cancelling capture or unfinished tools", async () => {
+  const view = callbacks();
+  let finish!: () => void;
+  let request!: AbortSignal;
+  const release = classroomCommands.register("canvas.text", "Write", (args) => {
+    request = args.signal as AbortSignal;
+    return new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  });
+  const handle = await startDuplexSpeech(view);
+  const oldSession = session;
+  let restore!: () => void;
+  try {
+    emit({ type: "session.created", session: { id: "provider-dialog" } });
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("unfinished", "canvas.text")],
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    mocks.engine.start.mockImplementationOnce((options) => {
+      session = options.session;
+      return new Promise((resolve) => {
+        restore = () => resolve({ session });
+      });
+    });
+    emit({ type: "error", message: "实时语音连接中断" });
+    const transport = vi.mocked(startPCMSpeech).mock.calls[0][0];
+    const pushes = mocks.engine.pushAudio.mock.calls.length;
+    await transport.push({
+      session: oldSession,
+      pcm: "AAAA",
+      sampleRate: 16000,
+    });
+    expect(mocks.engine.pushAudio).toHaveBeenCalledTimes(pushes);
+    await vi.waitFor(() => expect(restore).toBeDefined());
+    expect(session).not.toBe(oldSession);
+    expect(mocks.engine.start).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        configuration: expect.objectContaining({
+          session: expect.objectContaining({ id: "provider-dialog" }),
+        }),
+      }),
+    );
+    expect(request.aborted).toBe(false);
+    expect(capture.cancel).not.toHaveBeenCalled();
+    finish();
+    restore();
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+    await transport.push({
+      session: oldSession,
+      pcm: "AAAA",
+      sampleRate: 16000,
+    });
+    expect(mocks.engine.pushAudio).toHaveBeenLastCalledWith({
+      session,
+      pcm: "AAAA",
+      sampleRate: 16000,
+    });
+    expect(view.error).not.toHaveBeenCalled();
+    const captions = view.caption.mock.calls.length;
+    receive({
+      session: oldSession,
+      event: { type: "response.output_text.delta", delta: "stale" },
+    });
+    expect(view.caption).toHaveBeenCalledTimes(captions);
+  } finally {
+    restore?.();
+    await handle.cancel();
+    release();
+  }
+});
+
+it("recovers a failed PCM transfer without rejecting the shared microphone capture", async () => {
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    mocks.engine.pushAudio.mockRejectedValueOnce(
+      new Error("实时语音网络发送过慢"),
+    );
+    const transport = vi.mocked(startPCMSpeech).mock.calls[0][0];
+    await expect(
+      transport.push({ session, pcm: "AAAA", sampleRate: 16000 }),
+    ).resolves.toEqual({ lines: [] });
+    await vi.waitFor(() => expect(mocks.engine.start).toHaveBeenCalledTimes(2));
+    expect(capture.cancel).not.toHaveBeenCalled();
+    expect(view.error).not.toHaveBeenCalled();
+  } finally {
+    await handle.cancel();
+  }
+});
+
+it("reports authorization failures immediately and limits repeated network reconnects", async () => {
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  emit({
+    type: "error",
+    message: "实时语音连接失败 (HTTP 401)，请检查密钥与 Seeduplex 权限",
+  });
+  await vi.waitFor(() => expect(capture.cancel).toHaveBeenCalledTimes(1));
+  expect(mocks.engine.start).toHaveBeenCalledTimes(1);
+  expect(view.error).toHaveBeenCalledWith(expect.stringContaining("HTTP 401"));
+  await handle.cancel();
+
+  view.error.mockClear();
+  const next = await startDuplexSpeech(view);
+  try {
+    mocks.engine.start.mockRejectedValue(new Error("实时语音连接超时"));
+    emit({ type: "error", message: "实时语音连接中断" });
+    await vi.waitFor(
+      () => expect(view.error).toHaveBeenCalledWith("实时语音连接超时"),
+      { timeout: 3000 },
+    );
+    expect(mocks.engine.start).toHaveBeenCalledTimes(5); // two initial sessions + three recovery attempts
+  } finally {
+    await next.cancel();
+  }
+});
+
+it("keeps listening after an isolated ASR failure and prunes long context using only actual old paired message ids", async () => {
+  const view = callbacks();
+  const release = classroomCommands.context("teacher", () => ({
+    title: "牛顿第二定律",
+    step: 6,
+  }));
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "conversation.item.input_audio_transcription.failed",
+      message: "重说这句话",
+    });
+    expect(capture.cancel).not.toHaveBeenCalled();
+    expect(view.error).not.toHaveBeenCalled();
+    for (let i = 0; i < 8; i++) {
+      emit({ type: "response.done" });
+    }
+    const retrieval = mocks.engine.send.mock.calls
+      .map(([value]) => value.event)
+      .find((event) => event.type === "conversation.item.retrieve");
+    expect(retrieval).toEqual({
+      type: "conversation.item.retrieve",
+      event_id: expect.any(String),
+    });
+    emit({
+      type: "conversation.item.retrieved",
+      event_id: "retrieved",
+      items: Array.from({ length: 32 }, (_, index) => ({
+        id: `message-${index}`,
+        role: index % 2 ? "assistant" : "user",
+      })),
+    });
+    expect(mocks.engine.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: "conversation.item.delete",
+          items: [2, 4, 6].map((index) => ({ id: `message-${index}` })),
+        },
+      }),
+    );
+    expect(mocks.engine.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: expect.objectContaining({
+          type: "session.update",
+          session: expect.objectContaining({
+            instructions: expect.stringContaining("牛顿第二定律"),
+          }),
+        }),
+      }),
+    );
+  } finally {
+    await handle.cancel();
+    release();
+  }
+});
+
+it("retains the original user goal alongside recent turns and seeds only complete pairs when a dialog id was unavailable", async () => {
+  const handle = await startDuplexSpeech(callbacks());
+  try {
+    for (let i = 0; i < 9; i++) {
+      emit({ type: "conversation.item.input_audio_transcription.started" });
+      emit({
+        type: "conversation.item.input_audio_transcription.completed",
+        text: i ? `问题${i}` : "用初中物理方式讲牛顿第一定律",
+      });
+      emit({ type: "response.output_text.done", text: `回答${i}` });
+    }
+    const history = classroomCommands.read("conversation") as {
+      role: string;
+      content: string;
+    }[];
+    expect(history).toHaveLength(14);
+    expect(history[0]).toEqual({
+      role: "user",
+      content: "用初中物理方式讲牛顿第一定律",
+    });
+    expect(history[1]).toEqual({ role: "assistant", content: "回答0" });
+    emit({ type: "error", message: "实时语音连接中断" });
+    await vi.waitFor(() => expect(mocks.engine.start).toHaveBeenCalledTimes(2));
+    const configuration = mocks.engine.start.mock.calls[1][0].configuration;
+    const pairs = configuration.extension.dialog.dialog_context;
+    expect(pairs).toHaveLength(14);
+    expect(pairs[0]).toEqual({
+      role: "user",
+      text: "用初中物理方式讲牛顿第一定律",
+    });
+    expect(
+      pairs.every(
+        (item: { role: string }, index: number) =>
+          item.role === (index % 2 ? "assistant" : "user"),
+      ),
+    ).toBe(true);
+  } finally {
+    await handle.cancel();
+  }
+});
+
+it("does not reopen capture or deliver late events when closed during a reconnect", async () => {
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  let restore!: () => void;
+  mocks.engine.start.mockImplementationOnce((options) => {
+    session = options.session;
+    return new Promise((resolve) => {
+      restore = () => resolve({ session });
+    });
+  });
+  emit({ type: "error", message: "实时语音连接中断" });
+  await vi.waitFor(() => expect(restore).toBeDefined());
+  await handle.cancel();
+  const states = view.state.mock.calls.length;
+  restore();
+  await vi.waitFor(() => expect(mocks.engine.stop).toHaveBeenCalledTimes(3));
+  emit({
+    type: "conversation.item.input_audio_transcription.completed",
+    text: "迟到的文稿",
+  });
+  expect(view.line).not.toHaveBeenCalled();
+  expect(view.state).toHaveBeenCalledTimes(states);
+  expect(startPCMSpeech).toHaveBeenCalledTimes(1);
+  expect(capture.cancel).toHaveBeenCalledTimes(1);
 });

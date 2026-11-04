@@ -2,7 +2,8 @@ import type { InkInput } from "./digitalInk";
 
 /** A calculation bar spans two explicit operand rows; a minus or equals alone does not. */
 export const columnCalculation = (input: InkInput, text: string) => {
-  if (!/[+\-×*÷/]/.test(text)) {
+  const division = /^\s*\d+(?:\.\d+)?\s*[)⟌]\s*\d+(?:\.\d+)?\s*$/.test(text);
+  if (!division && !/[+\-×*÷/]/.test(text)) {
     return;
   }
   const boxes = input
@@ -32,7 +33,7 @@ export const columnCalculation = (input: InkInput, text: string) => {
     (box) =>
       box.bottom - box.top <= Math.max(3, height * 0.15) &&
       box.right - box.left >= Math.max(height * 1.5, (right - left) * 0.7) &&
-      box.top >= bottom - height * 0.15,
+      (division || box.top >= bottom - height * 0.15),
   );
   if (!bar) {
     return;
@@ -46,7 +47,7 @@ export const columnCalculation = (input: InkInput, text: string) => {
       rows.push({ top: box.top, bottom: box.bottom });
     }
   }
-  return rows.length >= 2
-    ? { mode: "column" as const, lines: rows.length }
+  return rows.length >= 2 || division
+    ? { mode: "column" as const, lines: Math.max(2, rows.length) }
     : undefined;
 };

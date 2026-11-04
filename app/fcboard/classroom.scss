@@ -4669,8 +4669,63 @@
   box-shadow: 0 3px 18px #0002;
   pointer-events: none;
   font-size: 15px;
+  max-height: min(132px, 22vh);
+  overflow: hidden;
+  span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+    max-height: 4.35em;
+  }
   small {
     color: #596579;
     font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+.fc-agent-tasks {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 36;
+  width: min(280px, 38vw);
+  max-height: 28vh;
+  overflow-y: auto;
+  font-size: 13px;
+  > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: var(--island-bg-color);
+    box-shadow: 0 2px 12px #0002;
+  }
+  span {
+    min-width: 0;
+    flex: 1;
+  }
+  strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  small {
+    overflow-wrap: anywhere;
+  }
+  button {
+    border: 0;
+    min-width: 36px;
+    min-height: 36px;
+    background: transparent;
+    color: inherit;
   }
 }

@@ -7,7 +7,12 @@ type Point = [number, number];
 type Stroke = { points: Point[]; color: string; width: number; erase: boolean };
 type Pane = { strokes: Stroke[] };
 const colors = ["#202124", "#1565c0", "#d32f2f"];
-const backgrounds = ["#ffffff", "#e7f2e3", "#252f38", "#fff2d5"];
+const backgrounds = [
+  { color: "#ffffff", label: "split_background_0" },
+  { color: "#e7f2e3", label: "split_background_1" },
+  { color: "#252f38", label: "split_background_2" },
+  { color: "#fff2d5", label: "split_background_3" },
+] as const;
 const drawSegment = (
   canvas: HTMLCanvasElement,
   stroke: Stroke,
@@ -147,13 +152,15 @@ const SplitPane = ({
         onLostPointerCapture={(event) => active.current.delete(event.pointerId)}
       />
       <div className="fc-split-penbar">
-        {[
-          "split_black",
-          "split_blue",
-          "split_red",
-          "split_small_eraser",
-          "split_large_eraser",
-        ].map((label, value) => (
+        {(
+          [
+            "split_black",
+            "split_blue",
+            "split_red",
+            "split_small_eraser",
+            "split_large_eraser",
+          ] as const
+        ).map((label, value) => (
           <button
             type="button"
             key={label}
@@ -267,9 +274,9 @@ export const SplitBoard = () => {
             value={background}
             onChange={(event) => setBackground(Number(event.target.value))}
           >
-            {backgrounds.map((color, i) => (
+            {backgrounds.map(({ color, label }, i) => (
               <option key={color} value={i}>
-                {t(`fcboard.split_background_${i}`)}
+                {t(`fcboard.${label}`)}
               </option>
             ))}
           </select>
@@ -288,7 +295,7 @@ export const SplitBoard = () => {
             key={i}
             index={i}
             model={model}
-            background={backgrounds[background]}
+            background={backgrounds[background].color}
           />
         ))}
       </div>

@@ -33,8 +33,19 @@ export const startSystemSpeech = async (
   onError: (message: string) => void,
   continuous = false,
 ): Promise<() => void> => {
+  const preference = currentSettings().speechLanguage;
+  const language =
+    preference && preference !== "auto"
+      ? preference
+      : navigator.language || getLanguage().code;
   if (Capacitor.isNativePlatform()) {
-    return startAndroidSpeech(onText, onError, continuous, getLanguage().code);
+    return startAndroidSpeech(
+      onText,
+      onError,
+      continuous,
+      language,
+      !preference || preference === "auto",
+    );
   }
   const constructors = window as Window & {
     SpeechRecognition?: new () => WebSpeech;
@@ -52,7 +63,7 @@ export const startSystemSpeech = async (
   const speech = new Constructor();
   let stopped = false;
   let received = false;
-  speech.lang = getLanguage().code;
+  speech.lang = language;
   speech.continuous = continuous;
   speech.interimResults = false;
   speech.onresult = (event) => {
@@ -106,7 +117,9 @@ export const transcribe = async (blob: Blob): Promise<TranscriptLine[]> => {
   );
   form.append("model", settings.speechModel);
   form.append("response_format", "verbose_json");
-  form.append("language", getLanguage().code.split("-")[0]);
+  if (settings.speechLanguage && settings.speechLanguage !== "auto") {
+    form.append("language", settings.speechLanguage.split("-")[0]);
+  }
   const response = await fetch(validateEndpoint(settings.speechEndpoint), {
     method: "POST",
     headers: settings.speechKey

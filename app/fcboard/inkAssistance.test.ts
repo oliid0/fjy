@@ -549,79 +549,87 @@ it("retries the whole unfinished word when new ink cancels a pending text recogn
   }
 });
 
-it("turns a drawn dog into a generated hand-drawn image at its original location", async () => {
-  vi.useFakeTimers();
-  const { api, ink, draw } = setup("magic");
-  saveSettings(
-    {
-      ...defaults,
-      model: "recognizer",
-      apiKey: "mock-key",
-      imageModel: "illustrator",
-    },
-    false,
-  );
-  vi.spyOn(ai, "chat").mockResolvedValue('{"version":1,"kind":"drawing"}');
-  vi.spyOn(transparent, "transparentInkImage").mockReturnValue({
-    dataURL: "data:image/png;base64,transparent" as DataURL,
-    width: 100,
-    height: 100,
-  });
-  const fetcher = vi.fn().mockResolvedValue({
-    status: 200,
-    json: async () => ({
-      data: [
-        {
-          z_index: 1,
-          bounding_box: { absolute: [0, 0, 100, 100] },
-          b64_json:
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
-        },
-      ],
-    }),
-  });
-  vi.stubGlobal("fetch", fetcher);
-  vi.stubGlobal(
-    "Image",
-    class {
-      naturalWidth = 100;
-      naturalHeight = 100;
-      src = "";
-      decode = async () => {};
-    },
-  );
-  const stop = observeInkAssistance(api, () => {}, vi.fn());
-  try {
-    draw();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1600);
+it.each([true, false])(
+  "turns a drawn dog into a generated image at its original location with supported layers=%s",
+  async (layers) => {
+    vi.useFakeTimers();
+    const { api, ink, draw } = setup("magic");
+    saveSettings(
+      {
+        ...defaults,
+        model: "recognizer",
+        apiKey: "mock-key",
+        imageModel: layers ? defaults.imageModel : "illustrator",
+      },
+      false,
+    );
+    vi.spyOn(ai, "chat").mockResolvedValue('{"version":1,"kind":"drawing"}');
+    vi.spyOn(transparent, "transparentInkImage").mockReturnValue({
+      dataURL: "data:image/png;base64,transparent" as DataURL,
+      width: 100,
+      height: 100,
     });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    const request = JSON.parse(fetcher.mock.calls[0][1].body);
-    expect(request.model).toBe("illustrator");
-    expect(request.image).toMatch(/^data:image\//);
-    expect(ai.chat).toHaveBeenCalledTimes(1);
-    expect(request.prompt).toContain("参考草图");
-    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
-      layer_decomposition: true,
-      image: expect.stringMatching(/^data:image\/png;base64,/),
+    const fetcher = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        data: [
+          {
+            z_index: 1,
+            bounding_box: { absolute: [0, 0, 100, 100] },
+            b64_json:
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+          },
+        ],
+      }),
     });
-    expect(api.getSceneElements()).toHaveLength(1);
-    const generated = api.getSceneElements()[0];
-    expect(generated).toMatchObject({
-      type: "image",
-      x: 120,
-      y: 100,
-      width: 60,
-      height: 60,
-    });
-    expect(generated.id).not.toBe(ink.id);
-    expect(api.addFiles).toHaveBeenCalledTimes(1);
-    expect(api.updateScene).toHaveBeenCalledTimes(1);
-  } finally {
-    stop();
-  }
-});
+    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal(
+      "Image",
+      class {
+        naturalWidth = 100;
+        naturalHeight = 100;
+        src = "";
+        decode = async () => {};
+      },
+    );
+    const stop = observeInkAssistance(api, () => {}, vi.fn());
+    try {
+      draw();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1600);
+      });
+      expect(fetcher).toHaveBeenCalledTimes(layers ? 2 : 1);
+      const request = JSON.parse(fetcher.mock.calls[0][1].body);
+      expect(request.model).toBe(layers ? defaults.imageModel : "illustrator");
+      expect(request.image).toMatch(/^data:image\//);
+      expect(ai.chat).toHaveBeenCalledTimes(1);
+      expect(request.prompt).toContain("参考草图");
+      if (layers) {
+        expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
+          layer_decomposition: true,
+          image: expect.stringMatching(/^data:image\/png;base64,/),
+        });
+      } else {
+        expect(request.layer_decomposition).toBeUndefined();
+        expect(request.prompt).not.toContain("透明图层");
+      }
+      expect(api.getSceneElements()).toHaveLength(1);
+      const generated = api.getSceneElements()[0];
+      expect(generated).toMatchObject({
+        type: "image",
+        x: 120,
+        y: 100,
+        width: 60,
+        height: 60,
+      });
+      expect(generated.id).not.toBe(ink.id);
+      expect(api.addFiles).toHaveBeenCalledTimes(1);
+      expect(api.updateScene).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
+  },
+);
 
 it("keeps a magic sketch and sends no recognition request when its capture is unavailable", async () => {
   vi.useFakeTimers();
@@ -654,3 +662,57 @@ it("keeps a magic sketch and sends no recognition request when its capture is un
     stop();
   }
 });
+
+it.each(["function", "calculation"] as const)(
+  "keeps a later independent %s request running while an earlier region fails",
+  async (mode) => {
+    vi.useFakeTimers();
+    const { api, ink, draw } = setup(mode);
+    let failFirst!: (error: Error) => void;
+    let firstSignal!: AbortSignal;
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockImplementationOnce((_capture, signal) => {
+        firstSignal = signal;
+        return new Promise<string>((_resolve, reject) => {
+          failFirst = reject;
+        });
+      })
+      .mockResolvedValue(mode === "function" ? "fx=1/x^2+x" : "6/3=");
+    const plot = vi.fn();
+    const releasePlot = classroomCommands.register("math.plot", "Plot", plot);
+    const busy = vi.fn();
+    const release = observeInkAssistance(api, busy, vi.fn());
+    try {
+      draw([ink]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(800);
+      });
+      const second = { ...ink, id: "independent-region", y: 500 };
+      draw([ink, second]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(recognize).toHaveBeenCalledTimes(2);
+      expect(firstSignal.aborted).toBe(false);
+      if (mode === "function") {
+        expect(plot).toHaveBeenCalledTimes(1);
+      } else {
+        expect(handwritingText(api.getSceneElements()).join(" ")).toContain(
+          "2",
+        );
+      }
+      failFirst(new Error("first region unreadable"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(
+        api.getSceneElements().some((element) => element.id === ink.id),
+      ).toBe(true);
+      expect(busy).toHaveBeenLastCalledWith(false);
+    } finally {
+      release();
+      releasePlot();
+    }
+  },
+);

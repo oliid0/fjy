@@ -190,7 +190,7 @@ it("starts a real native voting session, displays its LAN QR/results, and ends w
     ),
   );
   expect(screen.getAllByRole("progressbar")).toHaveLength(2);
-  expect(voteBridge.end).toHaveBeenCalledOnce();
+  expect(voteBridge.end).toHaveBeenCalledTimes(1);
 });
 it("routes media to the internal Android picker and real player controls", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);

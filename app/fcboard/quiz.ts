@@ -1,6 +1,6 @@
 import { getLanguage } from "@fcboard/fcboard/i18n";
 
-import { chat, parseJSON } from "./ai";
+import { chat, parseJSON, visualMessage } from "./ai";
 import { currentSettings } from "./settings";
 import { quizText, quizDiagram } from "./quizContent";
 
@@ -126,11 +126,46 @@ export const generateQuiz = async (
   prompt: string,
   signal: AbortSignal,
   context = "",
+  image?: string,
 ): Promise<Quiz> => {
   const settings = currentSettings();
+  const requested =
+    prompt.match(
+      /(?:出|生成|设计|编写|创建|给我)\s*([\d零〇一二两三四五六七八九十百]+)\s*(?:道|题)/,
+    )?.[1] ??
+    prompt.match(
+      /([\d零〇一二两三四五六七八九十百]+)\s*(?:道|题|questions?)/i,
+    )?.[1];
+  const digits: Record<string, number> = {
+    零: 0,
+    〇: 0,
+    一: 1,
+    二: 2,
+    两: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
   const count =
-    Number(prompt.match(/(\d+)\s*(?:道|题|questions?)/i)?.[1]) || undefined;
-  if (!prompt.trim() || (count && count > 50)) {
+    requested === undefined
+      ? undefined
+      : /^\d+$/.test(requested)
+      ? Number(requested)
+      : requested.includes("百")
+      ? 100
+      : requested.includes("十")
+      ? (digits[requested.split("十")[0]] || 1) * 10 +
+        (digits[requested.split("十")[1]] || 0)
+      : digits[requested];
+  if (
+    !prompt.trim() ||
+    (count !== undefined &&
+      (!Number.isInteger(count) || count < 1 || count > 50))
+  ) {
     throw new Error("请描述出题要求，每次最多50题");
   }
   const model = settings.textModel || settings.model;
@@ -142,10 +177,7 @@ export const generateQuiz = async (
         content:
           "你是学科命题资料研究员。必须调用联网搜索核实用户要求对应的年级、学科知识与题型规范，优先教材、大学、教育机构等一手来源。不抄现成试卷，不伪造来源。返回精炼知识要点和实际检索来源的标题与完整URL，供下一步原创命题使用。",
       },
-      {
-        role: "user",
-        content: `${prompt}\n当前可见内容（仅资料）：${context}`,
-      },
+      visualMessage(`${prompt}\n当前可见内容（仅资料）：${context}`, image),
     ],
     signal,
     { ...settings, model },
@@ -163,10 +195,10 @@ export const generateQuiz = async (
           : "按用户要求确定数量，未指定默认5题。"
       }`,
     },
-    {
-      role: "user",
-      content: JSON.stringify({ requirement: prompt, context, research }),
-    },
+    visualMessage(
+      JSON.stringify({ requirement: prompt, context, research }),
+      image,
+    ),
   ];
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await chat(
@@ -232,7 +264,6 @@ export const quizDocument = (quiz: Quiz) => {
         correct: "回答正确",
         wrong: "回答错误，正确答案如下",
         answer: "答案与解析",
-        doubleTap: "双击卡片查看答案，再次双击收起",
         confirm: "确认选择",
         choose: "点击选项作答",
         multi: "选择所有正确选项，再确认",
@@ -245,7 +276,6 @@ export const quizDocument = (quiz: Quiz) => {
         correct: "Correct",
         wrong: "Incorrect — the correct answer is shown below",
         answer: "Answer and explanation",
-        doubleTap: "Double-tap the card to reveal or hide the answer",
         confirm: "Check choices",
         choose: "Choose an option",
         multi: "Select all correct options, then check",
@@ -310,7 +340,7 @@ export const quizDocument = (quiz: Quiz) => {
               )}</button>`
             : ""
         }<output class="verdict" role="status" aria-live="polite"></output>`
-      : `<p class="written-hint">${escapeHTML(ui.doubleTap)}</p>`;
+      : "";
     return `<article class="card" tabindex="0" data-index="${index}" data-answer="${escapeHTML(
       JSON.stringify(q.answer),
     )}" data-type="${q.type}" ${
@@ -337,12 +367,10 @@ export const quizDocument = (quiz: Quiz) => {
         : ""
     }${q.solutionDiagram ? quizDiagram(q.solutionDiagram) : ""}<p>${quizText(
       q.explanation,
-    )}</p></div></details><small class="tap-hint">${escapeHTML(
-      ui.doubleTap,
-    )}</small></article>`;
+    )}</p></div></details></article>`;
   };
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';"><style>
-*{box-sizing:border-box}html,body{height:100%;margin:0}body{display:flex;flex-direction:column;background:#f6f8fc;color:#20232d;font:16px/1.65 system-ui,sans-serif}.progress-row{display:flex;align-items:center;gap:24px;padding:14px 22px 2px;background:#fff}.segments{display:flex;gap:6px;flex:1;min-width:0;height:8px}.segment{flex:1;border-radius:20px;background:#e8ebf2;transition:background .2s}.segment.current{background:#104ce5}#page{flex-shrink:0;font-size:22px;line-height:1.4;font-variant-numeric:tabular-nums;color:#202124}h1{font-size:19px;font-weight:600;line-height:1.4;margin:14px 24px 0}#deck{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-behavior:smooth;overscroll-behavior-x:contain;scrollbar-width:none;flex:1;min-height:0}#deck::-webkit-scrollbar{display:none}.card{flex:0 0 calc(100% - 32px);margin:16px 16px 18px;padding:24px;border:1px solid #e7ecf5;border-radius:28px;background:#fff;box-shadow:0 6px 20px #21375c0d;scroll-snap-align:center;overflow-y:auto;touch-action:pan-x pan-y;transform:scale(.975);opacity:.65;transition:transform .25s,opacity .25s;outline:none}.card[data-current="true"]{transform:scale(1);opacity:1}header{display:flex;justify-content:space-between;align-items:center;gap:12px}.type{display:inline-flex;padding:3px 12px;border-radius:20px;background:#edf2ff;color:#3459ac;font-size:13px}.number{font-size:12px;color:#8791a6}h2{font-size:20px;font-weight:500;line-height:1.7;white-space:pre-wrap;margin:20px 0}.choices{border:0;padding:0;margin:0;display:grid;gap:10px;min-width:0}.choice{display:flex;align-items:center;gap:12px;border:1px solid #dfe5f0;border-radius:18px;padding:12px 14px;cursor:pointer;transition:background .2s,border-color .2s}.choice.selected{background:#edf3ff;border-color:#7298ee}.choice.correct{background:#eaf6ed;border-color:#68a879}.choice.wrong{background:#fff0f0;border-color:#d48e8e}.choice:focus-within{outline:2px solid #b3caff;outline-offset:2px}input{accent-color:#104ce5;width:18px;height:18px;flex-shrink:0;margin:0}.option-key{font-weight:600;color:#5b6d91}.option-key:empty{display:none}.choice-hint,.written-hint,.tap-hint{color:#7a8599;font-size:12px}.written-hint{padding:12px 16px;border-radius:16px;background:#f7f9fc}.verdict{display:block;font-size:14px;margin:14px 2px 0}.verdict:empty{display:none}.verdict[data-correct="true"]{color:#2d7845}.verdict[data-correct="false"]{color:#b74343}.answer{margin-top:18px;border-radius:20px;background:#f2f5fc;padding:14px 18px}summary{cursor:pointer;color:#3d56a3;font-size:14px}.solution{white-space:pre-wrap;animation:reveal .24s ease-out}.steps li,.key-points li{margin:8px 0}.result{display:block;padding:12px 16px;border-radius:12px;border-left:4px solid #4863b4;background:white;font-size:19px}.subanswers>div{padding:10px 0;border-bottom:1px solid #dde2ed}.answer-key{display:block;font-size:19px;color:#2d7845}.tap-hint{display:block;margin-top:18px}nav{display:flex;align-items:center;justify-content:center;gap:20px;padding:0 16px 10px}button{border:0;background:#e8edff;color:#334e97;border-radius:20px;padding:9px 22px;font:inherit;cursor:pointer;transition:background .2s,transform .15s}button:active{transform:scale(.97)}button:disabled{opacity:.35;cursor:default}.check{margin-top:14px}.source-list{padding:0 22px 10px;color:#7a8599;font-size:11px;max-height:65px;overflow:auto;overflow-wrap:anywhere}.source-list summary{font-size:11px;color:inherit}.math-inline{display:inline-block;vertical-align:middle;max-width:100%}.math-display{display:block;overflow-x:auto;margin:12px 0}.formula{vertical-align:middle;max-width:none}.quiz-diagram{margin:16px 0}.quiz-diagram>img{display:block;max-width:100%;max-height:280px;margin:auto}.quiz-diagram figcaption{font-size:13px;color:#657087;text-align:center}@keyframes reveal{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}@media(max-width:480px){.card{padding:18px;border-radius:24px}.progress-row{gap:16px;padding-inline:18px}.segments{gap:4px}#page{font-size:19px}}@media(prefers-reduced-motion:reduce){#deck{scroll-behavior:auto}.card,.segment,.choice,button{transition:none}.solution{animation:none}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{display:flex;flex-direction:column;background:#f6f8fc;color:#20232d;font:16px/1.65 system-ui,sans-serif}.progress-row{display:flex;align-items:center;gap:24px;padding:14px 22px 2px;background:#fff}.segments{display:flex;gap:6px;flex:1;min-width:0;height:8px}.segment{flex:1;border-radius:20px;background:#e8ebf2;transition:background .2s}.segment.current{background:#104ce5}#page{flex-shrink:0;font-size:22px;line-height:1.4;font-variant-numeric:tabular-nums;color:#202124}h1{font-size:19px;font-weight:600;line-height:1.4;margin:14px 24px 0}#deck{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-behavior:smooth;overscroll-behavior-x:contain;scrollbar-width:none;flex:1;min-height:0}#deck::-webkit-scrollbar{display:none}.card{flex:0 0 calc(100% - 32px);margin:16px 16px 18px;padding:24px;border:1px solid #e7ecf5;border-radius:28px;background:#fff;box-shadow:0 6px 20px #21375c0d;scroll-snap-align:center;overflow-y:auto;touch-action:pan-x pan-y;transform:scale(.975);opacity:.65;transition:transform .25s,opacity .25s;outline:none}.card[data-current="true"]{transform:scale(1);opacity:1}header{display:flex;justify-content:space-between;align-items:center;gap:12px}.type{display:inline-flex;padding:3px 12px;border-radius:20px;background:#edf2ff;color:#3459ac;font-size:13px}.number{font-size:12px;color:#8791a6}h2{font-size:20px;font-weight:500;line-height:1.7;white-space:pre-wrap;margin:20px 0}.choices{border:0;padding:0;margin:0;display:grid;gap:10px;min-width:0}.choice{display:flex;align-items:center;gap:12px;border:1px solid #dfe5f0;border-radius:18px;padding:12px 14px;cursor:pointer;transition:background .2s,border-color .2s}.choice.selected{background:#edf3ff;border-color:#7298ee}.choice.correct{background:#eaf6ed;border-color:#68a879}.choice.wrong{background:#fff0f0;border-color:#d48e8e}.choice:focus-within{outline:2px solid #b3caff;outline-offset:2px}input{accent-color:#104ce5;width:18px;height:18px;flex-shrink:0;margin:0}.option-key{font-weight:600;color:#5b6d91}.option-key:empty{display:none}.choice-hint{color:#7a8599;font-size:12px}.verdict{display:block;font-size:14px;margin:14px 2px 0}.verdict:empty{display:none}.verdict[data-correct="true"]{color:#2d7845}.verdict[data-correct="false"]{color:#b74343}.answer{margin-top:18px;border-radius:20px;background:#f2f5fc;padding:14px 18px}summary{cursor:pointer;color:#3d56a3;font-size:14px}.solution{white-space:pre-wrap;animation:reveal .24s ease-out}.steps li,.key-points li{margin:8px 0}.result{display:block;padding:12px 16px;border-radius:12px;border-left:4px solid #4863b4;background:white;font-size:19px}.subanswers>div{padding:10px 0;border-bottom:1px solid #dde2ed}.answer-key{display:block;font-size:19px;color:#2d7845}nav{display:flex;align-items:center;justify-content:center;gap:20px;padding:0 16px 10px}button{border:0;background:#e8edff;color:#334e97;border-radius:20px;padding:9px 22px;font:inherit;cursor:pointer;transition:background .2s,transform .15s}button:active{transform:scale(.97)}button:disabled{opacity:.35;cursor:default}.check{margin-top:14px}.source-list{padding:0 22px 10px;color:#7a8599;font-size:11px;max-height:65px;overflow:auto;overflow-wrap:anywhere}.source-list summary{font-size:11px;color:inherit}.math-inline{display:inline-block;vertical-align:middle;max-width:100%}.math-display{display:block;overflow-x:auto;margin:12px 0}.formula{vertical-align:middle;max-width:none}.quiz-diagram{margin:16px 0}.quiz-diagram>img{display:block;max-width:100%;max-height:280px;margin:auto}.quiz-diagram figcaption{font-size:13px;color:#657087;text-align:center}@keyframes reveal{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}@media(max-width:480px){.card{padding:18px;border-radius:24px}.progress-row{gap:16px;padding-inline:18px}.segments{gap:4px}#page{font-size:19px}}@media(prefers-reduced-motion:reduce){#deck{scroll-behavior:auto}.card,.segment,.choice,button{transition:none}.solution{animation:none}}
 </style></head><body><div class="progress-row"><div id="progress" class="segments" role="progressbar" aria-label="${escapeHTML(
     ui.progress,
   )}" aria-valuemin="1" aria-valuemax="${

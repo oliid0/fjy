@@ -422,10 +422,18 @@ export const moveDocumentStroke = (
     points: stroke.points.map(([x, y]) => [x + dx, y + dy]),
     anchor: stroke.anchor ? moved(stroke.anchor) : undefined,
     widget: stroke.widget
-      ? { ...stroke.widget, origin: moved(stroke.widget.origin) }
+      ? {
+          ...stroke.widget,
+          position: moved(stroke.widget.position),
+          origin: moved(stroke.widget.origin),
+        }
       : undefined,
     insertion: stroke.insertion
-      ? { ...stroke.insertion, origin: moved(stroke.insertion.origin) }
+      ? {
+          ...stroke.insertion,
+          position: moved(stroke.insertion.position),
+          origin: moved(stroke.insertion.origin),
+        }
       : undefined,
     plot: stroke.plot
       ? {

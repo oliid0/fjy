@@ -12,7 +12,9 @@ import * as ai from "./ai";
 import { defaults, saveSettings } from "./settings";
 
 vi.mock("./materials", () => ({ searchMaterials: async () => [] }));
-vi.mock("./lessonObserver", () => ({ observeLesson: async () => undefined }));
+vi.mock("./lessonObserver", () => ({
+  observeTeachingStep: async () => undefined,
+}));
 
 const lesson = (
   tools: { name: string; args?: Record<string, unknown> }[] = [],
@@ -285,4 +287,81 @@ it("cancels pending quiz generation on manual navigation and never publishes the
     classroomCommands.execute({ name: "quiz.open" }),
   ).rejects.toThrow();
   view.unmount();
+});
+
+it("keeps quiz jobs independent and returns each job's own result when they finish out of order", async () => {
+  const { chat, view } = setup();
+  const makeQuiz = (title: string) => ({
+    title,
+    questions: [
+      {
+        type: "short",
+        question: `${title}的问题`,
+        answer: ["答案"],
+        explanation: "说明",
+      },
+    ],
+    sources: [{ title: "教材", url: "https://www.moe.gov.cn/" }],
+  });
+  let finishFirst!: (value: string) => void;
+  let finishSecond!: (value: string) => void;
+  chat
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSecond = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(JSON.stringify(makeQuiz("数学测验")))
+    .mockResolvedValueOnce(JSON.stringify(makeQuiz("力学测验")));
+  const release = classroomCommands.register(
+    "canvas.snapshot",
+    "@internal",
+    () => ({
+      text: "实际课件文字",
+      image: "data:image/png;base64,visible-equation",
+    }),
+  );
+  try {
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    act(() => {
+      first = classroomCommands.execute({
+        name: "quiz.generate",
+        args: { prompt: "出1道力学题" },
+      });
+      second = classroomCommands.execute({
+        name: "quiz.generate",
+        args: { prompt: "出1道数学题" },
+      });
+    });
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(2));
+    expect(chat.mock.calls[0][1]?.aborted).toBe(false);
+    expect(JSON.stringify(chat.mock.calls[0][0][1].content)).toContain(
+      "data:image/png;base64,visible-equation",
+    );
+    await act(async () => {
+      finishSecond("数学资料 https://www.moe.gov.cn/");
+      await expect(second).resolves.toEqual({ title: "数学测验", count: 1 });
+    });
+    expect(chat.mock.calls[0][1]?.aborted).toBe(false);
+    await act(async () => {
+      finishFirst("物理资料 https://www.moe.gov.cn/");
+      await expect(first).resolves.toEqual({ title: "力学测验", count: 1 });
+    });
+    expect(
+      await classroomCommands.execute({ name: "quiz.inspect" }),
+    ).toMatchObject({ title: "数学测验", count: 1 });
+    expect(view.getByTitle("数学测验")).toBeVisible();
+    expect(view.queryByTitle("力学测验")).toBeNull();
+  } finally {
+    view.unmount();
+    release();
+  }
 });

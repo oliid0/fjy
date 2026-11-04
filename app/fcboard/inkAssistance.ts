@@ -14,7 +14,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { insertGeneratedImage } from "./imageGeneration";
-import { circledLanguage } from "./languageCircle";
+import { InkRequests } from "./inkRequests";
 
 import { boardContext } from "./ai";
 import { classroomCommands } from "./commands";
@@ -54,7 +54,7 @@ export const observeInkAssistance = (
   const seen = new Set(api.getSceneElements().map((element) => element.id));
   const failed = new Set<string>();
   let timer: ReturnType<typeof setTimeout>;
-  let controller: AbortController | undefined;
+  const requests = new InkRequests();
   let previous = "";
   let observedScene:
     | readonly import("@fcboard/element/types").FcboardElement[]
@@ -76,6 +76,7 @@ export const observeInkAssistance = (
     const state = api.getAppState();
     const nextConfiguration = configuration();
     const currentScene = api.getSceneElements();
+    requests.prune(currentScene.map((element) => element.id));
     if (
       currentScene === observedScene &&
       state.cursorButton === observedButton &&
@@ -93,15 +94,15 @@ export const observeInkAssistance = (
       penConfiguration = nextConfiguration;
       api.getSceneElements().forEach((element) => seen.add(element.id));
       clearTimeout(timer);
-      controller?.abort();
-      onBusy(false);
+      requests.cancelAll();
+      onBusy(requests.busy);
       previous = "";
       return;
     }
     if (state.cursorButton === "down" || state.activeTool.type !== "freedraw") {
       clearTimeout(timer);
-      controller?.abort();
-      onBusy(false);
+      requests.cancelPending();
+      onBusy(requests.busy);
       previous = "";
       return;
     }
@@ -154,7 +155,12 @@ export const observeInkAssistance = (
         seen.add(element.id);
         return false;
       });
-    const last = pending.at(-1);
+    const last = pending
+      .filter((element) => requests.available(element.id))
+      .at(-1);
+    if (!last) {
+      return;
+    }
     const target = last ? targetFor(last) : undefined;
     const mode = target
       ? "text"
@@ -164,6 +170,9 @@ export const observeInkAssistance = (
         ? targetFor(element)?.key === target.key
         : !targetFor(element) && element.customData?.fcInk?.assist === mode,
     );
+    if (mode) {
+      source = requests.source(source, mode, (element) => element.id, boardInk);
+    }
     if (!target && mode === "function") {
       const included = latestFunctionInk(boardInk(source));
       source = source.filter((_, index) => included.has(index));
@@ -176,8 +185,8 @@ export const observeInkAssistance = (
     const requestKey = `${signature}:${target?.stamp || ""}`;
     if (!mode || !signature || failed.has(requestKey)) {
       clearTimeout(timer);
-      controller?.abort();
-      onBusy(false);
+      requests.cancelPending();
+      onBusy(requests.busy);
       previous = "";
       return;
     }
@@ -186,9 +195,14 @@ export const observeInkAssistance = (
     }
     previous = requestKey;
     clearTimeout(timer);
-    controller?.abort();
+    requests.cancelPending();
     const request = new AbortController();
-    controller = request;
+    requests.reserve(
+      request,
+      source.map((element) => element.id),
+      boardInk(source),
+      mode,
+    );
     const since = Date.now();
     timer = setTimeout(
       () => {
@@ -208,46 +222,9 @@ export const observeInkAssistance = (
                 source.some((input) => input.id === element.id),
               ),
           ) === signature;
+        requests.start(request);
         onBusy(true);
         void (async () => {
-          if (mode === "language" && classroomCommands.has("language.card")) {
-            const circled = circledLanguage(
-              boardInk(source),
-              api
-                .getSceneElements()
-                .filter(
-                  (element) =>
-                    !source.some((stroke) => stroke.id === element.id) &&
-                    (element.type === "text" || element.type === "freedraw"),
-                )
-                .map((element) => {
-                  const [left, top, right, bottom] = getCommonBounds([element]);
-                  return {
-                    id: element.id,
-                    bounds: { left, top, right, bottom },
-                  };
-                }),
-            );
-            if (circled) {
-              source.forEach((element) => seen.add(element.id));
-              await classroomCommands.execute({
-                name: "language.card",
-                args: { ...circled, signal: request.signal },
-              });
-              if (current()) {
-                api.updateScene({
-                  elements: api
-                    .getSceneElements()
-                    .filter(
-                      (element) =>
-                        !source.some((stroke) => stroke.id === element.id),
-                    ),
-                  captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-                });
-              }
-              return;
-            }
-          }
           if (mode === "shape") {
             const scene = api.getSceneElements();
             const angle = recognizeAngleMark(
@@ -521,9 +498,8 @@ export const observeInkAssistance = (
             }
           })
           .finally(() => {
-            if (controller === request) {
-              onBusy(false);
-            }
+            requests.finish(request, failed.has(requestKey));
+            onBusy(requests.busy);
           });
       },
       mode === "function" || mode === "calculation"
@@ -540,9 +516,9 @@ export const observeInkAssistance = (
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
     if (phase === "start") {
       clearTimeout(timer);
-      controller?.abort();
+      requests.cancelPending();
       previous = "";
-      onBusy(false);
+      onBusy(requests.busy);
     }
     if (!classroomCommands.has("document.draw")) {
       tables.progress(stroke, phase);
@@ -598,7 +574,7 @@ export const observeInkAssistance = (
   });
   const invalidate = classroomCommands.onInvalidate(() => {
     clearTimeout(timer);
-    controller?.abort();
+    requests.cancelAll();
     onBusy(false);
   });
   let board = "";
@@ -609,8 +585,8 @@ export const observeInkAssistance = (
     if (active !== board) {
       board = active;
       clearTimeout(timer);
-      controller?.abort();
-      onBusy(false);
+      requests.cancelAll();
+      onBusy(requests.busy);
       api.getSceneElements().forEach((element) => seen.add(element.id));
     }
   });
@@ -651,7 +627,7 @@ export const observeInkAssistance = (
   );
   return () => {
     clearTimeout(timer);
-    controller?.abort();
+    requests.cancelAll();
     stop();
     inkCommit?.();
     inkProgress?.();

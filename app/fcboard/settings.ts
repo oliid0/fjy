@@ -22,6 +22,7 @@ export type Settings = {
   speechEndpoint: string;
   speechKey: string;
   speechModel: string;
+  speechLanguage: string;
   ttsEndpoint: string;
   ttsKey: string;
   autoSummary: boolean;
@@ -45,6 +46,7 @@ export const defaults: Settings = {
   speechEndpoint: "",
   speechKey: "",
   speechModel: "whisper-1",
+  speechLanguage: "auto",
   ttsEndpoint: "",
   ttsKey: "",
   autoSummary: true,

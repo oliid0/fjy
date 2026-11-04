@@ -25,6 +25,7 @@ import { SelectionActions } from "./SelectionActions";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
 import * as speech from "./speech";
+import * as recordingExport from "./recordingExport";
 import * as localSpeech from "./localSpeech";
 import * as cloudSpeech from "./cloudSpeech";
 import * as duplex from "./duplexSpeech";
@@ -204,7 +205,13 @@ describe("selection-driven classroom controls", () => {
           screen.getByRole("button", { name: t("fcboard.expand_answer") }),
         ).toBeEnabled(),
       );
-      expect(read).toHaveBeenCalledWith(api, whole);
+      expect(read).toHaveBeenCalledWith(
+        api,
+        true,
+        undefined,
+        { left: 16, top: 16, right: 1584, bottom: 816 },
+        true,
+      );
       expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
         "Notes changed while writing the question",
       );
@@ -224,7 +231,15 @@ describe("selection-driven classroom controls", () => {
       fireEvent.click(
         screen.getByRole("button", { name: t("fcboard.send_question") }),
       );
-      await waitFor(() => expect(read).toHaveBeenCalledWith(api, false));
+      await waitFor(() =>
+        expect(read).toHaveBeenCalledWith(
+          api,
+          true,
+          undefined,
+          { left: 16, top: 16, right: 1584, bottom: 816 },
+          true,
+        ),
+      );
     },
   );
 
@@ -313,6 +328,92 @@ describe("selection-driven classroom controls", () => {
         name: t("fcboard.view_summary_full_screen"),
       }),
     ).toBeVisible();
+  });
+
+  it("summarizes prior lesson boards and the current PDF together without navigation or scene changes", async () => {
+    selectText("current lesson board conclusion");
+    const previous = convertToFcboardElements([
+      { type: "text", x: 100, y: 100, text: "prior lesson law derivation" },
+    ]);
+    const read = vi
+      .spyOn(ai, "boardContext")
+      .mockImplementation(async (source) => ({
+        elements: source.getSceneElements(),
+        text: source
+          .getSceneElements()
+          .map((element) => (element.type === "text" ? element.text : ""))
+          .join("\n"),
+        image: "data:image/png;base64,board-page",
+      }));
+    const chat = vi.spyOn(ai, "chat").mockResolvedValue("完整混合课堂总结");
+    const navigate = vi.fn();
+    const releases = [
+      classroomCommands.context("document", () => ({
+        id: "mixed-pdf",
+        name: "lesson.pdf",
+        page: 2,
+        text: "original PDF source",
+        ink: [],
+        selection: [],
+        viewport: { left: 0, top: 0, scroll: 0 },
+      })),
+      classroomCommands.register("document.snapshot", "@internal", () => ({
+        name: "lesson.pdf",
+        page: 2,
+        text: "current PDF equation and original source",
+        image: "data:image/png;base64,pdf-page",
+      })),
+      classroomCommands.register("document.page", "page", navigate),
+      classroomCommands.register("board.switch", "switch", navigate),
+      classroomCommands.register("board.pages", "@internal", () => ({
+        active: "current",
+        boards: [
+          {
+            id: "prior",
+            name: "白板一",
+            elements: previous,
+            files: {},
+            view: {},
+            updated: 1,
+          },
+          {
+            id: "current",
+            name: "白板二",
+            elements: scene,
+            files: {},
+            view: {},
+            updated: 2,
+          },
+        ],
+      })),
+    ];
+    const view = render(<Classroom api={api} />);
+    releases.push(
+      classroomCommands.context("teacher", () => ({
+        canvas: { boards: ["prior", "current"] },
+      })),
+    );
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "canvas.summary" });
+      });
+      expect(read).toHaveBeenCalledTimes(2);
+      const input = JSON.stringify(chat.mock.calls[0][0]);
+      for (const text of [
+        "prior lesson law derivation",
+        "current lesson board conclusion",
+        "current PDF equation and original source",
+        "lesson.pdf",
+        "data:image/png;base64,pdf-page",
+      ]) {
+        expect(input).toContain(text);
+      }
+      expect(navigate).not.toHaveBeenCalled();
+      expect(api.updateScene).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      releases.forEach((release) => release());
+    }
   });
 
   it("discards a handwritten question's pending answer if its actual ink changes", async () => {
@@ -727,6 +828,76 @@ describe("selection-driven classroom controls", () => {
     }
   });
 
+  it.each([false, true])(
+    "keeps independent fallback voice jobs concurrent and cancels both on manual navigation=%s",
+    async (navigate) => {
+      saveSettings({ ...defaults, speech: "local", apiKey: "test" }, false);
+      let deliver!: (text: string) => void;
+      const capture = {
+        stop: vi.fn().mockResolvedValue(undefined),
+        cancel: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+        async (onLine) => {
+          deliver = (text) => onLine({ time: 0, text });
+          return capture;
+        },
+      );
+      vi.spyOn(ai, "boardContext").mockResolvedValue({
+        elements: [],
+        text: "",
+        image: undefined,
+      });
+      const finish: ((value: string) => void)[] = [];
+      const chat = vi
+        .spyOn(ai, "chat")
+        .mockImplementation(
+          () => new Promise((resolve) => finish.push(resolve)),
+        );
+      const view = render(<Classroom api={api} />);
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          await classroomCommands.execute({ name: "voice.toggle" });
+        });
+        act(() => deliver("请比较牛顿定律和惯性"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500);
+        });
+        expect(chat).toHaveBeenCalledTimes(1);
+        act(() => deliver("请比较质量和重量"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(500);
+        });
+        expect(chat).toHaveBeenCalledTimes(2);
+        expect(chat.mock.calls[0][1]?.aborted).toBe(false);
+        expect(chat.mock.calls[1][1]?.aborted).toBe(false);
+        if (navigate) {
+          act(() => classroomCommands.invalidate());
+          expect(chat.mock.calls.every((call) => call[1]?.aborted)).toBe(true);
+        }
+        const response = (x: number) =>
+          JSON.stringify({
+            action: "shapes",
+            shapes: [{ type: "rectangle", x, y: 150, width: 50, height: 50 }],
+          });
+        await act(async () => {
+          finish[1](response(400));
+          await vi.advanceTimersByTimeAsync(10);
+          finish[0](response(100));
+          await vi.advanceTimersByTimeAsync(10);
+        });
+        expect(
+          scene.filter((element) => element.type === "rectangle"),
+        ).toHaveLength(navigate ? 0 : 2);
+        expect(capture.cancel).not.toHaveBeenCalled();
+      } finally {
+        view.unmount();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("keeps the paused orb for five seconds and resumes capture before expiry", async () => {
     saveSettings({ ...defaults, speech: "local" }, false);
     const start = vi.spyOn(localSpeech, "startLocalSpeech").mockResolvedValue({
@@ -809,6 +980,7 @@ describe("selection-driven classroom controls", () => {
     const view = render(<Classroom api={api} />);
     let finished = false;
     let task!: Promise<unknown>;
+    const execute = vi.spyOn(classroomCommands, "execute");
     try {
       await act(async () => {
         await classroomCommands.execute({ name: "voice.toggle" });
@@ -821,6 +993,10 @@ describe("selection-driven classroom controls", () => {
           });
       });
       expect(players).toHaveLength(1);
+      expect(execute).toHaveBeenCalledWith({
+        name: "lesson.audio",
+        args: { conversation: true },
+      });
       expect(finished).toBe(false);
       expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
         "data-state",
@@ -831,6 +1007,10 @@ describe("selection-driven classroom controls", () => {
         await task;
       });
       expect(finished).toBe(true);
+      expect(execute).toHaveBeenCalledWith({
+        name: "lesson.audio",
+        args: { conversation: false },
+      });
       expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
         "data-state",
         "listening",
@@ -2062,9 +2242,16 @@ describe("selection-driven classroom controls", () => {
         cancel: vi.fn(),
       }),
     );
-    const chat = vi
-      .spyOn(ai, "chat")
-      .mockResolvedValue("Force equals mass times acceleration.");
+    const exported = vi
+      .spyOn(recordingExport, "autoSaveRecording")
+      .mockResolvedValue({ saved: true });
+    const chat = vi.spyOn(ai, "chat").mockImplementation(async () => {
+      const [preserved] = await loadRecordings();
+      expect(preserved.blob.size).toBe(5);
+      expect(preserved.summary).toBe("");
+      expect(exported).not.toHaveBeenCalled();
+      return "Force equals mass times acceleration.";
+    });
     const view = render(<Classroom api={api} />);
     try {
       await act(async () => {
@@ -2082,6 +2269,14 @@ describe("selection-driven classroom controls", () => {
         expect.objectContaining({ text: "F=ma" }),
       );
       expect(saved[0].summary).toBe("Force equals mass times acceleration.");
+      expect(exported).toHaveBeenCalledTimes(1);
+      expect(exported).toHaveBeenCalledWith(
+        expect.objectContaining({
+          summary: "Force equals mass times acceleration.",
+          transcript: saved[0].transcript,
+          blob: saved[0].blob,
+        }),
+      );
       expect(JSON.stringify(chat.mock.calls[0][0])).toContain("F=ma");
       expect(
         screen.getByRole("button", { name: t("buttons.saveAs") }),
@@ -2091,6 +2286,55 @@ describe("selection-driven classroom controls", () => {
       await saveRecordings([]);
     }
   });
+
+  it.each([false, true])(
+    "automatically exports final custom transcription once even when summary fails=%s",
+    async (failSummary) => {
+      await saveRecordings([]);
+      saveSettings(
+        { ...defaults, speech: "custom", autoSummary: true, apiKey: "test" },
+        false,
+      );
+      vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
+      vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({
+        blob: new Blob(["custom-media"], { type: "audio/webm" }),
+        duration: 6,
+      });
+      const finalTranscript = [{ time: 1, text: "final custom transcript" }];
+      vi.spyOn(speech, "transcribe").mockResolvedValue(finalTranscript);
+      const chat = vi.spyOn(ai, "chat");
+      if (failSummary) {
+        chat.mockRejectedValue(new Error("summary service unavailable"));
+      } else {
+        chat.mockResolvedValue("final custom summary");
+      }
+      const exported = vi
+        .spyOn(recordingExport, "autoSaveRecording")
+        .mockResolvedValue({ saved: true });
+      const view = render(<Classroom api={api} />);
+      try {
+        await act(async () => {
+          await classroomCommands.execute({
+            name: "record.start",
+            args: { mode: "audio" },
+          });
+          await classroomCommands.execute({ name: "record.stop" });
+        });
+        expect(exported).toHaveBeenCalledTimes(1);
+        expect(exported).toHaveBeenCalledWith(
+          expect.objectContaining({
+            transcript: finalTranscript,
+            summary: failSummary ? "" : "final custom summary",
+          }),
+        );
+        expect(exported.mock.calls[0][0].blob.size).toBe(12);
+        expect((await loadRecordings())[0].transcript).toEqual(finalTranscript);
+      } finally {
+        view.unmount();
+        await saveRecordings([]);
+      }
+    },
+  );
 
   it("keeps screen recording behind the board with pause, resume, restore and stop in its floating controls", async () => {
     await saveRecordings([]);
@@ -2883,8 +3127,8 @@ describe("selection-driven classroom controls", () => {
       scene.some((el) => el.type === "text" && el.text.includes("合外力")),
     ).toBe(true);
     expect(scene.find((el) => el.id === ink.id)).toBe(ink);
-    expect(chat).toHaveBeenCalledTimes(2);
-    expect(String(chat.mock.calls[1][0].at(-1)?.content)).toContain(ink.id);
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(String(chat.mock.calls[0][0].at(-1)?.content)).toContain(ink.id);
     expect(
       screen.queryByRole("textbox", { name: t("fcboard.ask_the_ai_teacher") }),
     ).toBeNull();

@@ -135,9 +135,14 @@ export class TeachingEngine {
   private observations = new Set<AbortController>();
   private cancellableRequests = new WeakSet<AbortController>();
   private waiting = new Set<() => void>();
+  private conversationActive = false;
   private answerWaiter?: () => void;
   private renderer?: LessonCanvas;
   private lessonBoards = new Set<string>();
+  private preparedResources = new Map<
+    LessonTool,
+    { taskId: string; request: AbortController; release: () => void }
+  >();
   private branchRenderer?: LessonCanvas;
   private voice = createNarrator();
   private interjection = createNarrator();
@@ -259,6 +264,26 @@ export class TeachingEngine {
       throw new DOMException("Visible lesson surface changed", "AbortError");
     }
   }
+  /** Let a live conversation own audio without pausing drawing, tools or the lesson. */
+  conversation(active: boolean) {
+    if (this.conversationActive === active) {
+      return;
+    }
+    this.conversationActive = active;
+    if (active) {
+      this.voice.pause();
+      this.interjection.pause();
+    } else {
+      if (["teaching", "question", "quiz"].includes(this.state.mode)) {
+        const voice = this.branchActive ? this.interjection : this.voice;
+        void voice
+          .resume()
+          .catch((error) => this.update({ audioError: String(error) }));
+      }
+      this.waiting.forEach((resolve) => resolve());
+      this.waiting.clear();
+    }
+  }
   pause() {
     if (this.state.mode === "idle" || this.state.mode === "complete") {
       return;
@@ -295,9 +320,11 @@ export class TeachingEngine {
     if (this.branchActive) {
       this.update({ mode: "question" });
       this.branchRenderer?.resume();
-      void this.interjection
-        .resume()
-        .catch((error) => this.update({ audioError: String(error) }));
+      if (!this.conversationActive) {
+        void this.interjection
+          .resume()
+          .catch((error) => this.update({ audioError: String(error) }));
+      }
       this.waiting.forEach((resolve) => resolve());
       this.waiting.clear();
       return;
@@ -311,9 +338,11 @@ export class TeachingEngine {
       toolError: "",
     });
     this.renderer?.resume();
-    void this.voice
-      .resume()
-      .catch((error) => this.update({ audioError: String(error) }));
+    if (!this.conversationActive) {
+      void this.voice
+        .resume()
+        .catch((error) => this.update({ audioError: String(error) }));
+    }
     this.waiting.forEach((resolve) => resolve());
     this.waiting.clear();
   }
@@ -329,6 +358,9 @@ export class TeachingEngine {
     this.branchRenderer?.cancel();
     this.voice.stop();
     this.interjection.stop();
+    for (const tool of this.preparedResources.keys()) {
+      this.releasePreparedResource(tool, true);
+    }
     this.toolRequests.forEach((request) => request.abort());
     this.branchToolRequests.forEach((request) => request.abort());
     this.observations.forEach((request) => request.abort());
@@ -353,6 +385,101 @@ export class TeachingEngine {
       toolIndex: 0,
       observing: false,
     });
+  }
+  private releasePreparedResource(tool: LessonTool, cancel = false) {
+    const prepared = this.preparedResources.get(tool);
+    if (prepared) {
+      if (cancel) {
+        prepared.request.abort();
+      }
+      prepared.release();
+      this.toolRequests.delete(prepared.request);
+      this.preparedResources.delete(tool);
+    }
+  }
+  /** Prepare independent future assets while the current step speaks and writes.
+   * Surface-dependent prompts and steps with preceding tools keep their normal ordering. */
+  private async prefetchResources(
+    lesson: Lesson,
+    index: number,
+    generation: number,
+  ) {
+    const remaining = new Set(
+      lesson.steps.slice(index).flatMap((step) => step.tools || []),
+    );
+    for (const tool of this.preparedResources.keys()) {
+      if (!remaining.has(tool)) {
+        this.releasePreparedResource(tool, true);
+      }
+    }
+    if (
+      ![
+        "agent.start",
+        "agent.wait",
+        "resources.prepare",
+        "resources.use",
+      ].every((name) => classroomCommands.isPublic(name))
+    ) {
+      return;
+    }
+    for (const step of lesson.steps.slice(index + 1, index + 4)) {
+      if (this.preparedResources.size >= 2) {
+        break;
+      }
+      const tool = step.tools?.[0];
+      if (
+        !tool ||
+        step.tools?.length !== 1 ||
+        tool.name !== "resources.generate" ||
+        this.preparedResources.has(tool) ||
+        typeof tool.args?.prompt !== "string" ||
+        Object.keys(tool.args).some((key) => key !== "prompt") ||
+        /根据|白板|课件|当前|上[一个]步|based on|\b(?:board|slide|current|previous)\b/i.test(
+          tool.args.prompt,
+        )
+      ) {
+        continue;
+      }
+      await this.gate(generation);
+      const request = new AbortController();
+      const release = classroomCommands.registerOwner(
+        request.signal,
+        this.owner,
+      );
+      this.toolRequests.add(request);
+      try {
+        const task = (await executeBoardCommand(
+          {
+            name: "agent.start",
+            args: {
+              role: "resource",
+              prompt: tool.args.prompt,
+              command: {
+                name: "resources.prepare",
+                args: { prompt: tool.args.prompt },
+              },
+            },
+          },
+          request.signal,
+        )) as { id: string; state: string };
+        if (generation !== this.generation || request.signal.aborted) {
+          throw new DOMException("Lesson ended", "AbortError");
+        }
+        if (typeof task.id !== "string" || task.state !== "running") {
+          throw new Error(t("fcboard.invalid_ai_follow_up_action"));
+        }
+        this.preparedResources.set(tool, { taskId: task.id, request, release });
+      } catch (failure) {
+        request.abort();
+        release();
+        this.toolRequests.delete(request);
+        if (generation !== this.generation) {
+          throw failure;
+        }
+        // Capacity or unavailable preparation falls back to the original tool
+        // when the step is reached, without holding up this narration.
+      }
+    }
   }
   private async tools(
     tools: readonly LessonTool[] | undefined,
@@ -399,9 +526,15 @@ export class TeachingEngine {
         this.update({ tool: { name: tool.name, index }, toolError: "" });
         let result: unknown;
         let mismatch: ReturnType<typeof lessonToolMismatch>;
+        const prepared = !branch && this.preparedResources.get(tool);
         try {
           assertLessonToolsAvailable([tool]);
-          result = await executeBoardCommand(tool, request.signal);
+          result = await executeBoardCommand(
+            prepared
+              ? { name: "resources.use", args: { taskId: prepared.taskId } }
+              : tool,
+            request.signal,
+          );
           if (current()) {
             this.acceptTransition(request.signal);
           }
@@ -415,6 +548,9 @@ export class TeachingEngine {
             ok: true,
             result: result === undefined ? null : result,
           };
+          if (prepared) {
+            this.releasePreparedResource(tool);
+          }
           this.update({
             toolResults: [...results],
             ...(!branch
@@ -435,8 +571,21 @@ export class TeachingEngine {
             await gate();
             continue;
           }
+          if (
+            prepared &&
+            failure instanceof DOMException &&
+            failure.name === "AbortError"
+          ) {
+            // Navigation may invalidate an asset prepared for the old surface.
+            // Retry the original generation on the now-current lesson page.
+            this.releasePreparedResource(tool, true);
+            continue;
+          }
           const error =
             failure instanceof Error ? failure.message : String(failure);
+          if (prepared) {
+            this.releasePreparedResource(tool, true);
+          }
           results[slot] = {
             name: tool.name,
             ok: false,
@@ -623,10 +772,18 @@ export class TeachingEngine {
       return;
     }
     try {
+      const generation = this.generation;
+      while (this.conversationActive && generation === this.generation) {
+        await new Promise<void>((resolve) => this.waiting.add(resolve));
+      }
+      await this.gate(generation, voice === this.interjection);
       await voice.speak(text, {
         rate: this.state.speed,
         onBoundary: (spoken) => this.update({ spoken }),
       });
+      if (this.conversationActive) {
+        voice.pause();
+      }
       await voice.finished;
     } catch (error) {
       this.update({
@@ -757,6 +914,7 @@ export class TeachingEngine {
     this.bindOwner(owner);
     for (let index = start; index < lesson.steps.length; index++) {
       await this.gate(generation);
+      await this.prefetchResources(lesson, index, generation);
       this.update({
         step: index,
         caption: "",
@@ -801,6 +959,9 @@ export class TeachingEngine {
       await this.ask(question, generation);
     }
     await this.gate(generation);
+    for (const tool of this.preparedResources.keys()) {
+      this.releasePreparedResource(tool, true);
+    }
     this.update({
       mode: "complete",
       caption: this.state.attempts

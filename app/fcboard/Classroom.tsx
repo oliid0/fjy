@@ -63,6 +63,8 @@ import {
 import { Teacher, LearningSettings } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
 import { registerCanvasCommands } from "./canvasCommands";
+import { backgroundCommands, registerBoardAgents } from "./boardAgents";
+import { BoardAgentStatus } from "./BoardAgentStatus";
 import { registerUICommands } from "./uiControls";
 import { localMathIntent, selectionMathIntent } from "./intent";
 import { defaultPlot, plotExpression } from "./math";
@@ -131,6 +133,13 @@ const titles = {
 } as const;
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+const lessonConversation = (conversation: boolean) =>
+  classroomCommands.has("lesson.audio")
+    ? classroomCommands.execute({
+        name: "lesson.audio",
+        args: { conversation },
+      })
+    : Promise.resolve();
 
 export const Classroom = ({
   api,
@@ -272,6 +281,19 @@ export const Classroom = ({
   const actionBusy = useRef(false);
   const assistantGeneration = useRef(0);
   const assistantRequest = useRef<AbortController | undefined>(undefined);
+  const assistantRequests = useRef(new Set<AbortController>());
+  const cancelAssistantRequests = useCallback(() => {
+    assistantRequest.current?.abort();
+    assistantRequests.current.forEach((request) => request.abort());
+  }, []);
+  const ownsAssistantRequest = useCallback(
+    (source?: AbortSignal) =>
+      classroomCommands.isOwnedBy(source, assistantRequest.current?.signal) ||
+      [...assistantRequests.current].some((request) =>
+        classroomCommands.isOwnedBy(source, request.signal),
+      ),
+    [],
+  );
   const returnFocus = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const panelStyle = useAnchoredPanel(
@@ -289,6 +311,7 @@ export const Classroom = ({
     [api],
   );
   useEffect(() => registerUICommands(api), [api]);
+  useEffect(() => registerBoardAgents(), [api]);
   const showPreview = useCallback((file: File, signal?: AbortSignal) => {
     signal?.throwIfAborted();
     recentFiles.current.set(file.name, file);
@@ -324,15 +347,16 @@ export const Classroom = ({
     [showPreview],
   );
   const invalidateVoice = useCallback(() => {
-    assistantRequest.current?.abort();
+    cancelAssistantRequests();
     voiceGeneration.current++;
     voicePlayback.current++;
     activeVoice.current = undefined;
     narrator.current?.stop();
     voiceTurns.current?.stop();
+    void lessonConversation(false).catch(() => {});
     voiceTurns.current = null;
     assistantGeneration.current++;
-  }, []);
+  }, [cancelAssistantRequests]);
 
   useEffect(() => {
     if (!voicePaused) {
@@ -360,12 +384,17 @@ export const Classroom = ({
     const reset = (source?: AbortSignal) => {
       if (
         source &&
-        classroomCommands.isOwnedBy(source, assistantRequest.current?.signal) &&
+        ownsAssistantRequest(source) &&
         classroomCommands.isExpectedTransition(source)
       ) {
+        assistantRequests.current.forEach((request) => {
+          if (!classroomCommands.isOwnedBy(source, request.signal)) {
+            request.abort();
+          }
+        });
         return;
       }
-      assistantRequest.current?.abort();
+      cancelAssistantRequests();
       voiceTurns.current?.reset();
       assistantGeneration.current++;
       voicePlayback.current++;
@@ -389,8 +418,9 @@ export const Classroom = ({
         if (next !== previous) {
           previous = next;
           if (
-            !classroomCommands.isExpectedTransition(
-              assistantRequest.current?.signal,
+            ![assistantRequest.current, ...assistantRequests.current].some(
+              (request) =>
+                classroomCommands.isExpectedTransition(request?.signal),
             )
           ) {
             reset();
@@ -404,7 +434,7 @@ export const Classroom = ({
       unwatch();
       release();
     };
-  }, []);
+  }, [cancelAssistantRequests, ownsAssistantRequest]);
 
   useEffect(() => {
     let previousGraph = "";
@@ -653,14 +683,8 @@ export const Classroom = ({
   }, [panel]);
 
   const close = (cancel = true) => {
-    if (
-      cancel &&
-      !classroomCommands.isOwnedBy(
-        classroomCommands.interactionSource,
-        assistantRequest.current?.signal,
-      )
-    ) {
-      assistantRequest.current?.abort();
+    if (cancel && !ownsAssistantRequest(classroomCommands.interactionSource)) {
+      cancelAssistantRequests();
       assistantGeneration.current++;
       setStatus("");
     }
@@ -1057,16 +1081,22 @@ export const Classroom = ({
       ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
           text: string;
           image: string;
+          name?: string;
+          page?: number;
         })
       : undefined;
-    const context = document
-      ? { elements: [], text: document.text, image: document.image }
-      : await boardContext(api, true);
     const lessonPages = (
       classroomCommands.read("teacher") as
         | { canvas?: { boards?: string[] } }
         | undefined
     )?.canvas?.boards;
+    const board =
+      !document || lessonPages?.length
+        ? await boardContext(api, true)
+        : undefined;
+    const context = document
+      ? { elements: [], text: document.text, image: document.image }
+      : board!;
     if (!document && !context.elements.length && !lessonPages?.length) {
       throw new Error(t("fcboard.the_board_is_empty"));
     }
@@ -1074,7 +1104,17 @@ export const Classroom = ({
     setOutput("");
     setPanel("summary");
     const pages = document
-      ? [visualMessage(`当前课件：${document.text}`, document.image)]
+      ? [
+          ...(board ? await classroomSummaryMessages(api, board) : []),
+          visualMessage(
+            `当前课件${
+              document.name
+                ? `（${document.name}，第${document.page ?? "?"}页）`
+                : ""
+            }：${document.text}`,
+            document.image,
+          ),
+        ]
       : await classroomSummaryMessages(api, context);
     if (
       revision !== classroomCommands.revision ||
@@ -1135,7 +1175,7 @@ export const Classroom = ({
       const request = new AbortController();
       const abort = () => request.abort();
       externalSignal?.addEventListener("abort", abort, { once: true });
-      assistantRequest.current?.abort();
+      assistantRequests.current.add(request);
       assistantRequest.current = request;
       const releaseOwner = classroomCommands.registerOwner(
         request.signal,
@@ -1143,7 +1183,7 @@ export const Classroom = ({
       );
       selection = { ...selection, signal: request.signal };
       try {
-        const generation = ++assistantGeneration.current;
+        const generation = assistantGeneration.current;
         const direct = directCommand(text);
         if (direct) {
           await executeBoardCommand(direct, request.signal);
@@ -1313,7 +1353,9 @@ export const Classroom = ({
           action.action === "text" &&
           typeof action.text === "string"
         ) {
-          setOutput(action.text);
+          if (assistantRequest.current === request) {
+            setOutput(action.text);
+          }
           await classroomCommands.execute({
             name: "canvas.text",
             args: {
@@ -1338,6 +1380,7 @@ export const Classroom = ({
       } finally {
         releaseOwner();
         externalSignal?.removeEventListener("abort", abort);
+        assistantRequests.current.delete(request);
       }
     },
     [api, plot, summarize, solveMath, createPlot],
@@ -1354,6 +1397,7 @@ export const Classroom = ({
     signal?.addEventListener("abort", stop, { once: true });
     setVoiceState("speaking");
     try {
+      await lessonConversation(true);
       const starting = narrator.current!.speak(text);
       const finished = narrator.current!.finished;
       await starting;
@@ -1362,6 +1406,7 @@ export const Classroom = ({
     } finally {
       signal?.removeEventListener("abort", stop);
       if (playback === voicePlayback.current) {
+        await lessonConversation(false);
         setVoiceState(
           activeVoice.current && !activeVoice.current.aborted
             ? "thinking"
@@ -1380,9 +1425,51 @@ export const Classroom = ({
     if (classroomCommands.has("lesson.pause")) {
       await classroomCommands.execute({ name: "lesson.pause" });
     }
+    await lessonConversation(false);
     return { listening: !!voiceTurns.current, interrupted: true };
   };
   voiceExecute.current = async (text, signal) => {
+    const direct = directCommand(text);
+    const lesson =
+      /^(?:请|帮我|麻烦)?(?:讲解|解释|引导|教我|辅导|为什么|怎么理解|没听懂|不理解|换.*例子)/.test(
+        text,
+      );
+    const drawing = /^(?:请|帮我|麻烦)?(?:用.*笔.*(?:画|写)|画|绘制)/.test(
+      text,
+    );
+    const resource = /(?:教学动画|交互|演示.*动画)/.test(text);
+    if (
+      classroomCommands.isPublic("agent.start") &&
+      (backgroundCommands.has(direct?.name || "") ||
+        lesson ||
+        drawing ||
+        resource ||
+        (!direct && /插入|字号|放大.*内容|内容.*放大/.test(text)))
+    ) {
+      setVoiceCaption(text);
+      await executeBoardCommand(
+        {
+          name: "agent.start",
+          args: {
+            prompt: text,
+            role: resource ? "resource" : drawing ? "draw" : "board",
+            ...(direct && backgroundCommands.has(direct.name)
+              ? { command: { ...direct, args: direct.args || {} } }
+              : lesson
+              ? { command: { name: "lesson.ask", args: { prompt: text } } }
+              : {}),
+          },
+        },
+        signal,
+      );
+      setVoiceJob(t("fcboard.assistant_executing"));
+      return;
+    }
+    if (direct) {
+      await executeBoardCommand(direct, signal);
+      setVoiceJob(t("fcboard.assistant_completed"));
+      return;
+    }
     activeVoice.current = signal;
     setVoiceState("thinking");
     setVoiceCaption(text);
@@ -1443,6 +1530,10 @@ export const Classroom = ({
       450,
       {
         interrupt: false,
+        concurrent: (text) =>
+          !/(?:搞错|不对|改成|改为|换成|换为|刚才|上一个|已写|字号|放大|缩小)/.test(
+            text,
+          ),
         immediate: (text) =>
           ["voice.interrupt", "lesson.pause", "lesson.stop"].includes(
             directCommand(text)?.name || "",
@@ -1464,7 +1555,7 @@ export const Classroom = ({
     const generation = ++voiceGeneration.current;
     setListening(true);
     setVoiceState("listening");
-    setStatus(t("fcboard.duplex_connecting"));
+    setStatus("");
     try {
       const handle = await startDuplexSpeech({
         stream,
@@ -1523,7 +1614,7 @@ export const Classroom = ({
       }
       duplexSpeech.current = handle;
       localSpeech.current = handle;
-      setStatus(t("fcboard.listening_for_your_command"));
+      setStatus("");
     } catch (failure) {
       if (generation === voiceGeneration.current) {
         setListening(false);
@@ -1554,9 +1645,6 @@ export const Classroom = ({
       !duplexSpeech.current
     ) {
       narrator.current?.stop();
-      if (classroomCommands.has("lesson.pause")) {
-        await classroomCommands.execute({ name: "lesson.pause" });
-      }
       if (recorder.current) {
         recordSpeechGeneration.current++;
         await recordSpeechTask.current;
@@ -1581,9 +1669,6 @@ export const Classroom = ({
       setVoicePaused(false);
       resumeExisting = true;
       await voiceRelease.current;
-    }
-    if (resumeExisting !== true && classroomCommands.has("lesson.pause")) {
-      await classroomCommands.execute({ name: "lesson.pause" });
     }
     narrator.current?.stop();
     const recordingNow =
@@ -1807,7 +1892,7 @@ export const Classroom = ({
           ? voiceTurns.current
           : beginVoiceTurns();
       setListening(true);
-      setStatus(t("fcboard.listening_for_your_command"));
+      setStatus("");
       try {
         const stop = await startSystemSpeech(
           (text) => {
@@ -2203,13 +2288,22 @@ export const Classroom = ({
       setActiveId(item.id);
       setPanel("record");
       setStatus(saved ? t("fcboard.recording_saved_to_this_device") : "");
-      try {
-        const exported = await autoSaveRecording(item);
-        if (exported.saved) {
-          setStatus(t("fcboard.recording_saved_to_this_device"));
+      let exported = false;
+      const exportRecording = async () => {
+        try {
+          const result = await autoSaveRecording(item);
+          exported = result.saved;
+          if (exported) {
+            setStatus(t("fcboard.recording_saved_to_this_device"));
+          }
+        } catch (failure) {
+          setError(errorMessage(failure));
         }
-      } catch (failure) {
-        setError(errorMessage(failure));
+      };
+      // Preserve media immediately if local persistence failed. Otherwise export
+      // once after transcript and summary settle, so the saved package is complete.
+      if (!saved) {
+        await exportRecording();
       }
       if (currentSettings().speech === "custom") {
         try {
@@ -2231,9 +2325,10 @@ export const Classroom = ({
         setRecordPhase("summarizing");
         try {
           const summary = await summaryFor(item);
+          item = { ...item, summary };
           await persistRecords(
             recordsRef.current.map((value) =>
-              value.id === item.id ? { ...value, summary } : value,
+              value.id === item.id ? item : value,
             ),
           );
         } catch (failure) {
@@ -2243,6 +2338,9 @@ export const Classroom = ({
             }),
           );
         }
+      }
+      if (!exported) {
+        await exportRecording();
       }
     } catch (failure) {
       recorder.current?.dispose();
@@ -2745,6 +2843,7 @@ export const Classroom = ({
   return (
     <div className="fc-classroom">
       <InsertionCandidates />
+      <BoardAgentStatus />
       <MindMapControls api={api} inkProfile={inkProfile} />
       <LanguagePanel api={api} />
       <SelectionActions
@@ -2775,6 +2874,7 @@ export const Classroom = ({
       <LanguagePacks />
       <Teacher
         api={api}
+        voiceActive={listening}
         onCommand={async (text, signal, sourceIds, whole = false) => {
           await execute(text, whole, { signal, sourceIds });
         }}
@@ -2782,7 +2882,7 @@ export const Classroom = ({
       <TeachingTools api={api} />
       <Spotlight />
       <TransientMessage
-        message={error || status}
+        message={listening ? "" : error || status}
         role={error ? "alert" : "status"}
         className={`fc-notice ${error ? "fc-error" : ""}`}
       />
@@ -2810,7 +2910,7 @@ export const Classroom = ({
         <VoiceOrb
           state={voicePaused ? "paused" : voiceState}
           caption={voiceCaption}
-          status={voiceJob}
+          status={error || voiceJob}
           onStop={() => {
             void toggleVoice().catch((failure) =>
               setError(errorMessage(failure)),
@@ -3134,6 +3234,28 @@ export const Classroom = ({
                     </label>
                   </SettingsSection>
                   <SettingsSection id="voice">
+                    <label>
+                      {t("fcboard.language")}
+                      <MaterialSelect
+                        aria-label={t("fcboard.language")}
+                        value={settings.speechLanguage}
+                        onChange={(event) =>
+                          setSettings({
+                            ...settings,
+                            speechLanguage: event.target.value,
+                          })
+                        }
+                      >
+                        <option value="auto">
+                          {t("fcboard.follow_system_language")}
+                        </option>
+                        {languages.map((language) => (
+                          <option key={language.code} value={language.code}>
+                            {language.label}
+                          </option>
+                        ))}
+                      </MaterialSelect>
+                    </label>
                     <label>
                       {t("fcboard.voice_assistant_mode")}
                       <MaterialSelect

@@ -81,6 +81,8 @@ it("splits a narrow pole between sample points even when its amplitude is small"
 
 it.each([
   "fx=x+1",
+  "fx=1/x^2+x",
+  "fx=1/x²+x",
   "f x = x^2",
   "f ( x ) = sin(x)",
   "y=sin(x)",

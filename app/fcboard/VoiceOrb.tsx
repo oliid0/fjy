@@ -42,7 +42,7 @@ export const VoiceOrb = ({
   <>
     {(caption || status) && (
       <div className="fc-voice-caption" role="status">
-        <span>{caption}</span>
+        <span title={caption}>{caption}</span>
         <small>{status}</small>
       </div>
     )}

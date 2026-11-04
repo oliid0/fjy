@@ -20,7 +20,10 @@ final class AIStreamTransport {
         void failed(Exception error);
     }
     private final Map<String, Request> active = new ConcurrentHashMap<>();
-    private final ExecutorService workers = Executors.newFixedThreadPool(4);
+    // Six background agents plus a conversation and live lesson observation.
+    // Admission matches worker capacity so accepted requests never sit in a FIFO.
+    private static final int MAX_REQUESTS = 8;
+    private final ExecutorService workers = Executors.newFixedThreadPool(MAX_REQUESTS);
     private boolean closed;
 
     private static final class Request {
@@ -57,7 +60,7 @@ final class AIStreamTransport {
     }
 
     synchronized void start(String id, String endpoint, Map<String, String> headers, String body, Callback callback) throws Exception {
-        if (closed || id == null || active.size() >= 4 || active.containsKey(id)) throw new IOException("AI transport unavailable");
+        if (closed || id == null || active.size() >= MAX_REQUESTS || active.containsKey(id)) throw new IOException("AI transport unavailable");
         URL url = checkedURL(endpoint);
         if (body == null || body.length() > 24_000_000) throw new IOException("Invalid AI request");
         Request request = new Request();

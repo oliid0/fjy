@@ -12,6 +12,9 @@ import { LessonCanvas, validateLesson } from "./lesson";
 import { contentViewport } from "./board";
 import { handwritingText } from "./handwriting";
 import { sceneAPI } from "./test/scene";
+import { fitLessonFormula, prepareLessonText } from "./lessonWriting";
+
+import type { LessonWritingContext } from "./lessonWriting";
 
 const scene = (width = 1440, height = 900, zoom = 1) => {
   const api = sceneAPI();
@@ -57,6 +60,37 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
+
+it.each([0.5, 1, 2])(
+  "leaves a nearly full visible page at zoom %s instead of squeezing lesson writing into a tiny strip",
+  (scale) => {
+    const context: LessonWritingContext = {
+      viewport: { left: 0, top: 0, right: 300 / scale, bottom: 100 / scale },
+      obstacles: [{ left: 0, top: 0, right: 300 / scale, bottom: 80 / scale }],
+      source: [],
+      fontSize: 24 / scale,
+      color: "#123456",
+      width: 2 / scale,
+      opacity: 100,
+      scale,
+    };
+    expect(() =>
+      prepareLessonText(
+        "惯性示意",
+        context,
+        { x: 0, y: 88 / scale },
+        context.color,
+        {},
+      ),
+    ).toThrowError(expect.objectContaining({ name: "WritingSpaceError" }));
+    expect(() =>
+      fitLessonFormula({ width: 64, height: 32 }, context, {
+        x: 0,
+        y: 88 / scale,
+      }),
+    ).toThrowError(expect.objectContaining({ name: "WritingSpaceError" }));
+  },
+);
 
 it.each(
   [1440, 3080, 390].flatMap((width) =>

@@ -73,6 +73,45 @@ it("scales a courseware insertion and its editable geometry together around the 
   ]);
 });
 
+it("moves editable widget and insertion positions together with their geometry and reference anchors", () => {
+  const original: InkStroke = {
+    id: "semantic",
+    color: "#123456",
+    width: 2,
+    points: [
+      [110, 120],
+      [140, 150],
+    ],
+    anchor: { x: 110, y: 120 },
+    widget: {
+      id: "cube",
+      kind: "cube",
+      params: widgetDefaults(),
+      position: { x: 100, y: 100 },
+      origin: { x: 110, y: 120 },
+    },
+    insertion: {
+      ...insertionDefaults("mindmap", { x: 100, y: 100 }),
+      origin: { x: 110, y: 120 },
+    },
+  };
+  const moved = moveDocumentStroke(original, 80, 50);
+  expect(moved.points).toEqual([
+    [190, 170],
+    [220, 200],
+  ]);
+  expect(moved.anchor).toEqual({ x: 190, y: 170 });
+  expect(moved.widget).toMatchObject({
+    position: { x: 180, y: 150 },
+    origin: { x: 190, y: 170 },
+  });
+  expect(moved.insertion).toMatchObject({
+    position: { x: 180, y: 150 },
+    origin: { x: 190, y: 170 },
+  });
+  expect(original.widget!.position).toEqual({ x: 100, y: 100 });
+});
+
 describe("document ink and classroom tools", () => {
   it("removes whole swept objects and composite parts without splitting or changing missed ink", () => {
     const line = (id: string, y: number): InkStroke => ({

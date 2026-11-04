@@ -5,6 +5,7 @@ import { classroomCommands, executeBoardCommand } from "./commands";
 
 import type { Message } from "./ai";
 import type { Command } from "./commands";
+import type { Settings } from "./settings";
 
 export type BoardAgentAction = {
   action?: string;
@@ -66,6 +67,7 @@ export const runBoardCommands = async (
     context?: () => unknown;
     verify?: boolean;
     observe?: () => unknown | Promise<unknown>;
+    settings?: Settings;
   } = {},
 ): Promise<BoardAgentAction> => {
   let action = initial;
@@ -203,7 +205,7 @@ export const runBoardCommands = async (
       },
     );
     action = parseJSON(
-      await chat(conversation, signal, undefined, {
+      await chat(conversation, signal, options.settings, {
         maxTokens: options.maxTokens,
       }),
     ) as BoardAgentAction;

@@ -1406,6 +1406,116 @@ it("reports object ids and actual movement before erasing only those annotations
   expect(update).not.toHaveBeenCalled();
 });
 
+it("resizes existing handwriting and CJK text together on visible courseware, then aligns them without touching the hidden board", async () => {
+  const { draw, api, update } = await setup();
+  draw();
+  const stop = registerCanvasCommands(api);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.text",
+        args: {
+          text: "牛顿第二定律",
+          role: "title",
+          presentation: "handwritten",
+          placement: "center",
+          sourceIds: [],
+        },
+      });
+    });
+    const original = currentInk();
+    const title = original.find((stroke) => stroke.text === "牛顿第二定律")!;
+    expect(title).toBeDefined();
+    const boxes = original.map(documentStrokeBounds);
+    const anchor = {
+      x: Math.min(...boxes.map((box) => box.left)),
+      y: Math.min(...boxes.map((box) => box.top)),
+    };
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.resize",
+        args: {
+          ids: original.map((stroke) => stroke.id),
+          scale: 1.5,
+          anchor: "top-left",
+        },
+      });
+    });
+    expect(currentInk()).toHaveLength(original.length);
+    const resizedTitle = currentInk().find((stroke) => stroke.id === title.id)!;
+    expect(resizedTitle.fontSize).toBeCloseTo(title.fontSize! * 1.5);
+    const originalInk = original.find((stroke) => !stroke.text)!;
+    const resizedInk = currentInk().find(
+      (stroke) => stroke.id === originalInk.id,
+    )!;
+    expect(resizedInk.points).toEqual(
+      originalInk.points.map(([x, y]) => [
+        anchor.x + (x - anchor.x) * 1.5,
+        anchor.y + (y - anchor.y) * 1.5,
+      ]),
+    );
+    expect(resizedInk.width).toBeCloseTo(originalInk.width * 1.5);
+    const beforeAlign = currentInk().map(documentStrokeBounds);
+    const width =
+      Math.max(...beforeAlign.map((box) => box.right)) -
+      Math.min(...beforeAlign.map((box) => box.left));
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.align",
+        args: {
+          ids: original.map((stroke) => stroke.id),
+          horizontal: "center",
+          vertical: "top",
+        },
+      });
+    });
+    const after = currentInk().map(documentStrokeBounds);
+    const viewport = (
+      classroomCommands.read("document.layout") as {
+        viewport: { left: number; top: number; right: number };
+      }
+    ).viewport;
+    const left = Math.min(...after.map((box) => box.left));
+    const right = Math.max(...after.map((box) => box.right));
+    expect((left + right) / 2).toBeCloseTo(
+      (viewport.left + viewport.right) / 2,
+    );
+    expect(Math.min(...after.map((box) => box.top))).toBeCloseTo(viewport.top);
+    expect(right - left).toBeCloseTo(width);
+    expect(update).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
+it.each(["canvas.resize", "canvas.align"])(
+  "rejects stale mixed courseware targets before %s changes any ink",
+  async (name) => {
+    const { draw, api } = await setup();
+    draw();
+    const before = JSON.stringify(currentInk());
+    const stop = registerCanvasCommands(api);
+    try {
+      await act(async () => {
+        await expect(
+          classroomCommands.execute({
+            name,
+            args: {
+              ids: [currentInk()[0].id, "missing"],
+              ...(name === "canvas.resize"
+                ? { scale: 2 }
+                : { horizontal: "left" }),
+            },
+          }),
+        ).rejects.toThrow("missing");
+      });
+      expect(JSON.stringify(currentInk())).toBe(before);
+    } finally {
+      stop();
+    }
+  },
+);
+
 it("centers voice writing on the visible courseware without inheriting a previous selection", async () => {
   const { draw, update } = await setup();
   draw();

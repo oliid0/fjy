@@ -12,6 +12,8 @@ import { recognizeInkContent } from "./inkRecognition";
 import { insertGeneratedImage } from "./imageGeneration";
 import { sceneAPI } from "./test/scene";
 import * as transparent from "./transparentInkImage";
+import { registerCanvasCommands } from "./canvasCommands";
+import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
 
 // Only the browser host is adapted: execute the actual compositor with real
 // decoded PNG alpha and Canvas, without starting an app server or building.
@@ -116,6 +118,58 @@ const observeStream = async (
 
 const nativeFetch = globalThis.fetch;
 const settings = () => ({ ...defaults, apiKey: process.env.hs_apikey || "" });
+
+it.runIf(live)(
+  "LIVE: continues native Responses function calls until actual editable pen work is complete",
+  async () => {
+    const started = Date.now();
+    const api = sceneAPI();
+    const stop = registerCanvasCommands(api);
+    try {
+      const result = await runResponsesAgent({
+        endpoint: agentResponsesEndpoint(settings().endpoint)!,
+        settings: settings(),
+        signal: new AbortController().signal,
+        current: () => true,
+        allowed: (name) => name === "canvas.ink",
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是白板操作Agent。调用提供的真实工具执行用户目标，根据工具结果完成后再简要报告。不要只输出计划，不调用截图，不插入文字。",
+          },
+          {
+            role: "user",
+            content:
+              "使用board_draw，在实际画布坐标(400,300)、(430,280)、(460,300)之间用笔画一条折线，select=false。只执行一次，收到真实结果后说明已完成。",
+          },
+        ],
+      });
+      const ink = api
+        .getSceneElements()
+        .filter((element) => element.type === "freedraw");
+      expect(ink).toHaveLength(1);
+      expect(ink[0]).toMatchObject({
+        x: 400,
+        y: 300,
+        points: [
+          [0, 0],
+          [30, -20],
+          [60, 0],
+        ],
+      });
+      expect(result.summary.trim()).not.toBe("");
+      reports.responsesAgent = {
+        success: true,
+        elapsedMs: Date.now() - started,
+        strokes: ink.length,
+      };
+    } finally {
+      stop();
+    }
+  },
+  180000,
+);
 
 beforeEach(() => {
   if (!live) {

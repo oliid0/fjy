@@ -11,6 +11,49 @@ import org.junit.Test;
 
 public class AIStreamTransportTest {
     @Test
+    public void startsEightRequestsWithoutWaitingForEarlierResponses() throws Exception {
+        CountDownLatch entered = new CountDownLatch(8);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(8);
+        java.util.concurrent.atomic.AtomicReference<Exception> failure = new java.util.concurrent.atomic.AtomicReference<>();
+        NanoHTTPD server = new NanoHTTPD("127.0.0.1", 0) {
+            @Override public Response serve(IHTTPSession session) {
+                try {
+                    session.parseBody(new HashMap<>());
+                    entered.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) throw new java.io.IOException("Requests queued behind earlier work");
+                    return newFixedLengthResponse(Response.Status.OK, "application/json", "{}");
+                } catch (Exception error) {
+                    failure.set(error);
+                    return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", error.toString());
+                }
+            }
+        };
+        server.start();
+        AIStreamTransport transport = new AIStreamTransport();
+        AIStreamTransport.Callback callback = new AIStreamTransport.Callback() {
+            public void chunk(String text) {}
+            public void complete(int status, String data, boolean stream) {
+                if (status != 200) failure.set(new Exception("HTTP " + status));
+                finished.countDown();
+            }
+            public void failed(Exception error) { failure.set(error); finished.countDown(); }
+        };
+        try {
+            String endpoint = "http://127.0.0.1:" + server.getListeningPort() + "/chat";
+            for (int i = 0; i < 8; i++) transport.start("concurrent-" + i, endpoint, new HashMap<>(), "{}", callback);
+            assertTrue("All requests must reach HTTP before any response completes", entered.await(5, TimeUnit.SECONDS));
+            try {
+                transport.start("excess", endpoint, new HashMap<>(), "{}", callback);
+                fail("Excess work must fail admission instead of queueing");
+            } catch (java.io.IOException expected) {}
+            release.countDown();
+            assertTrue(finished.await(5, TimeUnit.SECONDS));
+            assertNull(failure.get());
+        } finally { release.countDown(); transport.close(); server.stop(); }
+    }
+
+    @Test
     public void streamsUtf8AndRetainsGatewayErrors() throws Exception {
         String frames = "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}\n\ndata: [DONE]\n\n";
         NanoHTTPD server = new NanoHTTPD("127.0.0.1", 0) {

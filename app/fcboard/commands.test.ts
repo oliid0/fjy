@@ -96,6 +96,10 @@ describe("component commands", () => {
       { name: "insert.object", args: { kind: "table", rows: 3, columns: 4 } },
     ],
     [
+      "生成一个牛顿定律动画",
+      { name: "resources.generate", args: { prompt: "生成一个牛顿定律动画" } },
+    ],
+    [
       "生成一个牛顿定律教学动画html",
       {
         name: "resources.generate",

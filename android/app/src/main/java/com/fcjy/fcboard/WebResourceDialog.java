@@ -96,8 +96,11 @@ final class WebResourceDialog extends Dialog {
 
     WebResourceDialog(Activity activity, String url) { this(activity, url, Locale.getDefault().toLanguageTag()); }
     WebResourceDialog(Activity activity, String url, String language) { this(activity, url, language, ignored -> {}); }
-    WebResourceDialog(Activity activity, String url, String language, java.util.function.Consumer<JSObject> selected) {
+    private final boolean teaching;
+    WebResourceDialog(Activity activity, String url, String language, java.util.function.Consumer<JSObject> selected) { this(activity, url, language, selected, false); }
+    WebResourceDialog(Activity activity, String url, String language, java.util.function.Consumer<JSObject> selected, boolean teaching) {
         super(activity);
+        this.teaching = teaching;
         Configuration config = new Configuration(activity.getResources().getConfiguration());
         config.setLocale(Locale.forLanguageTag(language));
         text = activity.createConfigurationContext(config);
@@ -287,9 +290,9 @@ final class WebResourceDialog extends Dialog {
         displayWidth = bounds.width();
         displayHeight = bounds.height();
         android.view.WindowManager.LayoutParams current = getWindow().getAttributes();
-        int width = first ? Math.min(dp(400), Math.max(1, displayWidth - dp(24))) : current.width;
+        int width = first ? Math.min(dp(teaching ? 900 : 400), Math.max(1, displayWidth - dp(24))) : current.width;
         int height = first ? Math.min(dp(600), Math.max(1, displayHeight - dp(24))) : current.height;
-        setWindowBounds(first ? displayWidth - width - dp(12) : current.x,
+        setWindowBounds(first ? (teaching ? (displayWidth - width) / 2 : displayWidth - width - dp(12)) : current.x,
             first ? (displayHeight - height) / 2 : current.y, width, height);
     }
 

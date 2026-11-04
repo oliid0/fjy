@@ -6,6 +6,7 @@ import {
   prepareRecordingPackage,
   recordingFiles,
   saveRecordingFiles,
+  saveRecordingMedia,
 } from "./recordingExport";
 
 import type { Recording } from "./recording";
@@ -43,6 +44,36 @@ afterEach(() => {
   vi.restoreAllMocks();
   delete (window as Window & { showDirectoryPicker?: unknown })
     .showDirectoryPicker;
+  delete (window as Window & { showSaveFilePicker?: unknown })
+    .showSaveFilePicker;
+});
+
+it("opens a real media destination picker and writes exactly the recording bytes", async () => {
+  const output = {
+    write: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+    abort: vi.fn(),
+  };
+  const picker = vi
+    .fn()
+    .mockResolvedValue({ createWritable: async () => output });
+  Object.assign(window, { showSaveFilePicker: picker });
+  await saveRecordingMedia(recording);
+  expect(picker).toHaveBeenCalledWith({ suggestedName: "Fcboard-test.webm" });
+  expect(
+    new Uint8Array(await blobToArrayBuffer(output.write.mock.calls[0][0])),
+  ).toEqual(new Uint8Array(300000).fill(7));
+  expect(output.close).toHaveBeenCalledTimes(1);
+});
+
+it("routes media saving through the same native package with an explicit media flag", async () => {
+  const item = await prepareRecordingPackage(
+    recording,
+    new AbortController().signal,
+  );
+  await item.save(true);
+  expect(engine.save).toHaveBeenCalledWith({ id: "export", media: true });
+  await item.close();
 });
 
 it("exports the actual media plus timestamped text and summary", async () => {

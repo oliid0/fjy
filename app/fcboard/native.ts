@@ -48,7 +48,11 @@ export const Classroom = registerPlugin<{
     event: "aiStream",
     listener: (event: { id: string; chunk: string }) => void,
   ): Promise<PluginListenerHandle>;
-  openWebResource(options: { url: string; language?: string }): Promise<void>;
+  openWebResource(options: {
+    url: string;
+    language?: string;
+    teaching?: boolean;
+  }): Promise<void>;
   addListener(
     event: "webSelection",
     listener: (event: {

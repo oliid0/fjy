@@ -207,6 +207,9 @@ export const prepareLessonText = (
 ) => {
   const { viewport, obstacles, scale } = context;
   const gap = 8 / scale;
+  // Continue inherited small writing at its original size, but never squeeze
+  // teaching notes into the tiny strips that should start another board page.
+  const minimum = Math.min(context.fontSize, 16 / scale);
   for (let attempt = 0; attempt < 24; attempt++) {
     const layout = layoutBoardText(
       text,
@@ -217,7 +220,7 @@ export const prepareLessonText = (
       preferred,
       gap,
     );
-    if (!layout) {
+    if (!layout || layout.fontSize < minimum) {
       break;
     }
     const ink = handwritingElements(layout.text, {
@@ -267,9 +270,10 @@ export const fitLessonFormula = (
   context: LessonWritingContext,
   preferred: { x: number; y: number },
 ) => {
+  const minimum = Math.min(context.fontSize, 16 / context.scale);
   for (let attempt = 0; attempt < 24; attempt++) {
     const ratio = (context.fontSize / 32) * 0.9 ** attempt;
-    if (context.fontSize * 0.9 ** attempt < 6 / context.scale) {
+    if (context.fontSize * 0.9 ** attempt < minimum) {
       break;
     }
     const dimensions = {

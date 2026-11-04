@@ -53,6 +53,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands, commandObjectIds } from "./commands";
+import { alignmentOffset, resizeAnchor } from "./canvasTransform";
 import { documentSharing } from "./documentSharing";
 import { renderInsertion } from "./insertObjects";
 import { Classroom as NativeClassroom } from "./native";
@@ -108,7 +109,7 @@ import {
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { drawPlot } from "./board";
 import { insertGeneratedImage } from "./imageGeneration";
-import { circledLanguage } from "./languageCircle";
+import { InkRequests } from "./inkRequests";
 import { changeQuestionAnswer } from "./questionAnswer";
 import { resourcePlacement } from "./resourcePlacement";
 import {
@@ -277,7 +278,7 @@ export const FilePreview = ({
   const documentId = useRef(crypto.randomUUID());
   const recognized = useRef(new Set<string>());
   const failedRecognition = useRef(new Set<string>());
-  const assistRequest = useRef<AbortController | null>(null);
+  const assistRequests = useRef(new InkRequests());
   const [ink, setInk] = useState<DocumentInk>({});
   const [draft, setDraft] = useState<InkStroke | null>(null);
   const draftRef = useRef<InkStroke | null>(null);
@@ -860,6 +861,64 @@ export const FilePreview = ({
     [ink, page, ready, loading, error, draft, zoom, scroll],
   );
   useEffect(() => {
+    const transformSelection = (
+      args: Record<string, unknown>,
+      resize: boolean,
+    ) => {
+      const all = inkRef.current[pageRef.current] || [];
+      const ids = commandObjectIds(
+        args.ids === undefined ? selectedInkRef.current : args.ids,
+        all,
+      );
+      const bounds = all
+        .filter((stroke) => ids.has(stroke.id))
+        .map(documentStrokeBounds);
+      const selection = {
+        left: Math.min(...bounds.map((box) => box.left)),
+        top: Math.min(...bounds.map((box) => box.top)),
+        right: Math.max(...bounds.map((box) => box.right)),
+        bottom: Math.max(...bounds.map((box) => box.bottom)),
+      };
+      const anchor = resize ? resizeAnchor(args, selection) : undefined;
+      const offset = resize
+        ? { dx: 0, dy: 0 }
+        : alignmentOffset(
+            args,
+            selection,
+            visibleDocumentArea(stage.current, size, zoomRef.current, scroll)
+              .viewport,
+          );
+      if (
+        resize &&
+        all.some(
+          (stroke) => ids.has(stroke.id) && stroke.insertion?.kind === "table",
+        )
+      ) {
+        throw new Error(t("fcboard.table_zoom_instructions"));
+      }
+      const next = all.map((stroke) =>
+        ids.has(stroke.id)
+          ? anchor
+            ? scaleDocumentStroke(stroke, anchor, args.scale as number)
+            : moveDocumentStroke(stroke, offset.dx, offset.dy)
+          : stroke,
+      );
+      commitInk({ ...inkRef.current, [pageRef.current]: next });
+      setLasso([]);
+      const actual = next
+        .filter((stroke) => ids.has(stroke.id))
+        .map(documentStrokeBounds);
+      return {
+        ids: [...ids],
+        ...(resize ? { scale: args.scale } : offset),
+        bounds: [
+          Math.min(...actual.map((box) => box.left)),
+          Math.min(...actual.map((box) => box.top)),
+          Math.max(...actual.map((box) => box.right)),
+          Math.max(...actual.map((box) => box.bottom)),
+        ],
+      };
+    };
     const registrations = [
       classroomCommands.register(
         "document.next",
@@ -1418,6 +1477,12 @@ export const FilePreview = ({
           ],
         });
       }),
+      classroomCommands.register("document.resize", "@internal", (args) =>
+        transformSelection(args, true),
+      ),
+      classroomCommands.register("document.align", "@internal", (args) =>
+        transformSelection(args, false),
+      ),
       classroomCommands.register("document.move", "@internal", (args) => {
         if (
           typeof args.dx !== "number" ||
@@ -2037,15 +2102,21 @@ export const FilePreview = ({
       Object.values(inkRef.current)
         .flat()
         .forEach((stroke) => recognized.current.add(stroke.id));
-      assistRequest.current?.abort();
+      assistRequests.current.cancelAll();
     }
   }, [penConfiguration]);
+  useEffect(() => {
+    const requests = assistRequests.current;
+    return () => requests.cancelAll();
+  }, [file, page]);
   const drawing = !!draft;
   useEffect(() => {
+    const requests = assistRequests.current;
     if (!ready || loading || !inkOn || erase || selecting || drawing) {
       return;
     }
     const currentInk = inkRef.current[page] || [];
+    requests.prune(currentInk.map((stroke) => stroke.id));
     const targets = insertionWritingTargets(documentWritingParts(currentInk));
     const targetFor = (stroke: InkStroke) =>
       !stroke.fcInk?.assist || stroke.fcInk.assist === "text"
@@ -2069,7 +2140,9 @@ export const FilePreview = ({
       recognized.current.add(stroke.id);
       return false;
     });
-    const last = pending.at(-1);
+    const last = pending
+      .filter((stroke) => requests.available(stroke.id))
+      .at(-1);
     const target = last ? targetFor(last) : undefined;
     const assistMode = target ? "text" : last?.fcInk?.assist;
     let source = pending.filter((stroke) =>
@@ -2077,6 +2150,14 @@ export const FilePreview = ({
         ? targetFor(stroke)?.key === target.key
         : !targetFor(stroke) && stroke.fcInk?.assist === assistMode,
     );
+    if (assistMode) {
+      source = requests.source(
+        source,
+        assistMode,
+        (stroke) => stroke.id,
+        (items) => items.map((stroke) => stroke.points),
+      );
+    }
     if (!target && assistMode === "function") {
       const included = latestFunctionInk(source.map((stroke) => stroke.points));
       source = source.filter((_, index) => included.has(index));
@@ -2094,8 +2175,13 @@ export const FilePreview = ({
       return;
     }
     const request = new AbortController();
-    assistRequest.current = request;
     const sourceIds = source.map((stroke) => stroke.id);
+    requests.reserve(
+      request,
+      sourceIds,
+      source.map((stroke) => stroke.points),
+      assistMode,
+    );
     const current = () =>
       !request.signal.aborted &&
       pageRef.current === page &&
@@ -2113,6 +2199,7 @@ export const FilePreview = ({
     const since = Date.now();
     const timer = setTimeout(
       () => {
+        requests.start(request);
         void (async () => {
           const boxes = source.map(documentStrokeBounds);
           const left = Math.min(...boxes.map((box) => box.left));
@@ -2153,41 +2240,6 @@ export const FilePreview = ({
                 ],
               });
               sourceIds.forEach((id) => recognized.current.add(id));
-              return;
-            }
-          }
-          if (
-            assistMode === "language" &&
-            classroomCommands.has("language.card")
-          ) {
-            const circled = circledLanguage(
-              source.map((stroke) => stroke.points),
-              (inkRef.current[page] || [])
-                .filter(
-                  (stroke) =>
-                    !sourceIds.includes(stroke.id) &&
-                    !stroke.widget &&
-                    !stroke.resource,
-                )
-                .map((stroke) => ({
-                  id: stroke.id,
-                  bounds: documentStrokeBounds(stroke),
-                })),
-            );
-            if (circled) {
-              sourceIds.forEach((id) => recognized.current.add(id));
-              await classroomCommands.execute({
-                name: "language.card",
-                args: { ...circled, signal: request.signal },
-              });
-              if (current()) {
-                commitInk({
-                  ...inkRef.current,
-                  [page]: (inkRef.current[page] || []).filter(
-                    (stroke) => !sourceIds.includes(stroke.id),
-                  ),
-                });
-              }
               return;
             }
           }
@@ -2354,16 +2406,20 @@ export const FilePreview = ({
             });
           }
           sourceIds.forEach((id) => recognized.current.add(id));
-        })().catch(() => {
-          if (!request.signal.aborted) {
-            failedRecognition.current.add(requestKey);
-            if (failedRecognition.current.size > 100) {
-              failedRecognition.current.delete(
-                failedRecognition.current.values().next().value!,
-              );
+        })()
+          .catch(() => {
+            if (!request.signal.aborted) {
+              failedRecognition.current.add(requestKey);
+              if (failedRecognition.current.size > 100) {
+                failedRecognition.current.delete(
+                  failedRecognition.current.values().next().value!,
+                );
+              }
             }
-          }
-        });
+          })
+          .finally(() =>
+            requests.finish(request, failedRecognition.current.has(requestKey)),
+          );
       },
       assistMode === "function" || assistMode === "calculation"
         ? 350
@@ -2375,7 +2431,7 @@ export const FilePreview = ({
     );
     return () => {
       clearTimeout(timer);
-      request.abort();
+      requests.cancelPending();
     };
   }, [
     ink,
@@ -2392,10 +2448,10 @@ export const FilePreview = ({
     commitInk,
     langCode,
   ]);
-  useEffect(
-    () => classroomCommands.onInvalidate(() => assistRequest.current?.abort()),
-    [],
-  );
+  useEffect(() => {
+    const requests = assistRequests.current;
+    return classroomCommands.onInvalidate(() => requests.cancelAll());
+  }, []);
 
   const point = (
     event: React.PointerEvent<SVGSVGElement>,
@@ -2421,7 +2477,7 @@ export const FilePreview = ({
     }
   };
   const cancelInkGesture = useCallback(() => {
-    assistRequest.current?.abort();
+    assistRequests.current.cancelPending();
     restoreTableWriting();
     const owner = activePointer.current;
     activePointer.current = null;
@@ -2889,7 +2945,7 @@ export const FilePreview = ({
               if (activePointer.current) {
                 cancelInkGesture();
               }
-              assistRequest.current?.abort();
+              assistRequests.current.cancelPending();
               if (classroomCommands.has("lesson.pause")) {
                 void classroomCommands.execute({ name: "lesson.pause" });
               }

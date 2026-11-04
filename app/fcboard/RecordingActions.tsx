@@ -13,6 +13,7 @@ import {
   prepareRecordingPackage,
   recordingFiles,
   saveRecordingFiles,
+  saveRecordingMedia,
 } from "./recordingExport";
 
 import type { Recording } from "./recording";
@@ -61,7 +62,7 @@ export const RecordingActions = ({ recording }: { recording: Recording }) => {
     const timer = setTimeout(closeShare, 600000);
     return () => clearTimeout(timer);
   }, [urls]);
-  const run = async (share: boolean) => {
+  const run = async (action: "save" | "share" | "media") => {
     if (pending.current) {
       return;
     }
@@ -71,7 +72,9 @@ export const RecordingActions = ({ recording }: { recording: Recording }) => {
     setError("");
     try {
       if (!native) {
-        await saveRecordingFiles(recording);
+        await (action === "media"
+          ? saveRecordingMedia(recording)
+          : saveRecordingFiles(recording));
         return;
       }
       const resource =
@@ -82,12 +85,12 @@ export const RecordingActions = ({ recording }: { recording: Recording }) => {
         controller.signal.throwIfAborted();
       }
       prepared.current = resource;
-      if (share) {
+      if (action === "share") {
         const result = await prepared.current.share();
         controller.signal.throwIfAborted();
         setUrls(result.urls);
       } else {
-        await prepared.current.save();
+        await prepared.current.save(action === "media");
       }
     } catch (failure) {
       if (
@@ -107,11 +110,14 @@ export const RecordingActions = ({ recording }: { recording: Recording }) => {
   return (
     <>
       <div className="fc-actions">
-        <Button disabled={busy || !ready} onClick={() => void run(false)}>
+        <Button disabled={busy || !ready} onClick={() => void run("save")}>
           {t("buttons.saveAs")}
         </Button>
+        <Button disabled={busy || !ready} onClick={() => void run("media")}>
+          {t("fcboard.download_recording")}
+        </Button>
         {native && (
-          <Button disabled={busy || !ready} onClick={() => void run(true)}>
+          <Button disabled={busy || !ready} onClick={() => void run("share")}>
             {t("fcboard.qr_share")}
           </Button>
         )}

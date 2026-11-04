@@ -108,6 +108,7 @@ describe("component commands", () => {
         name: "canvas.text",
         args: {
           text: "牛顿定律",
+          role: "title",
           presentation: "handwritten",
           placement: "center",
           sourceIds: [],
@@ -126,11 +127,25 @@ describe("component commands", () => {
       "打开课件牛顿定律，然后翻到第二页并开始录制",
       "生成一个教学动画然后讲解",
       "板书标题牛顿定律，接着插入一个表格",
+      "请手写标题牛顿第二定律，然后讲课并生成加速动画",
       "插入二十一行四列表格",
       "插入十一二行四列表格",
     ]) {
       expect(directCommand(text)).toBeNull();
     }
+  });
+
+  it("routes a dictated handwritten title into centered, readable title layout", () => {
+    expect(directCommand("请手写标题牛顿第二定律")).toEqual({
+      name: "canvas.text",
+      args: {
+        text: "牛顿第二定律",
+        role: "title",
+        presentation: "handwritten",
+        placement: "center",
+        sourceIds: [],
+      },
+    });
   });
 
   it("adopts only contiguous target transitions owned by the exact active request", () => {

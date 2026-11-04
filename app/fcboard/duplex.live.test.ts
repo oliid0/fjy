@@ -14,6 +14,7 @@ const host = vi.hoisted(() => ({
     addListener: vi.fn(),
     start: vi.fn(),
     send: vi.fn(),
+    pushAudio: vi.fn(),
     stop: vi.fn(),
   },
   capture: vi.fn(),
@@ -56,6 +57,7 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
     let closing = false;
     let cancelled = false;
     let pump = Promise.resolve();
+    let audioQueue = Promise.resolve();
     let audioBytes = 0;
     let spoken = "";
     let result: { expression: string; answer: string } | undefined;
@@ -69,7 +71,12 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
     });
     void complete.catch(() => {});
     const progress = () => {
-      if (result?.answer === "2" && audioBytes > 0 && /2|二|两/.test(spoken)) {
+      if (
+        result?.answer === "2" &&
+        audioBytes > 0 &&
+        /2|二|两/.test(spoken) &&
+        events["response.done"] > 0
+      ) {
         pass();
       }
     };
@@ -92,6 +99,7 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
             const event = JSON.parse(message.toString());
             events[event.type] = (events[event.type] || 0) + 1;
             receive({ session: clientSession, event });
+            progress();
             if (event.type === "session.created") {
               resolve({ session: clientSession });
             }
@@ -114,7 +122,31 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
         }),
     );
     host.engine.send.mockImplementation(async ({ event }) => {
+      if (event.type === "input_audio_buffer.commit") {
+        await audioQueue;
+      }
       socket!.send(JSON.stringify(event));
+    });
+    // Adapt only the Android bridge host: preserve the actual 100 ms transfers
+    // and native scheduler's 20 ms / 640-byte official WebSocket frames.
+    host.engine.pushAudio.mockImplementation(async ({ pcm }) => {
+      const bytes = Buffer.from(pcm, "base64");
+      audioQueue = audioQueue.then(async () => {
+        for (
+          let offset = 0;
+          offset < bytes.length && !cancelled;
+          offset += 640
+        ) {
+          socket!.send(
+            JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: bytes.subarray(offset, offset + 640).toString("base64"),
+            }),
+          );
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+      });
+      void audioQueue.catch((error) => fail(error));
     });
     host.engine.stop.mockImplementation(async () => {
       closing = true;
@@ -131,9 +163,9 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
         while (!cancelled) {
           const bytes =
             offset < pcm.length
-              ? pcm.subarray(offset, Math.min(offset + 640, pcm.length))
-              : Buffer.alloc(640);
-          offset += 640;
+              ? pcm.subarray(offset, Math.min(offset + 3200, pcm.length))
+              : Buffer.alloc(3200);
+          offset += 3200;
           const samples = new Float32Array(Math.floor(bytes.length / 2));
           for (let i = 0; i < samples.length; i++) {
             samples[i] = bytes.readInt16LE(i * 2) / 32768;
@@ -143,7 +175,7 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
             pcm: encodePCM(samples),
             sampleRate: 16000,
           });
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       })();
       void pump.catch((error) => fail(error));
@@ -152,6 +184,7 @@ it.runIf(process.env.FCBOARD_LIVE === "1" && !!process.env.voice_key)(
         cancel: async () => {
           cancelled = true;
           await pump.catch(() => {});
+          await audioQueue.catch(() => {});
         },
       };
     });

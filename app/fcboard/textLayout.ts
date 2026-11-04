@@ -10,6 +10,7 @@ import type { ContentRect } from "./placement";
 
 export type TextPlacement = {
   mode?: "inline" | "below" | "column" | "replace" | "center";
+  role?: "title";
   bounds?: ContentRect;
   sourceLines?: number;
 };
@@ -20,8 +21,11 @@ export const answerFontSize = (
   size: number,
   scale: number,
   mode?: TextPlacement["mode"],
+  role?: TextPlacement["role"],
 ) =>
-  mode === "inline" || mode === "column" || mode === "replace"
+  role === "title"
+    ? 36 / scale
+    : mode === "inline" || mode === "column" || mode === "replace"
     ? size
     : Math.min(size * 0.5, 28 / scale);
 

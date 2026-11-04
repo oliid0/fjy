@@ -306,7 +306,7 @@ export const directCommand = (text: string): Command | null => {
   }
   const request = text.trim();
   const title = request.match(
-    /^(?:请|帮我)?(?:用(?:画笔|钢笔))?(?:板书|写下?|写一个)(?:一个)?(?:标题|题目)\s*[:：]?\s*(.+)$/,
+    /^(?:请|帮我)?(?:用(?:画笔|钢笔))?(?:手写|板书|写下?|写一个)(?:一个)?(?:标题|题目)\s*[:：]?\s*(.+)$/,
   );
   if (
     title?.[1]?.trim() &&
@@ -318,6 +318,7 @@ export const directCommand = (text: string): Command | null => {
       name: "canvas.text",
       args: {
         text: title[1].trim(),
+        role: "title",
         presentation: "handwritten",
         placement: "center",
         sourceIds: [],

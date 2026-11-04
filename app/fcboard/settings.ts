@@ -59,6 +59,9 @@ export const loadSettings = (): Settings => {
     return {
       ...defaults,
       speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
+      assistantVoice: Capacitor.isNativePlatform()
+        ? "duplex"
+        : defaults.assistantVoice,
       ...saved,
       model: saved.model?.trim() || defaults.model,
       imageModel: saved.imageModel?.trim() || defaults.imageModel,
@@ -68,6 +71,9 @@ export const loadSettings = (): Settings => {
     return {
       ...defaults,
       speech: Capacitor.isNativePlatform() ? "cloud" : defaults.speech,
+      assistantVoice: Capacitor.isNativePlatform()
+        ? "duplex"
+        : defaults.assistantVoice,
     };
   }
 };

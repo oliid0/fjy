@@ -334,6 +334,7 @@ export const insertText = (
     sourceSize * (inkSource ? 0.9 : 1),
     state.zoom.value,
     placement.mode,
+    placement.role,
   );
   const fontFamily =
     presentation === "handwritten"

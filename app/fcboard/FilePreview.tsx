@@ -1299,6 +1299,7 @@ export const FilePreview = ({
             existing
               ? "replace"
               : (args.placement as import("./textLayout").TextPlacement["mode"]),
+            existing ? undefined : (args.role as "title" | undefined),
           ),
           fontFamily,
           viewport,

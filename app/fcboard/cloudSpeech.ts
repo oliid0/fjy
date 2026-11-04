@@ -16,7 +16,7 @@ const engine = registerPlugin<{
   stop(options: {
     session: string;
     discard?: boolean;
-  }): Promise<{ lines?: TranscriptLine[] }>;
+  }): Promise<{ lines?: TranscriptLine[] } | undefined>;
 }>("FcboardCloudSpeech");
 
 export const startCloudSpeech = (
@@ -46,7 +46,7 @@ export const startCloudSpeech = (
         }),
       push: (options) => engine.push(options),
       stop: async (options) => ({
-        lines: (await engine.stop(options)).lines || [],
+        lines: (await engine.stop(options))?.lines || [],
       }),
     },
     onLine,

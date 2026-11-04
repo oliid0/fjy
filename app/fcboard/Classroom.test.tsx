@@ -562,9 +562,17 @@ describe("selection-driven classroom controls", () => {
         expect(clear).toHaveBeenCalledTimes(2);
         act(() => deliver("写一个1+1=2"));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(3000);
+          await vi.advanceTimersByTimeAsync(450);
         });
         expect(handwritingText(scene)).toContain("1+1=2");
+        expect(
+          view.container.querySelector(".fc-voice-caption"),
+        ).toHaveTextContent(t("fcboard.assistant_completed"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2500);
+        });
+        expect(view.container.querySelector(".fc-voice-caption")).toBeNull();
+        expect(view.container.querySelector(".fc-voice-orb")).not.toBeNull();
         expect(scene.every((element) => element.type === "freedraw")).toBe(
           true,
         );

@@ -47,7 +47,7 @@ public class RecordingExportPlugin extends Plugin {
             try {
                 if (saving) throw new Exception("A recording is being saved");
                 clear();
-                recording = new RecordingPackage(getContext().getCacheDir(), call.getLong("size", 0L), call.getString("mime", ""), call.getString("transcript"), call.getString("summary"));
+                recording = new RecordingPackage(getContext().getCacheDir(), call.getInt("size", 0), call.getString("mime", ""), call.getString("transcript"), call.getString("summary"));
                 call.resolve(new JSObject().put("id", recording.id));
             } catch (Exception error) { call.reject(error.getMessage(), error); }
         });
@@ -57,7 +57,7 @@ public class RecordingExportPlugin extends Plugin {
             try {
                 String data = call.getString("data", "");
                 if (data.length() > 350000) throw new Exception("Recording chunk is too large");
-                current(call).append(call.getLong("offset", -1L), Base64.decode(data, Base64.DEFAULT));
+                current(call).append(call.getInt("offset", -1), Base64.decode(data, Base64.DEFAULT));
                 call.resolve();
             } catch (Exception error) { call.reject(error.getMessage(), error); }
         });

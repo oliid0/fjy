@@ -40,7 +40,11 @@ it("uses cloud by default on Android and keeps the speech credential separate fr
     key: "speech-only",
     resource: "volc.seedasr.sauc.duration",
   });
-  await transport.stop({ session: "cloud", discard: true });
+  // Older APKs resolve cancellation without a value. Restart must still work.
+  mocks.stop.mockResolvedValueOnce(undefined);
+  await expect(
+    transport.stop({ session: "cloud", discard: true }),
+  ).resolves.toEqual({ lines: [] });
   expect(mocks.stop).toHaveBeenCalledWith({ session: "cloud", discard: true });
   expect(JSON.parse(localStorage.getItem("fcboard-settings")!).speechKey).toBe(
     "",

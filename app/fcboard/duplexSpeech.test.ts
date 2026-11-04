@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     addListener: vi.fn(),
     start: vi.fn(),
     send: vi.fn(),
+    pushAudio: vi.fn(),
     stop: vi.fn(),
   },
   player: { enqueue: vi.fn(), interrupt: vi.fn(), close: vi.fn() },
@@ -57,6 +58,7 @@ beforeEach(() => {
   mocks.player.enqueue.mockResolvedValue(undefined);
   mocks.player.close.mockResolvedValue(undefined);
   mocks.engine.send.mockResolvedValue(undefined);
+  mocks.engine.pushAudio.mockResolvedValue(undefined);
   mocks.engine.stop.mockResolvedValue(undefined);
   mocks.engine.addListener.mockImplementation(async (_name, callback) => {
     receive = callback;
@@ -73,7 +75,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-it("uses the documented duplex configuration and 20 ms capture, with the speech key only", async () => {
+it("uses the documented duplex configuration and batches bridge transfers for native 20 ms pacing", async () => {
   const handle = await startDuplexSpeech(callbacks());
   expect(mocks.engine.start).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -101,13 +103,14 @@ it("uses the documented duplex configuration and 20 ms capture, with the speech 
     true,
     undefined,
     undefined,
-    { blockDuration: 0.02 },
+    { blockDuration: 0.1 },
   );
   const transport = vi.mocked(startPCMSpeech).mock.calls[0][0];
   await transport.push({ session, pcm: "AAAA", sampleRate: 16000 });
-  expect(mocks.engine.send).toHaveBeenLastCalledWith({
+  expect(mocks.engine.pushAudio).toHaveBeenLastCalledWith({
     session,
-    event: { type: "input_audio_buffer.append", audio: "AAAA" },
+    pcm: "AAAA",
+    sampleRate: 16000,
   });
   expect(handle.stream).toBe(capture.stream);
   await handle.cancel();

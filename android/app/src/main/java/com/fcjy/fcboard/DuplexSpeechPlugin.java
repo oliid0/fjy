@@ -10,6 +10,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import android.util.Base64;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -22,6 +24,7 @@ import org.json.JSONObject;
 @CapacitorPlugin(name = "FcboardDuplexSpeech")
 public class DuplexSpeechPlugin extends Plugin {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ScheduledThreadPoolExecutor audio = new ScheduledThreadPoolExecutor(1);
     private final OkHttpClient client = new OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(0, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS).pingInterval(20, TimeUnit.SECONDS).build();
@@ -31,6 +34,7 @@ public class DuplexSpeechPlugin extends Plugin {
         final CountDownLatch ready = new CountDownLatch(1);
         volatile boolean closed;
         volatile String error;
+        long nextAudioAt;
         WebSocket socket;
         Session(String id) { this.id = id; }
     }
@@ -102,7 +106,48 @@ public class DuplexSpeechPlugin extends Plugin {
                 if (session.error != null) throw new IOException(session.error);
                 JSObject event = call.getObject("event");
                 if (event == null || event.toString().length() > 1024 * 1024) throw new IOException("无效的实时语音事件");
-                if (session.socket.queueSize() > 320000 || !session.socket.send(event.toString())) throw new IOException("实时语音网络发送过慢");
+                if ("input_audio_buffer.commit".equals(event.optString("type"))) {
+                    // Commit follows every already accepted microphone frame.
+                    audio.schedule(() -> {
+                        try { send(session, event); call.resolve(); }
+                        catch (Exception error) { call.reject(error.getMessage()); }
+                    }, Math.max(0, session.nextAudioAt - System.nanoTime()), TimeUnit.NANOSECONDS);
+                } else {
+                    send(session, event); call.resolve();
+                }
+            } catch (Exception error) { call.reject(error.getMessage()); }
+        });
+    }
+    private void send(Session session, JSONObject event) throws IOException {
+        if (session != active || session.closed || session.error != null) throw new IOException("实时语音会话已结束");
+        if (session.socket.queueSize() > 320000 || !session.socket.send(event.toString())) throw new IOException("实时语音网络发送过慢");
+    }
+    /** One 100 ms bridge transfer, then the documented 640-byte frames paced at 20 ms.
+     * Do not make 50 sequential UI/bridge round trips per second on a teaching display. */
+    @PluginMethod public void pushAudio(PluginCall call) {
+        worker.execute(() -> {
+            try {
+                Session session = active;
+                if (session == null || session.closed || !session.id.equals(call.getString("session"))) throw new IOException("实时语音会话已结束");
+                String encoded = call.getString("pcm", "");
+                if (call.getInt("sampleRate", 0) != 16000 || encoded.length() > 8600) throw new IOException("实时语音需要16 kHz PCM");
+                byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
+                if (bytes.length == 0 || bytes.length > 6400 || bytes.length % 2 != 0) throw new IOException("无效的实时音频片段");
+                long now = System.nanoTime();
+                if (session.nextAudioAt - now > TimeUnit.SECONDS.toNanos(2)) throw new IOException("实时音频发送积压，请检查网络后重新开始");
+                for (int offset = 0; offset < bytes.length; offset += 640) {
+                    byte[] frame = java.util.Arrays.copyOfRange(bytes, offset, Math.min(bytes.length, offset + 640));
+                    JSONObject event = new JSObject().put("type", "input_audio_buffer.append")
+                        .put("audio", Base64.encodeToString(frame, Base64.NO_WRAP));
+                    long at = Math.max(now, session.nextAudioAt);
+                    session.nextAudioAt = at + TimeUnit.MILLISECONDS.toNanos(20);
+                    audio.schedule(() -> {
+                        if (session == active && !session.closed && session.error == null) {
+                            try { send(session, event); }
+                            catch (Exception error) { fail(session, error.getMessage()); }
+                        }
+                    }, Math.max(0, at - System.nanoTime()), TimeUnit.NANOSECONDS);
+                }
                 call.resolve();
             } catch (Exception error) { call.reject(error.getMessage()); }
         });
@@ -125,6 +170,7 @@ public class DuplexSpeechPlugin extends Plugin {
     }
     @Override protected void handleOnDestroy() {
         if (active != null) release(active);
+        audio.shutdownNow();
         worker.shutdownNow(); client.dispatcher().executorService().shutdown(); client.connectionPool().evictAll();
     }
 }

@@ -9,7 +9,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { registerCanvasCommands } from "./canvasCommands";
 import { classroomCommands } from "./commands";
-import { drawPlot, selectedPlot } from "./board";
+import { contentViewport, drawPlot, selectedPlot } from "./board";
 import { defaultPlot } from "./math";
 import { shapeInk } from "./documents";
 
@@ -17,6 +17,54 @@ import { sceneAPI } from "./test/scene";
 import { interactiveResource } from "./test/interactiveResource";
 
 import type { InkStroke } from "./documents";
+
+it.each([0.5, 0.634303, 1, 2])(
+  "centers a complete CJK title at 36 screen pixels on an empty board at zoom %s",
+  async (zoom) => {
+    const api = sceneAPI();
+    api.updateScene({ elements: [] });
+    const original = api.getAppState();
+    api.getAppState = () => ({
+      ...original,
+      zoom: { value: getNormalizedZoom(zoom) },
+      scrollX: 160,
+      scrollY: 49,
+      currentItemFontSize: 20,
+    });
+    const stop = registerCanvasCommands(api);
+    try {
+      await classroomCommands.execute({
+        name: "canvas.text",
+        args: {
+          text: "牛顿第二定律",
+          role: "title",
+          presentation: "handwritten",
+          placement: "center",
+          sourceIds: [],
+        },
+      });
+      const elements = api.getSceneElements();
+      expect(elements).toHaveLength(1);
+      const title = elements[0];
+      expect(title.type).toBe("text");
+      if (title.type !== "text") {
+        throw new Error("Expected CJK handwriting font text");
+      }
+      expect(title.originalText).toBe("牛顿第二定律");
+      expect(title.fontSize * zoom).toBeCloseTo(36);
+      const [left, top, right, bottom] = getCommonBounds(elements);
+      const viewport = contentViewport(api);
+      expect((left + right) / 2).toBeCloseTo(
+        (viewport.left + viewport.right) / 2,
+      );
+      expect((top + bottom) / 2).toBeCloseTo(
+        (viewport.top + viewport.bottom) / 2,
+      );
+    } finally {
+      stop();
+    }
+  },
+);
 
 it.each([0.5, 1, 2])(
   "keeps a dictated CJK question inside its physical writing frame at zoom %s",

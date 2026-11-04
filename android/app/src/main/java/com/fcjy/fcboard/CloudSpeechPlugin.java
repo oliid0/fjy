@@ -141,7 +141,7 @@ public class CloudSpeechPlugin extends Plugin {
             if (session == null || !session.id.equals(call.getString("session"))) { call.reject("云端语音任务已结束"); return; }
             try {
                 session.stopping = true;
-                if (call.getBoolean("discard", false)) { call.resolve(); return; }
+                if (call.getBoolean("discard", false)) { call.resolve(new JSObject().put("lines", new JSArray())); return; }
                 if (session.error != null) { throw new IOException(session.error); }
                 if (!session.socket.send(ByteString.of(DoubaoSpeechProtocol.frame(2, -(++session.sequence), new byte[0])))
                         || !session.ended.await(5, TimeUnit.SECONDS)) { throw new IOException("云端文稿收尾超时"); }

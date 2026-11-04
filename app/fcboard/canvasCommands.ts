@@ -573,7 +573,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.text",
-      "插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区",
+      '插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区。板书标题用 {"text":"完整标题","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}，标题按36屏幕像素排版，正文仍按邻近笔迹排版。',
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -590,6 +590,9 @@ export const registerCanvasCommands = (
           !["match", "handwritten", "text"].includes(String(args.presentation))
         ) {
           throw new Error(t("fcboard.unknown_answer_style"));
+        }
+        if (args.role !== undefined && args.role !== "title") {
+          throw new Error(t("fcboard.invalid_style_parameters"));
         }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });
@@ -648,6 +651,7 @@ export const registerCanvasCommands = (
             args.placement === "center" ? undefined : source,
             args.presentation as "match" | "handwritten" | "text" | undefined,
             {
+              role: args.role as "title" | undefined,
               mode:
                 args.placement === "center"
                   ? "center"
@@ -729,7 +733,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.animate",
-      "逐步板书，args.commands 使用 write_text/draw_path/draw_arrow 等，支持id、x,y,width,height,text,points,color,duration。返回 lessonId 与真实对象；更正已写标题须从 canvas.inspect 读取 lessonId 和 tutorId，传 args.lessonId 并复用 command.id=tutorId，原位置/字号/颜色会保留。新标题省略 lessonId。",
+      '逐步板书，args.commands 是扁平命令数组，例如 {"commands":[{"type":"write_text","id":"note","text":"板书内容","x":0,"y":0,"duration":0.8}]}。内部命令使用 type，不使用 name/args 嵌套。type支持 write_text/draw_path/draw_arrow 等，支持id、x,y,width,height,text,points,color,duration。返回 lessonId 与真实对象；更正已写内容须从 canvas.inspect 读取 lessonId 和 tutorId，传 args.lessonId 并复用 command.id=tutorId，原位置/字号/颜色会保留。独立标题用canvas.text的role=title。',
       async (args) => {
         const signal =
           args.signal instanceof AbortSignal ? args.signal : undefined;

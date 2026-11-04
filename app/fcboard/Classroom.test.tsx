@@ -707,6 +707,52 @@ describe("selection-driven classroom controls", () => {
     },
   );
 
+  it("keeps local cube insertion and function plotting out of background AI with no token", async () => {
+    saveSettings(
+      { ...defaults, speech: "local", apiKey: "", model: "" },
+      false,
+    );
+    let deliver!: (text: string) => void;
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(localSpeech, "startLocalSpeech").mockImplementation(
+      async (onLine) => {
+        deliver = (text) => onLine({ time: 0, text });
+        return { stop: vi.fn().mockResolvedValue(undefined), cancel };
+      },
+    );
+    const chat = vi.spyOn(ai, "chat");
+    const view = render(<Classroom api={api} />);
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(classroomCommands.isPublic("agent.start")).toBe(true);
+      act(() => deliver("帮我画个立方体"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      expect(readWidgets(api)).toHaveLength(1);
+      expect(readWidgets(api)[0].kind).toBe("cube");
+      act(() => deliver("画y=a*x+1的函数图像"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+      expect(
+        screen.getByRole("slider", {
+          name: t("fcboard.adjust_key", { key: "a" }),
+        }),
+      ).toBeVisible();
+      expect(scene.some((element) => element.customData?.fcPlot)).toBe(true);
+      expect(chat).not.toHaveBeenCalled();
+      expect(cancel).not.toHaveBeenCalled();
+      expect(classroomCommands.read("agents")).toEqual([]);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it("queues natural speech without interrupting tools and revises the same title from conversation context", async () => {
     vi.spyOn(window, "matchMedia").mockImplementation((media) => ({
       matches: false,

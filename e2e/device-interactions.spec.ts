@@ -162,20 +162,30 @@ for (const width of [390, 1920]) {
         .getByRole("button", { name: `插入${label}`, exact: true })
         .click();
       const current = async () =>
-        page.evaluate(
-          (kind) =>
-            JSON.parse(localStorage.getItem("fcboard") || "[]")
-              .filter(
-                (element: {
-                  isDeleted?: boolean;
-                  customData?: { fcWidget?: { kind: string } };
-                }) =>
-                  !element.isDeleted &&
-                  element.customData?.fcWidget?.kind === kind,
-              )
-              .at(-1)?.customData.fcWidget,
-          kind,
-        );
+        page.evaluate((kind) => {
+          const element = JSON.parse(localStorage.getItem("fcboard") || "[]")
+            .filter(
+              (element: {
+                isDeleted?: boolean;
+                customData?: { fcWidget?: { kind: string } };
+              }) =>
+                !element.isDeleted &&
+                element.customData?.fcWidget?.kind === kind,
+            )
+            .at(-1);
+          if (!element) {
+            return undefined;
+          }
+          const widget = element.customData.fcWidget;
+          // Generic selection moves element geometry; metadata retains its base origin.
+          return {
+            ...widget,
+            position: {
+              x: widget.position.x + element.x - widget.origin.x,
+              y: widget.position.y + element.y - widget.origin.y,
+            },
+          };
+        }, kind);
       await expect.poll(current).toBeDefined();
       const before = await current();
       const group = page.locator(`[data-gizmo="${before.id}"]`);

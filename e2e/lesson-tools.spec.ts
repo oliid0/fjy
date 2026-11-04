@@ -55,6 +55,17 @@ for (const viewport of [
           expect(context.resources[0].state.outputs[0]).toBe(
             observations === 1 ? "2 m/s²" : "5 m/s²",
           );
+          if (observations === 2) {
+            // Check the actual graphic before the following writing can create a new page.
+            const experiment = page.frameLocator(
+              `iframe[title="${interactiveResource.title}"]`,
+            );
+            await expect(experiment.locator("output")).toHaveText("5 m/s²");
+            await expect(experiment.locator("#block")).toHaveAttribute(
+              "x",
+              "150",
+            );
+          }
           result = { action: "keep" };
         } else {
           expect(request.messages[0].content).toContain(
@@ -175,10 +186,6 @@ for (const viewport of [
     ).toBeVisible();
     await expect(experiment.locator("input")).toHaveValue("4");
     await page.getByRole("button", { name: "继续讲解", exact: true }).click();
-    await expect(experiment.locator("output")).toHaveText("5 m/s²", {
-      timeout: 20000,
-    });
-    await expect(experiment.locator("#block")).toHaveAttribute("x", "150");
     await expect(
       page.getByRole("button", { name: "重播讲解", exact: true }),
     ).toBeVisible({ timeout: 20000 });

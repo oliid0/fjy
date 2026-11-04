@@ -310,6 +310,13 @@ export const directCommand = (text: string): Command | null => {
     return { name: "voice.interrupt" };
   }
   const request = text.trim();
+  if (
+    /^(?:请|帮我)?(?:画|插入|生成|创建)(?:一个|个|一|标准|线条|的|\s)*(?:立方体|正方体)[吧。！!\s]*$/.test(
+      request,
+    )
+  ) {
+    return { name: "tools.insert", args: { kind: "cube" } };
+  }
   const title = request.match(
     /^(?:请|帮我)?(?:用(?:画笔|钢笔))?(?:手写|板书|写下?|写一个)(?:一个)?(?:标题|题目)\s*[:：]?\s*(.+)$/,
   );

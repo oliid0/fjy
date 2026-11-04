@@ -90,6 +90,8 @@ describe("component commands", () => {
     ["继续录制", { name: "record.resume" }],
     ["使用聚光灯", { name: "tools.spotlight", args: { open: true } }],
     ["使用直尺", { name: "tools.insert", args: { kind: "ruler" } }],
+    ["帮我画个立方体", { name: "tools.insert", args: { kind: "cube" } }],
+    ["请插入一个正方体", { name: "tools.insert", args: { kind: "cube" } }],
     ["插入思维图", { name: "insert.object", args: { kind: "mindmap" } }],
     [
       "插入三行四列表格",
@@ -134,6 +136,8 @@ describe("component commands", () => {
       "请手写标题牛顿第二定律，然后讲课并生成加速动画",
       "插入二十一行四列表格",
       "插入十一二行四列表格",
+      "画一个立方体，然后解释它的体积",
+      "用彩虹笔画一个立方体",
     ]) {
       expect(directCommand(text)).toBeNull();
     }

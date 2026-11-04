@@ -6,7 +6,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import fi.iki.elonen.NanoHTTPD;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -63,8 +62,13 @@ public class GeneratedResourceTest {
         NanoHTTPD server = new NanoHTTPD("127.0.0.1", 0) {
             @Override public Response serve(IHTTPSession session) {
                 try {
-                    HashMap<String, String> body = new HashMap<>();
-                    session.parseBody(body); sent.set(new JSONObject(body.get("postData")));
+                    // RFC 8259 JSON is UTF-8 without a charset parameter. NanoHTTPD 2.3.1's
+                    // generic parseBody defaults a present header to US-ASCII instead.
+                    int length = Integer.parseInt(session.getHeaders().get("content-length"));
+                    if (length < 1 || length > 24_000_000) throw new IllegalArgumentException("Invalid request size");
+                    byte[] body = new byte[length];
+                    new java.io.DataInputStream(session.getInputStream()).readFully(body);
+                    sent.set(new JSONObject(new String(body, StandardCharsets.UTF_8)));
                     return newChunkedResponse(Response.Status.OK, "text/event-stream; charset=utf-8", new ByteArrayInputStream(frames.getBytes(StandardCharsets.UTF_8)));
                 } catch (Exception error) {
                     serverError.set(error);
@@ -78,7 +82,8 @@ public class GeneratedResourceTest {
                 until(scenario, "!!document.querySelector('.fc-unified-toolbar')");
                 JSONObject settings = new JSONObject().put("endpoint", "http://127.0.0.1:" + server.getListeningPort() + "/chat")
                     .put("apiKey", "native-test-only").put("model", "native-test-model").put("speech", "system");
-                evaluate(scenario, "window.__fcBeforeReload=true;localStorage.setItem('fcboard-settings'," + JSONObject.quote(settings.toString()) + ");sessionStorage.removeItem('fcboard-keys');localStorage.setItem('fcboard-language','zh-CN');location.reload();true");
+                evaluate(scenario, "window.__fcBeforeReload=true;localStorage.setItem('fcboard-settings'," + JSONObject.quote(settings.toString()) + ");sessionStorage.removeItem('fcboard-keys');localStorage.setItem('fcboard-language','zh-CN');true");
+                scenario.onActivity(activity -> activity.getBridge().getWebView().reload());
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('.fc-unified-toolbar')");
                 evaluate(scenario, "document.querySelector('[data-board-insert]').click();true");
                 until(scenario, "Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='教学资源')");
@@ -90,7 +95,18 @@ public class GeneratedResourceTest {
                 until(scenario, "!!document.querySelector('iframe[title=\"" + title + "\"]') && !document.querySelector('.fc-resource-library')");
                 assertNull(serverError.get()); assertNotNull("The real native bridge must send the request", sent.get());
                 assertEquals("native-test-model", sent.get().getString("model")); assertTrue(sent.get().getBoolean("stream"));
-                JSONObject topic = new JSONObject(sent.get().getJSONArray("messages").getJSONObject(1).getString("content"));
+                Object content = sent.get().getJSONArray("messages").getJSONObject(1).get("content");
+                String prompt = content instanceof String ? (String) content : null;
+                if (content instanceof JSONArray) {
+                    JSONArray parts = (JSONArray) content;
+                    for (int i = 0; i < parts.length(); i++) {
+                        JSONObject part = parts.getJSONObject(i);
+                        if ("text".equals(part.optString("type"))) prompt = part.getString("text");
+                        else if ("image_url".equals(part.optString("type"))) assertTrue(part.getJSONObject("image_url").getString("url").startsWith("data:image/"));
+                    }
+                }
+                assertNotNull("The real request must include its topic text", prompt);
+                JSONObject topic = new JSONObject(prompt);
                 assertEquals("The native bridge must preserve the actual requested topic", "牛顿第一定律演示", topic.getString("topic"));
                 assertEquals("\"allow-scripts\"", evaluate(scenario, "document.querySelector('iframe[title=\"" + title + "\"]').getAttribute('sandbox')"));
                 // Wait for the production runtime, then inspect via its actual scoped MessageChannel.
@@ -108,7 +124,8 @@ public class GeneratedResourceTest {
                     JSONObject changed = requestFrame(scenario, new JSONObject().put("type", "set").put("version", state.getString("version")).put("control", control).put("value", 10));
                     assertEquals("5 m/s²", changed.getJSONArray("outputs").getString(0));
                 }
-                evaluate(scenario, "window.__fcBeforeReload=true;location.reload();true");
+                evaluate(scenario, "window.__fcBeforeReload=true;true");
+                scenario.onActivity(activity -> activity.getBridge().getWebView().reload());
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('iframe[title=\"" + title + "\"]')");
             } finally {
                 evaluate(scenario, "localStorage.removeItem('fcboard-settings');sessionStorage.removeItem('fcboard-keys');true");

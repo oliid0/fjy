@@ -150,7 +150,7 @@ test("new boards preserve previous work and offer the original teaching tools", 
   }
   await expect(
     page.getByRole("button", { name: "打开计时器", exact: true }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await page.getByRole("button", { name: "下一页", exact: true }).click();
   for (const name of ["骰子", "随机抽取", "单摆", "抛体运动"]) {
     await expect(
@@ -186,7 +186,7 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   let imageSent = false;
   let requests = 0;
   let calculationObserved = false;
-  let lessonObserved = false;
+  let observations = 0;
   await page.route(
     "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
     async (route) => {
@@ -196,11 +196,7 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
           "You are the Fcboard teacher observing a live lesson",
         )
       ) {
-        const observation = JSON.parse(String(body.messages.at(-1).content));
-        lessonObserved =
-          observation.remainingSteps[0].commands.some(
-            (command: { text?: string }) => command.text === "x+1=3",
-          ) && observation.state.canvas.target.kind === "whiteboard";
+        observations++;
         await route.fulfill({
           json: {
             choices: [
@@ -328,7 +324,8 @@ test("live teacher writes real math, pauses and completes a quiz on the shared c
   expect(imageSent).toBe(true);
   expect(requests).toBe(2);
   expect(calculationObserved).toBe(true);
-  expect(lessonObserved).toBe(true);
+  // Ordinary writing/math steps need no extra model round trip between steps.
+  expect(observations).toBe(0);
   await page.screenshot({ path: info.outputPath("live-teacher-quiz.png") });
 });
 

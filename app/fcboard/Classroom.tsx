@@ -1205,17 +1205,6 @@ export const Classroom = ({
           return;
         }
         const revision = classroomCommands.revision;
-        if (
-          /^(?:请|帮我)?(?:画|插入|生成|创建)(?:一个|个|一|标准|线条|的|\s)*(?:立方体|正方体)[吧。！!\s]*$/.test(
-            text,
-          )
-        ) {
-          await classroomCommands.execute({
-            name: "tools.insert",
-            args: { kind: "cube" },
-          });
-          return;
-        }
         if (/^(?:请|帮我|麻烦)?(?:总结|小结|概括)/.test(text)) {
           await summarize();
           return;
@@ -1441,10 +1430,12 @@ export const Classroom = ({
     if (
       classroomCommands.isPublic("agent.start") &&
       (backgroundCommands.has(direct?.name || "") ||
-        lesson ||
-        drawing ||
-        resource ||
-        (!direct && /插入|字号|放大.*内容|内容.*放大/.test(text)))
+        (!direct &&
+          !localMathIntent(text) &&
+          (lesson ||
+            drawing ||
+            resource ||
+            /插入|字号|放大.*内容|内容.*放大/.test(text))))
     ) {
       setVoiceCaption(text);
       await executeBoardCommand(

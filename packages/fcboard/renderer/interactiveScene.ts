@@ -75,6 +75,7 @@ import type {
 } from "@fcboard/element/types";
 
 import { renderSnaps } from "../renderer/renderSnaps";
+import { selectedRegion } from "../lasso/region";
 import { roundRect } from "../renderer/roundRect";
 import {
   getScrollBars,
@@ -1702,6 +1703,15 @@ const _renderInteractiveScene = ({
     }
   }
 
+  const operationSelection =
+    app.props.UIOptions.unifiedToolbar &&
+    ["selection", "lasso"].includes(appState.activeTool.type)
+      ? selectedRegion(
+          selectedElements,
+          appState.whiteboardSelection,
+          appState.zoom.value,
+        )
+      : undefined;
   // Paint selected elements
   if (
     !appState.multiElement &&
@@ -1710,7 +1720,7 @@ const _renderInteractiveScene = ({
     // GizmoLayer owns pen-mode controls. A completed lasso still needs the
     // same native operation frame as every other selected object.
     !(
-      !appState.whiteboardSelection &&
+      !operationSelection &&
       selectedElements.length > 0 &&
       selectedElements.every((element) =>
         ["ruler", "compass", "setSquare", "protractor"].includes(
@@ -1725,14 +1735,7 @@ const _renderInteractiveScene = ({
       editorInterface,
     );
 
-    const selection = appState.whiteboardSelection;
-    const region =
-      ["selection", "lasso"].includes(appState.activeTool.type) &&
-      selection?.elementIds.length ===
-        Object.keys(appState.selectedElementIds).length &&
-      selection.elementIds.every((id) => appState.selectedElementIds[id])
-        ? selection.bounds
-        : undefined;
+    const region = operationSelection?.bounds;
     const isSingleLinearElementSelected =
       selectedElements.length === 1 && isLinearElement(selectedElements[0]);
     // render selected linear element points
@@ -1776,7 +1779,8 @@ const _renderInteractiveScene = ({
           if (
             locallySelectedIds.has(element.id) &&
             !isSelectedViaGroup(appState, element) &&
-            !region
+            !region &&
+            !app.props.UIOptions.unifiedToolbar
           ) {
             selectionColors.push(selectionColor);
           }
@@ -1843,12 +1847,16 @@ const _renderInteractiveScene = ({
 
       for (const groupId of getSelectedGroupIds(appState)) {
         // TODO: support multiplayer selected group IDs
-        if (!region) {
+        if (!region && !app.props.UIOptions.unifiedToolbar) {
           addSelectionForGroupId(groupId);
         }
       }
 
-      if (!region && appState.editingGroupId) {
+      if (
+        !region &&
+        !app.props.UIOptions.unifiedToolbar &&
+        appState.editingGroupId
+      ) {
         addSelectionForGroupId(appState.editingGroupId);
       }
 
@@ -1874,7 +1882,11 @@ const _renderInteractiveScene = ({
     context.save();
     context.translate(appState.scrollX, appState.scrollY);
 
-    if (!region && selectedElements.length === 1) {
+    if (
+      !region &&
+      !app.props.UIOptions.unifiedToolbar &&
+      selectedElements.length === 1
+    ) {
       context.fillStyle = "#fff";
       const transformHandles = getTransformHandles(
         selectedElements[0],
@@ -1915,6 +1927,7 @@ const _renderInteractiveScene = ({
       }
     } else if (
       !region &&
+      !app.props.UIOptions.unifiedToolbar &&
       selectedElements.length > 1 &&
       !appState.isRotating &&
       !selectedElements.some((el) => el.locked)

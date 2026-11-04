@@ -298,7 +298,14 @@ it("opens a language card through the selection tool without drawing a language-
     speak,
   );
   const [word] = convertToFcboardElements([
-    { type: "text", text: languageStudy.term, x: 220, y: 150, fontSize: 28 },
+    {
+      type: "text",
+      text: languageStudy.term,
+      x: 220,
+      y: 150,
+      fontSize: 28,
+      customData: { fcInk: { version: 2, pen: "hard", assist: "language" } },
+    },
   ]);
   host.chat.mockResolvedValue(
     JSON.stringify({ ...languageStudy, synonyms: ["a similar expression"] }),
@@ -329,5 +336,36 @@ it("opens a language card through the selection tool without drawing a language-
     host.release();
     stopTranslate();
     stopVoice();
+  }
+});
+
+it("keeps ordinary and mixed object selections as movable objects while language pen mode is active", async () => {
+  vi.useFakeTimers();
+  const host = setup();
+  const [object] = convertToFcboardElements([
+    { type: "rectangle", x: 100, y: 100, width: 120, height: 80 },
+  ]);
+  const view = render(<LanguagePanel api={host.api} />);
+  try {
+    for (const selected of [[object], [host.source, object]]) {
+      Object.assign(host.api.getAppState(), {
+        activeTool: { type: "lasso" },
+        selectedElementIds: Object.fromEntries(
+          selected.map((element) => [element.id, true]),
+        ),
+      });
+      act(() => host.api.updateScene({ elements: selected }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(130);
+      });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(host.chat).not.toHaveBeenCalled();
+      expect(host.api.getAppState().selectedElementIds).toEqual(
+        Object.fromEntries(selected.map((element) => [element.id, true])),
+      );
+    }
+  } finally {
+    view.unmount();
+    host.release();
   }
 });

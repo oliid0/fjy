@@ -1,9 +1,14 @@
 import { pointFrom } from "@fcboard/math";
 import { CaptureUpdateAction } from "@fcboard/element";
 
+import { getCommonBounds } from "@fcboard/element";
+
 import type { FileId } from "@fcboard/element/types";
 
 import { interactiveResource } from "../../../app/fcboard/test/interactiveResource";
+import { registerCanvasCommands } from "../../../app/fcboard/canvasCommands";
+import { classroomCommands } from "../../../app/fcboard/commands";
+import { renderWidget, widgetDefaults } from "../../../app/fcboard/widgets";
 import {
   insertionDefaults,
   renderInsertion,
@@ -25,6 +30,91 @@ import { API } from "./helpers/api";
 import { act, fireEvent, render } from "./test-utils";
 
 const { h } = window;
+
+it("gives an agent-selected cylinder the blue operation frame immediately and resizes and moves it over another object", async () => {
+  const { container } = await render(
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+  );
+  h.state.width = 1600;
+  h.state.height = 900;
+  const api = h.app.api;
+  const stop = registerCanvasCommands(api);
+  try {
+    const target = API.createElement({
+      type: "rectangle",
+      x: 650,
+      y: 350,
+      width: 50,
+      height: 50,
+    });
+    API.updateScene({ elements: [target] });
+    act(() => {
+      h.app.setActiveTool({ type: "freedraw" });
+      renderWidget(api, {
+        id: "agent-cylinder",
+        kind: "cylinder",
+        params: widgetDefaults(),
+        position: { x: 200, y: 180 },
+      });
+    });
+    const parts = h.elements.filter(
+      (element) => element.customData?.fcWidget?.id === "agent-cylinder",
+    );
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.select",
+        args: { ids: parts.map((part) => part.id) },
+      });
+    });
+    expect(h.state.activeTool.type).toBe("lasso");
+    const initial = h.state.whiteboardSelection!;
+    expect(initial.elementIds).toEqual(parts.map((part) => part.id));
+    const canvas = container.querySelector("canvas.interactive")!;
+    regionPointer(
+      canvas,
+      "pointerdown",
+      initial.bounds.right,
+      initial.bounds.bottom,
+    );
+    regionPointer(
+      canvas,
+      "pointermove",
+      initial.bounds.right + 45,
+      initial.bounds.bottom + 45,
+    );
+    regionPointer(
+      canvas,
+      "pointerup",
+      initial.bounds.right + 45,
+      initial.bounds.bottom + 45,
+    );
+    const resized = h.state.whiteboardSelection!.bounds;
+    expect(resized.right - resized.left).toBeGreaterThan(
+      initial.bounds.right - initial.bounds.left,
+    );
+    const center = {
+      x: (resized.left + resized.right) / 2,
+      y: (resized.top + resized.bottom) / 2,
+    };
+    regionPointer(canvas, "pointerdown", center.x, center.y);
+    regionPointer(canvas, "pointermove", 675, 375);
+    regionPointer(canvas, "pointerup", 675, 375);
+    const [left, top, right, bottom] = getCommonBounds(
+      h.elements.filter((element) => initial.elementIds.includes(element.id)),
+    );
+    expect(left).toBeLessThan(675);
+    expect(right).toBeGreaterThan(675);
+    expect(top).toBeLessThan(375);
+    expect(bottom).toBeGreaterThan(375);
+    expect(
+      h.elements.find((element) => element.id === target.id),
+    ).toMatchObject({ x: 650, y: 350, isDeleted: false });
+    expect(h.state.selectedLinearElement).toBeNull();
+    expect(h.state.editingGroupId).toBeNull();
+  } finally {
+    stop();
+  }
+});
 
 it("allows direct interaction with a teaching resource in the selector and gives drawing gestures the canvas", async () => {
   const { container, getByTitle } = await render(
@@ -600,6 +690,7 @@ it("keeps all coalesced circle samples in scene coordinates at a changed zoom an
       offsetLeft: 30,
       offsetTop: 40,
       whiteboardSelection: undefined,
+      selectedElementIds: {},
     });
   });
   regionPointer(canvas, "pointerdown", 230, 200);

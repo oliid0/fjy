@@ -431,7 +431,12 @@ import { isOverScrollBars } from "../scene/scrollbars";
 import { isMaybeMermaidDefinition } from "../mermaid";
 
 import { LassoTrail } from "../lasso";
-import { regionHandleAt, regionPath, resizeRegion } from "../lasso/region";
+import {
+  regionHandleAt,
+  regionPath,
+  resizeRegion,
+  selectedRegion,
+} from "../lasso/region";
 
 import { EraserTrail } from "../eraser";
 import {
@@ -4852,7 +4857,34 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (appState) {
-        this.setState(appState as Pick<AppState, K> | null);
+        this.setState((previous) => {
+          const next = { ...previous, ...appState };
+          if (
+            this.props.UIOptions.unifiedToolbar &&
+            appState.selectedElementIds
+          ) {
+            return {
+              ...appState,
+              whiteboardSelection: isSelectionLikeTool(next.activeTool.type)
+                ? selectedRegion(
+                    (elements || this.scene.getNonDeletedElements()).filter(
+                      (element) =>
+                        !element.isDeleted &&
+                        next.selectedElementIds[element.id],
+                    ),
+                    "whiteboardSelection" in appState
+                      ? appState.whiteboardSelection
+                      : previous.whiteboardSelection,
+                    next.zoom.value,
+                  )
+                : undefined,
+              selectedLinearElement: null,
+              selectedGroupIds: {},
+              editingGroupId: null,
+            } as Pick<AppState, K>;
+          }
+          return appState as Pick<AppState, K>;
+        });
       }
 
       if (elements) {
@@ -5864,6 +5896,18 @@ class App extends React.Component<AppProps, AppState> {
         ...prevState,
         ...commonResets,
         activeTool: nextActiveTool,
+        ...(this.props.UIOptions.unifiedToolbar
+          ? {
+              whiteboardSelection: selectedRegion(
+                this.scene.getSelectedElements(prevState),
+                prevState.whiteboardSelection,
+                prevState.zoom.value,
+              ),
+              selectedLinearElement: null,
+              editingGroupId: null,
+              selectedGroupIds: {},
+            }
+          : {}),
       };
     });
   };
@@ -7306,7 +7350,11 @@ class App extends React.Component<AppProps, AppState> {
 
     if (this.isRegionSelectionTool()) {
       hideHyperlinkToolip();
-      const bounds = this.state.whiteboardSelection?.bounds;
+      const bounds = selectedRegion(
+        this.scene.getSelectedElements(this.state),
+        this.state.whiteboardSelection,
+        this.state.zoom.value,
+      )?.bounds;
       setCursor(
         this.interactiveCanvas,
         bounds &&
@@ -9024,25 +9072,13 @@ class App extends React.Component<AppProps, AppState> {
         // Insertion and API selection do not travel through the lasso. Give
         // those selected objects the same movable operation frame as a lasso
         // selection, instead of treating their first drag as another lasso.
-        selection:
-          this.state.whiteboardSelection ||
-          (this.props.UIOptions.unifiedToolbar &&
-          this.isRegionSelectionTool() &&
-          selectedElements.length &&
-          origin.x >= minX &&
-          origin.x <= maxX &&
-          origin.y >= minY &&
-          origin.y <= maxY
-            ? {
-                bounds: {
-                  left: minX - 12 / this.state.zoom.value,
-                  top: minY - 12 / this.state.zoom.value,
-                  right: maxX + 12 / this.state.zoom.value,
-                  bottom: maxY + 12 / this.state.zoom.value,
-                },
-                elementIds: selectedElements.map((element) => element.id),
-              }
-            : undefined),
+        selection: this.isRegionSelectionTool()
+          ? selectedRegion(
+              selectedElements,
+              this.state.whiteboardSelection,
+              this.state.zoom.value,
+            )
+          : undefined,
         selectedElementIds: this.state.selectedElementIds,
         selectedGroupIds: this.state.selectedGroupIds,
         handle: null,

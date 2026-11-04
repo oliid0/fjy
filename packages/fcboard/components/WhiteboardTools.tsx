@@ -1,6 +1,7 @@
 import React from "react";
 import Popper from "@mui/material/Popper";
 import Paper from "@mui/material/Paper";
+import Dialog from "@mui/material/Dialog";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
@@ -65,25 +66,23 @@ export const WhiteboardTools = ({
     () =>
       app.onPointerDownEmitter.on(() => {
         setOpen(false);
+        setShapesOpen(false);
         setEraserOpen(false);
       }),
     [app],
   );
   React.useEffect(() => {
-    if (
-      state.toolbarHidden ||
-      activeTool.type !== "custom" ||
-      !activeTool.customType?.startsWith("factory-shape:")
-    ) {
-      setOpen(false);
-      setShapesOpen(false);
-    }
+    setOpen(false);
+    setShapesOpen(false);
     if (activeTool.type !== "eraser" || state.toolbarHidden) {
       setEraserOpen(false);
     }
   }, [activeTool.type, activeTool.customType, state.toolbarHidden]);
   React.useEffect(() => {
-    const close = () => setOpen(false);
+    const close = () => {
+      setOpen(false);
+      setShapesOpen(false);
+    };
     window.addEventListener("fcboard:shape-draw", close);
     return () => window.removeEventListener("fcboard:shape-draw", close);
   }, []);
@@ -315,13 +314,14 @@ export const WhiteboardTools = ({
         onClick={(event) => {
           updateGap(event.currentTarget as HTMLElement);
           setInsertAnchor(event.currentTarget as HTMLElement);
+          setShapesOpen(false);
           setOpen(!open);
         }}
       />
-      {open && (
+      {open && !shapesOpen && (
         <ClickAwayListener onClickAway={() => setOpen(false)}>
           <Popper
-            open={open}
+            open
             anchorEl={insertAnchor}
             container={container}
             placement="top"
@@ -338,79 +338,87 @@ export const WhiteboardTools = ({
             }}
           >
             <Paper
-              className={`fc-insert-tools fc-insert-picker${
-                shapesOpen ? " fc-insert-picker-expanded" : ""
-              }`}
+              className="fc-insert-tools fc-insert-picker"
               role="dialog"
               aria-label={t("fcboard.insert_tools")}
             >
-              {!shapesOpen && (
-                <div
-                  className="fc-insert-grid"
-                  onClick={(event) => {
-                    if (
-                      (event.target as Element).closest("[data-close-insert]")
-                    ) {
-                      setOpen(false);
-                    }
-                  }}
-                >
-                  <button
-                    type="button"
-                    aria-expanded={shapesOpen}
-                    onClick={() => {
-                      if (
-                        !shapesOpen &&
-                        hasHostShapes &&
-                        (activeTool.type !== "custom" ||
-                          !activeTool.customType?.startsWith("factory-shape:"))
-                      ) {
-                        app.setActiveTool({
-                          type: "custom",
-                          customType: "factory-shape:0",
-                        });
-                      }
-                      setShapesOpen(!shapesOpen);
-                    }}
-                  >
-                    <FactoryIcon name="shape" />
-                    <span>{t("fcboard.shape")}</span>
-                  </button>
-                  <tunnels.ToolbarInsertTunnel.Out />
-                </div>
-              )}
-              {shapesOpen && (
-                <div className="fc-insert-shapes">
-                  {hasHostShapes ? (
-                    <tunnels.ToolbarShapesTunnel.Out />
-                  ) : (
-                    SHAPES.filter(({ value }) =>
-                      [
-                        "rectangle",
-                        "diamond",
-                        "ellipse",
-                        "arrow",
-                        "line",
-                      ].includes(value),
-                    ).map(({ value, icon }) => (
-                      <ToolButton
-                        key={value}
-                        type="button"
-                        icon={icon}
-                        showAriaLabel
-                        aria-label={t(`toolBar.${value}`)}
-                        data-testid={`toolbar-${value}`}
-                        selected={activeTool.type === value}
-                        onClick={() => app.setActiveTool({ type: value })}
-                      />
-                    ))
-                  )}
-                </div>
-              )}
+              <div
+                className="fc-insert-grid"
+                onClick={(event) => {
+                  if (
+                    (event.target as Element).closest("[data-close-insert]")
+                  ) {
+                    setOpen(false);
+                  }
+                }}
+              >
+                <button type="button" onClick={() => setShapesOpen(true)}>
+                  <FactoryIcon name="shape" />
+                  <span>{t("fcboard.shape")}</span>
+                </button>
+                <tunnels.ToolbarInsertTunnel.Out />
+              </div>
             </Paper>
           </Popper>
         </ClickAwayListener>
       )}
+      <Dialog
+        open={open && shapesOpen}
+        container={container}
+        maxWidth={false}
+        onClose={() => {
+          setOpen(false);
+          setShapesOpen(false);
+        }}
+        aria-label={t("fcboard.insert_tools")}
+        slotProps={{
+          paper: {
+            "aria-label": t("fcboard.insert_tools"),
+            className:
+              "fc-insert-tools fc-insert-picker fc-insert-picker-expanded",
+            sx: { maxWidth: "calc(100% - 24px)" },
+          },
+        }}
+      >
+        <div
+          className="fc-insert-shapes"
+          onClick={(event) => {
+            if (
+              (event.target as Element).closest(
+                '[data-testid^="factory-shape-"]',
+              )
+            ) {
+              setOpen(false);
+              setShapesOpen(false);
+            }
+          }}
+        >
+          {hasHostShapes ? (
+            <tunnels.ToolbarShapesTunnel.Out />
+          ) : (
+            SHAPES.filter(({ value }) =>
+              ["rectangle", "diamond", "ellipse", "arrow", "line"].includes(
+                value,
+              ),
+            ).map(({ value, icon }) => (
+              <ToolButton
+                key={value}
+                type="button"
+                icon={icon}
+                showAriaLabel
+                aria-label={t(`toolBar.${value}`)}
+                data-testid={`toolbar-${value}`}
+                selected={activeTool.type === value}
+                onClick={() => {
+                  app.setActiveTool({ type: value });
+                  setOpen(false);
+                  setShapesOpen(false);
+                }}
+              />
+            ))
+          )}
+        </div>
+      </Dialog>
     </>
   );
 };

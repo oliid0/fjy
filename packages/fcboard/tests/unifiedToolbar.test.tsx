@@ -1,11 +1,35 @@
 import { t } from "@fcboard/fcboard/i18n";
-import { within } from "@testing-library/react";
+import { waitFor, within } from "@testing-library/react";
 
 import { Fcboard, ToolbarExtras } from "../index";
 
 import { render, screen, fireEvent } from "./test-utils";
 
 describe("unified bottom toolbar", () => {
+  it("opens shapes without activating a drawing tool, dismisses outside, and reopens the insertion menu", async () => {
+    const { container } = await render(
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const insert = screen.getByRole("button", { name: t("fcboard.insert") });
+    const original = window.h.state.activeTool.type;
+    fireEvent.click(insert);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
+    expect(window.h.state.activeTool.type).toBe(original);
+    const modal = container.querySelector(".MuiDialog-root")!;
+    expect(modal).not.toBeNull();
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: t("fcboard.insert_tools") }),
+      { key: "Escape" },
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("toolbar-rectangle")).toBeNull(),
+    );
+    fireEvent.click(insert);
+    expect(
+      screen.getByRole("button", { name: t("fcboard.shape") }),
+    ).toBeVisible();
+    expect(screen.queryByTestId("toolbar-rectangle")).toBeNull();
+  });
   it("contains the original tools, menus, zoom, history and host controls in a single container", async () => {
     const { container } = await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }}>
@@ -38,15 +62,19 @@ describe("unified bottom toolbar", () => {
     expect(screen.getByTestId("toolbar-rectangle")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("toolbar-rectangle"));
     expect(window.h.state.activeTool.type).toBe("rectangle");
-    expect(
-      screen.queryByRole("dialog", { name: t("fcboard.insert_tools") }),
-    ).toBeNull();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: t("fcboard.insert_tools") }),
+      ).toBeNull(),
+    );
     expect(toolbar.querySelector(".undo-redo-buttons")).toBeInTheDocument();
-    expect(
-      within(toolbar).getByRole("button", {
-        name: t("fcboard.voice_commands"),
-      }),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(toolbar).getByRole("button", {
+          name: t("fcboard.voice_commands"),
+        }),
+      ).toBeInTheDocument(),
+    );
     expect(container.querySelector(".shapes-section-container")).toBeNull();
     expect(container.querySelector(".FixedSideContainer_side_top")).toBeNull();
     expect(container.querySelector(".layer-ui__wrapper__footer")).toBeNull();

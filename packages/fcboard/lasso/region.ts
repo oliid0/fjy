@@ -1,9 +1,14 @@
 import { DRAGGING_THRESHOLD } from "@fcboard/common";
 import { pointFrom } from "@fcboard/math";
+import { getCommonBounds } from "@fcboard/element";
+
+import type { FcboardElement } from "@fcboard/element/types";
 
 import type { GlobalPoint } from "@fcboard/math";
 
 import { getLassoBounds } from "./utils";
+
+import type { AppState } from "../types";
 
 export type RegionBounds = {
   left: number;
@@ -12,6 +17,36 @@ export type RegionBounds = {
   bottom: number;
 };
 export type RegionHandle = "nw" | "ne" | "sw" | "se" | "move";
+
+/** API insertion and lasso selection use the same operation frame and handles. */
+export const selectedRegion = (
+  elements: readonly FcboardElement[],
+  previous: AppState["whiteboardSelection"],
+  scale: number,
+): AppState["whiteboardSelection"] => {
+  if (!elements.length) {
+    return undefined;
+  }
+  const ids = new Set(elements.map((element) => element.id));
+  if (
+    previous?.elementIds.length === ids.size &&
+    previous.elementIds.every((id) => ids.has(id))
+  ) {
+    return previous;
+  }
+  const [left, top, right, bottom] = getCommonBounds(elements);
+  if (![left, top, right, bottom].every(Number.isFinite)) {
+    return undefined;
+  }
+  const padding = 12 / scale;
+  const bounds = {
+    left: left - padding,
+    top: top - padding,
+    right: right + padding,
+    bottom: bottom + padding,
+  };
+  return { bounds, path: regionPath(bounds), elementIds: [...ids] };
+};
 
 export const hasRegionArea = (
   path: readonly (readonly [number, number, ...number[]])[],

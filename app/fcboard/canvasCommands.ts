@@ -851,11 +851,28 @@ export const registerCanvasCommands = (
     classroomCommands.register(
       "canvas.select",
       "选择已存在的对象，args.ids 为对象id数组",
-      (args) => {
+      async (args) => {
         if (classroomCommands.has("document.select")) {
-          return classroomCommands.execute({ name: "document.select", args });
+          const result = await classroomCommands.execute({
+            name: "document.select",
+            args,
+          });
+          if (
+            Array.isArray(args.ids) &&
+            args.ids.length &&
+            classroomCommands.has("document.tool")
+          ) {
+            await classroomCommands.execute({
+              name: "document.tool",
+              args: { tool: "selection" },
+            });
+          }
+          return result;
         }
         const ids = commandObjectIds(args.ids, api.getSceneElements(), true);
+        if (ids.size) {
+          api.setActiveTool({ type: "lasso" });
+        }
         api.updateScene({
           appState: {
             whiteboardSelection: undefined,

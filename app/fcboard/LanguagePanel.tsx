@@ -243,7 +243,7 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
         return;
       }
       const doc = classroomCommands.read("document") as
-        | { tool?: string; selection?: string[] }
+        | { tool?: string; selection?: string[]; ink: InkStroke[] }
         | undefined;
       if (
         !["selection", "lasso"].includes(doc?.tool || state.activeTool.type)
@@ -253,6 +253,25 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
       const ids = doc
         ? doc.selection || []
         : selectedBoardElements(api).map((element) => element.id);
+      const languageOnly = doc
+        ? ids.length > 0 &&
+          ids.every((id) =>
+            doc.ink.some(
+              (stroke) =>
+                stroke.id === id &&
+                (stroke.fcInk?.assist === "language" || !!stroke.language),
+            ),
+          )
+        : ids.length > 0 &&
+          selectedBoardElements(api).every(
+            (element) =>
+              element.customData?.fcInk?.assist === "language" ||
+              !!element.customData?.fcLanguage,
+          );
+      if (!languageOnly) {
+        previous = "";
+        return;
+      }
       const token = selectionToken(api, ids);
       if (!token) {
         previous = "";

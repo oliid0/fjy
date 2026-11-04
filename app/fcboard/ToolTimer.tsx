@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
 import { classroomCommands } from "./commands";
@@ -14,6 +14,12 @@ export const timerValue = (
 export const ToolTimer = () => {
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
+  const [compact, setCompact] = useState(false);
+  const [interaction, setInteraction] = useState(0);
+  const reveal = useCallback(() => {
+    setCompact(false);
+    setInteraction((value) => value + 1);
+  }, []);
   const [state, setState] = useState({
     duration: 60000,
     elapsed: 0,
@@ -67,67 +73,82 @@ export const ToolTimer = () => {
     const id = window.setInterval(tick, 100);
     return () => clearInterval(id);
   }, [state.started]);
-  const act = (args: Record<string, unknown>) => {
-    const action = args.action ?? "open";
-    if (
-      ![
-        "open",
-        "close",
-        "read",
-        "start",
-        "pause",
-        "reset",
-        "configure",
-      ].includes(String(action)) ||
-      (args.seconds !== undefined &&
-        (typeof args.seconds !== "number" ||
-          !Number.isFinite(args.seconds) ||
-          args.seconds < 1 ||
-          args.seconds > 359999)) ||
-      (args.muted !== undefined && typeof args.muted !== "boolean")
-    ) {
-      throw new Error(t("fcboard.invalid_style_parameters"));
+  // TimerFloatingService.vanish: 5s after start, otherwise 7s; tapping restores controls.
+  useEffect(() => {
+    if (!open || full) {
+      return;
     }
-    const clock = Date.now();
-    const previous = current.current;
-    let next = { ...previous };
-    if (args.seconds !== undefined) {
-      next = {
-        ...next,
-        duration: Number(args.seconds) * 1000,
-        elapsed: 0,
-        started: null,
-      };
-    }
-    if (typeof args.muted === "boolean") {
-      next.muted = args.muted;
-    }
-    if (action === "start" && next.started === null) {
-      next.started = clock;
-      if (next.elapsed >= next.duration) {
-        next.elapsed = 0;
+    const timer = setTimeout(
+      () => setCompact(true),
+      state.started === null ? 7000 : 5000,
+    );
+    return () => clearTimeout(timer);
+  }, [open, full, state.started, interaction]);
+  const act = useCallback(
+    (args: Record<string, unknown>) => {
+      const action = args.action ?? "open";
+      if (
+        ![
+          "open",
+          "close",
+          "read",
+          "start",
+          "pause",
+          "reset",
+          "configure",
+        ].includes(String(action)) ||
+        (args.seconds !== undefined &&
+          (typeof args.seconds !== "number" ||
+            !Number.isFinite(args.seconds) ||
+            args.seconds < 1 ||
+            args.seconds > 359999)) ||
+        (args.muted !== undefined && typeof args.muted !== "boolean")
+      ) {
+        throw new Error(t("fcboard.invalid_style_parameters"));
       }
-    }
-    if (action === "pause") {
-      next.elapsed = Math.min(next.duration, timerValue(next, clock));
-      next.started = null;
-    }
-    if (action === "reset" || action === "close") {
-      next.elapsed = 0;
-      next.started = null;
-    }
-    current.current = next;
-    setState(next);
-    setNow(clock);
-    if (action !== "read") {
-      setOpen(action !== "close");
-    }
-    return {
-      ...next,
-      remaining: Math.max(0, next.duration - timerValue(next, clock)) / 1000,
-      running: next.started !== null,
-    };
-  };
+      const clock = Date.now();
+      const previous = current.current;
+      let next = { ...previous };
+      if (args.seconds !== undefined) {
+        next = {
+          ...next,
+          duration: Number(args.seconds) * 1000,
+          elapsed: 0,
+          started: null,
+        };
+      }
+      if (typeof args.muted === "boolean") {
+        next.muted = args.muted;
+      }
+      if (action === "start" && next.started === null) {
+        next.started = clock;
+        if (next.elapsed >= next.duration) {
+          next.elapsed = 0;
+        }
+      }
+      if (action === "pause") {
+        next.elapsed = Math.min(next.duration, timerValue(next, clock));
+        next.started = null;
+      }
+      if (action === "reset" || action === "close") {
+        next.elapsed = 0;
+        next.started = null;
+      }
+      current.current = next;
+      setState(next);
+      setNow(clock);
+      if (action !== "read") {
+        reveal();
+        setOpen(action !== "close");
+      }
+      return {
+        ...next,
+        remaining: Math.max(0, next.duration - timerValue(next, clock)) / 1000,
+        running: next.started !== null,
+      };
+    },
+    [reveal],
+  );
   useEffect(
     () =>
       classroomCommands.register(
@@ -135,7 +156,7 @@ export const ToolTimer = () => {
         "Built-in countdown. args.action=open|close|read|start|pause|reset|configure; seconds=1..359999, muted=boolean. Continues while other board tools are used.",
         act,
       ),
-    [],
+    [act],
   );
   const seconds = Math.ceil(
     Math.max(0, state.duration - timerValue(state, now)) / 1000,
@@ -154,9 +175,16 @@ export const ToolTimer = () => {
       fullscreen={full}
       onClose={() => act({ action: "close" })}
     >
-      <div className="fc-builtin-body">
+      <div
+        className="fc-builtin-body"
+        data-compact={compact && !full}
+        onPointerDownCapture={reveal}
+        onKeyDownCapture={reveal}
+      >
         <output
           role="timer"
+          tabIndex={compact && !full ? 0 : undefined}
+          onClick={reveal}
           className="fc-timer-digits"
           style={{
             color: seconds < 5 ? "#d32f2f" : undefined,
@@ -165,57 +193,61 @@ export const ToolTimer = () => {
         >
           {text}
         </output>
-        <label>
-          {t("fcboard.timer_seconds")}
-          <input
-            type="number"
-            min={1}
-            max={359999}
-            disabled={state.started !== null}
-            value={state.duration / 1000}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              if (value >= 1 && value <= 359999) {
-                act({ action: "configure", seconds: value });
-              }
-            }}
-          />
-        </label>
-        <div className="fc-builtin-row">
-          <button
-            type="button"
-            onClick={() => {
-              unlockSound();
-              act({ action: state.started === null ? "start" : "pause" });
-            }}
-          >
-            {t(
-              state.started === null
-                ? "fcboard.play_tool"
-                : "fcboard.pause_tool",
-            )}
-          </button>
-          <button type="button" onClick={() => act({ action: "reset" })}>
-            {t("fcboard.reset")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={full}
-            onClick={() => setFull(!full)}
-          >
-            {t("fcboard.fullscreen")}
-          </button>
-          <label>
-            <input
-              type="checkbox"
-              checked={state.muted}
-              onChange={(event) =>
-                act({ action: "configure", muted: event.target.checked })
-              }
-            />
-            {t("fcboard.timer_mute")}
-          </label>
-        </div>
+        {(!compact || full) && (
+          <>
+            <label>
+              {t("fcboard.timer_seconds")}
+              <input
+                type="number"
+                min={1}
+                max={359999}
+                disabled={state.started !== null}
+                value={state.duration / 1000}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (value >= 1 && value <= 359999) {
+                    act({ action: "configure", seconds: value });
+                  }
+                }}
+              />
+            </label>
+            <div className="fc-builtin-row">
+              <button
+                type="button"
+                onClick={() => {
+                  unlockSound();
+                  act({ action: state.started === null ? "start" : "pause" });
+                }}
+              >
+                {t(
+                  state.started === null
+                    ? "fcboard.play_tool"
+                    : "fcboard.pause_tool",
+                )}
+              </button>
+              <button type="button" onClick={() => act({ action: "reset" })}>
+                {t("fcboard.reset")}
+              </button>
+              <button
+                type="button"
+                aria-pressed={full}
+                onClick={() => setFull(!full)}
+              >
+                {t("fcboard.fullscreen")}
+              </button>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={state.muted}
+                  onChange={(event) =>
+                    act({ action: "configure", muted: event.target.checked })
+                  }
+                />
+                {t("fcboard.timer_mute")}
+              </label>
+            </div>
+          </>
+        )}
       </div>
     </FloatingToolPanel>
   ) : null;

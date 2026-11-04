@@ -69,6 +69,30 @@ it("counts actual elapsed time across suspension, pauses without drift and reset
   await command("tools.timer", { action: "close" });
   expect(screen.queryByRole("dialog")).toBeNull();
 });
+it("matches the vendor timer's idle controls and restores them without pausing the countdown", async () => {
+  vi.useFakeTimers();
+  render(<ToolTimer />);
+  await command("tools.timer", { action: "start", seconds: 60, muted: true });
+  await act(async () => vi.advanceTimersByTime(5100));
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.pause_tool") }),
+  ).toBeNull();
+  expect(screen.getByRole("timer")).toHaveTextContent("00:00:55");
+  fireEvent.click(screen.getByRole("timer"));
+  expect(
+    screen.getByRole("button", { name: t("fcboard.pause_tool") }),
+  ).toBeEnabled();
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    running: true,
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.fullscreen") }),
+  );
+  await act(async () => vi.advanceTimersByTime(8000));
+  expect(
+    screen.getByRole("button", { name: t("fcboard.pause_tool") }),
+  ).toBeEnabled();
+});
 it("moves curtain edges independently, clamps its center and exposes real original themes", async () => {
   const rect = { left: 100, top: 50, right: 700, bottom: 550 };
   expect(moveCurtain(rect, "left", 1000, 0, 900, 700)).toEqual({

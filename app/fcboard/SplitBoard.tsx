@@ -9,9 +9,9 @@ type Pane = { strokes: Stroke[] };
 const colors = ["#202124", "#1565c0", "#d32f2f"];
 const backgrounds = [
   { color: "#ffffff", label: "split_background_0" },
-  { color: "#e7f2e3", label: "split_background_1" },
-  { color: "#252f38", label: "split_background_2" },
-  { color: "#fff2d5", label: "split_background_3" },
+  { color: "#5c7c62", label: "split_background_1" },
+  { color: "#cfaa29", label: "split_background_3" },
+  { color: "#312e2e", label: "split_background_2" },
 ] as const;
 const drawSegment = (
   canvas: HTMLCanvasElement,

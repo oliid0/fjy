@@ -24,7 +24,7 @@ export const writeQuestion = async (page: Page, text: string) => {
       await route.fallback();
     }
   });
-  const ink = page.getByRole("img", { name: "向 AI 教师提问", exact: true });
+  const ink = page.getByRole("img", { name: "AI 出题", exact: true });
   const box = (await ink.boundingBox())!;
   await page.mouse.move(box.x + 20, box.y + 20);
   await page.mouse.down();

@@ -774,6 +774,7 @@ export const Teacher = ({
         title: state.lesson?.title,
         step: state.step + 1,
         caption: state.caption,
+        canvas: controller.canvas,
         question: state.question
           ? {
               question: state.question.question,
@@ -801,6 +802,7 @@ export const Teacher = ({
           placement={questionPlacement}
           onSubmit={createQuiz}
           hasResult={!!quiz}
+          resultOpen={quizOpen}
           onClearResult={() => {
             quizRequest.current?.abort();
             quizValue.current = null;

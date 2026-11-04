@@ -454,7 +454,8 @@ export const MindMapControls = ({
     }
     refreshRef.current();
   };
-  const uiUnit = 1 / (window.devicePixelRatio || 1);
+  const uiUnit =
+    api.getAppState().width < 620 ? 1.1 : 1 / (window.devicePixelRatio || 1);
   return (
     <>
       {view && (

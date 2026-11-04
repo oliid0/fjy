@@ -4,6 +4,7 @@ import { createStore, get, set } from "idb-keyval";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { LessonCanvas } from "./lesson";
+import { WritingSpaceError } from "./lessonWriting";
 import { createNarrator } from "./narration";
 import { mergeLessonContinuation } from "./lessonContinuation";
 import {
@@ -73,6 +74,7 @@ export type TeachingSession = {
     origin: { x: number; y: number };
     sourceIds?: string[];
     document?: { name: string; page: number };
+    boards?: string[];
   };
 };
 const storage = createStore("fcboard-lessons", "lessons");
@@ -135,6 +137,7 @@ export class TeachingEngine {
   private waiting = new Set<() => void>();
   private answerWaiter?: () => void;
   private renderer?: LessonCanvas;
+  private lessonBoards = new Set<string>();
   private branchRenderer?: LessonCanvas;
   private voice = createNarrator();
   private interjection = createNarrator();
@@ -193,6 +196,12 @@ export class TeachingEngine {
       return;
     }
     this.target = this.surface();
+    const board = classroomCommands.read("boards") as
+      | { active?: string }
+      | undefined;
+    if (board?.active) {
+      this.lessonBoards.add(board.active);
+    }
     // Tools run before the step's drawing. Rebind the renderer to the newly
     // visible page; retain the lesson identity, never the old page's source ids.
     if (this.renderer) {
@@ -633,6 +642,7 @@ export class TeachingEngine {
     generation: number,
     branchGeneration?: number,
   ) {
+    let addedPage = false;
     while (true) {
       await this.gate(generation, branchGeneration !== undefined);
       if (
@@ -659,6 +669,26 @@ export class TeachingEngine {
         ) {
           throw error;
         }
+        if (
+          error instanceof WritingSpaceError &&
+          !renderer.target &&
+          !addedPage &&
+          classroomCommands.has("board.new")
+        ) {
+          addedPage = true;
+          const moved = await this.tools(
+            [{ name: "board.new" }],
+            generation,
+            branchGeneration,
+          );
+          if (moved) {
+            renderer =
+              branchGeneration === undefined
+                ? this.renderer!
+                : this.branchRenderer!;
+            continue;
+          }
+        }
         this.update({
           toolError: error instanceof Error ? error.message : String(error),
         });
@@ -673,6 +703,7 @@ export class TeachingEngine {
           id: this.renderer.id,
           origin: this.renderer.origin,
           sourceIds: this.renderer.sourceIds,
+          boards: [...this.lessonBoards],
           document: target
             ? { name: target.name, page: target.page }
             : undefined,
@@ -701,6 +732,13 @@ export class TeachingEngine {
     }
     lesson.steps.forEach((step) => validatePlanTools(step.tools));
     this.cancel();
+    this.lessonBoards = new Set(saved?.boards || []);
+    const firstBoard = classroomCommands.read("boards") as
+      | { active?: string }
+      | undefined;
+    if (firstBoard?.active) {
+      this.lessonBoards.add(firstBoard.active);
+    }
     this.target = this.surface();
     const generation = this.generation;
     this.renderer = new LessonCanvas(this.api, {

@@ -35,6 +35,7 @@ export type Workspace = {
   customBackground?: AppState["whiteboardCustomBackground"];
 };
 const storage = createStore("fcboard-boards", "workspace");
+const recoveryKey = "fcboard-board-recovery";
 export const readWorkspace = async () => get<Workspace>("workspace", storage);
 export const writeWorkspace = (value: Workspace) =>
   set("workspace", value, storage);
@@ -94,7 +95,39 @@ export class BoardBook {
       stored.boards.some((board) => board.id === stored.active)
     ) {
       this.value = stored;
-      this.restore(stored.active);
+      // An IndexedDB transaction started by pagehide can be abandoned by reload.
+      // Recover only the matching page, never replace the other saved boards.
+      try {
+        const recovery = JSON.parse(
+          localStorage.getItem(recoveryKey) || "null",
+        ) as Board | null;
+        const page =
+          recovery && stored.boards.find((board) => board.id === recovery.id);
+        if (
+          page &&
+          recovery &&
+          recovery.updated > page.updated &&
+          Array.isArray(recovery.elements) &&
+          recovery.view
+        ) {
+          this.value = {
+            ...stored,
+            active: page.id,
+            boards: stored.boards.map((board) =>
+              board.id === page.id
+                ? {
+                    ...recovery,
+                    files: { ...board.files, ...recovery.files },
+                  }
+                : board,
+            ),
+          };
+          await this.flush();
+        }
+      } catch (error) {
+        this.onError(error);
+      }
+      this.restore(this.value.active);
     } else {
       const first = this.capture(`${t("fcboard.board")} 1`);
       this.value = {
@@ -118,6 +151,7 @@ export class BoardBook {
         return;
       }
       const current = this.capture(previous.name, previous.id);
+      current.updated = Math.max(current.updated, previous.updated + 1);
       const custom = current.view.whiteboardCustomBackground;
       const choseCustom =
         custom !==
@@ -167,6 +201,38 @@ export class BoardBook {
     const snapshot = JSON.parse(JSON.stringify(this.value)) as Workspace;
     this.writing = this.writing.catch(() => {}).then(() => this.save(snapshot));
     await this.writing;
+    try {
+      const recovery = JSON.parse(
+        localStorage.getItem(recoveryKey) || "null",
+      ) as Board | null;
+      if (
+        recovery &&
+        snapshot.boards.some(
+          (board) =>
+            board.id === recovery.id && board.updated >= recovery.updated,
+        )
+      ) {
+        localStorage.removeItem(recoveryKey);
+      }
+    } catch {
+      // A blocked or malformed recovery store must not fail an IndexedDB save.
+    }
+  }
+  /** Serialize once when leaving, rather than delaying ink with per-stroke JSON. */
+  checkpoint() {
+    const page = this.value.boards.find(
+      (board) => board.id === this.visibleActive,
+    );
+    if (!page) {
+      return;
+    }
+    try {
+      localStorage.setItem(recoveryKey, JSON.stringify(page));
+    } catch {
+      // Existing binary assets remain in IndexedDB. Still preserve vector ink
+      // and embedded HTML when a large image exceeds the synchronous quota.
+      localStorage.setItem(recoveryKey, JSON.stringify({ ...page, files: {} }));
+    }
   }
   private restore(id: string, source?: AbortSignal) {
     const board = this.value.boards.find((item) => item.id === id);

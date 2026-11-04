@@ -8,6 +8,7 @@ import { classroomCommands } from "./commands";
 import { registerCanvasCommands } from "./canvasCommands";
 import * as narration from "./narration";
 import { sceneAPI } from "./test/scene";
+import { BoardBook } from "./boards";
 import { resourceFrame } from "./test/resourceFrame";
 import { interactiveResource } from "./test/interactiveResource";
 import { observeLesson } from "./lessonObserver";
@@ -1254,5 +1255,65 @@ it("pauses a full board before narration and retries layout after space is made"
   } finally {
     host.stop();
     await finished;
+  }
+});
+
+it("saves a full page and continues the same narrated step on a real new BoardBook page", async () => {
+  const host = playback();
+  const { convertToFcboardElements } = await import("@fcboard/fcboard");
+  const [obstacle] = convertToFcboardElements([
+    { type: "rectangle", x: 0, y: 0, width: 1600, height: 900 },
+  ]);
+  host.api.updateScene({ elements: [obstacle] });
+  Object.assign(host.api, {
+    getFiles: () => ({}),
+    onChange: () => () => {},
+    resetScene: () => host.api.updateScene({ elements: [] }),
+    history: { clear: vi.fn() },
+  });
+  const save = vi.fn().mockResolvedValue(undefined);
+  const book = new BoardBook(host.api, vi.fn(), async () => undefined, save);
+  await book.initialize();
+  const first = book.value.active;
+  const unbooks = classroomCommands.context("boards", () => ({
+    active: book.visibleActive,
+    boards: book.value.boards.map(({ id, name }) => ({ id, name })),
+  }));
+  const unnew = classroomCommands.register(
+    "board.new",
+    "Create the next page",
+    (args) => book.create(undefined, args.signal as AbortSignal),
+  );
+  try {
+    await host.engine.start(
+      validateLesson({
+        steps: [
+          {
+            say: "第二页继续牛顿定律。",
+            commands: [{ type: "write_text", text: "F=ma", duration: 0 }],
+          },
+        ],
+      }),
+    );
+    expect(book.value.boards).toHaveLength(2);
+    expect(book.value.boards[0].elements).toContainEqual(obstacle);
+    expect(book.value.active).not.toBe(first);
+    expect(
+      host.api
+        .getSceneElements()
+        .some(
+          (element) =>
+            element.customData?.fcLessonId === host.engine.canvas?.id,
+        ),
+    ).toBe(true);
+    expect(host.engine.canvas?.boards).toEqual([first, book.value.active]);
+    expect(host.speak).toHaveBeenCalledTimes(1);
+    expect(host.engine.state.mode).toBe("complete");
+    expect(save).toHaveBeenCalled();
+  } finally {
+    unnew();
+    unbooks();
+    host.stop();
+    book.dispose();
   }
 });

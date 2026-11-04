@@ -108,6 +108,7 @@ import {
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { drawPlot } from "./board";
 import { insertGeneratedImage } from "./imageGeneration";
+import { circledLanguage } from "./languageCircle";
 import { changeQuestionAnswer } from "./questionAnswer";
 import { resourcePlacement } from "./resourcePlacement";
 import {
@@ -2151,6 +2152,41 @@ export const FilePreview = ({
                 ],
               });
               sourceIds.forEach((id) => recognized.current.add(id));
+              return;
+            }
+          }
+          if (
+            assistMode === "language" &&
+            classroomCommands.has("language.card")
+          ) {
+            const circled = circledLanguage(
+              source.map((stroke) => stroke.points),
+              (inkRef.current[page] || [])
+                .filter(
+                  (stroke) =>
+                    !sourceIds.includes(stroke.id) &&
+                    !stroke.widget &&
+                    !stroke.resource,
+                )
+                .map((stroke) => ({
+                  id: stroke.id,
+                  bounds: documentStrokeBounds(stroke),
+                })),
+            );
+            if (circled) {
+              sourceIds.forEach((id) => recognized.current.add(id));
+              await classroomCommands.execute({
+                name: "language.card",
+                args: { ...circled, signal: request.signal },
+              });
+              if (current()) {
+                commitInk({
+                  ...inkRef.current,
+                  [page]: (inkRef.current[page] || []).filter(
+                    (stroke) => !sourceIds.includes(stroke.id),
+                  ),
+                });
+              }
               return;
             }
           }

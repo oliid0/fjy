@@ -9,6 +9,7 @@ import { BoardBook } from "./boards";
 import { classroomCommands } from "./commands";
 
 describe("persistent whiteboard book", () => {
+  afterEach(() => localStorage.removeItem("fcboard-board-recovery"));
   const setup = () => {
     let elements: readonly FcboardElement[] = convertToFcboardElements([
       { type: "text", text: "第一板", x: 10, y: 10 },
@@ -71,6 +72,38 @@ describe("persistent whiteboard book", () => {
     expect(book.value.active).toBe(first);
     expect(book.value.boards).toHaveLength(1);
     book.dispose();
+  });
+  it("recovers an embedded resource on immediate reload before the idle save, keeping other boards", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const first = book.value.active;
+    await book.create("resources");
+    const active = book.value.active;
+    const stored = structuredClone(book.value);
+    const resource = convertToFcboardElements([
+      {
+        type: "rectangle",
+        x: 20,
+        y: 30,
+        width: 300,
+        height: 200,
+        customData: { fcEmbed: { html: "<button>F=ma</button>" } },
+      },
+    ]);
+    api.updateScene({ elements: resource });
+    book.checkpoint();
+    book.dispose();
+    const reloaded = new BoardBook(api, vi.fn(), async () => stored, save);
+    await reloaded.initialize();
+    expect(reloaded.value.active).toBe(active);
+    expect(api.getSceneElements()[0].customData?.fcEmbed).toEqual({
+      html: "<button>F=ma</button>",
+    });
+    expect(
+      reloaded.value.boards.find((page) => page.id === first)?.elements[0].type,
+    ).toBe("text");
+    expect(localStorage.getItem("fcboard-board-recovery")).toBeNull();
+    reloaded.dispose();
   });
   it("keeps edits received during an awaited page switch on the visible source board", async () => {
     const { book, api, save } = setup();

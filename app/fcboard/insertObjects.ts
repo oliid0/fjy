@@ -640,12 +640,17 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
   nodes.forEach((node, index) => {
     if (node.parent >= 0 && ["right", "bottom"].includes(node.direction)) {
       const parent = nodes[node.parent];
-      const start = [parent.x + parent.width, parent.y + parent.height / 2];
-      const end = [node.x, node.y + node.height / 2];
+      const vertical = node.direction === "bottom";
+      const start = vertical
+        ? [parent.x + parent.width / 2, parent.y + parent.height]
+        : [parent.x + parent.width, parent.y + parent.height / 2];
+      const end = vertical
+        ? [node.x + node.width / 2, node.y]
+        : [node.x, node.y + node.height / 2];
       // HMindMappingOBject.onDraw uses a straight link near the same row,
       // otherwise a quadratic curve with its control point 50px before the child.
       const points =
-        Math.abs(parent.y - node.y) < 30
+        vertical || Math.abs(parent.y - node.y) < 30
           ? [start, end]
           : Array.from({ length: 17 }, (_, step) => {
               const t = step / 16;

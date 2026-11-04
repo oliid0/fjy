@@ -1926,7 +1926,8 @@
       "expires": "The cloud file is available for 24 hours."
     },
     "no_subject_layers_returned": "The image service returned no valid subject layers; your ink is preserved",
-    "subject_layer_requires_transparency": "The subject layer has no valid transparency; your ink is preserved"
+    "subject_layer_requires_transparency": "The subject layer has no valid transparency; your ink is preserved",
+    "synonyms": "Synonyms and paraphrases"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "Number Compare",

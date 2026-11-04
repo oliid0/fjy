@@ -90,7 +90,8 @@ public class GeneratedResourceTest {
                 until(scenario, "!!document.querySelector('iframe[title=\"" + title + "\"]') && !document.querySelector('.fc-resource-library')");
                 assertNull(serverError.get()); assertNotNull("The real native bridge must send the request", sent.get());
                 assertEquals("native-test-model", sent.get().getString("model")); assertTrue(sent.get().getBoolean("stream"));
-                assertTrue(sent.get().getJSONArray("messages").getJSONObject(1).getString("content").contains("牛顿第一定律演示"));
+                JSONObject topic = new JSONObject(sent.get().getJSONArray("messages").getJSONObject(1).getString("content"));
+                assertEquals("The native bridge must preserve the actual requested topic", "牛顿第一定律演示", topic.getString("topic"));
                 assertEquals("\"allow-scripts\"", evaluate(scenario, "document.querySelector('iframe[title=\"" + title + "\"]').getAttribute('sandbox')"));
                 // Wait for the production runtime, then inspect via its actual scoped MessageChannel.
                 Thread.sleep(500);

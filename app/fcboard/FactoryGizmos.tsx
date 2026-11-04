@@ -12,6 +12,11 @@ import {
   compassGeometry,
 } from "./factoryGizmoShapes";
 import { readWidgets, renderWidget } from "./widgets";
+import {
+  adaptGizmo,
+  compactGizmoControl,
+  gizmoViewport,
+} from "./adaptiveGizmo";
 import deleteIcon from "./factory-gizmo-icons/delete.png?url";
 import rotateIcon from "./factory-gizmo-icons/rotate.png?url";
 import stretchIcon from "./factory-gizmo-icons/stretch.png?url";
@@ -170,7 +175,23 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
     };
     const stop = api.onChange(refresh);
     const document = classroomCommands.watch("document", refresh);
-    const resize = () => refresh();
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const resize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        restore();
+        const { viewport, scale } = gizmoViewport(api);
+        for (const widget of readWidgets(api).filter((item) =>
+          factoryGizmoKinds.has(item.kind),
+        )) {
+          const next = adaptGizmo(widget, viewport, scale);
+          if (JSON.stringify(next) !== JSON.stringify(widget)) {
+            renderWidget(api, next, false);
+          }
+        }
+        refresh();
+      }, 120);
+    };
     const blur = () => restore();
     const outsideMove = (event: PointerEvent) => {
       if (
@@ -199,6 +220,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
       stop();
       document();
       window.removeEventListener("resize", resize);
+      clearTimeout(resizeTimer);
       window.removeEventListener("blur", blur);
       window.removeEventListener("pointermove", outsideMove);
       window.removeEventListener("pointerup", outsideUp);
@@ -448,8 +470,20 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
           params: {
             ...original.params,
             stretchX:
-              Math.max(400 * GIZMO_UNIT, layout.width + after[0] - before[0]) /
-              360,
+              Math.max(
+                original.params.gizmo?.layout
+                  ? (144 * original.params.gizmo.unit) / original.params.size
+                  : 400 * GIZMO_UNIT,
+                Math.min(
+                  original.params.gizmo?.layout
+                    ? (gizmoViewport(api).viewport.right -
+                        gizmoViewport(api).viewport.left) /
+                        original.params.size -
+                        24
+                    : Infinity,
+                  layout.width + after[0] - before[0],
+                ),
+              ) / 360,
           },
         };
       } else if (original.kind === "compass") {
@@ -498,9 +532,10 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
             original.position.x) /
             original.params.size -
           10 * localUnit;
+        const minimum = original.params.gizmo?.layout ? 144 * localUnit : 360;
         const width = Math.max(
-          360,
-          Math.min(Math.max(360, available), layout.width + delta),
+          minimum,
+          Math.min(Math.max(minimum, available), layout.width + delta),
         );
         active.next = {
           ...original,
@@ -677,179 +712,214 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
               y: number,
               icon: string,
               label: string,
-            ) => (
-              <g
-                key={action}
-                data-gizmo-action={action}
-                role="button"
-                tabIndex={0}
-                aria-label={label}
-                style={{
-                  pointerEvents: "auto",
-                  cursor: action === "delete" ? "pointer" : "grab",
-                  touchAction: "none",
-                }}
-                onPointerDown={(event) => begin(event, widget, action)}
-                onKeyDown={(event) => {
-                  if (
-                    action === "rotate" &&
-                    ["ArrowLeft", "ArrowRight", "Enter", " "].includes(
-                      event.key,
-                    )
-                  ) {
-                    event.preventDefault();
-                    const layout = gizmoLayout(
-                      widget.kind,
-                      widget.params.stretchX,
-                    );
-                    const pivot = gizmoPoint(
-                      widget,
-                      layout.pivot[0],
-                      layout.pivot[1],
-                    );
-                    const rotation = degrees(
-                      widget.params.rotation +
-                        (event.key === "ArrowLeft" ? -15 : 15),
-                    );
-                    const radians = (rotation * Math.PI) / 180;
-                    renderWidget(api, {
-                      ...widget,
-                      params: { ...widget.params, rotation },
-                      position: {
-                        x:
-                          pivot[0] -
-                          widget.params.size *
-                            (layout.pivot[0] * Math.cos(radians) -
-                              layout.pivot[1] * Math.sin(radians)),
-                        y:
-                          pivot[1] -
-                          widget.params.size *
-                            (layout.pivot[0] * Math.sin(radians) +
-                              layout.pivot[1] * Math.cos(radians)),
-                      },
-                    });
-                  } else if (
-                    action === "resize" &&
-                    [
-                      "ArrowLeft",
-                      "ArrowDown",
-                      "ArrowRight",
-                      "ArrowUp",
-                      "Enter",
-                      " ",
-                    ].includes(event.key)
-                  ) {
-                    event.preventDefault();
-                    const step = ["ArrowLeft", "ArrowDown"].includes(event.key)
-                      ? -1
-                      : 1;
-                    const layout = gizmoLayout(
-                      widget.kind,
-                      widget.params.stretchX,
-                    );
-                    renderWidget(api, {
-                      ...widget,
-                      params:
-                        widget.kind === "compass"
-                          ? {
-                              ...widget.params,
-                              gizmo: {
-                                unit:
-                                  widget.params.gizmo?.unit ??
-                                  GIZMO_UNIT * widget.params.size,
-                                ...widget.params.gizmo,
-                                leg: compass.leg,
-                                opening: Math.max(
-                                  40 * compass.dp,
-                                  Math.min(
-                                    2 * compass.leg - 24 * compass.dp,
-                                    compass.radius + step * 14 * compass.dp,
-                                  ),
-                                ),
-                              },
-                            }
-                          : {
-                              ...widget.params,
-                              stretchX:
-                                Math.max(
-                                  widget.kind === "ruler" ? 240 : 360,
-                                  layout.width + step * 14 * GIZMO_UNIT,
-                                ) / 360,
-                            },
-                    });
-                  }
-                  if (
-                    (event.key === "Enter" || event.key === " ") &&
-                    action === "delete"
-                  ) {
-                    event.preventDefault();
-                    void classroomCommands
-                      .execute({
-                        name: "tools.delete",
-                        args: { id: widget.id },
-                      })
-                      .catch((failure) => setError(String(failure)));
-                  }
-                }}
-              >
-                <image
-                  href={icon}
-                  x={
-                    x -
-                    (widget.kind === "protractor"
-                      ? 26.666668 * nativeUnit
-                      : widget.kind === "ruler" || widget.kind === "setSquare"
-                      ? 24
-                      : (action === "delete" ? 16 : 15) * compass.dp)
-                  }
-                  y={
-                    y -
-                    (widget.kind === "protractor"
-                      ? 26.666668 * nativeUnit
-                      : widget.kind === "ruler" || widget.kind === "setSquare"
-                      ? 24
-                      : (action === "delete" ? 16 : 15) * compass.dp)
-                  }
-                  width={
-                    widget.kind === "protractor"
-                      ? 53.333336 * nativeUnit
-                      : widget.kind === "ruler" || widget.kind === "setSquare"
-                      ? 48
-                      : (action === "delete" ? 32 : 30) * compass.dp
-                  }
-                  height={
-                    widget.kind === "protractor"
-                      ? 53.333336 * nativeUnit
-                      : widget.kind === "ruler" || widget.kind === "setSquare"
-                      ? 48
-                      : (action === "delete" ? 32 : 30) * compass.dp
-                  }
+            ) => {
+              const compact = compactGizmoControl(widget, action);
+              if (compact) {
+                [x, y] = compact;
+              }
+              const touchUnit = Math.max(
+                nativeUnit,
+                1 / (view.scale * widget.params.size),
+              );
+              return (
+                <g
+                  key={action}
+                  data-gizmo-action={action}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={label}
                   style={{
-                    visibility:
-                      widget.kind === "compass" && action === "rotate"
-                        ? "hidden"
-                        : "inherit",
+                    pointerEvents: "auto",
+                    cursor: action === "delete" ? "pointer" : "grab",
+                    touchAction: "none",
                   }}
-                  transform={
-                    widget.kind === "compass" &&
-                    (action === "delete" || action === "drawArc")
-                      ? `rotate(${
-                          -widget.params.rotation *
-                          (action === "drawArc" ? 2 : 1)
-                        } ${x} ${y})`
-                      : undefined
-                  }
-                />
-                {widget.kind === "compass" && (
-                  <circle
-                    cx={x}
-                    cy={y}
-                    r={(action === "rotate" ? 21.12 : 36) * compass.dp}
-                    fill="transparent"
+                  onPointerDown={(event) => begin(event, widget, action)}
+                  onKeyDown={(event) => {
+                    if (
+                      action === "rotate" &&
+                      ["ArrowLeft", "ArrowRight", "Enter", " "].includes(
+                        event.key,
+                      )
+                    ) {
+                      event.preventDefault();
+                      const layout = gizmoLayout(
+                        widget.kind,
+                        widget.params.stretchX,
+                      );
+                      const pivot = gizmoPoint(
+                        widget,
+                        layout.pivot[0],
+                        layout.pivot[1],
+                      );
+                      const rotation = degrees(
+                        widget.params.rotation +
+                          (event.key === "ArrowLeft" ? -15 : 15),
+                      );
+                      const radians = (rotation * Math.PI) / 180;
+                      renderWidget(api, {
+                        ...widget,
+                        params: { ...widget.params, rotation },
+                        position: {
+                          x:
+                            pivot[0] -
+                            widget.params.size *
+                              (layout.pivot[0] * Math.cos(radians) -
+                                layout.pivot[1] * Math.sin(radians)),
+                          y:
+                            pivot[1] -
+                            widget.params.size *
+                              (layout.pivot[0] * Math.sin(radians) +
+                                layout.pivot[1] * Math.cos(radians)),
+                        },
+                      });
+                    } else if (
+                      action === "resize" &&
+                      [
+                        "ArrowLeft",
+                        "ArrowDown",
+                        "ArrowRight",
+                        "ArrowUp",
+                        "Enter",
+                        " ",
+                      ].includes(event.key)
+                    ) {
+                      event.preventDefault();
+                      const step = ["ArrowLeft", "ArrowDown"].includes(
+                        event.key,
+                      )
+                        ? -1
+                        : 1;
+                      const layout = gizmoLayout(
+                        widget.kind,
+                        widget.params.stretchX,
+                      );
+                      renderWidget(api, {
+                        ...widget,
+                        params:
+                          widget.kind === "compass"
+                            ? {
+                                ...widget.params,
+                                gizmo: {
+                                  unit:
+                                    widget.params.gizmo?.unit ??
+                                    GIZMO_UNIT * widget.params.size,
+                                  ...widget.params.gizmo,
+                                  leg: compass.leg,
+                                  opening: Math.max(
+                                    40 * compass.dp,
+                                    Math.min(
+                                      2 * compass.leg - 24 * compass.dp,
+                                      compass.radius + step * 14 * compass.dp,
+                                    ),
+                                  ),
+                                },
+                              }
+                            : {
+                                ...widget.params,
+                                stretchX:
+                                  Math.max(
+                                    widget.params.gizmo?.layout
+                                      ? 144 * nativeUnit
+                                      : widget.kind === "ruler"
+                                      ? 240
+                                      : 360,
+                                    layout.width + step * 14 * GIZMO_UNIT,
+                                  ) / 360,
+                              },
+                      });
+                    }
+                    if (
+                      (event.key === "Enter" || event.key === " ") &&
+                      action === "delete"
+                    ) {
+                      event.preventDefault();
+                      void classroomCommands
+                        .execute({
+                          name: "tools.delete",
+                          args: { id: widget.id },
+                        })
+                        .catch((failure) => setError(String(failure)));
+                    }
+                  }}
+                >
+                  {compact && (
+                    <rect
+                      x={x - 22 * touchUnit}
+                      y={y - 22 * touchUnit}
+                      width={44 * touchUnit}
+                      height={44 * touchUnit}
+                      fill="transparent"
+                    />
+                  )}
+                  <image
+                    href={icon}
+                    x={
+                      x -
+                      (compact
+                        ? 16 * nativeUnit
+                        : widget.kind === "protractor"
+                        ? 26.666668 * nativeUnit
+                        : widget.kind === "ruler" || widget.kind === "setSquare"
+                        ? 24
+                        : (action === "delete" ? 16 : 15) * compass.dp)
+                    }
+                    y={
+                      y -
+                      (compact
+                        ? 16 * nativeUnit
+                        : widget.kind === "protractor"
+                        ? 26.666668 * nativeUnit
+                        : widget.kind === "ruler" || widget.kind === "setSquare"
+                        ? 24
+                        : (action === "delete" ? 16 : 15) * compass.dp)
+                    }
+                    width={
+                      compact
+                        ? 32 * nativeUnit
+                        : widget.kind === "protractor"
+                        ? 53.333336 * nativeUnit
+                        : widget.kind === "ruler" || widget.kind === "setSquare"
+                        ? 48
+                        : (action === "delete" ? 32 : 30) * compass.dp
+                    }
+                    height={
+                      compact
+                        ? 32 * nativeUnit
+                        : widget.kind === "protractor"
+                        ? 53.333336 * nativeUnit
+                        : widget.kind === "ruler" || widget.kind === "setSquare"
+                        ? 48
+                        : (action === "delete" ? 32 : 30) * compass.dp
+                    }
+                    style={{
+                      visibility:
+                        !compact &&
+                        widget.kind === "compass" &&
+                        action === "rotate"
+                          ? "hidden"
+                          : "inherit",
+                    }}
+                    transform={
+                      widget.kind === "compass" &&
+                      (action === "delete" || action === "drawArc")
+                        ? `rotate(${
+                            -widget.params.rotation *
+                            (action === "drawArc" ? 2 : 1)
+                          } ${x} ${y})`
+                        : undefined
+                    }
                   />
-                )}
-              </g>
-            );
+                  {!compact && widget.kind === "compass" && (
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={(action === "rotate" ? 21.12 : 36) * compass.dp}
+                      fill="transparent"
+                    />
+                  )}
+                </g>
+              );
+            };
             return (
               <g
                 key={widget.id}
@@ -1038,7 +1108,14 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
                         180 -
                         needle * Math.sin((widget.params.sweep * Math.PI) / 180)
                       }
-                      r={ball / 2}
+                      r={
+                        widget.params.gizmo?.layout
+                          ? Math.max(
+                              ball / 2,
+                              22 / (view.scale * widget.params.size),
+                            )
+                          : ball / 2
+                      }
                       fill="transparent"
                       role="slider"
                       tabIndex={0}
@@ -1073,93 +1150,117 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
                       }}
                     />
                     {(["angle", "sector", "arc"] as const).map(
-                      (mode, index) => (
-                        <g
-                          key={mode}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`${t("toolBar.freedraw")} ${index + 1}`}
-                          onClick={(event) => {
-                            if (event.detail === 0) {
-                              drawAngle(widget, mode);
-                            }
-                          }}
-                          onPointerDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            actionPress.current = {
-                              id: widget.id,
-                              mode,
-                              pointer: event.pointerId,
-                            };
-                            setPressed(`${widget.id}:${mode}`);
-                            setPreview(anglePoints(widget, mode));
-                            try {
-                              event.currentTarget.setPointerCapture?.(
-                                event.pointerId,
-                              );
-                            } catch (failure) {
-                              if (
-                                !(failure instanceof Error) ||
-                                failure.name !== "NotFoundError"
-                              ) {
-                                restore();
-                                setError(String(failure));
+                      (mode, index) => {
+                        const compact = compactGizmoControl(widget, mode);
+                        const x =
+                          compact?.[0] ??
+                          180 + (-100 + index * 100 + 26.666668) * nativeUnit;
+                        const y = compact?.[1] ?? 180 + 66.666668 * nativeUnit;
+                        const iconSize =
+                          (compact ? 32 : 53.333336) * nativeUnit;
+                        const hitSize = Math.max(
+                          44 * nativeUnit,
+                          44 / (view.scale * widget.params.size),
+                        );
+                        return (
+                          <g
+                            key={mode}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${t("toolBar.freedraw")} ${index + 1}`}
+                            onClick={(event) => {
+                              if (event.detail === 0) {
+                                drawAngle(widget, mode);
                               }
-                            }
-                          }}
-                          onPointerUp={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const press = actionPress.current;
-                            actionPress.current = undefined;
-                            setPressed("");
-                            if (
-                              press?.id === widget.id &&
-                              press.mode === mode &&
-                              press.pointer === event.pointerId
-                            ) {
-                              drawAngle(widget, mode);
-                            }
-                          }}
-                          onPointerCancel={restore}
-                          onLostPointerCapture={() => {
-                            actionPress.current = undefined;
-                            setPressed("");
-                            setPreview([]);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
+                            }}
+                            onPointerDown={(event) => {
                               event.preventDefault();
-                              drawAngle(widget, mode);
-                            }
-                          }}
-                          style={{
-                            pointerEvents: "auto",
-                            cursor: "pointer",
-                            touchAction: "none",
-                          }}
-                        >
-                          <image
-                            x={180 + (-100 + index * 100) * nativeUnit}
-                            y={180 + 40 * nativeUnit}
-                            width={53.333336 * nativeUnit}
-                            height={53.333336 * nativeUnit}
-                            href={
-                              (pressed === `${widget.id}:${mode}`
-                                ? [
-                                    drawAngleDownIcon,
-                                    drawSectorDownIcon,
-                                    drawArcDownIcon,
-                                  ]
-                                : [drawAngleIcon, drawSectorIcon, drawArcIcon])[
-                                index
-                              ]
-                            }
-                            style={{ pointerEvents: "none" }}
-                          />
-                        </g>
-                      ),
+                              event.stopPropagation();
+                              actionPress.current = {
+                                id: widget.id,
+                                mode,
+                                pointer: event.pointerId,
+                              };
+                              setPressed(`${widget.id}:${mode}`);
+                              setPreview(anglePoints(widget, mode));
+                              try {
+                                event.currentTarget.setPointerCapture?.(
+                                  event.pointerId,
+                                );
+                              } catch (failure) {
+                                if (
+                                  !(failure instanceof Error) ||
+                                  failure.name !== "NotFoundError"
+                                ) {
+                                  restore();
+                                  setError(String(failure));
+                                }
+                              }
+                            }}
+                            onPointerUp={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              const press = actionPress.current;
+                              actionPress.current = undefined;
+                              setPressed("");
+                              if (
+                                press?.id === widget.id &&
+                                press.mode === mode &&
+                                press.pointer === event.pointerId
+                              ) {
+                                drawAngle(widget, mode);
+                              }
+                            }}
+                            onPointerCancel={restore}
+                            onLostPointerCapture={() => {
+                              actionPress.current = undefined;
+                              setPressed("");
+                              setPreview([]);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                drawAngle(widget, mode);
+                              }
+                            }}
+                            style={{
+                              pointerEvents: "auto",
+                              cursor: "pointer",
+                              touchAction: "none",
+                            }}
+                          >
+                            {compact && (
+                              <rect
+                                x={x - hitSize / 2}
+                                y={y - hitSize / 2}
+                                width={hitSize}
+                                height={hitSize}
+                                fill="transparent"
+                              />
+                            )}
+                            <image
+                              x={x - iconSize / 2}
+                              y={y - iconSize / 2}
+                              width={iconSize}
+                              height={iconSize}
+                              href={
+                                (pressed === `${widget.id}:${mode}`
+                                  ? [
+                                      drawAngleDownIcon,
+                                      drawSectorDownIcon,
+                                      drawArcDownIcon,
+                                    ]
+                                  : [
+                                      drawAngleIcon,
+                                      drawSectorIcon,
+                                      drawArcIcon,
+                                    ])[index]
+                              }
+                              style={{ pointerEvents: "none" }}
+                            />
+                          </g>
+                        );
+                      },
                     )}
                   </>
                 )}

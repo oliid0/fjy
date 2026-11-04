@@ -20,7 +20,7 @@ export const selectMenu = async (page: Page, label: string) => {
   ) {
     await page.locator("[data-teaching-tools]").click();
     const names: Record<string, string> = {
-      提问与讲解: "AI 问答",
+      提问与讲解: "AI 出题",
       课堂录制: "录制",
       总结白板: "AI 总结",
       "课件 / 局域网快传": "快传",

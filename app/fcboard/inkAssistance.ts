@@ -14,6 +14,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { insertGeneratedImage } from "./imageGeneration";
+import { circledLanguage } from "./languageCircle";
 
 import { boardContext } from "./ai";
 import { classroomCommands } from "./commands";
@@ -209,6 +210,44 @@ export const observeInkAssistance = (
           ) === signature;
         onBusy(true);
         void (async () => {
+          if (mode === "language" && classroomCommands.has("language.card")) {
+            const circled = circledLanguage(
+              boardInk(source),
+              api
+                .getSceneElements()
+                .filter(
+                  (element) =>
+                    !source.some((stroke) => stroke.id === element.id) &&
+                    (element.type === "text" || element.type === "freedraw"),
+                )
+                .map((element) => {
+                  const [left, top, right, bottom] = getCommonBounds([element]);
+                  return {
+                    id: element.id,
+                    bounds: { left, top, right, bottom },
+                  };
+                }),
+            );
+            if (circled) {
+              source.forEach((element) => seen.add(element.id));
+              await classroomCommands.execute({
+                name: "language.card",
+                args: { ...circled, signal: request.signal },
+              });
+              if (current()) {
+                api.updateScene({
+                  elements: api
+                    .getSceneElements()
+                    .filter(
+                      (element) =>
+                        !source.some((stroke) => stroke.id === element.id),
+                    ),
+                  captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+                });
+              }
+              return;
+            }
+          }
           if (mode === "shape") {
             const scene = api.getSceneElements();
             const angle = recognizeAngleMark(

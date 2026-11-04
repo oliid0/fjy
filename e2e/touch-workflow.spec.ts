@@ -368,7 +368,9 @@ test("three touchscreen contacts transform the view and cancel without leaving g
     await expect.poll(async () => (await view()).zoom).toBeCloseTo(1.5);
     const expanded = await view();
     expect(200 / expanded.zoom - expanded.x).toBeCloseTo(200 - original.x);
-    expect(400 / expanded.zoom - expanded.y).toBeCloseTo(300 - original.y);
+    // HCanvas.doScaleWithMore retains the prior center when the first two
+    // contacts do not move together. Moving only finger 3 changes scale.
+    expect(300 / expanded.zoom - expanded.y).toBeCloseTo(300 - original.y);
     await input.send("Input.dispatchTouchEvent", {
       type: "touchCancel",
       touchPoints: [],

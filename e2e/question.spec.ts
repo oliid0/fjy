@@ -8,7 +8,7 @@ for (const viewport of [
   { width: 3080, height: 1240 },
   { width: 390, height: 844 },
 ]) {
-  test(`handwritten requests are editable board ink with a nearby foldable answer at ${viewport.width}`, async ({
+  test(`handwritten quiz researches, grades, renders physics and preserves answers at ${viewport.width}`, async ({
     page,
   }, info) => {
     await page.setViewportSize(viewport);
@@ -18,150 +18,73 @@ for (const viewport of [
         JSON.stringify({
           apiKey: "test-only",
           model: "test",
-          speech: "system",
-          autoMath: false,
-          answerStyle: "handwritten",
-        }),
-      ),
-    );
-    let requested = false;
-    await page.route(
-      "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-      async (route) => {
-        const body = route.request().postDataJSON();
-        expect(
-          String(body.messages?.[0]?.content).startsWith("Transcribe only"),
-        ).toBe(false);
-        requested = JSON.stringify(body).includes("物体为什么会下落");
-        await route.fulfill({
-          json: {
-            choices: [
-              {
-                message: {
-                  content: JSON.stringify({
-                    action: "text",
-                    text: "物体受到重力，会向地面加速下落。",
-                  }),
-                },
-              },
-            ],
-          },
-        });
-      },
-    );
-    await page.goto("/");
-    await selectMenu(page, "提问与讲解");
-    const frame = (await page
-      .getByRole("img", { name: "向 AI 教师提问", exact: true })
-      .boundingBox())!;
-    await writeQuestion(page, "物体为什么会下落？");
-    const fold = page.getByRole("button", { name: "折叠回答", exact: true });
-    await expect(fold).toBeEnabled();
-    expect(requested).toBe(true);
-    const writing = () =>
-      page.evaluate(() => {
-        const items = JSON.parse(
-          localStorage.getItem("fcboard") || "[]",
-        ).filter((item: { isDeleted?: boolean }) => !item.isDeleted);
-        return {
-          question: items.filter(
-            (item: {
-              type: string;
-              customData?: { fcQuestionInput?: boolean; fcGenerated?: boolean };
-            }) => item.type === "freedraw" && !item.customData?.fcGenerated,
-          ),
-          answer: items.filter(
-            (item: {
-              customData?: { fcQuestionInput?: boolean; fcGenerated?: boolean };
-            }) =>
-              item.customData?.fcGenerated && !item.customData?.fcQuestionInput,
-          ),
-          state: JSON.parse(localStorage.getItem("fcboard-state") || "{}"),
-        };
-      });
-    await expect
-      .poll(async () => (await writing()).answer.length)
-      .toBeGreaterThan(0);
-    const { question, answer, state } = await writing();
-    expect(question).toHaveLength(1);
-    const source = question[0];
-    expect(source.type).toBe("freedraw");
-    expect(source.points.length).toBeGreaterThan(2);
-    const root = (await page.locator(".fcboard").boundingBox())!;
-    const xs = source.points.map((point: number[]) => point[0]);
-    const ys = source.points.map((point: number[]) => point[1]);
-    const width = Math.max(...xs) - Math.min(...xs);
-    const height = Math.max(...ys) - Math.min(...ys);
-    const left =
-      root.x + (source.x + Math.min(...xs) + state.scrollX) * state.zoom.value;
-    const top =
-      root.y + (source.y + Math.min(...ys) + state.scrollY) * state.zoom.value;
-    expect(left).toBeGreaterThanOrEqual(frame.x - 1);
-    expect(top).toBeGreaterThanOrEqual(frame.y - 1);
-    expect(left + width * state.zoom.value).toBeLessThanOrEqual(
-      frame.x + frame.width + 1,
-    );
-    expect(top + height * state.zoom.value).toBeLessThanOrEqual(
-      frame.y + frame.height + 1,
-    );
-    expect(height * state.zoom.value).toBeGreaterThanOrEqual(6);
-    expect(answer[0].fontSize).toBeLessThanOrEqual(height);
-    expect(answer[0].y).toBeGreaterThanOrEqual(source.y + Math.max(...ys));
-    expect(
-      await page.evaluate(
-        ({ x, y }) =>
-          !!document.elementFromPoint(x, y)?.closest(".fc-ink-question"),
-        { x: left + 2, y: top + 2 },
-      ),
-    ).toBe(true);
-    await expect(page.locator(".fc-ink-question-words")).toHaveCount(0);
-    await fold.click();
-    await expect.poll(async () => (await writing()).answer.length).toBe(0);
-    await page.getByRole("button", { name: "展开回答", exact: true }).click();
-    await expect
-      .poll(async () => (await writing()).answer.length)
-      .toBe(answer.length);
-    await page.screenshot({
-      path: info.outputPath(`dictated-question-${viewport.width}.png`),
-    });
-  });
-  test(`handwritten question stays visible and writes an editable answer nearby at ${viewport.width}`, async ({
-    page,
-  }, info) => {
-    await page.setViewportSize(viewport);
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "fcboard-settings",
-        JSON.stringify({
-          apiKey: "test-only",
-          model: "test",
           ocr: "cloud",
-          answerStyle: "handwritten",
+          autoMath: false,
         }),
-      );
-    });
-    let recognized = false;
-    let requested = false;
+      ),
+    );
+    let searched = false;
+    let generated = false;
     await page.route(
       "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
       async (route) => {
         const body = route.request().postDataJSON();
-        const transcription = String(body.messages?.[0]?.content).startsWith(
-          "Transcribe only",
-        );
-        if (transcription) {
-          recognized = JSON.stringify(body).includes("data:image/png;base64,");
+        const research = JSON.stringify(body).includes("学科命题资料研究员");
+        if (research) {
+          searched =
+            body.web_search_options !== undefined ||
+            body.tools?.some(
+              (tool: { type: string }) => tool.type === "web_search",
+            ) ||
+            body.tools?.some(
+              (tool: { function?: { name: string } }) =>
+                tool.function?.name === "web_search",
+            );
         } else {
-          requested = JSON.stringify(body).includes("这个题目的答案是什么");
+          generated = JSON.stringify(body).includes(
+            "出10道初中物理关于牛顿第一定律的选择题和计算题",
+          );
         }
+        const questions = Array.from({ length: 10 }, (_, index) =>
+          index % 2 === 0
+            ? {
+                type: "single",
+                question: `第${index + 1}题：物体不受力时将如何运动？`,
+                options: ["保持静止或匀速直线运动", "一定静止", "一直加速"],
+                answer: ["A"],
+                explanation: "运动状态保持不变。",
+              }
+            : {
+                type: "calculation",
+                question: `第${
+                  index + 1
+                }题：小车质量$m=2\\,\\mathrm{kg}$，合力$F=4\\,\\mathrm{N}$，求加速度。`,
+                answer: ["$a=2\\,\\mathrm{m/s^2}$"],
+                explanation: "加速度沿合力方向。",
+                steps: [
+                  "由牛顿第二定律$F=ma$",
+                  "代入$a=\\frac{F}{m}=\\frac{4}{2}=2\\,\\mathrm{m/s^2}$",
+                ],
+                diagram: {
+                  svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100"><rect x="40" y="35" width="80" height="40" fill="none" stroke="black"/><path d="M120 50H210L200 45M210 50L200 55" fill="none" stroke="black"/><text x="160" y="30">F=4 N</text></svg>',
+                  caption: "小车受力示意图",
+                },
+              },
+        );
         await route.fulfill({
           json: {
             choices: [
               {
                 message: {
-                  content: transcription
-                    ? "这个题目的答案是什么"
-                    : JSON.stringify({ action: "text", text: "2" }),
+                  content: research
+                    ? "教材资料 https://www.moe.gov.cn/"
+                    : JSON.stringify({
+                        title: "牛顿定律课堂练习",
+                        questions,
+                        sources: [
+                          { title: "教育部", url: "https://www.moe.gov.cn/" },
+                        ],
+                      }),
                 },
               },
             ],
@@ -171,80 +94,62 @@ for (const viewport of [
     );
     await page.goto("/");
     await selectMenu(page, "提问与讲解");
-    const paper = page.getByRole("dialog", { name: "手写提问", exact: true });
-    await expect(paper).toBeVisible();
-    await expect(paper.getByRole("textbox")).toHaveCount(0);
-    const box = (await paper.boundingBox())!;
+    await expect(
+      page.locator(".fc-ink-question").getByRole("textbox"),
+    ).toHaveCount(0);
+    await writeQuestion(page, "出10道初中物理关于牛顿第一定律的选择题和计算题");
+    const panel = page.locator(".fc-quiz-panel");
+    await expect(panel).toBeVisible();
+    const frame = page.frameLocator('iframe[title="牛顿定律课堂练习"]');
+    await expect(frame.locator("article.card")).toHaveCount(10);
+    expect(searched).toBe(true);
+    expect(generated).toBe(true);
+    const box = (await panel.boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-    const ink = page.getByRole("img", { name: "向 AI 教师提问", exact: true });
-    const writing = (await ink.boundingBox())!;
-    await page.mouse.move(writing.x + 30, writing.y + 20);
-    await page.mouse.down();
-    await page.mouse.move(writing.x + 65, writing.y + 50, { steps: 6 });
-    await page.mouse.move(writing.x + 45, writing.y + 80, { steps: 6 });
-    await page.mouse.up();
-    await expect(ink.locator("path")).toHaveCount(1);
-    await page.getByRole("button", { name: "发送问题", exact: true }).click();
-    await expect(paper).toHaveAttribute("aria-busy", "false");
-    await expect
-      .poll(() =>
-        page.evaluate(() => {
-          const elements = JSON.parse(
-            localStorage.getItem("fcboard") || "[]",
-          ).filter((el: { isDeleted?: boolean }) => !el.isDeleted);
-          const question = elements.find(
-            (el: { type: string; customData?: { fcGenerated?: boolean } }) =>
-              el.type === "freedraw" && !el.customData?.fcGenerated,
-          );
-          const answer = elements.filter(
-            (el: { customData?: { fcWrittenText?: string } }) =>
-              el.customData?.fcWrittenText === "2",
-          );
-          return (
-            !!question &&
-            answer.length > 0 &&
-            answer.every(
-              (el: { y: number }) => el.y >= question.y + question.height,
-            )
-          );
-        }),
-      )
-      .toBe(true);
-    expect(recognized).toBe(true);
-    expect(requested).toBe(true);
-    await page.getByRole("button", { name: "折叠回答", exact: true }).click();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
-              (el: {
-                isDeleted?: boolean;
-                customData?: { fcWrittenText?: string };
-              }) => !el.isDeleted && el.customData?.fcWrittenText === "2",
-            ).length,
-        ),
-      )
-      .toBe(0);
+    const first = frame.locator("article.card").nth(0);
+    await first.locator("input").nth(1).check();
+    await expect(first.locator(".verdict")).toHaveAttribute(
+      "data-correct",
+      "false",
+    );
+    await expect(first.locator('.choice[data-key="A"]')).toHaveClass(/correct/);
+    await first.locator("h2").dblclick();
+    await expect(first.locator(".answer")).not.toHaveAttribute("open");
+    await first.locator("h2").dblclick();
+    await expect(first.locator(".answer")).toHaveAttribute("open");
+    await first.locator("input").nth(0).check();
+    await expect(first.locator(".verdict")).toHaveAttribute(
+      "data-correct",
+      "true",
+    );
+    await frame.locator("#next").click();
+    await expect(frame.locator("#page")).toHaveText("2 / 10");
+    await expect(frame.locator("#progress")).toHaveAttribute(
+      "aria-valuenow",
+      "2",
+    );
+    const calculation = frame.locator("article.card").nth(1);
+    await expect(calculation.locator("input,textarea")).toHaveCount(0);
+    await expect(calculation.locator(".quiz-diagram img")).toBeVisible();
+    await expect(calculation.locator("h2 img.formula").first()).toBeVisible();
+    await calculation.locator("h2").dblclick();
+    await expect(calculation.locator(".steps li")).toHaveCount(2);
+    await expect(
+      calculation.locator(".steps img.formula").last(),
+    ).toBeVisible();
+    await calculation.locator("h2").dblclick();
+    await expect(calculation.locator(".answer")).not.toHaveAttribute("open");
+    await frame.locator("#prev").click();
+    await expect(frame.locator("#page")).toHaveText("1 / 10");
+    await expect(first.locator("input").nth(0)).toBeChecked();
+    await panel.getByRole("button", { name: "关闭", exact: true }).click();
     await page.getByRole("button", { name: "展开回答", exact: true }).click();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
-              (el: {
-                isDeleted?: boolean;
-                customData?: { fcWrittenText?: string };
-              }) => !el.isDeleted && el.customData?.fcWrittenText === "2",
-            ).length,
-        ),
-      )
-      .toBeGreaterThan(0);
+    await expect(first.locator("input").nth(0)).toBeChecked();
     await page.screenshot({
-      path: info.outputPath("handwritten-question.png"),
+      path: info.outputPath(`physics-quiz-${viewport.width}.png`),
     });
   });
 }

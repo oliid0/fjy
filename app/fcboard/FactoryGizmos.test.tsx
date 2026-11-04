@@ -19,6 +19,7 @@ import { registerCanvasCommands } from "./canvasCommands";
 import { TeachingTools } from "./TeachingTools";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
 import { compassGeometry, gizmoPoint } from "./factoryGizmoShapes";
+import { adaptGizmo } from "./adaptiveGizmo";
 
 vi.mock("@fcboard/fcboard", async (original) => ({
   ...(await original<typeof import("@fcboard/fcboard")>()),
@@ -45,6 +46,71 @@ const pointer = (
       buttons: type === "pointerup" ? 0 : 1,
     }),
   );
+
+it("keeps compact ruler controls reachable while moving, shortening and drawing actual ink", async () => {
+  let api!: FcboardImperativeAPI;
+  await editorRender(
+    <Fcboard
+      onMount={({ excalidrawAPI }) => {
+        api = excalidrawAPI;
+      }}
+    />,
+  );
+  const commands = registerCanvasCommands(api);
+  act(() => {
+    renderWidget(
+      api,
+      adaptGizmo(
+        {
+          id: "phone-ruler",
+          kind: "ruler",
+          params: widgetDefaults(),
+          position: { x: 200, y: 200 },
+        },
+        { left: 16, top: 16, right: 374, bottom: 700 },
+        1,
+      ),
+      true,
+      { exact: true },
+    );
+    api.setActiveTool({ type: "freedraw" });
+  });
+  const tools = render(<TeachingTools api={api} />);
+  try {
+    const group = tools.container.querySelector('[data-gizmo="phone-ruler"]')!;
+    const before = readWidgets(api)[0];
+    const body = group.querySelector(":scope > rect")!;
+    pointer(
+      body,
+      "pointerdown",
+      before.position.x + 50,
+      before.position.y + 50,
+    );
+    pointer(body, "pointerup", before.position.x + 74, before.position.y + 78);
+    const moved = readWidgets(api)[0];
+    expect(moved.position).toEqual({
+      x: before.position.x + 24,
+      y: before.position.y + 28,
+    });
+    const resize = group.querySelector('[data-gizmo-action="resize"]')!;
+    expect(resize.querySelector("rect")).toHaveAttribute("width", "44");
+    fireEvent.keyDown(resize, { key: "ArrowLeft" });
+    expect(readWidgets(api)[0].params.stretchX).toBeLessThan(
+      moved.params.stretchX,
+    );
+    expect(resize.querySelector("rect")).toHaveAttribute("width", "44");
+    const edge = group.querySelector("line")!;
+    pointer(edge, "pointerdown", moved.position.x + 20, moved.position.y - 6);
+    pointer(edge, "pointerup", moved.position.x + 100, moved.position.y - 6);
+    await act(async () => {});
+    expect(
+      api.getSceneElements().filter((element) => element.type === "freedraw"),
+    ).toHaveLength(1);
+  } finally {
+    tools.unmount();
+    commands();
+  }
+});
 
 it("moves a ruler as one undo, rolls back interrupted rotation, and draws one constrained editable stroke", async () => {
   let api!: FcboardImperativeAPI;

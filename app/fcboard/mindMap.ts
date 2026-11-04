@@ -52,21 +52,27 @@ export const changeMindMapNode = (
         throw new Error("Mind map node limit reached");
       }
       const children = nodes.filter((item) => item.parent === index);
+      const vertical = node.direction === "bottom";
+      // Existing nodes retain their positions, so coordinate-based stroke
+      // ownership survives insertion even when several labels are blank.
+      const nextY = Math.max(...nodes.map((item) => item.y + item.height)) + 32;
       rows.splice(end, 0, "  ".repeat(node.depth + 1));
       positions.splice(end, 0, {
-        x: node.x + node.width + 100,
-        y: children.length
+        x: vertical ? node.x : node.x + node.width + 100,
+        y: vertical
+          ? nextY
+          : children.length
           ? Math.max(...children.map((item) => item.y + item.height)) + 40
           : node.y,
       });
       colors.splice(end, 0, "");
       if (styles) {
         styles.splice(end, 0, {
-          width: 300,
-          height: 150,
+          width: vertical ? node.width : 300,
+          height: vertical ? node.height : 150,
           color: "#0ed49f",
           opacity: 100,
-          direction: "right",
+          direction: vertical ? "bottom" : "right",
           columns: (styles[index]?.columns || node.depth + 1) + 1,
         });
       }

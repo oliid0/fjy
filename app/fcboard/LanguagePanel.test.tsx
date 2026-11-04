@@ -9,6 +9,8 @@ import {
 } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
+import { convertToFcboardElements } from "@fcboard/fcboard";
+
 import type { FcboardElement } from "@fcboard/element/types";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
@@ -18,6 +20,8 @@ import type { LocalPoint } from "@fcboard/math";
 import { render } from "./test/render";
 import { languageStudy } from "./test/language";
 import { LanguagePanel, readLanguageCard } from "./LanguagePanel";
+
+import { registerLanguageCommands } from "./languageCommands";
 import { observeInkAssistance } from "./inkAssistance";
 import { classroomCommands } from "./commands";
 import * as ai from "./ai";
@@ -280,5 +284,59 @@ it("hides a loading card on double click and ignores a late translation", async 
   } finally {
     release();
     view.unmount();
+  }
+});
+
+it("opens a card for a circled word in ordinary text without inserting a translation, and can pronounce the actual term", async () => {
+  vi.useFakeTimers();
+  const host = setup();
+  const stopTranslate = registerLanguageCommands(host.api);
+  const speak = vi.fn();
+  const stopVoice = classroomCommands.register(
+    "voice.speak",
+    "Read the selected term",
+    speak,
+  );
+  const [word] = convertToFcboardElements([
+    { type: "text", text: languageStudy.term, x: 220, y: 150, fontSize: 28 },
+  ]);
+  const circle = newFreeDrawElement({
+    type: "freedraw",
+    x: 180,
+    y: 110,
+    points: Array.from({ length: 65 }, (_, i) =>
+      pointFrom(
+        130 + 130 * Math.cos((i * Math.PI) / 32),
+        65 + 65 * Math.sin((i * Math.PI) / 32),
+      ),
+    ),
+    simulatePressure: true,
+    customData: { fcInk: { version: 2, pen: "hard", assist: "language" } },
+  });
+  host.chat.mockResolvedValue(
+    JSON.stringify({ ...languageStudy, synonyms: ["a similar expression"] }),
+  );
+  const view = render(<LanguagePanel api={host.api} />);
+  try {
+    act(() => host.api.updateScene({ elements: [word, circle] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.language_study") }),
+    ).toBeVisible();
+    expect(screen.getByText(/a similar expression/)).toBeVisible();
+    expect(host.recognize).toHaveBeenCalledTimes(1);
+    expect(host.api.getSceneElements()).toEqual([word]);
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.pronunciation") }),
+    );
+    await act(async () => {});
+    expect(speak).toHaveBeenCalledWith({ text: languageStudy.term });
+  } finally {
+    view.unmount();
+    host.release();
+    stopTranslate();
+    stopVoice();
   }
 });

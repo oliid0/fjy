@@ -25,6 +25,7 @@ import { useAnchoredPanel, placePanel } from "./floating";
 import { classroomCommands } from "./commands";
 import { Classroom } from "./native";
 import { animateSolid } from "./solidAnimation";
+import { adaptGizmo, gizmoViewport } from "./adaptiveGizmo";
 import { FactoryGizmos } from "./FactoryGizmos";
 import { FactoryShapes } from "./FactoryShapes";
 import {
@@ -551,9 +552,17 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           300 * widget.params.size,
       };
     }
-    const elements = renderWidget(api, widget, true, {
-      exact: factoryGizmoKinds.has(kind),
-    });
+    const viewport = factoryGizmoKinds.has(kind)
+      ? gizmoViewport(api)
+      : undefined;
+    const elements = renderWidget(
+      api,
+      viewport ? adaptGizmo(widget, viewport.viewport, viewport.scale) : widget,
+      true,
+      {
+        exact: factoryGizmoKinds.has(kind),
+      },
+    );
     if (classroomCommands.has("document.select")) {
       void classroomCommands.execute({
         name: "document.select",

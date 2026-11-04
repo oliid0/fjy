@@ -2,13 +2,13 @@ import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { boardContext, selectedBoardElements } from "./ai";
+import { boardContext, cropImage, selectedBoardElements } from "./ai";
 import {
   classroomCommands,
   commandObjectIds,
   executeBoardCommand,
 } from "./commands";
-import { boardInk } from "./digitalInk";
+import { boardInk, clipInk } from "./digitalInk";
 import { documentStrokeBounds, inkSnapshot } from "./documents";
 import { handwritingText } from "./handwriting";
 import { explainLanguage } from "./languageStudy";
@@ -43,6 +43,7 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
               "targetLanguage",
               "insert",
               "presentation",
+              "region",
               "signal",
             ].includes(key),
         ) ||
@@ -63,6 +64,19 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
         throw new Error(t("fcboard.invalid_style_parameters"));
       }
       const signal = args.signal as AbortSignal | undefined;
+      const region = args.region as
+        | { left: number; top: number; right: number; bottom: number }
+        | undefined;
+      if (
+        region &&
+        (![region.left, region.top, region.right, region.bottom].every(
+          Number.isFinite,
+        ) ||
+          region.right <= region.left ||
+          region.bottom <= region.top)
+      ) {
+        throw new Error(t("fcboard.invalid_selection_format"));
+      }
       signal?.throwIfAborted();
       const request = new AbortController();
       const abort = () => request.abort();
@@ -194,6 +208,38 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
                 : boardInk(unknown);
             }
           }
+          if (region) {
+            known.length = 0;
+            if (doc) {
+              capture = async () =>
+                cropImage(
+                  await inkSnapshot(
+                    documentSource,
+                    region.bottom - region.top,
+                    1000,
+                    region.top,
+                  ),
+                  {
+                    left: region.left / 1000,
+                    right: region.right / 1000,
+                    top: 0,
+                    bottom: 1,
+                  },
+                  request.signal,
+                );
+              strokes = clipInk(
+                documentSource
+                  .filter((stroke) => !stroke.text && !stroke.image)
+                  .map((stroke) => stroke.points),
+                region,
+              );
+            } else {
+              capture = async () =>
+                (await boardContext(api, false, boardSource, region)).image ||
+                "";
+              strokes = boardInk(boardSource, region);
+            }
+          }
           if (capture) {
             const recognized = await recognizeHandwriting(
               capture,
@@ -241,6 +287,7 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
         assertCurrent();
         const after = doc ? readDocument()?.ink || [] : api.getSceneElements();
         return {
+          study,
           text: study.term,
           translation: study.translation,
           targetLanguage,

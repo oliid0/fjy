@@ -200,6 +200,7 @@ const cancellable = new Set([
   "voice.speak",
   "math.evaluate",
   "language.translate",
+  "language.card",
   "tools.configure",
   "files.open",
   "document.next",

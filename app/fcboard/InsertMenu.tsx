@@ -11,7 +11,7 @@ import { TransientMessage } from "./TransientMessage";
 import { MaterialPanel } from "./MaterialPanel";
 
 import { classroomCommands } from "./commands";
-import { insertionPoint } from "./board";
+import { contentViewport, insertionPoint } from "./board";
 import {
   configureInsertion,
   insertionDefaults,
@@ -195,6 +195,40 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
           Math.min(area.top + 400 * unit, area.bottom - 550 * unit - margin),
         ),
       };
+      if ((area.right - area.left) * scale < 620) {
+        // A narrow board has room for readable writing boxes in a column;
+        // shrinking the native four-node tree also shrinks its writing areas.
+        const count = base.outline.split("\n").length;
+        const gap = 32 / scale;
+        const height = Math.max(
+          48 / scale,
+          Math.min(
+            96 / scale,
+            (area.bottom - area.top - 64 / scale - gap * (count - 1)) / count,
+          ),
+        );
+        const width = Math.min(
+          240 / scale,
+          area.right - area.left - 80 / scale,
+        );
+        base.nodeSize = { width, height };
+        base.nodePositions = Array.from({ length: count }, (_, index) => ({
+          x: 0,
+          y: index * (height + gap),
+        }));
+        base.nodeStyles = Array.from({ length: count }, () => ({
+          width,
+          height,
+          color: "#0ed49f",
+          opacity: 100,
+          direction: "bottom",
+          columns: 1,
+        }));
+        base.position = {
+          x: (area.left + area.right - width) / 2,
+          y: area.top + 32 / scale,
+        };
+      }
     }
     base.color =
       kind === "fourline"
@@ -206,6 +240,11 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
           )?.pen?.color ||
           api.getAppState().currentItemStrokeColor ||
           "#333333";
+    if (kind === "table") {
+      const area = visible || contentViewport(api);
+      base.width = Math.min(base.width, area.right - area.left - 16);
+      base.height = Math.min(base.height, area.bottom - area.top - 16);
+    }
     if (kind === "fourline") {
       const state = api.getAppState();
       const scale =

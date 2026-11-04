@@ -112,8 +112,9 @@ export const factoryGizmoShapes = (
       fontSize,
       strokeColor: color,
     });
-  const density =
-    widget.params.gizmo?.density ?? (window.devicePixelRatio || 1);
+  const density = widget.params.gizmo?.layout
+    ? widget.params.gizmo.unit / (GIZMO_UNIT * widget.params.size)
+    : widget.params.gizmo?.density ?? (window.devicePixelRatio || 1);
   const { width: bodyWidth } = gizmoLayout(widget.kind, widget.params.stretchX);
   const ticks = (vertical = false) => {
     const count = Math.floor((bodyWidth - 50 * GIZMO_UNIT) / (14 * GIZMO_UNIT));
@@ -234,7 +235,7 @@ export const factoryGizmoShapes = (
       180 + 20 * unit,
       180 - 78 * unit,
       `${Math.round(Math.min(normalized, 360 - normalized))}°`,
-      48 * unit,
+      (widget.params.gizmo?.layout ? 18 : 48) * unit,
     );
   } else if (widget.kind === "compass") {
     const { dp, leg, radius, hinge } = compassGeometry(widget);
@@ -408,7 +409,7 @@ export const factoryGizmoShapes = (
           78 * unit,
         width: element.width * size,
         height: element.height * size,
-        fontSize: 48 * unit,
+        fontSize: (widget.params.gizmo?.layout ? 18 : 48) * unit,
         angle: 0,
       } as FcboardElementSkeleton;
     }

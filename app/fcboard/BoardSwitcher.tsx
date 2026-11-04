@@ -242,6 +242,11 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       })),
     ];
     const persist = () => {
+      try {
+        controller.checkpoint();
+      } catch (failure) {
+        setError(String(failure));
+      }
       void controller.flush().catch(() => {});
     };
     window.addEventListener("pagehide", persist);

@@ -178,33 +178,40 @@ for (const width of [390, 1920]) {
         );
       await expect.poll(current).toBeDefined();
       const before = await current();
-      await toolbar.getByRole("button", { name: "选择", exact: true }).click();
       const group = page.locator(`[data-gizmo="${before.id}"]`);
       await expect(group).toBeVisible();
       const body = group
-        .locator(
-          kind === "ruler" ? "rect" : kind === "setSquare" ? "polygon" : "path",
-        )
+        .locator(kind === "setSquare" ? ":scope > polygon" : ":scope > rect")
         .first();
       const box = (await body.boundingBox())!;
       const scale = await page.evaluate(
         () =>
           JSON.parse(localStorage.getItem("fcboard-state") || "{}").zoom.value,
       );
-      const from = {
-        x: box.x + box.width * (kind === "setSquare" ? 0.2 : 0.5),
-        y: box.y + box.height * (kind === "setSquare" ? 0.2 : 0.6),
-      };
-      expect(
-        await page.evaluate(
-          ({ from, id }) =>
-            document
-              .elementFromPoint(from.x, from.y)
-              ?.closest("[data-gizmo]")
-              ?.getAttribute("data-gizmo") === id,
-          { from, id: before.id },
-        ),
-      ).toBe(true);
+      const left = Math.max(4, box.x - 10);
+      const top = Math.max(4, box.y - 10);
+      const right = Math.min(width - 4, box.x + box.width + 10);
+      const bottom = Math.min(780, box.y + box.height + 10);
+      const select = toolbar.getByRole("button", { name: "选择", exact: true });
+      await select.click();
+      await page.mouse.move(left, top);
+      await page.mouse.down();
+      for (const [x, y] of [
+        [right, top],
+        [right, bottom],
+        [left, bottom],
+        [left, top],
+      ]) {
+        await page.mouse.move(x, y, { steps: 8 });
+      }
+      await page.mouse.up();
+      const actions = page.getByRole("toolbar", {
+        name: "选区操作",
+        exact: true,
+      });
+      await expect(actions).toBeVisible();
+      await expect(group).not.toBeVisible();
+      const from = { x: (left + right) / 2, y: (top + bottom) / 2 };
       await dragTouch(page, from, { x: from.x + 24, y: from.y + 28 });
       await expect
         .poll(async () => (await current()).position.x)
@@ -212,8 +219,7 @@ for (const width of [390, 1920]) {
       await expect
         .poll(async () => (await current()).position.y)
         .toBeCloseTo(before.position.y + 28 / scale, 0);
-      // Use the real delete handle so the next tool has no overlapping hit layer.
-      await group.getByRole("button", { name: "删除", exact: true }).click();
+      await actions.getByRole("button", { name: "删除", exact: true }).click();
       await expect.poll(current).toBeUndefined();
     }
   });

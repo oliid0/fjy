@@ -1922,7 +1922,8 @@
       "expires": "云端文件保留 24 小时。"
     },
     "no_subject_layers_returned": "图片服务未返回有效主体图层，原笔迹已保留",
-    "subject_layer_requires_transparency": "主体图层没有有效透明背景，原笔迹已保留"
+    "subject_layer_requires_transparency": "主体图层没有有效透明背景，原笔迹已保留",
+    "synonyms": "同义词与近义表达"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "数量比较",

@@ -240,7 +240,10 @@ it("places new document insertions in the actual scrolled viewport and sizes fou
         expect(bounds[1]).toBeGreaterThanOrEqual(900);
         expect(bounds[2]).toBeLessThanOrEqual(700);
         expect(bounds[3]).toBeLessThanOrEqual(1300);
-        expect(object.nodeSize!.width / object.nodeSize!.height).toBe(2);
+        expect(object.nodeSize!.height).toBeGreaterThanOrEqual(48);
+        expect(
+          object.nodeStyles?.every((node) => node.direction === "bottom"),
+        ).toBe(true);
       }
     }
     await act(async () => {

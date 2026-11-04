@@ -201,7 +201,7 @@ describe("selection-driven classroom controls", () => {
       );
       await waitFor(() =>
         expect(
-          screen.getByRole("button", { name: t("fcboard.collapse_answer") }),
+          screen.getByRole("button", { name: t("fcboard.expand_answer") }),
         ).toBeEnabled(),
       );
       expect(read).toHaveBeenCalledWith(api, whole);
@@ -2010,12 +2010,9 @@ describe("selection-driven classroom controls", () => {
         });
       });
       act(() => partial({ time: 1, text: "牛顿第二" }));
-      expect(screen.getByText("牛顿第二")).toBeVisible();
-      fireEvent.click(
-        screen.getByRole("button", {
-          name: t("fcboard.restore_recording_window"),
-        }),
-      );
+      expect(
+        screen.getByRole("dialog", { name: t("fcboard.recording") }),
+      ).toBeVisible();
       expect(screen.getByRole("log")).toHaveTextContent("牛顿第二");
       await act(async () => {
         await classroomCommands.execute({ name: "record.stop" });
@@ -2087,7 +2084,7 @@ describe("selection-driven classroom controls", () => {
     }
   });
 
-  it("keeps recording behind the board with pause, resume, restore and stop in its floating controls", async () => {
+  it("keeps screen recording behind the board with pause, resume, restore and stop in its floating controls", async () => {
     await saveRecordings([]);
     saveSettings({ ...defaults, speech: "local", autoSummary: false }, false);
     vi.spyOn(BoardRecorder.prototype, "start").mockResolvedValue(undefined);
@@ -2112,7 +2109,7 @@ describe("selection-driven classroom controls", () => {
         await classroomCommands.execute({ name: "record.open" });
         await classroomCommands.execute({
           name: "record.start",
-          args: { mode: "audio" },
+          args: { mode: "screen" },
         });
       });
       expect(

@@ -179,7 +179,7 @@ test("AI style commands update selected text and the next insertion through orig
         expect(observation.canvas.elements).toContainEqual(
           expect.objectContaining({
             text: "已统一样式",
-            fontSize: 40,
+            fontSize: 20,
             color: "#dc2626",
           }),
         );
@@ -233,7 +233,10 @@ test("AI style commands update selected text and the next insertion through orig
   } else {
     await selectMenu(page, "提问与讲解");
   }
-  await writeQuestion(page, "把选中的字设为40号红色居中，再写已统一样式");
+  await writeQuestion(
+    page,
+    "请标注选中的文字，将其设为40号红色居中，再写已统一样式",
+  );
   await expect.poll(() => verified).toBe(true);
   await expect
     .poll(() =>
@@ -252,11 +255,12 @@ test("AI style commands update selected text and the next insertion through orig
           text.length === 2 &&
           text.every(
             (element: {
+              text: string;
               fontSize: number;
               strokeColor: string;
               textAlign: string;
             }) =>
-              element.fontSize === 40 &&
+              element.fontSize === (element.text === "已统一样式" ? 20 : 40) &&
               element.strokeColor === "#dc2626" &&
               element.textAlign === "center",
           )

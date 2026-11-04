@@ -18,10 +18,17 @@ import { answerFontSize, layoutBoardText } from "./textLayout";
 import type { InkStroke } from "./documents";
 import type { ContentRect } from "./placement";
 
-export const noWritingSpace = () =>
-  new Error(
-    t("fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing"),
-  );
+export class WritingSpaceError extends Error {
+  constructor() {
+    super(
+      t(
+        "fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing",
+      ),
+    );
+    this.name = "WritingSpaceError";
+  }
+}
+export const noWritingSpace = () => new WritingSpaceError();
 export type LessonWritingContext = {
   viewport: ContentRect;
   obstacles: ContentRect[];

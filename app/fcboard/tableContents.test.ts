@@ -16,73 +16,90 @@ import { carryDocumentInsertionContents } from "./tableContents";
 import { shapeInk } from "./documents";
 import { sceneAPI } from "./test/scene";
 
-it("keeps raw handwriting with the same nodes through child insertion, branch deletion, node movement and clearing", async () => {
-  const api = sceneAPI();
-  const original = insertionDefaults("mindmap", { x: 100, y: 100 });
-  await renderInsertion(api, original, true, { exact: true });
-  const object = readInsertions(api)[0];
-  const nodes = mindMapNodes(object);
-  const raw = (index: number) => {
-    const x = object.position.x + nodes[index].x + 20;
-    const y = object.position.y + nodes[index].y + 20;
-    return newFreeDrawElement({
-      type: "freedraw",
-      x,
-      y,
-      points: [pointFrom(0, 0), pointFrom(20, 10)],
-      strokeColor: "#123456",
-      simulatePressure: true,
-      groupIds: [object.id],
-      customData: {
-        fcInsertion: { ...object, inkCell: index, origin: { x, y } },
-      },
-    });
-  };
-  const first = raw(1);
-  const third = raw(3);
-  api.updateScene({ elements: [...api.getSceneElements(), first, third] });
-  await renderInsertion(
-    api,
-    changeMindMapNode(readInsertions(api)[0], 1, "add")!,
-  );
-  expect(
-    api.getSceneElements().find((element) => element.id === third.id)
-      ?.customData?.fcInsertion.inkCell,
-  ).toBe(4);
-  expect(
-    api.getSceneElements().find((element) => element.id === third.id),
-  ).toMatchObject({ x: third.x, y: third.y });
-  await renderInsertion(
-    api,
-    changeMindMapNode(readInsertions(api)[0], 1, "delete")!,
-  );
-  expect(
-    api.getSceneElements().some((element) => element.id === first.id),
-  ).toBe(false);
-  expect(
-    api.getSceneElements().find((element) => element.id === third.id)
-      ?.customData?.fcInsertion.inkCell,
-  ).toBe(2);
-  const current = readInsertions(api)[0];
-  const node = mindMapNodes(current)[2];
-  const moved = changeMindMapNode(current, 2, "move", {
-    x: node.x + 50,
-    y: node.y + 30,
-  })!;
-  await renderInsertion(api, moved);
-  expect(
-    api.getSceneElements().find((element) => element.id === third.id),
-  ).toMatchObject({ x: third.x + 50, y: third.y + 30 });
-  await renderInsertion(
-    api,
-    changeMindMapNode(readInsertions(api)[0], 2, "clear")!,
-    true,
-    { removeIds: [third.id] },
-  );
-  expect(
-    api.getSceneElements().some((element) => element.id === third.id),
-  ).toBe(false);
-});
+it.each(["right", "bottom"])(
+  "keeps raw handwriting with %s nodes through child insertion, branch deletion, node movement and clearing",
+  async (direction) => {
+    const api = sceneAPI();
+    const original = insertionDefaults("mindmap", { x: 100, y: 100 });
+    if (direction === "bottom") {
+      original.nodePositions = Array.from({ length: 4 }, (_, index) => ({
+        x: 0,
+        y: index * 120,
+      }));
+      original.nodeStyles = Array.from({ length: 4 }, () => ({
+        width: 240,
+        height: 80,
+        color: "#0ed49f",
+        opacity: 100,
+        direction,
+        columns: 1,
+      }));
+    }
+    await renderInsertion(api, original, true, { exact: true });
+    const object = readInsertions(api)[0];
+    const nodes = mindMapNodes(object);
+    const raw = (index: number) => {
+      const x = object.position.x + nodes[index].x + 20;
+      const y = object.position.y + nodes[index].y + 20;
+      return newFreeDrawElement({
+        type: "freedraw",
+        x,
+        y,
+        points: [pointFrom(0, 0), pointFrom(20, 10)],
+        strokeColor: "#123456",
+        simulatePressure: true,
+        groupIds: [object.id],
+        customData: {
+          fcInsertion: { ...object, inkCell: index, origin: { x, y } },
+        },
+      });
+    };
+    const first = raw(1);
+    const third = raw(3);
+    api.updateScene({ elements: [...api.getSceneElements(), first, third] });
+    await renderInsertion(
+      api,
+      changeMindMapNode(readInsertions(api)[0], 1, "add")!,
+    );
+    expect(
+      api.getSceneElements().find((element) => element.id === third.id)
+        ?.customData?.fcInsertion.inkCell,
+    ).toBe(4);
+    expect(
+      api.getSceneElements().find((element) => element.id === third.id),
+    ).toMatchObject({ x: third.x, y: third.y });
+    await renderInsertion(
+      api,
+      changeMindMapNode(readInsertions(api)[0], 1, "delete")!,
+    );
+    expect(
+      api.getSceneElements().some((element) => element.id === first.id),
+    ).toBe(false);
+    expect(
+      api.getSceneElements().find((element) => element.id === third.id)
+        ?.customData?.fcInsertion.inkCell,
+    ).toBe(2);
+    const current = readInsertions(api)[0];
+    const node = mindMapNodes(current)[2];
+    const moved = changeMindMapNode(current, 2, "move", {
+      x: node.x + 50,
+      y: node.y + 30,
+    })!;
+    await renderInsertion(api, moved);
+    expect(
+      api.getSceneElements().find((element) => element.id === third.id),
+    ).toMatchObject({ x: third.x + 50, y: third.y + 30 });
+    await renderInsertion(
+      api,
+      changeMindMapNode(readInsertions(api)[0], 2, "clear")!,
+      true,
+      { removeIds: [third.id] },
+    );
+    expect(
+      api.getSceneElements().some((element) => element.id === third.id),
+    ).toBe(false);
+  },
+);
 
 it.each(["fourline", "mindmap"] as const)(
   "translates %s raw ink from current geometry once after a prior whole-object move, with the same courseware result",

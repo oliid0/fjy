@@ -88,6 +88,7 @@ export type WidgetParams = {
     ball?: number;
     leg?: number;
     opening?: number;
+    layout?: "bottom" | "side";
   };
   factory?: boolean;
   shape?: FactoryFlatShapeData;
@@ -134,21 +135,22 @@ export const configureWidget = (
     if (
       !value ||
       !Number.isFinite(value.unit) ||
-      Object.entries(value).some(
-        ([key, number]) =>
-          ![
-            "unit",
-            "density",
-            "scaleUnit",
-            "needle",
-            "ball",
-            "leg",
-            "opening",
-          ].includes(key) ||
-          typeof number !== "number" ||
-          !Number.isFinite(number) ||
-          number <= 0 ||
-          number > 1e9,
+      Object.entries(value).some(([key, number]) =>
+        key === "layout"
+          ? typeof number !== "string" || !["bottom", "side"].includes(number)
+          : ![
+              "unit",
+              "density",
+              "scaleUnit",
+              "needle",
+              "ball",
+              "leg",
+              "opening",
+            ].includes(key) ||
+            typeof number !== "number" ||
+            !Number.isFinite(number) ||
+            number <= 0 ||
+            number > 1e9,
       )
     ) {
       throw new Error("Invalid native gizmo geometry");

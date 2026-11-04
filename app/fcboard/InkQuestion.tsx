@@ -28,6 +28,7 @@ export const InkQuestion = ({
   onSubmit,
   onClose,
   hasResult,
+  resultOpen = true,
   onToggleResult,
   onClearResult,
 }: {
@@ -40,6 +41,7 @@ export const InkQuestion = ({
   ) => Promise<void>;
   onClose: () => void;
   hasResult?: boolean;
+  resultOpen?: boolean;
   onToggleResult?: () => void;
   onClearResult?: () => void;
 }) => {
@@ -56,6 +58,7 @@ export const InkQuestion = ({
   const [answered, setAnswered] = useState(false);
   const [persisted, setPersisted] = useState(false);
   const [answer, setAnswer] = useState({ collapsed: false, count: 0 });
+  const collapsed = hasResult ? !resultOpen : answer.collapsed;
   const questionIds = useRef<string[]>([]);
   const mounted = useRef(true);
   const request = useRef<AbortController | null>(null);
@@ -551,12 +554,10 @@ export const InkQuestion = ({
         </IconButton>
         <IconButton
           aria-label={t(
-            answer.collapsed
-              ? "fcboard.expand_answer"
-              : "fcboard.collapse_answer",
+            collapsed ? "fcboard.expand_answer" : "fcboard.collapse_answer",
           )}
           disabled={busy || (!answer.count && !hasResult)}
-          aria-pressed={answer.collapsed}
+          aria-pressed={collapsed}
           size="small"
           onClick={() => {
             if (hasResult && onToggleResult) {

@@ -1603,7 +1603,7 @@
     "type_on_board": "ਬੋਰਡ 'ਤੇ ਟਾਈਪ ਕਰੋ",
     "type_on_board_including_chinese": "ਬੋਰਡ 'ਤੇ ਟਾਈਪ ਕਰੋ, ਚੀਨੀ ਵੀ ਸ਼ਾਮਲ ਹੈ",
     "send": "ਭੇਜੋ",
-    "fangcheng_education": "ਫੈਂਗਚੇਂਗ ਐਜੂਕੇਸ਼ਨ",
+    "education": "ਫੈਂਗਚੇਂਗ ਐਜੂਕੇਸ਼ਨ",
     "fcboard_device_control": "Fcboard · ਜੰਤਰ ਕੰਟਰੋਲ",
     "unsupported_lesson_command_type": "ਅਸਮਰਥਿਤ ਪਾਠ ਕਮਾਂਡਃ {{type}}",
     "command_unavailable_command": "ਹੁਕਮ ਅਣਉਪਲਬਧ: {{command}}",

@@ -384,7 +384,7 @@
     "clearCanvasMessage": "නැවත පූරණය ක් ‍ රියා නොකරන්නේ නම්, Canvas</button> ඉවත් කිරීමට <button> උත්සාහ කරන්න.",
     "clearCanvasCaveat": "කැන්වසය පිරිසිදු කිරීමේ සීමාව",
     "trackedToSentry": "Sentry වෙත ලුහුබඳින ලදි",
-    "openIssueMessage": "සහාය සඳහා, <button>Fangcheng අධ්යාපන වෙබ් අඩවියට පිවිසෙන්න</button>. සහාය සම්බන්ධ කර ගැනීමේදී ඔබට පහත රෝග විනිශ්චය පිටපත් කළ හැක.",
+    "openIssueMessage": "සහාය සඳහා, <button>අධ්යාපන වෙබ් අඩවියට පිවිසෙන්න</button>. සහාය සම්බන්ධ කර ගැනීමේදී ඔබට පහත රෝග විනිශ්චය පිටපත් කළ හැක.",
     "sceneContent": "දර්ශන අන්තර්ගතය"
   },
   "shareDialog": {
@@ -1191,7 +1191,7 @@
     "expand_answer": "පිළිතුර පුළුල් කරන්න",
     "explain_the_step_i_circled_or_use_another_example": "මම දාපු ලින්ක් එක හෝ වෙනත් උදාහරණයකින් පැහැදිලි කරන්නම්...",
     "face_colors": "මුහුණු වර්ණ",
-    "fangcheng_education": "Fangcheng අධ්යාපන",
+    "education": "අධ්යාපන",
     "fast_answer_model_id_blank_to_use_the_main_model": "ඉක්මන් පිළිතුරු ආදර්ශ හැඳුනුම්පත (ප්රධාන ආකෘතිය භාවිතා කිරීමට හිස්)",
     "fcboard_device_control": "Fcboard · උපාංග පාලනය",
     "fcboard_website": "Fcboard වෙබ් අඩවිය",

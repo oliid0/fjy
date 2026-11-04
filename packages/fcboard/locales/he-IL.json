@@ -1382,7 +1382,7 @@
     "type_on_board": "הקלד על הסיפון",
     "type_on_board_including_chinese": "הקלד על הסיפון, כולל סינית",
     "send": "שלח",
-    "fangcheng_education": "Fangcheng Education",
+    "education": "Education",
     "fcboard_device_control": "Fcboard · בקרת מכשירים",
     "unsupported_lesson_command_type": "פקודת שיעור לא נתמכת: {{type}}",
     "command_unavailable_command": "הפקודה אינה זמינה: {{command}}",

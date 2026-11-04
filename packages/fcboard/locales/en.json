@@ -384,7 +384,7 @@
     "clearCanvasMessage": "If reloading doesn't work, try <button>clearing the canvas</button>.",
     "clearCanvasCaveat": " This will result in loss of work ",
     "trackedToSentry": "Diagnostics remain on this device.",
-    "openIssueMessage": "For assistance, visit the <button>Fangcheng Education website</button>. You can copy the diagnostics below when contacting support.",
+    "openIssueMessage": "For assistance, visit the <button>Education website</button>. You can copy the diagnostics below when contacting support.",
     "sceneContent": "Scene content:"
   },
   "shareDialog": {
@@ -1508,7 +1508,7 @@
     "type_on_board": "Type on board",
     "type_on_board_including_chinese": "Type on board, including Chinese",
     "send": "Send",
-    "fangcheng_education": "Fangcheng Education",
+    "education": "Education",
     "fcboard_device_control": "Fcboard · Device control",
     "unsupported_lesson_command_type": "Unsupported lesson command: {{type}}",
     "command_unavailable_command": "Command unavailable: {{command}}",

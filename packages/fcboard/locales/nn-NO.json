@@ -1604,7 +1604,7 @@
     "type_on_board": "Skriv om bord",
     "type_on_board_including_chinese": "Skriv om bord, inkludert kinesiske",
     "send": "Send",
-    "fangcheng_education": "Fangcheng Utdanning",
+    "education": "Utdanning",
     "fcboard_device_control": "Fcboard · Enhetskontroll",
     "unsupported_lesson_command_type": "ikkje-støtta leksjonskommando: {{type}}",
     "command_unavailable_command": "Kommando utilgjengeleg: {{command}}",

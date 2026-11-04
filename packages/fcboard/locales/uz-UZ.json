@@ -384,7 +384,7 @@
     "clearCanvasMessage": "Agar qayta yuklash ishlamasa, <button>Clearing Canvas</button>-ni sinab ko'ring.",
     "clearCanvasCaveat": "Bu ishning yo'qolishiga olib keladi",
     "trackedToSentry": "Diagnostika ushbu qurilmada davom etmoqda.",
-    "openIssueMessage": "Yordam uchun <button>Fangcheng Ta'lim veb-saytiga tashrif buyuring </button>. Qo'llab-quvvatlash bilan bog'langanda quyidagi diagnostikani nusxalashingiz mumkin.",
+    "openIssueMessage": "Yordam uchun <button>Ta'lim veb-saytiga tashrif buyuring </button>. Qo'llab-quvvatlash bilan bog'langanda quyidagi diagnostikani nusxalashingiz mumkin.",
     "sceneContent": "Sahna ko'rinishi:"
   },
   "shareDialog": {
@@ -1176,7 +1176,7 @@
     "expand_answer": "Javobni kengaytiring",
     "explain_the_step_i_circled_or_use_another_example": "Yoki boshqa bir misolni keltirib o'tsam...",
     "face_colors": "Rangli yuzlar",
-    "fangcheng_education": "Fangcheng Ta'lim",
+    "education": "Ta'lim",
     "fast_answer_model_id_blank_to_use_the_main_model": "Tez javob berish modeli identifikatori (asosiy modeldan foydalanish uchun bo'sh)",
     "fcboard": "Flashboard Flashboard",
     "fcboard_device_control": "Dvigatelni boshqarish - Dvigatelni boshqarish",

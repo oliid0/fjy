@@ -384,7 +384,7 @@
     "clearCanvasMessage": "Jei perkrovimas neveikia, pabandykite <button> išvalyti drobę</button>.",
     "clearCanvasCaveat": "Dėl to neteksite darbo",
     "trackedToSentry": "Diagnostika lieka šiame įrenginyje.",
-    "openIssueMessage": "Jei reikia pagalbos, apsilankykite <button>Fangcheng Education svetainėje</button>. Kreipdamiesi į pagalbos tarnybą galite nukopijuoti toliau pateiktą diagnostiką.",
+    "openIssueMessage": "Jei reikia pagalbos, apsilankykite <button>Education svetainėje</button>. Kreipdamiesi į pagalbos tarnybą galite nukopijuoti toliau pateiktą diagnostiką.",
     "sceneContent": "Scenos turinys:"
   },
   "shareDialog": {
@@ -1604,7 +1604,7 @@
     "type_on_board": "Tipas laive",
     "type_on_board_including_chinese": "Tipas laive, įskaitant kinų",
     "send": "Siųsti",
-    "fangcheng_education": "Fangcheng švietimas",
+    "education": "švietimas",
     "fcboard_device_control": "Fcboard · Įrenginio valdymas",
     "unsupported_lesson_command_type": "Nepalaikoma pamokos komanda: {{type}}",
     "command_unavailable_command": "Komanda nepasiekiama: {{command}}",

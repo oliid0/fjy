@@ -1382,7 +1382,7 @@
     "type_on_board": "Írja be a fedélzeten",
     "type_on_board_including_chinese": "Írja be a fedélzeten, beleértve a kínait is",
     "send": "Küldés",
-    "fangcheng_education": "Fangcheng oktatás",
+    "education": "oktatás",
     "fcboard_device_control": "Fcboard · Eszközvezérlés",
     "unsupported_lesson_command_type": "Nem támogatott leckeparancs: {{type}}",
     "command_unavailable_command": "A parancs nem elérhető: {{command}}",

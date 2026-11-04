@@ -384,7 +384,7 @@
     "clearCanvasMessage": "ถ้าโหลดไม่ได้ ให้ลอง <button>เคลียร์ผืนผ้าใบ</button>",
     "clearCanvasCaveat": "สิ่งนี้จะส่งผลให้สูญเสียงาน",
     "trackedToSentry": "การวินิจฉัยยังคงอยู่ในอุปกรณ์นี้",
-    "openIssueMessage": "สำหรับความช่วยเหลือโปรดไปที่เว็บไซต์ <button>Fangcheng Education</button> คุณสามารถคัดลอกการวินิจฉัยด้านล่างเมื่อติดต่อฝ่ายสนับสนุน",
+    "openIssueMessage": "สำหรับความช่วยเหลือโปรดไปที่เว็บไซต์ <button>Education</button> คุณสามารถคัดลอกการวินิจฉัยด้านล่างเมื่อติดต่อฝ่ายสนับสนุน",
     "sceneContent": "เนื้อหาฉาก:"
   },
   "shareDialog": {
@@ -988,7 +988,7 @@
     "expand_answer": "ขยายคำตอบ",
     "explain_the_step_i_circled_or_use_another_example": "อธิบายขั้นตอนที่ฉันวงกลมหรือใช้ตัวอย่างอื่น...",
     "face_colors": "สีผิวหน้า",
-    "fangcheng_education": "การศึกษาฝางเฉิง",
+    "education": "การศึกษาฝางเฉิง",
     "fast_answer_model_id_blank_to_use_the_main_model": "ID โมเดลคำตอบที่รวดเร็ว (ว่างเปล่าเพื่อใช้โมเดลหลัก)",
     "fcboard": "Fcboard",
     "fcboard_device_control": "Fcboard · การควบคุมอุปกรณ์",

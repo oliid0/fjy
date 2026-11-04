@@ -1382,7 +1382,7 @@
     "type_on_board": "बोर्ड पर टाइप करें",
     "type_on_board_including_chinese": "चीनी सहित बोर्ड पर टाइप करें",
     "send": "भेजें",
-    "fangcheng_education": "फांगचेंग शिक्षा",
+    "education": "फांगचेंग शिक्षा",
     "fcboard_device_control": "एफसीबोर्ड · डिवाइस नियंत्रण",
     "unsupported_lesson_command_type": "असमर्थित पाठ आदेश: {{type}}",
     "command_unavailable_command": "कमांड अनुपलब्ध: {{command}}",

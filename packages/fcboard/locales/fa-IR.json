@@ -1382,7 +1382,7 @@
     "type_on_board": "نوع در هیئت مدیره",
     "type_on_board_including_chinese": "نوع در هیئت مدیره، از جمله چینی",
     "send": "ارسال",
-    "fangcheng_education": "آموزش Fangcheng",
+    "education": "آموزش Fangcheng",
     "fcboard_device_control": "Fcboard · کنترل دستگاه",
     "unsupported_lesson_command_type": "فرمان درس پشتیبانی نشده: {{type}}",
     "command_unavailable_command": "فرمان در دسترس نیست: {{command}}",

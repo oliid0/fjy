@@ -1607,7 +1607,7 @@
     "type_on_board": "Tipus a bord",
     "type_on_board_including_chinese": "Tipus a bord, inclòs el xinès",
     "send": "Envia",
-    "fangcheng_education": "Educació Fangcheng",
+    "education": "Educació Fangcheng",
     "fcboard_device_control": "Fcboard · Control del dispositiu",
     "unsupported_lesson_command_type": "Ordre de lliçó no compatible: {{type}}",
     "command_unavailable_command": "Ordre no disponible: {{command}}",

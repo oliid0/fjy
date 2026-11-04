@@ -384,7 +384,7 @@
     "clearCanvasMessage": "Қайта жүктеу жұмыс істемесе, <button></button> кенепті тазалап көріңіз.",
     "clearCanvasCaveat": "Бұл жұмысты жоғалтуға әкеледі",
     "trackedToSentry": "Диагностика осы құрылғыда қалады.",
-    "openIssueMessage": "Көмек алу үшін <button>Fangcheng Education веб-сайтына кіріңіз</button>. Қолдау қызметіне хабарласқанда төмендегі диагностиканы көшіруге болады.",
+    "openIssueMessage": "Көмек алу үшін <button>Education веб-сайтына кіріңіз</button>. Қолдау қызметіне хабарласқанда төмендегі диагностиканы көшіруге болады.",
     "sceneContent": "Көрініс мазмұны:"
   },
   "shareDialog": {
@@ -1384,7 +1384,7 @@
     "type_on_board": "Тақтаға теріңіз",
     "type_on_board_including_chinese": "Борттағы түрін, оның ішінде қытай тілін",
     "send": "Жіберу",
-    "fangcheng_education": "Fangcheng білім беру",
+    "education": "білім беру",
     "fcboard_device_control": "[Fcboard · Құрылғыны басқару",
     "unsupported_lesson_command_type": "Қолдау көрсетілмейтін сабақ командасы: {{type}}",
     "command_unavailable_command": "Пәрмен қолжетімсіз: {{command}}",

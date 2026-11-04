@@ -1382,7 +1382,7 @@
     "type_on_board": "オンボードのタイプ",
     "type_on_board_including_chinese": "中国語を含む機内文字",
     "send": "送信",
-    "fangcheng_education": "方城教育",
+    "education": "方城教育",
     "fcboard_device_control": "Fcboard · デバイス制御",
     "unsupported_lesson_command_type": "サポートされていないレッスン コマンド: {{type}}",
     "command_unavailable_command": "コマンドは使用できません: {{command}}",

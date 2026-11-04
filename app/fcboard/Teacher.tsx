@@ -423,7 +423,7 @@ export const Teacher = ({
       const messages: Message[] = [
         {
           role: "system",
-          content: `你是方成教育的现场教师。默认用当前界面语言 ${
+          content: `你是现场教师。默认用当前界面语言 ${
             getLanguage().code
           } 讲述和板书，用户明确要求的语言优先。${LESSON_FORMAT}\n${LESSON_TOOLS_FORMAT}\n如需先观察或准备工具，返回 {"action":"commands","commands":[{"name":"已注册命令","args":{}}],"continue":true}，系统执行后返回真实结果和最新状态，你再决定下一步。可用 canvas.inspect 读取当前可见画布，math.evaluate 本地核算而不写板，其余工具按需要使用；不得编造结果、对象id或能力。准备完成返回 {"action":"lesson","lesson":上述课程JSON}，也可直接返回课程JSON。讲解准备阶段禁止递归调用 lesson.ask、lesson.teach 或另开 assistant.open；只有用户明确要求才删除、清空、录制或退出。已注册工具：\n${classroomCommands.describe()}\n${
             document

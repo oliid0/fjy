@@ -1383,7 +1383,7 @@
     "type_on_board": "Kirjoita koneeseen",
     "type_on_board_including_chinese": "Kirjoita koneeseen, mukaan lukien kiina",
     "send": "Lähetä",
-    "fangcheng_education": "Fangcheng koulutus",
+    "education": "koulutus",
     "fcboard_device_control": "Fcboard · Laitteen ohjaus",
     "unsupported_lesson_command_type": "Oppituntikomentoa ei tueta: {{type}}",
     "command_unavailable_command": "Komento ei ole käytettävissä: {{command}}",

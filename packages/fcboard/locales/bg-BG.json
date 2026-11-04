@@ -1607,7 +1607,7 @@
     "type_on_board": "Тип на борда",
     "type_on_board_including_chinese": "Тип на борда, включително китайски",
     "send": "Изпрати",
-    "fangcheng_education": "Fangcheng Education",
+    "education": "Education",
     "fcboard_device_control": "Fcboard · Контрол на устройството",
     "unsupported_lesson_command_type": "Неподдържана команда за урок: {{type}}",
     "command_unavailable_command": "Недостъпна команда: {{command}}",

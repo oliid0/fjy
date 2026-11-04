@@ -250,7 +250,7 @@ export default defineConfig(({ mode }) => {
         manifest: {
           short_name: "Fcboard",
           name: "Fcboard",
-          description: "方成教育教学与会议智能白板。",
+          description: "教学与会议智能白板。",
           icons: [
             {
               src: "fcboard.svg",

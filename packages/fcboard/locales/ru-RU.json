@@ -1382,7 +1382,7 @@
     "type_on_board": "Тип на борту",
     "type_on_board_including_chinese": "тип на борту, включая китайский",
     "send": "Отправить",
-    "fangcheng_education": "Образование Fangcheng",
+    "education": "Образование Fangcheng",
     "fcboard_device_control": "Fcboard · Управление устройством",
     "unsupported_lesson_command_type": "Неподдерживаемая команда урока: {{type}}",
     "command_unavailable_command": "Команда недоступна: {{command}}",

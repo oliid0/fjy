@@ -1382,7 +1382,7 @@
     "type_on_board": "اكتب على اللوحة",
     "type_on_board_including_chinese": "اكتب على متن الطائرة، بما في ذلك الصينية",
     "send": "أرسل",
-    "fangcheng_education": "تعليم فانغتشنغ",
+    "education": "تعليم فانغتشنغ",
     "fcboard_device_control": "Fcboard · التحكم بالجهاز",
     "unsupported_lesson_command_type": "أمر الدرس غير مدعوم: {{type}}",
     "command_unavailable_command": "الأمر غير متاح: {{command}}",

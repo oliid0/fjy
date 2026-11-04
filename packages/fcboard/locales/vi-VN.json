@@ -384,7 +384,7 @@
     "clearCanvasMessage": "Nếu không tải lại được, hãy thử <button>dọn canvas.</button>",
     "clearCanvasCaveat": " Điều này sẽ dẫn đến mất dữ liệu bạn đã làm ",
     "trackedToSentry": "Chẩn đoán vẫn còn trên thiết bị này.",
-    "openIssueMessage": "Để được hỗ trợ, hãy truy cập trang web <button>Fangcheng Education website</button>. Bạn có thể sao chép chẩn đoán bên dưới khi liên hệ với bộ phận hỗ trợ.",
+    "openIssueMessage": "Để được hỗ trợ, hãy truy cập trang web <button>Education website</button>. Bạn có thể sao chép chẩn đoán bên dưới khi liên hệ với bộ phận hỗ trợ.",
     "sceneContent": "Nội dung bản vẽ:"
   },
   "shareDialog": {
@@ -985,7 +985,7 @@
     "expand_answer": "Mở rộng câu trả lời",
     "explain_the_step_i_circled_or_use_another_example": "Giải thích bước tôi đã khoanh tròn hoặc sử dụng một ví dụ khác…",
     "face_colors": "Màu sắc khuôn mặt",
-    "fangcheng_education": "Giáo dục Fangcheng",
+    "education": "Giáo dục Fangcheng",
     "fast_answer_model_id_blank_to_use_the_main_model": "ID mô hình câu trả lời nhanh (để trống để sử dụng mô hình chính)",
     "fcboard": "Fcboard",
     "fcboard_device_control": "Fcboard · Điều khiển thiết bị",

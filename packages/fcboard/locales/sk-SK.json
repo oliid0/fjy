@@ -1382,7 +1382,7 @@
     "type_on_board": "Typ na palube",
     "type_on_board_including_chinese": "Typ na palube vrátane čínštiny",
     "send": "Odoslať",
-    "fangcheng_education": "Fangcheng vzdelávanie",
+    "education": "vzdelávanie",
     "fcboard_device_control": "Fcboard · Ovládanie zariadenia",
     "unsupported_lesson_command_type": "Nepodporovaný príkaz lekcie: {{type}}",
     "command_unavailable_command": "Príkaz nie je k dispozícii: {{command}}",

@@ -1384,7 +1384,7 @@
     "type_on_board": "বোর্ডে টাইপ করুন",
     "type_on_board_including_chinese": "বোর্ডে টাইপ করুন, চাইনিজ সহ",
     "send": "পাঠান",
-    "fangcheng_education": "ফাংচেং শিক্ষা",
+    "education": "ফাংচেং শিক্ষা",
     "fcboard_device_control": "Fcboard · ডিভাইস নিয়ন্ত্রণ",
     "unsupported_lesson_command_type": "অসমর্থিত পাঠ কমান্ড: {{type}}",
     "command_unavailable_command": "কমান্ড অনুপলব্ধ: {{command}}",

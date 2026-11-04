@@ -384,7 +384,7 @@
     "clearCanvasMessage": "Yenidən yükləmə işləmirsə, <button></button> kətanı təmizləməyə cəhd edin.",
     "clearCanvasCaveat": "Bu, işin itirilməsi ilə nəticələnəcək",
     "trackedToSentry": "Diaqnostika bu cihazda qalır.",
-    "openIssueMessage": "Yardım üçün <button>Fangcheng Təhsil veb saytına daxil olun</button>. Dəstək ilə əlaqə saxlayarkən aşağıdakı diaqnostikanı kopyalaya bilərsiniz.",
+    "openIssueMessage": "Yardım üçün <button>Təhsil veb saytına daxil olun</button>. Dəstək ilə əlaqə saxlayarkən aşağıdakı diaqnostikanı kopyalaya bilərsiniz.",
     "sceneContent": "Səhnə məzmunu:"
   },
   "shareDialog": {
@@ -1605,7 +1605,7 @@
     "type_on_board": "Bortda yazın",
     "type_on_board_including_chinese": "Çin də daxil olmaqla təyyarədə yazın",
     "send": "Göndər",
-    "fangcheng_education": "Fangcheng Təhsili",
+    "education": "Təhsili",
     "fcboard_device_control": "Fcboard · Cihaz nəzarəti",
     "unsupported_lesson_command_type": "Dəstəklənməyən dərs əmri: {{type}}",
     "command_unavailable_command": "Komanda mövcud deyil: {{command}}",

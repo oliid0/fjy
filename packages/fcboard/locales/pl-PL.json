@@ -1382,7 +1382,7 @@
     "type_on_board": "Typ na pokładzie",
     "type_on_board_including_chinese": "Typ na pokładzie, w tym chiński",
     "send": "Wyślij",
-    "fangcheng_education": "Edukacja Fangcheng",
+    "education": "Edukacja Fangcheng",
     "fcboard_device_control": "Fcboard · Sterowanie urządzeniem",
     "unsupported_lesson_command_type": "Nieobsługiwane polecenie lekcji: {{type}}",
     "command_unavailable_command": "Polecenie niedostępne: {{command}}",

@@ -1382,7 +1382,7 @@
     "type_on_board": "보드에 입력",
     "type_on_board_including_chinese": "중국어를 포함한 기내 유형",
     "send": "보내기",
-    "fangcheng_education": "팽청교육",
+    "education": "팽청교육",
     "fcboard_device_control": "Fcboard · 장치 제어",
     "unsupported_lesson_command_type": "지원되지 않는 수업 명령: {{type}}",
     "command_unavailable_command": "명령 사용 불가: {{command}}",

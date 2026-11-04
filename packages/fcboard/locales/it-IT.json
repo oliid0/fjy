@@ -1382,7 +1382,7 @@
     "type_on_board": "Digita a bordo",
     "type_on_board_including_chinese": "Digita a bordo, incluso il cinese",
     "send": "Invia",
-    "fangcheng_education": "Istruzione di Fangcheng",
+    "education": "Istruzione di Fangcheng",
     "fcboard_device_control": "Fcboard · Controllo del dispositivo",
     "unsupported_lesson_command_type": "Comando lezione non supportato: {{type}}",
     "command_unavailable_command": "Comando non disponibile: {{command}}",

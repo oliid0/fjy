@@ -1382,7 +1382,7 @@
     "type_on_board": "Typ ombord",
     "type_on_board_including_chinese": "Typ ombord, inklusive kinesiska",
     "send": "Skicka",
-    "fangcheng_education": "Fangcheng Education",
+    "education": "Education",
     "fcboard_device_control": "Fcboard · Enhetskontroll",
     "unsupported_lesson_command_type": "Lektionskommando stöds inte: {{type}}",
     "command_unavailable_command": "Kommando ej tillgängligt: {{command}}",

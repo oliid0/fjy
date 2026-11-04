@@ -1607,7 +1607,7 @@
     "type_on_board": "Ketik di papan",
     "type_on_board_including_chinese": "Ketik di papan, termasuk bahasa Mandarin",
     "send": "Kirim",
-    "fangcheng_education": "Pendidikan Fangcheng",
+    "education": "Pendidikan Fangcheng",
     "fcboard_device_control": "Fcboard · Kontrol perangkat",
     "unsupported_lesson_command_type": "Perintah pelajaran tidak didukung: {{type}}",
     "command_unavailable_command": "Perintah tidak tersedia: {{command}}",

@@ -1604,7 +1604,7 @@
     "type_on_board": "Tips uz kuģa",
     "type_on_board_including_chinese": "Ierakstiet lidmašīnā, ieskaitot ķīniešu",
     "send": "Sūtīt",
-    "fangcheng_education": "Fangcheng izglītība",
+    "education": "izglītība",
     "fcboard_device_control": "Fcboard · Ierīces vadība",
     "unsupported_lesson_command_type": "Neatbalstīta nodarbības komanda: {{type}}",
     "command_unavailable_command": "Komanda nav pieejama: {{command}}",

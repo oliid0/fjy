@@ -2,7 +2,7 @@ import { t } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
 export const BRAND = {
   name: "Fcboard",
-  company: "Fangcheng Education",
+  company: "Education",
   website: "http://www.fcjyboard.com/",
 };
 

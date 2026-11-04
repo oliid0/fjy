@@ -1607,7 +1607,7 @@
     "type_on_board": "Tip na krovu",
     "type_on_board_including_chinese": "Tip na krovu, vključno s kitajskim",
     "send": "Pošlji",
-    "fangcheng_education": "Izobraževanje Fangcheng",
+    "education": "Izobraževanje Fangcheng",
     "fcboard_device_control": "Fcboard · Nadzor naprave",
     "unsupported_lesson_command_type": "nepodprt ukaz lekcije: {{type}}",
     "command_unavailable_command": "ukaz NI NA voljo: {{command}}",

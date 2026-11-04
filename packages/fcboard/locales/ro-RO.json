@@ -1382,7 +1382,7 @@
     "type_on_board": "Tip la bord",
     "type_on_board_including_chinese": "Tip la bord, inclusiv chineză",
     "send": "Trimitere",
-    "fangcheng_education": "Educație Fangcheng",
+    "education": "Educație Fangcheng",
     "fcboard_device_control": "Fcboard · Control dispozitiv",
     "unsupported_lesson_command_type": "Comandă lecție neacceptată: {{type}}",
     "command_unavailable_command": "Comandă indisponibilă: {{command}}",

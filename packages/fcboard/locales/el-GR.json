@@ -1382,7 +1382,7 @@
     "type_on_board": "Πληκτρολογήστε επί του σκάφους",
     "type_on_board_including_chinese": "Πληκτρολογήστε επί του σκάφους, συμπεριλαμβανομένων των κινεζικών",
     "send": "Αποστολή",
-    "fangcheng_education": "Εκπαίδευση Fangcheng",
+    "education": "Εκπαίδευση Fangcheng",
     "fcboard_device_control": "Fcboard · Έλεγχος συσκευής",
     "unsupported_lesson_command_type": "Μη υποστηριζόμενη εντολή μαθήματος: {{type}}",
     "command_unavailable_command": "Μη διαθέσιμη εντολή: {{command}}",

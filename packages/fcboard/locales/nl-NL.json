@@ -1382,7 +1382,7 @@
     "type_on_board": "Type aan boord",
     "type_on_board_including_chinese": "Type aan boord, inclusief Chinees",
     "send": "Verzenden",
-    "fangcheng_education": "Fangcheng Education",
+    "education": "Education",
     "fcboard_device_control": "Fcboard · Apparaatbesturing",
     "unsupported_lesson_command_type": "Niet-ondersteunde lesopdracht: {{type}}",
     "command_unavailable_command": "Opdracht niet beschikbaar: {{command}}",

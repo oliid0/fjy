@@ -1382,7 +1382,7 @@
     "type_on_board": "बोर्ड वर टाइप करा",
     "type_on_board_including_chinese": "बोर्ड वर प्रकार, चीनी समावेश",
     "send": "पाठवा",
-    "fangcheng_education": "Fangcheng शिक्षण",
+    "education": "शिक्षण",
     "fcboard_device_control": "Fcboard · डिव्हाइस नियंत्रण",
     "unsupported_lesson_command_type": "असमर्थित धडा आदेश: {{type}}",
     "command_unavailable_command": "आदेश अनुपलब्ध: {{command}}",

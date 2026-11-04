@@ -1,3 +1,8 @@
+import {
+  getNonDeletedElements,
+  syncInvalidIndicesImmutable,
+} from "@fcboard/element";
+
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { boardContext, chat, visualMessage } from "./ai";
@@ -39,7 +44,9 @@ export const classroomSummaryMessages = async (
             {
               ...api,
               getSceneElements: () =>
-                page.elements.filter((element) => !element.isDeleted),
+                getNonDeletedElements(
+                  syncInvalidIndicesImmutable(page.elements),
+                ),
               getFiles: () => page.files,
               getAppState: () => ({ ...api.getAppState(), ...page.view }),
             },

@@ -13,6 +13,8 @@ import { registerLanguageCommands } from "./languageCommands";
 import { languageStudy } from "./test/language";
 import * as language from "./languageStudy";
 import * as ocr from "./ocr";
+import * as documents from "./documents";
+import * as ai from "./ai";
 import { inkLineHeight } from "./handwriting";
 
 import type { InkStroke } from "./documents";
@@ -71,6 +73,55 @@ const setup = () => {
   };
 };
 afterEach(() => vi.restoreAllMocks());
+
+it("captures only the circled document word with the actual ink snapshot and normalized crop contract", async () => {
+  const host = setup();
+  const ink: InkStroke[] = [
+    {
+      id: "sentence",
+      text: "A sentence with inertia",
+      points: [[100, 100]],
+      color: "#000000",
+      width: 2,
+    },
+  ];
+  const unread = classroomCommands.context("document", () => ({
+    id: "lesson",
+    page: 1,
+    ink,
+  }));
+  const snapshot = vi
+    .spyOn(documents, "inkSnapshot")
+    .mockResolvedValue("data:image/png;base64,source");
+  const crop = vi
+    .spyOn(ai, "cropImage")
+    .mockResolvedValue("data:image/png;base64,cropped");
+  host.recognize.mockImplementationOnce(async (capture) => {
+    expect(await capture()).toBe("data:image/png;base64,cropped");
+    return "inertia";
+  });
+  try {
+    await classroomCommands.execute({
+      name: "language.translate",
+      args: {
+        sourceIds: ["sentence"],
+        region: { left: 100, top: 100, right: 200, bottom: 140 },
+        insert: false,
+      },
+    });
+    expect(snapshot).toHaveBeenCalledWith(ink, 40, undefined, 100);
+    expect(crop).toHaveBeenCalledWith(
+      "data:image/png;base64,source",
+      { left: 0.1, top: 0, right: 0.2, bottom: 1 },
+      expect.any(AbortSignal),
+    );
+    expect(host.explain.mock.calls[0][0]).toBe("inertia");
+    expect(host.api.updateScene).not.toHaveBeenCalled();
+  } finally {
+    unread();
+    host.stop();
+  }
+});
 
 it("translates exact editable selection without OCR, preserves source and returns the new visible object ids", async () => {
   const { api, source, explain, recognize, stop } = setup();

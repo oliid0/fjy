@@ -216,7 +216,7 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
                   await inkSnapshot(
                     documentSource,
                     region.bottom - region.top,
-                    1000,
+                    undefined,
                     region.top,
                   ),
                   {

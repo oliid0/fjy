@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>课堂投票</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f5fa;
+        font: 18px/1.6 system-ui;
+        color: #202535;
+      }
+      main {
+        max-width: 540px;
+        margin: 32px auto;
+        padding: 24px;
+        background: white;
+        border-radius: 24px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      label {
+        display: flex;
+        gap: 12px;
+        padding: 16px;
+        margin: 12px 0;
+        border: 1px solid #dce1eb;
+        border-radius: 16px;
+      }
+      input {
+        width: 24px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      button {
+        width: 100%;
+        min-height: 52px;
+        border: 0;
+        border-radius: 16px;
+        background: #1565c0;
+        color: white;
+        font: inherit;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      #message {
+        min-height: 32px;
+      }
+      progress {
+        width: 100%;
+      }
+      @media (max-width: 600px) {
+        main {
+          margin: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="topic">正在连接投票…</h1>
+      <p id="kind"></p>
+      <form id="form">
+        <div id="options"></div>
+        <button id="submit" disabled>提交投票</button>
+      </form>
+      <p id="message" role="status"></p>
+      <div id="results"></div>
+    </main>
+    <script>
+      const root = location.pathname.replace(/\/$/, ""),
+        form = document.getElementById("form"),
+        button = document.getElementById("submit"),
+        message = document.getElementById("message");
+      let config,
+        busy = false;
+      async function request(path, options) {
+        const response = await fetch(root + path, options);
+        const body = await response.json();
+        if (!response.ok) throw Error(body.error || "请求失败");
+        return body;
+      }
+      function stats(data) {
+        document.getElementById("results").replaceChildren();
+        const total = document.createElement("p");
+        total.textContent =
+          "已参与：" +
+          data.participants +
+          " 人" +
+          (data.accepting ? "" : " · 已结束");
+        document.getElementById("results").append(total);
+        data.options.forEach((label, i) => {
+          const row = document.createElement("p");
+          row.textContent = label + "：" + data.counts[i] + " 票";
+          const bar = document.createElement("progress");
+          bar.max = Math.max(1, data.participants);
+          bar.value = data.counts[i];
+          row.append(bar);
+          document.getElementById("results").append(row);
+        });
+        button.disabled = busy || !data.accepting;
+      }
+      async function refresh() {
+        try {
+          const data = await request("/api");
+          if (!config) {
+            config = data;
+            document.getElementById("topic").textContent = data.topic;
+            document.getElementById("kind").textContent = data.multiple
+              ? "可多选，提交后可修改"
+              : "请选择一项，提交后可修改";
+            data.options.forEach((text, i) => {
+              const label = document.createElement("label"),
+                input = document.createElement("input"),
+                span = document.createElement("span");
+              input.type = data.multiple ? "checkbox" : "radio";
+              input.name = "choice";
+              input.value = i;
+              input.checked = data.selection.includes(i);
+              span.textContent = text;
+              label.append(input, span);
+              document.getElementById("options").append(label);
+            });
+          }
+          stats(data);
+        } catch (error) {
+          message.textContent = error.message;
+          button.disabled = true;
+        }
+      }
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (busy) return;
+        const choices = Array.from(
+          form.querySelectorAll("input:checked"),
+          (input) => Number(input.value),
+        );
+        if (!choices.length) {
+          message.textContent = "请先选择选项";
+          return;
+        }
+        busy = true;
+        button.disabled = true;
+        message.textContent = "正在提交…";
+        try {
+          const data = await request("/vote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+            body: JSON.stringify({ choices }),
+          });
+          message.textContent = "已提交，可修改选项后再次提交";
+          stats(data);
+        } catch (error) {
+          message.textContent = error.message;
+        } finally {
+          busy = false;
+          await refresh();
+        }
+      });
+      refresh();
+      setInterval(() => {
+        if (!document.hidden && !busy) refresh();
+      }, 2000);
+    </script>
+  </body>
+</html>

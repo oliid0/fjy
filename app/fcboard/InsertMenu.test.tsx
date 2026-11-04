@@ -106,9 +106,15 @@ it("previews table dimensions until confirmation and inserts once with the chose
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
 
-it("opens documents and media in the internal viewer even when OEM apps exist", async () => {
+it("routes documents to the internal viewer and media to the built-in player", async () => {
   const open = vi.fn();
   const stop = classroomCommands.register("files.open", "@internal", open);
+  const media = vi.fn();
+  const stopMedia = classroomCommands.register(
+    "tools.media",
+    "@internal",
+    media,
+  );
   const { view } = setup();
   try {
     await act(async () => {
@@ -121,11 +127,13 @@ it("opens documents and media in the internal viewer even when OEM apps exist", 
         args: { kind: "media" },
       });
     });
-    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(media).toHaveBeenCalledTimes(1);
     expect(Classroom.openFactoryInsertion).not.toHaveBeenCalled();
   } finally {
     view.unmount();
     stop();
+    stopMedia();
   }
 });
 

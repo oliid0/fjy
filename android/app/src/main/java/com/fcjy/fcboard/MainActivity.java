@@ -20,6 +20,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DigitalInkPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);
         registerPlugin(NetworkPlugin.class);
+        registerPlugin(VotingPlugin.class);
+        registerPlugin(MediaPlugin.class);
         registerPlugin(BoardFilePlugin.class);
         registerPlugin(MailPlugin.class);
         registerPlugin(SkizzePenPlugin.class);

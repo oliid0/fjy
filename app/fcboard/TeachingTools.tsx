@@ -1,6 +1,5 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 import ButtonBase from "@mui/material/ButtonBase";
 import { ToolbarExtras } from "@fcboard/fcboard";
 import { getCommonBounds } from "@fcboard/element";
@@ -23,11 +22,19 @@ import { MaterialPanel } from "./MaterialPanel";
 import { insertionPoint, selectedPlot, objectSelection } from "./board";
 import { useAnchoredPanel, placePanel } from "./floating";
 import { classroomCommands } from "./commands";
-import { Classroom } from "./native";
 import { animateSolid } from "./solidAnimation";
 import { adaptGizmo, gizmoViewport } from "./adaptiveGizmo";
 import { FactoryGizmos } from "./FactoryGizmos";
 import { FactoryShapes } from "./FactoryShapes";
+import { Calculator } from "./Calculator";
+import { ToolTimer } from "./ToolTimer";
+import { Curtain } from "./Curtain";
+import { SplitBoard } from "./SplitBoard";
+import { Voting } from "./Voting";
+import { ToolMedia } from "./ToolMedia";
+import curtainIcon from "./assets/curtain/icon.png";
+
+import "./BuiltinTools.scss";
 import {
   factoryGizmoColor,
   factoryGizmoKinds,
@@ -54,6 +61,10 @@ const factoryTools = {
   calculator: { label: "calculator", icon: <FactoryIcon name="calculator" /> },
   spotlight: { label: "spotlight", icon: <FactoryIcon name="spotlight" /> },
   timer: { label: "timer", icon: <FactoryIcon name="timer" /> },
+  curtain: {
+    label: "curtain",
+    icon: <img src={curtainIcon} alt="" width={40} height={40} />,
+  },
 } as const;
 
 const parameters: Partial<Record<WidgetKind, (keyof typeof ranges)[]>> = {
@@ -97,10 +108,14 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   const panel = useRef<HTMLElement>(null);
   const pickerStyle = useAnchoredPanel(panel, "[data-teaching-tools]", open);
   const [error, setError] = useState("");
-  const [factory, setFactory] = useState<FactoryTool[]>([]);
-  const [factoryLoading, setFactoryLoading] = useState(
-    Capacitor.isNativePlatform,
-  );
+  const factory = [
+    "split",
+    "vote",
+    "calculator",
+    "spotlight",
+    "timer",
+    "curtain",
+  ] as const;
   const [factoryPending, setFactoryPending] = useState<FactoryTool>();
   const factoryBusy = useRef(false);
   const animations = useRef(new Map<string, AbortController>());
@@ -109,39 +124,6 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
     return () => {
       active.forEach((controller) => controller.abort());
       active.clear();
-    };
-  }, []);
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) {
-      return;
-    }
-    let disposed = false;
-    Classroom.getFactoryTools()
-      .then(({ available }) => {
-        if (!disposed) {
-          setFactory(
-            (Object.keys(factoryTools) as FactoryTool[]).filter(
-              (tool) => tool !== "transfer" && available.includes(tool),
-            ),
-          );
-        }
-      })
-      .catch((failure) => {
-        if (!disposed) {
-          setError(
-            t("fcboard.could_not_read_board_tools_error", {
-              error: String(failure),
-            }),
-          );
-        }
-      })
-      .finally(() => {
-        if (!disposed) {
-          setFactoryLoading(false);
-        }
-      });
-    return () => {
-      disposed = true;
     };
   }, []);
   const [widgetPlacement, setWidgetPlacement] = useState({ left: 12, top: 12 });
@@ -709,14 +691,14 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
         ? [
             classroomCommands.register(
               "tools.factory",
-              `打开大屏原厂应用，args.tool=${factory.join(
+              `打开应用内置教学工具，不依赖外部APK，args.tool=${factory.join(
                 "|",
               )}，依次对应 ${factory
                 .map((tool) => t(`fcboard.${factoryTools[tool].label}`))
                 .join("、")}`,
               async (args) => {
                 const tool = args.tool as FactoryTool;
-                if (!factory.includes(tool)) {
+                if (!(factory as readonly string[]).includes(tool)) {
                   throw new Error(
                     t("fcboard.this_tool_is_not_installed_on_this_display"),
                   );
@@ -730,7 +712,10 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
                 setFactoryPending(tool);
                 setError("");
                 try {
-                  await Classroom.openFactoryTool({ tool });
+                  await classroomCommands.execute({
+                    name: `tools.${tool}`,
+                    args: { signal: args.signal },
+                  });
                   setOpen(false);
                   return { opened: tool };
                 } catch (failure) {
@@ -873,6 +858,12 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
     <>
       <FactoryGizmos api={api} />
       <FactoryShapes api={api} />
+      <Calculator />
+      <ToolTimer />
+      <Curtain />
+      <SplitBoard />
+      <Voting />
+      <ToolMedia />
       <ToolbarExtras>
         <div className="fc-toolbar-extras">
           <button
@@ -908,78 +899,57 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
             }
           }}
         >
-          {factoryLoading && (
-            <p role="status">{t("fcboard.loading_display_tools")}</p>
-          )}
           {toolPage === 0 && (
             <div className="fc-tools-grid">
-              {factory.some((tool) => tool !== "transfer") && (
+              {factory.length > 0 && (
                 <>
                   <div
                     className="fc-factory-tools"
                     role="group"
                     aria-label={t("fcboard.display_tools")}
                   >
-                    {factory
-                      .filter((tool) => tool !== "transfer")
-                      .map((tool) => (
-                        <ButtonBase
-                          key={tool}
-                          type="button"
-                          style={{
-                            order: {
-                              split: 1,
-                              vote: 2,
-                              calculator: 7,
-                              spotlight: 8,
-                              timer: 9,
-                              transfer: 0,
-                            }[tool],
-                          }}
-                          aria-label={t("fcboard.open_name", {
-                            name: t(`fcboard.${factoryTools[tool].label}`),
-                          })}
-                          disabled={!!factoryPending}
-                          aria-busy={factoryPending === tool}
-                          onClick={() => {
-                            void classroomCommands
-                              .execute({
-                                name: "tools.factory",
-                                args: { tool },
-                              })
-                              .catch((failure) => setError(String(failure)));
-                          }}
-                        >
-                          {factoryTools[tool].icon}
-                          <span>
-                            {factoryPending === tool
-                              ? t("fcboard.opening")
-                              : t(`fcboard.${factoryTools[tool].label}`)}
-                          </span>
-                        </ButtonBase>
-                      ))}
+                    {factory.map((tool) => (
+                      <ButtonBase
+                        key={tool}
+                        type="button"
+                        style={{
+                          order: {
+                            split: 1,
+                            vote: 2,
+                            calculator: 7,
+                            spotlight: 8,
+                            timer: 9,
+                            curtain: 10,
+                          }[tool],
+                        }}
+                        aria-label={t("fcboard.open_name", {
+                          name: t(`fcboard.${factoryTools[tool].label}`),
+                        })}
+                        disabled={!!factoryPending}
+                        aria-busy={factoryPending === tool}
+                        onClick={() => {
+                          void classroomCommands
+                            .execute({
+                              name: "tools.factory",
+                              args: { tool },
+                            })
+                            .catch((failure) => setError(String(failure)));
+                        }}
+                      >
+                        {factoryTools[tool].icon}
+                        <span>
+                          {factoryPending === tool
+                            ? t("fcboard.opening")
+                            : t(`fcboard.${factoryTools[tool].label}`)}
+                        </span>
+                      </ButtonBase>
+                    ))}
                   </div>
                 </>
               )}
               {entries
                 .filter(([kind]) => factoryGizmoKinds.has(kind))
                 .map(widgetButton)}
-              {!factory.includes("timer") && (
-                <ButtonBase
-                  type="button"
-                  disabled
-                  style={{ order: 9 }}
-                  aria-label={t("fcboard.open_name", {
-                    name: t("fcboard.timer"),
-                  })}
-                  title={t(
-                    "fcboard.this_tool_is_not_installed_on_this_display",
-                  )}
-                >
-                  {factoryTools.timer.icon}
-                  <span>{t("fcboard.timer")}</span>
-                </ButtonBase>
-              )}
               {(
                 [
                   [
@@ -987,19 +957,8 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
                     "files.open",
                     <FactoryIcon name="transfer" />,
                   ],
-                  [
-                    t("fcboard.spotlight"),
-                    "tools.spotlight",
-                    <FactoryIcon name="spotlight" />,
-                  ],
                 ] as const
-              )
-                .filter(
-                  ([, command]) =>
-                    command !== "tools.spotlight" ||
-                    !factory.includes("spotlight"),
-                )
-                .map(actionButton)}
+              ).map(actionButton)}
             </div>
           )}
           {toolPage === 1 && (

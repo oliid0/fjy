@@ -9,7 +9,8 @@ export type FactoryTool =
   | "calculator"
   | "spotlight"
   | "timer"
-  | "split";
+  | "split"
+  | "curtain";
 export type FactoryInsertion = "document" | "media" | "signal";
 export type SignalSourceState = {
   open: boolean;
@@ -120,8 +121,6 @@ export const Classroom = registerPlugin<{
     id?: string;
     language?: string;
   }): Promise<SignalSourceState>;
-  getFactoryTools(): Promise<{ available: FactoryTool[] }>;
-  openFactoryTool(options: { tool: FactoryTool }): Promise<void>;
   startShare(options: { pages: string[] }): Promise<{ urls: string[] }>;
   setSharePassword(options: { password: string }): Promise<void>;
   stopShare(): Promise<void>;

@@ -1,0 +1,2028 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'"
+    />
+    <title>Calculator</title>
+    <style>
+      :root {
+        /* Default Theme: Sky Blue (Matching Index) */
+        --color-brand-50: 240 249 255;
+        --color-brand-100: 224 242 254;
+        --color-brand-500: 14 165 233;
+        --color-brand-600: 2 132 199;
+        --color-brand-900: 12 74 110;
+      }
+
+      /* Smooth Transitions */
+      body,
+      div,
+      button,
+      input,
+      span,
+      i {
+        transition-property: background-color, border-color, color, fill, stroke,
+          transform, opacity, box-shadow;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 300ms;
+      }
+
+      /* Glassmorphism */
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+      }
+
+      .dark .glass-panel {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      /* Mesh Gradient Background */
+      .bg-gradient-mesh {
+        background-color: #f3f3f3;
+        background-image: radial-gradient(
+            at 0% 0%,
+            rgba(var(--color-brand-100), 0.6) 0,
+            transparent 50%
+          ),
+          radial-gradient(
+            at 100% 100%,
+            rgba(var(--color-brand-50), 0.6) 0,
+            transparent 50%
+          );
+        background-size: 100% 100%;
+        background-attachment: fixed;
+      }
+
+      .dark .bg-gradient-mesh {
+        background-color: #0f172a;
+        background-image: radial-gradient(
+            at 0% 0%,
+            rgba(var(--color-brand-900), 0.4) 0,
+            transparent 50%
+          ),
+          radial-gradient(
+            at 100% 0%,
+            rgba(var(--color-brand-900), 0.2) 0,
+            transparent 50%
+          );
+      }
+
+      /* Button Press Effect */
+      .btn-press:active,
+      .btn-active {
+        transform: scale(0.95);
+        filter: brightness(0.9);
+      }
+
+      /* Custom Scrollbar for History */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(156, 163, 175, 0.5);
+        border-radius: 20px;
+      }
+
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(71, 85, 105, 0.5);
+      }
+
+      @media only screen and (max-width: 400px) {
+        .glass-panel {
+          width: 100%;
+          height: 100vh;
+        }
+
+        #result-display {
+          font-size: 2.5rem;
+        }
+
+        .bg-gradient-mesh {
+          background: rgba(255, 255, 255, 0.7);
+        }
+
+        .glass-panel {
+          background: rgba(255, 255, 255, 0.7);
+          box-shadow: 0 0px 0px 0 rgba(31, 38, 135, 0.07);
+        }
+
+        .dark .glass-panel {
+          background: rgba(15, 23, 42, 0.6);
+          box-shadow: 0 0px 0px 0 rgba(0, 0, 0, 0.3);
+          border: none;
+          outline: none;
+        }
+      }
+
+      @media only screen and (min-width: 400px) {
+        #result-display {
+          font-size: 2.8rem;
+        }
+      }
+
+      @media only screen and (max-height: 737px) {
+        .glass-panel {
+          height: auto;
+        }
+      }
+
+      :root {
+        --color-brand-50: 255 247 237;
+        --color-brand-100: 255 237 213;
+        --color-brand-500: 255 159 10;
+        --color-brand-600: 247 139 0;
+        --color-brand-900: 124 45 18;
+      }
+
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      body,
+      div,
+      button,
+      input,
+      span,
+      i {
+        transition-duration: 180ms;
+      }
+
+      body.bg-gradient-mesh {
+        background-color: #e9e9ed;
+        background-image: radial-gradient(
+            ellipse at 14% 12%,
+            rgba(255, 159, 10, 0.12),
+            transparent 34%
+          ),
+          radial-gradient(
+            ellipse at 88% 86%,
+            rgba(83, 105, 255, 0.12),
+            transparent 38%
+          );
+      }
+
+      .dark body.bg-gradient-mesh,
+      .dark .bg-gradient-mesh {
+        background-color: #09090b;
+        background-image: radial-gradient(
+            ellipse at 16% 12%,
+            rgba(255, 159, 10, 0.1),
+            transparent 34%
+          ),
+          radial-gradient(
+            ellipse at 90% 86%,
+            rgba(80, 87, 120, 0.12),
+            transparent 40%
+          );
+      }
+
+      #calculator-wrapper {
+        max-width: 440px;
+        padding: 20px;
+      }
+
+      #calculator-wrapper.scientific-open {
+        max-width: 840px;
+      }
+
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 32px;
+        box-shadow: 0 30px 80px rgba(26, 27, 36, 0.14);
+        backdrop-filter: blur(28px);
+        -webkit-backdrop-filter: blur(28px);
+      }
+
+      .dark .glass-panel {
+        background: rgba(24, 24, 27, 0.93);
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 34px 90px rgba(0, 0, 0, 0.48);
+      }
+
+      #calculator-wrapper > .glass-panel {
+        border-width: 1px;
+      }
+
+      #calculator-wrapper .flex-1.flex.flex-col.px-3 {
+        padding: 20px;
+      }
+
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+        width: min(100%, 72px);
+        height: auto;
+        aspect-ratio: 1;
+        min-width: 0;
+        justify-self: center;
+        border: 0;
+        border-radius: 50%;
+        box-shadow: none;
+        font-size: 1.35rem;
+        font-weight: 500;
+        transition: transform 120ms ease, filter 120ms ease,
+          background-color 180ms ease;
+      }
+
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="Escape"],
+      #calculator-wrapper
+        .grid.grid-cols-4.gap-3
+        > button[data-key="Backspace"],
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="%"] {
+        background: #a5a5a7;
+        color: #161616;
+        font-weight: 600;
+      }
+
+      .dark
+        #calculator-wrapper
+        .grid.grid-cols-4.gap-3
+        > button[data-key="Escape"],
+      .dark
+        #calculator-wrapper
+        .grid.grid-cols-4.gap-3
+        > button[data-key="Backspace"],
+      .dark #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="%"] {
+        background: #a5a5a7;
+        color: #111;
+      }
+
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="+"],
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="-"],
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="*"],
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="/"],
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="Enter"] {
+        background: #ff9f0a;
+        color: #fff;
+        font-size: 1.8rem;
+        font-weight: 500;
+      }
+
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button[data-key="Enter"] {
+        background: #f28c00;
+      }
+
+      #calculator-wrapper
+        .grid.grid-cols-4.gap-3
+        > button:not([data-key="Escape"]):not([data-key="Backspace"]):not([data-key="%"]):not([data-key="+"]):not([data-key="-"]):not([data-key="*"]):not([data-key="/"]):not([data-key="Enter"]) {
+        background: #e5e5e7;
+        color: #171719;
+      }
+
+      .dark
+        #calculator-wrapper
+        .grid.grid-cols-4.gap-3
+        > button:not([data-key="Escape"]):not([data-key="Backspace"]):not([data-key="%"]):not([data-key="+"]):not([data-key="-"]):not([data-key="*"]):not([data-key="/"]):not([data-key="Enter"]) {
+        background: #333336;
+        color: #f5f5f7;
+      }
+
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button:hover {
+        filter: brightness(1.08);
+      }
+
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button:active,
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button.btn-active {
+        transform: scale(0.91);
+        filter: brightness(0.88);
+      }
+
+      #result_display_container {
+        min-height: 156px;
+        padding: 12px 8px 16px;
+      }
+
+      #history-display {
+        color: #929298;
+        font-size: 0.9rem;
+        min-height: 1.5rem;
+      }
+
+      #input-display {
+        color: #929298;
+        font-size: 1rem;
+        min-height: 1.75rem;
+      }
+
+      #result-display {
+        height: auto;
+        min-height: 62px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: clip;
+        font-size: clamp(2rem, 9vw, 3.4rem);
+        font-weight: 400;
+        letter-spacing: -0.055em;
+        line-height: 1.15;
+      }
+
+      #result-display.calculator-long-result {
+        font-size: clamp(1.45rem, 6vw, 2.2rem);
+      }
+
+      #result-display.calculator-error {
+        color: #ff6b5e;
+        font-size: 2.4rem;
+      }
+
+      #btn-basic,
+      #btn-scientific {
+        padding: 1px 18px;
+        padding-right: 24px;
+        color: #8b8b92;
+      }
+
+      #btn-basic.mode-selected,
+      #btn-scientific.mode-selected {
+        color: #1b1b1d;
+      }
+
+      .dark #btn-basic.mode-selected,
+      .dark #btn-scientific.mode-selected {
+        color: #fff;
+      }
+
+      #mode-indicator {
+        background: #fff;
+      }
+
+      .dark #mode-indicator {
+        background: #4a4a4e;
+      }
+
+      #scientific-panel {
+        background: transparent;
+        height: min(78dvh, 680px);
+        max-height: min(calc(100dvh - 40px), 680px);
+        overflow: hidden;
+        align-self: center;
+      }
+
+      #scientific-panel > .grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        align-content: start;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      #scientific-panel > .grid::-webkit-scrollbar,
+      #mobile-scientific-drawer::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+
+      #scientific-panel .grid button,
+      #mobile-scientific-drawer button {
+        border-radius: 14px;
+        font-size: 0.98rem;
+        transition: transform 120ms ease, background-color 180ms ease;
+      }
+
+      #scientific-panel .grid button:active,
+      #mobile-scientific-drawer button:active {
+        transform: scale(0.94);
+      }
+
+      #btn-inv.inverse-active,
+      #mobile-btn-inv.inverse-active {
+        background-color: #ff9f0a;
+        color: #fff;
+      }
+
+      #mobile-scientific-drawer {
+        max-height: min(42dvh, 360px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      #mobile-scientific-drawer button {
+        min-height: 44px;
+        padding: 4px;
+      }
+
+      @media (max-width: 480px) {
+        #calculator-wrapper {
+          width: 100%;
+          max-width: 440px;
+          padding: 0;
+        }
+
+        #calculator-wrapper > .glass-panel {
+          min-height: 100vh;
+          min-height: 100dvh;
+          border-radius: 0;
+          border: 0;
+          justify-content: space-between;
+        }
+
+        #calculator-wrapper .flex-1.flex.flex-col.px-3 {
+          padding: max(18px, env(safe-area-inset-top)) 20px
+            max(24px, env(safe-area-inset-bottom));
+        }
+
+        #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+          font-size: 1.4rem;
+        }
+
+        #result_display_container {
+          min-height: 180px;
+          margin-bottom: 12px;
+        }
+      }
+
+      @media (max-width: 360px) {
+        #calculator-wrapper .flex-1.flex.flex-col.px-3 {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        #calculator-wrapper .grid.grid-cols-4.gap-3 {
+          gap: 8px;
+        }
+
+        #mobile-scientific-drawer {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          max-height: min(42dvh, 360px);
+        }
+      }
+
+      @media (max-width: 767px) {
+        #calculator-wrapper,
+        #calculator-wrapper.scientific-open {
+          max-width: 440px;
+        }
+      }
+
+      @media (max-height: 700px) and (min-width: 481px) {
+        #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+          height: auto;
+        }
+
+        #result_display_container {
+          min-height: 115px;
+        }
+      }
+
+      @media (orientation: landscape) and (max-width: 900px) {
+        #calculator-wrapper,
+        #calculator-wrapper.scientific-open {
+          max-width: min(100vw, 840px);
+        }
+
+        #calculator-wrapper > .glass-panel {
+          min-height: 100vh;
+        }
+
+        #calculator-wrapper .flex-1.flex.flex-col.px-3 {
+          padding-top: 12px;
+          padding-bottom: 12px;
+        }
+
+        #result_display_container {
+          min-height: 96px;
+          margin-bottom: 8px;
+        }
+
+        #scientific-panel {
+          max-height: calc(100dvh - 24px);
+        }
+
+        #mobile-scientific-drawer {
+          max-height: min(42dvh, 220px);
+        }
+
+        #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+          width: min(12vh, 56px);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+      /* Local layout replaces the reference's CDN utilities in the calculator-sized iframe. */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 16px system-ui, sans-serif;
+        color: #171719;
+        background: #f4f4f5;
+      }
+      .dark body {
+        background: #18181b;
+        color: #fff;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        touch-action: manipulation;
+        border: 0;
+      }
+      button:focus-visible {
+        outline: 3px solid #2563eb;
+        outline-offset: 2px;
+      }
+      #calculator-wrapper,
+      #calculator-wrapper.scientific-open {
+        width: 100%;
+        max-width: none;
+        padding: 0;
+      }
+      #calculator-wrapper > .glass-panel {
+        display: flex;
+        flex-direction: column;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      #calculator-wrapper > .glass-panel > .flex-1 {
+        display: flex;
+        flex-direction: column;
+        padding: 12px;
+      }
+      #calculator-wrapper > .glass-panel > .flex-1 > div:first-child {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      #calculator-wrapper > .glass-panel > .flex-1 > div:first-child > div {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #calculator-wrapper
+        > .glass-panel
+        > .flex-1
+        > div:first-child
+        > div:last-child
+        > div {
+        display: flex;
+        align-items: center;
+        position: relative;
+        border-radius: 24px;
+        background: #e5e5e7;
+      }
+      .dark
+        #calculator-wrapper
+        > .glass-panel
+        > .flex-1
+        > div:first-child
+        > div:last-child
+        > div {
+        background: #333336;
+      }
+      #mode-indicator {
+        display: none;
+      }
+      #btn-basic,
+      #btn-scientific {
+        border-radius: 24px;
+        min-height: 36px;
+        padding: 8px 12px;
+        background: none;
+        font-size: 13px;
+      }
+      #theme-toggle {
+        width: 36px;
+        height: 36px;
+        position: relative;
+        background: #e5e5e7;
+        border-radius: 50%;
+        color: inherit;
+        display: grid;
+        place-items: center;
+      }
+      .dark #theme-toggle {
+        background: #333336;
+      }
+      #theme-toggle i {
+        font-style: normal;
+      }
+      #icon-moon,
+      .dark #icon-sun {
+        display: none;
+      }
+      .dark #icon-moon {
+        display: inline;
+      }
+      #result_display_container {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        min-height: 130px;
+        padding: 8px;
+      }
+      #history-display,
+      #input-display {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #result-display {
+        overflow-x: auto;
+        max-width: 100%;
+        scrollbar-width: none;
+      }
+      #calculator-wrapper .grid-cols-4 {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+        width: 100%;
+        height: 54px;
+        min-height: 44px;
+        aspect-ratio: auto;
+        border-radius: 22px;
+      }
+      #calculator-wrapper > .glass-panel > .hidden {
+        display: none !important;
+      }
+      #mobile-scientific-drawer {
+        padding: 0 12px 12px;
+        gap: 8px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      #mobile-scientific-drawer.grid {
+        display: grid;
+      }
+      #mobile-scientific-drawer.hidden {
+        display: none;
+      }
+      #mobile-scientific-drawer button {
+        min-height: 44px;
+        background: #e5e5e7;
+        color: #222;
+      }
+      .dark #mobile-scientific-drawer button {
+        background: #333336;
+        color: #fff;
+      }
+      #mobile-scientific-drawer button.inverse-active {
+        background: #ff9f0a;
+        color: #fff;
+      }
+      @media (max-width: 340px) {
+        #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+          height: 46px;
+        }
+        #result_display_container {
+          min-height: 110px !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Calculator Container -->
+    <div
+      class="w-full max-w-[400px] md:max-w-[800px] transition-all duration-500 ease-in-out"
+      id="calculator-wrapper"
+    >
+      <div
+        class="glass-panel rounded-3xl overflow-hidden border-2 animate-fade-in flex flex-col md:flex-row"
+      >
+        <!-- Main Calculator Section -->
+        <div class="flex-1 flex flex-col px-3 py-3 relative">
+          <!-- Header / Mode Toggle -->
+          <div class="flex justify-between items-center mb-6 pl-2.5">
+            <div class="flex items-center gap-2">
+              <div class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-red-500"></div>
+              <div
+                class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-amber-400"
+              ></div>
+              <div
+                class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-emerald-500"
+              ></div>
+            </div>
+
+            <div class="flex gap-2">
+              <button
+                id="theme-toggle"
+                aria-label="Toggle color theme"
+                title="Toggle color theme"
+                class="w-9 h-9 rounded-full glass-panel flex items-center justify-center text-brand-600 dark:text-brand-400 hover:scale-110 active:scale-95 relative overflow-hidden group shadow-2xl border-2 border-gray-300 dark:border-2 dark:border-brand-600"
+                style="border-radius: 100vh !important"
+              >
+                <div
+                  class="absolute inset-0 bg-brand-500/10 dark:bg-brand-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                ></div>
+                <i
+                  id="icon-sun"
+                  class="fas fa-sun text-xl absolute transition-all duration-500 rotate-0 scale-100 opacity-100 dark:rotate-180 dark:scale-0 dark:opacity-0"
+                  >☀</i
+                >
+                <i
+                  id="icon-moon"
+                  class="fas fa-moon text-xl absolute transition-all duration-500 rotate-180 scale-0 opacity-0 dark:rotate-0 dark:scale-100 dark:opacity-100"
+                  >☾</i
+                >
+              </button>
+
+              <!-- Mode Switcher -->
+              <div
+                class="bg-slate-200 dark:bg-slate-800/50 p-1 rounded-full flex relative"
+              >
+                <div
+                  id="mode-indicator"
+                  class="absolute top-1 left-1 w-[calc(50%-4px)] h-[calc(100%-8px)] bg-white dark:bg-slate-700 rounded-full shadow-sm transition-all duration-300"
+                ></div>
+                <button
+                  onclick="setMode('basic')"
+                  class="relative z-10 px-2 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-colors duration-300 text-brand-600 dark:text-brand-400"
+                  id="btn-basic"
+                >
+                  Basic
+                </button>
+                <button
+                  onclick="setMode('scientific')"
+                  class="relative z-10 px-3 py-4 text-xs font-bold uppercase tracking-wider rounded-full transition-colors duration-300 text-slate-500 dark:text-slate-400"
+                  id="btn-scientific"
+                >
+                  Sci
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Display Screen -->
+          <div
+            class="flex-1 flex flex-col justify-end mb-4 text-right space-y-1 min-h-[130px]"
+            id="result_display_container"
+          >
+            <div
+              id="history-display"
+              aria-live="polite"
+              class="text-slate-400 dark:text-slate-500 text-xl font-mono h-7 overflow-hidden text-ellipsis whitespace-nowrap md:text-2xl"
+            ></div>
+            <div
+              id="input-display"
+              aria-live="polite"
+              class="text-slate-500 dark:text-slate-400 md:text-2xl text-xl font-mono break-all opacity-80 min-h-[1.75rem]"
+            ></div>
+            <div
+              id="result-display"
+              aria-live="assertive"
+              aria-atomic="true"
+              class="text-5xl font-bold text-slate-900 dark:text-white font-mono tracking-tight break-all transition-all overflow-scroll h-[70px] custom-scrollbar [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:bg-transparent pr-1"
+            >
+              0
+            </div>
+          </div>
+
+          <!-- Keypad -->
+          <div class="grid grid-cols-4 gap-3 flex-grow content-end">
+            <!-- Row 1 -->
+            <button
+              id="clear-button"
+              data-key="Escape"
+              onclick="clearCalculator()"
+              class="btn-press h-14 rounded-2xl bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 font-bold sm:text-xl text-lg"
+            >
+              AC
+            </button>
+            <button
+              data-key="Backspace"
+              onclick="deleteChar()"
+              class="btn-press h-14 rounded-2xl bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/40 dark:hover:bg-slate-700 font-bold sm:text-xl text-lg"
+            >
+              ⌫
+            </button>
+            <button
+              data-key="%"
+              onclick="appendOperator('%')"
+              title="Remainder (modulo)"
+              class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-slate-800 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-semibold text-xl"
+            >
+              %
+            </button>
+            <button
+              data-key="/"
+              onclick="appendOperator('÷')"
+              class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-semibold text-3xl"
+            >
+              ÷
+            </button>
+
+            <!-- Row 2 -->
+            <button
+              data-key="7"
+              onclick="appendNumber('7')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              7
+            </button>
+            <button
+              data-key="8"
+              onclick="appendNumber('8')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              8
+            </button>
+            <button
+              data-key="9"
+              onclick="appendNumber('9')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              9
+            </button>
+            <button
+              data-key="*"
+              onclick="appendOperator('×')"
+              class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-bold text-2xl"
+            >
+              ×
+            </button>
+
+            <!-- Row 3 -->
+            <button
+              data-key="4"
+              onclick="appendNumber('4')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              4
+            </button>
+            <button
+              data-key="5"
+              onclick="appendNumber('5')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              5
+            </button>
+            <button
+              data-key="6"
+              onclick="appendNumber('6')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              6
+            </button>
+            <button
+              data-key="-"
+              onclick="appendOperator('-')"
+              class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-semibold text-2xl"
+            >
+              −
+            </button>
+
+            <!-- Row 4 -->
+            <button
+              data-key="1"
+              onclick="appendNumber('1')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              1
+            </button>
+            <button
+              data-key="2"
+              onclick="appendNumber('2')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              2
+            </button>
+            <button
+              data-key="3"
+              onclick="appendNumber('3')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              3
+            </button>
+            <button
+              data-key="+"
+              onclick="appendOperator('+')"
+              class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-semibold text-2xl"
+            >
+              +
+            </button>
+
+            <!-- Row 5 -->
+            <button
+              data-key="0"
+              onclick="appendNumber('0')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              0
+            </button>
+            <button
+              data-key="."
+              onclick="appendNumber('.')"
+              class="btn-press h-14 rounded-2xl bg-white dark:bg-slate-700/50 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold text-2xl shadow-sm border border-slate-100 dark:border-slate-800"
+            >
+              .
+            </button>
+            <button
+              onclick="useAns()"
+              class="btn-press h-14 rounded-2xl bg-slate-200/70 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold sm:text-xl text-md"
+            >
+              Ans
+            </button>
+            <button
+              data-key="Enter"
+              onclick="calculate()"
+              class="btn-press h-14 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xl shadow-lg shadow-brand-500/30"
+            >
+              =
+            </button>
+          </div>
+        </div>
+
+        <!-- Scientific Panel -->
+        <div class="hidden md:block">
+          <div
+            id="scientific-panel"
+            class="hidden md:flex flex-col h-full bg-slate-50/50 dark:bg-slate-800/20 w-0 opacity-0 transition-all duration-500 overflow-hidden"
+          >
+            <div class="mb-6 flex justify-between items-center">
+              <h3
+                class="text-lg font-bold text-slate-500 uppercase tracking-wider"
+              >
+                Scientific
+              </h3>
+              <button
+                onclick="toggleInverse()"
+                id="btn-inv"
+                class="px-2 py-1 text-md font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 dark:hover:bg-brand-900 transition-colors"
+                aria-label="Toggle inverse trigonometric functions"
+                title="Toggle inverse sine, cosine, and tangent"
+              >
+                2nd
+              </button>
+            </div>
+            <div class="grid grid-cols-3 gap-3 content-start">
+              <button
+                id="deg-rad-toggle"
+                onclick="toggleAngleMode()"
+                class="btn-press h-12 rounded-xl bg-brand-100 dark:bg-slate-700 text-brand-600 dark:text-brand-400 font-semibold text-sm"
+                aria-label="Switch angle unit"
+                title="Toggle degrees and radians"
+              >
+                DEG
+              </button>
+              <!-- Trig -->
+              <button
+                data-key="s"
+                id="btn-sin"
+                onclick="appendFunc('sin(')"
+                title="Sine (angle uses DEG/RAD mode)"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                sin
+              </button>
+              <button
+                data-key="c"
+                id="btn-cos"
+                onclick="appendFunc('cos(')"
+                title="Cosine (angle uses DEG/RAD mode)"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                cos
+              </button>
+              <button
+                data-key="t"
+                id="btn-tan"
+                onclick="appendFunc('tan(')"
+                title="Tangent (angle uses DEG/RAD mode)"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                tan
+              </button>
+
+              <!-- Logs & Roots -->
+              <button
+                data-key="l"
+                onclick="appendFunc('log(')"
+                title="Base-10 logarithm; input must be positive"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                log
+              </button>
+              <button
+                onclick="appendFunc('ln(')"
+                title="Natural logarithm; input must be positive"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                ln
+              </button>
+              <button
+                onclick="appendFunc('sqrt(')"
+                title="Square root; input must be non-negative"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                √
+              </button>
+
+              <!-- Powers & Constants -->
+              <button
+                data-key="^"
+                onclick="appendOperator('^')"
+                title="Raise a value to a power"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                x^y
+              </button>
+              <button
+                data-key="p"
+                onclick="appendConstant('PI')"
+                title="Insert pi (π)"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                π
+              </button>
+              <button
+                data-key="e"
+                onclick="appendConstant('E')"
+                title="Insert Euler's number (e)"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                e
+              </button>
+
+              <!-- Misc -->
+              <button
+                data-key="("
+                onclick="appendOperator('(')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                (
+              </button>
+              <button
+                data-key=")"
+                onclick="appendOperator(')')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+              >
+                )
+              </button>
+              <button
+                onclick="appendFunc('fact(')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Factorial"
+                title="Factorial of a non-negative integer"
+              >
+                n!
+              </button>
+              <button
+                onclick="appendUnaryFunction('square')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Square"
+                title="Square the current value"
+              >
+                x²
+              </button>
+              <button
+                onclick="appendUnaryFunction('cube')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Cube"
+                title="Cube the current value"
+              >
+                x³
+              </button>
+              <button
+                onclick="appendUnaryFunction('cbrt')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Cube root"
+                title="Cube root"
+              >
+                ∛x
+              </button>
+              <button
+                onclick="appendUnaryFunction('reciprocal')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Reciprocal"
+                title="Reciprocal (1 divided by the current value)"
+              >
+                1/x
+              </button>
+              <button
+                onclick="appendUnaryFunction('exp')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Exponential e to the x"
+                title="Exponential function e to the x"
+              >
+                eˣ
+              </button>
+              <button
+                onclick="appendUnaryFunction('pow10')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Ten to the x"
+                title="Ten raised to the current value"
+              >
+                10ˣ
+              </button>
+              <button
+                onclick="appendUnaryFunction('pct')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Percent of value"
+                title="Divide the current value by 100"
+              >
+                x%
+              </button>
+              <button
+                onclick="appendUnaryFunction('abs')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Absolute value"
+                title="Absolute value"
+              >
+                |x|
+              </button>
+              <button
+                onclick="appendUnaryFunction('round')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Round"
+                title="Round to the nearest integer"
+              >
+                round
+              </button>
+              <button
+                onclick="appendUnaryFunction('floor')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Round down"
+                title="Round down to the nearest integer"
+              >
+                floor
+              </button>
+              <button
+                onclick="appendUnaryFunction('ceil')"
+                class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
+                aria-label="Round up"
+                title="Round up to the nearest integer"
+              >
+                ceil
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile Scientific Drawer -->
+        <div
+          id="mobile-scientific-drawer"
+          class="md:hidden hidden w-full p-4 bg-slate-100 dark:bg-slate-800/50 border-t border-slate-200 dark:border-white/5 grid-cols-4 gap-2 animate-fade-in"
+        >
+          <button
+            id="mobile-deg-rad-toggle"
+            onclick="toggleAngleMode()"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold"
+            aria-label="Switch angle unit"
+            title="Toggle degrees and radians"
+          >
+            DEG
+          </button>
+          <button
+            id="mobile-btn-inv"
+            onclick="toggleInverse()"
+            aria-label="Toggle inverse trigonometric functions"
+            title="Toggle inverse sine, cosine, and tangent"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold"
+          >
+            2nd
+          </button>
+          <button
+            id="mobile-btn-sin"
+            onclick="appendFunc('sin(')"
+            title="Sine (angle uses DEG/RAD mode)"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            sin
+          </button>
+          <button
+            id="mobile-btn-cos"
+            onclick="appendFunc('cos(')"
+            title="Cosine (angle uses DEG/RAD mode)"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            cos
+          </button>
+          <button
+            id="mobile-btn-tan"
+            onclick="appendFunc('tan(')"
+            title="Tangent (angle uses DEG/RAD mode)"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            tan
+          </button>
+          <button
+            onclick="appendFunc('sqrt(')"
+            title="Square root; input must be non-negative"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            √
+          </button>
+          <button
+            onclick="appendFunc('log(')"
+            title="Base-10 logarithm; input must be positive"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            log
+          </button>
+          <button
+            onclick="appendFunc('ln(')"
+            title="Natural logarithm; input must be positive"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            ln
+          </button>
+          <button
+            onclick="appendOperator('(')"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            (
+          </button>
+          <button
+            onclick="appendOperator(')')"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            )
+          </button>
+          <button
+            onclick="appendConstant('PI')"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            π
+          </button>
+          <button
+            onclick="appendConstant('E')"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            e
+          </button>
+          <button
+            onclick="appendOperator('^')"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            ^
+          </button>
+          <button
+            onclick="appendFunc('fact(')"
+            title="Factorial of an integer from 0 to 170"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            !
+          </button>
+          <button
+            onclick="appendUnaryFunction('square')"
+            aria-label="Square"
+            title="Square the current value"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            x²
+          </button>
+          <button
+            onclick="appendUnaryFunction('cube')"
+            aria-label="Cube"
+            title="Cube the current value"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            x³
+          </button>
+          <button
+            onclick="appendUnaryFunction('cbrt')"
+            aria-label="Cube root"
+            title="Cube root"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            ∛x
+          </button>
+          <button
+            onclick="appendUnaryFunction('reciprocal')"
+            aria-label="Reciprocal"
+            title="1 divided by the current value"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            1/x
+          </button>
+          <button
+            onclick="appendUnaryFunction('exp')"
+            aria-label="Exponential e to the x"
+            title="e raised to the current value"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            eˣ
+          </button>
+          <button
+            onclick="appendUnaryFunction('pow10')"
+            aria-label="Ten to the x"
+            title="10 raised to the current value"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            10ˣ
+          </button>
+          <button
+            onclick="appendUnaryFunction('pct')"
+            aria-label="Percent of value"
+            title="Divide the current value by 100"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            x%
+          </button>
+          <button
+            onclick="appendUnaryFunction('abs')"
+            aria-label="Absolute value"
+            title="Absolute value"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            |x|
+          </button>
+          <button
+            onclick="appendUnaryFunction('round')"
+            aria-label="Round"
+            title="Round to the nearest integer"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            round
+          </button>
+          <button
+            onclick="appendUnaryFunction('floor')"
+            aria-label="Round down"
+            title="Round down to the nearest integer"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            floor
+          </button>
+          <button
+            onclick="appendUnaryFunction('ceil')"
+            aria-label="Round up"
+            title="Round up to the nearest integer"
+            class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
+          >
+            ceil
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const html = document.documentElement;
+      const themeToggle = document.getElementById("theme-toggle");
+      const resultDisplay = document.getElementById("result-display");
+      const clearButton = document.getElementById("clear-button");
+      const inputDisplay = document.getElementById("input-display");
+      const historyDisplay = document.getElementById("history-display");
+      const scientificPanel = document.getElementById("scientific-panel");
+      const mobileScientificDrawer = document.getElementById(
+        "mobile-scientific-drawer",
+      );
+      const calculatorWrapper = document.getElementById("calculator-wrapper");
+      const modeIndicator = document.getElementById("mode-indicator");
+      const btnBasic = document.getElementById("btn-basic");
+      const btnScientific = document.getElementById("btn-scientific");
+      const degRadToggle = document.getElementById("deg-rad-toggle");
+      const mobileDegRadToggle = document.getElementById(
+        "mobile-deg-rad-toggle",
+      );
+      const btnInv = document.getElementById("btn-inv");
+      const mobileBtnInv = document.getElementById("mobile-btn-inv");
+
+      let currentInput = "";
+      let expression = "";
+      let shouldResetDisplay = false;
+      let mode = "basic";
+      let isDegrees = true;
+      let lastAnswer = "0";
+      let isInverse = false;
+      let hasError = false;
+
+      function initTheme() {
+        let savedTheme;
+        try {
+          savedTheme = localStorage.getItem("theme");
+        } catch {}
+        const prefersDark = window.matchMedia(
+          "(prefers-color-scheme: dark)",
+        ).matches;
+        html.classList.toggle(
+          "dark",
+          savedTheme ? savedTheme === "dark" : prefersDark,
+        );
+      }
+
+      initTheme();
+
+      themeToggle.addEventListener("click", () => {
+        const isDark = html.classList.toggle("dark");
+        try {
+          localStorage.setItem("theme", isDark ? "dark" : "light");
+        } catch {}
+      });
+
+      function getExpression() {
+        return expression + currentInput;
+      }
+
+      function formatResult(value) {
+        if (!Number.isFinite(value)) {
+          throw new Error("Math error");
+        }
+        const rounded = Number(value.toPrecision(13));
+        return Object.is(rounded, -0) ? "0" : String(rounded);
+      }
+
+      function tokenize(source) {
+        const tokens = [];
+        const tokenPattern =
+          /\s*(?:(\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?|([a-zA-Z][a-zA-Z0-9]*)|([()+\-*/%^!×÷]))/gy;
+        let position = 0;
+
+        while (position < source.length) {
+          tokenPattern.lastIndex = position;
+          const match = tokenPattern.exec(source);
+          if (!match) {
+            throw new Error("Invalid expression");
+          }
+          position = tokenPattern.lastIndex;
+          if (match[1] !== undefined) {
+            const value = Number(
+              match[1] + (match[2] === undefined ? "" : `e${match[2]}`),
+            );
+            if (!Number.isFinite(value)) throw new Error("Number out of range");
+            tokens.push({ type: "number", value });
+          } else if (match[3] !== undefined) {
+            tokens.push({ type: "name", value: match[3] });
+          } else {
+            tokens.push({ type: "symbol", value: match[4] });
+          }
+        }
+
+        return tokens;
+      }
+
+      function evaluate(source) {
+        const tokens = tokenize(source);
+        let cursor = 0;
+        const peek = () => tokens[cursor];
+        const consume = () => tokens[cursor++];
+        const matchSymbol = (symbol) => {
+          if (peek()?.type === "symbol" && peek().value === symbol) {
+            consume();
+            return true;
+          }
+          return false;
+        };
+        const toRadians = (value) =>
+          isDegrees ? (value * Math.PI) / 180 : value;
+        const fromRadians = (value) =>
+          isDegrees ? (value * 180) / Math.PI : value;
+
+        function parseExpression() {
+          let value = parseTerm();
+          while (
+            peek()?.type === "symbol" &&
+            ["+", "-"].includes(peek().value)
+          ) {
+            const operator = consume().value;
+            const right = parseTerm();
+            value = operator === "+" ? value + right : value - right;
+          }
+          return value;
+        }
+
+        function startsImplicitProduct(token) {
+          return (
+            token &&
+            (token.type === "number" ||
+              token.type === "name" ||
+              (token.type === "symbol" && token.value === "("))
+          );
+        }
+
+        function parseTerm() {
+          let value = parseUnary();
+          while (peek()) {
+            if (
+              peek().type === "symbol" &&
+              ["*", "×", "/", "÷", "%"].includes(peek().value)
+            ) {
+              const operator = consume().value;
+              const right = parseUnary();
+              if (
+                (operator === "/" || operator === "÷" || operator === "%") &&
+                right === 0
+              ) {
+                throw new Error("Cannot divide by zero");
+              }
+              if (operator === "*" || operator === "×") value *= right;
+              else if (operator === "/" || operator === "÷") value /= right;
+              else value %= right;
+            } else if (startsImplicitProduct(peek())) {
+              value *= parseUnary();
+            } else {
+              break;
+            }
+          }
+          return value;
+        }
+
+        function parseUnary() {
+          if (matchSymbol("+")) return parseUnary();
+          if (matchSymbol("-")) return -parseUnary();
+          return parsePower();
+        }
+
+        function parsePower() {
+          let value = parsePostfix();
+          if (matchSymbol("^")) {
+            value = Math.pow(value, parseUnary());
+          }
+          return value;
+        }
+
+        function parsePostfix() {
+          let value = parsePrimary();
+          while (matchSymbol("!")) {
+            value = factorial(value);
+          }
+          return value;
+        }
+
+        function parsePrimary() {
+          const token = consume();
+          if (!token) throw new Error("Incomplete expression");
+          if (token.type === "number") return token.value;
+
+          if (token.type === "symbol" && token.value === "(") {
+            const value = parseExpression();
+            if (!matchSymbol(")"))
+              throw new Error("Missing closing parenthesis");
+            return value;
+          }
+
+          if (token.type === "name") {
+            const name = token.value.toLowerCase();
+            if (name === "pi") return Math.PI;
+            if (name === "e") return Math.E;
+            if (token.value === "Ans") return Number(lastAnswer);
+
+            if (!matchSymbol("("))
+              throw new Error("Function needs parentheses");
+            const argument = parseExpression();
+            if (!matchSymbol(")"))
+              throw new Error("Missing closing parenthesis");
+            const functions = {
+              sin: (x) => Math.sin(toRadians(x)),
+              cos: (x) => Math.cos(toRadians(x)),
+              tan: (x) => {
+                const radians = toRadians(x);
+                if (Math.abs(Math.cos(radians)) < 1e-14)
+                  throw new Error("Undefined");
+                return Math.tan(radians);
+              },
+              asin: (x) => fromRadians(Math.asin(x)),
+              acos: (x) => fromRadians(Math.acos(x)),
+              atan: (x) => fromRadians(Math.atan(x)),
+              sqrt: Math.sqrt,
+              cbrt: Math.cbrt,
+              exp: Math.exp,
+              pow10: (x) => Math.pow(10, x),
+              pct: (x) => x / 100,
+              square: (x) => x ** 2,
+              cube: (x) => x ** 3,
+              reciprocal: (x) => {
+                if (x === 0) throw new Error("Cannot divide by zero");
+                return 1 / x;
+              },
+              log: Math.log10,
+              ln: Math.log,
+              abs: Math.abs,
+              round: Math.round,
+              floor: Math.floor,
+              ceil: Math.ceil,
+              fact: factorial,
+            };
+            if (!functions[name]) throw new Error("Unknown function");
+            return functions[name](argument);
+          }
+
+          throw new Error("Invalid expression");
+        }
+
+        const result = parseExpression();
+        if (cursor !== tokens.length) throw new Error("Invalid expression");
+        return formatResult(result);
+      }
+
+      function closeOpenParentheses(source) {
+        let depth = 0;
+        for (const character of source) {
+          if (character === "(") depth += 1;
+          if (character === ")") depth -= 1;
+          if (depth < 0) throw new Error("Invalid parentheses");
+        }
+        return source + ")".repeat(depth);
+      }
+
+      function updateDisplay() {
+        const fullExpression = getExpression();
+        clearButton.textContent = currentInput || hasError ? "C" : "AC";
+        inputDisplay.textContent = expression
+          .replace(/\*/g, "×")
+          .replace(/\//g, "÷");
+        resultDisplay.textContent = hasError ? "Error" : currentInput || "0";
+
+        if (
+          !hasError &&
+          fullExpression &&
+          !/[+\-*/%^×÷.(]$/.test(fullExpression)
+        ) {
+          try {
+            resultDisplay.textContent = evaluate(
+              closeOpenParentheses(fullExpression),
+            );
+          } catch {
+            // Partial expressions are expected while entering a calculation.
+          }
+        } else if (!hasError && !currentInput && expression) {
+          const previousEntry = expression.replace(/[+\-*/%^×÷]$/, "");
+          if (previousEntry && !/[.(]$/.test(previousEntry)) {
+            try {
+              resultDisplay.textContent = evaluate(
+                closeOpenParentheses(previousEntry),
+              );
+            } catch {
+              // Keep the last display for incomplete expressions.
+            }
+          }
+        }
+
+        resultDisplay.classList.toggle("calculator-error", hasError);
+        resultDisplay.classList.toggle(
+          "calculator-long-result",
+          resultDisplay.textContent.length > 9,
+        );
+        checkDisplayLength();
+      }
+
+      function toggleAngleMode() {
+        isDegrees = !isDegrees;
+        const label = isDegrees ? "DEG" : "RAD";
+        degRadToggle.textContent = label;
+        mobileDegRadToggle.textContent = label;
+        degRadToggle.setAttribute(
+          "aria-label",
+          `Switch angle unit (currently ${label})`,
+        );
+        mobileDegRadToggle.setAttribute(
+          "aria-label",
+          `Switch angle unit (currently ${label})`,
+        );
+        updateDisplay();
+      }
+
+      function updateInverseButtons() {
+        const trig = [
+          ["btn-sin", "mobile-btn-sin", "sin", "asin", "sine"],
+          ["btn-cos", "mobile-btn-cos", "cos", "acos", "cosine"],
+          ["btn-tan", "mobile-btn-tan", "tan", "atan", "tangent"],
+        ];
+        trig.forEach(([desktopId, mobileId, normal, inverse, description]) => {
+          const label = isInverse ? `${normal}⁻¹` : normal;
+          const fn = isInverse ? inverse : normal;
+          [desktopId, mobileId].forEach((id) => {
+            const button = document.getElementById(id);
+            button.textContent = label;
+            button.setAttribute("onclick", `appendFunc('${fn}(')`);
+            button.setAttribute(
+              "aria-label",
+              isInverse ? `Inverse ${description}` : description,
+            );
+            button.title = isInverse
+              ? `Inverse ${description}; result uses DEG/RAD mode`
+              : `${description} (angle uses DEG/RAD mode)`;
+          });
+        });
+      }
+
+      function toggleInverse() {
+        isInverse = !isInverse;
+        [btnInv, mobileBtnInv].forEach((button) => {
+          button.classList.toggle("inverse-active", isInverse);
+          button.setAttribute("aria-pressed", String(isInverse));
+        });
+        updateInverseButtons();
+      }
+
+      function resetAfterError() {
+        if (!hasError) return;
+        hasError = false;
+        currentInput = "";
+        expression = "";
+      }
+
+      function appendNumber(number) {
+        resetAfterError();
+        if (shouldResetDisplay) {
+          currentInput = number === "." ? "0." : number;
+          expression = "";
+          shouldResetDisplay = false;
+        } else if (number === ".") {
+          if (currentInput.includes(".")) return;
+          currentInput = currentInput ? `${currentInput}.` : "0.";
+        } else {
+          currentInput = currentInput === "0" ? number : currentInput + number;
+        }
+        updateDisplay();
+      }
+
+      function appendOperator(operator) {
+        resetAfterError();
+        if (operator === "(") {
+          if (currentInput) {
+            expression += `${currentInput}×`;
+            currentInput = "";
+          } else if (/[)\w]$/.test(expression)) {
+            expression += "×";
+          }
+          expression += "(";
+          shouldResetDisplay = false;
+          updateDisplay();
+          return;
+        }
+
+        if (operator === ")") {
+          if (currentInput) {
+            expression += currentInput;
+            currentInput = "";
+          }
+          const openCount = (expression.match(/\(/g) || []).length;
+          const closeCount = (expression.match(/\)/g) || []).length;
+          if (
+            openCount > closeCount &&
+            expression &&
+            !/[+\-*/%^×÷(]$/.test(expression)
+          ) {
+            expression += ")";
+          }
+          shouldResetDisplay = false;
+          updateDisplay();
+          return;
+        }
+
+        if (currentInput) {
+          expression += currentInput;
+          currentInput = "";
+        } else if (!expression) {
+          if (operator !== "-") return;
+        } else if (/[+\-*/%^×÷]$/.test(expression)) {
+          if (operator === "-" && !expression.endsWith("-")) {
+            expression += operator;
+            shouldResetDisplay = false;
+            updateDisplay();
+            return;
+          }
+          expression = expression.slice(0, -1);
+        }
+
+        expression += operator;
+        shouldResetDisplay = false;
+        updateDisplay();
+      }
+
+      function appendFunc(func) {
+        resetAfterError();
+        if (currentInput) {
+          expression += `${currentInput}×`;
+          currentInput = "";
+        } else if (/[)\w]$/.test(expression)) {
+          expression += "×";
+        }
+        expression += func;
+        shouldResetDisplay = false;
+        updateDisplay();
+      }
+
+      function appendUnaryFunction(name) {
+        resetAfterError();
+        const operand = currentInput;
+
+        if (operand) {
+          const hasTrailingMinus = expression.endsWith("-");
+          const prefix = hasTrailingMinus
+            ? expression.slice(0, -1)
+            : expression;
+          const isUnarySign =
+            hasTrailingMinus && (!prefix || /[+*/%^×÷(]$/.test(prefix));
+          expression = isUnarySign
+            ? `${prefix}${name}(-${operand})`
+            : `${expression}${name}(${operand})`;
+          currentInput = "";
+          shouldResetDisplay = false;
+          updateDisplay();
+          return;
+        }
+
+        if (expression && !/[+\-*/%^×÷(]$/.test(expression)) {
+          expression = `${name}(${expression})`;
+          shouldResetDisplay = false;
+          updateDisplay();
+          return;
+        }
+
+        appendFunc(`${name}(`);
+      }
+
+      function appendConstant(constant) {
+        resetAfterError();
+        if (currentInput) {
+          expression += `${currentInput}×`;
+          currentInput = "";
+        } else if (/[)\w]$/.test(expression)) {
+          expression += "×";
+        }
+        expression += constant === "PI" ? "PI" : "E";
+        shouldResetDisplay = false;
+        updateDisplay();
+      }
+
+      function useAns() {
+        resetAfterError();
+        if (shouldResetDisplay) {
+          expression = "";
+          currentInput = lastAnswer;
+          shouldResetDisplay = false;
+        } else {
+          if (currentInput) {
+            expression += `${currentInput}×`;
+            currentInput = "";
+          } else if (/[)\w]$/.test(expression)) {
+            expression += "×";
+          }
+          currentInput = lastAnswer;
+        }
+        updateDisplay();
+      }
+
+      function clearAll() {
+        currentInput = "";
+        expression = "";
+        shouldResetDisplay = false;
+        hasError = false;
+        historyDisplay.textContent = "";
+        updateDisplay();
+      }
+
+      function clearCalculator() {
+        if (clearButton.textContent === "AC" || hasError) {
+          clearAll();
+          return;
+        }
+        currentInput = "";
+        hasError = false;
+        shouldResetDisplay = false;
+        updateDisplay();
+      }
+
+      function deleteChar() {
+        if (hasError) {
+          clearAll();
+          return;
+        }
+        shouldResetDisplay = false;
+        if (currentInput) {
+          currentInput = currentInput.slice(0, -1);
+        } else if (expression) {
+          expression = expression.slice(0, -1);
+        }
+        updateDisplay();
+      }
+
+      function factorial(value) {
+        if (!Number.isInteger(value) || value < 0 || value > 170) {
+          throw new Error("Factorial requires an integer from 0 to 170");
+        }
+        let result = 1;
+        for (let number = 2; number <= value; number += 1) result *= number;
+        return result;
+      }
+
+      function calculate() {
+        if (hasError) return;
+        const source = getExpression();
+        if (!source) return;
+
+        try {
+          const completedExpression = closeOpenParentheses(source);
+          const answer = evaluate(completedExpression);
+          historyDisplay.textContent = `${completedExpression
+            .replace(/\*/g, "×")
+            .replace(/\//g, "÷")} =`;
+          currentInput = answer;
+          lastAnswer = answer;
+          expression = "";
+          shouldResetDisplay = true;
+          hasError = false;
+        } catch {
+          hasError = true;
+          currentInput = "";
+          historyDisplay.textContent = "Check your expression";
+          shouldResetDisplay = false;
+        }
+        updateDisplay();
+      }
+
+      function setMode(newMode) {
+        mode = newMode;
+        const scientific = mode === "scientific";
+        modeIndicator.style.transform = scientific
+          ? "translateX(100%)"
+          : "translateX(0)";
+        btnBasic.classList.toggle("mode-selected", !scientific);
+        btnScientific.classList.toggle("mode-selected", scientific);
+        scientificPanel.classList.toggle("hidden", !scientific);
+        scientificPanel.classList.toggle("w-0", !scientific);
+        scientificPanel.classList.toggle("opacity-0", !scientific);
+        scientificPanel.classList.toggle("w-64", scientific);
+        scientificPanel.classList.toggle("opacity-100", scientific);
+        scientificPanel.classList.toggle("p-6", scientific);
+        calculatorWrapper.classList.toggle("scientific-open", scientific);
+        mobileScientificDrawer.classList.toggle("hidden", !scientific);
+        mobileScientificDrawer.classList.toggle("grid", scientific);
+      }
+
+      function checkDisplayLength() {
+        const container = document.getElementById("result_display_container");
+        container.style.minHeight =
+          resultDisplay.textContent.length > 18 ? "150px" : "130px";
+      }
+
+      function triggerKeyFeedback(key) {
+        const button = document.querySelector(`button[data-key="${key}"]`);
+        if (!button) return;
+        button.classList.add("btn-active");
+        window.setTimeout(() => button.classList.remove("btn-active"), 120);
+      }
+
+      document.addEventListener("keydown", (event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        const { key } = event;
+        if (/^\d$/.test(key)) {
+          event.preventDefault();
+          appendNumber(key);
+          triggerKeyFeedback(key);
+        } else if (key === ".") {
+          event.preventDefault();
+          appendNumber(".");
+          triggerKeyFeedback(key);
+        } else if (["+", "-", "*", "/", "%", "^", "(", ")"].includes(key)) {
+          event.preventDefault();
+          appendOperator(key === "*" ? "×" : key === "/" ? "÷" : key);
+          triggerKeyFeedback(key);
+        } else if (key === "Enter" || key === "=") {
+          event.preventDefault();
+          calculate();
+          triggerKeyFeedback("Enter");
+        } else if (key === "Backspace") {
+          event.preventDefault();
+          deleteChar();
+          triggerKeyFeedback("Backspace");
+        } else if (key === "Escape") {
+          event.preventDefault();
+          clearAll();
+          triggerKeyFeedback("Escape");
+        } else if (key.toLowerCase() === "s" && mode === "scientific") {
+          appendFunc(`${isInverse ? "asin" : "sin"}(`);
+        } else if (key.toLowerCase() === "c" && mode === "scientific") {
+          appendFunc(`${isInverse ? "acos" : "cos"}(`);
+        } else if (key.toLowerCase() === "t" && mode === "scientific") {
+          appendFunc(`${isInverse ? "atan" : "tan"}(`);
+        } else if (key.toLowerCase() === "l" && mode === "scientific") {
+          appendFunc("log(");
+        } else if (key.toLowerCase() === "p" && mode === "scientific") {
+          appendConstant("PI");
+        } else if (key.toLowerCase() === "e" && mode === "scientific") {
+          appendConstant("E");
+        }
+      });
+
+      setMode("basic");
+      updateDisplay();
+    </script>
+  </body>
+</html>

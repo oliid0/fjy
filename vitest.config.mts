@@ -68,6 +68,7 @@ export default defineConfig({
     include: [
       "packages/**/*.{test,spec}.{ts,tsx}",
       "app/**/*.{test,spec}.{ts,tsx}",
+      "app/fcboard/calculator/*.test.js",
     ],
     // Since hooks are running in stack in v2, which means all hooks run serially whereas
     // we need to run them in parallel

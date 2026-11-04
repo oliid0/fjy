@@ -366,7 +366,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
         );
       }
       return classroomCommands.execute({
-        name: "files.open",
+        name: kind === "media" ? "tools.media" : "files.open",
         args: { signal },
       });
     }
@@ -379,7 +379,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
     const stops = [
       classroomCommands.register(
         "insert.open",
-        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents and media open in the internal file viewer; signal uses the available display input app.",
+        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents use the internal viewer; media opens the built-in local audio/video player; signal uses real TV inputs.",
         (args) =>
           open(
             args.kind,

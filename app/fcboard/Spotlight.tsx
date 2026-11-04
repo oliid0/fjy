@@ -1,5 +1,5 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   CloseIcon,
   fullscreenIcon,
@@ -13,6 +13,8 @@ import "./Spotlight.scss";
 /** A board-local spotlight also works on devices without the OEM spotlight app. */
 export const Spotlight = () => {
   useI18n();
+  const maskId = useId();
+  const [shape, setShape] = useState("circle");
   const [state, setState] = useState({
     open: false,
     x: window.innerWidth / 2,
@@ -29,9 +31,13 @@ export const Spotlight = () => {
   useEffect(() => {
     const release = classroomCommands.register(
       "tools.spotlight",
-      "聚光灯：args.open=true|false，args.x/y 为屏幕坐标，args.radius=48..600；拖动可移动光圈",
+      "聚光灯：args.open=true|false，args.x/y 为屏幕坐标，args.radius=48..600，args.shape=circle|rectangle|triangle|star；拖动可移动光圈",
       (args) => {
         if (
+          (args.shape !== undefined &&
+            !["circle", "rectangle", "triangle", "star"].includes(
+              String(args.shape),
+            )) ||
           (args.open !== undefined && typeof args.open !== "boolean") ||
           ["x", "y", "radius"].some(
             (key) =>
@@ -42,6 +48,9 @@ export const Spotlight = () => {
             (args.radius < 48 || args.radius > 600))
         ) {
           throw new Error(t("fcboard.invalid_spotlight_parameters"));
+        }
+        if (typeof args.shape === "string") {
+          setShape(args.shape);
         }
         setState((previous) => ({
           open: args.open !== false,
@@ -95,7 +104,6 @@ export const Spotlight = () => {
         zIndex: 90,
         pointerEvents: "auto",
         touchAction: "none",
-        background: `radial-gradient(circle ${state.radius}px at ${state.x}px ${state.y}px, transparent 99.5%, ${maskColor}c7 100%)`,
       }}
       onPointerDown={(event) => {
         if (event.target !== event.currentTarget) {
@@ -147,6 +155,49 @@ export const Spotlight = () => {
         dragging.current = undefined;
       }}
     >
+      <svg
+        aria-hidden="true"
+        width="100%"
+        height="100%"
+        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+      >
+        <defs>
+          <mask id={maskId}>
+            <rect width="100%" height="100%" fill="white" />
+            <g
+              transform={`translate(${state.x} ${state.y}) scale(${state.radius})`}
+              fill="black"
+            >
+              {shape === "circle" ? (
+                <circle r="1" />
+              ) : shape === "rectangle" ? (
+                <rect x="-1" y="-1" width="2" height="2" />
+              ) : (
+                <polygon
+                  points={
+                    shape === "triangle"
+                      ? "0,-1 1,1 -1,1"
+                      : Array.from({ length: 10 }, (_, i) => {
+                          const radius = i % 2 ? 0.382 : 1;
+                          const angle = (i * Math.PI) / 5 - Math.PI / 2;
+                          return `${Math.cos(angle) * radius},${
+                            Math.sin(angle) * radius
+                          }`;
+                        }).join(" ")
+                  }
+                />
+              )}
+            </g>
+          </mask>
+        </defs>
+        <rect
+          width="100%"
+          height="100%"
+          fill={maskColor}
+          fillOpacity="0.78"
+          mask={`url(#${maskId})`}
+        />
+      </svg>
       <div
         className="fc-spotlight-ring"
         style={{
@@ -154,6 +205,7 @@ export const Spotlight = () => {
           top: state.y - state.radius,
           width: state.radius * 2,
           height: state.radius * 2,
+          border: shape === "circle" ? undefined : "none",
         }}
       />
       <div
@@ -163,9 +215,20 @@ export const Spotlight = () => {
             12,
             Math.min(window.innerWidth - 60, state.x + state.radius + 16),
           ),
-          top: Math.max(12, Math.min(window.innerHeight - 132, state.y)),
+          top: Math.max(12, Math.min(window.innerHeight - 210, state.y)),
         }}
       >
+        <select
+          aria-label={t("fcboard.spotlight_shape")}
+          value={shape}
+          onChange={(event) => setShape(event.target.value)}
+          style={{ width: 44, height: 44 }}
+        >
+          <option value="circle">○</option>
+          <option value="rectangle">□</option>
+          <option value="triangle">△</option>
+          <option value="star">☆</option>
+        </select>
         <label className="fc-spotlight-color" title={t("fcboard.colour")}>
           {palette}
           <input

@@ -132,29 +132,6 @@ public class ClassroomPlugin extends Plugin {
             webResource.action(call.getData(), call);
         });
     }
-    @PluginMethod
-    public void getFactoryTools(PluginCall call) {
-        try {
-            JSArray available = new JSArray();
-            for (String tool : FactoryTools.PACKAGES.keySet()) {
-                if (FactoryTools.resolve(getContext(), tool) != null) available.put(tool);
-            }
-            JSObject result = new JSObject(); result.put("available", available); call.resolve(result);
-        } catch (Exception error) { call.reject("无法读取大屏工具", error); }
-    }
-
-    @PluginMethod
-    public void openFactoryTool(PluginCall call) {
-        getActivity().runOnUiThread(() -> {
-            try {
-                android.content.Intent intent = FactoryTools.resolve(getContext(), call.getString("tool"));
-                if (intent == null) { call.reject("当前设备未安装或未开放这项大屏工具"); return; }
-                getActivity().startActivity(intent);
-                call.resolve();
-            } catch (Exception error) { call.reject("无法打开大屏工具：" + error.getMessage(), error); }
-        });
-    }
-
     private Receiver receiver;
     private SignalResourceDialog signalResource;
     @PluginMethod
@@ -162,10 +139,8 @@ public class ClassroomPlugin extends Plugin {
         try {
             JSArray available = new JSArray();
             boolean embeddedSignal = !SignalResourceDialog.availableInputs(getContext()).isEmpty();
-            for (String insertion : FactoryTools.INSERTIONS.keySet()) {
-                if (("signal".equals(insertion) && embeddedSignal)
-                    || FactoryTools.resolveInsertion(getContext(), insertion) != null) available.put(insertion);
-            }
+            available.put("document"); available.put("media");
+            if (embeddedSignal) available.put("signal");
             JSArray embedded = new JSArray();
             if (embeddedSignal) embedded.put("signal");
             JSObject result = new JSObject(); result.put("available", available); result.put("embedded", embedded); call.resolve(result);
@@ -184,11 +159,7 @@ public class ClassroomPlugin extends Plugin {
                     JSObject result = new JSObject(); result.put("embedded", true); call.resolve(result);
                     return;
                 }
-                android.content.Intent intent = FactoryTools.resolveInsertion(getContext(), insertion);
-                if (intent == null) { call.reject("当前设备未安装或未开放这项插入应用"); return; }
-                if ("signal".equals(insertion)) android.widget.Toast.makeText(getContext(), R.string.signal_external, android.widget.Toast.LENGTH_LONG).show();
-                getActivity().startActivity(intent);
-                JSObject result = new JSObject(); result.put("embedded", false); call.resolve(result);
+                call.reject("当前设备没有可用的信号输入，请检查电视输入服务及硬件连接");
             } catch (Exception error) { closeSignalResource(); call.reject("无法打开插入应用：" + error.getMessage(), error); }
         });
     }

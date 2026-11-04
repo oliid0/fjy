@@ -45,7 +45,9 @@ export const classroomSummaryMessages = async (
               ...api,
               getSceneElements: () =>
                 getNonDeletedElements(
-                  syncInvalidIndicesImmutable(page.elements),
+                  Array.from(
+                    syncInvalidIndicesImmutable(page.elements)?.values() || [],
+                  ),
                 ),
               getFiles: () => page.files,
               getAppState: () => ({ ...api.getAppState(), ...page.view }),

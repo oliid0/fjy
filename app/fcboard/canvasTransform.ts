@@ -1,5 +1,5 @@
 import { t } from "@fcboard/fcboard/i18n";
-import { hashString, newElementWith } from "@fcboard/element";
+import { hashString, isElbowArrow, newElementWith } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { MIN_FONT_SIZE } from "@fcboard/common";
 
@@ -123,7 +123,7 @@ export const transformBoardElement = (
     strokeWidth: element.strokeWidth * scale,
     ...(points ? { points } : {}),
     ...(element.type === "text" ? { fontSize: element.fontSize * scale } : {}),
-    ...(element.type === "arrow" && element.elbowed && element.fixedSegments
+    ...(isElbowArrow(element) && element.fixedSegments
       ? {
           fixedSegments: element.fixedSegments.map((segment) => ({
             ...segment,

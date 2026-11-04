@@ -2,6 +2,8 @@ import { columnCalculation } from "./columnCalculation";
 import { latestFunctionInk } from "./functionInk";
 import { localMathResult } from "./mathRecognition";
 
+import type { InkInput } from "./digitalInk";
+
 it.each([
   ["123\n+45\n----", "168"],
   ["123\n-45\n----", "78"],
@@ -67,7 +69,7 @@ it("keeps a failed function on an earlier row separate from the next function an
   ).toEqual([1, 2]);
 });
 
-const vertical = [
+const vertical: InkInput = [
   [
     [20, 10],
     [30, 30],
@@ -97,7 +99,7 @@ it.each([
   },
 );
 it("recognizes explicit long division and does not turn an ordinary minus into a column", () => {
-  const division = [
+  const division: InkInput = [
     [
       [20, 30],
       [30, 50],

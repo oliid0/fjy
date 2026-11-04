@@ -140,7 +140,7 @@ it.each(["cancel", "navigate"])(
     );
     try {
       const task = await start("画图");
-      await waitFor(() => expect(finish).toBeTypeOf("function"));
+      await waitFor(() => expect(typeof finish).toBe("function"));
       if (action === "cancel") {
         await classroomCommands.execute({
           name: "agent.cancel",

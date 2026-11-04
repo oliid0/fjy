@@ -71,6 +71,12 @@ public class MediaPlaybackTest {
                 invoke(scenario, "seek", new JSObject().put("action", "seek").put("seconds", 2), null);
                 assertEquals(2.0, invoke(scenario, "read", new JSObject().put("action", "read"), null).getDouble("position"), 0.1);
                 invoke(scenario, "speed", new JSObject().put("action", "speed").put("speed", 1.5), null);
+                // Let the previous Dialog's posted dismiss callback run after replacement.
+                assertTrue(invoke(scenario, "chosen", new JSObject(), uri).getBoolean("open"));
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                JSObject replacement = invoke(scenario, "read", new JSObject().put("action", "read"), null);
+                assertTrue("Closing the old window must not release the replacement player", replacement.getBoolean("open"));
+                assertEquals(1, replacement.getJSONArray("items").length());
             } finally {
                 assertFalse(invoke(scenario, "close", new JSObject().put("action", "close"), null).getBoolean("open"));
             }

@@ -77,23 +77,24 @@ public class MediaPlugin extends Plugin {
             }
             show(items, call.getObject("labels", new JSObject()));
             call.resolve(state());
-        } catch (Exception error) { release(); call.reject(error.getMessage(), error); }
+        } catch (Exception error) { closePlayer(); call.reject(error.getMessage(), error); }
     }
     private void show(List<MediaItem> items, JSObject labels) {
-        if (dialog != null) dialog.dismiss();
+        closePlayer();
         player = new ExoPlayer.Builder(getContext()).build();
         player.setAudioAttributes(new androidx.media3.common.AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true);
         failure = "";
-        dialog = new Dialog(getActivity()); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        Dialog shown = new Dialog(getActivity());
+        dialog = shown; shown.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout content = new LinearLayout(getActivity()); content.setOrientation(LinearLayout.VERTICAL); content.setBackgroundColor(Color.BLACK);
         LinearLayout bar = new LinearLayout(getActivity());
         TextView status = new TextView(getActivity()); status.setTextColor(Color.WHITE); status.setPadding(16, 12, 16, 12); status.setText(labels.optString("title", "Media"));
         bar.addView(status, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        Button close = new Button(getActivity()); close.setText(labels.optString("close", "Close")); close.setOnClickListener(view -> { if (dialog != null) dialog.dismiss(); }); bar.addView(close);
+        Button close = new Button(getActivity()); close.setText(labels.optString("close", "Close")); close.setOnClickListener(view -> closePlayer()); bar.addView(close);
         content.addView(bar);
         video = new PlayerView(getActivity()); video.setPlayer(player); video.setKeepScreenOn(true);
         content.addView(video, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-        dialog.setContentView(content); dialog.setOnDismissListener(ignored -> release()); dialog.show();
+        dialog.setContentView(content); dialog.setOnDismissListener(ignored -> { if (dialog == shown) release(); }); dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         player.addListener(new Player.Listener() {
             @Override public void onPlayerError(PlaybackException error) { failure = error.getMessage() == null ? error.getErrorCodeName() : error.getMessage(); status.setText(failure); }
@@ -114,7 +115,7 @@ public class MediaPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 String action = call.getString("action", "read");
-                if (action.equals("close")) { if (dialog != null) dialog.dismiss(); call.resolve(state()); return; }
+                if (action.equals("close")) { closePlayer(); call.resolve(state()); return; }
                 if (action.equals("read")) { call.resolve(state()); return; }
                 if (player == null) throw new IllegalStateException("Open a media file first");
                 switch (action) {
@@ -138,7 +139,14 @@ public class MediaPlugin extends Plugin {
             } catch (Exception error) { call.reject(error.getMessage(), error); }
         });
     }
+    /** Dialog's dismiss callback is posted asynchronously; an old window never owns a new player. */
+    private void closePlayer() {
+        Dialog previous = dialog;
+        dialog = null;
+        if (previous != null) { previous.setOnDismissListener(null); previous.dismiss(); }
+        release();
+    }
     private void release() { if (video != null) video.setPlayer(null); video = null; if (player != null) player.release(); player = null; dialog = null; }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { if (player != null) player.pause(); }); }
-    @Override protected void handleOnDestroy() { getActivity().runOnUiThread(() -> { if (dialog != null) dialog.dismiss(); release(); }); }
+    @Override protected void handleOnDestroy() { getActivity().runOnUiThread(this::closePlayer); }
 }

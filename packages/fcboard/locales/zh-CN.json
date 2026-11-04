@@ -1920,7 +1920,9 @@
       "code": "提取码",
       "invalid_code": "请输入四位字母或数字提取码。",
       "expires": "云端文件保留 24 小时。"
-    }
+    },
+    "no_subject_layers_returned": "图片服务未返回有效主体图层，原笔迹已保留",
+    "subject_layer_requires_transparency": "主体图层没有有效透明背景，原笔迹已保留"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "数量比较",
@@ -2149,9 +2151,7 @@
     "teach_res_other_scoreboard": "记分牌",
     "teach_res_math_tool_function": "函数",
     "teach_res_math_tool_random_number": "随机数",
-    "str_geogebra_phet": "phet",
-    "no_subject_layers_returned": "图片服务未返回有效主体图层，原笔迹已保留",
-    "subject_layer_requires_transparency": "主体图层没有有效透明背景，原笔迹已保留"
+    "str_geogebra_phet": "phet"
   },
   "progressDialog": {
     "title": "正在保存",

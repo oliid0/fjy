@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { transferableAbortController } from "node:util";
 import { execFileSync } from "node:child_process";
 
+import { it } from "vitest";
+
 import { chat } from "./ai";
 import { generateQuiz, quizDocument } from "./quiz";
 import { defaults, saveSettings } from "./settings";

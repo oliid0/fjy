@@ -1,5 +1,5 @@
 import { simplify } from "points-on-curve";
-import { distanceToLineSegment, pointFrom } from "@fcboard/math";
+import { distanceToLineSegment, lineSegment, pointFrom } from "@fcboard/math";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
@@ -44,10 +44,10 @@ const distance = (point: InkPoint, lines: [InkPoint, InkPoint][]) => {
   for (const [a, b] of lines) {
     nearest = Math.min(
       nearest,
-      distanceToLineSegment(pointFrom(...point), [
-        pointFrom(...a),
-        pointFrom(...b),
-      ]),
+      distanceToLineSegment(
+        pointFrom(...point),
+        lineSegment(pointFrom(...a), pointFrom(...b)),
+      ),
     );
   }
   return nearest;

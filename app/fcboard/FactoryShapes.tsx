@@ -49,7 +49,7 @@ export const draggedFactoryShape = (
   start: ShapePoint,
   end: ShapePoint,
   style: FactoryShapeStyle,
-  id = crypto.randomUUID(),
+  id: string = crypto.randomUUID(),
 ): Widget => {
   const kind = factoryShapeCatalog[index][0];
   const params = widgetDefaults();

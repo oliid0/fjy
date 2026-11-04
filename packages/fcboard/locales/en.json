@@ -1924,7 +1924,9 @@
       "code": "Extraction code",
       "invalid_code": "Enter a four-character extraction code.",
       "expires": "The cloud file is available for 24 hours."
-    }
+    },
+    "no_subject_layers_returned": "The image service returned no valid subject layers; your ink is preserved",
+    "subject_layer_requires_transparency": "The subject layer has no valid transparency; your ink is preserved"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "Number Compare",
@@ -2153,8 +2155,6 @@
     "teach_res_other_scoreboard": "Scoreboard",
     "teach_res_math_tool_function": "Function",
     "teach_res_math_tool_random_number": "Random Numbers",
-    "str_geogebra_phet": "phet",
-    "no_subject_layers_returned": "The image service returned no valid subject layers; your ink is preserved",
-    "subject_layer_requires_transparency": "The subject layer has no valid transparency; your ink is preserved"
+    "str_geogebra_phet": "phet"
   }
 }

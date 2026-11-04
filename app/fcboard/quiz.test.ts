@@ -98,7 +98,7 @@ const interactiveQuiz = (value: Quiz) => {
   parsed.querySelector("script")!.remove();
   const iframe = document.createElement("iframe");
   document.body.append(iframe);
-  const win = iframe.contentWindow!;
+  const win = iframe.contentWindow as Window & typeof globalThis;
   const doc = win.document;
   doc.open();
   doc.write(parsed.documentElement.outerHTML);

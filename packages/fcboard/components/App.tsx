@@ -8861,8 +8861,9 @@ class App extends React.Component<AppProps, AppState> {
       zoom: this.state.zoom,
     };
     let { clientX: lastX, clientY: lastY } = event;
+    const pointerId = "pointerId" in event ? event.pointerId : undefined;
     const onPointerMove = withBatchedUpdatesThrottled((next: PointerEvent) => {
-      if (factory && next.pointerId !== event.pointerId) {
+      if (factory && pointerId !== undefined && next.pointerId !== pointerId) {
         return;
       }
       const deltaX = lastX - next.clientX;
@@ -8921,9 +8922,13 @@ class App extends React.Component<AppProps, AppState> {
       }
     });
     const teardown = withBatchedUpdates(
-      (lastPointerUp = (lastEvent?: PointerEvent) => {
-        if (factory && lastEvent?.type === "pointerup") {
-          if (lastEvent.pointerId !== event.pointerId) {
+      (lastPointerUp = (lastEvent?: PointerEvent | FocusEvent) => {
+        if (
+          factory &&
+          lastEvent?.type === "pointerup" &&
+          "pointerId" in lastEvent
+        ) {
+          if (pointerId !== undefined && lastEvent.pointerId !== pointerId) {
             return;
           }
           onPointerMove(lastEvent);

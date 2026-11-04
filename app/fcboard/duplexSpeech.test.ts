@@ -168,7 +168,7 @@ it("keeps capture and later speech live while a real tool is pending, then retur
       type: "response.function_call_arguments.done",
       items: [call("first", "canvas.text", { text: "电流和电阻" })],
     });
-    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await vi.waitFor(() => expect(typeof finish).toBe("function"));
     emit({ type: "conversation.item.input_audio_transcription.started" });
     emit({
       type: "conversation.item.input_audio_transcription.completed",

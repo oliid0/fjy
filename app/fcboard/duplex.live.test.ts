@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 import WebSocket from "ws";
+import { it } from "vitest";
 
 import { startDuplexSpeech } from "./duplexSpeech";
 import { calculateAsync } from "./mathComputation";

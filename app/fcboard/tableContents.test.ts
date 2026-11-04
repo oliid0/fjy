@@ -129,7 +129,9 @@ it.each(["fourline", "mindmap"] as const)(
         {
           ...element,
           type: element.type === "freedraw" ? "line" : element.type,
-        } as Parameters<typeof convertToFcboardElements>[0][number],
+        } as NonNullable<
+          Parameters<typeof convertToFcboardElements>[0]
+        >[number],
         "insertion",
       ),
     );

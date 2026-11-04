@@ -23,6 +23,9 @@ it("saves and shares one complete package, then revokes its QR session on dismis
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   const session = {
     save: vi.fn().mockResolvedValue({ saved: true }),
+    saveDownloads: vi
+      .fn()
+      .mockResolvedValue({ saved: true, uri: "content://recording" }),
     share: vi
       .fn()
       .mockResolvedValue({ urls: ["http://192.168.1.10:1234/token/"] }),
@@ -83,6 +86,7 @@ it("closes a late package when its recording panel is removed during preparation
   );
   const session = {
     save: vi.fn(),
+    saveDownloads: vi.fn(),
     share: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
   };

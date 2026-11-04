@@ -62,7 +62,7 @@ it("right-aligns a vertical arithmetic result below the bar at the original hand
   expect(bounds[3] - bounds[1]).toBeCloseTo(36);
 });
 
-it("inserts Chinese answers at 90% of measured handwriting without applying ink-glyph scaling twice", () => {
+it("inserts Chinese AI answers at half the prior handwriting size without applying glyph scaling twice", () => {
   const api = sceneAPI();
   const source = newFreeDrawElement({
     type: "freedraw",
@@ -86,7 +86,7 @@ it("inserts Chinese answers at 90% of measured handwriting without applying ink-
     .find((element) => ids.includes(element.id));
   expect(answer).toMatchObject({
     type: "text",
-    fontSize: 36,
+    fontSize: 18,
     strokeColor: "#dc2626",
   });
   expect(answer!.y).toBeGreaterThanOrEqual(220);
@@ -111,7 +111,7 @@ it("keeps answer text legible near an edge by using nearby empty space before sh
   const result = api
     .getSceneElements()
     .filter((element) => answer.includes(element.id));
-  expect(result[0]).toMatchObject({ type: "text", fontSize: 40 });
+  expect(result[0]).toMatchObject({ type: "text", fontSize: 20 });
   const bounds = getCommonBounds(result);
   const viewport = contentViewport(api);
   expect(bounds[0]).toBeGreaterThanOrEqual(viewport.left);
@@ -260,7 +260,7 @@ it("preserves the question and reports a full visible board instead of inserting
   expect(api.scrollToContent).not.toHaveBeenCalled();
 });
 
-it("keeps the selected text alignment and size when inserting the next answer", () => {
+it("keeps selected text alignment and colour while halving the next answer size", () => {
   const api = sceneAPI();
   insertElements(api, [
     {
@@ -284,7 +284,7 @@ it("keeps the selected text alignment and size when inserting the next answer", 
     .find((element) => ids.includes(element.id));
   expect(answer).toMatchObject({
     type: "text",
-    fontSize: 40,
+    fontSize: 20,
     strokeColor: "#dc2626",
     textAlign: "center",
   });

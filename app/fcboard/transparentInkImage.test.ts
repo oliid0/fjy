@@ -1,52 +1,84 @@
-import { transparentInkPixels } from "./transparentInkImage";
+import { transparentInkImage } from "./transparentInkImage";
 
-const pixels = (size: number, color: number[]) =>
-  new Uint8ClampedArray(
-    Array.from({ length: size * size }, () => color).flat(),
-  );
-const set = (
-  data: Uint8ClampedArray,
-  size: number,
-  x: number,
-  y: number,
-  color: number[],
-) => data.set(color, (y * size + x) * 4);
-it("removes edge-connected paper without punching out the enclosed white of a drawing", () => {
-  const data = pixels(5, [255, 255, 255, 255]);
-  for (let y = 1; y <= 3; y++) {
-    for (let x = 1; x <= 3; x++) {
-      if (x !== 2 || y !== 2) {
-        set(data, 5, x, y, [0, 0, 0, 255]);
-      }
-    }
-  }
-  expect(transparentInkPixels(data, 5, 5)).toEqual({
-    left: 1,
-    top: 1,
-    right: 4,
-    bottom: 4,
+import type { SubjectLayer } from "./transparentInkImage";
+
+const layer = (zIndex = 1, left = 10): SubjectLayer => ({
+  image: { naturalWidth: 100, naturalHeight: 50 } as HTMLImageElement,
+  zIndex,
+  bounds: { left, top: 20, right: left + 100, bottom: 70 },
+});
+const setup = (alpha = [255, 0]) => {
+  const contexts: { drawImage: ReturnType<typeof vi.fn> }[] = [];
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => {
+    const context = {
+      drawImage: vi.fn(),
+      getImageData: () => ({
+        data: new Uint8ClampedArray(alpha.flatMap((a) => [255, 255, 255, a])),
+      }),
+    };
+    contexts.push(context);
+    return context as unknown as CanvasRenderingContext2D;
   });
-  expect(data[3]).toBe(0);
-  expect(Array.from(data.slice((2 * 5 + 2) * 4, (2 * 5 + 2) * 4 + 4))).toEqual([
-    255, 255, 255, 255,
+  vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+    "data:image/png;base64,composed",
+  );
+  return contexts;
+};
+afterEach(() => vi.restoreAllMocks());
+
+it("composes only foreground layers in z order at their documented bounds, preserving white pixels", () => {
+  const contexts = setup();
+  const back = layer(1);
+  const front = layer(2, 60);
+  const output = transparentInkImage([front, back]);
+  expect(output).toEqual({
+    dataURL: "data:image/png;base64,composed",
+    width: 150,
+    height: 50,
+  });
+  expect(contexts[0].drawImage.mock.calls).toEqual([
+    [back.image, 0, 0, 100, 50],
+    [front.image, 50, 0, 100, 50],
   ]);
 });
-it("preserves an existing colored alpha subject", () => {
-  const data = pixels(3, [0, 0, 0, 0]);
-  set(data, 3, 1, 1, [50, 120, 240, 180]);
-  expect(transparentInkPixels(data, 3, 3)).toEqual({
-    left: 1,
-    top: 1,
-    right: 2,
-    bottom: 2,
-  });
-  expect(Array.from(data.slice(16, 20))).toEqual([50, 120, 240, 180]);
+
+it.each([
+  [255, 255],
+  [0, 0],
+])("rejects opaque or empty layers with alpha %j", (...alpha) => {
+  const contexts = setup(alpha);
+  expect(() => transparentInkImage([layer()])).toThrow();
+  expect(contexts[0].drawImage).not.toHaveBeenCalled();
 });
-it("rejects an opaque colored scene or empty output instead of disguising it as a transparent drawing", () => {
-  expect(() =>
-    transparentInkPixels(pixels(3, [20, 50, 100, 255]), 3, 3),
-  ).toThrow("opaque background");
-  expect(() =>
-    transparentInkPixels(pixels(3, [255, 255, 255, 255]), 3, 3),
-  ).toThrow("no visible subject");
+
+it("rejects base layers, repeated z indices and invalid bounds", () => {
+  setup();
+  for (const layers of [
+    [],
+    [layer(0)],
+    [layer(), layer()],
+    [{ ...layer(), bounds: { left: 100, top: 0, right: 0, bottom: 50 } }],
+  ]) {
+    expect(() => transparentInkImage(layers)).toThrow();
+  }
+});
+
+it("caps composition and alpha sampling for large subjects", () => {
+  const contexts = setup();
+  const subject = layer();
+  subject.bounds = { left: 0, top: 0, right: 8000, bottom: 4000 };
+  subject.image = {
+    naturalWidth: 8000,
+    naturalHeight: 4000,
+  } as HTMLImageElement;
+  const result = transparentInkImage([subject]);
+  expect(result.width).toBe(2048);
+  expect(result.height).toBe(1024);
+  expect(contexts[1].drawImage).toHaveBeenCalledWith(
+    subject.image,
+    0,
+    0,
+    256,
+    128,
+  );
 });

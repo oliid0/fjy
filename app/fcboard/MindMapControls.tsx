@@ -30,6 +30,7 @@ type DocumentSurface = {
   name: string;
   page: number;
   ink: InkStroke[];
+  selection?: string[];
   tool?: string;
   viewport: { left: number; top: number; width: number; scroll: number };
 };
@@ -211,6 +212,18 @@ export const MindMapControls = ({
         refresh();
         return;
       }
+      if (
+        ["selection", "lasso"].includes(tool) &&
+        (current.document
+          ? current.document.selection?.length
+          : state.whiteboardSelection?.elementIds.length)
+      ) {
+        // SelectCacheLayer owns the next move/corner gesture after a lasso.
+        // Node controls must not consume that contact or clear its selection.
+        selected.current = undefined;
+        refresh();
+        return;
+      }
       const rect = canvas.getBoundingClientRect();
       const point = current.document
         ? [
@@ -248,8 +261,10 @@ export const MindMapControls = ({
         surface: current.key,
       };
       if (!same || tool !== "freedraw") {
-        event.preventDefault();
-        event.stopPropagation();
+        if (tool !== "freedraw") {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         if (current.document) {
           void classroomCommands
             .execute({ name: "document.select", args: { ids: [] } })
@@ -413,13 +428,33 @@ export const MindMapControls = ({
         });
       }
     } else {
-      await renderInsertion(api, next, true, { select: false });
+      const removeIds =
+        action === "clear"
+          ? surface().document
+            ? surface()
+                .document!.ink.filter(
+                  (stroke) =>
+                    stroke.insertion?.id === object.id &&
+                    stroke.insertion.inkCell === choice.index,
+                )
+                .map((stroke) => stroke.id)
+            : api
+                .getSceneElements()
+                .filter(
+                  (element) =>
+                    element.customData?.fcInsertion?.id === object.id &&
+                    element.customData.fcInsertion.inkCell === choice.index,
+                )
+                .map((element) => element.id)
+          : undefined;
+      await renderInsertion(api, next, true, { select: false, removeIds });
     }
     if (action === "delete") {
       selected.current = undefined;
     }
     refreshRef.current();
   };
+  const uiUnit = 1 / (window.devicePixelRatio || 1);
   return (
     <>
       {view && (
@@ -428,22 +463,47 @@ export const MindMapControls = ({
           style={{
             position: "fixed",
             zIndex: 1450,
-            left: view.left - 5,
-            top: view.top - 5,
-            width: view.width + 10,
-            height: view.height + 10,
-            border: "2px solid #a9fb78",
-            borderRadius: "10px",
+            left: view.left - 10 * uiUnit,
+            top: view.top - 10 * uiUnit,
+            width: view.width + 20 * uiUnit,
+            height: view.height + 20 * uiUnit,
+            border: `${6 * uiUnit}px solid #a9fb78`,
+            boxSizing: "border-box",
+            borderRadius: 10 * uiUnit,
             transform: `rotate(${view.angle}rad)`,
             pointerEvents: "none",
           }}
         >
           {(
             [
-              ["delete", deleteIcon, "mindmap_delete_node", "50%", "0%"],
-              ["add", addIcon, "mindmap_add_child", "100%", "50%"],
-              ["clear", clearIcon, "mindmap_clear_node", "50%", "100%"],
-              ["move", moveIcon, "mindmap_move_node", "0%", "50%"],
+              [
+                "delete",
+                deleteIcon,
+                "mindmap_delete_node",
+                "50%",
+                `${-10 * uiUnit}px`,
+              ],
+              [
+                "add",
+                addIcon,
+                "mindmap_add_child",
+                `calc(100% + ${10 * uiUnit}px)`,
+                "50%",
+              ],
+              [
+                "clear",
+                clearIcon,
+                "mindmap_clear_node",
+                "50%",
+                `calc(100% + ${10 * uiUnit}px)`,
+              ],
+              [
+                "move",
+                moveIcon,
+                "mindmap_move_node",
+                `${-10 * uiUnit}px`,
+                "50%",
+              ],
             ] as const
           ).map(([action, icon, label, left, top]) => (
             <ButtonBase
@@ -529,8 +589,8 @@ export const MindMapControls = ({
                 position: "absolute",
                 left,
                 top,
-                width: 32,
-                height: 32,
+                width: 40 * uiUnit,
+                height: 40 * uiUnit,
                 borderRadius: "50%",
                 transform: "translate(-50%,-50%)",
                 pointerEvents: "auto",

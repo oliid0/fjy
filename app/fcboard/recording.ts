@@ -68,7 +68,11 @@ export class BoardRecorder {
     return this.streams[0];
   }
 
-  async start(mode: RecordingMode, onStopped: () => void) {
+  async start(
+    mode: RecordingMode,
+    onStopped: () => void,
+    microphone?: MediaStream,
+  ) {
     if (
       !navigator.mediaDevices?.getUserMedia ||
       typeof MediaRecorder === "undefined"
@@ -80,18 +84,40 @@ export class BoardRecorder {
       );
     }
     try {
-      const media = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-        video:
-          mode === "camera" || mode === "combined"
-            ? {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                facingMode: "user",
-              }
-            : false,
-      });
-      this.streams.push(media);
+      // Clone the active assistant microphone so stopping recording never stops
+      // the long-lived dialogue. Camera capture only requests a video track.
+      const shared = microphone
+        ? new MediaStream(
+            microphone.getAudioTracks().map((track) => track.clone()),
+          )
+        : undefined;
+      if (shared) {
+        this.streams.push(shared);
+      }
+      const video =
+        mode === "camera" || mode === "combined"
+          ? {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              facingMode: "user",
+            }
+          : false;
+      const captured =
+        !shared || video
+          ? await navigator.mediaDevices.getUserMedia({
+              audio: shared
+                ? false
+                : { echoCancellation: true, noiseSuppression: true },
+              video,
+            })
+          : shared;
+      if (captured !== shared) {
+        this.streams.push(captured);
+      }
+      if (shared && captured !== shared) {
+        captured.getVideoTracks().forEach((track) => shared.addTrack(track));
+      }
+      const media = shared || captured;
       let output = media;
       if (mode === "screen" || mode === "combined") {
         const canvas = document.createElement("canvas");

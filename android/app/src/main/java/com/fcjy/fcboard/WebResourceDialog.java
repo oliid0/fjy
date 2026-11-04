@@ -164,7 +164,8 @@ final class WebResourceDialog extends Dialog {
                         if (content.length()>28000000) throw new IllegalArgumentException("Web image is too large");
                         if (!content.matches("^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]*={0,2}$")) checkedUrl(content);
                     }
-                    selected.accept(new JSObject().put("kind", kind).put("value", content));
+                    selected.accept(new JSObject().put("kind", kind).put("value", content)
+                        .put("sourceUrl", web.getUrl()).put("userAgent", web.getSettings().getUserAgentString()));
                     status.setVisibility(android.view.View.GONE);
                 } catch (Exception unavailable) {
                     status.setText(text.getString(R.string.web_selection_failed));
@@ -286,9 +287,9 @@ final class WebResourceDialog extends Dialog {
         displayWidth = bounds.width();
         displayHeight = bounds.height();
         android.view.WindowManager.LayoutParams current = getWindow().getAttributes();
-        int width = first ? Math.min(dp(400), (int)(displayWidth * 0.9)) : current.width;
-        int height = first ? Math.min(dp(600), (int)(displayHeight * 0.82)) : current.height;
-        setWindowBounds(first ? (displayWidth - width) / 2 : current.x,
+        int width = first ? Math.min(dp(400), Math.max(1, displayWidth - dp(24))) : current.width;
+        int height = first ? Math.min(dp(600), Math.max(1, displayHeight - dp(24))) : current.height;
+        setWindowBounds(first ? displayWidth - width - dp(12) : current.x,
             first ? (displayHeight - height) / 2 : current.y, width, height);
     }
 

@@ -105,7 +105,16 @@ const setup = (
     type: "freedraw",
     x: 100,
     y: 100,
-    points: [pointFrom(0, 0), pointFrom(100, 60)],
+    points:
+      mode === "shape"
+        ? [
+            [0, 0],
+            [100, 20],
+            [40, 100],
+            [30, 30],
+            [0, 0],
+          ].map(([x, y]) => pointFrom(x, y))
+        : [pointFrom(0, 0), pointFrom(100, 60)],
     strokeColor: "#ff0000",
     simulatePressure: true,
     customData: { fcInk: { version: 2, pen: "hard", assist: mode } },
@@ -563,6 +572,8 @@ it("turns a drawn dog into a generated hand-drawn image at its original location
     json: async () => ({
       data: [
         {
+          z_index: 1,
+          bounding_box: { absolute: [0, 0, 100, 100] },
           b64_json:
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
         },
@@ -585,12 +596,16 @@ it("turns a drawn dog into a generated hand-drawn image at its original location
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1600);
     });
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
     const request = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(request.model).toBe("illustrator");
     expect(request.image).toMatch(/^data:image\//);
     expect(ai.chat).toHaveBeenCalledTimes(1);
-    expect(request.prompt).toContain("手绘");
+    expect(request.prompt).toContain("参考草图");
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
+      layer_decomposition: true,
+      image: expect.stringMatching(/^data:image\/png;base64,/),
+    });
     expect(api.getSceneElements()).toHaveLength(1);
     const generated = api.getSceneElements()[0];
     expect(generated).toMatchObject({

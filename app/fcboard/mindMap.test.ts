@@ -70,7 +70,27 @@ it("moves one node and its connector, persists the actual geometry and preserves
     ),
   ).toMatchObject({ x: nodes[2].x, y: nodes[2].y });
   const link = shapes.find((shape) => shape.type === "line")!;
-  expect(link.type === "line" && link.points?.at(-1)).toEqual([100, -46]);
+  expect(link.type === "line" && link.points?.at(-1)).toEqual([150, -170]);
   await renderInsertion(api, JSON.parse(JSON.stringify(next)));
   expect(readInsertions(api)[0].nodePositions).toEqual(next.nodePositions);
+});
+
+it("uses the native initial node rectangles, root center and 400/200 spacing", () => {
+  const object = insertionDefaults("mindmap", { x: 200, y: 400 });
+  expect(
+    mindMapNodes(object).map(({ x, y, width, height, color }) => ({
+      x,
+      y,
+      width,
+      height,
+      color,
+    })),
+  ).toEqual([
+    { x: 0, y: 200, width: 300, height: 150, color: "#0ed49f" },
+    { x: 400, y: 0, width: 300, height: 150, color: "#0ed49f" },
+    { x: 400, y: 200, width: 300, height: 150, color: "#0ed49f" },
+    { x: 400, y: 400, width: 300, height: 150, color: "#0ed49f" },
+  ]);
+  const next = changeMindMapNode(object, 0, "add")!;
+  expect(mindMapNodes(next).at(-1)).toMatchObject({ x: 400, y: 590 });
 });

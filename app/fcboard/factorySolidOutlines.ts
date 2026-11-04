@@ -6,7 +6,15 @@ import type { SolidSettings } from "./solids";
 
 /** HShapeObject cases 11/13/14/17/18: factory silhouettes and hidden edges. */
 export const factorySolidOutlines = (
-  kind: "sphere" | "pyramid" | "cone" | "frustum" | "prism" | "hemisphere",
+  kind:
+    | "cube"
+    | "cylinder"
+    | "sphere"
+    | "pyramid"
+    | "cone"
+    | "frustum"
+    | "prism"
+    | "hemisphere",
   settings: SolidSettings,
   size: number,
   rotation: number,
@@ -31,7 +39,64 @@ export const factorySolidOutlines = (
       }),
     });
   };
-  if (kind === "sphere") {
+  if (kind === "cube") {
+    // HShapeObject case 12: one front outline and its visible/hidden rear edges.
+    paths.push(
+      {
+        points: [
+          [0, 60],
+          [120, 60],
+          [120, 180],
+          [0, 180],
+          [0, 60],
+          [60, 0],
+          [180, 0],
+          [180, 120],
+          [120, 180],
+        ],
+      },
+      {
+        points: [
+          [120, 60],
+          [180, 0],
+        ],
+      },
+      {
+        points: [
+          [60, 0],
+          [60, 120],
+          [0, 180],
+        ],
+        hidden: true,
+      },
+      {
+        points: [
+          [60, 120],
+          [180, 120],
+        ],
+        hidden: true,
+      },
+    );
+  } else if (kind === "cylinder") {
+    // HShapeObject case 16: ellipse height is one quarter of drag height.
+    arc(90, 22.5, 90, 22.5, 0, 2 * Math.PI);
+    paths.push(
+      {
+        points: [
+          [0, 22.5],
+          [0, 157.5],
+        ],
+      },
+      {
+        points: [
+          [180, 22.5],
+          [180, 157.5],
+        ],
+      },
+    );
+    arc(90, 157.5, 90, 22.5, 0, Math.PI);
+    arc(90, 157.5, 90, 22.5, 0, -Math.PI, true);
+  } else if (kind === "sphere") {
     arc(90, 90, 90, 90, 0, 2 * Math.PI);
     arc(90, 90, 90, 45, 0, Math.PI);
     arc(90, 90, 90, 45, 0, -Math.PI, true);

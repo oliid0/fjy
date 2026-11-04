@@ -8,6 +8,10 @@ import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
 import { explainLanguage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
+import { fitInkShape, isShapeClosed } from "./shapeRecognition";
+import { hasDigitalInk, digitalInkEngine } from "./digitalInk";
+
+import type { RecognizedShape } from "./shapeRecognition";
 
 import type { LanguageStudy } from "./languageStudy";
 
@@ -35,11 +39,8 @@ export type InkRecognitionResult =
       study: LanguageStudy;
       targetLanguage: string;
     }
-  | {
-      kind: "shape";
-      shape: "rectangle" | "ellipse" | "line" | "arrow" | "triangle";
-    }
-  | { kind: "magic"; prompt: string; image?: string }
+  | RecognizedShape
+  | { kind: "magic"; prompt: string; image?: string; transparent?: boolean }
   | (MathResult & { text: string });
 
 /** Start math recognition early, but preserve the existing whole-expression pause. */
@@ -148,6 +149,30 @@ export const recognizeInkContent = async (
         : {}),
     };
   }
+  if (mode === "shape") {
+    const local = fitInkShape(strokes);
+    if (local) {
+      return local;
+    }
+    if (strokes.length && !isShapeClosed(strokes)) {
+      throw new Error("Shape incomplete");
+    }
+    if (hasDigitalInk()) {
+      try {
+        const result = await digitalInkEngine.recognize({
+          strokes,
+          language: "zxx-Zsym-x-shapes",
+        });
+        signal.throwIfAborted();
+        const shape = result.candidates[0]?.toLowerCase();
+        if (["rectangle", "ellipse", "triangle", "arrow"].includes(shape)) {
+          return { kind: "shape", shape: shape as RecognizedShape["shape"] };
+        }
+      } catch {
+        signal.throwIfAborted();
+      }
+    }
+  }
   if (mode === "magic" && !currentSettings().imageModel.trim()) {
     throw new Error(
       t(
@@ -167,7 +192,7 @@ export const recognizeInkContent = async (
           {
             role: "system",
             content:
-              '辨别魔法笔墨迹是文字要求还是绘画。只返回 {"version":1,"kind":"text","text":"逐字转录的完整要求"} 或 {"version":1,"kind":"drawing"}。完整可读的词句是 text；人物、动物、物体草图是 drawing。不能把绘画猜成文字，不能补写未写完的句子。混合且无法确定返回 {"none":true}。',
+              '辨别魔法笔墨迹是文字要求还是绘画。只返回 {"version":1,"kind":"text","text":"逐字转录的完整要求"} 或 {"version":1,"kind":"drawing"}。完整可读的词句是 text，逐字保留主体、风格和背景要求，例如“一个二次元女孩”；人物、动物、物体草图是 drawing，例如手绘小狗。不能把绘画猜成文字，不能补写未写完的句子；“一个二次”等未完成描述返回 {"none":true}。混合且无法确定也返回 {"none":true}。',
           },
           visualMessage(
             "辨别已经停笔的墨迹，不生成图片、不回答文字内容。",
@@ -176,7 +201,7 @@ export const recognizeInkContent = async (
         ],
         signal,
         currentSettings(),
-        { maxTokens: 500, timeoutMs: 6000 },
+        { maxTokens: 500, timeoutMs: 15000 },
       ),
     ) as Record<string, unknown>;
     signal.throwIfAborted();
@@ -190,28 +215,37 @@ export const recognizeInkContent = async (
     ) {
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
-    const isolation =
-      "仅绘制主体，透明背景，无文字、水印、画框、地面、场景、投影或纸张纹理。若格式无法输出透明通道，使用完全纯白 #FFFFFF 背景以便去除，主体不接触图像边缘。画面应像直接绘制在白板上。";
+    const background =
+      "主体完整、轮廓清晰，保留主体自身的颜色与白色细节。后续会拆出主体透明图层放到白板上，背景保持简洁，不要纸张、边框、投影或额外装饰。";
     return {
       kind: "magic",
       ...(intent.kind === "drawing" ? { image } : {}),
+      transparent: true,
       prompt:
         intent.kind === "text"
-          ? `根据以下文字绘制精细的铅笔素描 / 手绘图标：${intent.text}。${isolation}`
-          : `将参考手绘可辨认的主体制作成精致有色彩的 3D 风格手绘图。保留主体数量、姿态、比例和构图。${isolation}`,
+          ? `严格按手写描述中的主体、画风、颜色、动作与背景要求生成图片。用户原文：${intent.text}。${background}不要把描述文字本身画成图片中的文字。`
+          : `根据参考草图生成完整、精致的图片。草图只用于识别主体和构图，保留主体、数量、姿态与主要比例，按合理结构补全断开的轮廓，使头部、身体与四肢自然连接；清除草稿辅助线，不生成悬浮碎片，不逐线复制未完成笔画。${background}`,
     };
   }
   const instruction =
-    '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle"} 中最接近的一种。不确定返回 {"none":true}。';
+    '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle|star|diamond|pentagon|hexagon"} 中最接近的一种。不确定返回 {"none":true}。';
   const result = parseJSON(
     await chat([visualMessage(instruction, image)], signal),
   ) as Record<string, unknown>;
   signal.throwIfAborted();
   if (
     mode === "shape" &&
-    ["rectangle", "ellipse", "line", "arrow", "triangle"].includes(
-      String(result?.shape),
-    )
+    [
+      "rectangle",
+      "ellipse",
+      "line",
+      "arrow",
+      "triangle",
+      "star",
+      "diamond",
+      "pentagon",
+      "hexagon",
+    ].includes(String(result?.shape))
   ) {
     return {
       kind: "shape",

@@ -16,6 +16,10 @@ public class DoubaoSpeechProtocolTest {
         assertTrue(request.getJSONObject("request").getBoolean("enable_nonstream"));
         byte[] frame = DoubaoSpeechProtocol.frame(1, 1, config);
         assertEquals(0x11, frame[0]); assertEquals(0x11, frame[1]); assertEquals(1, ByteBuffer.wrap(frame, 4, 4).getInt());
+        byte[] audio = DoubaoSpeechProtocol.frame(2, 2, new byte[] {0, 0, 1, 0});
+        assertEquals(0x21, audio[1]); assertEquals(0x11, audio[2]);
+        byte[] finalAudio = DoubaoSpeechProtocol.frame(2, -3, new byte[0]);
+        assertEquals(0x23, finalAudio[1]); assertEquals(0x11, finalAudio[2]);
         byte[] finalFrame = DoubaoSpeechProtocol.frame(9, -3, "{\"result\":{\"text\":\"完成\"}}".getBytes(StandardCharsets.UTF_8));
         DoubaoSpeechProtocol.Response response = DoubaoSpeechProtocol.parse(finalFrame);
         assertTrue(response.last); assertEquals("完成", response.body.getJSONObject("result").getString("text"));

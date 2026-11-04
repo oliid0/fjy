@@ -15,7 +15,8 @@ import { classroomCommands } from "./commands";
 import { contentPosition, contentViewport, revealNewContent } from "./board";
 import { findVisibleContentPosition } from "./placement";
 import { configureSolid, solidDefaults, solidShapes } from "./solids";
-import { factoryGizmoShapes } from "./factoryGizmoShapes";
+import { factoryGizmoKinds, factoryGizmoShapes } from "./factoryGizmoShapes";
+import { factoryProtractorFiles } from "./factoryGizmoAssets";
 import {
   factoryFlatShape,
   rotateFactoryShapes,
@@ -78,6 +79,17 @@ export type WidgetParams = {
   stretchY: number;
   strokeWidth: number;
   opacity: number;
+  measurement: number;
+  gizmo?: {
+    unit: number;
+    density?: number;
+    scaleUnit?: number;
+    needle?: number;
+    ball?: number;
+    leg?: number;
+    opening?: number;
+  };
+  factory?: boolean;
   shape?: FactoryFlatShapeData;
   solid: SolidSettings;
 };
@@ -106,6 +118,7 @@ export const widgetDefaults = (): WidgetParams => ({
   stretchY: 1,
   strokeWidth: 2,
   opacity: 100,
+  measurement: 0,
   solid: solidDefaults(),
 });
 export const widgetTime = (params: WidgetParams, now = Date.now()) =>
@@ -116,6 +129,38 @@ export const configureWidget = (
   changes: Record<string, unknown>,
 ): WidgetParams => {
   const next = { ...params };
+  if (changes.gizmo !== undefined) {
+    const value = changes.gizmo as WidgetParams["gizmo"];
+    if (
+      !value ||
+      !Number.isFinite(value.unit) ||
+      Object.entries(value).some(
+        ([key, number]) =>
+          ![
+            "unit",
+            "density",
+            "scaleUnit",
+            "needle",
+            "ball",
+            "leg",
+            "opening",
+          ].includes(key) ||
+          typeof number !== "number" ||
+          !Number.isFinite(number) ||
+          number <= 0 ||
+          number > 1e9,
+      )
+    ) {
+      throw new Error("Invalid native gizmo geometry");
+    }
+    next.gizmo = { ...value };
+  }
+  if (changes.factory !== undefined) {
+    if (typeof changes.factory !== "boolean") {
+      throw new Error("Invalid factory shape origin");
+    }
+    next.factory = changes.factory;
+  }
   if (changes.shape !== undefined) {
     next.shape = validatedFactoryShape(changes.shape);
   }
@@ -130,7 +175,9 @@ export const configureWidget = (
     vx: [1, 50],
     vy: [1, 50],
     rotation: [-180, 180],
-    size: [0.3, 2],
+    // A selected object can be uniformly scaled beyond the old tool slider.
+    size: [0.001, 1000],
+    measurement: [0, 1e9],
     sweep: [-360, 360],
     stretchX: [0.01, 100],
     stretchY: [0.01, 100],
@@ -372,7 +419,10 @@ export const widgetShapes = (
     );
   } else {
     result.push(
-      ...(kind === "cube" || kind === "cylinder"
+      ...((kind === "cube" || kind === "cylinder") &&
+      (!params.solid.border ||
+        params.solid.unfold > 0 ||
+        Object.keys(params.solid.colors).length > 0)
         ? solidShapes(
             kind,
             params.solid || solidDefaults(),
@@ -467,14 +517,28 @@ export const renderWidget = (
   const document = classroomCommands.read("document") as
     | { ink: InkStroke[]; pen?: { color: string } }
     | undefined;
+  const images =
+    widget.kind === "protractor"
+      ? factoryProtractorFiles(widget.params.solid.stroke)
+      : [];
+  if (!document && images.length) {
+    const files = api.getFiles();
+    const missing = images.filter((image) => !files[image.id]);
+    if (missing.length) {
+      api.addFiles(missing);
+    }
+  }
   const existing = document ? [] : api.getSceneElements();
+  const existingById = new Map(
+    existing.map((element) => [element.id, element]),
+  );
   const isSolid = solidWidgetKinds.has(widget.kind);
   const found = document
     ? document.ink.some((stroke) => stroke.widget?.id === widget.id)
     : existing.some(
         (element) => element.customData?.fcWidget?.id === widget.id,
       );
-  if (isSolid) {
+  if (isSolid && !transaction.exact) {
     const layout = document
       ? (classroomCommands.read("document.layout") as
           | { viewport: ContentRect; obstacles: ContentRect[] }
@@ -584,9 +648,7 @@ export const renderWidget = (
       x: widget.position.x + (shape.x || 0),
       y: widget.position.y + (shape.y || 0),
       groupIds: [widget.id],
-      version:
-        (existing.find((el) => el.id === `${widget.id}-${index}`)?.version ||
-          0) + 1,
+      version: (existingById.get(`${widget.id}-${index}`)?.version || 0) + 1,
       customData: {
         ...shape.customData,
         fcGenerated: true,
@@ -604,7 +666,15 @@ export const renderWidget = (
   if (classroomCommands.has("document.widget")) {
     const commit = classroomCommands.execute({
       name: "document.widget",
-      args: { widget, shapes: elements, remember, before: transaction.before },
+      args: {
+        widget,
+        shapes: elements,
+        remember,
+        before: transaction.before,
+        images: Object.fromEntries(
+          images.map((image) => [image.id, image.dataURL]),
+        ),
+      },
     });
     transaction.onDocumentCommit?.(commit);
     return elements;
@@ -643,6 +713,7 @@ export const renderWidget = (
       : {}),
   });
   if (
+    !factoryGizmoKinds.has(widget.kind) &&
     !existing.some((element) => element.customData?.fcWidget?.id === widget.id)
   ) {
     revealNewContent(api, elements);

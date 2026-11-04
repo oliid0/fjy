@@ -541,9 +541,10 @@ describe("APK-style whiteboard ink", () => {
     expect(view()).toEqual(beforeThird);
     touch("pointermove", 33, 100, 500);
     expect(h.state.zoom.value).toBeCloseTo(1.5);
-    // The same scene point remains below the old/new first-last midpoint.
+    // HCanvas retains the initial center unless both first contacts move
+    // together; moving only the third finger changes scale without translation.
     expect(100 / h.state.zoom.value - h.state.scrollX).toBeCloseTo(100);
-    expect(300 / h.state.zoom.value - h.state.scrollY).toBeCloseTo(200);
+    expect(200 / h.state.zoom.value - h.state.scrollY).toBeCloseTo(200);
     const beforeFourth = view();
     touch("pointerdown", 34, 500, 500);
     expect(view()).toEqual(beforeFourth);

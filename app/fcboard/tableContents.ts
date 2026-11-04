@@ -3,6 +3,12 @@ import { newElementWith } from "@fcboard/element";
 
 import type { FcboardElement } from "@fcboard/element/types";
 
+import {
+  mindMapNodes,
+  readSceneInsertions,
+  readDocumentInsertions,
+} from "./insertObjects";
+
 import type { InsertObject } from "./insertObjects";
 import type { InkStroke } from "./documents";
 
@@ -116,6 +122,103 @@ export const carryDocumentTableContents = (
                 inkCell: cell,
                 origin: { x: owner.origin.x + dx, y: owner.origin.y + dy },
               },
+      },
+    ];
+  });
+};
+
+/** HNodeObject owns its strokes. Node edits transform that handwriting with
+ * the node; adding/removing branches preserves the other nodes' ownership. */
+const insertionShift = (
+  previous: InsertObject,
+  next: InsertObject,
+  index: number,
+) => {
+  let cell = index;
+  let dx = next.position.x - previous.position.x;
+  let dy = next.position.y - previous.position.y;
+  if (next.kind === "mindmap") {
+    const before = mindMapNodes(previous);
+    const after = mindMapNodes(next);
+    const old = before[index];
+    if (!old) {
+      return;
+    }
+    if (before.length !== after.length) {
+      cell = after.findIndex(
+        (node) =>
+          Math.abs(node.x - old.x) < 0.001 && Math.abs(node.y - old.y) < 0.001,
+      );
+    }
+    if (!after[cell]) {
+      return;
+    }
+    dx += after[cell].x - old.x;
+    dy += after[cell].y - old.y;
+  }
+  return { cell, dx, dy };
+};
+export const carryBoardInsertionContents = (
+  scene: readonly FcboardElement[],
+  next: InsertObject,
+) => {
+  const members = scene.filter(
+    (element) => element.customData?.fcInsertion?.id === next.id,
+  );
+  const previous = readSceneInsertions(members)[0];
+  return members.flatMap((element) => {
+    const owner = element.customData!.fcInsertion as Owner;
+    if (owner.inkCell === undefined) {
+      return [];
+    }
+    const shift = insertionShift(previous || owner, next, owner.inkCell);
+    if (!shift) {
+      return [];
+    }
+    const x = element.x + shift.dx;
+    const y = element.y + shift.dy;
+    return [
+      newElementWith(element, {
+        x,
+        y,
+        customData: {
+          ...element.customData,
+          fcInsertion: { ...next, inkCell: shift.cell, origin: { x, y } },
+        },
+      }),
+    ];
+  });
+};
+export const carryDocumentInsertionContents = (
+  strokes: readonly InkStroke[],
+  next: InsertObject,
+) => {
+  const members = strokes.filter((stroke) => stroke.insertion?.id === next.id);
+  const previous = readDocumentInsertions(members)[0];
+  return members.flatMap((stroke): InkStroke[] => {
+    const owner = stroke.insertion!;
+    if (owner.inkCell === undefined) {
+      return [];
+    }
+    const shift = insertionShift(previous || owner, next, owner.inkCell);
+    if (!shift) {
+      return [];
+    }
+    const origin = {
+      x: owner.origin.x + shift.dx,
+      y: owner.origin.y + shift.dy,
+    };
+    return [
+      {
+        ...stroke,
+        points: stroke.points.map(([x, y]): [number, number] => [
+          x + shift.dx,
+          y + shift.dy,
+        ]),
+        anchor: stroke.anchor
+          ? { x: stroke.anchor.x + shift.dx, y: stroke.anchor.y + shift.dy }
+          : undefined,
+        insertion: { ...next, inkCell: shift.cell, origin },
       },
     ];
   });

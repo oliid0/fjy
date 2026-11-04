@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(RecordingExportPlugin.class);
         registerPlugin(LocalSpeechPlugin.class);
         registerPlugin(CloudSpeechPlugin.class);
+        registerPlugin(DuplexSpeechPlugin.class);
         registerPlugin(OfflineTtsPlugin.class);
         registerPlugin(DigitalInkPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);

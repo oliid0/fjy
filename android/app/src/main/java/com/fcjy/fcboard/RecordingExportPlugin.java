@@ -77,16 +77,53 @@ public class RecordingExportPlugin extends Plugin {
                 server = new RecordingShareServer(item);
                 server.start(15000, true);
                 JSArray urls = new JSArray();
-                for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                    if (!network.isUp() || network.isLoopback()) continue;
-                    for (InetAddress address : Collections.list(network.getInetAddresses())) {
-                        if (address instanceof Inet4Address && address.isSiteLocalAddress()) urls.put("http://" + address.getHostAddress() + ":" + server.getListeningPort() + "/" + server.token + "/");
-                    }
+                for (String address : NetworkPlugin.lanAddresses(getContext())) {
+                    urls.put("http://" + address + ":" + server.getListeningPort() + "/" + server.token + "/");
                 }
                 if (urls.length() == 0) { server.stop();server = null;throw new Exception("Connect to a local network before sharing"); }
                 timer.postDelayed(() -> worker.execute(this::clear), 600000);
                 call.resolve(new JSObject().put("urls", urls));
             } catch (Exception error) { call.reject(error.getMessage(), error); }
+        });
+    }
+    /** Persist the completed archive independently of optional AI summaries. */
+    @PluginMethod public void saveDownloads(PluginCall call) {
+        worker.execute(() -> {
+            android.net.Uri uri = null;
+            try {
+                RecordingPackage item = current(call);
+                if (!item.isComplete() || saving) throw new Exception("Recording export is not ready");
+                String name = "Fcboard-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(new java.util.Date()) + "-" + item.id.substring(0, 8) + ".zip";
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    android.content.ContentValues values = new android.content.ContentValues();
+                    values.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name);
+                    values.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/zip");
+                    values.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Fcboard");
+                    values.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1);
+                    uri = getContext().getContentResolver().insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (uri == null) throw new Exception("Cannot create recording download");
+                    try (FileInputStream input = new FileInputStream(item.archive); OutputStream output = getContext().getContentResolver().openOutputStream(uri)) {
+                        if (output == null) throw new Exception("Cannot write recording download");
+                        byte[] buffer = new byte[65536]; int count;
+                        while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                    }
+                    values.clear(); values.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0);
+                    getContext().getContentResolver().update(uri, values, null, null);
+                } else {
+                    java.io.File folder = getContext().getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS);
+                    if (folder == null || (!folder.isDirectory() && !folder.mkdirs())) throw new Exception("Recording storage unavailable");
+                    java.io.File file = new java.io.File(folder, name);
+                    try (FileInputStream input = new FileInputStream(item.archive); OutputStream output = new java.io.FileOutputStream(file)) {
+                        byte[] buffer = new byte[65536]; int count;
+                        while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                    }
+                    uri = android.net.Uri.fromFile(file);
+                }
+                call.resolve(new JSObject().put("saved", true).put("uri", uri.toString()));
+            } catch (Exception error) {
+                if (uri != null && "content".equals(uri.getScheme())) getContext().getContentResolver().delete(uri, null, null);
+                call.reject(error.getMessage(), error);
+            }
         });
     }
     @PluginMethod public void save(PluginCall call) {

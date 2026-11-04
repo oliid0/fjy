@@ -559,3 +559,32 @@ it("generates, discovers and reuses an interactive lesson through the same canva
     }
   }
 });
+
+it("opens Insert Website at the original right-hand margin and vertical center while leaving the board available", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+  const view = render(<TeachingResources api={api} />);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "web.open",
+        args: { url: "https://example.test/" },
+      });
+    });
+    const panel = document.querySelector<HTMLElement>(".fc-web-resource")!;
+    const width = Math.min(400, innerWidth - 32);
+    const height = Math.min(600, innerHeight - 24);
+    expect(panel).toHaveStyle({
+      left: `${innerWidth - width - 12}px`,
+      top: `${(innerHeight - height) / 2}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    });
+    expect(panel).not.toHaveAttribute("aria-modal", "true");
+    expect(panel.querySelector("iframe")).toHaveAttribute(
+      "src",
+      "https://example.test/",
+    );
+  } finally {
+    view.unmount();
+  }
+});

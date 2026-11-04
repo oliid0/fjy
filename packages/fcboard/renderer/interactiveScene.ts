@@ -1706,7 +1706,18 @@ const _renderInteractiveScene = ({
   if (
     !appState.multiElement &&
     !appState.newElement &&
-    !appState.selectedLinearElement?.isEditing
+    !appState.selectedLinearElement?.isEditing &&
+    // GizmoLayer owns pen-mode controls. A completed lasso still needs the
+    // same native operation frame as every other selected object.
+    !(
+      !appState.whiteboardSelection &&
+      selectedElements.length > 0 &&
+      selectedElements.every((element) =>
+        ["ruler", "compass", "setSquare", "protractor"].includes(
+          element.customData?.fcWidget?.kind,
+        ),
+      )
+    )
   ) {
     const showBoundingBox = hasBoundingBox(
       selectedElements,

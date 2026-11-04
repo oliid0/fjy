@@ -15,6 +15,7 @@ export const startRealtimeSpeech = async (
   stream?: MediaStream,
   onActivity?: () => void,
   onInterim?: (line: TranscriptLine | null) => void,
+  onNotice?: (message: string) => void,
 ): Promise<LocalSpeechHandle> => {
   type Attempt = {
     cloud: boolean;
@@ -28,6 +29,7 @@ export const startRealtimeSpeech = async (
   let finished = false;
   let finishing: Promise<void> | undefined;
   let latestTime = 0;
+  let reconnects = 0;
   let transition: Promise<void>;
   const report = (error: unknown) => {
     if (!closed) {
@@ -47,11 +49,26 @@ export const startRealtimeSpeech = async (
       return attempt.recovery;
     }
     onInterim?.(null);
+    onNotice?.(error instanceof Error ? error.message : String(error));
     attempt.recovery = (async () => {
       const handle = await attempt.opening.catch(() => undefined);
       await handle?.cancel().catch(() => {});
       if (!closed) {
-        await open(false);
+        // One fresh WSS session handles a transient disconnect. Authentication
+        // or configuration failures fall back immediately and remain visible.
+        const retryCloud =
+          reconnects++ < 1 &&
+          !/key|密钥|权限|resource|资源|HTTP [4]|unavailable|unsupported|not installed|missing/i.test(
+            error instanceof Error ? error.message : String(error),
+          );
+        try {
+          await open(retryCloud);
+        } catch (failure) {
+          if (!retryCloud) {
+            throw failure;
+          }
+          await recover(current, failure);
+        }
       }
     })();
     transition = attempt.recovery;

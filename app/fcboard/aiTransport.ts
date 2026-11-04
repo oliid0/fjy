@@ -174,7 +174,7 @@ export class AIStream {
       this.pending = "";
     }
     this.frame();
-    if (!this.completed) {
+    if (!this.completed && !this.chatFinished) {
       throw new Error(
         t(
           "fcboard.ai_connection_interrupted_the_incomplete_answer_was_not_inserted_please_try_again",

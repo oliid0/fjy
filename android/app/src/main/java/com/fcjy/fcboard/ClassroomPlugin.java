@@ -238,13 +238,7 @@ public class ClassroomPlugin extends Plugin {
                 if (total > 20000000) throw new IOException("分享图片总大小超过 20 MB，请减少页数");
                 images.add(image);
             }
-            List<String> addresses = new ArrayList<>();
-            for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (!network.isUp() || network.isLoopback()) continue;
-                for (InetAddress address : Collections.list(network.getInetAddresses())) {
-                    if (address instanceof Inet4Address && address.isSiteLocalAddress()) addresses.add(address.getHostAddress());
-                }
-            }
+            List<String> addresses = NetworkPlugin.lanAddresses(getContext());
             if (addresses.isEmpty()) throw new IOException("请先连接局域网后再分享");
             stopBoardShare();
             boardShare = new BoardShareServer(images, 600000);
@@ -420,13 +414,7 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public synchronized void startReceiver(PluginCall call) {
         try {
-            List<String> addresses = new ArrayList<>();
-            for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (!network.isUp() || network.isLoopback()) { continue; }
-                for (InetAddress address : Collections.list(network.getInetAddresses())) {
-                    if (address instanceof Inet4Address && address.isSiteLocalAddress()) { addresses.add(address.getHostAddress()); }
-                }
-            }
+            List<String> addresses = NetworkPlugin.lanAddresses(getContext());
             if (addresses.isEmpty()) { call.reject("未连接局域网，请先连接 Wi-Fi 或有线网络"); return; }
             if (receiver == null) {
                 receiver = new Receiver(directory(), (item) -> {

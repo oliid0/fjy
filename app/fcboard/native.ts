@@ -50,7 +50,12 @@ export const Classroom = registerPlugin<{
   openWebResource(options: { url: string; language?: string }): Promise<void>;
   addListener(
     event: "webSelection",
-    listener: (event: { kind: "text" | "image"; value: string }) => void,
+    listener: (event: {
+      kind: "text" | "image";
+      value: string;
+      sourceUrl?: string;
+      userAgent?: string;
+    }) => void,
   ): Promise<PluginListenerHandle>;
   webResourceAction(options: {
     action:

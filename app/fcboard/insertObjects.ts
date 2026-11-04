@@ -4,7 +4,7 @@ import {
 } from "@fcboard/fcboard";
 import { pointFrom } from "@fcboard/math";
 import { randomId } from "@fcboard/common";
-import { getCommonBounds, newElementWith } from "@fcboard/element";
+import { getCommonBounds } from "@fcboard/element";
 import { t } from "@fcboard/fcboard/i18n";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
@@ -20,7 +20,10 @@ import {
   insertionWritingText,
 } from "./insertionWriting";
 
-import { carryBoardTableContents } from "./tableContents";
+import {
+  carryBoardTableContents,
+  carryBoardInsertionContents,
+} from "./tableContents";
 import { insertionLabelParts } from "./insertionLabels";
 
 import type { InkStroke } from "./documents";
@@ -324,6 +327,7 @@ export const insertionDefaults = (
   rows: 3,
   columns: 3,
   cells: [],
+  ...(kind === "mindmap" ? { nodeSize: { width: 300, height: 150 } } : {}),
   outline: kind === "mindmap" ? "\n  \n  \n  " : t("fcboard.main_topic"),
   width: 360,
   height: kind === "table" ? 180 : 144,
@@ -430,8 +434,10 @@ const line = (
 });
 
 export const mindMapNodes = (object: InsertObject) => {
-  const scaleX = (object.nodeSize?.width || 140) / 140;
-  const scaleY = (object.nodeSize?.height || 48) / 48;
+  // HMindMappingOBject: 300×150 nodes, 400 horizontal / 200 vertical
+  // initial spacing. Normalize the first child to y=0; the root sits at y=200.
+  const scaleX = (object.nodeSize?.width || 140) / 300;
+  const scaleY = (object.nodeSize?.height || 48) / 150;
   const nodes: {
     depth: number;
     parent: number;
@@ -454,8 +460,8 @@ export const mindMapNodes = (object: InsertObject) => {
       depth,
       parent,
       text: row.trim(),
-      x: depth * 190 * scaleX,
-      y: nodes.length * 76 * scaleY,
+      x: depth * 400 * scaleX,
+      y: Math.max(0, nodes.length - 1) * 200 * scaleY,
     });
   }
   for (let index = nodes.length - 1; index >= 0; index--) {
@@ -469,7 +475,7 @@ export const mindMapNodes = (object: InsertObject) => {
     ...object.nodePositions?.[index],
     width: object.nodeStyles?.[index]?.width ?? object.nodeSize?.width ?? 140,
     height: object.nodeStyles?.[index]?.height ?? object.nodeSize?.height ?? 48,
-    color: object.nodeStyles?.[index]?.color ?? "#36b48e",
+    color: object.nodeStyles?.[index]?.color ?? "#0ed49f",
     opacity: object.nodeStyles?.[index]?.opacity ?? 100,
     direction: object.nodeStyles?.[index]?.direction ?? "right",
   }));
@@ -646,13 +652,18 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
               return [0, 1].map(
                 (axis) =>
                   (1 - t) ** 2 * start[axis] +
-                  2 * (1 - t) * t * (axis === 0 ? end[0] - 50 : end[1] - 10) +
+                  2 *
+                    (1 - t) *
+                    t *
+                    (axis === 0
+                      ? end[0] - 50 * (parent.width / 300)
+                      : end[1] - 10 * (parent.height / 150)) +
                   t * t * end[axis],
               );
             });
       shapes.push({
         ...line(points, "#36b48e"),
-        strokeWidth: object.nodeStyles ? 6 : 1.3,
+        strokeWidth: 6 * (parent.width / 300),
       });
     }
     shapes.push(
@@ -663,7 +674,7 @@ export const insertionShapes = (object: InsertObject): InsertShape[] => {
         width: node.width,
         height: node.height,
         roughness: 0,
-        roundness: { type: 3 },
+        roundness: { type: 3, value: 15 * (node.width / 300) },
         fillStyle: "solid",
         backgroundColor: node.color,
         strokeColor: node.color,
@@ -688,8 +699,16 @@ export const readInsertions = (api: FcboardImperativeAPI): InsertObject[] => {
   const document = classroomCommands.read("document") as
     | { ink: InkStroke[] }
     | undefined;
-  const elements = document
-    ? document.ink.map((stroke) => ({
+  return document
+    ? readDocumentInsertions(document.ink)
+    : readSceneInsertions(api.getSceneElements());
+};
+
+export const readDocumentInsertions = (ink: readonly InkStroke[]) =>
+  readSceneInsertions(
+    ink
+      .filter((stroke) => stroke.insertion?.inkCell === undefined)
+      .map((stroke) => ({
         x: stroke.anchor?.x ?? stroke.points[0][0],
         y: stroke.anchor?.y ?? stroke.points[0][1],
         type: stroke.text
@@ -715,10 +734,8 @@ export const readInsertions = (api: FcboardImperativeAPI): InsertObject[] => {
             : undefined,
         customData: { fcInsertion: stroke.insertion },
         opacity: stroke.opacity,
-      }))
-    : api.getSceneElements();
-  return readSceneInsertions(elements);
-};
+      })),
+  );
 
 /** File export reads the requested page, independently of the active document. */
 export const readSceneInsertions = (
@@ -1000,29 +1017,12 @@ export const renderInsertion = async (
   const handwriting =
     object.kind === "table"
       ? carryBoardTableContents(existing, object)
-      : existing.flatMap((element) => {
-          const owner = element.customData?.fcInsertion;
-          if (owner?.id !== object.id || owner.inkCell === undefined) {
-            return [];
-          }
-          const x = element.x + object.position.x - owner.position.x;
-          const y = element.y + object.position.y - owner.position.y;
-          return [
-            newElementWith(element, {
-              x,
-              y,
-              customData: {
-                ...element.customData,
-                fcInsertion: {
-                  ...owner,
-                  ...object,
-                  inkCell: owner.inkCell,
-                  origin: { x, y },
-                },
-              },
-            }),
-          ];
-        });
+      : carryBoardInsertionContents(
+          existing.filter(
+            (element) => !transaction.removeIds?.includes(element.id),
+          ),
+          object,
+        );
   const replacement = [...elements, ...handwriting];
   const oldTable =
     object.kind === "table"

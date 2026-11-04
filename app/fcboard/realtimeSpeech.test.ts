@@ -69,7 +69,8 @@ it("releases a broken cloud session before one local restart, retaining the reco
   const localHandle = capture();
   const start = vi
     .spyOn(cloud, "startCloudSpeech")
-    .mockResolvedValue(cloudHandle);
+    .mockResolvedValueOnce(cloudHandle)
+    .mockRejectedValueOnce(new Error("network unavailable"));
   const offline = vi
     .spyOn(local, "startLocalSpeech")
     .mockResolvedValue(localHandle);
@@ -91,12 +92,14 @@ it("releases a broken cloud session before one local restart, retaining the reco
   start.mock.calls[0][1]("duplicate error");
   await vi.waitFor(() => expect(offline).toHaveBeenCalledTimes(1));
   expect(cloudHandle.cancel).toHaveBeenCalledTimes(1);
+  expect(start).toHaveBeenCalledTimes(2);
   expect(offline.mock.calls[0][2]).toBe(stream);
   start.mock.calls[0][0]({ time: 9, text: "stale cloud" });
   start.mock.calls[0][3]?.();
   start.mock.calls[0][4]?.({ time: 9, text: "stale cloud partial" });
   offline.mock.calls[0][4]?.({ time: 0.5, text: "offline partial" });
   expect(interim.mock.calls.map(([line]) => line)).toEqual([
+    null,
     null,
     { time: 5.5, text: "offline partial" },
   ]);

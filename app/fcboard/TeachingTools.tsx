@@ -27,7 +27,11 @@ import { Classroom } from "./native";
 import { animateSolid } from "./solidAnimation";
 import { FactoryGizmos } from "./FactoryGizmos";
 import { FactoryShapes } from "./FactoryShapes";
-import { factoryGizmoColor, factoryGizmoKinds } from "./factoryGizmoShapes";
+import {
+  factoryGizmoColor,
+  factoryGizmoKinds,
+  GIZMO_UNIT,
+} from "./factoryGizmoShapes";
 import {
   configureWidget,
   readWidgets,
@@ -423,7 +427,133 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           api.getAppState().currentItemStrokeColor ||
           "#17243c";
     }
-    const elements = renderWidget(api, widget);
+    if (kind === "ruler" || kind === "setSquare") {
+      const state = api.getAppState();
+      const document = classroomCommands.read("document.layout") as
+        | {
+            scale?: number;
+            viewport?: {
+              left: number;
+              top: number;
+              right: number;
+              bottom: number;
+            };
+          }
+        | undefined;
+      const scale = document?.scale || state.zoom.value;
+      widget.params.factory = true;
+      widget.params.size =
+        1 / (GIZMO_UNIT * (window.devicePixelRatio || 1) * scale);
+      widget.params.gizmo = {
+        unit: 1 / ((window.devicePixelRatio || 1) * scale),
+        density: window.devicePixelRatio || 1,
+      };
+      widget.position = document?.viewport
+        ? {
+            x: (document.viewport.left + document.viewport.right) / 2,
+            y: (document.viewport.top + document.viewport.bottom) / 2,
+          }
+        : {
+            x: -state.scrollX + state.width / (2 * state.zoom.value),
+            y: -state.scrollY + state.height / (2 * state.zoom.value),
+          };
+    }
+    if (kind === "protractor") {
+      const state = api.getAppState();
+      const document = classroomCommands.read("document.layout") as
+        | {
+            scale?: number;
+            viewport?: {
+              left: number;
+              top: number;
+              right: number;
+              bottom: number;
+            };
+          }
+        | undefined;
+      const scale = document?.scale || state.zoom.value;
+      const unit = 1 / ((window.devicePixelRatio || 1) * scale);
+      // BitmapFactory scales hdpi (1.5) assets to display density; native
+      // baseHalfW=bitmap.width/6 and initial protractorScale=0.7.
+      const base = 1563 / 1.5 / 3 / 360 / scale;
+      widget.params.size = base * 0.7;
+      widget.params.factory = true;
+      widget.params.gizmo = {
+        unit,
+        density: window.devicePixelRatio || 1,
+        scaleUnit: base,
+        needle: (600 * 0.7 * unit) / widget.params.size,
+        ball: (80 * 0.7 * unit) / widget.params.size,
+      };
+      const center = document?.viewport
+        ? {
+            x:
+              (document.viewport.left + document.viewport.right) / 2 +
+              300 * unit,
+            y:
+              (document.viewport.top + document.viewport.bottom) / 2 +
+              300 * unit,
+          }
+        : {
+            x:
+              -state.scrollX +
+              state.width / (2 * state.zoom.value) +
+              300 * unit,
+            y:
+              -state.scrollY +
+              state.height / (2 * state.zoom.value) +
+              300 * unit,
+          };
+      widget.position = {
+        x: center.x - 180 * widget.params.size,
+        y: center.y - 180 * widget.params.size,
+      };
+    }
+    if (kind === "compass") {
+      const state = api.getAppState();
+      const document = classroomCommands.read("document.layout") as
+        | {
+            scale?: number;
+            viewport?: {
+              left: number;
+              top: number;
+              right: number;
+              bottom: number;
+            };
+          }
+        | undefined;
+      const scale = document?.scale || state.zoom.value;
+      const viewport = document?.viewport || {
+        left: -state.scrollX,
+        top: -state.scrollY,
+        right: -state.scrollX + state.width / scale,
+        bottom: -state.scrollY + state.height / scale,
+      };
+      const unit = 1 / ((window.devicePixelRatio || 1) * scale);
+      const dp = unit * (window.devicePixelRatio || 1) * 0.66;
+      const leg =
+        (2 / 3) *
+        Math.max(100 * dp, 0.15 * (viewport.right - viewport.left) + 40 * dp);
+      const opening = 2 * leg * Math.sin((25 * Math.PI) / 180) * 1.1;
+      widget.params.factory = true;
+      widget.params.size = 1 / scale;
+      widget.params.gizmo = {
+        unit,
+        density: window.devicePixelRatio || 1,
+        leg: leg / widget.params.size,
+        opening: opening / widget.params.size,
+      };
+      widget.position = {
+        x: (viewport.left + viewport.right - opening) / 2,
+        y:
+          viewport.top +
+          0.78 * (viewport.bottom - viewport.top) -
+          300 * widget.params.size,
+      };
+    }
+    const elements = renderWidget(api, widget, true, {
+      exact: factoryGizmoKinds.has(kind),
+    });
     if (classroomCommands.has("document.select")) {
       void classroomCommands.execute({
         name: "document.select",
@@ -434,7 +564,24 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
         appState: objectSelection(elements),
       });
     }
-    api.setActiveTool({ type: "selection" });
+    if (factoryGizmoKinds.has(kind)) {
+      api.updateScene({
+        appState: {
+          selectedElementIds: {},
+          selectedGroupIds: {},
+          whiteboardSelection: undefined,
+        },
+      });
+      api.setActiveTool({ type: "freedraw" });
+      if (classroomCommands.has("document.tool")) {
+        void classroomCommands.execute({
+          name: "document.tool",
+          args: { tool: "freedraw" },
+        });
+      }
+    } else {
+      api.setActiveTool({ type: "selection" });
+    }
     const placed =
       readWidgets(api).find((item) => item.id === widget.id) || widget;
     selectedRef.current = placed;

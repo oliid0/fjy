@@ -27,6 +27,9 @@ export const InkQuestion = ({
   placement,
   onSubmit,
   onClose,
+  hasResult,
+  onToggleResult,
+  onClearResult,
 }: {
   api: FcboardImperativeAPI;
   placement: ReturnType<typeof questionPosition>;
@@ -36,6 +39,9 @@ export const InkQuestion = ({
     sourceIds?: string[],
   ) => Promise<void>;
   onClose: () => void;
+  hasResult?: boolean;
+  onToggleResult?: () => void;
+  onClearResult?: () => void;
 }) => {
   const width = placement.width;
   const height = placement.height;
@@ -343,6 +349,7 @@ export const InkQuestion = ({
     setInk([...strokes.current, { ...current.stroke }]);
   };
   const prepareEdit = () => {
+    onClearResult?.();
     setAnswered(false);
     setPersisted(false);
     if (!questionIds.current.length) {
@@ -548,10 +555,14 @@ export const InkQuestion = ({
               ? "fcboard.expand_answer"
               : "fcboard.collapse_answer",
           )}
-          disabled={busy || !answer.count}
+          disabled={busy || (!answer.count && !hasResult)}
           aria-pressed={answer.collapsed}
           size="small"
           onClick={() => {
+            if (hasResult && onToggleResult) {
+              onToggleResult();
+              return;
+            }
             if (lock.current) {
               return;
             }

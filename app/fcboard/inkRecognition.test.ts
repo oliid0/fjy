@@ -20,7 +20,7 @@ it.each(["text", "drawing"])(
       false,
     );
     vi.spyOn(ai, "chat").mockResolvedValue(
-      JSON.stringify({ version: 1, kind, text: "一个漂亮的女孩" }),
+      JSON.stringify({ version: 1, kind, text: "一个二次元女孩" }),
     );
     const image = "data:image/png;base64,example";
     const result = await recognizeInkContent(
@@ -33,14 +33,39 @@ it.each(["text", "drawing"])(
     if (result.kind !== "magic") {
       throw new Error("Expected magic result");
     }
-    expect(result.prompt).toContain("透明背景");
+    expect(result.transparent).toBe(true);
     if (kind === "text") {
       expect(result.image).toBeUndefined();
-      expect(result.prompt).toContain("铅笔素描");
-      expect(result.prompt).toContain("一个漂亮的女孩");
+      expect(result.prompt).toContain("一个二次元女孩");
+      expect(result.prompt).not.toContain("铅笔素描");
     } else {
       expect(result.image).toBe(image);
-      expect(result.prompt).toContain("3D");
+      expect(result.prompt).toContain("参考草图");
     }
   },
 );
+
+it("preserves explicit transparency instructions while always requesting subject layers", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test", imageModel: "illustrator" },
+    false,
+  );
+  vi.spyOn(ai, "chat").mockResolvedValue(
+    JSON.stringify({
+      version: 1,
+      kind: "text",
+      text: "一个二次元女孩，透明背景",
+    }),
+  );
+  const result = await recognizeInkContent(
+    "magic",
+    async () => "data:image/png;base64,example",
+    [],
+    new AbortController().signal,
+  );
+  expect(result).toMatchObject({ kind: "magic", transparent: true });
+  if (result.kind === "magic") {
+    expect(result.image).toBeUndefined();
+    expect(result.prompt).toContain("一个二次元女孩，透明背景");
+  }
+});

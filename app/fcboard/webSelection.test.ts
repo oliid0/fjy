@@ -86,8 +86,8 @@ it.each([
           expect.objectContaining({
             image: "data:image/png;base64,aW1hZ2U=",
             shape: expect.objectContaining({
-              width: 400,
-              height: 300,
+              width: 800,
+              height: 600,
               x: 120,
               y: 820,
             }),
@@ -95,6 +95,20 @@ it.each([
         );
         expect(api.getSceneElements()).toEqual(before);
       } else {
+        expect(api.setActiveTool).toHaveBeenCalledWith({ type: "lasso" });
+        expect(api.updateScene).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            appState: expect.objectContaining({
+              whiteboardSelection: expect.objectContaining({
+                elementIds: expect.any(Array),
+                bounds: expect.objectContaining({
+                  left: expect.any(Number),
+                  right: expect.any(Number),
+                }),
+              }),
+            }),
+          }),
+        );
         expect(api.addFiles).toHaveBeenCalledWith([
           expect.objectContaining({
             dataURL: "data:image/png;base64,aW1hZ2U=",
@@ -155,4 +169,67 @@ it("rejects a late image after a manual surface change", async () => {
     ),
   ).rejects.toMatchObject({ name: "AbortError" });
   expect(api.addFiles).not.toHaveBeenCalled();
+});
+
+it("loads a protected webpage image with the browser's origin and user-agent", async () => {
+  const api = sceneAPI();
+  vi.mocked(CapacitorHttp.get).mockResolvedValue({
+    status: 200,
+    headers: { "content-type": "image/png" },
+    url: "https://images.example.test/item.png",
+    data: "aW1hZ2U=",
+  });
+  vi.stubGlobal(
+    "Image",
+    class {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      src = "";
+      decode = async () => {};
+    },
+  );
+  await insertWebSelection(
+    api,
+    {
+      kind: "image",
+      value: "https://images.example.test/item.png",
+      sourceUrl: "https://search.example.test/result?private=value",
+      userAgent: "Board WebView",
+    },
+    new AbortController().signal,
+  );
+  expect(CapacitorHttp.get).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      headers: {
+        Referer: "https://search.example.test/",
+        "User-Agent": "Board WebView",
+      },
+    }),
+  );
+});
+
+it("fits imported images to the native 940 physical pixels independently of board zoom and screen density", async () => {
+  const api = sceneAPI();
+  const getState = api.getAppState;
+  api.getAppState = () => ({ ...getState(), zoom: { value: 1.5 as never } });
+  vi.stubGlobal("devicePixelRatio", 2);
+  vi.stubGlobal(
+    "Image",
+    class {
+      naturalWidth = 2000;
+      naturalHeight = 1000;
+      src = "";
+      decode = async () => {};
+    },
+  );
+  await insertWebSelection(
+    api,
+    { kind: "image", value: "data:image/png;base64,aW1hZ2U=" },
+    new AbortController().signal,
+  );
+  const image = api
+    .getSceneElements()
+    .find((element) => element.type === "image")!;
+  expect(image.width * 1.5 * 2).toBeCloseTo(940);
+  expect(image.height * 1.5 * 2).toBeCloseTo(470);
 });

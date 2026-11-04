@@ -128,9 +128,12 @@ it("appends recognized words without turning wrapped node text into extra nodes"
   await renderInsertion(api, insertionDefaults("mindmap", { x: 100, y: 100 }));
   const all = api.getSceneElements();
   const target = insertionWritingTargets(boardWritingParts(all))[2];
-  const label = insertionWritingText(target, "Newton's second law", "#e03131", [
-    "first",
-  ])!;
+  const label = insertionWritingText(
+    target,
+    "Newton's second law Newton's second law Newton's second law",
+    "#e03131",
+    ["first"],
+  )!;
   expect(label.type === "text" && label.text).toContain("\n");
   api.updateScene({
     elements: [...all, ...convertToFcboardElements([label])],

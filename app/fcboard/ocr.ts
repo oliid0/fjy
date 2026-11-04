@@ -39,7 +39,11 @@ export const recognizeHandwriting = async (
   let raster: Promise<string> | undefined;
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
-  if (settings.ocr !== "cloud" && hasDigitalInk() && strokes?.length) {
+  if (
+    (kind === "math" || settings.ocr !== "cloud") &&
+    hasDigitalInk() &&
+    strokes?.length
+  ) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
       const candidates = await recognizeDigitalInk(
@@ -66,13 +70,14 @@ export const recognizeHandwriting = async (
         error &&
         typeof error === "object" &&
         "code" in error &&
-        error.code === "HANDWRITING_MODEL_REQUIRED"
+        error.code === "HANDWRITING_MODEL_REQUIRED" &&
+        kind !== "math"
       ) {
         throw error;
       }
       // Explicit local mode reports the real native failure. Auto can use the
       // separately configured raster/cloud fallback; never call it Digital Ink.
-      if (settings.ocr === "local") {
+      if (settings.ocr === "local" && kind !== "math") {
         throw error;
       }
     }
@@ -119,7 +124,9 @@ export const recognizeHandwriting = async (
       ? await local(signal)
       : (() => {
           progress(t("fcboard.recognizing_handwriting"));
-          return settings.ocr === "cloud"
+          return kind === "math"
+            ? preferredRace(local, cloud, signal, 0)
+            : settings.ocr === "cloud"
             ? cloud(signal)
             : preferredRace(cloud, local, signal);
         })();

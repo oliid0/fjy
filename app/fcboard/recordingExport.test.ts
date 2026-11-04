@@ -1,6 +1,8 @@
+import { Capacitor } from "@capacitor/core";
 import { blobToArrayBuffer } from "@fcboard/fcboard/data/blob";
 
 import {
+  autoSaveRecording,
   prepareRecordingPackage,
   recordingFiles,
   saveRecordingFiles,
@@ -13,6 +15,7 @@ const engine = vi.hoisted(() => ({
   append: vi.fn(),
   complete: vi.fn(),
   save: vi.fn(),
+  saveDownloads: vi.fn(),
   share: vi.fn(),
   close: vi.fn(),
 }));
@@ -107,4 +110,23 @@ it("writes all three files after one directory choice", async () => {
     recordingFiles(recording).map((file) => file.name),
   );
   expect(output.close).toHaveBeenCalledTimes(3);
+});
+
+it("finishes a native media archive before saving a real download, and closes it on failure", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  engine.saveDownloads.mockResolvedValueOnce({
+    saved: true,
+    uri: "content://downloads/recording",
+  });
+  expect(await autoSaveRecording(recording)).toEqual({
+    saved: true,
+    uri: "content://downloads/recording",
+  });
+  expect(engine.complete.mock.invocationCallOrder[0]).toBeLessThan(
+    engine.saveDownloads.mock.invocationCallOrder[0],
+  );
+  expect(engine.close).toHaveBeenCalledWith({ id: "export" });
+  engine.saveDownloads.mockRejectedValueOnce(new Error("Storage full"));
+  await expect(autoSaveRecording(recording)).rejects.toThrow("Storage full");
+  expect(engine.close).toHaveBeenCalledTimes(2);
 });

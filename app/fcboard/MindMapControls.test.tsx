@@ -9,6 +9,7 @@ import { act, fireEvent, render } from "@fcboard/fcboard/tests/test-utils";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render as renderControls } from "./test/render";
+import { observeInkAssistance } from "./inkAssistance";
 import { MindMapControls } from "./MindMapControls";
 import {
   configureInsertion,
@@ -39,6 +40,7 @@ const setup = async (scale = 1) => {
         height: 144 * scale,
       }),
     );
+    api.updateScene({ appState: { width: 1600, height: 900 } });
     api.setActiveTool({ type: "freedraw" });
   });
   const controls = renderControls(<MindMapControls api={api} />);
@@ -67,6 +69,7 @@ const setup = async (scale = 1) => {
   const targets = () =>
     insertionWritingTargets(boardWritingParts(api.getSceneElements()));
   const select = (index: number) => {
+    act(() => api.setActiveTool({ type: "lasso" }));
     const node = targets()[index];
     pointer(
       canvas,
@@ -81,7 +84,18 @@ const setup = async (scale = 1) => {
       node.y + node.height / 2,
     );
   };
-  return { api, controls, editor, canvas, pointer, select, targets };
+  return {
+    api,
+    controls,
+    editor,
+    canvas,
+    pointer,
+    select: (index: number) => {
+      select(index);
+      act(() => api.setActiveTool({ type: "freedraw" }));
+    },
+    targets,
+  };
 };
 
 it("selects a single node without adding ink, then clears, adds and deletes its complete branch", async () => {
@@ -233,4 +247,85 @@ it("lets palm and pen-side-button erasing reach the canvas without selecting a n
       screen.queryByRole("button", { name: t("fcboard.mindmap_move_node") }),
     ).toBeNull();
   }
+});
+
+it("keeps first-contact raw handwriting attached through move, clear and undo without waiting for OCR", async () => {
+  const { api, canvas, pointer, targets } = await setup();
+  const stop = observeInkAssistance(
+    api,
+    () => {},
+    () => {},
+  );
+  try {
+    const node = targets()[1];
+    pointer(canvas, "pointerdown", node.x + 20, node.y + 20);
+    pointer(canvas, "pointermove", node.x + 50, node.y + 25);
+    pointer(canvas, "pointerup", node.x + 60, node.y + 25);
+    const ink = api
+      .getSceneElements()
+      .find((element) => element.type === "freedraw")!;
+    expect(ink.customData?.fcInsertion).toMatchObject({
+      id: node.insertion.id,
+      inkCell: 1,
+    });
+    expect(ink.groupIds).toContain(node.insertion.id);
+    const button = screen.getByRole("button", {
+      name: t("fcboard.mindmap_move_node"),
+    });
+    pointer(button, "pointerdown", 200, 200);
+    pointer(window, "pointermove", 240, 230);
+    pointer(window, "pointerup", 250, 240);
+    expect(
+      api.getSceneElements().find((element) => element.id === ink.id),
+    ).toMatchObject({ x: ink.x + 50, y: ink.y + 40 });
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.mindmap_clear_node") }),
+    );
+    await waitFor(() =>
+      expect(
+        api.getSceneElements().some((element) => element.id === ink.id),
+      ).toBe(false),
+    );
+    Keyboard.undo();
+    expect(
+      api.getSceneElements().some((element) => element.id === ink.id),
+    ).toBe(true);
+  } finally {
+    stop();
+  }
+});
+
+it("lets the operation frame own the next node-interior drag and corner scale after circling the map", async () => {
+  const { api, canvas, pointer, targets } = await setup();
+  const original = targets();
+  const left = Math.min(...original.map((node) => node.x)) - 30;
+  const top = Math.min(...original.map((node) => node.y)) - 30;
+  const right = Math.max(...original.map((node) => node.x + node.width)) + 30;
+  const bottom = Math.max(...original.map((node) => node.y + node.height)) + 30;
+  act(() => api.setActiveTool({ type: "lasso" }));
+  pointer(canvas, "pointerdown", left, top);
+  for (const [x, y] of [
+    [right, top],
+    [right, bottom],
+    [left, bottom],
+  ]) {
+    pointer(canvas, "pointermove", x, y);
+  }
+  pointer(canvas, "pointerup", left, top);
+  const selection = api.getAppState().whiteboardSelection!;
+  expect(selection.elementIds.length).toBeGreaterThan(0);
+  const node = original[1];
+  pointer(canvas, "pointerdown", node.x + 30, node.y + 20);
+  pointer(canvas, "pointermove", node.x + 60, node.y + 40);
+  pointer(canvas, "pointerup", node.x + 70, node.y + 50);
+  expect(targets()[1]).toMatchObject({ x: node.x + 40, y: node.y + 30 });
+  expect(api.getAppState().whiteboardSelection!.elementIds).toEqual(
+    selection.elementIds,
+  );
+  const box = api.getAppState().whiteboardSelection!.bounds;
+  const width = targets()[0].width;
+  pointer(canvas, "pointerdown", box.right, box.bottom);
+  pointer(canvas, "pointermove", box.right + 60, box.bottom + 60);
+  pointer(canvas, "pointerup", box.right + 60, box.bottom + 60);
+  expect(targets()[0].width).toBeGreaterThan(width);
 });

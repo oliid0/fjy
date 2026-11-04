@@ -108,7 +108,7 @@ describe("incremental AI transport", () => {
     expect(parser.finish()).toBe("答案");
     expect(onChunk).toHaveBeenCalledWith("答案");
   });
-  it("reuses opaque cache routes for stable rules, isolated by endpoint, model and key", async () => {
+  it("uses fast only for the default text model and keeps custom models on the ordinary schema", async () => {
     const fetcher = vi.fn().mockResolvedValue({
       status: 200,
       text: async () =>
@@ -135,11 +135,11 @@ describe("incremental AI transport", () => {
       model: "doubao-seed-2-0-mini-260428",
       stream: true,
       service_tier: "fast",
-      thinking: { type: "disabled" },
     });
-    expect(bodies[0].prompt_cache_key).toBe(bodies[1].prompt_cache_key);
-    expect(bodies[0].prompt_cache_key).not.toBe(bodies[2].prompt_cache_key);
-    expect(bodies[0].prompt_cache_key).not.toContain("test-secret");
+    expect(bodies[0].prompt_cache_key).toBeUndefined();
+    expect(bodies[0].thinking).toBeUndefined();
+    expect(bodies[2].service_tier).toBeUndefined();
+    expect(bodies[2].prompt_cache_key).toBeUndefined();
   });
   it("reads Android chunks incrementally and removes the listener after completion", async () => {
     vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
@@ -165,4 +165,215 @@ describe("incremental AI transport", () => {
     expect(onDelta.mock.calls).toEqual([["2"]]);
     expect(remove).toHaveBeenCalledTimes(1);
   });
+});
+
+it("retries rejected fast requests once without changing the model or adding tuning fields", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce({
+      status: 400,
+      text: async () =>
+        JSON.stringify({ error: { message: "service_tier unsupported" } }),
+    })
+    .mockResolvedValueOnce({
+      status: 200,
+      text: async () =>
+        JSON.stringify({ choices: [{ message: { content: "成功" } }] }),
+    });
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    expect(
+      await chat([{ role: "user", content: "测试" }], undefined, {
+        ...defaults,
+        apiKey: "test",
+      }),
+    ).toBe("成功");
+    const bodies = fetcher.mock.calls.map((call) => JSON.parse(call[1].body));
+    expect(bodies[0].service_tier).toBe("fast");
+    expect(bodies[1]).toEqual({
+      model: defaults.model,
+      messages: [{ role: "user", content: "测试" }],
+      stream: true,
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+it("routes attached images to the configured vision model with ordinary parameters", async () => {
+  const fetcher = vi.fn().mockResolvedValue({
+    status: 200,
+    text: async () =>
+      JSON.stringify({ choices: [{ message: { content: "图画" } }] }),
+  });
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    await chat(
+      [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: { url: "data:image/png;base64,image" },
+            },
+          ],
+        },
+      ],
+      undefined,
+      { ...defaults, apiKey: "test", ocrModel: "vision-model" },
+    );
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+      model: "vision-model",
+      messages: expect.any(Array),
+      stream: true,
+    });
+    expect(fetcher.mock.calls[0][1].headers).toEqual({
+      "Content-Type": "application/json",
+      Authorization: "Bearer test",
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it.each([false, true])(
+  "retries a failed partial fast stream without duplicating previews (reset hook: %s)",
+  async (resettable) => {
+    const wire = (body: string) => ({
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(body));
+          controller.close();
+        },
+      }),
+    });
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        wire(
+          delta("partial") +
+            frame({ error: { message: "fast stream failed" } }),
+        ),
+      )
+      .mockResolvedValueOnce(wire(delta("complete") + stop));
+    vi.stubGlobal("fetch", fetcher);
+    let preview = "";
+    const onReset = vi.fn(() => {
+      preview = "";
+    });
+    try {
+      const result = await chat(
+        [{ role: "user", content: "hello" }],
+        undefined,
+        { ...defaults, apiKey: "test" },
+        {
+          onDelta: (text) => {
+            preview += text;
+          },
+          ...(resettable ? { onReset } : {}),
+        },
+      );
+      expect(result).toBe("complete");
+      expect(preview).toBe("complete");
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(
+        JSON.parse(fetcher.mock.calls[1][1].body).service_tier,
+      ).toBeUndefined();
+      expect(onReset).toHaveBeenCalledTimes(resettable ? 1 : 0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);
+
+it("cancels a stalled fast attempt and reserves the remaining deadline for ordinary inference", async () => {
+  vi.useFakeTimers();
+  const fetcher = vi
+    .fn()
+    .mockImplementationOnce(
+      (_url, options) =>
+        new Promise((_resolve, reject) =>
+          options.signal.addEventListener(
+            "abort",
+            () => reject(options.signal.reason),
+            { once: true },
+          ),
+        ),
+    )
+    .mockResolvedValueOnce({
+      status: 200,
+      text: async () =>
+        JSON.stringify({ choices: [{ message: { content: "recovered" } }] }),
+    });
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const result = chat(
+      [{ role: "user", content: "hello" }],
+      undefined,
+      { ...defaults, apiKey: "test" },
+      { timeoutMs: 2000 },
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await result).toBe("recovered");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(
+      JSON.parse(fetcher.mock.calls[1][1].body).service_tier,
+    ).toBeUndefined();
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("retains a healthy fast stream past the initial timeout while chunks keep arriving", async () => {
+  vi.useFakeTimers();
+  let writer!: ReadableStreamDefaultController<Uint8Array>;
+  const fetcher = vi
+    .fn()
+    .mockImplementationOnce((_url, options) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          writer = controller;
+          options.signal.addEventListener(
+            "abort",
+            () => controller.error(options.signal.reason),
+            { once: true },
+          );
+        },
+      });
+      return Promise.resolve({
+        status: 200,
+        headers: new Headers({ "content-type": "text/event-stream" }),
+        body,
+      });
+    })
+    .mockResolvedValue({
+      status: 200,
+      text: async () =>
+        JSON.stringify({ choices: [{ message: { content: "fallback" } }] }),
+    });
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const answer = chat(
+      [{ role: "user", content: "Generate a long answer" }],
+      undefined,
+      { ...defaults, apiKey: "test" },
+      { timeoutMs: 4000 },
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    writer.enqueue(new TextEncoder().encode(delta("first")));
+    await vi.advanceTimersByTimeAsync(1500);
+    writer.enqueue(new TextEncoder().encode(delta("second")));
+    await vi.advanceTimersByTimeAsync(1500);
+    writer.enqueue(new TextEncoder().encode(stop));
+    writer.close();
+    expect(await answer).toBe("firstsecond");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
 });

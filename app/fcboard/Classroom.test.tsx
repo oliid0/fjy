@@ -27,6 +27,7 @@ import * as ocr from "./ocr";
 import * as speech from "./speech";
 import * as localSpeech from "./localSpeech";
 import * as cloudSpeech from "./cloudSpeech";
+import * as duplex from "./duplexSpeech";
 import * as lessonObserver from "./lessonObserver";
 import { classroomCommands } from "./commands";
 import { BoardRecorder, loadRecordings, saveRecordings } from "./recording";
@@ -56,6 +57,19 @@ const render = (component: React.ReactElement) =>
     </div>,
   );
 
+const generatedQuiz = {
+  title: "Generated quiz",
+  questions: [
+    {
+      type: "short",
+      question: "State the main idea.",
+      answer: ["The current idea"],
+      explanation: "Use the visible notes.",
+    },
+  ],
+  sources: [{ title: "Education", url: "https://www.moe.gov.cn/" }],
+};
+
 describe("selection-driven classroom controls", () => {
   let scene: readonly FcboardElement[];
   let api: FcboardImperativeAPI;
@@ -67,6 +81,7 @@ describe("selection-driven classroom controls", () => {
     selected = { [scene[0].id]: true };
   };
   beforeEach(() => {
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:recording");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     scene = [];
@@ -133,9 +148,7 @@ describe("selection-driven classroom controls", () => {
       );
       const chat = vi
         .spyOn(ai, "chat")
-        .mockResolvedValue(
-          JSON.stringify({ action: "text", text: "The current idea" }),
-        );
+        .mockResolvedValue(JSON.stringify(generatedQuiz));
       render(<Classroom api={api} />);
       await act(async () => {
         await classroomCommands.execute({
@@ -175,6 +188,18 @@ describe("selection-driven classroom controls", () => {
         screen.getByRole("button", { name: t("fcboard.send_question") }),
       );
       await waitFor(() =>
+        expect(screen.getByTitle(generatedQuiz.title)).toBeVisible(),
+      );
+      expect(screen.getByTitle(generatedQuiz.title)).toHaveAttribute(
+        "sandbox",
+        "allow-scripts",
+      );
+      fireEvent.click(
+        within(
+          screen.getByRole("dialog", { name: t("fcboard.ai_questions") }),
+        ).getByRole("button", { name: t("buttons.close") }),
+      );
+      await waitFor(() =>
         expect(
           screen.getByRole("button", { name: t("fcboard.collapse_answer") }),
         ).toBeEnabled(),
@@ -183,7 +208,7 @@ describe("selection-driven classroom controls", () => {
       expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
         "Notes changed while writing the question",
       );
-      expect(scene.some((element) => element.customData?.fcGenerated)).toBe(
+      expect(scene.some((element) => element.customData?.fcQuestionInput)).toBe(
         true,
       );
       fireEvent.keyDown(
@@ -517,11 +542,11 @@ describe("selection-driven classroom controls", () => {
         });
         act(() => deliver("清空"));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(2000);
+          await vi.advanceTimersByTimeAsync(200);
         });
         act(() => deliver("白板"));
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(2999);
+          await vi.advanceTimersByTimeAsync(449);
         });
         expect(clear).not.toHaveBeenCalled();
         await act(async () => {
@@ -916,7 +941,7 @@ describe("selection-driven classroom controls", () => {
       });
       act(() => deliver("清空白板"));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
+        await vi.advanceTimersByTimeAsync(200);
       });
       act(() => {
         release[1]();
@@ -928,12 +953,12 @@ describe("selection-driven classroom controls", () => {
         }));
       });
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(250);
       });
       expect(clear).toHaveBeenCalledTimes(1);
       act(() => deliver("清空白板"));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
+        await vi.advanceTimersByTimeAsync(200);
       });
       act(() => {
         page = 2;
@@ -1052,9 +1077,8 @@ describe("selection-driven classroom controls", () => {
               return vi.fn();
             });
           await act(async () => {
-            fail("provider disconnected");
-            await Promise.resolve();
-            await Promise.resolve();
+            fail("HTTP 401 provider disconnected");
+            await vi.waitFor(() => expect(fallback).toHaveBeenCalledTimes(1));
           });
           expect(fallback).toHaveBeenCalledTimes(1);
           await act(async () => {
@@ -1066,7 +1090,7 @@ describe("selection-driven classroom controls", () => {
           });
           expect(clear).toHaveBeenCalledTimes(3);
         } else {
-          act(() => fail("provider disconnected"));
+          act(() => fail("HTTP 401 provider disconnected"));
           await act(async () => {
             await expect(
               classroomCommands.execute({ name: "voice.toggle" }),
@@ -1115,7 +1139,7 @@ describe("selection-driven classroom controls", () => {
               quiz: [],
             })
           : operation === "question"
-          ? JSON.stringify({ action: "text", text: "visible answer" })
+          ? JSON.stringify(generatedQuiz)
           : "visible summary",
       );
       vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
@@ -1176,7 +1200,10 @@ describe("selection-driven classroom controls", () => {
           fireEvent.click(
             screen.getByRole("button", { name: t("fcboard.send_question") }),
           );
-          await waitFor(() => expect(text).toHaveBeenCalled());
+          await waitFor(() =>
+            expect(screen.getByTitle(generatedQuiz.title)).toBeVisible(),
+          );
+          expect(text).not.toHaveBeenCalled();
         } else {
           await act(async () => {
             await classroomCommands.execute(
@@ -1748,9 +1775,11 @@ describe("selection-driven classroom controls", () => {
           await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(3));
         });
         const saved = (await loadRecordings())[0];
-        expect(saved.transcript.filter((line) => line.text === "清屏")).toEqual(
-          [expect.objectContaining({ text: "清屏", time: 5 })],
+        const clearLines = saved.transcript.filter(
+          (line) => line.text === "清屏",
         );
+        expect(clearLines).toHaveLength(1);
+        expect(clearLines[0].time).toBeCloseTo(7.55, 3);
         expect(saved.transcript.some((line) => line.text === "继续录制")).toBe(
           false,
         );
@@ -3298,5 +3327,123 @@ describe("selection-driven classroom controls", () => {
         Math.abs(axis.points[1][1] - expected[index][1]),
       ).toBeLessThanOrEqual(1);
     });
+  });
+  it("keeps one duplex conversation through recording, includes final live words, and stops only on the voice control", async () => {
+    await saveRecordings([]);
+    saveSettings(
+      {
+        ...defaults,
+        speech: "local",
+        assistantVoice: "duplex",
+        speechKey: "speech-key",
+        autoSummary: false,
+      },
+      false,
+    );
+    const stream = {} as MediaStream;
+    const session = {
+      stream,
+      startedAt: Date.now(),
+      stop: vi.fn().mockResolvedValue(undefined),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      interrupt: vi.fn().mockResolvedValue(undefined),
+      flush: vi.fn().mockResolvedValue(undefined),
+    };
+    const start = vi
+      .spyOn(duplex, "startDuplexSpeech")
+      .mockResolvedValue(session);
+    const legacy = vi.spyOn(localSpeech, "startLocalSpeech");
+    const recordStart = vi
+      .spyOn(BoardRecorder.prototype, "start")
+      .mockResolvedValue(undefined);
+    vi.spyOn(BoardRecorder.prototype, "stop").mockResolvedValue({
+      blob: new Blob(["recorded"], { type: "audio/webm" }),
+      duration: 2,
+    });
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      const events = start.mock.calls[0][0];
+      act(() => {
+        events.caption("正在书写标题");
+        events.status("正在执行…");
+        events.state("speaking");
+      });
+      expect(screen.getByText("正在书写标题")).toBeInTheDocument();
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "record.start",
+          args: { mode: "audio" },
+        });
+      });
+      expect(recordStart).toHaveBeenCalledWith(
+        "audio",
+        expect.any(Function),
+        stream,
+      );
+      expect(session.cancel).not.toHaveBeenCalled();
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(legacy).not.toHaveBeenCalled();
+      act(() =>
+        events.line({
+          time: (Date.now() - session.startedAt) / 1000,
+          text: "录制中的知识点",
+        }),
+      );
+      session.flush.mockImplementation(async () =>
+        events.line({
+          time: (Date.now() - session.startedAt) / 1000,
+          text: "最后一句",
+        }),
+      );
+      await act(async () => {
+        await classroomCommands.execute({ name: "record.stop" });
+      });
+      expect(session.flush).toHaveBeenCalledTimes(1);
+      expect(session.cancel).not.toHaveBeenCalled();
+      const recordings = await loadRecordings();
+      expect(recordings[0].transcript.map((line) => line.text)).toEqual([
+        "录制中的知识点",
+        "最后一句",
+      ]);
+      act(() => events.caption("还可以继续对话"));
+      expect(screen.getByText("还可以继续对话")).toBeInTheDocument();
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      expect(session.cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it("interrupts actual duplex playback through the shared assistant command", async () => {
+    saveSettings(
+      { ...defaults, assistantVoice: "duplex", speechKey: "speech-key" },
+      false,
+    );
+    const session = {
+      startedAt: Date.now(),
+      stop: vi.fn(),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      interrupt: vi.fn().mockResolvedValue(undefined),
+      flush: vi.fn(),
+    };
+    vi.spyOn(duplex, "startDuplexSpeech").mockResolvedValue(session);
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.interrupt" });
+      });
+      expect(session.interrupt).toHaveBeenCalledTimes(1);
+      expect(session.cancel).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+    }
   });
 });

@@ -866,6 +866,8 @@ export type AppClassProperties = {
   onExportImage: App["onExportImage"];
   lastViewportPosition: App["lastViewportPosition"];
   scrollToContent: App["scrollToContent"];
+  resetWhiteboardZoom: App["resetWhiteboardZoom"];
+  onWhiteboardScaleEmitter: App["onWhiteboardScaleEmitter"];
   addFiles: App["addFiles"];
   addElementsFromPasteOrLibrary: App["addElementsFromPasteOrLibrary"];
   togglePenMode: App["togglePenMode"];

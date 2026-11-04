@@ -147,6 +147,38 @@ const DefaultOverwriteConfirmDialog = () => {
   );
 };
 
+/** main.xml scale_layout and showScalePercent's renewed 1000ms hide timer. */
+const WhiteboardScale = ({ app }: { app: AppClassProperties }) => {
+  const [value, setValue] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = app.onWhiteboardScaleEmitter.on((scale) => {
+      clearTimeout(timer);
+      setValue(scale);
+      if (scale !== null) {
+        timer = setTimeout(() => setValue(null), 1000);
+      }
+    });
+    return () => {
+      stop();
+      clearTimeout(timer);
+    };
+  }, [app]);
+  return value !== null ? (
+    <div
+      className="fc-whiteboard-scale"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <output aria-label={t("fcboard.zoom_level")}>
+        {t("fcboard.scale_tips", { value: Math.round(value * 100) })}
+      </output>
+      <button type="button" onClick={app.resetWhiteboardZoom}>
+        {t("fcboard.reset")}
+      </button>
+    </div>
+  ) : null;
+};
+
 const LayerUI = ({
   actionManager,
   appState,
@@ -596,6 +628,7 @@ const LayerUI = ({
 
   const renderUnifiedToolbar = () => (
     <>
+      <WhiteboardScale app={app} />
       {showProperties && !toolbarHidden && !appState.viewModeEnabled && (
         <div
           className={`fc-editor-properties${

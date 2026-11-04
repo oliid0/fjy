@@ -54,18 +54,9 @@ export const changeMindMapNode = (
       const children = nodes.filter((item) => item.parent === index);
       rows.splice(end, 0, "  ".repeat(node.depth + 1));
       positions.splice(end, 0, {
-        x:
-          node.x +
-          (styles
-            ? node.width + 100
-            : (190 * (object.nodeSize?.width || 140)) / 140),
-        y: styles
-          ? children.length
-            ? Math.max(...children.map((item) => item.y + item.height)) + 40
-            : node.y
-          : children.length
-          ? Math.max(...children.map((item) => item.y)) +
-            (76 * (object.nodeSize?.height || 48)) / 48
+        x: node.x + node.width + 100,
+        y: children.length
+          ? Math.max(...children.map((item) => item.y + item.height)) + 40
           : node.y,
       });
       colors.splice(end, 0, "");

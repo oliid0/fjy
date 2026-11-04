@@ -85,6 +85,9 @@ it("offers exactly the photographed twenty shapes and commits each drag as one g
       const before = api.getSceneElements().length;
       pointer(surface(), "pointerdown", 300, 150);
       pointer(surface(), "pointermove", 540, 330);
+      await act(async () => {
+        await new Promise(requestAnimationFrame);
+      });
       expect(surface().querySelector("g")!.children.length).toBeGreaterThan(0);
       expect(api.getSceneElements()).toHaveLength(before);
       pointer(surface(), "pointerup", 540, 330);
@@ -108,7 +111,7 @@ it("offers exactly the photographed twenty shapes and commits each drag as one g
   }
 });
 
-it("keeps a shape tool ready for rapid taps and retains the last dragged aspect ratio", async () => {
+it("keeps a shape tool ready for rapid taps and retains the native cube size and outline", async () => {
   const { api, choose, surface, close } = await setup();
   try {
     choose("cube");
@@ -128,8 +131,8 @@ it("keeps a shape tool ready for rapid taps and retains the last dragged aspect 
           .getSceneElements()
           .filter((element) => element.customData?.fcWidget?.id === widget.id),
       );
-      expect(bounds[2] - bounds[0]).toBeCloseTo(300);
-      expect(bounds[3] - bounds[1]).toBeCloseTo(60);
+      expect(bounds[2] - bounds[0]).toBeCloseTo(450);
+      expect(bounds[3] - bounds[1]).toBeCloseTo(450);
     }
     expect(api.getAppState().activeTool.type).toBe("custom");
     Keyboard.undo();
@@ -190,7 +193,7 @@ it("keeps the drag position at zoom, cancels without objects, and copies a flat 
   }
 });
 
-it("uses the chosen fill and real hemisphere hidden edge, and retains cube unfolding metadata", async () => {
+it("uses the chosen fill and factory hidden edges, and retains cube unfolding metadata", async () => {
   const { api, view, choose, surface, close } = await setup();
   try {
     fireEvent.click(
@@ -227,13 +230,18 @@ it("uses the chosen fill and real hemisphere hidden edge, and retains cube unfol
     pointer(surface(), "pointerup", 600, 580);
     const cube = readWidgets(api).find((widget) => widget.kind === "cube")!;
     expect(cube.params.solid.unfold).toBe(0);
-    expect(cube.params.stretchX).not.toBe(cube.params.stretchY);
+    const cubeParts = api
+      .getSceneElements()
+      .filter((element) => element.customData?.fcWidget?.id === cube.id);
+    const [left, top, right, bottom] = getCommonBounds(cubeParts);
+    expect((right - left) / (bottom - top)).toBeCloseTo(1);
     expect(
       api
         .getSceneElements()
         .filter((element) => element.customData?.fcWidget?.id === cube.id)
-        .some((element) => element.customData?.fcSolidFace),
+        .some((element) => element.strokeStyle === "dashed"),
     ).toBe(true);
+    expect(cube.params.factory).toBe(true);
   } finally {
     close();
   }

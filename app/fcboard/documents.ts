@@ -479,6 +479,20 @@ export const scaleDocumentStroke = (
           params: {
             ...stroke.widget.params,
             size: stroke.widget.params.size * scale,
+            ...(stroke.widget.params.gizmo
+              ? {
+                  gizmo: {
+                    ...stroke.widget.params.gizmo,
+                    unit: stroke.widget.params.gizmo.unit * scale,
+                    ...(stroke.widget.params.gizmo.scaleUnit
+                      ? {
+                          scaleUnit:
+                            stroke.widget.params.gizmo.scaleUnit * scale,
+                        }
+                      : {}),
+                  },
+                }
+              : {}),
           },
         }
       : undefined,

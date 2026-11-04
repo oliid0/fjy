@@ -1,4 +1,6 @@
 import { Capacitor } from "@capacitor/core";
+import { getCommonBounds } from "@fcboard/element";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
@@ -215,10 +217,31 @@ it("places new document insertions in the actual scrolled viewport and sizes fou
         expect.objectContaining({
           kind,
           position:
-            kind === "fourline" ? { x: 400, y: 1060 } : { x: 260, y: 960 },
+            kind === "fourline"
+              ? { x: 400, y: 1060 }
+              : kind === "mindmap"
+              ? { x: expect.any(Number), y: expect.any(Number) }
+              : { x: 260, y: 960 },
           ...(kind === "fourline" ? { width: 100, height: 80 } : {}),
         }),
       );
+      if (kind === "mindmap") {
+        const object = insert.mock.calls.at(-1)![1];
+        const bounds = getCommonBounds(
+          convertToFcboardElements(
+            insertions.insertionShapes(object).map((shape) => ({
+              ...shape,
+              x: (shape.x || 0) + object.position.x,
+              y: (shape.y || 0) + object.position.y,
+            })),
+          ),
+        );
+        expect(bounds[0]).toBeGreaterThanOrEqual(200);
+        expect(bounds[1]).toBeGreaterThanOrEqual(900);
+        expect(bounds[2]).toBeLessThanOrEqual(700);
+        expect(bounds[3]).toBeLessThanOrEqual(1300);
+        expect(object.nodeSize!.width / object.nodeSize!.height).toBe(2);
+      }
     }
     await act(async () => {
       await classroomCommands.execute({

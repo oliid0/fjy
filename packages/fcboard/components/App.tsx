@@ -761,6 +761,7 @@ class App extends React.Component<AppProps, AppState> {
       phase: "start" | "update" | "cancel" | "settled",
     ]
   >();
+  onWhiteboardScaleEmitter = new Emitter<[value: number | null]>();
   onUserFollowEmitter = new Emitter<[payload: OnUserFollowedPayload]>();
   onScrollChangeEmitter = new Emitter<
     [scrollX: number, scrollY: number, zoom: AppState["zoom"]]
@@ -2375,6 +2376,10 @@ class App extends React.Component<AppProps, AppState> {
                             />
                           )}
                           <StaticCanvas
+                            synchronous={
+                              !!this.props.UIOptions.unifiedToolbar &&
+                              this.state.shouldCacheIgnoreZoom
+                            }
                             canvas={this.canvas}
                             rc={this.rc}
                             elementsMap={elementsMap}
@@ -2965,6 +2970,7 @@ class App extends React.Component<AppProps, AppState> {
   private onBlur = withBatchedUpdates(() => {
     isHoldingSpace = false;
     if (this.props.UIOptions.unifiedToolbar) {
+      this.updateFactoryGesture.flush();
       gesture.pointers.clear();
       this.rebaseGesture();
       this.resetContextMenuTimer();
@@ -3310,6 +3316,7 @@ class App extends React.Component<AppProps, AppState> {
     this.imageCache.clear();
     this.resizeObserver?.disconnect();
     this.unmounted = true;
+    this.updateFactoryGesture.cancel();
     if (this.props.UIOptions.unifiedToolbar) {
       gesture.pointers.clear();
       this.rebaseGesture();
@@ -3320,6 +3327,7 @@ class App extends React.Component<AppProps, AppState> {
     this.laserTrails.stop();
     this.eraserTrail.stop();
     this.onChangeEmitter.clear();
+    this.onWhiteboardScaleEmitter.clear();
     this.inkFrameEmitter.clear();
     this.onInkProgressEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
@@ -3796,6 +3804,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
       });
     } else {
+      this.updateFactoryGesture.flush();
       gesture.pointers.clear();
       this.rebaseGesture();
     }
@@ -4350,6 +4359,9 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   removePointer = (event: React.PointerEvent<HTMLElement> | PointerEvent) => {
+    if (this.props.UIOptions.unifiedToolbar) {
+      this.updateFactoryGesture.flush();
+    }
     if (touchTimeout) {
       this.resetContextMenuTimer();
     }
@@ -4382,12 +4394,109 @@ class App extends React.Component<AppProps, AppState> {
         }
       : null;
 
+  private factoryPanPointers = new Map<number, { x: number; y: number }>();
+  private factoryGestureView: Pick<
+    AppState,
+    "zoom" | "scrollX" | "scrollY"
+  > | null = null;
+  private factoryZoomAnchor: { x: number; y: number } | null = null;
+
+  /** HCanvas.doScaleWithTwo/More: translate only when the first two contacts
+   * move together; otherwise scale around the retained center. Read the latest
+   * pointer map once per frame, without replaying or rewriting scene objects.
+   */
+  private updateFactoryGesture = withBatchedUpdatesThrottled(() => {
+    if (this.unmounted || !this.props.UIOptions.unifiedToolbar) {
+      return;
+    }
+    const metrics = getFactoryGesture(gesture.pointers);
+    if (!metrics) {
+      return;
+    }
+    if (
+      !gesture.lastCenter ||
+      !gesture.initialDistance ||
+      !gesture.initialScale
+    ) {
+      this.rebaseGesture();
+      return;
+    }
+    const contacts = [...gesture.pointers.entries()].slice(0, 2);
+    const moves = contacts.map(([id, point]) => {
+      const before = this.factoryPanPointers.get(id) || point;
+      return { x: point.x - before.x, y: point.y - before.y };
+    });
+    const translate =
+      moves[0].x * moves[1].x > 0 || moves[0].y * moves[1].y > 0;
+    const previous = gesture.lastCenter;
+    const center = translate ? metrics.center : previous;
+    if (translate) {
+      this.factoryPanPointers = new Map(gesture.pointers);
+    }
+    const nextZoom = getNormalizedZoom(
+      Math.max(
+        0.5,
+        Math.min(
+          2,
+          (gesture.initialScale * metrics.distance) / gesture.initialDistance,
+        ),
+      ),
+    );
+    gesture.initialScale = nextZoom;
+    gesture.initialDistance = metrics.distance;
+    gesture.lastCenter = center;
+    this.factoryZoomAnchor = {
+      x: center.x - this.state.offsetLeft,
+      y: center.y - this.state.offsetTop,
+    };
+    this.onWhiteboardScaleEmitter.trigger(nextZoom);
+    const state = { ...this.state, ...this.factoryGestureView };
+    if (
+      nextZoom === state.zoom.value &&
+      center.x === previous.x &&
+      center.y === previous.y
+    ) {
+      return;
+    }
+    const view = getStateForPinch(previous, center, nextZoom, state);
+    this.factoryGestureView = view;
+    this.translateCanvas({ ...view, shouldCacheIgnoreZoom: true });
+    this.resetShouldCacheIgnoreZoomDebounced();
+  });
+
+  resetWhiteboardZoom = () => {
+    this.updateFactoryGesture.flush();
+    this.onWhiteboardScaleEmitter.trigger(null);
+    const anchor = this.factoryZoomAnchor || {
+      x: this.state.width / 2,
+      y: this.state.height / 2,
+    };
+    const state =
+      gesture.pointers.size > 1
+        ? { ...this.state, ...this.factoryGestureView }
+        : this.state;
+    const view = getStateForZoom(
+      {
+        viewportX: anchor.x + state.offsetLeft,
+        viewportY: anchor.y + state.offsetTop,
+        nextZoom: getNormalizedZoom(1),
+      },
+      state,
+    );
+    this.factoryGestureView = view;
+    this.translateCanvas({ ...view, shouldCacheIgnoreZoom: false });
+    this.rebaseGesture();
+  };
+
   /** Rebase membership changes; adding/lifting a finger must not change the view. */
   private rebaseGesture = () => {
     const metrics = this.gestureMetrics();
     gesture.lastCenter = metrics?.center ?? null;
     gesture.initialDistance = metrics?.distance ?? null;
-    gesture.initialScale = metrics ? this.state.zoom.value : null;
+    gesture.initialScale = metrics
+      ? this.factoryGestureView?.zoom.value || this.state.zoom.value
+      : null;
+    this.factoryPanPointers = new Map(gesture.pointers);
   };
 
   toggleLock = (source: "keyboard" | "ui" = "ui") => {
@@ -6807,6 +6916,16 @@ class App extends React.Component<AppProps, AppState> {
       );
       return;
     }
+    if (gesture.pointers.has(event.pointerId)) {
+      gesture.pointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (this.props.UIOptions.unifiedToolbar && gesture.pointers.size > 1) {
+        this.updateFactoryGesture();
+        return;
+      }
+    }
     this.savePointer(event.clientX, event.clientY, this.state.cursorButton);
     this.lastPointerMoveEvent = event.nativeEvent;
     const scenePointer = viewportCoordsToSceneCoords(event, this.state);
@@ -6815,13 +6934,6 @@ class App extends React.Component<AppProps, AppState> {
       x: scenePointerX,
       y: scenePointerY,
     };
-
-    if (gesture.pointers.has(event.pointerId)) {
-      gesture.pointers.set(event.pointerId, {
-        x: event.clientX,
-        y: event.clientY,
-      });
-    }
 
     const initialScale = gesture.initialScale;
     const metrics = this.gestureMetrics();
@@ -6832,7 +6944,6 @@ class App extends React.Component<AppProps, AppState> {
       gesture.initialDistance
     ) {
       const { center, distance } = metrics;
-      const previousCenter = gesture.lastCenter;
       const deltaX = center.x - gesture.lastCenter.x;
       const deltaY = center.y - gesture.lastCenter.y;
       gesture.lastCenter = center;
@@ -6844,40 +6955,18 @@ class App extends React.Component<AppProps, AppState> {
           ? 1
           : distance / gesture.initialDistance;
 
-      const factoryGesture = this.props.UIOptions.unifiedToolbar;
       const nextZoom = scaleFactor
-        ? getNormalizedZoom(
-            factoryGesture
-              ? Math.max(0.5, Math.min(2, initialScale * scaleFactor))
-              : initialScale * scaleFactor,
-          )
+        ? getNormalizedZoom(initialScale * scaleFactor)
         : this.state.zoom.value;
-      if (factoryGesture) {
-        // HCanvas.doScaleWithTwo/More use incremental distances, also at 50/200%.
-        // Reversing at a limit must respond immediately instead of crossing an old baseline.
-        gesture.initialScale = nextZoom;
-        gesture.initialDistance = distance;
-      }
-
       this.translateCanvas((state) => {
-        const zoomState = factoryGesture
-          ? getStateForPinch(previousCenter, center, nextZoom, state)
-          : getStateForZoom(
-              {
-                viewportX: center.x,
-                viewportY: center.y,
-                nextZoom,
-              },
-              state,
-            );
-
+        const zoomState = getStateForZoom(
+          { viewportX: center.x, viewportY: center.y, nextZoom },
+          state,
+        );
         return {
           zoom: zoomState.zoom,
-          // Keep the legacy editor behavior outside the factory whiteboard.
-          scrollX:
-            zoomState.scrollX + (factoryGesture ? 0 : 2 * (deltaX / nextZoom)),
-          scrollY:
-            zoomState.scrollY + (factoryGesture ? 0 : 2 * (deltaY / nextZoom)),
+          scrollX: zoomState.scrollX + 2 * (deltaX / nextZoom),
+          scrollY: zoomState.scrollY + 2 * (deltaY / nextZoom),
           shouldCacheIgnoreZoom: true,
         };
       });
@@ -8718,6 +8807,7 @@ class App extends React.Component<AppProps, AppState> {
     lastPointerUp?.();
     this.missingPointerEventCleanupEmitter.trigger(event).clear();
     if (!event && this.props.UIOptions.unifiedToolbar) {
+      this.updateFactoryGesture.flush();
       gesture.pointers.clear();
       this.rebaseGesture();
       this.resetContextMenuTimer();
@@ -8762,12 +8852,23 @@ class App extends React.Component<AppProps, AppState> {
         : /Linux/.test(window.navigator.platform);
 
     setCursor(this.interactiveCanvas, CURSOR_TYPE.GRABBING);
+    const factory = !!this.props.UIOptions.unifiedToolbar;
+    const start = {
+      x: event.clientX,
+      y: event.clientY,
+      scrollX: this.state.scrollX,
+      scrollY: this.state.scrollY,
+      zoom: this.state.zoom,
+    };
     let { clientX: lastX, clientY: lastY } = event;
-    const onPointerMove = withBatchedUpdatesThrottled((event: PointerEvent) => {
-      const deltaX = lastX - event.clientX;
-      const deltaY = lastY - event.clientY;
-      lastX = event.clientX;
-      lastY = event.clientY;
+    const onPointerMove = withBatchedUpdatesThrottled((next: PointerEvent) => {
+      if (factory && next.pointerId !== event.pointerId) {
+        return;
+      }
+      const deltaX = lastX - next.clientX;
+      const deltaY = lastY - next.clientY;
+      lastX = next.clientX;
+      lastY = next.clientY;
 
       /*
        * Prevent paste event if we move while middle clicking on Linux.
@@ -8803,13 +8904,30 @@ class App extends React.Component<AppProps, AppState> {
         window.addEventListener(EVENT.POINTER_UP, enableNextPaste);
       }
 
-      this.translateCanvas({
-        scrollX: this.state.scrollX - deltaX / this.state.zoom.value,
-        scrollY: this.state.scrollY - deltaY / this.state.zoom.value,
-      });
+      if (factory) {
+        const view = {
+          scrollX: start.scrollX + (next.clientX - start.x) / start.zoom.value,
+          scrollY: start.scrollY + (next.clientY - start.y) / start.zoom.value,
+          zoom: start.zoom,
+        };
+        this.factoryGestureView = view;
+        this.translateCanvas({ ...view, shouldCacheIgnoreZoom: true });
+        this.resetShouldCacheIgnoreZoomDebounced();
+      } else {
+        this.translateCanvas({
+          scrollX: this.state.scrollX - deltaX / this.state.zoom.value,
+          scrollY: this.state.scrollY - deltaY / this.state.zoom.value,
+        });
+      }
     });
     const teardown = withBatchedUpdates(
-      (lastPointerUp = () => {
+      (lastPointerUp = (lastEvent?: PointerEvent) => {
+        if (factory && lastEvent?.type === "pointerup") {
+          if (lastEvent.pointerId !== event.pointerId) {
+            return;
+          }
+          onPointerMove(lastEvent);
+        }
         lastPointerUp = null;
         isPanning = false;
         if (!isHoldingSpace) {
@@ -8847,6 +8965,12 @@ class App extends React.Component<AppProps, AppState> {
   private updateGestureOnPointerDown(
     event: React.PointerEvent<HTMLElement>,
   ): void {
+    if (this.props.UIOptions.unifiedToolbar) {
+      this.updateFactoryGesture.flush();
+      if (!gesture.pointers.size) {
+        this.factoryGestureView = null;
+      }
+    }
     gesture.pointers.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
@@ -8854,6 +8978,11 @@ class App extends React.Component<AppProps, AppState> {
 
     if (gesture.pointers.size === 2 || this.props.UIOptions.unifiedToolbar) {
       this.rebaseGesture();
+    }
+    if (this.props.UIOptions.unifiedToolbar && gesture.pointers.size > 1) {
+      this.onWhiteboardScaleEmitter.trigger(
+        this.factoryGestureView?.zoom.value || this.state.zoom.value,
+      );
     }
   }
 
@@ -10372,6 +10501,21 @@ class App extends React.Component<AppProps, AppState> {
                         params: {
                           ...data.fcWidget.params,
                           size: data.fcWidget.params.size * scale,
+                          ...(data.fcWidget.params.gizmo
+                            ? {
+                                gizmo: {
+                                  ...data.fcWidget.params.gizmo,
+                                  unit: data.fcWidget.params.gizmo.unit * scale,
+                                  ...(data.fcWidget.params.gizmo.scaleUnit
+                                    ? {
+                                        scaleUnit:
+                                          data.fcWidget.params.gizmo.scaleUnit *
+                                          scale,
+                                      }
+                                    : {}),
+                                },
+                              }
+                            : {}),
                         },
                       },
                     }

@@ -13,7 +13,7 @@ import { documentStrokeBounds } from "./documents";
 import { documentInkElement } from "./documentInk";
 import { handwritingElements, inkLineHeight } from "./handwriting";
 import { findVisibleContentPosition } from "./placement";
-import { layoutBoardText } from "./textLayout";
+import { answerFontSize, layoutBoardText } from "./textLayout";
 
 import type { InkStroke } from "./documents";
 import type { ContentRect } from "./placement";
@@ -165,12 +165,14 @@ export const lessonWritingContext = (
     bounds: bounds
       ? { left: bounds[0], top: bounds[1], right: bounds[2], bottom: bounds[3] }
       : undefined,
-    fontSize:
+    fontSize: answerFontSize(
       text?.type === "text"
         ? text.fontSize
         : ink
         ? inkLineHeight(source, 1 / scale) / 1.25
         : (document?.pen?.fontSize || state?.currentItemFontSize || 24) / scale,
+      scale,
+    ),
     color:
       source[0]?.strokeColor ||
       document?.pen?.color ||

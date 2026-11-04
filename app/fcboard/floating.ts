@@ -24,7 +24,17 @@ export const useAnchoredPanel = (
     const update = () => {
       const anchor = Array.from(
         document.querySelectorAll<HTMLElement>(selector),
-      ).find((el) => el.getBoundingClientRect().height);
+      ).find((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return (
+          rect.height > 0 &&
+          rect.width > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none" &&
+          !el.closest("[hidden], [aria-hidden='true']")
+        );
+      });
       const parent =
         getComputedStyle(panel).position === "fixed"
           ? {

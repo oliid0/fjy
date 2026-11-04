@@ -1,4 +1,4 @@
-import { registerPlugin } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
 
 import { timestamp } from "./recording";
@@ -14,6 +14,9 @@ const engine = registerPlugin<{
   }): Promise<{ id: string }>;
   append(options: { id: string; offset: number; data: string }): Promise<void>;
   complete(options: { id: string }): Promise<void>;
+  saveDownloads(options: {
+    id: string;
+  }): Promise<{ saved: boolean; uri: string }>;
   save(options: { id: string }): Promise<{ saved: boolean }>;
   share(options: { id: string }): Promise<{ urls: string[] }>;
   close(options: { id: string }): Promise<void>;
@@ -70,6 +73,7 @@ export const prepareRecordingPackage = async (
     signal.throwIfAborted();
     return {
       save: () => engine.save({ id }),
+      saveDownloads: () => engine.saveDownloads({ id }),
       share: () => engine.share({ id }),
       close: () => engine.close({ id }),
     };
@@ -116,4 +120,30 @@ export const saveRecordingFiles = async (recording: Recording) => {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   }
+};
+
+/** Stop always produces a real file; internal history is an additional copy. */
+export const autoSaveRecording = async (recording: Recording) => {
+  if (Capacitor.isNativePlatform()) {
+    const resource = await prepareRecordingPackage(
+      recording,
+      new AbortController().signal,
+    );
+    try {
+      return await resource.saveDownloads();
+    } finally {
+      await resource.close();
+    }
+  }
+  for (const file of recordingFiles(recording).filter((item) => item.size)) {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+  return { saved: true };
 };

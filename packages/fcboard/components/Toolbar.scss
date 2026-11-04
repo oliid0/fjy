@@ -61,3 +61,34 @@
     z-index: 1;
   }
 }
+
+.fc-whiteboard-scale {
+  position: absolute;
+  bottom: calc(70 * var(--fc-unit));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  width: calc(170 * var(--fc-unit));
+  height: calc(40 * var(--fc-unit));
+  border-radius: calc(2 * var(--fc-unit));
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+  output {
+    flex: 2;
+    display: grid;
+    place-items: center;
+    color: #00bfff;
+    font: 400 calc(18 * var(--fc-unit)) / 1.4 system-ui;
+  }
+  button {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: #778899;
+    font: 400 calc(15 * var(--fc-unit)) / 1.4 system-ui;
+    cursor: pointer;
+  }
+}

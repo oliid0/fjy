@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ToolbarExtras, convertToFcboardElements } from "@fcboard/fcboard";
-import { getCommonBounds } from "@fcboard/element";
+import { ToolbarExtras } from "@fcboard/fcboard";
 import { viewportCoordsToSceneCoords } from "@fcboard/common";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 
@@ -50,14 +49,16 @@ export const draggedFactoryShape = (
   start: ShapePoint,
   end: ShapePoint,
   style: FactoryShapeStyle,
+  id = crypto.randomUUID(),
 ): Widget => {
   const kind = factoryShapeCatalog[index][0];
   const params = widgetDefaults();
+  params.factory = true;
   params.solid.stroke = style.color;
   params.strokeWidth = style.width;
   params.opacity = style.opacity;
   const widget: Widget = {
-    id: crypto.randomUUID(),
+    id,
     kind: index < 12 ? "shape" : (kind as WidgetKind),
     params,
     position: { x: start[0], y: start[1] },
@@ -73,26 +74,22 @@ export const draggedFactoryShape = (
     };
     return widget;
   }
-  const bounds = getCommonBounds(
-    convertToFcboardElements(widgetShapes(widget)),
+  const width = Math.max(1, Math.abs(end[0] - start[0]));
+  const height = Math.max(1, Math.abs(end[1] - start[1]));
+  const side = Math.max(width, height);
+  // HShapeObject 11/12/13/14/15 use the larger drag side. Cylinder,
+  // frustum and prism keep the independent drag extents (cases 16/17/18).
+  const uniform = ["cube", "sphere", "pyramid", "cone", "hemisphere"].includes(
+    kind,
   );
-  params.stretchX = Math.max(
-    0.01,
-    Math.min(
-      100,
-      Math.abs(end[0] - start[0]) / Math.max(1, bounds[2] - bounds[0]),
-    ),
-  );
-  params.stretchY = Math.max(
-    0.01,
-    Math.min(
-      100,
-      Math.abs(end[1] - start[1]) / Math.max(1, bounds[3] - bounds[1]),
-    ),
-  );
+  const scale = side / (kind === "cube" ? 120 : 180);
+  params.stretchX = uniform ? scale : width / 180;
+  params.stretchY = uniform
+    ? scale
+    : height / (kind === "cylinder" ? 180 : 200);
   widget.position = {
-    x: Math.min(start[0], end[0]) - bounds[0] * params.stretchX,
-    y: Math.min(start[1], end[1]) - bounds[1] * params.stretchY,
+    x: Math.min(start[0], end[0]),
+    y: Math.min(start[1], end[1]) - (kind === "cube" ? side / 2 : 0),
   };
   return widget;
 };
@@ -106,6 +103,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
   const [error, setError] = useState("");
   const gesture = useRef<
     | {
+        id: string;
         pointer: number;
         index: number;
         start: ShapePoint;
@@ -125,8 +123,13 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
       }
     | undefined
   >(undefined);
+  const previewFrame = useRef<number | undefined>(undefined);
   const identity = () => shapeTarget(api);
   const cancel = () => {
+    if (previewFrame.current !== undefined) {
+      cancelAnimationFrame(previewFrame.current);
+      previewFrame.current = undefined;
+    }
     gesture.current = undefined;
     setPreview(null);
   };
@@ -315,6 +318,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
     window.addEventListener("resize", cancel);
     refresh();
     return () => {
+      cancel();
       stop();
       stopDocument();
       stopInvalidate();
@@ -362,14 +366,22 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
     event.preventDefault();
     event.stopPropagation();
     current.end = point(event);
-    setPreview(
-      draggedFactoryShape(
-        current.index,
-        current.start,
-        current.end,
-        current.style,
-      ),
-    );
+    if (previewFrame.current === undefined) {
+      previewFrame.current = requestAnimationFrame(() => {
+        previewFrame.current = undefined;
+        if (gesture.current === current) {
+          setPreview(
+            draggedFactoryShape(
+              current.index,
+              current.start,
+              current.end,
+              current.style,
+              current.id,
+            ),
+          );
+        }
+      });
+    }
   };
   const finish = (event: ReactPointerEvent) => {
     const current = gesture.current;
@@ -408,6 +420,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
           current.start,
           current.end,
           current.style,
+          current.id,
         ),
         true,
         { exact: true },
@@ -452,6 +465,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
             | undefined;
           const start = point(event);
           gesture.current = {
+            id: crypto.randomUUID(),
             pointer: event.pointerId,
             index: active,
             start,

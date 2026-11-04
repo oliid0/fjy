@@ -17,7 +17,6 @@ import {
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 import { finishFactoryInk } from "@fcboard/element/factoryInk";
 import factoryEraser from "@fcboard/fcboard/components/FactoryEraser.png?url";
-import { pointFrom } from "@fcboard/math";
 import {
   circleRegion,
   hasRegionArea,
@@ -59,6 +58,11 @@ import { renderInsertion } from "./insertObjects";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
 import { latestFunctionInk } from "./functionInk";
+import {
+  latestShapeInk,
+  recognizeAngleMark,
+  recognizedShapeSkeleton,
+} from "./shapeRecognition";
 
 import {
   documentKey,
@@ -79,7 +83,7 @@ import {
 
 import { rememberPage } from "./materials";
 import { currentSettings } from "./settings";
-import { layoutBoardText } from "./textLayout";
+import { answerFontSize, layoutBoardText } from "./textLayout";
 import { prepareQuestionWriting } from "./questionWriting";
 import { MaterialPanel } from "./MaterialPanel";
 import { documentStrokeGeometry } from "./documentInk";
@@ -113,7 +117,10 @@ import {
 } from "./canvasConfiguration";
 import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
 
-import { carryDocumentTableContents } from "./tableContents";
+import {
+  carryDocumentTableContents,
+  carryDocumentInsertionContents,
+} from "./tableContents";
 import { insertionLabelParts } from "./insertionLabels";
 
 import type { TableWritingTarget } from "./insertionWritingTables";
@@ -1285,7 +1292,13 @@ export const FilePreview = ({
             : pen.current.fontSize / scale);
         const layout = layoutBoardText(
           args.text,
-          measuredSize * (source && !source.text && !source.image ? 0.9 : 1),
+          answerFontSize(
+            measuredSize * (source && !source.text && !source.image ? 0.9 : 1),
+            scale,
+            existing
+              ? "replace"
+              : (args.placement as import("./textLayout").TextPlacement["mode"]),
+          ),
           fontFamily,
           viewport,
           strokes
@@ -1812,37 +1825,14 @@ export const FilePreview = ({
         const handwriting =
           table?.kind === "table"
             ? carryDocumentTableContents(inkRef.current[page] || [], table)
-            : (inkRef.current[page] || []).flatMap((stroke) => {
-                const owner = stroke.insertion;
-                if (
-                  !table ||
-                  !owner ||
-                  owner.id !== args.id ||
-                  owner.inkCell === undefined
-                ) {
-                  return [];
-                }
-                const dx = table.position.x - owner.position.x;
-                const dy = table.position.y - owner.position.y;
-                return [
-                  {
-                    ...stroke,
-                    points: stroke.points.map(([x, y]): [number, number] => [
-                      x + dx,
-                      y + dy,
-                    ]),
-                    insertion: {
-                      ...owner,
-                      ...table,
-                      inkCell: owner.inkCell,
-                      origin: {
-                        x: owner.origin.x + dx,
-                        y: owner.origin.y + dy,
-                      },
-                    },
-                  },
-                ];
-              });
+            : table
+            ? carryDocumentInsertionContents(
+                (inkRef.current[page] || []).filter(
+                  (stroke) => !remove.has(stroke.id),
+                ),
+                table,
+              )
+            : [];
         commitInk(
           {
             ...inkRef.current,
@@ -1922,7 +1912,16 @@ export const FilePreview = ({
           throw new Error(t("fcboard.invalid_teaching_tool_data"));
         }
         const strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
-          shapeInk(shape, "widget"),
+          shapeInk(
+            shape,
+            "widget",
+            shape.type === "image" &&
+              shape.fileId &&
+              args.images &&
+              typeof args.images === "object"
+              ? (args.images as Record<string, string>)[shape.fileId]
+              : undefined,
+          ),
         );
         const page = pageRef.current;
         const current = inkRef.current[page] || [];
@@ -2055,7 +2054,8 @@ export const FilePreview = ({
         stroke.lesson ||
         stroke.questionInput ||
         stroke.language ||
-        stroke.insertion?.inkCell !== undefined ||
+        (stroke.insertion?.kind === "table" &&
+          stroke.insertion.inkCell !== undefined) ||
         !stroke.fcInk ||
         recognized.current.has(stroke.id)
       ) {
@@ -2077,6 +2077,10 @@ export const FilePreview = ({
     );
     if (!target && assistMode === "function") {
       const included = latestFunctionInk(source.map((stroke) => stroke.points));
+      source = source.filter((_, index) => included.has(index));
+    }
+    if (!target && assistMode === "shape") {
+      const included = latestShapeInk(source.map((stroke) => stroke.points));
       source = source.filter((_, index) => included.has(index));
     }
     if (!source.length || !assistMode) {
@@ -2113,6 +2117,43 @@ export const FilePreview = ({
           const top = Math.min(...boxes.map((box) => box.top));
           const right = Math.max(...boxes.map((box) => box.right));
           const bottom = Math.max(...boxes.map((box) => box.bottom));
+          if (assistMode === "shape") {
+            const angle = recognizeAngleMark(
+              source.map((item) => item.points),
+              (inkRef.current[page] || [])
+                .filter(
+                  (item) =>
+                    item.lesson?.startsWith("recognized:") && !item.text,
+                )
+                .map((item) => ({ id: item.id, points: item.points })),
+            );
+            if (angle && current()) {
+              const parent = (inkRef.current[page] || []).find(
+                (item) => item.id === angle.target,
+              )!;
+              commitInk({
+                ...inkRef.current,
+                [page]: [
+                  ...(inkRef.current[page] || []).filter(
+                    (item) => !sourceIds.includes(item.id),
+                  ),
+                  ...angle.shapes.map((shape) =>
+                    shapeInk(
+                      {
+                        ...shape,
+                        id: crypto.randomUUID(),
+                        strokeColor: source[0].color,
+                        strokeWidth: source[0].width,
+                      },
+                      parent.lesson!,
+                    ),
+                  ),
+                ],
+              });
+              sourceIds.forEach((id) => recognized.current.add(id));
+              return;
+            }
+          }
           const result = await recognizeInkContent(
             assistMode,
             () => inkSnapshot(source, bottom - top + 32, undefined, top - 16),
@@ -2244,41 +2285,17 @@ export const FilePreview = ({
           } else if (result.kind === "magic") {
             await insertGeneratedImage(api, result.prompt, request.signal, {
               referenceImage: result.image,
-              transparent: true,
+              transparent: result.transparent,
               bounds: { left, top, right, bottom },
               replaceIds: sourceIds,
               sourceSignature: signature,
               sourcePage: page + 1,
             });
           } else {
-            const width = Math.max(1, right - left);
-            const height = Math.max(1, bottom - top);
-            const first = source[0].points[0];
-            const last = source.at(-1)!.points.at(-1)!;
-            const shape: FcboardElementSkeleton =
-              result.shape === "triangle"
-                ? {
-                    type: "line",
-                    x: left + width / 2,
-                    y: top,
-                    points: [
-                      pointFrom(0, 0),
-                      pointFrom(width / 2, height),
-                      pointFrom(-width / 2, height),
-                      pointFrom(0, 0),
-                    ],
-                  }
-                : result.shape === "line" || result.shape === "arrow"
-                ? {
-                    type: result.shape,
-                    x: first[0],
-                    y: first[1],
-                    points: [
-                      pointFrom(0, 0),
-                      pointFrom(last[0] - first[0], last[1] - first[1]),
-                    ],
-                  }
-                : { type: result.shape, x: left, y: top, width, height };
+            const shape = recognizedShapeSkeleton(
+              result,
+              source.map((stroke) => stroke.points),
+            );
             const stroke = shapeInk(
               {
                 ...shape,
@@ -2287,7 +2304,7 @@ export const FilePreview = ({
                 strokeColor: source[0].color,
                 opacity: source[0].opacity ?? 100,
               },
-              "recognized",
+              `recognized:${crypto.randomUUID()}`,
             );
             commitInk({
               ...inkRef.current,
@@ -2315,6 +2332,8 @@ export const FilePreview = ({
         ? 350
         : assistMode === "magic"
         ? 1600
+        : assistMode === "shape"
+        ? 450
         : 700,
     );
     return () => {
@@ -3012,10 +3031,34 @@ export const FilePreview = ({
                 }
                 selectionGesture.current = null;
               } else if (draftRef.current) {
-                const stroke = {
+                let stroke = {
                   ...draftRef.current,
                   fcInk: finishFactoryInk(draftRef.current.fcInk),
                 };
+                if (
+                  !stroke.insertion &&
+                  (!stroke.fcInk?.assist || stroke.fcInk.assist === "text")
+                ) {
+                  const target = insertionWritingAt(
+                    insertionWritingTargets(
+                      documentWritingParts(inkRef.current[page] || []),
+                    ),
+                    stroke.points[0],
+                  );
+                  if (target && target.insertion.kind !== "table") {
+                    stroke = {
+                      ...stroke,
+                      insertion: {
+                        ...target.insertion,
+                        inkCell: target.index,
+                        origin: {
+                          x: stroke.points[0][0],
+                          y: stroke.points[0][1],
+                        },
+                      },
+                    };
+                  }
+                }
                 const table = tableWriting.current;
                 const ids = new Set([stroke.id]);
                 const next = growDocumentTableWriting(

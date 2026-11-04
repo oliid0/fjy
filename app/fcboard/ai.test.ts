@@ -149,8 +149,6 @@ describe("AI configuration and transport", () => {
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(body).toMatchObject({
       model: "doubao-seed-evolving",
-      reasoning: { effort: "minimal" },
-      service_tier: "fast",
       stream: true,
       max_output_tokens: 256,
       input: [
@@ -164,6 +162,8 @@ describe("AI configuration and transport", () => {
       ],
     });
     expect(body.messages).toBeUndefined();
+    expect(body.service_tier).toBeUndefined();
+    expect(body.reasoning).toBeUndefined();
   });
 
   it("parses fenced JSON and refuses malformed responses", () => {
@@ -267,3 +267,20 @@ vi.mock("@capacitor/core", async (original) => ({
   ...(await original<typeof import("@capacitor/core")>()),
   CapacitorHttp: { post: vi.fn() },
 }));
+
+it("migrates the old native system default to WSS when a speech key was configured, preserving new explicit choices", () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  localStorage.setItem(
+    "fcboard-settings",
+    JSON.stringify({ speech: "system", speechKey: "speech-test" }),
+  );
+  expect(currentSettings().speech).toBe("cloud");
+  saveSettings(
+    { ...defaults, speech: "system", speechKey: "speech-test" },
+    false,
+  );
+  expect(currentSettings().speech).toBe("system");
+  vi.restoreAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+});

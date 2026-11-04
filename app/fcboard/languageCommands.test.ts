@@ -97,7 +97,7 @@ it("translates exact editable selection without OCR, preserves source and return
       type: "text",
       originalText: languageStudy.translation,
       strokeColor: source.strokeColor,
-      fontSize: 32,
+      fontSize: 16,
     });
     expect(inserted.y).toBeGreaterThan(source.y + source.height);
   } finally {
@@ -135,7 +135,7 @@ it("reads mixed handwriting and editable text once and offers read-only translat
   }
 });
 
-it("inserts a translated answer at 90 percent of the measured handwritten size", async () => {
+it("halves a translated answer's previous handwritten size to fit the visible board", async () => {
   const { api, recognize, stop } = setup();
   const ink = newFreeDrawElement({
     type: "freedraw",
@@ -156,7 +156,7 @@ it("inserts a translated answer at 90 percent of the measured handwritten size",
       .getSceneElements()
       .find((element) => result.ids.includes(element.id))!;
     expect(output.type === "text" && output.fontSize).toBeCloseTo(
-      inkLineHeight([ink], 1) * 0.9,
+      inkLineHeight([ink], 1) * 0.45,
     );
     expect(output.strokeColor).toBe(ink.strokeColor);
   } finally {

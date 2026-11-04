@@ -4652,3 +4652,25 @@
     }
   }
 }
+
+.fc-voice-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 112px;
+  transform: translateX(-50%);
+  z-index: 36;
+  display: grid;
+  gap: 4px;
+  width: min(400px, calc(100vw - 32px));
+  padding: 10px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #292929;
+  box-shadow: 0 3px 18px #0002;
+  pointer-events: none;
+  font-size: 15px;
+  small {
+    color: #596579;
+    font-size: 12px;
+  }
+}

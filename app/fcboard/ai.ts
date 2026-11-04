@@ -9,7 +9,7 @@ import type { FcboardElement } from "@fcboard/element/types";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { AIStream, postAI, readAIResult } from "./aiTransport";
-import { currentSettings, validateEndpoint } from "./settings";
+import { currentSettings, defaults, validateEndpoint } from "./settings";
 import { handwritingText } from "./handwriting";
 
 import type { Settings } from "./settings";
@@ -25,27 +25,6 @@ export type Message = {
   content: Content;
 };
 
-// A short, stable system prefix allows provider-side KV reuse without reusing
-// answers or mixing a previous selection into the current request.
-const cacheRoutes = new Map<string, string>();
-const cacheRoute = (url: string, settings: Settings, messages: Message[]) => {
-  const scope = JSON.stringify([
-    url,
-    settings.apiKey,
-    settings.model,
-    messages.filter((message) => message.role === "system"),
-  ]);
-  let id = cacheRoutes.get(scope);
-  if (!id) {
-    id = crypto.randomUUID();
-    if (cacheRoutes.size >= 16) {
-      cacheRoutes.delete(cacheRoutes.keys().next().value!);
-    }
-    cacheRoutes.set(scope, id);
-  }
-  return id;
-};
-
 export const chat = async (
   messages: Message[],
   signal?: AbortSignal,
@@ -53,10 +32,20 @@ export const chat = async (
   options: {
     maxTokens?: number;
     onDelta?: (text: string) => void;
+    onReset?: () => void;
     timeoutMs?: number;
+    webSearch?: boolean;
   } = {},
 ): Promise<string> => {
-  if (!settings.apiKey || !settings.model.trim()) {
+  const visual = messages.some(
+    (message) =>
+      Array.isArray(message.content) &&
+      message.content.some((part) => part.type === "image_url"),
+  );
+  const model = (
+    visual ? settings.ocrModel.trim() || settings.model : settings.model
+  ).trim();
+  if (!settings.apiKey || !model) {
     throw new Error(
       t(
         "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
@@ -69,8 +58,11 @@ export const chat = async (
   const streaming =
     !Capacitor.isNativePlatform() ||
     Capacitor.isPluginAvailable("FcboardClassroom");
+  // Only the shipped text model opts into fast. Vision and custom models use
+  // the provider's ordinary schema, without model-specific tuning parameters.
+  const fast = ark && !visual && model === defaults.model && streaming;
   const body = {
-    model: settings.model.trim(),
+    model,
     ...(responses
       ? {
           input: messages.map((message) => ({
@@ -87,18 +79,13 @@ export const chat = async (
         }
       : { messages }),
     stream: streaming,
-    temperature: 0.2,
+    ...(options.webSearch
+      ? responses
+        ? { tools: [{ type: "web_search" }] }
+        : { web_search_options: {} }
+      : {}),
     ...(options.maxTokens
       ? { [responses ? "max_output_tokens" : "max_tokens"]: options.maxTokens }
-      : {}),
-    ...(ark
-      ? {
-          ...(responses
-            ? { reasoning: { effort: "minimal" } }
-            : { thinking: { type: "disabled" } }),
-          service_tier: "fast",
-          prompt_cache_key: cacheRoute(url, settings, messages),
-        }
       : {}),
   };
   const controller = new AbortController();
@@ -107,6 +94,7 @@ export const chat = async (
   if (signal?.aborted) {
     cancel();
   }
+  const timeoutMs = Math.max(1000, Math.min(90000, options.timeoutMs || 90000));
   const timer = setTimeout(
     () =>
       controller.abort(
@@ -116,7 +104,7 @@ export const chat = async (
           ),
         ),
       ),
-    Math.max(1000, Math.min(90000, options.timeoutMs || 90000)),
+    timeoutMs,
   );
   let unsubscribe = () => {};
   try {
@@ -126,39 +114,83 @@ export const chat = async (
       controller.signal.addEventListener("abort", abort, { once: true });
       unsubscribe = () => controller.signal.removeEventListener("abort", abort);
     });
-    const request = async () => {
+    const request = async (accelerated: boolean): Promise<string> => {
+      const attempt = new AbortController();
+      const abortAttempt = () => attempt.abort(controller.signal.reason);
+      controller.signal.addEventListener("abort", abortAttempt, { once: true });
+      // Leave time for ordinary inference if fast stalls instead of consuming
+      // the whole request deadline. Only cancellable transports opt into fast.
+      let fastTimer: ReturnType<typeof setTimeout> | undefined;
+      const renewFastDeadline = () => {
+        clearTimeout(fastTimer);
+        if (accelerated) {
+          fastTimer = setTimeout(
+            () => attempt.abort(new Error("Fast request timed out")),
+            Math.min(30000, timeoutMs / 2),
+          );
+        }
+      };
+      renewFastDeadline();
+      // Callers with no reset hook receive a fast preview only after completion.
+      // This lets a failed partial fast stream be discarded without duplicate text.
+      const deferPreview = accelerated && !!options.onDelta && !options.onReset;
       const output = new AIStream(responses, (delta) => {
-        if (!controller.signal.aborted) {
+        if (
+          !controller.signal.aborted &&
+          !attempt.signal.aborted &&
+          !deferPreview
+        ) {
           options.onDelta?.(delta);
         }
       });
-      const response = await postAI(
-        url,
-        settings.apiKey,
-        body,
-        controller.signal,
-        (chunk) => output.push(chunk),
-      );
-      controller.signal.throwIfAborted();
-      if (response.status < 200 || response.status >= 300) {
-        let detail = t("fcboard.check_the_endpoint_model_and_api_key");
-        try {
-          detail = JSON.parse(response.data).error?.message || detail;
-        } catch {
-          /* Non-JSON gateway. */
-        }
-        throw new Error(
-          t("fcboard.ai_request_failed_status_detail", {
-            status: response.status,
-            detail,
-          }),
+      try {
+        const response = await postAI(
+          url,
+          settings.apiKey,
+          accelerated ? { ...body, service_tier: "fast" } : body,
+          attempt.signal,
+          (chunk) => {
+            renewFastDeadline();
+            output.push(chunk);
+          },
         );
+        controller.signal.throwIfAborted();
+        attempt.signal.throwIfAborted();
+        if (response.status < 200 || response.status >= 300) {
+          let detail = t("fcboard.check_the_endpoint_model_and_api_key");
+          try {
+            detail = JSON.parse(response.data).error?.message || detail;
+          } catch {
+            /* Non-JSON gateway. */
+          }
+          throw new Error(
+            t("fcboard.ai_request_failed_status_detail", {
+              status: response.status,
+              detail,
+            }),
+          );
+        }
+        const result = response.stream
+          ? output.finish()
+          : readAIResult(response.data, responses);
+        if (deferPreview) {
+          options.onDelta?.(result);
+        }
+        return result;
+      } catch (failure) {
+        controller.signal.throwIfAborted();
+        // Retry once with the same endpoint/model/input and ordinary parameters.
+        if (accelerated) {
+          options.onReset?.();
+          return request(false);
+        }
+        throw failure;
+      } finally {
+        clearTimeout(fastTimer);
+        controller.signal.removeEventListener("abort", abortAttempt);
       }
-      return response.stream
-        ? output.finish()
-        : readAIResult(response.data, responses);
     };
-    return await Promise.race([request(), cancelled]);
+    return await Promise.race([request(fast), cancelled]);
   } finally {
     clearTimeout(timer);
     unsubscribe();

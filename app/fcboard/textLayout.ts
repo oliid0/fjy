@@ -14,6 +14,17 @@ export type TextPlacement = {
   sourceLines?: number;
 };
 
+/** AI answers use half the source size and a screen-space cap. Local arithmetic,
+ * replacements and explicit object edits retain their notation's dimensions. */
+export const answerFontSize = (
+  size: number,
+  scale: number,
+  mode?: TextPlacement["mode"],
+) =>
+  mode === "inline" || mode === "column" || mode === "replace"
+    ? size
+    : Math.min(size * 0.5, 28 / scale);
+
 /** Reflow at the source's size first; shrink only when the visible area requires it.
  * Measurement and wrapping use the editor's font metrics, also used by SVG export.
  */

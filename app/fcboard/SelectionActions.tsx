@@ -518,6 +518,12 @@ export const SelectionActions = ({
           settings,
           {
             maxTokens: 1536,
+            onReset: () => {
+              preview = "";
+              if (!signal.aborted) {
+                setMessage("");
+              }
+            },
             onDelta: (delta) => {
               preview += delta;
               if (!signal.aborted) {
@@ -747,6 +753,12 @@ export const SelectionActions = ({
           },
           {
             maxTokens: 1536,
+            onReset: () => {
+              preview = "";
+              if (!signal.aborted) {
+                setMessage("");
+              }
+            },
             onDelta: (delta) => {
               preview += delta;
               if (!signal.aborted) {

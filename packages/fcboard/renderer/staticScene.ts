@@ -520,5 +520,8 @@ export const renderStaticScene = (
     return;
   }
 
+  // Switching from queued painting to an already frame-coalesced gesture must
+  // not let the old viewport repaint over the current one on the next frame.
+  renderStaticSceneThrottled.cancel();
   _renderStaticScene(renderConfig);
 };

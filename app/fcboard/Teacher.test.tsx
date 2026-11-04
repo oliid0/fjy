@@ -199,3 +199,90 @@ it("continues teacher preparation across its planned transition, while a manual 
     stop();
   }
 });
+
+it("lets the voice agent generate a real quiz, inspect its answers, and reopen the same iframe", async () => {
+  const { chat, view } = setup();
+  saveSettings({ ...defaults, apiKey: "test" }, false);
+  const quiz = {
+    title: "真实测验",
+    questions: [
+      {
+        type: "single",
+        question: "1+1等于？",
+        options: ["1", "2"],
+        answer: ["B"],
+        explanation: "两个1合为2",
+      },
+    ],
+    sources: [{ title: "教材", url: "https://www.moe.gov.cn/" }],
+  };
+  chat
+    .mockResolvedValueOnce("实际检索：https://www.moe.gov.cn/")
+    .mockResolvedValueOnce(JSON.stringify(quiz));
+  try {
+    await expect(
+      classroomCommands.execute({ name: "quiz.open" }),
+    ).rejects.toThrow();
+    let result: unknown;
+    await act(async () => {
+      result = await classroomCommands.execute({
+        name: "quiz.generate",
+        args: { prompt: "出1道数学单选题" },
+      });
+    });
+    expect(result).toEqual({ title: quiz.title, count: 1 });
+    expect(chat.mock.calls[0][3]).toMatchObject({ webSearch: true });
+    expect(
+      await classroomCommands.execute({
+        name: "quiz.inspect",
+        args: { index: 0 },
+      }),
+    ).toEqual(quiz.questions[0]);
+    const frame = view.getByTitle(quiz.title);
+    await act(async () => {
+      await classroomCommands.execute({ name: "quiz.open" });
+    });
+    expect(view.getByTitle(quiz.title)).toBe(frame);
+    expect(frame).toHaveAttribute("sandbox", "allow-scripts");
+    await expect(
+      classroomCommands.execute({ name: "quiz.inspect", args: { index: 1 } }),
+    ).rejects.toThrow();
+    expect(classroomCommands.read("quiz")).toMatchObject({
+      open: true,
+      generating: false,
+      count: 1,
+    });
+  } finally {
+    view.unmount();
+  }
+});
+
+it("cancels pending quiz generation on manual navigation and never publishes the stale result", async () => {
+  const { chat, view } = setup();
+  let finish!: (value: string) => void;
+  chat.mockImplementationOnce(
+    () =>
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  let pending!: Promise<unknown>;
+  act(() => {
+    pending = classroomCommands
+      .execute({ name: "quiz.generate", args: { prompt: "出1道题" } })
+      .catch((failure) => failure);
+  });
+  await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
+  const signal = chat.mock.calls[0][1]!;
+  act(() => classroomCommands.invalidate());
+  expect(signal.aborted).toBe(true);
+  await act(async () => {
+    finish("检索已取消");
+    await pending;
+  });
+  expect(view.queryByTitle("真实测验")).toBeNull();
+  await expect(
+    classroomCommands.execute({ name: "quiz.open" }),
+  ).rejects.toThrow();
+  view.unmount();
+});

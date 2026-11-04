@@ -9,6 +9,9 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
 import { InkQuestion } from "./InkQuestion";
+import { QuizPanel } from "./QuizPanel";
+import { selectionMathIntent, selectionRequest } from "./intent";
+import { generateQuiz } from "./quiz";
 
 import { useAnchoredPanel } from "./floating";
 
@@ -20,13 +23,15 @@ import {
   visualMessage,
 } from "./ai";
 import { agentContext, runBoardCommands } from "./agent";
-import { classroomCommands } from "./commands";
+import { classroomCommands, directCommand } from "./commands";
 import { LESSON_FORMAT, LESSON_TOOLS_FORMAT, validateLesson } from "./lesson";
 import { searchMaterials } from "./materials";
 import { lessonSessions, saveLessonSession, TeachingEngine } from "./teaching";
 import { questionPosition } from "./questionInk";
 import { observeLesson } from "./lessonObserver";
 import { currentSettings } from "./settings";
+
+import type { Quiz } from "./quiz";
 
 import type { Lens, TeachingSession } from "./teaching";
 import type { Message } from "./ai";
@@ -120,6 +125,7 @@ export const Teacher = ({
   const [state, setState] = useState(controller.state);
   const [asking, setAsking] = useState(false);
   const [questionWhole, setQuestionWhole] = useState(false);
+
   const [questionId, setQuestionId] = useState(0);
   const [questionPlacement, setQuestionPlacement] =
     useState<ReturnType<typeof questionPosition>>();
@@ -127,6 +133,77 @@ export const Teacher = ({
   const request = useRef<AbortController | null>(null);
   const session = useRef<string>("");
   const active = state.mode !== "idle";
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const quizValue = useRef<Quiz | null>(null);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [quizBusy, setQuizBusy] = useState(false);
+  const [quizError, setQuizError] = useState("");
+  const quizRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => quizRequest.current?.abort(), []);
+  const createQuiz = async (
+    text: string,
+    signal: AbortSignal,
+    sourceIds?: string[],
+    forceQuiz = false,
+  ) => {
+    const quizRequirement =
+      /(?:出|生成|设计|编写|创建|给我).*(?:题|卷)|\b(?:quiz|questions|exam|test)\b/i.test(
+        text,
+      );
+    // Preserve the existing deterministic math and explicit tool/lesson routes.
+    // Ordinary prompts in this entry generate quiz cards instead of board answers.
+    if (
+      !forceQuiz &&
+      !quizRequirement &&
+      (selectionMathIntent(text) ||
+        directCommand(text) ||
+        selectionRequest(text))
+    ) {
+      return onCommand(text, signal, sourceIds, questionWhole);
+    }
+    quizRequest.current?.abort();
+    const request = new AbortController();
+    quizRequest.current = request;
+    const releaseOwner = classroomCommands.registerOwner(
+      request.signal,
+      signal,
+    );
+    const cancel = () => request.abort(signal.reason);
+    signal.addEventListener("abort", cancel, { once: true });
+    if (signal.aborted) {
+      cancel();
+    }
+    quizValue.current = null;
+    setQuiz(null);
+    setQuizError("");
+    setQuizBusy(true);
+    setQuizOpen(true);
+    try {
+      const document = classroomCommands.read("document") as
+        | { text?: string }
+        | undefined;
+      const context = document
+        ? document.text || ""
+        : (await boardContext(api, questionWhole)).text;
+      request.signal.throwIfAborted();
+      const result = await generateQuiz(text, request.signal, context);
+      request.signal.throwIfAborted();
+      quizValue.current = result;
+      setQuiz(result);
+    } catch (failure) {
+      if (!request.signal.aborted) {
+        setQuizError((failure as Error).message);
+      }
+      throw failure;
+    } finally {
+      releaseOwner();
+      signal.removeEventListener("abort", cancel);
+      if (quizRequest.current === request) {
+        quizRequest.current = null;
+        setQuizBusy(false);
+      }
+    }
+  };
   const surface = useRef<HTMLElement>(null);
   const floatingStyle = useAnchoredPanel(
     surface,
@@ -194,12 +271,15 @@ export const Teacher = ({
       !!source &&
       !source.aborted &&
       (classroomCommands.isOwnedBy(source, request.current?.signal) ||
+        classroomCommands.isOwnedBy(source, quizRequest.current?.signal) ||
         controller.ownsSignal(source));
     const invalidate = classroomCommands.onInvalidate((source) => {
       if (owned(source) && classroomCommands.isExpectedTransition(source)) {
         return;
       }
       request.current?.abort();
+      quizRequest.current?.abort();
+      setQuizOpen(false);
       controller.cancel();
       setAsking(false);
     });
@@ -474,6 +554,72 @@ export const Teacher = ({
         setAsking(false),
       ),
       classroomCommands.register(
+        "quiz.generate",
+        "根据args.prompt联网核实资料并生成可作答卡片测验，支持任意学科与题型，例：出10道高一数学选择题。完成后返回真实标题/题数。无需打开手写输入框；该命令会等待生成完成。",
+        async (args) => {
+          if (typeof args.prompt !== "string" || !args.prompt.trim()) {
+            throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
+          }
+          const signal =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : new AbortController().signal;
+          await createQuiz(args.prompt, signal, undefined, true);
+          signal.throwIfAborted();
+          return {
+            title: quizValue.current!.title,
+            count: quizValue.current!.questions.length,
+          };
+        },
+      ),
+      classroomCommands.register(
+        "quiz.inspect",
+        "读取最近生成测验的真实标题/题数；传args.index（从0开始）读取该题题干、选项、答案与解析，用于继续讲解，不编造题目。",
+        (args) => {
+          const value = quizValue.current;
+          if (!value) {
+            throw new Error(t("fcboard.generate_a_quiz_first"));
+          }
+          if (args.index === undefined) {
+            return {
+              title: value.title,
+              count: value.questions.length,
+              sources: value.sources,
+            };
+          }
+          if (
+            typeof args.index !== "number" ||
+            !Number.isInteger(args.index) ||
+            args.index < 0 ||
+            args.index >= value.questions.length
+          ) {
+            throw new Error(t("fcboard.invalid_quiz_count"));
+          }
+          return value.questions[args.index];
+        },
+      ),
+      classroomCommands.register(
+        "quiz.open",
+        "重新显示最近生成的答题卡，保留已有作答和卡片位置。",
+        () => {
+          if (!quizValue.current) {
+            throw new Error(t("fcboard.generate_a_quiz_first"));
+          }
+          setQuizOpen(true);
+          return {
+            title: quizValue.current.title,
+            count: quizValue.current.questions.length,
+          };
+        },
+      ),
+      classroomCommands.context("quiz", () => ({
+        open: quizOpen,
+        generating: quizBusy,
+        title: quiz?.title,
+        count: quiz?.questions.length,
+        error: quizError || undefined,
+      })),
+      classroomCommands.register(
         "lesson.configure",
         "设置教学方式与速度，args.lens=standard|audio|captions|reading|focus，args.speed=0.5..2",
         (args) => {
@@ -653,10 +799,28 @@ export const Teacher = ({
           key={questionId}
           api={api}
           placement={questionPlacement}
-          onSubmit={(text, signal, sourceIds) =>
-            onCommand(text, signal, sourceIds, questionWhole)
-          }
+          onSubmit={createQuiz}
+          hasResult={!!quiz}
+          onClearResult={() => {
+            quizRequest.current?.abort();
+            quizValue.current = null;
+            setQuiz(null);
+            setQuizOpen(false);
+          }}
+          onToggleResult={() => setQuizOpen((open) => !open)}
           onClose={() => setAsking(false)}
+        />
+      )}
+      {(quizOpen || quiz) && (
+        <QuizPanel
+          open={quizOpen}
+          quiz={quiz}
+          busy={quizBusy}
+          error={quizError}
+          onClose={() => {
+            quizRequest.current?.abort();
+            setQuizOpen(false);
+          }}
         />
       )}
       {(active || error) && (

@@ -158,6 +158,44 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       kind,
       document ? { x: 60, y: 60 } : insertionPoint(api),
     );
+    if (kind === "mindmap") {
+      const state = api.getAppState();
+      const scale = document
+        ? (
+            classroomCommands.read("document.layout") as
+              | { scale?: number }
+              | undefined
+          )?.scale || 1
+        : state.zoom.value;
+      let unit = 1 / ((window.devicePixelRatio || 1) * scale);
+      const area = visible || {
+        left: -state.scrollX,
+        top: -state.scrollY,
+        right: -state.scrollX + (state.width || 1280) / state.zoom.value,
+        bottom:
+          -state.scrollY + ((state.height || 720) - 100) / state.zoom.value,
+      };
+      // Original root (200,600), children (600,400/600/800) in physical pixels.
+      // Fit only if the native-size map cannot fit this visible surface.
+      unit *= Math.min(
+        1,
+        (area.right - area.left - 32 / scale) / (700 * unit),
+        (area.bottom - area.top - 32 / scale) / (550 * unit),
+      );
+      unit = Math.max(0.001, unit);
+      base.nodeSize = { width: 300 * unit, height: 150 * unit };
+      const margin = 16 / scale;
+      base.position = {
+        x: Math.max(
+          area.left + margin,
+          Math.min(area.left + 200 * unit, area.right - 700 * unit - margin),
+        ),
+        y: Math.max(
+          area.top + margin,
+          Math.min(area.top + 400 * unit, area.bottom - 550 * unit - margin),
+        ),
+      };
+    }
     base.color =
       kind === "fourline"
         ? "#0ed49f"
@@ -198,7 +236,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
         };
       }
     }
-    if (visible) {
+    if (visible && kind !== "mindmap") {
       base.position = {
         x:
           visible.left +

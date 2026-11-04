@@ -663,7 +663,8 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
     name: "document.select",
     args: { ids: [] },
   });
-  expect(currentInk().some((stroke) => stroke.fcInk)).toBe(false);
+  const firstInk = currentInk().find((stroke) => stroke.fcInk)!;
+  expect(firstInk.insertion?.inkCell).toBe(1);
   const move = (target: Element | Window, type: string, x: number, y: number) =>
     fireEvent(
       target,
@@ -694,6 +695,9 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
     x: selected.x + 70,
     y: selected.y + 40,
   });
+  expect(
+    currentInk().find((stroke) => stroke.id === firstInk.id)?.points[0],
+  ).toEqual([firstInk.points[0][0] + 70, firstInk.points[0][1] + 40]);
   await act(async () => {
     await classroomCommands.execute({ name: "document.undo" });
   });
@@ -1878,4 +1882,55 @@ it("clears a courseware selection immediately when a new outside gesture starts 
   expect(context().selection).toEqual([]);
   pointer("pointerup", 601, 401);
   expect(context().region).toEqual([]);
+});
+
+it("keeps original protractor bitmaps as two editable courseware image objects through scaling and undo", async () => {
+  const { api } = await setup();
+  await act(async () => {
+    renderWidget(api, {
+      id: "native-protractor",
+      kind: "protractor",
+      params: {
+        ...widgetDefaults(),
+        size: 0.7,
+        gizmo: { unit: 1, scaleUnit: 1, needle: 600, ball: 80 },
+      },
+      position: { x: 200, y: 120 },
+    });
+  });
+  const original = currentInk();
+  expect(original).toHaveLength(4);
+  const images = original.filter((stroke) => stroke.image);
+  expect(images).toHaveLength(2);
+  expect(
+    images.every((stroke) =>
+      stroke.image!.startsWith("data:image/png;base64,"),
+    ),
+  ).toBe(true);
+  const changed = documentTools.scaleDocumentStroke(
+    images[0],
+    { x: 0, y: 0 },
+    2,
+  );
+  expect(changed.image).toBe(images[0].image);
+  expect(changed.imageWidth).toBeCloseTo(images[0].imageWidth! * 2);
+  expect(changed.widget!.params.size).toBeCloseTo(1.4);
+  expect(changed.widget!.params.gizmo).toMatchObject({
+    unit: 2,
+    scaleUnit: 2,
+    needle: 600,
+    ball: 80,
+  });
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(currentInk()).toHaveLength(0);
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.redo" });
+  });
+  expect(
+    currentInk()
+      .filter((stroke) => stroke.image)
+      .map((stroke) => stroke.image),
+  ).toEqual(images.map((stroke) => stroke.image));
 });

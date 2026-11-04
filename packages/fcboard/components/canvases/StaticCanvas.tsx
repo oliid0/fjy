@@ -20,6 +20,8 @@ import type { RoughCanvas } from "roughjs/bin/canvas";
 
 type StaticCanvasProps = {
   canvas: HTMLCanvasElement;
+  /** The upstream whiteboard gesture already coalesces to animation frames. */
+  synchronous?: boolean;
   rc: RoughCanvas;
   elementsMap: RenderableElementsMap;
   allElementsMap: NonDeletedSceneElementsMap;
@@ -69,7 +71,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
           appState: props.appState,
           renderConfig: props.renderConfig,
         },
-        isRenderThrottlingEnabled(),
+        !props.synchronous && isRenderThrottlingEnabled(),
       );
     paint();
     let cancelled = false;
@@ -128,6 +130,7 @@ const areEqual = (
   nextProps: StaticCanvasProps,
 ) => {
   if (
+    prevProps.synchronous !== nextProps.synchronous ||
     prevProps.sceneNonce !== nextProps.sceneNonce ||
     prevProps.scale !== nextProps.scale ||
     // we need to memoize on elementsMap because they may have renewed

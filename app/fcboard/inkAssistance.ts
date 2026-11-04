@@ -3,8 +3,11 @@ import {
   CaptureUpdateAction,
   convertToFcboardElements,
 } from "@fcboard/fcboard";
-import { getCommonBounds } from "@fcboard/element";
-import { pointFrom } from "@fcboard/math";
+import {
+  getCommonBounds,
+  LinearElementEditor,
+  newElementWith,
+} from "@fcboard/element";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
@@ -14,7 +17,6 @@ import { insertGeneratedImage } from "./imageGeneration";
 
 import { boardContext } from "./ai";
 import { classroomCommands } from "./commands";
-import { currentSettings } from "./settings";
 import { selectionSignature } from "./selection";
 import { boardInk } from "./digitalInk";
 import { insertText } from "./board";
@@ -23,6 +25,11 @@ import { LiveTableWriting } from "./liveTableWriting";
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { renderInsertion } from "./insertObjects";
 import { latestFunctionInk } from "./functionInk";
+import {
+  latestShapeInk,
+  recognizeAngleMark,
+  recognizedShapeSkeleton,
+} from "./shapeRecognition";
 import {
   boardWritingParts,
   insertionWritingTargets,
@@ -48,6 +55,10 @@ export const observeInkAssistance = (
   let timer: ReturnType<typeof setTimeout>;
   let controller: AbortController | undefined;
   let previous = "";
+  let observedScene:
+    | readonly import("@fcboard/element/types").FcboardElement[]
+    | undefined;
+  let observedButton: string | undefined;
   const configuration = () => {
     const state = api.getAppState();
     return JSON.stringify([
@@ -63,6 +74,16 @@ export const observeInkAssistance = (
   const refresh = () => {
     const state = api.getAppState();
     const nextConfiguration = configuration();
+    const currentScene = api.getSceneElements();
+    if (
+      currentScene === observedScene &&
+      state.cursorButton === observedButton &&
+      penConfiguration === nextConfiguration
+    ) {
+      return;
+    }
+    observedScene = currentScene;
+    observedButton = state.cursorButton;
     if (
       penConfiguration !== nextConfiguration ||
       classroomCommands.has("document.draw") ||
@@ -146,6 +167,10 @@ export const observeInkAssistance = (
       const included = latestFunctionInk(boardInk(source));
       source = source.filter((_, index) => included.has(index));
     }
+    if (!target && mode === "shape") {
+      const included = latestShapeInk(boardInk(source));
+      source = source.filter((_, index) => included.has(index));
+    }
     const signature = selectionSignature(source);
     const requestKey = `${signature}:${target?.stamp || ""}`;
     if (!mode || !signature || failed.has(requestKey)) {
@@ -166,13 +191,6 @@ export const observeInkAssistance = (
     const since = Date.now();
     timer = setTimeout(
       () => {
-        if (
-          mode === "shape" &&
-          (!currentSettings().apiKey || !currentSettings().model.trim())
-        ) {
-          failed.add(requestKey);
-          return;
-        }
         const current = () =>
           !request.signal.aborted &&
           !classroomCommands.has("document.draw") &&
@@ -191,6 +209,56 @@ export const observeInkAssistance = (
           ) === signature;
         onBusy(true);
         void (async () => {
+          if (mode === "shape") {
+            const scene = api.getSceneElements();
+            const angle = recognizeAngleMark(
+              boardInk(source),
+              scene.flatMap((element) =>
+                element.type === "line" &&
+                element.customData?.fcRecognizedSource
+                  ? [
+                      {
+                        id: element.id,
+                        points: LinearElementEditor.getPointsGlobalCoordinates(
+                          element,
+                          new Map(scene.map((item) => [item.id, item])),
+                        ).map(([x, y]): [number, number] => [x, y]),
+                      },
+                    ]
+                  : [],
+              ),
+            );
+            if (angle && current()) {
+              const ids = new Set(source.map((item) => item.id));
+              const parent = scene.find((item) => item.id === angle.target)!;
+              const group = parent.groupIds.at(-1) || parent.id;
+              api.updateScene({
+                elements: [
+                  ...scene
+                    .filter((item) => !ids.has(item.id))
+                    .map((item) =>
+                      item.id === parent.id
+                        ? newElementWith(item, {
+                            groupIds: [...new Set([...item.groupIds, group])],
+                          })
+                        : item,
+                    ),
+                  ...convertToFcboardElements(
+                    angle.shapes.map((shape) => ({
+                      ...shape,
+                      strokeColor: source[0].strokeColor,
+                      strokeWidth: source[0].strokeWidth,
+                      groupIds: [group],
+                      customData: { fcAngleTarget: parent.id },
+                    })),
+                  ),
+                ],
+                captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+              });
+              source.forEach((item) => seen.add(item.id));
+              return;
+            }
+          }
           const result = await recognizeInkContent(
             mode,
             async () => (await boardContext(api, false, source)).image || "",
@@ -293,7 +361,7 @@ export const observeInkAssistance = (
           if (result.kind === "magic") {
             await insertGeneratedImage(api, result.prompt, request.signal, {
               referenceImage: result.image,
-              transparent: true,
+              transparent: result.transparent,
               bounds: { left, top, right, bottom },
               replaceIds: source.map((element) => element.id),
               sourceSignature: signature,
@@ -309,7 +377,6 @@ export const observeInkAssistance = (
               fcRecognizedSource: source.map((element) => element.id),
             },
           };
-          let shape: FcboardElementSkeleton;
           if (result.kind === "text") {
             if (target) {
               const ids = source.map((element) => element.id);
@@ -376,52 +443,10 @@ export const observeInkAssistance = (
             );
             return;
           }
-          const width = Math.max(1, right - left);
-          const height = Math.max(1, bottom - top);
-          if (result?.shape === "triangle") {
-            shape = {
-              ...style,
-              type: "line",
-              x: left + width / 2,
-              y: top,
-              points: [
-                pointFrom(0, 0),
-                pointFrom(width / 2, height),
-                pointFrom(-width / 2, height),
-                pointFrom(0, 0),
-              ],
-            };
-          } else if (result?.shape === "line" || result?.shape === "arrow") {
-            const first = source[0];
-            const last = source[source.length - 1];
-            const end = last.points[last.points.length - 1];
-            shape = {
-              ...style,
-              type: result.shape,
-              x: first.x,
-              y: first.y,
-              points: [
-                pointFrom(0, 0),
-                pointFrom(last.x + end[0] - first.x, last.y + end[1] - first.y),
-              ],
-            };
-          } else if (
-            result?.shape === "rectangle" ||
-            result?.shape === "ellipse"
-          ) {
-            shape = {
-              ...style,
-              type: result.shape,
-              x: left,
-              y: top,
-              width,
-              height,
-            };
-          } else {
-            throw new Error(
-              t("fcboard.invalid_shape_pen_response_your_ink_is_preserved"),
-            );
-          }
+          const shape: FcboardElementSkeleton = {
+            ...recognizedShapeSkeleton(result, boardInk(source)),
+            ...style,
+          };
 
           if (!current()) {
             return;
@@ -443,7 +468,15 @@ export const observeInkAssistance = (
               if (failed.size > 100) {
                 failed.delete(failed.values().next().value!);
               }
-              if (!target && mode !== "function" && mode !== "calculation") {
+              if (
+                !target &&
+                mode !== "function" &&
+                mode !== "calculation" &&
+                !(
+                  failure instanceof Error &&
+                  failure.message === "Shape incomplete"
+                )
+              ) {
                 onError(failure);
               }
             }
@@ -458,12 +491,20 @@ export const observeInkAssistance = (
         ? 350
         : mode === "magic"
         ? 1600
+        : mode === "shape"
+        ? 450
         : 700,
     );
   };
   const stop = api.onChange(refresh);
   const tables = new LiveTableWriting(api);
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
+    if (phase === "start") {
+      clearTimeout(timer);
+      controller?.abort();
+      previous = "";
+      onBusy(false);
+    }
     if (!classroomCommands.has("document.draw")) {
       tables.progress(stroke, phase);
     }
@@ -474,8 +515,44 @@ export const observeInkAssistance = (
     }
     tables.commit(stroke);
     if (
+      !stroke.customData?.fcInsertion &&
+      !stroke.customData?.fcQuestionInput &&
+      (!stroke.customData?.fcInk?.assist ||
+        stroke.customData.fcInk.assist === "text")
+    ) {
+      const point = boardInk([stroke])[0]?.[0];
+      const target =
+        point &&
+        insertionWritingAt(
+          insertionWritingTargets(boardWritingParts(api.getSceneElements())),
+          point,
+        );
+      if (target && target.insertion.kind !== "table") {
+        api.updateScene({
+          elements: api.getSceneElements().map((element) =>
+            element.id === stroke.id
+              ? newElementWith(element, {
+                  groupIds: [
+                    ...new Set([...stroke.groupIds, target.insertion.id]),
+                  ],
+                  customData: {
+                    ...stroke.customData,
+                    fcInsertion: {
+                      ...target.insertion,
+                      inkCell: target.index,
+                      origin: { x: stroke.x, y: stroke.y },
+                    },
+                  },
+                })
+              : element,
+          ),
+          captureUpdate: CaptureUpdateAction.EVENTUALLY,
+        });
+      }
+    }
+    if (
       api.getSceneElements().find((item) => item.id === stroke.id)?.customData
-        ?.fcInsertion
+        ?.fcInsertion?.kind === "table"
     ) {
       seen.add(stroke.id);
     }

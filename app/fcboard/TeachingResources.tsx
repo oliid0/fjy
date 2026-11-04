@@ -147,7 +147,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
           return current;
         }
         const width = Math.min(current.bounds.width, innerWidth - 32);
-        const height = Math.min(current.bounds.height, innerHeight - 112);
+        const height = Math.min(current.bounds.height, innerHeight - 24);
         return {
           ...current,
           bounds: {
@@ -155,11 +155,11 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
             height,
             x: Math.max(
               16,
-              Math.min(innerWidth - width - 16, current.bounds.x),
+              Math.min(innerWidth - width - 12, current.bounds.x),
             ),
             y: Math.max(
               16,
-              Math.min(innerHeight - height - 96, current.bounds.y),
+              Math.min(innerHeight - height - 12, current.bounds.y),
             ),
           },
         };
@@ -290,13 +290,13 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       });
     } else {
       const width = Math.min(400, innerWidth - 32);
-      const height = Math.min(600, innerHeight - 112);
+      const height = Math.min(600, innerHeight - 24);
       setWeb({
         url: parsed.href,
         title,
         bounds: {
-          x: (innerWidth - width) / 2,
-          y: (innerHeight - 80 - height) / 2,
+          x: innerWidth - width - 12,
+          y: (innerHeight - height) / 2,
           width,
           height,
         },
@@ -1151,8 +1151,8 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
             viewport={{
               left: 16,
               top: 16,
-              right: innerWidth - 16,
-              bottom: innerHeight - 96,
+              right: innerWidth - 12,
+              bottom: innerHeight - 12,
             }}
             onCommit={(bounds) =>
               setWeb((current) => (current ? { ...current, bounds } : current))

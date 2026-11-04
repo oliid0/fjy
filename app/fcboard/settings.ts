@@ -15,7 +15,9 @@ export type Settings = {
   ocr: "auto" | "local" | "cloud";
   inkLanguage: "auto" | "zh-Hani-CN" | "en-US";
   apiKey: string;
+  speechRoutingVersion?: number;
   speech: "cloud" | "local" | "system" | "custom";
+  assistantVoice: "agent" | "duplex";
   speechResource: string;
   speechEndpoint: string;
   speechKey: string;
@@ -38,6 +40,7 @@ export const defaults: Settings = {
   inkLanguage: "auto",
   apiKey: "",
   speech: "system",
+  assistantVoice: "agent",
   speechResource: "volc.seedasr.sauc.duration",
   speechEndpoint: "",
   speechKey: "",
@@ -82,6 +85,7 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
     "fcboard-settings",
     JSON.stringify({
       ...settings,
+      speechRoutingVersion: 1,
       apiKey: rememberKey ? settings.apiKey : "",
       speechKey: rememberKey ? settings.speechKey : "",
       ttsKey: rememberKey ? settings.ttsKey : "",
@@ -92,10 +96,21 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
 export const currentSettings = (): Settings => {
   const settings = loadSettings();
   try {
-    return {
+    const merged = {
       ...settings,
       ...JSON.parse(sessionStorage.getItem("fcboard-keys") || "{}"),
     };
+    // Earlier installations saved the old system default even after a cloud key
+    // was entered. Migrate that default once; new explicit choices are retained.
+    if (
+      Capacitor.isNativePlatform() &&
+      merged.speechRoutingVersion !== 1 &&
+      merged.speech === "system" &&
+      merged.speechKey?.trim()
+    ) {
+      merged.speech = "cloud";
+    }
+    return merged;
   } catch {
     return settings;
   }

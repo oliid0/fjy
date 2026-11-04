@@ -76,6 +76,53 @@ describe("recording lifecycle", () => {
     expect(stop).toHaveBeenCalledTimes(1);
     expect(ended).toHaveBeenCalledTimes(1);
   });
+  it("clones an active assistant microphone and stops only the recording's track", async () => {
+    const originalStop = vi.fn();
+    const cloneStop = vi.fn();
+    const clone = vi.fn(() => ({ stop: cloneStop }));
+    const microphone = {
+      getAudioTracks: () => [{ clone, stop: originalStop }],
+    } as unknown as MediaStream;
+    const getUserMedia = vi.fn();
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    vi.stubGlobal(
+      "MediaStream",
+      class {
+        constructor(private tracks: MediaStreamTrack[]) {}
+        getTracks() {
+          return this.tracks;
+        }
+      },
+    );
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        static isTypeSupported() {
+          return true;
+        }
+        mimeType = "audio/webm";
+        state = "inactive";
+        ondataavailable?: (event: { data: Blob }) => void;
+        onstop?: () => void;
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+          this.ondataavailable?.({ data: new Blob(["recorded"]) });
+          this.onstop?.();
+        }
+      },
+    );
+    const recorder = new BoardRecorder();
+    await recorder.start("audio", vi.fn(), microphone);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(clone).toHaveBeenCalledTimes(1);
+    const result = await recorder.stop();
+    expect(result.blob.size).toBe(8);
+    expect(originalStop).not.toHaveBeenCalled();
+    expect(cloneStop).toHaveBeenCalledTimes(1);
+  });
   it.each([false, true])(
     "preserves one media session and excludes paused time (stop while paused: %s)",
     async (stopWhilePaused) => {

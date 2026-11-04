@@ -31,43 +31,55 @@ const layers = [
 export const VoiceOrb = ({
   state,
   onStop,
+  caption,
+  status,
 }: {
   state: "listening" | "thinking" | "speaking" | "paused";
   onStop: () => void;
+  caption?: string;
+  status?: string;
 }) => (
-  <Tooltip
-    title={t(
-      state === "paused" ? "fcboard.listening" : "fcboard.stop_listening",
+  <>
+    {(caption || status) && (
+      <div className="fc-voice-caption" role="status">
+        <span>{caption}</span>
+        <small>{status}</small>
+      </div>
     )}
-  >
-    <IconButton
-      className="fc-voice-orb"
-      data-state={state}
-      aria-label={t(
+    <Tooltip
+      title={t(
         state === "paused" ? "fcboard.listening" : "fcboard.stop_listening",
       )}
-      aria-pressed={state !== "paused"}
-      onClick={onStop}
-      onPointerDown={(event) => event.stopPropagation()}
-      sx={{
-        position: "fixed",
-        width: 64,
-        height: 64,
-        color: "#fff",
-        zIndex: 36,
-      }}
     >
-      <span className="fc-voice-orb-layers" aria-hidden="true">
-        {layers.map((src, index) => (
-          <img
-            key={src}
-            src={src}
-            alt=""
-            draggable={false}
-            data-layer={index}
-          />
-        ))}
-      </span>
-    </IconButton>
-  </Tooltip>
+      <IconButton
+        className="fc-voice-orb"
+        data-state={state}
+        aria-label={t(
+          state === "paused" ? "fcboard.listening" : "fcboard.stop_listening",
+        )}
+        aria-pressed={state !== "paused"}
+        onClick={onStop}
+        onPointerDown={(event) => event.stopPropagation()}
+        sx={{
+          position: "fixed",
+          width: 64,
+          height: 64,
+          color: "#fff",
+          zIndex: 36,
+        }}
+      >
+        <span className="fc-voice-orb-layers" aria-hidden="true">
+          {layers.map((src, index) => (
+            <img
+              key={src}
+              src={src}
+              alt=""
+              draggable={false}
+              data-layer={index}
+            />
+          ))}
+        </span>
+      </IconButton>
+    </Tooltip>
+  </>
 );

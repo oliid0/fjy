@@ -30,6 +30,7 @@ export const prepareLocalSpeech = () => {
 export type LocalSpeechHandle = {
   stop(): Promise<void>;
   cancel(): Promise<void>;
+  readonly stream?: MediaStream;
 };
 
 export const encodePCM = (samples: Float32Array) => {
@@ -72,6 +73,7 @@ export const startPCMSpeech = async (
   cloud = false,
   onActivity?: () => void,
   onInterim?: (line: TranscriptLine | null) => void,
+  capture?: { blockDuration: 0.02 | 0.1 | 0.5 },
 ): Promise<LocalSpeechHandle> => {
   if (!Capacitor.isNativePlatform()) {
     throw new Error(
@@ -88,7 +90,19 @@ export const startPCMSpeech = async (
     );
   }
   // Resume in the initiating click, before model loading can consume activation.
-  const context = new AudioContext(cloud ? { sampleRate: 16000 } : undefined);
+  let context: AudioContext;
+  try {
+    context = new AudioContext(cloud ? { sampleRate: 16000 } : undefined);
+  } catch (failure) {
+    if (
+      !cloud ||
+      !(failure instanceof Error) ||
+      failure.name !== "NotSupportedError"
+    ) {
+      throw failure;
+    }
+    context = new AudioContext();
+  }
   const resumed = context.resume();
   void resumed.catch(() => {});
   let session: string;
@@ -166,7 +180,10 @@ export const startPCMSpeech = async (
       `${import.meta.env.BASE_URL}fc-pcm-worklet.js`,
     );
     node = new AudioWorkletNode(context, "fcboard-pcm", {
-      processorOptions: { blockDuration: cloud ? 0.1 : 0.5 },
+      processorOptions: {
+        blockDuration: capture?.blockDuration ?? (cloud ? 0.1 : 0.5),
+        ...(cloud ? { targetSampleRate: 16000 } : {}),
+      },
     });
     source = context.createMediaStreamSource(media);
     node.port.onmessage = ({
@@ -250,7 +267,13 @@ export const startPCMSpeech = async (
     } finally {
       clearTimeout(resumeTimeout);
     }
-    return { stop: () => finish(false), cancel: () => finish(true) };
+    return {
+      stop: () => finish(false),
+      cancel: () => finish(true),
+      get stream() {
+        return media;
+      },
+    };
   } catch (error) {
     await transport.stop({ session }).catch(() => {});
     await cleanup();

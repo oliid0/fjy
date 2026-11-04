@@ -1,118 +1,86 @@
+import { t } from "@fcboard/fcboard/i18n";
+
 import type { DataURL } from "@fcboard/fcboard/types";
 
-/** Remove only edge-connected white paper, retaining enclosed whites and existing alpha. */
-export const transparentInkPixels = (
-  pixels: Uint8ClampedArray,
-  width: number,
-  height: number,
-) => {
-  const count = width * height;
-  if (!count || count > 4_194_304 || pixels.length !== count * 4) {
-    throw new Error("Invalid generated image dimensions");
-  }
-  const paper = (index: number) => {
-    const i = index * 4;
-    return (
-      pixels[i + 3] < 8 ||
-      (Math.min(pixels[i], pixels[i + 1], pixels[i + 2]) >= 235 &&
-        Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) -
-          Math.min(pixels[i], pixels[i + 1], pixels[i + 2]) <
-          15)
-    );
-  };
-  const corners = [0, width - 1, (height - 1) * width, count - 1];
-  if (!corners.every(paper)) {
-    throw new Error(
-      "Generated picture has an opaque background; request an isolated subject on transparent or plain white background",
-    );
-  }
-  const visited = new Uint8Array(count);
-  const queue = new Uint32Array(count);
-  let read = 0;
-  let write = 0;
-  const add = (index: number) => {
-    if (!visited[index] && paper(index)) {
-      visited[index] = 1;
-      queue[write++] = index;
-    }
-  };
-  for (let x = 0; x < width; x++) {
-    add(x);
-    add((height - 1) * width + x);
-  }
-  for (let y = 0; y < height; y++) {
-    add(y * width);
-    add(y * width + width - 1);
-  }
-  while (read < write) {
-    const index = queue[read++];
-    pixels[index * 4 + 3] = 0;
-    if (index % width) {
-      add(index - 1);
-    }
-    if (index % width < width - 1) {
-      add(index + 1);
-    }
-    if (index >= width) {
-      add(index - width);
-    }
-    if (index < count - width) {
-      add(index + width);
-    }
-  }
-  let left = width;
-  let top = height;
-  let right = 0;
-  let bottom = 0;
-  for (let index = 0; index < count; index++) {
-    if (pixels[index * 4 + 3] < 8) {
-      continue;
-    }
-    const x = index % width;
-    const y = Math.floor(index / width);
-    left = Math.min(left, x);
-    top = Math.min(top, y);
-    right = Math.max(right, x + 1);
-    bottom = Math.max(bottom, y + 1);
-  }
-  if (left >= right || top >= bottom) {
-    throw new Error("The generated image contains no visible subject");
-  }
-  return { left, top, right, bottom };
+import type { ContentRect } from "./placement";
+
+export type SubjectLayer = {
+  image: HTMLImageElement;
+  bounds: ContentRect;
+  zIndex: number;
 };
 
-export const transparentInkImage = (image: HTMLImageElement) => {
-  const scale = Math.min(
-    1,
-    2048 / Math.max(image.naturalWidth, image.naturalHeight),
-  );
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) {
-    throw new Error("Unable to prepare a transparent drawing");
+/** Compose only the provider's foreground PNG layers, never its z_index=0 base. */
+export const transparentInkImage = (layers: SubjectLayer[]) => {
+  if (
+    !layers.length ||
+    layers.length > 16 ||
+    new Set(layers.map((layer) => layer.zIndex)).size !== layers.length ||
+    layers.some(
+      ({ bounds, zIndex }) =>
+        !Number.isInteger(zIndex) ||
+        zIndex <= 0 ||
+        !Object.values(bounds).every(Number.isFinite) ||
+        bounds.left < 0 ||
+        bounds.top < 0 ||
+        bounds.right <= bounds.left ||
+        bounds.bottom <= bounds.top,
+    )
+  ) {
+    throw new Error(t("fcboard.no_subject_layers_returned"));
   }
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const data = context.getImageData(0, 0, canvas.width, canvas.height);
-  const bounds = transparentInkPixels(data.data, canvas.width, canvas.height);
-  context.putImageData(data, 0, 0);
+  const left = Math.min(...layers.map((layer) => layer.bounds.left));
+  const top = Math.min(...layers.map((layer) => layer.bounds.top));
+  const width = Math.max(...layers.map((layer) => layer.bounds.right)) - left;
+  const height = Math.max(...layers.map((layer) => layer.bounds.bottom)) - top;
+  const scale = Math.min(1, 2048 / Math.max(width, height));
   const output = document.createElement("canvas");
-  output.width = bounds.right - bounds.left;
-  output.height = bounds.bottom - bounds.top;
-  output
-    .getContext("2d")!
-    .drawImage(
-      canvas,
-      bounds.left,
-      bounds.top,
-      output.width,
-      output.height,
-      0,
-      0,
-      output.width,
-      output.height,
+  output.width = Math.max(1, Math.round(width * scale));
+  output.height = Math.max(1, Math.round(height * scale));
+  const context = output.getContext("2d");
+  const sample = document.createElement("canvas");
+  const sampleContext = sample.getContext("2d", { willReadFrequently: true });
+  if (!context || !sampleContext) {
+    throw new Error(t("fcboard.the_image_service_returned_no_valid_image"));
+  }
+  for (const layer of [...layers].sort((a, b) => a.zIndex - b.zIndex)) {
+    // Check decoded alpha at bounded cost; white parts of the subject stay intact.
+    const sampleScale = Math.min(
+      1,
+      256 / Math.max(layer.image.naturalWidth, layer.image.naturalHeight),
     );
+    sample.width = Math.max(
+      1,
+      Math.round(layer.image.naturalWidth * sampleScale),
+    );
+    sample.height = Math.max(
+      1,
+      Math.round(layer.image.naturalHeight * sampleScale),
+    );
+    sampleContext.drawImage(layer.image, 0, 0, sample.width, sample.height);
+    const pixels = sampleContext.getImageData(
+      0,
+      0,
+      sample.width,
+      sample.height,
+    ).data;
+    let visible = false;
+    let transparent = false;
+    for (let i = 3; i < pixels.length; i += 4) {
+      visible ||= pixels[i] > 0;
+      transparent ||= pixels[i] < 255;
+    }
+    if (!visible || !transparent) {
+      throw new Error(t("fcboard.subject_layer_requires_transparency"));
+    }
+    context.drawImage(
+      layer.image,
+      (layer.bounds.left - left) * scale,
+      (layer.bounds.top - top) * scale,
+      (layer.bounds.right - layer.bounds.left) * scale,
+      (layer.bounds.bottom - layer.bounds.top) * scale,
+    );
+  }
   return {
     dataURL: output.toDataURL("image/png") as DataURL,
     width: output.width,

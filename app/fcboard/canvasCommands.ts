@@ -29,7 +29,7 @@ import {
 } from "./canvasTransform";
 import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
-import { prepareQuestionWriting } from "./questionWriting";
+import { prepareQuestionWriting, questionStrokeStyle } from "./questionWriting";
 import { resourcePlacement } from "./resourcePlacement";
 import { registerResourceCommands } from "./resourceControls";
 import { registerLanguageCommands } from "./languageCommands";
@@ -525,7 +525,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.ink",
-      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces a previous question. Returns actual object ids.",
+      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional per-command pen=hard|brush|highlighter|dashed|rainbow, color (hex), width=1..30 and opacity=0..100 use real pen effects without changing the global pen. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces a previous question. Returns actual object ids.",
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -566,6 +566,12 @@ export const registerCanvasCommands = (
                 return { left, top, right, bottom };
               }),
             scale: state.zoom.value,
+            inkStyle: questionStrokeStyle(
+              args,
+              state,
+              inkProfile(),
+              state.zoom.value,
+            ),
             fontSize: (state.currentItemFontSize || 24) / state.zoom.value,
             color: state.currentItemStrokeColor || "#000000",
             width: state.currentItemStrokeWidth || 2,

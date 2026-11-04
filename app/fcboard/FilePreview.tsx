@@ -85,7 +85,7 @@ import {
 import { rememberPage } from "./materials";
 import { currentSettings } from "./settings";
 import { answerFontSize, layoutBoardText } from "./textLayout";
-import { prepareQuestionWriting } from "./questionWriting";
+import { prepareQuestionWriting, questionStrokeStyle } from "./questionWriting";
 import { MaterialPanel } from "./MaterialPanel";
 import { documentStrokeGeometry } from "./documentInk";
 import {
@@ -1687,6 +1687,12 @@ export const FilePreview = ({
               obstacles: (inkRef.current[page] || [])
                 .filter((stroke) => !replaced.has(stroke.id))
                 .map(documentStrokeBounds),
+              inkStyle: questionStrokeStyle(
+                args,
+                penStateRef.current,
+                deviceProfileRef.current,
+                scale,
+              ),
               fontSize: pen.current.fontSize / scale,
               color: pen.current.color,
               width: pen.current.penWidth,

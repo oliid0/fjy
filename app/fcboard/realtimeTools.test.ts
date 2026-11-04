@@ -40,6 +40,9 @@ it("routes typed writing and pen paths to actual editable scene elements with no
               ],
             ],
             select: false,
+            pen: "highlighter",
+            color: "#2299aa",
+            opacity: 70,
           }),
         },
       }),
@@ -57,6 +60,9 @@ it("routes typed writing and pen paths to actual editable scene elements with no
     expect(ink).toMatchObject({
       x: 500,
       y: 200,
+      strokeColor: "#2299aa",
+      opacity: 30,
+      customData: { fcInk: { pen: "highlighter" } },
       points: [
         [0, 0],
         [25, -40],

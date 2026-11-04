@@ -2044,3 +2044,45 @@ it("keeps original protractor bitmaps as two editable courseware image objects t
       .map((stroke) => stroke.image),
   ).toEqual(images.map((stroke) => stroke.image));
 });
+
+it.each(["hard", "brush", "highlighter", "dashed", "rainbow"] as const)(
+  "uses the same real %s pen for AI courseware strokes without changing the global tool",
+  async (pen) => {
+    const host = await setup();
+    try {
+      const before = host.api.getAppState();
+      await act(async () => {
+        await classroomCommands.execute({
+          name: "document.strokes",
+          args: {
+            strokes: [
+              [
+                [100, 100],
+                [150, 80],
+                [180, 130],
+              ],
+            ],
+            pen,
+            color: "#2367ab",
+            width: 4,
+            opacity: 80,
+            select: false,
+          },
+        });
+      });
+      const ink = documentSharing.current()!.ink;
+      expect(ink).toHaveLength(1);
+      expect(ink[0].fcInk).toMatchObject({
+        pen,
+        version: pen === "brush" ? 3 : 2,
+        finished: true,
+      });
+      expect(ink[0].color).toBe("#2367ab");
+      expect(ink[0].opacity).toBe(pen === "highlighter" ? 35 : 80);
+      expect(ink[0].strokeStyle).toBe(pen === "dashed" ? "dashed" : "solid");
+      expect(host.api.getAppState()).toEqual(before);
+    } finally {
+      host.unmount();
+    }
+  },
+);

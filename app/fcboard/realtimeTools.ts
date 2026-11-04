@@ -90,7 +90,7 @@ const bindings = [
     name: "board_draw",
     command: "canvas.ink",
     description:
-      "Draw actual editable pen strokes, including an apple, handwriting or demonstration diagram. Each stroke is an ordered polyline of [x,y] points in the inspected visible canvas coordinates. Submit meaningful stroke batches promptly; do not replace a requested drawing with text.",
+      "Draw actual editable pen strokes, including an apple, handwriting or demonstration diagram. Each stroke is an ordered polyline of [x,y] points in the inspected visible canvas coordinates. Use pen/color/width/opacity on this call for independent real brush, highlighter, dashed or rainbow effects. Submit meaningful stroke batches promptly; do not replace a requested drawing with text.",
     properties: {
       strokes: {
         type: "array",
@@ -98,6 +98,13 @@ const bindings = [
         minItems: 1,
       },
       select: { type: "boolean" },
+      pen: {
+        type: "string",
+        enum: ["hard", "brush", "highlighter", "dashed", "rainbow"],
+      },
+      color: { type: "string" },
+      width: { type: "number", minimum: 1, maximum: 30 },
+      opacity: { type: "number", minimum: 0, maximum: 100 },
     },
     required: ["strokes"],
   },
@@ -160,6 +167,22 @@ const bindings = [
     description:
       "Change the selected existing objects and current pen. fontSize changes editable text; use board_resize to enlarge an existing title group containing handwriting strokes. Select actual ids first.",
     properties: {
+      pen: {
+        type: "string",
+        enum: [
+          "hard",
+          "brush",
+          "highlighter",
+          "dashed",
+          "rainbow",
+          "text",
+          "shape",
+          "magic",
+          "function",
+          "calculation",
+          "language",
+        ],
+      },
       fontSize: { type: "number", minimum: 8, maximum: 200 },
       color: { type: "string" },
       width: { type: "number", minimum: 1, maximum: 30 },

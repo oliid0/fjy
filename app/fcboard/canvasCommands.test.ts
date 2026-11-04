@@ -740,3 +740,103 @@ it.each(["canvas.resize", "canvas.align"])(
     }
   },
 );
+
+it.each(["hard", "brush", "highlighter", "dashed", "rainbow"] as const)(
+  "draws real %s ink with an isolated per-command style",
+  async (pen) => {
+    const api = sceneAPI();
+    const before = api.getAppState();
+    const stop = registerCanvasCommands(api);
+    try {
+      const result = (await classroomCommands.execute({
+        name: "canvas.ink",
+        args: {
+          strokes: [
+            [
+              [300, 200],
+              [340, 170],
+              [380, 200],
+              [360, 250],
+            ],
+          ],
+          pen,
+          color: "#1256ab",
+          width: 6,
+          opacity: 80,
+          select: false,
+        },
+      })) as { ids: string[] };
+      const element = api
+        .getSceneElements()
+        .find((item) => result.ids.includes(item.id));
+      if (element?.type !== "freedraw") {
+        throw new Error("Expected editable pen trajectory");
+      }
+      expect(element.customData?.fcInk).toMatchObject({
+        pen,
+        version: pen === "brush" ? 3 : 2,
+        finished: true,
+      });
+      expect(element.strokeColor).toBe("#1256ab");
+      expect(element.strokeStyle).toBe(pen === "dashed" ? "dashed" : "solid");
+      expect(element.opacity).toBe(pen === "highlighter" ? 35 : 80);
+      expect(element.points).toHaveLength(4);
+      if (pen === "rainbow") {
+        expect(element.customData?.fcInk?.rainbow?.width).toBeGreaterThan(0);
+      }
+      expect(api.getAppState()).toEqual(before);
+    } finally {
+      stop();
+    }
+  },
+);
+it("commits parallel ink styles independently and preserves existing objects on invalid style", async () => {
+  const api = sceneAPI();
+  const stop = registerCanvasCommands(api);
+  try {
+    await Promise.all(
+      ["#123abc", "#ee2211"].map((color, i) =>
+        classroomCommands.execute({
+          name: "canvas.ink",
+          args: {
+            strokes: [
+              [
+                [400 + i * 100, 200],
+                [450 + i * 100, 250],
+              ],
+            ],
+            pen: i ? "highlighter" : "brush",
+            color,
+            select: false,
+          },
+        }),
+      ),
+    );
+    const ink = api
+      .getSceneElements()
+      .filter((element) => element.type === "freedraw");
+    expect(ink.map((element) => element.strokeColor)).toEqual([
+      "#123abc",
+      "#ee2211",
+    ]);
+    expect(ink.map((element) => element.customData?.fcInk?.pen)).toEqual([
+      "brush",
+      "highlighter",
+    ]);
+    const before = api.getSceneElements();
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.ink",
+        args: {
+          strokes: [[[400, 200]]],
+          pen: "brush",
+          opacity: -1,
+          replaceIds: ink.map((element) => element.id),
+        },
+      }),
+    ).rejects.toThrow();
+    expect(api.getSceneElements()).toBe(before);
+  } finally {
+    stop();
+  }
+});

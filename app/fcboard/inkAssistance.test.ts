@@ -489,10 +489,9 @@ it.each(["12\nx3\n----", "12x3"])(
         [80, 225],
         [200, 225],
       ],
-    ].map((points, index) =>
+    ].map((points) =>
       newFreeDrawElement({
         ...ink,
-        id: `column-${index}`,
         x: points[0][0],
         y: points[0][1],
         points: points.map(([x, y]) =>
@@ -515,7 +514,9 @@ it.each(["12\nx3\n----", "12x3"])(
       expect(cloud).not.toHaveBeenCalled();
       expect(errors).not.toHaveBeenCalled();
       expect(
-        source.every((input) => api.getSceneElements().includes(input)),
+        source.every((input) =>
+          api.getSceneElements().some((element) => element === input),
+        ),
       ).toBe(true);
     } finally {
       release();

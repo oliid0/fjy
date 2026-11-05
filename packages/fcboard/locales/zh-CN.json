@@ -875,6 +875,8 @@
     "close_this_browser_tab_to_exit": "网页可关闭当前标签页",
     "exit_app": "退出应用",
     "file_transfer": "快传",
+    "split_export_failed": "无法导出分屏画面，请重试。",
+    "split_exit_prompt": "是否退出分屏？是否保存文件？",
     "split_screen": "分屏",
     "vote": "投票",
     "calculator": "计算器",

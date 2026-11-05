@@ -103,87 +103,134 @@
     }
   }
 }
+// MultiScreen's activity_fullscreen and canvas_item_* place a 45dp bar over the canvas.
 .fc-classroom .fc-split-board {
   position: fixed;
   inset: 0;
   z-index: 70;
-  display: flex;
-  flex-direction: column;
-  background: var(--fc-surface, #fff);
-  > header {
-    flex: 0 0 auto;
-    padding: 4px 8px;
-  }
-  button,
-  select {
-    min-width: 44px;
-    min-height: 44px;
-    border: 0;
-    border-radius: 8px;
-    color: inherit;
-    background: var(--fc-surface, #fff);
-  }
-  button[aria-pressed="true"] {
-    background: #e0e0e0;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 1px #888;
-  }
+  background: #fff;
   .fc-split-panes {
     display: flex;
-    flex: 1;
-    min-height: 0;
+    width: 100%;
+    height: 100%;
   }
   .fc-split-pane {
     position: relative;
     flex: 1;
     min-width: 0;
     border-inline-end: 1.5px dashed #000;
-    display: flex;
-    flex-direction: column;
+    &:last-child {
+      border: 0;
+    }
   }
   canvas {
+    display: block;
     width: 100%;
+    height: 100%;
+  }
+  .fc-split-bottom {
+    position: absolute;
+    inset: auto 0 0;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  button {
+    min-width: 0;
     min-height: 0;
-    flex: 1;
+    border: 0;
+    background: transparent;
   }
   .fc-split-penbar {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    flex: 0 0 auto;
-    padding: 4px;
-    background: var(--fc-surface, #fff);
+    align-items: center;
+    height: 45px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border: 1px solid #999;
+    border-radius: 12px;
+    background: #f3f3f3f0;
     button {
-      font-size: 22px;
+      flex: 0 0 35px;
+      width: 35px;
+      height: 35px;
+      padding: 6px;
+      margin: 0 6px;
+      border-radius: 50%;
+      &[data-tool="2"] {
+        margin: 0;
+      }
+      &[data-tool="4"] {
+        padding: 3px;
+      }
+      &[hidden] {
+        display: none;
+      }
+      &[aria-pressed="true"] {
+        background: #e0e0e0;
+        box-shadow: inset 0 0 0 1px #888;
+      }
     }
     img {
       display: block;
-      width: 23px;
-      height: 23px;
-      object-fit: contain;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
+    }
+  }
+  .fc-split-pane:first-child .fc-split-penbar,
+  .fc-split-pane:last-child .fc-split-penbar {
+    max-width: calc(100% - 70px);
+  }
+  .fc-split-exit {
+    position: absolute;
+    left: 0;
+    width: 35px;
+    height: 35px;
+    padding: 10px;
+    border: 1px solid #999;
+    border-radius: 12px;
+    background: #f3f3f3;
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    &.fc-split-exit-right {
+      left: auto;
+      right: 0;
     }
   }
 }
 
+// SplitScreenPop's original dimensions and selectors.
 .fc-classroom .fc-split-settings {
   width: min(380px, calc(100vw - 24px));
   box-sizing: border-box;
-  padding: 20px;
-  border-radius: 16px;
+  padding: 0;
+  border: 1px solid #999;
+  border-radius: 12px;
+  background: #f3f3f3;
+  color: #262626;
   h2 {
-    margin: 0 0 20px;
+    display: grid;
+    place-items: center;
+    height: 47.3px;
+    margin: 0;
+    border-bottom: 1px solid #ccc;
     font-size: 21px;
-    text-align: center;
+    font-weight: 400;
   }
   fieldset {
-    border: 0;
-    margin: 0 0 20px;
-    padding: 0;
     min-width: 0;
+    border: 0;
+    padding: 0 20px;
+    margin: 20px 0 0;
   }
   legend {
-    padding: 0 0 8px;
+    padding: 0 0 5px;
     font-size: 16px;
   }
   .fc-split-options {
@@ -192,9 +239,9 @@
   }
   .fc-split-options label {
     position: relative;
-    display: grid;
-    justify-items: center;
-    gap: 4px;
+    display: block;
+    width: 42px;
+    height: 42px;
     cursor: pointer;
   }
   .fc-split-options input {
@@ -207,41 +254,75 @@
     cursor: pointer;
   }
   .fc-split-preview {
+    display: block;
     width: 42px;
     height: 42px;
-    display: flex;
-    border-radius: 6px;
-    border: 1px solid #aaa;
-    background: #fff;
-    padding: 4px;
-    box-sizing: border-box;
     pointer-events: none;
+    background-size: contain;
+    background-repeat: no-repeat;
   }
-  .fc-split-preview i {
-    flex: 1;
-    border-inline-end: 1px solid #aaa;
-  }
-  .fc-split-preview i:last-child {
-    border: 0;
-  }
-  input:checked + .fc-split-preview,
   input:focus-visible + .fc-split-preview {
     outline: 2px solid #1565c0;
     outline-offset: 2px;
   }
+  @for $number from 2 through 4 {
+    [data-count="#{$number}"] {
+      background-image: url("./assets/multiscreen/split_type_#{$number}.png");
+    }
+    input:checked + [data-count="#{$number}"] {
+      background-image: url("./assets/multiscreen/split_type_#{$number}_click.png");
+    }
+  }
+  @for $number from 1 through 4 {
+    [data-background="#{$number}"] {
+      background-image: url("./assets/multiscreen/layer_screen_bg#{$number}_normal.png");
+    }
+    input:checked + [data-background="#{$number}"] {
+      background-image: url("./assets/multiscreen/layer_screen_bg#{$number}_select.png");
+    }
+  }
   footer {
     display: flex;
-    justify-content: center;
+    justify-content: flex-end;
     gap: 30px;
+    padding: 20px 20px 10px;
   }
   footer button {
-    min-width: 90px;
-    min-height: 36px;
+    width: 90px;
+    height: 36px;
+    min-height: 0;
     border: 0;
-    border-radius: 8px;
-    color: white;
-    background: #1565c0;
-    cursor: pointer;
+    border-radius: 5px;
+    background: #4666f6;
+    color: #fff;
+    font-size: 13px;
+  }
+}
+.fc-classroom .fc-split-exit-dialog {
+  width: min(300px, calc(100vw - 24px));
+  min-height: 130px;
+  box-sizing: border-box;
+  padding: 20px 15px 10px;
+  border: 1px solid #999;
+  border-radius: 12px;
+  background: #f3f3f3;
+  color: #000;
+  > p {
+    margin: 0;
+    font-size: 18px;
+  }
+  footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    margin-top: 30px;
+  }
+  footer button {
+    min-height: 35px;
+    border: 0;
+    background: transparent;
+    color: #383838;
+    font-size: 16px;
   }
 }
 

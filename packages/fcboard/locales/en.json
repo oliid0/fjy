@@ -879,6 +879,8 @@
     "close_this_browser_tab_to_exit": "Close this browser tab to exit",
     "exit_app": "Exit app",
     "file_transfer": "File transfer",
+    "split_export_failed": "Could not export the split-screen drawing. Try again.",
+    "split_exit_prompt": "Exit split screen? Do you want to save the file?",
     "split_screen": "Split screen",
     "vote": "Vote",
     "calculator": "Calculator",

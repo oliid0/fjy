@@ -16,6 +16,7 @@ import { Voting } from "./Voting";
 import { ToolMedia } from "./ToolMedia";
 import { Voting as voteBridge, Media } from "./builtinNative";
 import { classroomCommands } from "./commands";
+import * as boardFile from "./boardFile";
 
 vi.mock("./builtinNative", () => ({
   Voting: { start: vi.fn(), read: vi.fn(), end: vi.fn(), clear: vi.fn() },
@@ -233,7 +234,7 @@ it("opens original split settings first, applies a confirmed layout/background, 
     (document.querySelector(".fc-split-pane canvas") as HTMLElement).style
       .background,
   ).toBe("rgb(92, 124, 98)");
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  await command("tools.split", { configure: true });
   const reopened = screen.getByRole("dialog", { name: title });
   fireEvent.click(within(reopened).getByRole("radio", { name: "2" }));
   fireEvent.click(
@@ -299,23 +300,125 @@ it("keeps independent split-pane ink through layout changes and erases only the 
   expect(context.lineWidth).toBe(2.5 * (window.devicePixelRatio || 1));
   fireEvent.click(
     within(first).getByRole("button", {
-      name: t("fcboard.split_small_eraser"),
+      name: t("fcboard.split_large_eraser"),
     }),
   );
   pointer(canvas()[0], "pointerdown", 6, 40);
   pointer(canvas()[0], "pointerup", 6, 40);
   expect(context.globalCompositeOperation).toBe("destination-out");
   expect(context.lineCap).toBe("square");
-  expect(context.lineWidth).toBe(120 * (window.devicePixelRatio || 1));
+  expect(context.lineWidth).toBe(180 * (window.devicePixelRatio || 1));
 
-  fireEvent.click(
-    within(first).getByRole("button", { name: t("buttons.clear") }),
-  );
+  fireEvent.keyDown(first, { key: "Delete" });
   await command("tools.split", { open: false });
   expect(await command("tools.split", { count: 2 })).toMatchObject({
     panes: [{ strokes: 0 }, { strokes: 1 }, { strokes: 0 }, { strokes: 0 }],
   });
 });
+it("uses the original edge exit controls and exports all actual panes through the existing destination picker without losing drawings on cancel or failure", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  vi.spyOn(
+    HTMLCanvasElement.prototype,
+    "getBoundingClientRect",
+  ).mockReturnValue({ width: 300, height: 500, left: 0, top: 0 } as DOMRect);
+  const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+  const encode = vi
+    .spyOn(HTMLCanvasElement.prototype, "toBlob")
+    .mockImplementation((callback) => callback(blob));
+  const save = vi
+    .spyOn(boardFile, "savePageFiles")
+    .mockResolvedValueOnce(false)
+    .mockRejectedValueOnce(new Error("disk full"))
+    .mockResolvedValueOnce(true);
+  render(<SplitBoard />);
+  await command("tools.split", { count: 2 });
+  const board = screen.getByRole("dialog", { name: t("fcboard.split_screen") });
+  expect(board.querySelector("header")).toBeNull();
+  expect(
+    within(board).getAllByRole("button", { name: t("buttons.close") }),
+  ).toHaveLength(2);
+  expect(
+    within(board).queryByRole("button", {
+      name: t("fcboard.split_small_eraser"),
+    }),
+  ).toBeNull();
+  const panes = Array.from(board.querySelectorAll("canvas"));
+  for (const [type, x] of [
+    ["pointerdown", 20],
+    ["pointerup", 80],
+  ] as const) {
+    fireEvent(
+      panes[0],
+      Object.assign(new Event(type, { bubbles: true }), {
+        pointerId: 1,
+        clientX: x,
+        clientY: 20,
+        button: 0,
+        pointerType: "pen",
+      }),
+    );
+  }
+  fireEvent.click(
+    within(board).getAllByRole("button", { name: t("buttons.close") })[0],
+  );
+  const prompt = screen.getByRole("dialog", {
+    name: t("fcboard.split_exit_prompt"),
+  });
+  const button = () =>
+    within(prompt).getByRole("button", { name: t("buttons.save") });
+  fireEvent.click(button());
+  await waitFor(() => expect(button()).toBeEnabled());
+  expect(save).toHaveBeenCalledWith(
+    [{ page: 1, blob }],
+    t("fcboard.split_screen"),
+    "jpg",
+    expect.any(AbortSignal),
+  );
+  expect(encode).toHaveBeenCalledWith(expect.any(Function), "image/jpeg", 1);
+  const canvas = encode.mock.contexts[0] as HTMLCanvasElement;
+  expect(canvas.width).toBe(600 * (window.devicePixelRatio || 1));
+  expect(canvas.height).toBe(500 * (window.devicePixelRatio || 1));
+  expect(canvas.getContext("2d")!.drawImage).toHaveBeenCalledWith(
+    panes[0],
+    0,
+    0,
+  );
+  expect(canvas.getContext("2d")!.drawImage).toHaveBeenCalledWith(
+    panes[1],
+    panes[0].width,
+    0,
+  );
+  fireEvent.click(button());
+  expect(await within(prompt).findByRole("alert")).toHaveTextContent(
+    "disk full",
+  );
+  expect(board.querySelectorAll("canvas")).toHaveLength(2);
+  fireEvent.click(button());
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.split_exit_prompt") }),
+    ).toBeNull(),
+  );
+  expect(await command("tools.split", { count: 2 })).toMatchObject({
+    panes: [{ strokes: 1 }, { strokes: 0 }, { strokes: 0 }, { strokes: 0 }],
+  });
+  fireEvent.click(
+    within(board).getAllByRole("button", { name: t("buttons.close") })[1],
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.exit_without_saving") }),
+  );
+  expect(
+    screen.queryByRole("dialog", { name: t("fcboard.split_screen") }),
+  ).toBeNull();
+});
+
 it("starts a real native voting session, displays its LAN QR/results, and ends with results retained", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   const session = {

@@ -3,6 +3,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import { palette } from "@fcboard/fcboard/components/icons";
 
 import { classroomCommands } from "./commands";
+import {
+  keepSpotlightVisible,
+  spotlightMenu,
+  spotlightStar,
+} from "./spotlightGeometry";
 
 import "./Spotlight.scss";
 
@@ -25,6 +30,9 @@ export const Spotlight = () => {
         window.innerHeight / (window.innerWidth >= window.innerHeight ? 4 : 5),
       ),
     ),
+    halfHeight:
+      window.innerHeight / 2 -
+      window.innerHeight / (window.innerWidth >= window.innerHeight ? 4 : 5),
   });
   const [maskColor, setMaskColor] = useState("#000000");
   const dragging = useRef<
@@ -102,6 +110,7 @@ export const Spotlight = () => {
             Math.min(window.innerHeight, Number(args.y ?? previous.y)),
           ),
           radius: Number(args.radius ?? previous.radius),
+          halfHeight: Number(args.radius ?? previous.halfHeight),
         }));
       },
     );
@@ -140,32 +149,45 @@ export const Spotlight = () => {
   if (!state.open) {
     return null;
   }
-  const controlsX = Math.max(
-    12,
-    Math.min(window.innerWidth - 60, state.x + state.radius + 16),
+  const menu = spotlightMenu(
+    state.x,
+    state.radius,
+    window.innerWidth,
+    window.innerHeight,
   );
-  const controlsY = Math.max(12, Math.min(window.innerHeight - 210, state.y));
-  const popupWidth = Math.min(280, window.innerWidth - 24);
-  const aperture =
-    shape === "circle" ? (
-      <circle r="1" />
-    ) : shape === "rectangle" ? (
-      <rect x="-1" y="-1" width="2" height="2" />
-    ) : (
+  const popupWidth = Math.min(
+    popup === "shape" ? 208 : 218,
+    window.innerWidth - 24,
+  );
+  const aperture = (outer = false) => {
+    const border = outer ? 10 / 3 : 0;
+    if (shape === "circle") {
+      return <circle r={state.radius + border} />;
+    }
+    if (shape === "rectangle") {
+      return (
+        <rect
+          x={-state.radius - border}
+          y={-state.halfHeight - border}
+          width={(state.radius + border) * 2}
+          height={(state.halfHeight + border) * 2}
+        />
+      );
+    }
+    return (
       <polygon
         points={
-          shape === "triangle"
-            ? "0,-1 1,1 -1,1"
-            : Array.from({ length: 10 }, (_, i) => {
-                const radius = i % 2 ? 0.382 : 1;
-                const angle = (i * Math.PI) / 5 - Math.PI / 2;
-                return `${Math.cos(angle) * radius},${
-                  Math.sin(angle) * radius
-                }`;
-              }).join(" ")
+          shape === "star"
+            ? spotlightStar(state.radius, state.halfHeight, outer)
+            : `0,${-state.halfHeight - (outer ? 20 / 3 : 0)} ${
+                state.radius + (outer ? 20 / 3 : 0)
+              },${state.halfHeight + (outer ? 14 / 3 : 0)} ${
+                -state.radius - (outer ? 20 / 3 : 0)
+              },${state.halfHeight + (outer ? 14 / 3 : 0)}`
         }
       />
     );
+  };
   return (
     <div
       className="fc-spotlight"
@@ -187,8 +209,8 @@ export const Spotlight = () => {
         // MarkSizeView only moves an existing mark when the press starts inside it.
         if (
           dragging.current ||
-          Math.abs(event.clientX - state.x) > state.radius ||
-          Math.abs(event.clientY - state.y) > state.radius
+          Math.abs(event.clientX - state.x) > state.radius + 8 ||
+          Math.abs(event.clientY - state.y) > state.halfHeight + 8
         ) {
           return;
         }
@@ -207,37 +229,40 @@ export const Spotlight = () => {
           return;
         }
         event.stopPropagation();
-        pending.current = start.resize
-          ? {
-              ...start.state,
-              radius: Math.max(
-                48,
-                Math.min(
-                  600,
-                  Math.hypot(
-                    event.clientX - start.state.x,
-                    event.clientY - start.state.y,
+        const change = Math.max(
+          Math.max(48 - start.state.radius, 48 - start.state.halfHeight),
+          Math.min(
+            Math.min(600 - start.state.radius, 600 - start.state.halfHeight),
+            event.clientY - start.y,
+          ),
+        );
+        pending.current = keepSpotlightVisible(
+          start.resize
+            ? {
+                ...start.state,
+                radius: start.state.radius + change,
+                halfHeight: start.state.halfHeight + change,
+              }
+            : {
+                ...start.state,
+                x: Math.max(
+                  0,
+                  Math.min(
+                    window.innerWidth,
+                    start.state.x + event.clientX - start.x,
                   ),
                 ),
-              ),
-            }
-          : {
-              ...start.state,
-              x: Math.max(
-                0,
-                Math.min(
-                  window.innerWidth,
-                  start.state.x + event.clientX - start.x,
+                y: Math.max(
+                  0,
+                  Math.min(
+                    window.innerHeight,
+                    start.state.y + event.clientY - start.y,
+                  ),
                 ),
-              ),
-              y: Math.max(
-                0,
-                Math.min(
-                  window.innerHeight,
-                  start.state.y + event.clientY - start.y,
-                ),
-              ),
-            };
+              },
+          window.innerWidth,
+          window.innerHeight,
+        );
         if (!frame.current) {
           frame.current = requestAnimationFrame(() => {
             frame.current = 0;
@@ -271,13 +296,17 @@ export const Spotlight = () => {
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
       >
         <defs>
-          <mask id={maskId}>
+          <mask
+            id={maskId}
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+          >
             <rect width="100%" height="100%" fill="white" />
-            <g
-              transform={`translate(${state.x} ${state.y}) scale(${state.radius})`}
-              fill="black"
-            >
-              {aperture}
+            <g transform={`translate(${state.x} ${state.y})`} fill="black">
+              {aperture()}
             </g>
           </mask>
         </defs>
@@ -288,30 +317,33 @@ export const Spotlight = () => {
           mask={`url(#${maskId})`}
         />
         <g
-          transform={`translate(${state.x} ${state.y}) scale(${state.radius})`}
+          transform={`translate(${state.x} ${state.y})`}
           fill="white"
           fillOpacity={alpha / 255}
-          stroke="#9f9f9f"
-          strokeWidth={5 / state.radius}
         >
-          {aperture}
+          {aperture()}
+        </g>
+        <g mask={`url(#${maskId})`}>
+          <g transform={`translate(${state.x} ${state.y})`} fill="#9f9f9f">
+            {aperture(true)}
+          </g>
         </g>
       </svg>
       <div
         className="fc-spotlight-ring"
         style={{
           left: state.x - state.radius,
-          top: state.y - state.radius,
+          top: state.y - state.halfHeight,
           width: state.radius * 2,
-          height: state.radius * 2,
+          height: state.halfHeight * 2,
           border: "none",
         }}
       />
       <div
         className="fc-spotlight-controls"
         style={{
-          left: controlsX,
-          top: controlsY,
+          left: menu.x,
+          top: menu.y,
         }}
       >
         <button
@@ -332,18 +364,23 @@ export const Spotlight = () => {
           <div
             className="fc-spotlight-popup"
             data-shapes={popup === "shape"}
+            data-left={menu.flipped}
             style={{
               width: popupWidth,
               left: Math.max(
                 12,
                 Math.min(
                   window.innerWidth - popupWidth - 12,
-                  controlsX - popupWidth - 12 >= 12
-                    ? controlsX - popupWidth - 12
-                    : controlsX + 72,
+                  menu.flipped ? menu.x - popupWidth - 12 : menu.x + 62,
                 ),
               ),
-              top: Math.max(12, Math.min(window.innerHeight - 210, controlsY)),
+              top: Math.max(
+                12,
+                Math.min(
+                  window.innerHeight - 110,
+                  menu.y + (popup === "shape" ? 0 : 48),
+                ),
+              ),
             }}
             role="group"
             aria-label={t(
@@ -375,7 +412,7 @@ export const Spotlight = () => {
                       type="button"
                       aria-label={color}
                       aria-pressed={maskColor.toLowerCase() === color}
-                      style={{ background: color }}
+                      data-color={color}
                       onClick={() => setMaskColor(color)}
                     />
                   ))}
@@ -423,20 +460,8 @@ export const Spotlight = () => {
         aria-valuemax={600}
         aria-valuenow={Math.round(state.radius)}
         style={{
-          left: Math.max(
-            8,
-            Math.min(
-              window.innerWidth - 52,
-              state.x + state.radius * Math.SQRT1_2 - 22,
-            ),
-          ),
-          top: Math.max(
-            8,
-            Math.min(
-              window.innerHeight - 52,
-              state.y + state.radius * Math.SQRT1_2 - 22,
-            ),
-          ),
+          left: menu.resizeX,
+          top: menu.resizeY,
         }}
         onPointerDown={(event) => {
           event.stopPropagation();
@@ -477,6 +502,21 @@ export const Spotlight = () => {
                       Math.min(
                         600,
                         previous.radius +
+                          (["ArrowUp", "ArrowRight"].includes(event.key)
+                            ? 12
+                            : -12),
+                      ),
+                    ),
+              halfHeight:
+                event.key === "Home"
+                  ? 48
+                  : event.key === "End"
+                  ? 600
+                  : Math.max(
+                      48,
+                      Math.min(
+                        600,
+                        previous.halfHeight +
                           (["ArrowUp", "ArrowRight"].includes(event.key)
                             ? 12
                             : -12),

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
 import type { Page } from "@playwright/test";
@@ -305,6 +307,11 @@ for (const width of [390, 1920]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() => {
+      // Exercise the real downloadable-file fallback in browsers without a picker.
+      Reflect.deleteProperty(window, "showOpenFilePicker");
+      Reflect.deleteProperty(window, "showSaveFilePicker");
+    });
     await page.goto("/");
     const openTool = async (name: string) => {
       await page.getByRole("button", { name: "教学工具", exact: true }).click();
@@ -345,12 +352,73 @@ for (const width of [390, 1920]) {
     expect(await hasInk(0)).toBe(true);
     expect(await hasInk(1)).toBe(false);
     const board = page.locator(".fc-split-board");
-    await board.getByRole("button", { name: "设置", exact: true }).click();
+    await expect(board.locator("header")).toHaveCount(0);
+    await expect(
+      board.getByRole("button", { name: "关闭", exact: true }),
+    ).toHaveCount(2);
+    await expect(board.locator(".fc-split-bottom").first()).toHaveCSS(
+      "height",
+      "45px",
+    );
+    const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
+      width: items.reduce((sum, canvas) => sum + canvas.width, 0),
+      height: Math.max(...items.map((canvas) => canvas.height)),
+    }));
+    await board
+      .getByRole("button", { name: "关闭", exact: true })
+      .first()
+      .click();
+    const exit = page.getByRole("dialog", {
+      name: "是否退出分屏？是否保存文件？",
+      exact: true,
+    });
+    const downloading = page.waitForEvent("download");
+    await exit.getByRole("button", { name: "保存", exact: true }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toMatch(/\.jpg$/);
+    const bytes = await readFile((await download.path())!);
+    const exported = await page.evaluate(async (data) => {
+      const image = new Image();
+      image.src = `data:image/jpeg;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      const pixels = context.getImageData(
+        10,
+        30,
+        Math.min(90, canvas.width - 10),
+        100,
+      ).data;
+      return {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        hasInk: pixels.some((value, i) => i % 4 < 3 && value < 70),
+      };
+    }, bytes.toString("base64"));
+    expect(exported).toMatchObject({ ...size, hasInk: true });
+    await expect(exit).toHaveCount(0);
+    expect(await hasInk(0)).toBe(true);
+    await board
+      .getByRole("button", { name: "关闭", exact: true })
+      .last()
+      .click();
+    await exit.getByRole("button", { name: "不保存", exact: true }).click();
+    await openTool("分屏");
     await settings.getByRole("radio", { name: "2", exact: true }).check();
     await settings.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(panes).toHaveCount(0);
+    await openTool("分屏");
+    await settings.getByRole("button", { name: "确定", exact: true }).click();
     await expect(panes).toHaveCount(3);
     expect(await hasInk(0)).toBe(true);
-    await board.getByRole("button", { name: "关闭", exact: true }).click();
+    await board
+      .getByRole("button", { name: "关闭", exact: true })
+      .first()
+      .click();
+    await exit.getByRole("button", { name: "不保存", exact: true }).click();
     await openTool("幕布");
     const curtain = page.locator(".fc-curtain");
     await curtain

@@ -8,6 +8,50 @@ import { Spotlight } from "./Spotlight";
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it("keeps the vendor portrait aperture proportions and flips the screen-centered menu when the mark moves past the right quarter", async () => {
+  vi.stubGlobal("innerWidth", 390);
+  vi.stubGlobal("innerHeight", 844);
+  render(<Spotlight />);
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "tools.spotlight",
+      args: { shape: "rectangle" },
+    });
+  });
+  const overlay = screen.getByRole("region", { name: t("fcboard.spotlight") });
+  const aperture = overlay.querySelector("mask g rect")!;
+  expect(Number(aperture.getAttribute("width"))).toBeCloseTo((844 * 2) / 5);
+  expect(Number(aperture.getAttribute("height"))).toBeCloseTo((844 * 3) / 5);
+  const controls = overlay.querySelector<HTMLElement>(
+    ".fc-spotlight-controls",
+  )!;
+  const move = async (x: number, y: number) =>
+    act(async () => {
+      await classroomCommands.execute({
+        name: "tools.spotlight",
+        args: { x, y, radius: 90 },
+      });
+    });
+  await move(150, 200);
+  const fixedY = controls.style.top;
+  expect(parseFloat(controls.style.left)).toBeGreaterThan(240);
+  await move(350, 600);
+  expect(parseFloat(controls.style.left)).toBeLessThan(260);
+  expect(controls.style.top).toBe(fixedY);
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.spotlight_shape") }),
+  );
+  expect(
+    screen.getByRole("group", { name: t("fcboard.spotlight_shape") }).style
+      .width,
+  ).toBe("208px");
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  expect(
+    screen.getByRole("group", { name: t("fcboard.settings") }).style.width,
+  ).toBe("218px");
 });
 
 it("moves and resizes one spotlight, cancels interrupted dragging and retains keyboard controls", async () => {
@@ -45,12 +89,15 @@ it("moves and resizes one spotlight, cancels interrupted dragging and retains ke
     name: t("fcboard.spotlight_size"),
   });
   send(resize, "pointerdown", 350, 370);
-  send(resize, "pointermove", 420, 240);
+  send(resize, "pointermove", 420, 370);
   await act(async () => vi.advanceTimersByTime(20));
-  expect(resize).toHaveAttribute("aria-valuenow", "180");
-  send(resize, "lostpointercapture", 460, 300);
+  expect(resize).toHaveAttribute("aria-valuenow", "100");
+  send(resize, "pointermove", 420, 406);
+  await act(async () => vi.advanceTimersByTime(20));
+  expect(resize).toHaveAttribute("aria-valuenow", "136");
+  send(resize, "lostpointercapture", 460, 406);
   send(resize, "pointermove", 800, 300);
-  expect(resize).toHaveAttribute("aria-valuenow", "180");
+  expect(resize).toHaveAttribute("aria-valuenow", "136");
   fireEvent.keyDown(resize, { key: "End" });
   expect(resize).toHaveAttribute("aria-valuenow", "600");
   fireEvent.keyDown(resize, { key: "Home" });

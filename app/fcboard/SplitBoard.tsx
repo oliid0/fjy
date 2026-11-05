@@ -6,10 +6,12 @@ import bluePen from "./assets/multiscreen/ic_blue_pen.svg";
 import redPen from "./assets/multiscreen/ic_red_pen.svg";
 import smallEraser from "./assets/multiscreen/ic_small_eraser.svg";
 import largeEraser from "./assets/multiscreen/ic_big_eraser.svg";
+import exitIcon from "./assets/multiscreen/ic_exit.svg";
 
 import { MaterialPanel } from "./MaterialPanel";
 
 import { classroomCommands } from "./commands";
+import { savePageFiles } from "./boardFile";
 
 type Point = [number, number];
 type Stroke = { points: Point[]; color: string; width: number; erase: boolean };
@@ -80,10 +82,14 @@ const SplitPane = ({
   model,
   index,
   background,
+  count,
+  onExit,
 }: {
   model: Pane;
   index: number;
   background: string;
+  count: number;
+  onExit: () => void;
 }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   const active = useRef(new Map<number, Stroke>());
@@ -137,15 +143,35 @@ const SplitPane = ({
     <section
       className="fc-split-pane"
       aria-label={t("fcboard.split_pane", { number: index + 1 })}
+      onKeyDown={(event) => {
+        if (active.current.size) {
+          return;
+        }
+        if (
+          (event.ctrlKey || event.metaKey) &&
+          event.key.toLowerCase() === "z"
+        ) {
+          event.preventDefault();
+          model.strokes.pop();
+          redraw();
+        }
+        if (event.key === "Delete") {
+          event.preventDefault();
+          model.strokes.length = 0;
+          redraw();
+        }
+      }}
     >
       <canvas
         ref={canvas}
+        tabIndex={0}
         style={{ background, touchAction: "none" }}
         onPointerDown={(event) => {
           if (event.pointerType === "mouse" && event.button !== 0) {
             return;
           }
           event.preventDefault();
+          event.currentTarget.focus({ preventScroll: true });
           event.currentTarget.setPointerCapture?.(event.pointerId);
           const stroke: Stroke = {
             color: colors[tool] || colors[0],
@@ -200,50 +226,51 @@ const SplitPane = ({
         onPointerCancel={(event) => active.current.delete(event.pointerId)}
         onLostPointerCapture={(event) => active.current.delete(event.pointerId)}
       />
-      <div className="fc-split-penbar">
-        {(
-          [
-            "split_black",
-            "split_blue",
-            "split_red",
-            "split_small_eraser",
-            "split_large_eraser",
-          ] as const
-        ).map((label, value) => (
+      <div className="fc-split-bottom">
+        {index === 0 && (
           <button
+            className="fc-split-exit"
             type="button"
-            key={label}
-            aria-label={t(`fcboard.${label}`)}
-            aria-pressed={tool === value}
-            onClick={() => setTool(value)}
-            style={{ color: colors[value] }}
+            aria-label={t("buttons.close")}
+            onClick={onExit}
           >
-            <img src={toolIcons[value]} alt="" draggable={false} />
+            <img src={exitIcon} alt="" />
           </button>
-        ))}
-        <button
-          type="button"
-          aria-label={t("buttons.undo")}
-          onClick={() => {
-            if (!active.current.size) {
-              model.strokes.pop();
-              redraw();
-            }
-          }}
-        >
-          ↶
-        </button>
-        <button
-          type="button"
-          aria-label={t("buttons.clear")}
-          onClick={() => {
-            active.current.clear();
-            model.strokes.length = 0;
-            redraw();
-          }}
-        >
-          ⌫
-        </button>
+        )}
+        <div className="fc-split-penbar">
+          {(
+            [
+              "split_black",
+              "split_blue",
+              "split_red",
+              "split_small_eraser",
+              "split_large_eraser",
+            ] as const
+          ).map((label, value) => (
+            <button
+              type="button"
+              key={label}
+              aria-label={t(`fcboard.${label}`)}
+              aria-pressed={tool === value}
+              hidden={value === 3}
+              data-tool={value}
+              onClick={() => setTool(value)}
+              style={{ color: colors[value] }}
+            >
+              <img src={toolIcons[value]} alt="" draggable={false} />
+            </button>
+          ))}
+        </div>
+        {index === count - 1 && (
+          <button
+            className="fc-split-exit fc-split-exit-right"
+            type="button"
+            aria-label={t("buttons.close")}
+            onClick={onExit}
+          >
+            <img src={exitIcon} alt="" />
+          </button>
+        )}
       </div>
     </section>
   );
@@ -256,6 +283,77 @@ export const SplitBoard = () => {
     count: number;
     background: number;
   } | null>(null);
+  const [exiting, setExiting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const section = useRef<HTMLElement>(null);
+  const saveRequest = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => saveRequest.current?.abort(), []);
+  const save = async () => {
+    if (saveRequest.current) {
+      return;
+    }
+    const request = new AbortController();
+    saveRequest.current = request;
+    setSaving(true);
+    setError("");
+    try {
+      const panes = Array.from(section.current!.querySelectorAll("canvas"));
+      const canvas = document.createElement("canvas");
+      canvas.width = panes.reduce((sum, pane) => sum + pane.width, 0);
+      canvas.height = Math.max(...panes.map((pane) => pane.height));
+      const context = canvas.getContext("2d");
+      if (!context || !canvas.width || !canvas.height) {
+        throw new Error(t("fcboard.the_board_is_empty"));
+      }
+      context.fillStyle = backgrounds[background].color;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      let x = 0;
+      context.strokeStyle = "#000000";
+      context.lineWidth = 1.5 * (window.devicePixelRatio || 1);
+      context.setLineDash([5, 5]);
+      for (const pane of panes) {
+        context.drawImage(pane, x, 0);
+        if (x) {
+          context.beginPath();
+          context.moveTo(x, 0);
+          context.lineTo(x, canvas.height);
+          context.stroke();
+        }
+        x += pane.width;
+      }
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(
+          (value) =>
+            value
+              ? resolve(value)
+              : reject(new Error(t("fcboard.split_export_failed"))),
+          "image/jpeg",
+          1,
+        ),
+      );
+      request.signal.throwIfAborted();
+      const saved = await savePageFiles(
+        [{ page: 1, blob }],
+        t("fcboard.split_screen"),
+        "jpg",
+        request.signal,
+      );
+      request.signal.throwIfAborted();
+      if (saved) {
+        setExiting(false);
+      }
+    } catch (failure) {
+      if (!request.signal.aborted) {
+        setError(failure instanceof Error ? failure.message : String(failure));
+      }
+    } finally {
+      if (saveRequest.current === request) {
+        saveRequest.current = undefined;
+        setSaving(false);
+      }
+    }
+  };
   const current = useRef({ open, count, background });
   current.current = { open, count, background };
   const models = useRef<Pane[]>(
@@ -292,6 +390,8 @@ export const SplitBoard = () => {
           if (configure) {
             setDraft({ count: next.count, background: next.background });
           } else {
+            saveRequest.current?.abort();
+            setExiting(false);
             setDraft(null);
             setOpen(next.open);
             setCount(next.count);
@@ -310,7 +410,7 @@ export const SplitBoard = () => {
     [],
   );
   useEffect(() => {
-    if (!open) {
+    if (!open && !draft) {
       return;
     }
     const escape = (event: KeyboardEvent) => {
@@ -318,7 +418,7 @@ export const SplitBoard = () => {
         if (draft) {
           setDraft(null);
         } else {
-          setOpen(false);
+          setExiting(true);
         }
       }
     };
@@ -330,30 +430,20 @@ export const SplitBoard = () => {
       {open && (
         <section
           className="fc-split-board"
+          ref={section}
           role="dialog"
           aria-label={t("fcboard.split_screen")}
         >
-          <header className="fc-builtin-row">
-            <strong>{t("fcboard.split_screen")}</strong>
-            <button
-              type="button"
-              onClick={() => setDraft({ count, background })}
-            >
-              {t("fcboard.settings")}
-            </button>
-            <button
-              type="button"
-              aria-label={t("buttons.close")}
-              onClick={() => setOpen(false)}
-            >
-              ×
-            </button>
-          </header>
           <div className="fc-split-panes">
             {models.current.slice(0, count).map((model, i) => (
               <SplitPane
                 key={i}
                 index={i}
+                count={count}
+                onExit={() => {
+                  setError("");
+                  setExiting(true);
+                }}
                 model={model}
                 background={backgrounds[background].color}
               />
@@ -367,7 +457,6 @@ export const SplitBoard = () => {
           role="dialog"
           aria-label={`${t("fcboard.split_screen")} · ${t("fcboard.settings")}`}
           className="fc-split-settings"
-          onDismiss={() => setDraft(null)}
         >
           <h2>
             {t("fcboard.split_screen")} · {t("fcboard.settings")}
@@ -382,14 +471,14 @@ export const SplitBoard = () => {
                     name="fc-split-count"
                     value={number}
                     checked={draft.count === number}
+                    aria-label={String(number)}
                     onChange={() => setDraft({ ...draft, count: number })}
                   />
-                  <span className="fc-split-preview" aria-hidden="true">
-                    {Array.from({ length: number }, (_, i) => (
-                      <i key={i} />
-                    ))}
-                  </span>
-                  <span>{number}</span>
+                  <span
+                    className="fc-split-preview"
+                    data-count={number}
+                    aria-hidden="true"
+                  />
                 </label>
               ))}
             </div>
@@ -408,6 +497,7 @@ export const SplitBoard = () => {
                   />
                   <span
                     className="fc-split-preview"
+                    data-background={value + 1}
                     style={{ background: color }}
                     aria-hidden="true"
                   />
@@ -429,6 +519,32 @@ export const SplitBoard = () => {
             </button>
             <button type="button" onClick={() => setDraft(null)}>
               {t("buttons.cancel")}
+            </button>
+          </footer>
+        </MaterialPanel>
+      )}
+      {exiting && open && (
+        <MaterialPanel
+          centered
+          role="dialog"
+          aria-label={t("fcboard.split_exit_prompt")}
+          className="fc-split-exit-dialog"
+        >
+          <p>{t("fcboard.split_exit_prompt")}</p>
+          {error && <p role="alert">{error}</p>}
+          <footer>
+            <button type="button" disabled={saving} onClick={() => void save()}>
+              {t("buttons.save")}
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                setExiting(false);
+                setOpen(false);
+              }}
+            >
+              {t("fcboard.exit_without_saving")}
             </button>
           </footer>
         </MaterialPanel>

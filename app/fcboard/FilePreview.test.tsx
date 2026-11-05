@@ -649,6 +649,7 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
       <InsertionCandidates />
     </>,
   );
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const targets = () =>
     insertionWritingTargets(documentWritingParts(currentInk()));
   const before = targets();
@@ -706,22 +707,28 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
     await classroomCommands.execute({ name: "document.redo" });
   });
   const target = targets()[1];
-  vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
-    async (
-      _image,
-      _signal,
-      _progress,
-      _kind,
-      _accept,
-      _strokes,
-      _language,
-      choose,
-    ) => choose!(["Hello", "Hallo"]),
-  );
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockImplementation(
+      async (
+        _image,
+        _signal,
+        _progress,
+        _kind,
+        _accept,
+        _strokes,
+        _language,
+        choose,
+      ) => choose!(["Hello", "Hallo"]),
+    );
   pointer("pointerdown", target.x + 25, target.y + 20);
   pointer("pointermove", target.x + 45, target.y + 25);
   pointer("pointerup", target.x + 55, target.y + 25);
-  await screen.findByRole("button", { name: "Hallo" });
+  await act(async () => vi.advanceTimersByTimeAsync(700));
+  expect(recognize).toHaveBeenCalledTimes(1);
+  expect(recognize.mock.calls[0][5]).toHaveLength(2);
+  vi.useRealTimers();
+  expect(screen.getByRole("button", { name: "Hallo" })).toBeVisible();
   expect(currentInk().some((stroke) => stroke.fcInk)).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Hallo" }));
   await waitFor(() =>

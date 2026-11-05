@@ -12,6 +12,7 @@ export class InkRequests {
       mode: string;
       started: boolean;
       failed: boolean;
+      current?: () => boolean;
       timer?: ReturnType<typeof setTimeout>;
     }
   >();
@@ -59,6 +60,7 @@ export class InkRequests {
     ids: string[],
     ink: InkInput,
     mode: string,
+    current?: () => boolean,
   ) {
     this.entries.set(request, {
       ids,
@@ -66,6 +68,7 @@ export class InkRequests {
       mode,
       started: false,
       failed: false,
+      current,
     });
   }
   /** Every region owns its debounce; other regions may keep writing meanwhile. */
@@ -73,7 +76,13 @@ export class InkRequests {
     const entry = this.entries.get(request);
     if (entry) {
       clearTimeout(entry.timer);
-      entry.timer = setTimeout(work, delay);
+      entry.timer = setTimeout(() => {
+        if (entry.current && !entry.current()) {
+          this.cancel(request);
+        } else {
+          work();
+        }
+      }, delay);
     }
   }
   /** A new contact revises only nearby requests, including its own pending debounce. */
@@ -134,7 +143,10 @@ export class InkRequests {
   prune(visible: readonly string[]) {
     const ids = new Set(visible);
     for (const [request, entry] of this.entries) {
-      if (entry.ids.some((id) => !ids.has(id))) {
+      if (
+        entry.ids.some((id) => !ids.has(id)) ||
+        (entry.current && !entry.current())
+      ) {
         this.cancel(request);
       }
     }

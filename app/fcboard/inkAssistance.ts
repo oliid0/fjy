@@ -189,32 +189,29 @@ export const observeInkAssistance = (
     }
     previous = requestKey;
     const request = new AbortController();
+    const current = () =>
+      !request.signal.aborted &&
+      !classroomCommands.has("document.draw") &&
+      (!target ||
+        insertionWritingTargets(boardWritingParts(api.getSceneElements())).some(
+          (item) => item.key === target.key && item.stamp === target.stamp,
+        )) &&
+      selectionSignature(
+        api
+          .getSceneElements()
+          .filter((element) => source.some((input) => input.id === element.id)),
+      ) === signature;
     requests.reserve(
       request,
       source.map((element) => element.id),
       boardInk(source),
       mode,
+      current,
     );
     const since = Date.now();
     requests.schedule(
       request,
       () => {
-        const current = () =>
-          !request.signal.aborted &&
-          !classroomCommands.has("document.draw") &&
-          (!target ||
-            insertionWritingTargets(
-              boardWritingParts(api.getSceneElements()),
-            ).some(
-              (item) => item.key === target.key && item.stamp === target.stamp,
-            )) &&
-          selectionSignature(
-            api
-              .getSceneElements()
-              .filter((element) =>
-                source.some((input) => input.id === element.id),
-              ),
-          ) === signature;
         requests.start(request);
         onBusy(true);
         void (async () => {

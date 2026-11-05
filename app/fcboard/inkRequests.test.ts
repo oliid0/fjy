@@ -57,3 +57,25 @@ it("deletes only removed regions and cancels all remaining timers on a page chan
   expect(b).not.toHaveBeenCalled();
   expect(second.signal.aborted).toBe(true);
 });
+
+it("releases relocated ink IDs for a new request while an independent region keeps its deadline", () => {
+  const requests = new InkRequests();
+  const moved = new AbortController();
+  const other = new AbortController();
+  const staleWork = vi.fn();
+  const otherWork = vi.fn();
+  let valid = true;
+  requests.reserve(moved, ["moved"], ink(100), "text", () => valid);
+  requests.reserve(other, ["other"], ink(500), "text");
+  requests.schedule(moved, staleWork, 700);
+  requests.schedule(other, otherWork, 700);
+  vi.advanceTimersByTime(400);
+  valid = false;
+  requests.prune(["moved", "other"]);
+  expect(moved.signal.aborted).toBe(true);
+  expect(requests.available("moved")).toBe(true);
+  expect(other.signal.aborted).toBe(false);
+  vi.advanceTimersByTime(300);
+  expect(staleWork).not.toHaveBeenCalled();
+  expect(otherWork).toHaveBeenCalledTimes(1);
+});

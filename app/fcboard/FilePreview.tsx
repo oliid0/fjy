@@ -2182,12 +2182,6 @@ export const FilePreview = ({
     }
     const request = new AbortController();
     const sourceIds = source.map((stroke) => stroke.id);
-    requests.reserve(
-      request,
-      sourceIds,
-      source.map((stroke) => stroke.points),
-      assistMode,
-    );
     const current = () =>
       !request.signal.aborted &&
       pageRef.current === page &&
@@ -2202,6 +2196,13 @@ export const FilePreview = ({
           sourceIds.includes(stroke.id),
         ),
       ) === signature;
+    requests.reserve(
+      request,
+      sourceIds,
+      source.map((stroke) => stroke.points),
+      assistMode,
+      current,
+    );
     const since = Date.now();
     requests.schedule(
       request,

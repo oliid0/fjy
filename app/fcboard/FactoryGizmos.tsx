@@ -73,6 +73,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
     scale: 1,
     hidden: false,
     selecting: false,
+    document: false,
   });
   const [preview, setPreview] = useState<[number, number][]>([]);
   const [error, setError] = useState("");
@@ -150,6 +151,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
           : state.scrollY * state.zoom.value,
         scale: stage ? stage.width / 1000 : state.zoom.value,
         hidden: !!state.viewModeEnabled,
+        document: !!document,
         selecting: ["selection", "lasso"].includes(
           document?.tool || state.activeTool.type,
         ),
@@ -159,7 +161,8 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
         previous.y === nextView.y &&
         previous.scale === nextView.scale &&
         previous.hidden === nextView.hidden &&
-        previous.selecting === nextView.selecting
+        previous.selecting === nextView.selecting &&
+        previous.document === nextView.document
           ? previous
           : nextView,
       );
@@ -671,7 +674,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
           // SVG paths are not CSS layout boxes. Disable native panning on the
           // SVG viewport so a real touch drag is not cancelled after its slop.
           touchAction: "none",
-          zIndex: 22,
+          zIndex: view.document ? 22 : "var(--zIndex-svgLayer)",
           visibility: view.hidden || view.selecting ? "hidden" : "visible",
           // Hidden SVG descendants can override visibility or pointer-events.
           // Remove this interaction layer from hit testing during object selection.

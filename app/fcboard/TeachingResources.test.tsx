@@ -587,6 +587,18 @@ it("opens Insert Website at the original right-hand margin and vertical center w
       "src",
       "https://example.test/",
     );
+    const board = document.createElement("canvas");
+    board.className = "interactive";
+    document.body.append(board);
+    const draw = vi.fn();
+    board.addEventListener("pointerdown", draw);
+    try {
+      fireEvent.pointerDown(board);
+      expect(document.querySelector(".fc-web-resource")).toBeNull();
+      expect(draw).toHaveBeenCalledTimes(1);
+    } finally {
+      board.remove();
+    }
   } finally {
     view.unmount();
   }

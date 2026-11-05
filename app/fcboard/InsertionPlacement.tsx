@@ -125,7 +125,7 @@ export const InsertionPlacement = ({
         inset: 0,
         width: "100%",
         height: "100%",
-        zIndex: documentStage ? 4 : 10,
+        zIndex: documentStage ? 4 : "var(--zIndex-svgLayer)",
         pointerEvents: "auto",
         touchAction: "none",
         cursor: "crosshair",

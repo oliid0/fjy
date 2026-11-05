@@ -142,6 +142,24 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
     if (!webUrl) {
       return;
     }
+    const outside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          "canvas.interactive,.fc-document-ink,.fc-document-stage",
+        )
+      ) {
+        setWeb(undefined);
+        webState.current = {};
+      }
+    };
+    window.addEventListener("pointerdown", outside, true);
+    return () => window.removeEventListener("pointerdown", outside, true);
+  }, [webUrl]);
+  useEffect(() => {
+    if (!webUrl) {
+      return;
+    }
     const resize = () =>
       setWeb((current) => {
         if (!current) {

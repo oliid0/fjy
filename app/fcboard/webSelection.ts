@@ -1,4 +1,5 @@
 import { CapacitorHttp } from "@capacitor/core";
+import { viewportCoordsToSceneCoords } from "@fcboard/common";
 
 import type { FcboardImperativeAPI, DataURL } from "@fcboard/fcboard/types";
 
@@ -16,10 +17,19 @@ export const insertWebSelection = async (
     value: string;
     sourceUrl?: string;
     userAgent?: string;
+    position?: { x: number; y: number };
   },
   signal: AbortSignal,
 ) => {
   signal.throwIfAborted();
+  if (
+    selection.position &&
+    ![selection.position.x, selection.position.y].every(
+      (value) => Number.isFinite(value) && Math.abs(value) <= 100000,
+    )
+  ) {
+    throw new Error("Invalid image drop position");
+  }
   const revision = classroomCommands.revision;
   if (selection.kind === "text") {
     if (!selection.value.trim() || selection.value.length > 10000) {
@@ -137,6 +147,25 @@ export const insertWebSelection = async (
       throw new DOMException("Document is not ready", "AbortError");
     }
     const id = crypto.randomUUID();
+    const surface = classroomCommands.read("document") as
+      | { viewport?: { scroll?: number } }
+      | undefined;
+    const stage = window.document
+      .querySelector(".fc-document-stage")
+      ?.getBoundingClientRect();
+    const drop =
+      selection.position && stage
+        ? {
+            x: (selection.position.x - stage.left) / viewportScale - width / 2,
+            y:
+              (selection.position.y - stage.top) / viewportScale +
+              (surface?.viewport?.scroll || 0) -
+              height / 2,
+          }
+        : undefined;
+    if (selection.position && !drop) {
+      throw new DOMException("Document is not ready", "AbortError");
+    }
     await classroomCommands.execute({
       name: "document.draw",
       args: {
@@ -148,13 +177,15 @@ export const insertWebSelection = async (
           id,
           type: "image",
           x:
-            layout.viewport.right === undefined
+            drop?.x ??
+            (layout.viewport.right === undefined
               ? layout.viewport.left + 20
-              : (layout.viewport.left + layout.viewport.right - width) / 2,
+              : (layout.viewport.left + layout.viewport.right - width) / 2),
           y:
-            layout.viewport.bottom === undefined
+            drop?.y ??
+            (layout.viewport.bottom === undefined
               ? layout.viewport.top + 20
-              : (layout.viewport.top + layout.viewport.bottom - height) / 2,
+              : (layout.viewport.top + layout.viewport.bottom - height) / 2),
           width,
           height,
         },
@@ -173,6 +204,12 @@ export const insertWebSelection = async (
     return [id];
   }
   const fileId = crypto.randomUUID() as FileId;
+  const dropped = selection.position
+    ? viewportCoordsToSceneCoords(
+        { clientX: selection.position.x, clientY: selection.position.y },
+        api.getAppState(),
+      )
+    : undefined;
   api.addFiles([
     {
       id: fileId,
@@ -189,7 +226,9 @@ export const insertWebSelection = async (
     {
       type: "image",
       fileId,
-      ...insertionPoint(api, { width, height }),
+      ...(dropped
+        ? { x: dropped.x - width / 2, y: dropped.y - height / 2 }
+        : insertionPoint(api, { width, height })),
       width,
       height,
     },

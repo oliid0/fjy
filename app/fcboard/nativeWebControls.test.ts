@@ -84,6 +84,9 @@ it.each([
       const overlay = window.document.createElement("span");
       const image = window.document.createElement("img");
       image.src = source;
+      Object.defineProperty(image, "getBoundingClientRect", {
+        value: () => ({ x: 12, y: 18, width: 160, height: 80 }),
+      });
       Object.defineProperties(image, {
         naturalWidth: { value: 2400 },
         naturalHeight: { value: 1200 },
@@ -106,6 +109,7 @@ it.each([
       expect(JSON.parse(window.fcNativeWebSelection(20, 20))).toEqual({
         kind: "image",
         value: tainted ? source : "data:image/png;base64,aW1hZ2U=",
+        bounds: { x: 12, y: 18, width: 160, height: 80 },
       });
       if (source.startsWith("blob:")) {
         expect(drawImage).toHaveBeenCalledWith(image, 0, 0, 1440, 720);

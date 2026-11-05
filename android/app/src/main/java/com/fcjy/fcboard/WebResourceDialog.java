@@ -59,6 +59,10 @@ final class WebResourceDialog extends Dialog {
     private int navigationRevision;
     private final Handler controlTimer = new Handler(Looper.getMainLooper());
     private final Map<PluginCall, Runnable> pendingControls = new HashMap<>();
+    private boolean touching;
+    private boolean closed;
+    private Runnable clearImageDrag;
+    private final java.util.function.Consumer<JSObject> onSelection;
 
     private void cancelControls(String reason) {
         for (PluginCall call : new java.util.ArrayList<>(pendingControls.keySet())) rejectControl(call, reason);
@@ -100,6 +104,7 @@ final class WebResourceDialog extends Dialog {
     WebResourceDialog(Activity activity, String url, String language, java.util.function.Consumer<JSObject> selected) { this(activity, url, language, selected, false); }
     WebResourceDialog(Activity activity, String url, String language, java.util.function.Consumer<JSObject> selected, boolean teaching) {
         super(activity);
+        onSelection = selected;
         this.teaching = teaching;
         Configuration config = new Configuration(activity.getResources().getConfiguration());
         config.setLocale(Locale.forLanguageTag(language));
@@ -146,6 +151,7 @@ final class WebResourceDialog extends Dialog {
         final int[] touchPage = new int[1];
         web.setOnTouchListener((view, event) -> {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { touch[0] = event.getX(); touch[1] = event.getY(); touchPage[0] = pageEpoch; }
+            touching = event.getActionMasked() != MotionEvent.ACTION_UP && event.getActionMasked() != MotionEvent.ACTION_CANCEL;
             return false;
         });
         web.setOnLongClickListener(view -> {
@@ -167,8 +173,11 @@ final class WebResourceDialog extends Dialog {
                         if (content.length()>28000000) throw new IllegalArgumentException("Web image is too large");
                         if (!content.matches("^data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]*={0,2}$")) checkedUrl(content);
                     }
-                    selected.accept(new JSObject().put("kind", kind).put("value", content)
-                        .put("sourceUrl", web.getUrl()).put("userAgent", web.getSettings().getUserAgentString()));
+                    JSObject selection = new JSObject().put("kind", kind).put("value", content)
+                        .put("sourceUrl", web.getUrl()).put("userAgent", web.getSettings().getUserAgentString());
+                    if ("image".equals(kind)) {
+                        if (touching) startImageDrag(selection, value.getJSONObject("bounds"));
+                    } else selected.accept(selection);
                     status.setVisibility(android.view.View.GONE);
                 } catch (Exception unavailable) {
                     status.setText(text.getString(R.string.web_selection_failed));
@@ -251,6 +260,8 @@ final class WebResourceDialog extends Dialog {
             }
         });
         setOnDismissListener(dialog -> {
+            closed = true;
+            if (clearImageDrag != null) clearImageDrag.run();
             cancelControls("WEB_PAGE_CLOSED");
             controlTimer.removeCallbacksAndMessages(null);
             activity.getWindow().getDecorView().removeOnLayoutChangeListener(displayLayout);
@@ -278,6 +289,59 @@ final class WebResourceDialog extends Dialog {
         resizeToDisplay();
         getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH);
+    }
+
+    @Override public boolean onTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_OUTSIDE) { dismiss(); return false; }
+        return super.onTouchEvent(event);
+    }
+
+    /** Android's native drag shadow follows the held finger across the browser window. */
+    private void startImageDrag(JSObject selection, JSONObject box) throws Exception {
+        float scale = Math.max(0.1f, web.getScale());
+        float left = Math.max(0, (float)box.getDouble("x") * scale);
+        float top = Math.max(0, (float)box.getDouble("y") * scale);
+        float width = Math.min(web.getWidth() - left, (float)box.getDouble("width") * scale);
+        float height = Math.min(web.getHeight() - top, (float)box.getDouble("height") * scale);
+        if (!Float.isFinite(left + top + width + height) || width <= 0 || height <= 0) throw new IllegalArgumentException("Image is not visible");
+        float fit = Math.min(1, dp(180) / Math.max(width, height));
+        Bitmap preview = Bitmap.createBitmap(Math.max(1, Math.round(width * fit)), Math.max(1, Math.round(height * fit)), Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(preview);
+        canvas.scale(fit, fit); canvas.translate(-left, -top); web.draw(canvas);
+        android.widget.ImageView shadow = new android.widget.ImageView(getContext());
+        shadow.setImageBitmap(preview); shadow.setAlpha(0.92f); shadow.layout(0, 0, preview.getWidth(), preview.getHeight());
+        android.view.ViewGroup host = getOwnerActivity().findViewById(android.R.id.content);
+        WebView board = ((MainActivity)getOwnerActivity()).getBridge().getWebView();
+        android.view.View target = new android.view.View(getContext());
+        final boolean[] dropped = {false};
+        Runnable clear = () -> {
+            target.setOnDragListener(null); host.removeView(target);
+            if (!preview.isRecycled()) preview.recycle();
+            clearImageDrag = null;
+        };
+        clearImageDrag = clear;
+        target.setOnDragListener((view, event) -> {
+            if (event.getLocalState() != selection) return false;
+            if (event.getAction() == android.view.DragEvent.ACTION_DROP) {
+                int[] screen = new int[2], boardScreen = new int[2];
+                view.getLocationOnScreen(screen); board.getLocationOnScreen(boardScreen);
+                float boardScale = Math.max(0.1f, board.getScale());
+                dropped[0] = true;
+                onSelection.accept(selection.put("position", new JSObject()
+                    .put("x", (screen[0] + event.getX() - boardScreen[0]) / boardScale)
+                    .put("y", (screen[1] + event.getY() - boardScreen[1]) / boardScale)));
+                dismiss(); return true;
+            }
+            if (event.getAction() == android.view.DragEvent.ACTION_DRAG_ENDED) {
+                clear.run();
+                if (!dropped[0] && !closed) show();
+            }
+            return true;
+        });
+        host.addView(target, new android.view.ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (web.startDragAndDrop(android.content.ClipData.newPlainText("Fcboard image", ""), new android.view.View.DragShadowBuilder(shadow), selection, 0)) hide();
+        else { clear.run(); throw new IllegalStateException("Image drag is unavailable"); }
     }
 
     private void resizeToDisplay() {

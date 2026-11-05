@@ -13,6 +13,102 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+it.each([0.5, 2])(
+  "places a held image at the actual drop at zoom %s, even over existing content",
+  async (zoom) => {
+    const api = sceneAPI();
+    const state = api.getAppState();
+    api.getAppState = () => ({
+      ...state,
+      zoom: { value: zoom as typeof state.zoom.value },
+      scrollX: 80 as typeof state.scrollX,
+      scrollY: -40 as typeof state.scrollY,
+      offsetLeft: 30,
+      offsetTop: 40,
+    });
+    vi.stubGlobal("devicePixelRatio", 1);
+    vi.stubGlobal(
+      "Image",
+      class {
+        naturalWidth = 200;
+        naturalHeight = 100;
+        src = "";
+        decode = async () => {};
+      },
+    );
+    const before = api.getSceneElements();
+    await insertWebSelection(
+      api,
+      {
+        kind: "image",
+        value: "data:image/png;base64,aW1hZ2U=",
+        position: { x: 360, y: 280 },
+      },
+      new AbortController().signal,
+    );
+    const image = api.getSceneElements().find((item) => item.type === "image")!;
+    expect(image.x + image.width / 2).toBeCloseTo((360 - 30) / zoom - 80);
+    expect(image.y + image.height / 2).toBeCloseTo((280 - 40) / zoom + 40);
+    expect(
+      api
+        .getSceneElements()
+        .filter((item) => before.some((old) => old.id === item.id)),
+    ).toEqual(before);
+  },
+);
+
+it("maps an image drop into the scrolled courseware coordinates", async () => {
+  const api = sceneAPI();
+  vi.stubGlobal("devicePixelRatio", 1);
+  vi.stubGlobal(
+    "Image",
+    class {
+      naturalWidth = 200;
+      naturalHeight = 100;
+      src = "";
+      decode = async () => {};
+    },
+  );
+  const stage = document.createElement("div");
+  stage.className = "fc-document-stage";
+  stage.getBoundingClientRect = () => ({ left: 100, top: 80 } as DOMRect);
+  document.body.append(stage);
+  const draw = vi.fn();
+  const stops = [
+    classroomCommands.context("document", () => ({
+      viewport: { scroll: 300 },
+    })),
+    classroomCommands.context("document.layout", () => ({
+      scale: 2,
+      viewport: { left: 0, top: 300, right: 1000, bottom: 800 },
+    })),
+    classroomCommands.register("document.draw", "@internal", draw),
+  ];
+  try {
+    await insertWebSelection(
+      api,
+      {
+        kind: "image",
+        value: "data:image/png;base64,aW1hZ2U=",
+        position: { x: 600, y: 360 },
+      },
+      new AbortController().signal,
+    );
+    expect(draw).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shape: expect.objectContaining({
+          x: 200,
+          y: 415,
+          width: 100,
+          height: 50,
+        }),
+      }),
+    );
+  } finally {
+    stops.reverse().forEach((stop) => stop());
+    stage.remove();
+  }
+});
 it("inserts long-pressed webpage text using the visible canvas text command", async () => {
   const api = sceneAPI();
   const release = registerCanvasCommands(api);

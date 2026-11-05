@@ -24,7 +24,7 @@ public class GeneratedResourceTest {
         scenario.onActivity(activity -> activity.getBridge().getWebView().evaluateJavascript(script, result -> {
             value.set(result); done.countDown();
         }));
-        assertTrue("WebView evaluation must complete", done.await(5, TimeUnit.SECONDS));
+        assertTrue("WebView evaluation must complete: " + script.substring(0, Math.min(160, script.length())), done.await(5, TimeUnit.SECONDS));
         return value.get();
     }
 

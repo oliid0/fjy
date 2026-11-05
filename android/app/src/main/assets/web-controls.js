@@ -47,7 +47,12 @@
         if (value.length > 28000000) {
           throw Error("WEB_IMAGE_TOO_LARGE");
         }
-        return JSON.stringify({ kind: "image", value });
+        const box = image.getBoundingClientRect();
+        return JSON.stringify({
+          kind: "image",
+          value,
+          bounds: { x: box.x, y: box.y, width: box.width, height: box.height },
+        });
       }
       const value = (node.innerText || "").trim().slice(0, 10000);
       return value ? JSON.stringify({ kind: "text", value }) : "null";

@@ -150,6 +150,8 @@ jobs:
       - name: Install and verify emulator with download retries
         if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libpulse0
           for attempt in 1 2 3; do
             if sdkmanager --install emulator --channel=0 && "$ANDROID_HOME/emulator/emulator" -version; then
               exit 0
@@ -167,7 +169,9 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
-          script: cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon
+          # Headless runs reported invalid Vulkan color buffers before WebView stopped replying.
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -feature -Vulkan
+          script: bash scripts/verify-android-runtime.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

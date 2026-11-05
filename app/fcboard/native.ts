@@ -60,6 +60,7 @@ export const Classroom = registerPlugin<{
       value: string;
       sourceUrl?: string;
       userAgent?: string;
+      position?: { x: number; y: number };
     }) => void,
   ): Promise<PluginListenerHandle>;
   webResourceAction(options: {

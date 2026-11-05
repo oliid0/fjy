@@ -441,7 +441,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
           inset: 0,
           width: "100%",
           height: "100%",
-          zIndex: documentStage ? 3 : 9,
+          zIndex: "var(--zIndex-svgLayer)",
           touchAction: "none",
           pointerEvents: "auto",
           cursor: "crosshair",

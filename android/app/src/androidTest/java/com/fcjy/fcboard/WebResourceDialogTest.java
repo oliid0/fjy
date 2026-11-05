@@ -17,6 +17,12 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class WebResourceDialogTest {
+    private void inject(long down, int action, float x, float y) {
+        MotionEvent event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);
+        event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+        try { assertTrue(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getUiAutomation().injectInputEvent(event, true)); }
+        finally { event.recycle(); }
+    }
     @Test public void longPressImportsInlineImagePixels() throws Exception { assertImageImport(false); }
     @Test public void longPressImportsBlobImagePixels() throws Exception { assertImageImport(true); }
     private void assertImageImport(boolean blob) throws Exception {
@@ -43,14 +49,35 @@ public class WebResourceDialogTest {
                     assertTrue(read.await(5,TimeUnit.SECONDS));ready=loaded.get();if(!ready)Thread.sleep(100);
                 }
                 assertTrue("The actual inline/blob image must finish loading",ready);
+                final float[] start = new float[2], end = new float[2];
                 scenario.onActivity(activity->{
-                    WebResourceDialog browser=dialog.get();
-                    pointer(browser.web,MotionEvent.ACTION_DOWN,20*browser.web.getScale(),20*browser.web.getScale());
-                    browser.web.performLongClick();
-                    pointer(browser.web,MotionEvent.ACTION_UP,20*browser.web.getScale(),20*browser.web.getScale());
+                    WebResourceDialog browser=dialog.get(); int[] location=new int[2];
+                    browser.web.getLocationOnScreen(location);
+                    start[0]=location[0]+20*browser.web.getScale(); start[1]=location[1]+20*browser.web.getScale();
+                    activity.getBridge().getWebView().getLocationOnScreen(location);
+                    end[0]=location[0]+activity.getBridge().getWebView().getWidth()*0.2f;
+                    end[1]=location[1]+activity.getBridge().getWebView().getHeight()*0.4f;
                 });
-                assertTrue("Long press must return the actual displayed image",selected.await(5,TimeUnit.SECONDS));
+                long down=SystemClock.uptimeMillis();
+                inject(down,MotionEvent.ACTION_DOWN,start[0],start[1]);
+                boolean floating=false;
+                try {
+                    for(int attempt=0;attempt<100 && !floating;attempt++) {
+                        AtomicReference<Boolean> hidden=new AtomicReference<>(false);
+                        scenario.onActivity(activity->hidden.set(dialog.get().getWindow().getDecorView().getVisibility()!=View.VISIBLE));
+                        floating=hidden.get(); if(!floating) Thread.sleep(50);
+                    }
+                    assertTrue("Holding the real image must lift its native drag shadow",floating);
+                    assertEquals("Lifting must not insert before the drop",1,selected.getCount());
+                    for(int step=1;step<=12;step++) {
+                        inject(down,MotionEvent.ACTION_MOVE,start[0]+(end[0]-start[0])*step/12,start[1]+(end[1]-start[1])*step/12);
+                        Thread.sleep(16);
+                    }
+                } finally { inject(down,MotionEvent.ACTION_UP,end[0],end[1]); }
+                assertTrue("Dropping must return the actual displayed image",selected.await(5,TimeUnit.SECONDS));
                 assertEquals("image",selection.get().getString("kind"));
+                assertTrue(selection.get().has("position"));
+                scenario.onActivity(activity->assertFalse(dialog.get().isShowing()));
                 String value=selection.get().getString("value");
                 assertTrue(value.startsWith("data:image/png;base64,"));
                 byte[] decoded=android.util.Base64.decode(value.substring(value.indexOf(',')+1),android.util.Base64.DEFAULT);

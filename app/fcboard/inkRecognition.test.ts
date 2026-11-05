@@ -144,40 +144,33 @@ it("preserves explicit transparency instructions while always requesting subject
   }
 });
 
-it("preserves magic ink and fails before vision or generation when transparent layers are unsupported", async () => {
-  saveSettings(
-    { ...defaults, apiKey: "test", imageModel: "custom-illustrator" },
-    false,
-  );
-  const model = vi.spyOn(ai, "chat");
-  const capture = vi.fn();
-  await expect(
-    recognizeInkContent("magic", capture, [], new AbortController().signal),
-  ).rejects.toThrow("Seedream 5.0");
-  expect(model).not.toHaveBeenCalled();
-  expect(capture).not.toHaveBeenCalled();
-});
-
-it.each([
-  { text: "一个女孩，透明背景" },
-  { text: "Un chat sans arrière-plan", transparent: true },
-])(
-  "rejects an explicit transparent request without confirmed model support: %j",
-  async (intent) => {
+it.each(["text", "drawing"])(
+  "continues magic %s generation on a custom model without unsupported decomposition options",
+  async (kind) => {
     saveSettings(
       { ...defaults, apiKey: "test", imageModel: "custom-illustrator" },
       false,
     );
     vi.spyOn(ai, "chat").mockResolvedValue(
-      JSON.stringify({ version: 1, kind: "text", ...intent }),
+      JSON.stringify({
+        version: 1,
+        kind,
+        text: "一个二次元女孩",
+        transparent: true,
+      }),
     );
-    await expect(
-      recognizeInkContent(
-        "magic",
-        async () => "data:image/png;base64,ink",
-        [],
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow("Seedream 5.0");
+    const image = "data:image/png;base64,ink";
+    const result = await recognizeInkContent(
+      "magic",
+      async () => image,
+      [],
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({ kind: "magic", transparent: false });
+    if (result.kind !== "magic") {
+      throw new Error("Expected magic intent");
+    }
+    expect(result.image).toBe(kind === "drawing" ? image : undefined);
+    expect(result.prompt).not.toContain("透明图层");
   },
 );

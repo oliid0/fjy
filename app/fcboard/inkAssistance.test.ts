@@ -655,15 +655,8 @@ it.each([true, false])(
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1600);
       });
-      if (!layers) {
-        expect(api.getSceneElements()).toEqual([ink]);
-        expect(api.addFiles).not.toHaveBeenCalled();
-        expect(fetcher).not.toHaveBeenCalled();
-        expect(ai.chat).not.toHaveBeenCalled();
-        expect(error).toHaveBeenCalledTimes(1);
-        return;
-      }
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(layers ? 2 : 1);
+      expect(error).not.toHaveBeenCalled();
       const request = JSON.parse(fetcher.mock.calls[0][1].body);
       expect(request.model).toBe(layers ? defaults.imageModel : "illustrator");
       expect(request.image).toMatch(/^data:image\//);

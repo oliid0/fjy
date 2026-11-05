@@ -100,25 +100,38 @@ it("uses the independent image endpoint and inserts an ordinary image object wit
   );
 });
 
-it("preserves source ink and sends no unsupported decomposition request for explicit transparency on a custom model", async () => {
+it("inserts a successful custom-model generation without unsupported decomposition options", async () => {
   saveSettings(
     { ...defaults, apiKey: "test", imageModel: "custom-illustrator" },
     false,
   );
-  const fetcher = vi.fn();
+  const fetcher = vi.fn().mockResolvedValue({
+    status: 200,
+    json: async () => ({ data: [{ b64_json: image }] }),
+  });
   vi.stubGlobal("fetch", fetcher);
+  vi.stubGlobal(
+    "Image",
+    class {
+      naturalWidth = 100;
+      naturalHeight = 100;
+      src = "";
+      decode = async () => {};
+    },
+  );
   const api = sceneAPI();
   const before = api.getSceneElements();
-  await expect(
-    insertGeneratedImage(api, "透明小推车", new AbortController().signal, {
-      transparent: true,
-      replaceIds: before.map((element) => element.id),
-    }),
-  ).rejects.toThrow("Seedream 5.0");
-  expect(fetcher).not.toHaveBeenCalled();
-  expect(api.getSceneElements()).toBe(before);
-  expect(api.addFiles).not.toHaveBeenCalled();
-  expect(api.updateScene).not.toHaveBeenCalled();
+  await insertGeneratedImage(api, "透明小推车", new AbortController().signal, {
+    transparent: true,
+    replaceIds: before.map((element) => element.id),
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(
+    JSON.parse(fetcher.mock.calls[0][1].body).layer_decomposition,
+  ).toBeUndefined();
+  expect(api.getSceneElements()).toHaveLength(1);
+  expect(api.getSceneElements()[0].type).toBe("image");
+  expect(api.addFiles).toHaveBeenCalledTimes(1);
 });
 
 it("does not import a late generated image after cancellation", async () => {
@@ -345,7 +358,7 @@ it.each([
   [{ ...subject, b64_json: "/9j/jpeg-layer" }],
   [{ z_index: 0, b64_json: image }, { error: { message: "split failed" } }],
 ])(
-  "preserves source ink when decomposition returns invalid layers %j",
+  "keeps the successful generation when optional decomposition returns invalid layers %j",
   async (...items) => {
     const { api, fetcher } = subjectGeneration();
     const before = api.getSceneElements();
@@ -353,15 +366,16 @@ it.each([
       status: 200,
       json: async () => ({ data: items }),
     });
-    await expect(
-      insertGeneratedImage(api, "小狗", new AbortController().signal, {
-        transparent: true,
-        replaceIds: before.map((element) => element.id),
-      }),
-    ).rejects.toThrow();
-    expect(api.getSceneElements()).toEqual(before);
-    expect(api.addFiles).not.toHaveBeenCalled();
-    expect(api.updateScene).not.toHaveBeenCalled();
+    await insertGeneratedImage(api, "小狗", new AbortController().signal, {
+      transparent: true,
+      replaceIds: before.map((element) => element.id),
+    });
+    expect(api.getSceneElements()).toHaveLength(1);
+    expect(api.getSceneElements()[0].type).toBe("image");
+    expect(api.addFiles).toHaveBeenCalledWith([
+      expect.objectContaining({ dataURL: `data:image/png;base64,${image}` }),
+    ]);
+    expect(api.updateScene).toHaveBeenCalledTimes(1);
   },
 );
 

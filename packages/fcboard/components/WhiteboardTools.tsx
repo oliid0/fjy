@@ -364,6 +364,8 @@ export const WhiteboardTools = ({
       )}
       <Dialog
         open={open && shapesOpen}
+        // Preserve the fade, but release the first drawing contact immediately.
+        style={{ pointerEvents: open && shapesOpen ? undefined : "none" }}
         container={container}
         maxWidth={false}
         onClose={() => {
@@ -372,7 +374,11 @@ export const WhiteboardTools = ({
         }}
         aria-label={t("fcboard.insert_tools")}
         slotProps={{
+          backdrop: {
+            style: { pointerEvents: open && shapesOpen ? undefined : "none" },
+          },
           paper: {
+            style: { pointerEvents: open && shapesOpen ? undefined : "none" },
             "aria-label": t("fcboard.insert_tools"),
             className:
               "fc-insert-tools fc-insert-picker fc-insert-picker-expanded",

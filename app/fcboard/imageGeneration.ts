@@ -17,14 +17,6 @@ import type { ContentRect } from "./placement";
 export const supportsImageLayers = (model: string) =>
   /^doubao-seedream-5-0-(?:flash|pro)-/.test(model.trim());
 
-export const requireImageLayers = (model: string) => {
-  if (!supportsImageLayers(model)) {
-    throw new Error(
-      t("fcboard.image_model_does_not_support_transparent_subjects"),
-    );
-  }
-};
-
 export const insertGeneratedImage = async (
   api: FcboardImperativeAPI,
   prompt: string,
@@ -47,9 +39,6 @@ export const insertGeneratedImage = async (
         "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
       ),
     );
-  }
-  if (placement.transparent) {
-    requireImageLayers(settings.imageModel);
   }
   const endpoint = validateEndpoint(settings.endpoint);
   if (!/\/(chat\/completions|responses)\/?$/.test(endpoint)) {
@@ -172,45 +161,50 @@ export const insertGeneratedImage = async (
   const generated = await decodeImage((await requestImage(body))[0].b64_json);
   let { dataURL, mimeType } = generated;
   let drawing;
-  if (placement.transparent) {
-    // New text/sketch generations first require decomposition. The transparent
-    // background option alone only supports an already-transparent input.
-    const items = await requestImage({
-      ...body,
-      image: dataURL,
-      prompt: `仅拆出以下要求对应的完整主体，多个主体保持相对位置。人物或动物的头、身体、四肢及其服饰合为完整主体图层；主体自身的白色和细节保留。背景、纸张、地面、投影、边框、装饰归入底图，不要拆成前景图层。要求：${prompt}`,
-      layer_decomposition: true,
-      size: "1.5K",
-      output_format: "png",
-    });
-    const layers = items.filter((item) => (item.z_index ?? 0) > 0);
-    if (!layers.length || layers.length > 16) {
-      throw new Error(t("fcboard.no_subject_layers_returned"));
+  if (placement.transparent && supportsImageLayers(settings.imageModel)) {
+    try {
+      // New text/sketch generations first require decomposition. The transparent
+      // background option alone only supports an already-transparent input.
+      const items = await requestImage({
+        ...body,
+        image: dataURL,
+        prompt: `仅拆出以下要求对应的完整主体，多个主体保持相对位置。人物或动物的头、身体、四肢及其服饰合为完整主体图层；主体自身的白色和细节保留。背景、纸张、地面、投影、边框、装饰归入底图，不要拆成前景图层。要求：${prompt}`,
+        layer_decomposition: true,
+        size: "1.5K",
+        output_format: "png",
+      });
+      const layers = items.filter((item) => (item.z_index ?? 0) > 0);
+      if (!layers.length || layers.length > 16) {
+        throw new Error(t("fcboard.no_subject_layers_returned"));
+      }
+      drawing = transparentInkImage(
+        await Promise.all(
+          layers.map(async (item) => {
+            const box = item.bounding_box?.absolute;
+            if (!Array.isArray(box) || box.length !== 4) {
+              throw new Error(t("fcboard.no_subject_layers_returned"));
+            }
+            const decoded = await decodeImage(item.b64_json);
+            if (decoded.mimeType !== "image/png") {
+              throw new Error(t("fcboard.subject_layer_requires_transparency"));
+            }
+            return {
+              image: decoded.image,
+              zIndex: item.z_index!,
+              bounds: {
+                left: box[0],
+                top: box[1],
+                right: box[2],
+                bottom: box[3],
+              },
+            };
+          }),
+        ),
+      );
+    } catch {
+      // Generation already succeeded. Optional background removal must not discard it.
+      signal.throwIfAborted();
     }
-    drawing = transparentInkImage(
-      await Promise.all(
-        layers.map(async (item) => {
-          const box = item.bounding_box?.absolute;
-          if (!Array.isArray(box) || box.length !== 4) {
-            throw new Error(t("fcboard.no_subject_layers_returned"));
-          }
-          const decoded = await decodeImage(item.b64_json);
-          if (decoded.mimeType !== "image/png") {
-            throw new Error(t("fcboard.subject_layer_requires_transparency"));
-          }
-          return {
-            image: decoded.image,
-            zIndex: item.z_index!,
-            bounds: {
-              left: box[0],
-              top: box[1],
-              right: box[2],
-              bottom: box[3],
-            },
-          };
-        }),
-      ),
-    );
   }
   if (drawing) {
     dataURL = drawing.dataURL;

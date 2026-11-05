@@ -64,6 +64,13 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
       plot[key] = number;
     }
   }
+  if (typeof value.equation === "string" && value.equation.length <= 500) {
+    const equation = mathNotation(value.equation);
+    const sides = equation.match(/^([^=<>]+)=([^=<>]+)$/);
+    if (sides && plotExpression(`(${sides[1]})-(${sides[2]})`) === expression) {
+      plot.equation = equation;
+    }
+  }
   samplePlot(plot);
   return plot;
 };
@@ -77,21 +84,32 @@ export const localMathResult = (
     return { kind: mode, expression: input, answer: calculate(input) };
   }
   const definition = input.match(
-    /^(y|z|f\s*x|f\s*\(\s*x(?:,\s*y)?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
+    /^(y|z|f\s*x|f\s*\(\s*x(?:(?:,\s*y)|(?:\s*[+-]\s*\d+(?:\.\d+)?))?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
   );
-  const expression = definition ? definition[3] : input;
+  let expression = definition ? definition[3] : input;
+  const shift = definition?.[1].match(
+    /^f\s*\(\s*x\s*([+-])\s*(\d+(?:\.\d+)?)\s*\)$/i,
+  );
+  if (shift) {
+    const offset = Number(`${shift[1]}${shift[2]}`);
+    expression = expression.replace(/\bx\b/g, `(x-(${offset}))`);
+  }
+  const equation = !definition && input.match(/^([^=<>]+)=([^=<>]+)$/);
+  if (equation) {
+    // Plot the residual; its x-axis intersections satisfy the original equation.
+    expression = `(${equation[1]})-(${equation[2]})`;
+  }
   if (!definition && !/\bx\b/.test(expression)) {
     throw new Error("No explicit function");
   }
+  const plot = validatedPlot({
+    expression,
+    surface: !!definition && /^(z|f\s*\(\s*x\s*,)/i.test(definition[1]),
+    ...(definition && definition[2] !== "=" ? { relation: definition[2] } : {}),
+  });
   return {
     kind: mode,
-    plot: validatedPlot({
-      expression,
-      surface: !!definition && /^(z|f\(x,)/i.test(definition[1]),
-      ...(definition && definition[2] !== "="
-        ? { relation: definition[2] }
-        : {}),
-    }),
+    plot: { ...plot, ...(equation ? { equation: input } : {}) },
   };
 };
 

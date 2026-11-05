@@ -2,7 +2,7 @@ import { all, create } from "mathjs";
 import nerdamer from "nerdamer/all";
 
 import { allowedFunctions } from "./mathFunctions";
-import { mathNotation } from "./mathNotation";
+import { calculationNotation } from "./mathNotation";
 import { solveEquations } from "./equations";
 import { continuousMathRange } from "./mathDomain";
 
@@ -14,7 +14,7 @@ const calculator = create(all, {
 });
 
 export const prepareCalculation = (input: string) => {
-  const expression = mathNotation(input);
+  const expression = calculationNotation(input);
   if (
     !expression ||
     expression.length > 500 ||

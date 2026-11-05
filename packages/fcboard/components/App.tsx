@@ -4857,11 +4857,12 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (appState) {
+        const update = appState as Partial<AppState>;
         this.setState((previous) => {
-          const next = { ...previous, ...appState };
+          const next = { ...previous, ...update };
           if (
             this.props.UIOptions.unifiedToolbar &&
-            appState.selectedElementIds
+            update.selectedElementIds
           ) {
             return {
               ...appState,
@@ -4872,8 +4873,8 @@ class App extends React.Component<AppProps, AppState> {
                         !element.isDeleted &&
                         next.selectedElementIds[element.id],
                     ),
-                    "whiteboardSelection" in appState
-                      ? appState.whiteboardSelection
+                    "whiteboardSelection" in update
+                      ? update.whiteboardSelection
                       : previous.whiteboardSelection,
                     next.zoom.value,
                   )

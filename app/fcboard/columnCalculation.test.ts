@@ -8,6 +8,7 @@ it.each([
   ["123\n+45\n----", "168"],
   ["123\n-45\n----", "78"],
   ["12\n×3\n----", "36"],
+  ["12\nx3\n----", "36"],
   ["144\n÷12\n----", "12"],
   ["12⟌144", "12"],
 ])("locally verifies vertical arithmetic %s", (input, answer) => {
@@ -87,6 +88,7 @@ it.each([
   ["12\n+3\n---", "15"],
   ["12\n-3\n---", "9"],
   ["12\n×3\n---", "36"],
+  ["12\nx3\n---", "36"],
   ["12\n÷3\n---", "4"],
 ])(
   "calculates explicit vertical %s with a separate below-bar result layout",

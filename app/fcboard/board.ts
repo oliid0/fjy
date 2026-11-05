@@ -661,9 +661,9 @@ export const drawPlot = (
       type: "text",
       x: position.x - 220,
       y: position.y + 240,
-      text: `${plot.surface ? "z" : "y"} ${plot.relation || "="} ${
-        plot.expression
-      }`,
+      text: `${plot.equation ? `${plot.equation}\n` : ""}${
+        plot.surface ? "z" : "y"
+      } ${plot.relation || "="} ${plot.expression}`,
       fontSize: 18,
       fontFamily: 2,
     },

@@ -1,5 +1,5 @@
 import { act } from "@testing-library/react";
-import { newFreeDrawElement } from "@fcboard/element";
+import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
 import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
@@ -464,6 +464,61 @@ it.each(["function", "calculation"] as const)(
     } finally {
       stop();
       unregister();
+    }
+  },
+);
+
+it.each(["12\nx3\n----", "12x3"])(
+  "writes %s below the real vertical bar without an AI token",
+  async (text) => {
+    vi.useFakeTimers();
+    const { api, ink, draw } = setup("calculation");
+    saveSettings({ ...defaults, apiKey: "", model: "" }, false);
+    vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(text);
+    const cloud = vi.spyOn(ai, "chat");
+    const source = [
+      [
+        [100, 100],
+        [180, 140],
+      ],
+      [
+        [110, 170],
+        [180, 210],
+      ],
+      [
+        [80, 225],
+        [200, 225],
+      ],
+    ].map((points, index) =>
+      newFreeDrawElement({
+        ...ink,
+        id: `column-${index}`,
+        x: points[0][0],
+        y: points[0][1],
+        points: points.map(([x, y]) =>
+          pointFrom(x - points[0][0], y - points[0][1]),
+        ),
+      }),
+    );
+    const errors = vi.fn();
+    const release = observeInkAssistance(api, vi.fn(), errors);
+    try {
+      draw(source);
+      await act(async () => vi.advanceTimersByTimeAsync(700));
+      const result = api
+        .getSceneElements()
+        .filter((element) => !source.some((input) => input.id === element.id));
+      expect(handwritingText(result)).toEqual(["36"]);
+      const bounds = getCommonBounds(result);
+      expect(bounds[1]).toBeGreaterThan(225);
+      expect(bounds[2]).toBeCloseTo(200);
+      expect(cloud).not.toHaveBeenCalled();
+      expect(errors).not.toHaveBeenCalled();
+      expect(
+        source.every((input) => api.getSceneElements().includes(input)),
+      ).toBe(true);
+    } finally {
+      release();
     }
   },
 );

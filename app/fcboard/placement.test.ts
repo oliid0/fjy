@@ -10,7 +10,7 @@ import {
   drawPlot,
   selectedPlot,
 } from "./board";
-import { validatedPlot } from "./mathRecognition";
+import { localMathResult, validatedPlot } from "./mathRecognition";
 import {
   insertionDefaults,
   readInsertions,
@@ -525,4 +525,24 @@ it("places a function beside its source rather than at the old distant lower-rig
   expect(Math.hypot(gapX, gapY)).toBeLessThanOrEqual(12);
   expect(graph[2]).toBeLessThanOrEqual(1584);
   expect(graph[3]).toBeLessThanOrEqual(816);
+});
+
+it("retains the original equation and its actual residual label through the public plot validator", () => {
+  const result = localMathResult("x^2+1/x-1=0", "function");
+  if (result.kind !== "function") {
+    throw new Error("Expected equation graph");
+  }
+  const api = sceneAPI();
+  const plot = validatedPlot(result.plot);
+  drawPlot(api, plot, { x: 500, y: 400 });
+  const label = api
+    .getSceneElements()
+    .find(
+      (element) =>
+        element.type === "text" && element.originalText.includes("=0"),
+    );
+  expect(label).toMatchObject({
+    originalText: `x^2+1/x-1=0\ny = ${plot.expression}`,
+  });
+  expect(validatedPlot({ ...plot, equation: "x=9" }).equation).toBeUndefined();
 });

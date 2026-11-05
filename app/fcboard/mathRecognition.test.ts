@@ -1,4 +1,9 @@
-import { calculate, samplePlot, sampleInequality } from "./math";
+import {
+  calculate,
+  compileExpression,
+  samplePlot,
+  sampleInequality,
+} from "./math";
 import {
   localMathResult,
   recognizeMath,
@@ -15,6 +20,11 @@ afterEach(() => {
 
 it.each([
   ["6+7=", "13"],
+  ["6x3=", "18"],
+  ["0.25 x 4", "1"],
+  ["12\nx3\n----", "36"],
+  ["ln(1)", "0"],
+  ["log(8,2)", "3"],
   ["65×3+12=", "207"],
   ["0.1+0.2", "0.3"],
   ["9007199254740993+1", "9.007199254740994e+15"],
@@ -48,6 +58,10 @@ it.each([
 );
 
 it.each([
+  "lnx",
+  "sinx",
+  "x^2",
+  "1/x",
   "1/0",
   "0/0",
   "1\n2",
@@ -80,11 +94,17 @@ it("splits a narrow pole between sample points even when its amplitude is small"
 });
 
 it.each([
+  "lnx",
+  "sinx",
+  "x^2",
+  "1/x",
   "fx=x+1",
   "fx=1/x^2+x",
   "fx=1/x²+x",
   "f x = x^2",
   "f ( x ) = sin(x)",
+  "f(x-1)=x^2",
+  "x^2+1/x-1=0",
   "y=sin(x)",
   "y=cos(x)",
   "y=tan(x)",
@@ -112,6 +132,26 @@ it.each([
     }
   }
 });
+
+it.each([
+  ["lnx", 1, 0],
+  ["sinx", Math.PI / 2, 1],
+  ["sinx^2", 2, Math.sin(4)],
+  ["f(x-1)=x^2", 2, 9],
+  ["f(x+1)=x^2", 2, 1],
+  ["x^2+1/x-1=0", 2, 3.5],
+])(
+  "preserves the mathematical value of function pen input %s",
+  (input, x, expected) => {
+    const result = localMathResult(input as string, "function");
+    expect(result.kind).toBe("function");
+    if (result.kind === "function") {
+      expect(
+        compileExpression(result.plot.expression).evaluate({ x }),
+      ).toBeCloseTo(expected as number, 10);
+    }
+  },
+);
 
 it("shades the requested side of an inequality using local coordinates", () => {
   for (const relation of [">", ">=", "<", "<="] as const) {

@@ -73,6 +73,7 @@ export {
 
 export type Plot = {
   expression: string;
+  equation?: string;
   surface: boolean;
   x: number;
   y: number;

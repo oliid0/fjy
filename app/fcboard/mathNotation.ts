@@ -25,6 +25,13 @@ export const mathNotation = (input: string): string => {
     .replace(/\\(?:,|;|!|quad\b|qquad\b)/g, " ")
     .replace(/\\(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|log|exp)\b/g, "$1")
     .replace(/\\ln\b/g, "log");
+  // A handwritten unary function need not include parentheses. Its variable's
+  // power belongs to the argument: sin x² means sin(x²), not sin(x)².
+  text = text.replace(
+    /(^|[^A-Za-z])(arcsin|arccos|arctan|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sqrt|exp|log|ln)\s*([xyz](?:\s*\^\s*\(?[+-]?\d+(?:\.\d+)?\)?)?)(?=$|[^A-Za-z])/gi,
+    (_, prefix: string, name: string, argument: string) =>
+      `${prefix}${name.toLowerCase()}(${argument})`,
+  );
   text = text
     .replace(
       /\\?\b(arcsin|arccos|arctan|ln)\b/g,
@@ -122,7 +129,9 @@ export const mathNotation = (input: string): string => {
       return rows.join(";");
     }
     // A vertical sum/product needs an operator on each subsequent operand.
-    const operands = rows.filter((row) => !/^[-_=─━]{2,}$/.test(row));
+    const operands = rows
+      .filter((row) => !/^[-_=─━]{2,}$/.test(row))
+      .map((row, index) => (index ? row.replace(/^[xX](?=\s*\d)/, "*") : row));
     if (
       !/^\d+(?:\.\d+)?$/.test(operands[0]) ||
       operands.length < 2 ||
@@ -133,4 +142,17 @@ export const mathNotation = (input: string): string => {
     text = operands.join("");
   }
   return text.replace(/\s*=\s*$/, "").trim();
+};
+
+/** Numeric calculation accepts x as multiplication, while functions retain variable x. */
+export const calculationNotation = (input: string) => {
+  const expression = mathNotation(input);
+  if (expression.includes("=")) {
+    return expression;
+  }
+  const product = expression.replace(/(\d|\))\s*[xX]\s*(?=[\d.(])/g, "$1*");
+  // Do not alter a symbolic expression that still contains an independent x.
+  return /(^|[^A-Za-z])[xX](?=$|[^A-Za-z])/.test(product)
+    ? expression
+    : product;
 };

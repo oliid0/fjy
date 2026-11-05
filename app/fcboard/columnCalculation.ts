@@ -3,7 +3,7 @@ import type { InkInput } from "./digitalInk";
 /** A calculation bar spans two explicit operand rows; a minus or equals alone does not. */
 export const columnCalculation = (input: InkInput, text: string) => {
   const division = /^\s*\d+(?:\.\d+)?\s*[)⟌]\s*\d+(?:\.\d+)?\s*$/.test(text);
-  if (!division && !/[+\-×*÷/]/.test(text)) {
+  if (!division && !/[+\-xX×*÷/]/.test(text)) {
     return;
   }
   const boxes = input

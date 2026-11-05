@@ -6,6 +6,7 @@ import {
   restoreOriginalGetBoundingClientRect,
   screen,
   fireEvent,
+  waitFor,
 } from "@fcboard/fcboard/tests/test-utils";
 
 import FcboardApp from "../App";
@@ -154,9 +155,11 @@ describe("Test MobileMenu", () => {
       customType: "factory-shape:6",
     });
     expect(rectangle).toHaveAttribute("aria-pressed", "true");
-    expect(
-      screen.getByRole("toolbar", { name: t("fcboard.whiteboard_toolbar") }),
-    ).toBe(toolbar);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("toolbar", { name: t("fcboard.whiteboard_toolbar") }),
+      ).toBe(toolbar),
+    );
     expect(document.querySelector(".welcome-screen-center")).toBeNull();
   });
 });

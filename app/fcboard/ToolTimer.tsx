@@ -53,26 +53,48 @@ export const ToolTimer = () => {
           elapsed: value.duration,
           started: null,
         }));
-        const audio = sound.current;
-        if (!current.current.muted && audio?.state === "running") {
-          const oscillator = audio.createOscillator();
-          const gain = audio.createGain();
-          oscillator.frequency.value = 880;
-          gain.gain.setValueAtTime(0.12, audio.currentTime);
-          gain.gain.exponentialRampToValueAtTime(
-            0.001,
-            audio.currentTime + 1.5,
-          );
-          oscillator.connect(gain).connect(audio.destination);
-          oscillator.start();
-          oscillator.stop(audio.currentTime + 1.5);
-        }
       }
     };
     tick();
     const id = window.setInterval(tick, 100);
     return () => clearInterval(id);
   }, [state.started]);
+  // TimerFloatingService.mCountdownTone rings immediately and every minute until stopped.
+  useEffect(() => {
+    const audio = sound.current;
+    if (
+      !open ||
+      state.started !== null ||
+      state.elapsed < state.duration ||
+      state.muted ||
+      audio?.state !== "running"
+    ) {
+      return;
+    }
+    const active = new Set<OscillatorNode>();
+    const ring = () => {
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.12, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 1.5);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.onended = () => {
+        active.delete(oscillator);
+        oscillator.disconnect();
+        gain.disconnect();
+      };
+      active.add(oscillator);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + 1.5);
+    };
+    ring();
+    const repeat = window.setInterval(ring, 60000);
+    return () => {
+      clearInterval(repeat);
+      active.forEach((oscillator) => oscillator.stop());
+    };
+  }, [open, state.started, state.elapsed, state.duration, state.muted]);
   // TimerFloatingService.vanish: 5s after start, otherwise 7s; tapping restores controls.
   useEffect(() => {
     if (!open || full) {

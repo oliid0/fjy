@@ -1,12 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { MaterialPanel } from "./MaterialPanel";
+
 import { classroomCommands } from "./commands";
 import first from "./assets/curtain/mubu01.jpg";
 import second from "./assets/curtain/mubu02.jpg";
 import third from "./assets/curtain/mubu03.jpg";
 
 const themes = [first, second, third];
+// DataTools.bgList and the original colors.xml.
+const colors = [
+  "#ff0040",
+  "#ffa500",
+  "#ffffe0",
+  "#00ff00",
+  "#0101df",
+  "#000000",
+];
 type Bounds = { left: number; top: number; right: number; bottom: number };
 type Edge = "left" | "right" | "top" | "bottom" | "move";
 /** DragScaleView's four independent edges and bounded center movement. */
@@ -53,6 +64,9 @@ export const moveCurtain = (
 export const Curtain = () => {
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState(0);
+  const [color, setColor] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
+  const [tab, setTab] = useState<"color" | "theme">("color");
   const [rect, setRect] = useState<Bounds>({
     left: 0,
     top: 0,
@@ -68,17 +82,26 @@ export const Curtain = () => {
   useEffect(() => {
     const stop = classroomCommands.register(
       "tools.curtain",
-      "Built-in curtain. args.open=false closes; args.theme=0|1|2; args.reset=true covers viewport. Drag center to move, four edge controls uncover board independently.",
+      "Built-in curtain. args.open=false closes; args.theme=0|1|2 or args.color=#RRGGBB; args.reset=true covers viewport. Drag center to move, four edge controls uncover board independently.",
       (args) => {
         if (
           (args.open !== undefined && typeof args.open !== "boolean") ||
-          (args.theme !== undefined && ![0, 1, 2].includes(Number(args.theme)))
+          (args.theme !== undefined &&
+            ![0, 1, 2].includes(Number(args.theme))) ||
+          (args.color !== undefined &&
+            (typeof args.color !== "string" ||
+              !/^#[0-9a-f]{6}$/i.test(args.color)))
         ) {
           throw new Error(t("fcboard.invalid_style_parameters"));
         }
         if (args.theme !== undefined) {
           setTheme(Number(args.theme));
+          setColor(null);
         }
+        if (typeof args.color === "string") {
+          setColor(args.color);
+        }
+        setSettings(false);
         if (args.reset === true) {
           setRect({ left: 0, top: 0, right: innerWidth, bottom: innerHeight });
         }
@@ -109,7 +132,14 @@ export const Curtain = () => {
       }));
     };
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(".fc-curtain-settings")
+        )
+      ) {
         setOpen(false);
       }
     };
@@ -127,99 +157,176 @@ export const Curtain = () => {
     cancelAnimationFrame(frame.current);
   };
   return open ? (
-    <section
-      className="fc-curtain"
-      aria-label={t("fcboard.curtain")}
-      style={{
-        left: rect.left,
-        top: rect.top,
-        width: rect.right - rect.left,
-        height: rect.bottom - rect.top,
-        backgroundImage: `url(${themes[theme]})`,
-      }}
-      onPointerMove={(event) => {
-        const start = drag.current;
-        if (start?.id !== event.pointerId) {
-          return;
-        }
-        const next = moveCurtain(
-          start.rect,
-          start.edge,
-          event.clientX - start.x,
-          event.clientY - start.y,
-          innerWidth,
-          innerHeight,
-        );
-        current.current = next;
-        cancelAnimationFrame(frame.current);
-        frame.current = requestAnimationFrame(() => setRect(next));
-      }}
-      onPointerUp={() => {
-        if (drag.current) {
-          setRect(current.current);
-        }
-        release();
-      }}
-      onPointerCancel={release}
-      onLostPointerCapture={release}
-    >
-      {(["left", "right", "top", "bottom", "move"] as const).map((edge) => (
-        <button
-          type="button"
-          key={edge}
-          className={`fc-curtain-${edge}`}
-          aria-label={t(`fcboard.curtain_${edge}`)}
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            drag.current = {
-              id: event.pointerId,
-              edge,
-              x: event.clientX,
-              y: event.clientY,
-              rect,
-            };
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-          }}
-          onKeyDown={(event) => {
-            const dx =
-              event.key === "ArrowLeft"
-                ? -20
-                : event.key === "ArrowRight"
-                ? 20
-                : 0;
-            const dy =
-              event.key === "ArrowUp"
-                ? -20
-                : event.key === "ArrowDown"
-                ? 20
-                : 0;
-            if (dx || dy) {
-              event.preventDefault();
-              setRect((r) =>
-                moveCurtain(r, edge, dx, dy, innerWidth, innerHeight),
-              );
-            }
-          }}
-        >
-          {edge === "move" ? "✥" : ["left", "right"].includes(edge) ? "↔" : "↕"}
-        </button>
-      ))}
-      <div className="fc-curtain-actions">
-        <button
-          type="button"
-          onClick={() => setTheme((theme + 1) % themes.length)}
+    <>
+      <section
+        className="fc-curtain"
+        aria-label={t("fcboard.curtain")}
+        style={{
+          left: rect.left,
+          top: rect.top,
+          width: rect.right - rect.left,
+          height: rect.bottom - rect.top,
+          backgroundImage: color ? "none" : `url(${themes[theme]})`,
+          backgroundColor: color || undefined,
+        }}
+        onPointerMove={(event) => {
+          const start = drag.current;
+          if (start?.id !== event.pointerId) {
+            return;
+          }
+          const next = moveCurtain(
+            start.rect,
+            start.edge,
+            event.clientX - start.x,
+            event.clientY - start.y,
+            innerWidth,
+            innerHeight,
+          );
+          current.current = next;
+          cancelAnimationFrame(frame.current);
+          frame.current = requestAnimationFrame(() => setRect(next));
+        }}
+        onPointerUp={() => {
+          if (drag.current) {
+            setRect(current.current);
+          }
+          release();
+        }}
+        onPointerCancel={release}
+        onLostPointerCapture={release}
+      >
+        {(["left", "right", "top", "bottom", "move"] as const).map((edge) => (
+          <button
+            type="button"
+            key={edge}
+            className={`fc-curtain-${edge}`}
+            aria-label={t(`fcboard.curtain_${edge}`)}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              drag.current = {
+                id: event.pointerId,
+                edge,
+                x: event.clientX,
+                y: event.clientY,
+                rect,
+              };
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+            }}
+            onKeyDown={(event) => {
+              const dx =
+                event.key === "ArrowLeft"
+                  ? -20
+                  : event.key === "ArrowRight"
+                  ? 20
+                  : 0;
+              const dy =
+                event.key === "ArrowUp"
+                  ? -20
+                  : event.key === "ArrowDown"
+                  ? 20
+                  : 0;
+              if (dx || dy) {
+                event.preventDefault();
+                setRect((r) =>
+                  moveCurtain(r, edge, dx, dy, innerWidth, innerHeight),
+                );
+              }
+            }}
+          >
+            {edge === "move"
+              ? "✥"
+              : ["left", "right"].includes(edge)
+              ? "↔"
+              : "↕"}
+          </button>
+        ))}
+        <div className="fc-curtain-actions">
+          <button
+            type="button"
+            onClick={() => setSettings(true)}
+            aria-label={t("fcboard.curtain_theme")}
+          >
+            ◐
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label={t("buttons.close")}
+          >
+            ×
+          </button>
+        </div>
+      </section>
+      {settings && (
+        <MaterialPanel
+          centered
+          role="dialog"
           aria-label={t("fcboard.curtain_theme")}
+          className="fc-curtain-settings"
+          onDismiss={() => setSettings(false)}
         >
-          ◐
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label={t("buttons.close")}
-        >
-          ×
-        </button>
-      </div>
-    </section>
+          <header>
+            <div role="tablist" aria-label={t("fcboard.curtain_theme")}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "color"}
+                onClick={() => setTab("color")}
+              >
+                {t("fcboard.colour")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === "theme"}
+                onClick={() => setTab("theme")}
+              >
+                {t("fcboard.background")}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettings(false)}
+              aria-label={t("buttons.close")}
+            >
+              ×
+            </button>
+          </header>
+          <div
+            className="fc-curtain-gallery"
+            role="group"
+            aria-label={t(
+              tab === "color" ? "fcboard.colour" : "fcboard.background",
+            )}
+          >
+            {tab === "color"
+              ? colors.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={value}
+                    aria-pressed={color === value}
+                    style={{ background: value }}
+                    onClick={() => setColor(value)}
+                  />
+                ))
+              : themes.map((image, index) => (
+                  <button
+                    key={image}
+                    type="button"
+                    aria-label={`${t("fcboard.curtain_theme")} ${index + 1}`}
+                    aria-pressed={color === null && theme === index}
+                    onClick={() => {
+                      setColor(null);
+                      setTheme(index);
+                    }}
+                  >
+                    <img src={image} alt="" />
+                  </button>
+                ))}
+          </div>
+        </MaterialPanel>
+      )}
+    </>
   ) : null;
 };

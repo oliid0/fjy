@@ -16,7 +16,7 @@ import {
 } from "./digitalInk";
 import { recognizeLocalHandwriting } from "./localOcr";
 import { preferredRace } from "./preferredRace";
-import { requireImageLayers, supportsImageLayers } from "./imageGeneration";
+import { requireImageLayers } from "./imageGeneration";
 
 import type { RecognizedShape } from "./shapeRecognition";
 
@@ -236,6 +236,11 @@ export const recognizeInkContent = async (
       ),
     );
   }
+  if (mode === "magic") {
+    // Magic ink always becomes a transparent subject. An unsupported model must
+    // preserve the user's strokes instead of silently inserting an opaque tile.
+    requireImageLayers(currentSettings().imageModel);
+  }
   const image = await capture();
   signal.throwIfAborted();
   if (!image.startsWith("data:image/")) {
@@ -273,23 +278,12 @@ export const recognizeInkContent = async (
     ) {
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
-    const transparent = supportsImageLayers(currentSettings().imageModel);
-    if (
-      intent.transparent === true ||
-      (intent.kind === "text" &&
-        /透明|无背景|不要背景|去(?:掉|除)?背景|transparent|backgroundless|(?:without|no)\s+(?:a\s+)?background|remove\s+(?:the\s+)?background/i.test(
-          String(intent.text),
-        ))
-    ) {
-      requireImageLayers(currentSettings().imageModel);
-    }
-    const background = transparent
-      ? "主体完整、轮廓清晰，保留主体自身的颜色与白色细节。后续会拆出主体透明图层放到白板上，背景保持简洁，不要纸张、边框、投影或额外装饰。"
-      : "主体完整、轮廓清晰，保留主体自身的颜色与白色细节，背景简洁，不要纸张、边框或额外装饰。";
+    const background =
+      "主体完整、轮廓清晰，保留主体自身的颜色与白色细节。后续会拆出主体透明图层放到白板上，背景保持简洁，不要纸张、边框、投影或额外装饰。";
     return {
       kind: "magic",
       ...(intent.kind === "drawing" ? { image } : {}),
-      transparent,
+      transparent: true,
       prompt:
         intent.kind === "text"
           ? `严格按手写描述中的主体、画风、颜色、动作与背景要求生成图片。用户原文：${intent.text}。${background}不要把描述文字本身画成图片中的文字。`

@@ -45,6 +45,43 @@
       cursor: pointer;
     }
   }
+  .fc-spotlight-popup {
+    position: fixed;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    padding: 16px;
+    border-radius: 16px;
+    background: #555f;
+    box-shadow: 0 4px 20px #0004;
+    &[data-shapes="true"] {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    button[aria-pressed="true"] {
+      outline: 2px solid #80b6ff;
+      outline-offset: 2px;
+    }
+  }
+  .fc-spotlight-swatches {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .fc-spotlight-alpha {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: white;
+    input {
+      min-width: 0;
+      width: 100%;
+    }
+  }
   .fc-spotlight-resize {
     position: absolute;
     background: #72727288;

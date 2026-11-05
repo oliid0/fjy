@@ -18,10 +18,14 @@ export const Voting = () => {
   const [session, setSession] = useState<VoteState | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const revision = useRef(0);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
+    const stamp = revision.current;
     const value = await bridge.read();
-    setSession(value.active ? value : null);
+    if (stamp === revision.current) {
+      setSession(value.active ? value : null);
+    }
     return value;
   }, []);
   const operate = useCallback(
@@ -52,6 +56,9 @@ export const Voting = () => {
         throw new Error(t("fcboard.opening_the_display_tool_please_wait"));
       }
       pending.current = true;
+      if (action !== "read") {
+        revision.current++;
+      }
       setBusy(true);
       setError("");
       try {
@@ -116,19 +123,24 @@ export const Voting = () => {
       return;
     }
     let live = true;
+    let polling = false;
     const poll = async () => {
-      if (pending.current) {
+      if (pending.current || polling) {
         return;
       }
+      polling = true;
+      const stamp = revision.current;
       try {
         const value = await bridge.read();
-        if (live) {
+        if (live && stamp === revision.current) {
           setSession(value.active ? value : null);
         }
       } catch (failure) {
-        if (live) {
+        if (live && stamp === revision.current) {
           setError(String(failure));
         }
+      } finally {
+        polling = false;
       }
     };
     void poll();

@@ -299,3 +299,115 @@ for (const width of [390, 1920]) {
     await expect.poll(table).toEqual([]);
   });
 }
+
+for (const width of [390, 1920]) {
+  test(`original split and curtain settings apply through actual tool controls at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const openTool = async (name: string) => {
+      await page.getByRole("button", { name: "教学工具", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "教学工具", exact: true })
+        .getByRole("button", { name: `打开${name}`, exact: true })
+        .click();
+    };
+    await openTool("分屏");
+    const settings = page.getByRole("dialog", {
+      name: "分屏 · 设置",
+      exact: true,
+    });
+    await expect(settings).toBeVisible();
+    await expect(page.locator(".fc-split-pane canvas")).toHaveCount(0);
+    await settings.getByRole("radio", { name: "3", exact: true }).check();
+    await settings.getByRole("radio", { name: "绿色", exact: true }).check();
+    await settings.getByRole("button", { name: "确定", exact: true }).click();
+    const panes = page.locator(".fc-split-pane canvas");
+    await expect(panes).toHaveCount(3);
+    await expect(panes.first()).toHaveCSS(
+      "background-color",
+      "rgb(92, 124, 98)",
+    );
+    const first = await panes.first().boundingBox();
+    await dragTouch(
+      page,
+      { x: first!.x + 20, y: first!.y + 60 },
+      { x: first!.x + 65, y: first!.y + 100 },
+    );
+    const hasInk = (index: number) =>
+      panes.nth(index).evaluate((canvas: HTMLCanvasElement) =>
+        canvas
+          .getContext("2d")!
+          .getImageData(0, 0, canvas.width, canvas.height)
+          .data.some((value, i) => i % 4 === 3 && value > 0),
+      );
+    expect(await hasInk(0)).toBe(true);
+    expect(await hasInk(1)).toBe(false);
+    const board = page.locator(".fc-split-board");
+    await board.getByRole("button", { name: "设置", exact: true }).click();
+    await settings.getByRole("radio", { name: "2", exact: true }).check();
+    await settings.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(panes).toHaveCount(3);
+    expect(await hasInk(0)).toBe(true);
+    await board.getByRole("button", { name: "关闭", exact: true }).click();
+    await openTool("幕布");
+    const curtain = page.locator(".fc-curtain");
+    await curtain
+      .getByRole("button", { name: "切换幕布背景", exact: true })
+      .click();
+    const themes = page.getByRole("dialog", {
+      name: "切换幕布背景",
+      exact: true,
+    });
+    await themes.getByRole("button", { name: "#0101df", exact: true }).click();
+    await expect(curtain).toHaveCSS("background-color", "rgb(1, 1, 223)");
+    await themes.getByRole("tab", { name: "背景", exact: true }).click();
+    await themes
+      .getByRole("button", { name: "切换幕布背景 2", exact: true })
+      .click();
+    await expect(curtain).not.toHaveCSS("background-image", "none");
+    await themes.getByRole("button", { name: "关闭", exact: true }).click();
+    await curtain.getByRole("button", { name: "关闭", exact: true }).click();
+    await expect(curtain).toHaveCount(0);
+  });
+
+  test(`spotlight touch movement keeps the grab point and settings remain reachable at ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "教学工具", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "教学工具", exact: true })
+      .getByRole("button", { name: "打开聚光灯", exact: true })
+      .click();
+    const spotlight = page.getByRole("region", { name: "聚光灯", exact: true });
+    const ring = spotlight.locator(".fc-spotlight-ring");
+    const before = await ring.boundingBox();
+    const from = {
+      x: before!.x + before!.width / 2 + 15,
+      y: before!.y + before!.height / 2 + 15,
+    };
+    await dragTouch(page, from, { x: from.x - 60, y: from.y - 40 });
+    const after = await ring.boundingBox();
+    expect(after!.x - before!.x).toBeCloseTo(-60, 0);
+    expect(after!.y - before!.y).toBeCloseTo(-40, 0);
+    await spotlight.getByRole("button", { name: "设置", exact: true }).click();
+    const popup = spotlight.getByRole("group", { name: "设置", exact: true });
+    const bounds = await popup.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    await popup.getByRole("button", { name: "#ff0000", exact: true }).click();
+    await expect(spotlight.locator("svg > rect")).toHaveAttribute(
+      "fill",
+      "#ff0000",
+    );
+    await page.touchscreen.tap(2, 2);
+    await expect(popup).toHaveCount(0);
+    await spotlight
+      .getByRole("button", { name: "关闭聚光灯", exact: true })
+      .click();
+    await expect(spotlight).toHaveCount(0);
+  });
+}

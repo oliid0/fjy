@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
+import blackPen from "./assets/multiscreen/ic_black_pen.svg";
+import bluePen from "./assets/multiscreen/ic_blue_pen.svg";
+import redPen from "./assets/multiscreen/ic_red_pen.svg";
+import smallEraser from "./assets/multiscreen/ic_small_eraser.svg";
+import largeEraser from "./assets/multiscreen/ic_big_eraser.svg";
+
 import { MaterialPanel } from "./MaterialPanel";
 
 import { classroomCommands } from "./commands";
@@ -9,6 +15,7 @@ type Point = [number, number];
 type Stroke = { points: Point[]; color: string; width: number; erase: boolean };
 type Pane = { strokes: Stroke[] };
 const colors = ["#000000", "#0000ff", "#ff0000"];
+const toolIcons = [blackPen, bluePen, redPen, smallEraser, largeEraser];
 const backgrounds = [
   { color: "#ffffff", label: "split_background_0" },
   { color: "#5c7c62", label: "split_background_1" },
@@ -211,7 +218,7 @@ const SplitPane = ({
             onClick={() => setTool(value)}
             style={{ color: colors[value] }}
           >
-            {value < 3 ? "✎" : value === 3 ? "▱" : "▰"}
+            <img src={toolIcons[value]} alt="" draggable={false} />
           </button>
         ))}
         <button

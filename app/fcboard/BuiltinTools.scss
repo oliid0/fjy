@@ -124,8 +124,9 @@
     background: var(--fc-surface, #fff);
   }
   button[aria-pressed="true"] {
-    background: #d7e6ff;
-    box-shadow: inset 0 0 0 2px #1565c0;
+    background: #e0e0e0;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px #888;
   }
   .fc-split-panes {
     display: flex;
@@ -136,7 +137,7 @@
     position: relative;
     flex: 1;
     min-width: 0;
-    border-inline-end: 2px solid #888;
+    border-inline-end: 1.5px dashed #000;
     display: flex;
     flex-direction: column;
   }
@@ -154,6 +155,13 @@
     background: var(--fc-surface, #fff);
     button {
       font-size: 22px;
+    }
+    img {
+      display: block;
+      width: 23px;
+      height: 23px;
+      object-fit: contain;
+      pointer-events: none;
     }
   }
 }

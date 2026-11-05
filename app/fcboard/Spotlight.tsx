@@ -1,10 +1,6 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useId, useRef, useState } from "react";
-import {
-  CloseIcon,
-  fullscreenIcon,
-  palette,
-} from "@fcboard/fcboard/components/icons";
+import { palette } from "@fcboard/fcboard/components/icons";
 
 import { classroomCommands } from "./commands";
 
@@ -320,20 +316,18 @@ export const Spotlight = () => {
       >
         <button
           type="button"
+          className="fc-spotlight-shape-button"
           aria-label={t("fcboard.spotlight_shape")}
           aria-expanded={popup === "shape"}
           onClick={() => setPopup(popup === "shape" ? null : "shape")}
-        >
-          {shapes[shape]}
-        </button>
+        />
         <button
           type="button"
+          className="fc-spotlight-settings-button"
           aria-label={t("fcboard.settings")}
           aria-expanded={popup === "settings"}
           onClick={() => setPopup(popup === "settings" ? null : "settings")}
-        >
-          {palette}
-        </button>
+        />
         {popup && (
           <div
             className="fc-spotlight-popup"
@@ -363,14 +357,14 @@ export const Spotlight = () => {
                 <button
                   key={value}
                   type="button"
+                  data-shape={value}
+                  aria-label={shapes[value]}
                   aria-pressed={shape === value}
                   onClick={() => {
                     setShape(value);
                     setPopup(null);
                   }}
-                >
-                  {shapes[value]}
-                </button>
+                />
               ))
             ) : (
               <>
@@ -413,14 +407,13 @@ export const Spotlight = () => {
           </div>
         )}
         <button
+          className="fc-spotlight-close-button"
           aria-label={t("fcboard.close_spotlight")}
           onClick={() => {
             flush();
             setState((previous) => ({ ...previous, open: false }));
           }}
-        >
-          {CloseIcon}
-        </button>
+        />
       </div>
       <button
         className="fc-spotlight-resize"
@@ -492,9 +485,7 @@ export const Spotlight = () => {
             }));
           }
         }}
-      >
-        {fullscreenIcon}
-      </button>
+      />
     </div>
   );
 };

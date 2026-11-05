@@ -13,7 +13,8 @@
     gap: 12px;
     padding: 10px 8px;
     border-radius: 32px;
-    background: #8c8c8caa;
+    background: url("./assets/spotlight/dazzle_spotlight_menu_bg.png") center /
+      50px 100% no-repeat;
   }
   button,
   .fc-spotlight-color {
@@ -55,7 +56,8 @@
     max-width: calc(100vw - 24px);
     padding: 16px;
     border-radius: 16px;
-    background: #555f;
+    background: #f8f8f8;
+    color: #333;
     box-shadow: 0 4px 20px #0004;
     &[data-shapes="true"] {
       flex-direction: row;
@@ -76,7 +78,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    color: white;
+    color: #333;
     input {
       min-width: 0;
       width: 100%;
@@ -84,7 +86,88 @@
   }
   .fc-spotlight-resize {
     position: absolute;
-    background: #72727288;
+    background: transparent;
     cursor: nwse-resize;
   }
+}
+
+// Original MarkSizeView menu sprites; 50px at hdpi = 33⅓ CSS px within the touch target.
+.fc-classroom .fc-spotlight {
+  .fc-spotlight-shape-button,
+  .fc-spotlight-settings-button,
+  .fc-spotlight-close-button,
+  .fc-spotlight-resize {
+    border: 0;
+    background-position: center;
+    background-size: 33.333px 33.333px;
+    background-repeat: no-repeat;
+  }
+  .fc-spotlight-shape-button {
+    background-image: url("./assets/spotlight/dazzle_spotlight_shape_normal.png");
+  }
+  .fc-spotlight-shape-button:active,
+  .fc-spotlight-shape-button[aria-expanded="true"] {
+    background-image: url("./assets/spotlight/dazzle_spotlight_shape_pressed.png");
+  }
+  .fc-spotlight-settings-button {
+    background-image: url("./assets/spotlight/dazzle_spotlight_picture_normal.png");
+  }
+  .fc-spotlight-settings-button:active,
+  .fc-spotlight-settings-button[aria-expanded="true"] {
+    background-image: url("./assets/spotlight/dazzle_spotlight_picture_pressed.png");
+  }
+  .fc-spotlight-close-button {
+    background-image: url("./assets/spotlight/dazzle_spotlight_quit_normal.png");
+  }
+  .fc-spotlight-close-button:active {
+    background-image: url("./assets/spotlight/dazzle_spotlight_quit_presse.png");
+  }
+  .fc-spotlight-resize {
+    background-image: url("./assets/spotlight/zoom_normal.png");
+  }
+  .fc-spotlight-resize:active {
+    background-image: url("./assets/spotlight/zoom_pressed.png");
+  }
+  .fc-spotlight-color {
+    border: 0;
+    background: url("./assets/spotlight/custom_normal.png") center / 24px auto
+      no-repeat;
+    svg {
+      visibility: hidden;
+    }
+  }
+  [data-shape] {
+    border: 0;
+    background-position: center;
+    background-size: 23px auto;
+    background-repeat: no-repeat;
+  }
+}
+.fc-classroom .fc-spotlight [data-shape="circle"] {
+  background-image: url("./assets/spotlight/circular_normal.png");
+}
+.fc-classroom .fc-spotlight [data-shape="circle"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/circular_pressed.png");
+}
+.fc-classroom .fc-spotlight [data-shape="rectangle"] {
+  background-image: url("./assets/spotlight/square_normal.png");
+}
+.fc-classroom .fc-spotlight [data-shape="rectangle"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/square_pressed.png");
+}
+.fc-classroom .fc-spotlight [data-shape="triangle"] {
+  background-image: url("./assets/spotlight/triangle_normal.png");
+}
+.fc-classroom .fc-spotlight [data-shape="triangle"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/triangle_pressed.png");
+}
+.fc-classroom .fc-spotlight [data-shape="star"] {
+  background-image: url("./assets/spotlight/star_normal.png");
+}
+.fc-classroom .fc-spotlight [data-shape="star"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/star_pressed.png");
+}
+
+.fc-classroom .fc-spotlight .fc-spotlight-color:active {
+  background-image: url("./assets/spotlight/custom_pressed.png");
 }

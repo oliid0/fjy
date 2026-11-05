@@ -2203,7 +2203,8 @@ export const FilePreview = ({
         ),
       ) === signature;
     const since = Date.now();
-    const timer = setTimeout(
+    requests.schedule(
+      request,
       () => {
         requests.start(request);
         void (async () => {
@@ -2435,10 +2436,6 @@ export const FilePreview = ({
         ? 450
         : 700,
     );
-    return () => {
-      clearTimeout(timer);
-      requests.cancelPending();
-    };
   }, [
     ink,
     page,
@@ -2483,7 +2480,6 @@ export const FilePreview = ({
     }
   };
   const cancelInkGesture = useCallback(() => {
-    assistRequests.current.cancelPending();
     restoreTableWriting();
     const owner = activePointer.current;
     activePointer.current = null;
@@ -2747,6 +2743,9 @@ export const FilePreview = ({
               ...events.map((sample) => sample.pressure),
             ],
       };
+      if (stroke.fcInk?.assist) {
+        assistRequests.current.revise([stroke.points], stroke.fcInk.assist);
+      }
       draftRef.current = stroke;
       setDraft(stroke);
       const table = tableWriting.current;
@@ -2951,7 +2950,6 @@ export const FilePreview = ({
               if (activePointer.current) {
                 cancelInkGesture();
               }
-              assistRequests.current.cancelPending();
               if (classroomCommands.has("lesson.pause")) {
                 void classroomCommands.execute({ name: "lesson.pause" });
               }
@@ -3021,6 +3019,12 @@ export const FilePreview = ({
                   pressures: style.simulatePressure ? [] : [event.pressure],
                   points: [point(event)],
                 };
+                if (stroke.fcInk?.assist) {
+                  assistRequests.current.revise(
+                    [stroke.points],
+                    stroke.fcInk.assist,
+                  );
+                }
                 draftRef.current = stroke;
                 setDraft(stroke);
                 const start = stroke.points[0];

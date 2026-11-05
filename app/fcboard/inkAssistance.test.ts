@@ -774,3 +774,132 @@ it.each(["function", "calculation"] as const)(
     }
   },
 );
+
+it.each([1700, 400])(
+  "runs three separate magic regions %sms apart and completes later images before the first fails",
+  async (pause) => {
+    vi.useFakeTimers();
+    const { api, ink, draw } = setup("magic");
+    saveSettings(
+      {
+        ...defaults,
+        apiKey: "test",
+        model: "vision",
+        imageModel: "illustrator",
+      },
+      false,
+    );
+    const original = [
+      ink,
+      { ...ink, id: "magic-text", x: 500 },
+      { ...ink, id: "magic-third", x: 900 },
+    ];
+    const model = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValueOnce('{"version":1,"kind":"drawing"}')
+      .mockResolvedValueOnce(
+        '{"version":1,"kind":"text","text":"一个二次元女孩"}',
+      )
+      .mockResolvedValueOnce('{"version":1,"kind":"drawing"}');
+    const generations: {
+      resolve: (value: object) => void;
+      reject: (error: Error) => void;
+      body: Record<string, unknown>;
+    }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url, options) =>
+          new Promise((resolve, reject) => {
+            generations.push({
+              resolve,
+              reject,
+              body: JSON.parse(options.body),
+            });
+          }),
+      ),
+    );
+    vi.stubGlobal(
+      "Image",
+      class {
+        naturalWidth = 100;
+        naturalHeight = 100;
+        src = "";
+        decode = async () => {};
+      },
+    );
+    const busy = vi.fn();
+    const error = vi.fn();
+    const release = observeInkAssistance(api, busy, error);
+    const success = {
+      status: 200,
+      json: async () => ({
+        data: [
+          {
+            b64_json:
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==",
+          },
+        ],
+      }),
+    };
+    try {
+      for (const source of original) {
+        draw([...api.getSceneElements(), source]);
+        await act(async () => vi.advanceTimersByTimeAsync(pause));
+      }
+      await act(async () => vi.advanceTimersByTimeAsync(1700));
+      expect(model).toHaveBeenCalledTimes(3);
+      expect(generations).toHaveLength(3);
+      expect(generations[0].body.image).toBeDefined();
+      expect(generations[1].body.image).toBeUndefined();
+      expect(generations[1].body.prompt).toContain("一个二次元女孩");
+      expect(generations[2].body.image).toBeDefined();
+      expect(
+        vi
+          .mocked(ai.boardContext)
+          .mock.calls.map((call) => call[2]?.map((element) => element.id)),
+      ).toEqual(original.map((source) => [source.id]));
+      await act(async () => {
+        generations[2].resolve(success);
+      });
+      expect(
+        api.getSceneElements().filter((element) => element.type === "image"),
+      ).toHaveLength(1);
+      expect(
+        api.getSceneElements().some((element) => element.id === original[2].id),
+      ).toBe(false);
+      expect(
+        api.getSceneElements().some((element) => element.id === original[1].id),
+      ).toBe(true);
+      await act(async () => {
+        generations[1].resolve(success);
+      });
+      const images = api
+        .getSceneElements()
+        .filter((element) => element.type === "image");
+      expect(images).toHaveLength(2);
+      expect(
+        images
+          .map((element) => element.x + element.width / 2)
+          .sort((a, b) => a - b),
+      ).toEqual([550, 950]);
+      expect(
+        api.getSceneElements().some((element) => element.id === ink.id),
+      ).toBe(true);
+      expect(busy).toHaveBeenLastCalledWith(true);
+      await act(async () => {
+        generations[0].reject(new Error("first generation failed"));
+      });
+      expect(error).toHaveBeenCalledTimes(1);
+      expect(
+        api.getSceneElements().filter((element) => element.type === "image"),
+      ).toEqual(images);
+      expect(
+        api.getSceneElements().some((element) => element.id === ink.id),
+      ).toBe(true);
+      expect(busy).toHaveBeenLastCalledWith(false);
+    } finally {
+      release();
+    }
+  },
+);

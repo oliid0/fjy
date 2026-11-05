@@ -12,6 +12,7 @@ export class InkRequests {
       mode: string;
       started: boolean;
       failed: boolean;
+      timer?: ReturnType<typeof setTimeout>;
     }
   >();
   available(id: string) {
@@ -25,7 +26,12 @@ export class InkRequests {
     id: (item: T) => string,
     ink: (items: readonly T[]) => InkInput,
   ) {
-    const fresh = pending.filter((item) => this.available(id(item)));
+    let fresh = pending.filter((item) => this.available(id(item)));
+    const region = latestFunctionInk(
+      ink(fresh),
+      mode === "calculation" ? 1.1 : 0.35,
+    );
+    fresh = fresh.filter((_, index) => region.has(index));
     if (!fresh.length) {
       return [];
     }
@@ -42,8 +48,7 @@ export class InkRequests {
         Array.from(group).some((index) => index < entry.ink.length) &&
         Array.from(group).some((index) => index >= entry.ink.length)
       ) {
-        request.abort();
-        this.entries.delete(request);
+        this.cancel(request);
         entry.ids.forEach((value) => selected.add(value));
       }
     }
@@ -63,9 +68,42 @@ export class InkRequests {
       failed: false,
     });
   }
+  /** Every region owns its debounce; other regions may keep writing meanwhile. */
+  schedule(request: AbortController, work: () => void, delay: number) {
+    const entry = this.entries.get(request);
+    if (entry) {
+      clearTimeout(entry.timer);
+      entry.timer = setTimeout(work, delay);
+    }
+  }
+  /** A new contact revises only nearby requests, including its own pending debounce. */
+  revise(ink: InkInput, mode: string) {
+    for (const [request, entry] of this.entries) {
+      if (entry.mode !== mode) {
+        continue;
+      }
+      const region = latestFunctionInk(
+        [...entry.ink, ...ink],
+        mode === "calculation" ? 1.1 : 0.35,
+      );
+      if (
+        Array.from(region).some((index) => index < entry.ink.length) &&
+        Array.from(region).some((index) => index >= entry.ink.length)
+      ) {
+        this.cancel(request);
+      }
+    }
+  }
+  private cancel(request: AbortController) {
+    clearTimeout(this.entries.get(request)?.timer);
+    request.abort();
+    this.entries.delete(request);
+  }
   start(request: AbortController) {
     const entry = this.entries.get(request);
     if (entry) {
+      clearTimeout(entry.timer);
+      entry.timer = undefined;
       entry.started = true;
     }
   }
@@ -74,6 +112,7 @@ export class InkRequests {
     if (!entry) {
       return;
     }
+    clearTimeout(entry.timer);
     if (!failed || request.signal.aborted) {
       this.entries.delete(request);
     } else {
@@ -92,25 +131,15 @@ export class InkRequests {
       (entry) => entry.started && !entry.failed,
     );
   }
-  cancelPending() {
-    for (const [request, entry] of this.entries) {
-      if (!entry.started) {
-        request.abort();
-        this.entries.delete(request);
-      }
-    }
-  }
   prune(visible: readonly string[]) {
     const ids = new Set(visible);
     for (const [request, entry] of this.entries) {
       if (entry.ids.some((id) => !ids.has(id))) {
-        request.abort();
-        this.entries.delete(request);
+        this.cancel(request);
       }
     }
   }
   cancelAll() {
-    this.entries.forEach((_, request) => request.abort());
-    this.entries.clear();
+    this.entries.forEach((_, request) => this.cancel(request));
   }
 }

@@ -53,7 +53,6 @@ export const observeInkAssistance = (
 ) => {
   const seen = new Set(api.getSceneElements().map((element) => element.id));
   const failed = new Set<string>();
-  let timer: ReturnType<typeof setTimeout>;
   const requests = new InkRequests();
   let previous = "";
   let observedScene:
@@ -93,15 +92,12 @@ export const observeInkAssistance = (
     ) {
       penConfiguration = nextConfiguration;
       api.getSceneElements().forEach((element) => seen.add(element.id));
-      clearTimeout(timer);
       requests.cancelAll();
       onBusy(requests.busy);
       previous = "";
       return;
     }
     if (state.cursorButton === "down" || state.activeTool.type !== "freedraw") {
-      clearTimeout(timer);
-      requests.cancelPending();
       onBusy(requests.busy);
       previous = "";
       return;
@@ -184,8 +180,6 @@ export const observeInkAssistance = (
     const signature = selectionSignature(source);
     const requestKey = `${signature}:${target?.stamp || ""}`;
     if (!mode || !signature || failed.has(requestKey)) {
-      clearTimeout(timer);
-      requests.cancelPending();
       onBusy(requests.busy);
       previous = "";
       return;
@@ -194,8 +188,6 @@ export const observeInkAssistance = (
       return;
     }
     previous = requestKey;
-    clearTimeout(timer);
-    requests.cancelPending();
     const request = new AbortController();
     requests.reserve(
       request,
@@ -204,7 +196,8 @@ export const observeInkAssistance = (
       mode,
     );
     const since = Date.now();
-    timer = setTimeout(
+    requests.schedule(
+      request,
       () => {
         const current = () =>
           !request.signal.aborted &&
@@ -514,9 +507,11 @@ export const observeInkAssistance = (
   const stop = api.onChange(refresh);
   const tables = new LiveTableWriting(api);
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
-    if (phase === "start") {
-      clearTimeout(timer);
-      requests.cancelPending();
+    if (phase === "start" || phase === "update") {
+      const mode = inkAssistMode(stroke.customData?.fcInk?.assist);
+      if (mode) {
+        requests.revise(boardInk([stroke]), mode);
+      }
       previous = "";
       onBusy(requests.busy);
     }
@@ -573,7 +568,6 @@ export const observeInkAssistance = (
     }
   });
   const invalidate = classroomCommands.onInvalidate(() => {
-    clearTimeout(timer);
     requests.cancelAll();
     onBusy(false);
   });
@@ -584,7 +578,6 @@ export const observeInkAssistance = (
         ?.active || "";
     if (active !== board) {
       board = active;
-      clearTimeout(timer);
       requests.cancelAll();
       onBusy(requests.busy);
       api.getSceneElements().forEach((element) => seen.add(element.id));
@@ -626,7 +619,6 @@ export const observeInkAssistance = (
     },
   );
   return () => {
-    clearTimeout(timer);
     requests.cancelAll();
     stop();
     inkCommit?.();

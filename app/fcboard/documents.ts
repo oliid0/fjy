@@ -57,6 +57,7 @@ export type InkStroke = {
   commandId?: string;
   annotation?: boolean;
   questionInput?: boolean;
+  questionFrame?: boolean;
   language?: LanguageInk;
   questionAnswer?: { owner: string; ids: string[]; folded?: InkStroke[] };
   widget?: Widget & { origin: { x: number; y: number } };
@@ -687,6 +688,7 @@ export const shapeInk = (
     annotation: !!shape.customData?.fcAnnotation,
     language: shape.customData?.fcLanguage,
     ...(shape.customData?.fcQuestionInput ? { questionInput: true } : {}),
+    ...(shape.customData?.fcQuestionFrame ? { questionFrame: true } : {}),
     widget: shape.customData?.fcWidget,
     insertion: shape.customData?.fcInsertion,
     plot: shape.customData?.fcPlot,

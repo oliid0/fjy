@@ -21,6 +21,7 @@ import { interactiveResource } from "./test/interactiveResource";
 import { defaultPlot } from "./math";
 
 import { Classroom } from "./Classroom";
+import { shapeInk } from "./documents";
 import { SelectionActions } from "./SelectionActions";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
@@ -36,7 +37,7 @@ import { currentSettings, defaults, saveSettings } from "./settings";
 import { handwritingText } from "./handwriting";
 import { insertionDefaults, renderInsertion } from "./insertObjects";
 import { documentSourceSignature } from "./documents";
-import { validateQuestionInk } from "./questionInk";
+import { questionSurface, validateQuestionInk } from "./questionInk";
 
 import { readWidgets } from "./widgets";
 import { lessonSessions } from "./teaching";
@@ -135,7 +136,7 @@ describe("selection-driven classroom controls", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([false, true])(
-    "uses one handwriting question route with whole=%s and reads the current surface only on submission",
+    "keeps a hollow question border with whole=%s and reads only its current region on search",
     async (whole) => {
       selectText("selected note");
       const read = vi.spyOn(ai, "boardContext").mockResolvedValue({
@@ -172,19 +173,22 @@ describe("selection-driven classroom controls", () => {
         screen.queryByRole("dialog", {
           name: t("fcboard.handwritten_question"),
         }),
-      ).toBeNull();
+      ).toBeVisible();
       await act(async () => {
         await classroomCommands.execute({
           name: "assistant.open",
           args: { whole },
         });
       });
+      expect(
+        scene.filter((element) => element.customData?.fcQuestionFrame),
+      ).toHaveLength(1);
       read.mockResolvedValue({
         elements: scene,
         text: "Notes changed while writing the question",
         image: undefined,
       });
-      writeQuestion();
+      await writeQuestion();
       fireEvent.click(
         screen.getByRole("button", { name: t("fcboard.send_question") }),
       );
@@ -200,19 +204,27 @@ describe("selection-driven classroom controls", () => {
           screen.getByRole("dialog", { name: t("fcboard.ai_questions") }),
         ).getByRole("button", { name: t("buttons.close") }),
       );
-      await waitFor(() =>
-        expect(
-          screen.getByRole("button", { name: t("fcboard.expand_answer") }),
-        ).toBeEnabled(),
-      );
+      expect(
+        screen.queryByRole("button", { name: t("fcboard.expand_answer") }),
+      ).toBeNull();
+      expect(
+        await screen.findByRole("button", { name: t("fcboard.send_question") }),
+      ).toBeEnabled();
+      const border = scene.find(
+        (element) => element.customData?.fcQuestionFrame,
+      )!;
       expect(read).toHaveBeenCalledWith(
         api,
-        true,
-        undefined,
-        { left: 16, top: 16, right: 1584, bottom: 816 },
-        true,
+        false,
+        expect.arrayContaining([expect.objectContaining({ type: "freedraw" })]),
+        {
+          left: border.x,
+          top: border.y,
+          right: border.x + border.width,
+          bottom: border.y + border.height,
+        },
       );
-      expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
+      expect(JSON.stringify(chat.mock.calls[0][0])).not.toContain(
         "Notes changed while writing the question",
       );
       expect(scene.some((element) => element.customData?.fcQuestionInput)).toBe(
@@ -227,18 +239,17 @@ describe("selection-driven classroom controls", () => {
       });
       expect(screen.queryByRole("textbox")).toBeNull();
       read.mockClear();
-      writeQuestion();
+      await writeQuestion();
       fireEvent.click(
         screen.getByRole("button", { name: t("fcboard.send_question") }),
       );
       await waitFor(() =>
-        expect(read).toHaveBeenCalledWith(
-          api,
-          true,
-          undefined,
-          { left: 16, top: 16, right: 1584, bottom: 816 },
-          true,
-        ),
+        expect(read).toHaveBeenCalledWith(api, false, expect.any(Array), {
+          left: border.x,
+          top: border.y,
+          right: border.x + border.width,
+          bottom: border.y + border.height,
+        }),
       );
     },
   );
@@ -266,7 +277,7 @@ describe("selection-driven classroom controls", () => {
       await act(async () => {
         await classroomCommands.execute({ name: "assistant.open" });
       });
-      writeQuestion();
+      await writeQuestion();
       fireEvent.click(
         screen.getByRole("button", { name: t("fcboard.send_question") }),
       );
@@ -433,7 +444,7 @@ describe("selection-driven classroom controls", () => {
     await act(async () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
-    writeQuestion();
+    await writeQuestion();
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.send_question") }),
     );
@@ -1386,15 +1397,21 @@ describe("selection-driven classroom controls", () => {
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
       }));
-      const draw = vi.fn();
-      const text = vi.fn();
       let visibleInk: InkStroke[] = [];
+      const draw = vi.fn((args) => {
+        if (args.shape?.customData?.fcQuestionFrame) {
+          visibleInk = [...visibleInk, shapeInk(args.shape, "question-frame")];
+          classroomCommands.changed("document");
+        }
+      });
+      const text = vi.fn();
       const stops = [
         classroomCommands.context("document", () => ({
           id: "course",
           name: "visible.pdf",
           page: 2,
           ink: visibleInk,
+          selection: [],
           text: "visible courseware",
           viewport: { left: 0, top: 0, scroll: 0 },
         })),
@@ -1404,13 +1421,15 @@ describe("selection-driven classroom controls", () => {
           obstacles: [],
         })),
         classroomCommands.register("document.strokes", "@internal", (args) => {
-          visibleInk = validateQuestionInk(args.strokes).map((points) => ({
+          const written = validateQuestionInk(args.strokes).map((points) => ({
             id: crypto.randomUUID(),
             points,
             color: "#000000",
             width: 2,
           }));
-          return { ids: visibleInk.map((stroke) => stroke.id) };
+          visibleInk = [...visibleInk, ...written];
+          classroomCommands.changed("document");
+          return { ids: written.map((stroke) => stroke.id) };
         }),
         classroomCommands.register("document.snapshot", "@internal", () => ({
           name: "visible.pdf",
@@ -1430,7 +1449,10 @@ describe("selection-driven classroom controls", () => {
           vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(
             "给我一个学习建议",
           );
-          writeQuestion();
+          await waitFor(() => expect(draw).toHaveBeenCalled());
+          expect(visibleInk.some((stroke) => stroke.questionFrame)).toBe(true);
+          expect(() => questionSurface(api)).not.toThrow();
+          await writeQuestion();
           fireEvent.click(
             screen.getByRole("button", { name: t("fcboard.send_question") }),
           );
@@ -1457,7 +1479,7 @@ describe("selection-driven classroom controls", () => {
         }
         expect(capture).not.toHaveBeenCalled();
         expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
-          "visible courseware",
+          operation === "question" ? "给我一个学习建议" : "visible courseware",
         );
         expect(JSON.stringify(chat.mock.calls[0][0])).not.toContain(
           "hidden board secret",
@@ -1756,7 +1778,7 @@ describe("selection-driven classroom controls", () => {
     const recognize = vi
       .spyOn(ocr, "recognizeHandwriting")
       .mockResolvedValue("插入一个矩形");
-    writeQuestion();
+    await writeQuestion();
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.send_question") }),
     );
@@ -1765,10 +1787,11 @@ describe("selection-driven classroom controls", () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
     recognize.mockResolvedValue("清空当前白板");
-    writeQuestion();
+    await writeQuestion();
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.send_question") }),
     );
+    await waitFor(() => expect(scene).toHaveLength(0));
     await act(async () => {
       finish(
         JSON.stringify({
@@ -3482,7 +3505,7 @@ describe("selection-driven classroom controls", () => {
         });
         expect(classroomCommands.has("document.next")).toBe(false);
         stops.push(classroomCommands.register("files.open", "open", open));
-        writeQuestion();
+        await writeQuestion();
         fireEvent.click(
           screen.getByRole("button", { name: t("fcboard.send_question") }),
         );
@@ -3491,12 +3514,9 @@ describe("selection-driven classroom controls", () => {
         if (outcome === "manual transition") {
           act(() => classroomCommands.invalidate());
         } else if (outcome === "question cancelled") {
-          fireEvent.keyDown(
-            screen.getByRole("dialog", {
-              name: t("fcboard.handwritten_question"),
-            }),
-            { key: "Escape" },
-          );
+          await act(async () => {
+            await classroomCommands.execute({ name: "assistant.close" });
+          });
         }
         await act(async () => {
           finishOpen();

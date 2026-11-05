@@ -24,8 +24,12 @@ export const writeQuestion = async (page: Page, text: string) => {
       await route.fallback();
     }
   });
-  const ink = page.getByRole("img", { name: "AI 出题", exact: true });
+  const ink = page.locator(".fc-ink-question");
   const box = (await ink.boundingBox())!;
+  await page
+    .getByRole("toolbar", { name: "白板工具栏", exact: true })
+    .getByRole("button", { name: "画笔", exact: true })
+    .click();
   await page.mouse.move(box.x + 20, box.y + 20);
   await page.mouse.down();
   await page.mouse.move(box.x + 45, box.y + Math.min(75, box.height - 20), {
@@ -33,6 +37,23 @@ export const writeQuestion = async (page: Page, text: string) => {
   });
   await page.mouse.move(box.x + 70, box.y + 25, { steps: 8 });
   await page.mouse.up();
-  await expect(ink.locator("path")).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
+            (element: {
+              type: string;
+              isDeleted?: boolean;
+              customData?: { fcQuestionFrame?: boolean };
+            }) =>
+              !element.isDeleted &&
+              element.type === "freedraw" &&
+              !element.customData?.fcQuestionFrame,
+          ).length,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await expect(ink).toHaveCSS("pointer-events", "none");
   await page.getByRole("button", { name: "发送问题", exact: true }).click();
 };

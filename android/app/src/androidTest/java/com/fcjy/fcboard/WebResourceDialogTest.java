@@ -17,6 +17,12 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class WebResourceDialogTest {
+    /** Active WebView animations need not make the whole UI queue idle before every read. */
+    private void onActivity(ActivityScenario<MainActivity> scenario, ActivityScenario.ActivityAction<MainActivity> action) {
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            .runOnMainSync(() -> scenario.onActivity(action));
+    }
+
     private void inject(long down, int action, float x, float y) {
         MotionEvent event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);
         event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
@@ -36,7 +42,7 @@ public class WebResourceDialogTest {
         CountDownLatch selected=new CountDownLatch(1);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             try {
-                scenario.onActivity(activity->{
+                onActivity(scenario, activity->{
                     WebResourceDialog browser=new WebResourceDialog(activity,"https://example.test/","en",value->{selection.set(value);selected.countDown();});
                     dialog.set(browser);browser.show();
                     String source=blob?"fetch('"+data+"').then(r=>r.blob()).then(b=>image.src=URL.createObjectURL(b))":"image.src='"+data+"'";
@@ -45,12 +51,12 @@ public class WebResourceDialogTest {
                 boolean ready=false;
                 for(int attempt=0;attempt<30 && !ready;attempt++) {
                     CountDownLatch read=new CountDownLatch(1);AtomicReference<Boolean> loaded=new AtomicReference<>(false);
-                    scenario.onActivity(activity->dialog.get().web.evaluateJavascript("window.__fcImageReady===true",value->{loaded.set("true".equals(value) && dialog.get().web.getProgress()==100);read.countDown();}));
+                    onActivity(scenario, activity->dialog.get().web.evaluateJavascript("window.__fcImageReady===true",value->{loaded.set("true".equals(value) && dialog.get().web.getProgress()==100);read.countDown();}));
                     assertTrue(read.await(5,TimeUnit.SECONDS));ready=loaded.get();if(!ready)Thread.sleep(100);
                 }
                 assertTrue("The actual inline/blob image must finish loading",ready);
                 final float[] start = new float[2], end = new float[2];
-                scenario.onActivity(activity->{
+                onActivity(scenario, activity->{
                     WebResourceDialog browser=dialog.get(); int[] location=new int[2];
                     browser.web.getLocationOnScreen(location);
                     start[0]=location[0]+20*browser.web.getScale(); start[1]=location[1]+20*browser.web.getScale();
@@ -64,7 +70,7 @@ public class WebResourceDialogTest {
                 try {
                     for(int attempt=0;attempt<100 && !floating;attempt++) {
                         AtomicReference<Boolean> hidden=new AtomicReference<>(false);
-                        scenario.onActivity(activity->hidden.set(dialog.get().getWindow().getDecorView().getVisibility()!=View.VISIBLE));
+                        onActivity(scenario, activity->hidden.set(dialog.get().getWindow().getDecorView().getVisibility()!=View.VISIBLE));
                         floating=hidden.get(); if(!floating) Thread.sleep(50);
                     }
                     assertTrue("Holding the real image must lift its native drag shadow",floating);
@@ -77,14 +83,14 @@ public class WebResourceDialogTest {
                 assertTrue("Dropping must return the actual displayed image",selected.await(5,TimeUnit.SECONDS));
                 assertEquals("image",selection.get().getString("kind"));
                 assertTrue(selection.get().has("position"));
-                scenario.onActivity(activity->assertFalse(dialog.get().isShowing()));
+                onActivity(scenario, activity->assertFalse(dialog.get().isShowing()));
                 String value=selection.get().getString("value");
                 assertTrue(value.startsWith("data:image/png;base64,"));
                 byte[] decoded=android.util.Base64.decode(value.substring(value.indexOf(',')+1),android.util.Base64.DEFAULT);
                 android.graphics.Bitmap image=android.graphics.BitmapFactory.decodeByteArray(decoded,0,decoded.length);
                 assertNotNull(image);assertEquals(20,image.getWidth());assertEquals(10,image.getHeight());assertEquals(android.graphics.Color.RED,image.getPixel(10,5));image.recycle();
             } finally {
-                scenario.onActivity(activity->{if(dialog.get()!=null)dialog.get().dismiss();});
+                onActivity(scenario, activity->{if(dialog.get()!=null)dialog.get().dismiss();});
             }
         }
     }
@@ -96,7 +102,7 @@ public class WebResourceDialogTest {
     @Test public void nativeBrowserMovesResizesAndCancelsWithoutReplacingItsLiveWebView() throws Exception {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             AtomicReference<WebResourceDialog> dialog = new AtomicReference<>();
-            scenario.onActivity(activity -> {
+            onActivity(scenario, activity -> {
                 WebResourceDialog browser = new WebResourceDialog(activity, "https://example.test/", "en");
                 dialog.set(browser); browser.show();
                 browser.web.loadDataWithBaseURL("https://example.test/", "<p>Live experiment</p><script>window.__fcKeepExperiment=17</script>", "text/html", "UTF-8", null);
@@ -105,13 +111,13 @@ public class WebResourceDialogTest {
             for (int attempt = 0; attempt < 30 && !initialized; attempt++) {
                 CountDownLatch read = new CountDownLatch(1);
                 AtomicReference<String> marker = new AtomicReference<>();
-                scenario.onActivity(activity -> dialog.get().web.evaluateJavascript("window.__fcKeepExperiment", value -> { marker.set(value); read.countDown(); }));
+                onActivity(scenario, activity -> dialog.get().web.evaluateJavascript("window.__fcKeepExperiment", value -> { marker.set(value); read.countDown(); }));
                 assertTrue(read.await(5, TimeUnit.SECONDS));
                 initialized = "17".equals(marker.get());
                 if (!initialized) Thread.sleep(100);
             }
             assertTrue(initialized);
-            scenario.onActivity(activity -> {
+            onActivity(scenario, activity -> {
                 WebResourceDialog browser = dialog.get();
                 android.view.WindowManager.LayoutParams before = new android.view.WindowManager.LayoutParams();
                 before.copyFrom(browser.getWindow().getAttributes());
@@ -133,10 +139,10 @@ public class WebResourceDialogTest {
             });
             CountDownLatch checked = new CountDownLatch(1);
             AtomicReference<String> value = new AtomicReference<>();
-            scenario.onActivity(activity -> dialog.get().web.evaluateJavascript("window.__fcKeepExperiment", result -> { value.set(result); checked.countDown(); }));
+            onActivity(scenario, activity -> dialog.get().web.evaluateJavascript("window.__fcKeepExperiment", result -> { value.set(result); checked.countDown(); }));
             assertTrue(checked.await(5, TimeUnit.SECONDS));
             assertEquals("17", value.get());
-            scenario.onActivity(activity -> dialog.get().dismiss());
+            onActivity(scenario, activity -> dialog.get().dismiss());
         }
     }
     private SeekBar findBar(View view) {
@@ -152,7 +158,7 @@ public class WebResourceDialogTest {
             AtomicReference<WebResourceDialog> dialog = new AtomicReference<>();
             AtomicReference<JSObject> selection = new AtomicReference<>();
             CountDownLatch selected = new CountDownLatch(1);
-            scenario.onActivity(activity -> {
+            onActivity(scenario, activity -> {
                 WebResourceDialog browser = new WebResourceDialog(activity,"https://example.test/", "en", result -> { selection.set(result); selected.countDown(); });
                 dialog.set(browser); browser.show();
                 browser.web.loadDataWithBaseURL("https://example.test/", "<meta name='viewport' content='width=device-width,initial-scale=1'><div id='wide' style='width:100%;height:100px;overflow-x:auto'><div style='width:2000px;height:80px'>Newton force and acceleration</div></div>", "text/html","UTF-8",null);
@@ -160,11 +166,11 @@ public class WebResourceDialogTest {
             boolean ready = false;
             for (int attempt = 0; attempt < 30 && !ready; attempt++) {
                 AtomicReference<Boolean> enabled = new AtomicReference<>(false);
-                scenario.onActivity(activity -> { SeekBar bar = findBar(dialog.get().getWindow().getDecorView()); enabled.set(bar != null && bar.isEnabled()); });
+                onActivity(scenario, activity -> { SeekBar bar = findBar(dialog.get().getWindow().getDecorView()); enabled.set(bar != null && bar.isEnabled()); });
                 ready = enabled.get(); if (!ready) Thread.sleep(200);
             }
             assertTrue("The real horizontal scrollbar must discover the wide DOM container",ready);
-            scenario.onActivity(activity -> {
+            onActivity(scenario, activity -> {
                 SeekBar bar = findBar(dialog.get().getWindow().getDecorView());
                 long now = SystemClock.uptimeMillis();
                 for (int action : new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_MOVE,MotionEvent.ACTION_UP}) {
@@ -174,10 +180,10 @@ public class WebResourceDialogTest {
             });
             CountDownLatch scrolled = new CountDownLatch(1);
             AtomicReference<String> position = new AtomicReference<>();
-            scenario.onActivity(activity -> dialog.get().web.evaluateJavascript("document.getElementById('wide').scrollLeft", value -> { position.set(value); scrolled.countDown(); }));
+            onActivity(scenario, activity -> dialog.get().web.evaluateJavascript("document.getElementById('wide').scrollLeft", value -> { position.set(value); scrolled.countDown(); }));
             assertTrue(scrolled.await(5,TimeUnit.SECONDS));
             assertTrue(Double.parseDouble(position.get()) > 100);
-            scenario.onActivity(activity -> {
+            onActivity(scenario, activity -> {
                 WebResourceDialog browser = dialog.get();
                 browser.web.evaluateJavascript("document.getElementById('wide').scrollLeft=0", ignored -> {
                     long now = SystemClock.uptimeMillis();
@@ -188,7 +194,7 @@ public class WebResourceDialogTest {
             assertTrue("A native long-press must produce real webpage text",selected.await(5,TimeUnit.SECONDS));
             assertEquals("text",selection.get().getString("kind"));
             assertTrue(selection.get().getString("value").contains("Newton"));
-            scenario.onActivity(activity -> dialog.get().dismiss());
+            onActivity(scenario, activity -> dialog.get().dismiss());
         }
     }
 }

@@ -1,56 +1,43 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { t } from "@fcboard/fcboard/i18n";
 
-/** Exercise real pointer sampling instead of filling an obsolete text input. */
-export const questionFrame = () => {
-  const svg = screen.getByRole("img", {
-    name: t("fcboard.ask_the_ai_teacher"),
-  });
-  Object.defineProperties(svg, {
-    setPointerCapture: { configurable: true, value: vi.fn() },
-    releasePointerCapture: { configurable: true, value: vi.fn() },
-  });
-  vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
-    x: 500,
-    y: 300,
-    left: 500,
-    top: 300,
-    right: 1100,
-    bottom: 444,
-    width: 600,
-    height: 144,
-    toJSON: () => ({}),
-  });
-  const pointer = (
-    type: string,
-    x: number,
-    y: number,
-    extra: Record<string, unknown> = {},
-  ) =>
-    fireEvent(
-      svg,
-      Object.assign(new Event(type, { bubbles: true }), {
-        pointerId: 1,
-        pointerType: "pen",
-        isPrimary: true,
-        button: 0,
-        clientX: x,
-        clientY: y,
-        ...extra,
-      }),
-    );
-  return { svg, pointer };
-};
+import { classroomCommands } from "../commands";
 
-export const writeQuestion = () => {
-  const { svg, pointer } = questionFrame();
-  pointer("pointerdown", 520, 320);
-  pointer("pointermove", 540, 345, {
-    getCoalescedEvents: () => [
-      { clientX: 525, clientY: 325 },
-      { clientX: 530, clientY: 335 },
-    ],
+/** Write through the real visible-surface command; the question border owns no ink layer. */
+export const writeQuestion = async () => {
+  const frame = await screen.findByRole("dialog", {
+    name: t("fcboard.handwritten_question"),
   });
-  pointer("pointerup", 550, 350);
-  return { svg, pointer };
+  await waitFor(() => expect(frame.style.width).not.toBe(""));
+  const document = classroomCommands.read("document") as
+    | { viewport: { left: number; top: number; scroll: number } }
+    | undefined;
+  const layout = classroomCommands.read("document.layout") as
+    | { scale: number }
+    | undefined;
+  const scale = layout?.scale || 1;
+  const left =
+    (parseFloat(frame.style.left) - (document?.viewport.left || 0)) / scale;
+  const top =
+    (parseFloat(frame.style.top) - (document?.viewport.top || 0)) / scale +
+    (document?.viewport.scroll || 0);
+  let result: unknown;
+  await act(async () => {
+    result = await classroomCommands.execute({
+      name: "canvas.ink",
+      args: {
+        strokes: [
+          [
+            [left + 20, top + 20],
+            [left + 25, top + 25],
+            [left + 30, top + 35],
+            [left + 40, top + 45],
+            [left + 50, top + 50],
+          ],
+        ],
+        select: false,
+      },
+    });
+  });
+  return result as { ids: string[] };
 };

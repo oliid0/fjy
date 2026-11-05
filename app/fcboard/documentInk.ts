@@ -31,7 +31,10 @@ export const documentInkElement = (stroke: InkStroke) => {
           stroke.fcInk?.pen === "dashed"
             ? "dashed"
             : stroke.strokeStyle || "solid",
-        customData: { fcInk: stroke.fcInk || { pen: "hard" } },
+        customData: {
+          fcInk: stroke.fcInk || { pen: "hard" },
+          ...(stroke.questionFrame ? { fcQuestionFrame: true } : {}),
+        },
       }),
       id: stroke.id,
     };

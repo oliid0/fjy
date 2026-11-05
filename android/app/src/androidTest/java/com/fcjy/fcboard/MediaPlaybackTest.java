@@ -25,11 +25,17 @@ import org.junit.runner.RunWith;
 /** Actual content-URI WAV decoding, playlist state and bridge controls, not a mocked media engine. */
 @RunWith(AndroidJUnit4.class)
 public class MediaPlaybackTest {
+    /** Active WebView animations need not make the whole UI queue idle before every read. */
+    private void onActivity(ActivityScenario<MainActivity> scenario, ActivityScenario.ActivityAction<MainActivity> action) {
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            .runOnMainSync(() -> scenario.onActivity(action));
+    }
+
     private JSObject invoke(ActivityScenario<MainActivity> scenario, String action, JSObject args, Uri chosen) throws Exception {
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<JSObject> result = new AtomicReference<>();
         AtomicReference<String> failure = new AtomicReference<>();
-        scenario.onActivity(activity -> {
+        onActivity(scenario, activity -> {
             MediaPlugin plugin = (MediaPlugin) activity.getBridge().getPlugin("FcboardMedia").getInstance();
             PluginCall call = new PluginCall(null, "FcboardMedia", "test", action, args) {
                 @Override public void resolve(JSObject value) { result.set(value); done.countDown(); }
@@ -73,7 +79,7 @@ public class MediaPlaybackTest {
                 invoke(scenario, "speed", new JSObject().put("action", "speed").put("speed", 1.5), null);
                 // Let the previous Dialog's posted dismiss callback run after replacement.
                 assertTrue(invoke(scenario, "chosen", new JSObject(), uri).getBoolean("open"));
-                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {});
                 JSObject replacement = invoke(scenario, "read", new JSObject().put("action", "read"), null);
                 assertTrue("Closing the old window must not release the replacement player", replacement.getBoolean("open"));
                 assertEquals(1, replacement.getJSONArray("items").length());

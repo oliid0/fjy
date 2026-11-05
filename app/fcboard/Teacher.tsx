@@ -151,6 +151,7 @@ export const Teacher = ({
     signal: AbortSignal,
     sourceIds?: string[],
     forceQuiz = false,
+    sourceContext?: { text: string; image?: string },
   ) => {
     const quizRequirement =
       /(?:出|生成|设计|编写|创建|给我).*(?:题|卷)|\b(?:quiz|questions|exam|test)\b/i.test(
@@ -185,17 +186,21 @@ export const Teacher = ({
     setQuizBusy(true);
     setQuizOpen(true);
     try {
-      const visible = classroomCommands.has("canvas.snapshot")
-        ? ((await classroomCommands.execute({
-            name: "canvas.snapshot",
-            args: { signal: request.signal },
-          })) as { text?: string; image?: string })
-        : classroomCommands.has("document.snapshot")
-        ? ((await classroomCommands.execute({ name: "document.snapshot" })) as {
-            text?: string;
-            image?: string;
-          })
-        : await boardContext(api, questionWhole);
+      const visible =
+        sourceContext ||
+        (classroomCommands.has("canvas.snapshot")
+          ? ((await classroomCommands.execute({
+              name: "canvas.snapshot",
+              args: { signal: request.signal },
+            })) as { text?: string; image?: string })
+          : classroomCommands.has("document.snapshot")
+          ? ((await classroomCommands.execute({
+              name: "document.snapshot",
+            })) as {
+              text?: string;
+              image?: string;
+            })
+          : await boardContext(api, questionWhole));
       const context = visible.text || "";
       request.signal.throwIfAborted();
       const result = await generateQuiz(
@@ -579,9 +584,12 @@ export const Teacher = ({
           setAsking(true);
         },
       ),
-      classroomCommands.register("assistant.close", "@internal", () =>
-        setAsking(false),
-      ),
+      classroomCommands.register("assistant.close", "@internal", async () => {
+        setAsking(false);
+        if (classroomCommands.has("question.cancel")) {
+          await classroomCommands.execute({ name: "question.cancel" });
+        }
+      }),
       classroomCommands.register(
         "quiz.generate",
         "根据args.prompt联网核实资料并生成可作答卡片测验，支持任意学科与题型，例：出10道高一数学选择题。完成后返回真实标题/题数。无需打开手写输入框；该命令会等待生成完成。",
@@ -827,26 +835,14 @@ export const Teacher = ({
 
   return (
     <>
-      {asking && questionPlacement && (
-        <InkQuestion
-          key={questionId}
-          api={api}
-          placement={questionPlacement}
-          onSubmit={async (...args) => {
-            await createQuiz(...args);
-          }}
-          hasResult={!!quiz}
-          resultOpen={quizOpen}
-          onClearResult={() => {
-            quizRequest.current?.abort();
-            quizValue.current = null;
-            setQuiz(null);
-            setQuizOpen(false);
-          }}
-          onToggleResult={() => setQuizOpen((open) => !open)}
-          onClose={() => setAsking(false)}
-        />
-      )}
+      <InkQuestion
+        key={questionId}
+        api={api}
+        placement={asking ? questionPlacement : undefined}
+        onSubmit={async (text, signal, ids, context) => {
+          await createQuiz(text, signal, ids, false, context);
+        }}
+      />
       {(quizOpen || quiz) && (
         <QuizPanel
           open={quizOpen}

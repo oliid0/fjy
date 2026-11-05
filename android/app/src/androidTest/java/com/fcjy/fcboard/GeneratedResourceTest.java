@@ -17,11 +17,17 @@ import org.junit.runner.RunWith;
 /** Exercises production React UI, native HTTP/SSE bridge, IndexedDB and opaque-origin lesson frame. */
 @RunWith(AndroidJUnit4.class)
 public class GeneratedResourceTest {
+    /** Active WebView animations need not make the whole UI queue idle before every read. */
+    private void onActivity(ActivityScenario<MainActivity> scenario, ActivityScenario.ActivityAction<MainActivity> action) {
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            .runOnMainSync(() -> scenario.onActivity(action));
+    }
+
     private String title;
     private String evaluate(ActivityScenario<MainActivity> scenario, String script) throws Exception {
         CountDownLatch done = new CountDownLatch(1);
         AtomicReference<String> value = new AtomicReference<>();
-        scenario.onActivity(activity -> activity.getBridge().getWebView().evaluateJavascript(script, result -> {
+        onActivity(scenario, activity -> activity.getBridge().getWebView().evaluateJavascript(script, result -> {
             value.set(result); done.countDown();
         }));
         assertTrue("WebView evaluation must complete: " + script.substring(0, Math.min(160, script.length())), done.await(5, TimeUnit.SECONDS));
@@ -83,7 +89,7 @@ public class GeneratedResourceTest {
                 JSONObject settings = new JSONObject().put("endpoint", "http://127.0.0.1:" + server.getListeningPort() + "/chat")
                     .put("apiKey", "native-test-only").put("model", "native-test-model").put("speech", "system");
                 evaluate(scenario, "window.__fcBeforeReload=true;localStorage.setItem('fcboard-settings'," + JSONObject.quote(settings.toString()) + ");sessionStorage.removeItem('fcboard-keys');localStorage.setItem('fcboard-language','zh-CN');true");
-                scenario.onActivity(activity -> activity.getBridge().getWebView().reload());
+                onActivity(scenario, activity -> activity.getBridge().getWebView().reload());
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('.fc-unified-toolbar')");
                 evaluate(scenario, "document.querySelector('[data-board-insert]').click();true");
                 until(scenario, "Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='教学资源')");
@@ -125,7 +131,7 @@ public class GeneratedResourceTest {
                     assertEquals("5 m/s²", changed.getJSONArray("outputs").getString(0));
                 }
                 evaluate(scenario, "window.__fcBeforeReload=true;true");
-                scenario.onActivity(activity -> activity.getBridge().getWebView().reload());
+                onActivity(scenario, activity -> activity.getBridge().getWebView().reload());
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('iframe[title=\"" + title + "\"]')");
             } finally {
                 evaluate(scenario, "localStorage.removeItem('fcboard-settings');sessionStorage.removeItem('fcboard-keys');true");

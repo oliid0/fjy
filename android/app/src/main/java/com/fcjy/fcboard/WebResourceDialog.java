@@ -315,6 +315,8 @@ final class WebResourceDialog extends Dialog {
         WebView board = ((MainActivity)getOwnerActivity()).getBridge().getWebView();
         android.view.View target = new android.view.View(getContext());
         final boolean[] dropped = {false};
+        final boolean[] accepted = {false};
+        final String dragToken = "Fcboard image " + java.util.UUID.randomUUID();
         Runnable clear = () -> {
             target.setOnDragListener(null); host.removeView(target);
             if (!preview.isRecycled()) preview.recycle();
@@ -322,7 +324,11 @@ final class WebResourceDialog extends Dialog {
         };
         clearImageDrag = clear;
         target.setOnDragListener((view, event) -> {
-            if (event.getLocalState() != selection) return false;
+            if (event.getAction() == android.view.DragEvent.ACTION_DRAG_STARTED) {
+                accepted[0] = event.getClipDescription() != null && dragToken.contentEquals(event.getClipDescription().getLabel());
+                return accepted[0];
+            }
+            if (!accepted[0]) return false;
             if (event.getAction() == android.view.DragEvent.ACTION_DROP) {
                 int[] screen = new int[2], boardScreen = new int[2];
                 view.getLocationOnScreen(screen); board.getLocationOnScreen(boardScreen);
@@ -340,7 +346,9 @@ final class WebResourceDialog extends Dialog {
             return true;
         });
         host.addView(target, new android.view.ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        if (web.startDragAndDrop(android.content.ClipData.newPlainText("Fcboard image", ""), new android.view.View.DragShadowBuilder(shadow), selection, 0)) hide();
+        // The Dialog and the board are different Windows, even within one Activity.
+        // Empty ClipData carries no image bytes outside the app; only our per-drag token target accepts.
+        if (web.startDragAndDrop(android.content.ClipData.newPlainText(dragToken, ""), new android.view.View.DragShadowBuilder(shadow), selection, android.view.View.DRAG_FLAG_GLOBAL)) hide();
         else { clear.run(); throw new IllegalStateException("Image drag is unavailable"); }
     }
 

@@ -1,588 +1,279 @@
 import { IconButton } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
-import { searchIcon, chevronRight } from "@fcboard/fcboard/components/icons";
-
-import { isPalmContact } from "@fcboard/fcboard/eraser/stroke";
+import { searchIcon } from "@fcboard/fcboard/components/icons";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
-import { MaterialPanel } from "./MaterialPanel";
 import { classroomCommands } from "./commands";
-import { clipInk } from "./digitalInk";
-import { documentStrokeGeometry } from "./documentInk";
-import { eraseDocumentInk } from "./documents";
 import { recognizeHandwriting, warmHandwriting } from "./ocr";
-import { questionPosition, questionSurface } from "./questionInk";
-import { updateQuestionAnswer, visibleObjectIds } from "./questionAnswer";
 
-import type { PointerEvent as ReactPointerEvent } from "react";
-import type { InkInput } from "./digitalInk";
-import type { InkStroke } from "./documents";
+import { questionSurface } from "./questionInk";
+import {
+  framedQuestion,
+  insertQuestionFrame,
+  questionFrames,
+} from "./questionFrame";
 
-/** A bounded writing sheet on the current surface, independent of the board pen. */
+import type { questionPosition } from "./questionInk";
+
+export type QuestionContext = { text: string; image?: string };
+
+/** Search controls follow persistent hollow scene borders; the canvas owns all writing and erasing. */
 export const InkQuestion = ({
   api,
   placement,
   onSubmit,
-  onClose,
-  hasResult,
-  resultOpen = true,
-  onToggleResult,
-  onClearResult,
 }: {
   api: FcboardImperativeAPI;
-  placement: ReturnType<typeof questionPosition>;
+  placement?: ReturnType<typeof questionPosition>;
   onSubmit: (
     text: string,
     signal: AbortSignal,
     sourceIds?: string[],
+    context?: QuestionContext,
   ) => Promise<void>;
-  onClose: () => void;
-  hasResult?: boolean;
-  resultOpen?: boolean;
-  onToggleResult?: () => void;
-  onClearResult?: () => void;
 }) => {
-  const width = placement.width;
-  const height = placement.height;
-  const svg = useRef<SVGSVGElement>(null);
-  const paper = useRef<HTMLElement>(null);
-  const strokes = useRef<InkStroke[]>([]);
-  const active = useRef<{ id: number; stroke: InkStroke } | null>(null);
-  const [ink, setInk] = useState<InkStroke[]>([]);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [position, setPosition] = useState(placement);
-  const [answered, setAnswered] = useState(false);
-  const [persisted, setPersisted] = useState(false);
-  const [answer, setAnswer] = useState({ collapsed: false, count: 0 });
-  const collapsed = hasResult ? !resultOpen : answer.collapsed;
-  const questionIds = useRef<string[]>([]);
-  const mounted = useRef(true);
-  const request = useRef<AbortController | null>(null);
-  const submitted = useRef("");
-  const lock = useRef(false);
-  const editing = useRef<Promise<void>>(Promise.resolve());
-  const erasing = useRef<
-    | {
-        id: number;
-        previous: [number, number];
-        before: InkStroke[];
-        size: number;
-      }
-    | undefined
-  >(undefined);
-  const cancelStroke = () => {
-    active.current = null;
-    if (erasing.current) {
-      strokes.current = erasing.current.before;
-      erasing.current = undefined;
+  const [frames, setFrames] = useState(() => questionFrames(api));
+  const readSurface = useCallback(() => {
+    try {
+      return questionSurface(api);
+    } catch {
+      return undefined;
     }
-    setInk(strokes.current);
-  };
-  useEffect(() => {
-    const outside = (event: PointerEvent) => {
-      if (
-        classroomCommands.isOwnedBy(
-          classroomCommands.interactionSource,
-          request.current?.signal,
-        )
-      ) {
-        return;
+  }, [api]);
+  const [surface, setSurface] = useState(readSurface);
+  const [busy, setBusy] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const requests = useRef(
+    new Map<
+      string,
+      {
+        controller: AbortController;
+        signature: string;
+        target: string;
+        transferred: boolean;
       }
-      if (!answered && !paper.current?.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
-  }, [onClose, answered]);
-  useEffect(() => {
-    const resize = () => {
-      request.current?.abort();
-      cancelStroke();
-      try {
-        setPosition(questionPosition(api));
-      } catch (failure) {
-        const { viewport } = questionSurface(api);
-        setPosition((previous) => ({
-          ...previous,
-          left: Math.max(
-            viewport.left,
-            Math.min(previous.left, viewport.right - previous.width),
-          ),
-          top: Math.max(
-            viewport.top,
-            Math.min(previous.top, viewport.bottom - previous.height),
-          ),
-          width: Math.min(previous.width, viewport.right - viewport.left),
-          height: Math.min(previous.height, viewport.bottom - viewport.top),
-        }));
-        setError(failure instanceof Error ? failure.message : String(failure));
-      }
-    };
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+    >(),
+  );
+  const mounted = useRef(false);
+  const created = useRef(false);
+  const target = useCallback(() => {
+    const document = classroomCommands.read("document") as
+      | { id?: string; name?: string; page?: number }
+      | undefined;
+    const board = classroomCommands.read("boards") as
+      | { active?: string }
+      | undefined;
+    return JSON.stringify(
+      document
+        ? ["document", document.id, document.name, document.page]
+        : ["board", board?.active || api.id],
+    );
   }, [api]);
   useEffect(() => {
     mounted.current = true;
-    paper.current?.focus();
-    void warmHandwriting().catch(() => {});
-    window.addEventListener("blur", cancelStroke);
+    const activeRequests = requests.current;
+    const refresh = () => {
+      const next = questionFrames(api);
+      setFrames((previous) =>
+        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
+      );
+      const area = next.length ? readSurface() : undefined;
+      setSurface((previous) => {
+        if (!previous || !area) {
+          return area;
+        }
+        return JSON.stringify([
+          previous.scale,
+          previous.viewport,
+          previous.point(0, 0),
+        ]) === JSON.stringify([area.scale, area.viewport, area.point(0, 0)])
+          ? previous
+          : area;
+      });
+      requests.current.forEach((request, id) => {
+        if (request.transferred) {
+          return;
+        }
+        if (classroomCommands.isExpectedTransition(request.controller.signal)) {
+          if (target() !== request.target) {
+            request.transferred = true;
+          }
+          return;
+        }
+        try {
+          if (
+            target() !== request.target ||
+            framedQuestion(api, id).signature !== request.signature
+          ) {
+            request.controller.abort();
+          }
+        } catch {
+          request.controller.abort();
+        }
+      });
+    };
+    const stop = api.onChange?.(refresh);
+    const document = classroomCommands.watch("document", refresh);
+    const board = classroomCommands.watch("boards", refresh);
+    const invalidate = classroomCommands.onInvalidate(() => {
+      requests.current.forEach((request) => {
+        if (classroomCommands.isExpectedTransition(request.controller.signal)) {
+          request.transferred = true;
+        } else {
+          request.controller.abort();
+        }
+      });
+      refresh();
+    });
+    const cancel = classroomCommands.register(
+      "question.cancel",
+      "@internal",
+      () => {
+        activeRequests.forEach((request) => request.controller.abort());
+      },
+    );
+    window.addEventListener("resize", refresh);
     return () => {
       mounted.current = false;
-      request.current?.abort();
-      window.removeEventListener("blur", cancelStroke);
+      activeRequests.forEach((request) => request.controller.abort());
+      stop?.();
+      document();
+      board();
+      invalidate();
+      cancel();
+      window.removeEventListener("resize", refresh);
     };
-  }, []);
-
-  const fail = (failure: unknown) => {
-    if (
-      mounted.current &&
-      !(failure instanceof DOMException && failure.name === "AbortError")
-    ) {
-      setError(failure instanceof Error ? failure.message : String(failure));
-    }
-  };
-  const send = async () => {
-    if (lock.current || active.current || erasing.current) {
+  }, [api, readSurface, target]);
+  useEffect(() => {
+    if (!placement || created.current) {
       return;
     }
-    lock.current = true;
-    setBusy(true);
-    setError("");
-    const abort = new AbortController();
-    request.current = abort;
-    try {
-      await editing.current;
-      abort.signal.throwIfAborted();
-      const input: InkInput = strokes.current.map((stroke) => stroke.points);
-      const written = input.length
-        ? await recognizeHandwriting(
-            async () => {
-              const canvas = document.createElement("canvas");
-              canvas.width = width * 2;
-              canvas.height = height * 2;
-              const context = canvas.getContext("2d");
-              if (!context) {
-                throw new Error(
-                  t("fcboard.unable_to_capture_the_writing_area"),
-                );
-              }
-              context.fillStyle = "#fff";
-              context.fillRect(0, 0, canvas.width, canvas.height);
-              context.scale(2, 2);
-              context.strokeStyle = "#000";
-              context.lineCap = "round";
-              context.lineJoin = "round";
-              for (const stroke of strokes.current) {
-                context.lineWidth = stroke.width;
-                context.stroke(new Path2D(documentStrokeGeometry(stroke).path));
-              }
-              return canvas.toDataURL("image/png");
-            },
-            abort.signal,
-            () => {},
-            "text",
-            undefined,
-            input,
-          )
-        : "";
-      abort.signal.throwIfAborted();
-      const text = written.trim();
-      if (!text) {
-        return;
-      }
-      const signature = JSON.stringify(input);
-      if (submitted.current !== signature && svg.current) {
-        const rect = svg.current.getBoundingClientRect();
-        const surface = questionSurface(api);
-        const result = await classroomCommands.execute({
-          name: "canvas.ink",
-          args: {
-            strokes: input.map((stroke) =>
-              stroke.map(([x, y]) =>
-                surface.point(
-                  rect.left + (x * rect.width) / width,
-                  rect.top + (y * rect.height) / height,
-                ),
-              ),
-            ),
-            bounds: {
-              left: surface.point(rect.left, rect.top)[0],
-              top: surface.point(rect.left, rect.top)[1],
-              right: surface.point(rect.right, rect.bottom)[0],
-              bottom: surface.point(rect.right, rect.bottom)[1],
-            },
-            replaceIds: questionIds.current,
-            signal: abort.signal,
-            select: false,
-          },
-        });
-        questionIds.current = (result as { ids: string[] }).ids;
-        submitted.current = signature;
-        setPersisted(true);
-      }
-      abort.signal.throwIfAborted();
-      const available = new Set(visibleObjectIds(api));
-      if (questionIds.current.some((id) => !available.has(id))) {
-        throw new DOMException("Question changed", "AbortError");
-      }
-      const before = new Set(visibleObjectIds(api));
-      const target = () => {
-        const document = classroomCommands.read("document") as
-          | { id?: string; name?: string; page?: number }
-          | undefined;
-        const boards = classroomCommands.read("boards") as
-          | { active?: string }
-          | undefined;
-        return JSON.stringify(
-          document
-            ? ["document", document.id, document.name, document.page]
-            : ["board", boards?.active || api.id],
-        );
-      };
-      let currentTarget = target();
-      let transferred = false;
-      const source = () => {
-        const document = classroomCommands.read("document") as
-          | { ink?: InkStroke[] }
-          | undefined;
-        return JSON.stringify(
-          (document ? document.ink || [] : api.getSceneElements()).filter(
-            (item) => questionIds.current.includes(item.id),
-          ),
-        );
-      };
-      const signatureBefore = source();
-      let scheduled = false;
-      let checking = true;
-      const changed = () => {
-        if (
-          !transferred &&
-          target() === currentTarget &&
-          source() !== signatureBefore &&
-          !classroomCommands.isExpectedTransition(abort.signal)
-        ) {
-          abort.abort();
-          return;
-        }
-        if (scheduled) {
-          return;
-        }
-        scheduled = true;
-        queueMicrotask(() => {
-          scheduled = false;
-          if (!checking) {
-            return;
-          }
-          const next = target();
-          if (next !== currentTarget) {
-            if (!classroomCommands.isExpectedTransition(abort.signal)) {
-              abort.abort();
-              return;
-            }
-            currentTarget = next;
-            transferred = true;
-          }
-          if (!transferred && source() !== signatureBefore) {
-            abort.abort();
-          }
-        });
-      };
-      const unwatch = api.onChange?.(changed);
-      const documentChanged = classroomCommands.watch("document", changed);
-      const boardChanged = classroomCommands.watch("boards", changed);
-      try {
-        await onSubmit(text, abort.signal, questionIds.current);
-      } finally {
-        checking = false;
-        unwatch?.();
-        documentChanged();
-        boardChanged();
-      }
-      if (!abort.signal.aborted) {
-        if (transferred) {
-          onClose();
-          return;
-        }
-        const ids = visibleObjectIds(api).filter((id) => !before.has(id));
-        if (questionIds.current.length && ids.length) {
-          setAnswer(
-            await updateQuestionAnswer(api, questionIds.current[0], ids),
-          );
-        }
-        setAnswered(true);
-      }
-    } catch (failure) {
-      fail(failure);
-    } finally {
-      lock.current = false;
-      if (mounted.current) {
-        setBusy(false);
-      }
-    }
-  };
-  const append = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const current = active.current;
-    if (!current || current.id !== event.pointerId || !svg.current) {
+    created.current = true;
+    if (questionFrames(api).length) {
+      setFrames(questionFrames(api));
       return;
     }
-    const rect = svg.current.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      return;
-    }
-    const samples = event.nativeEvent.getCoalescedEvents?.() || [];
-    for (const sample of [...samples, event]) {
-      const point: [number, number] = [
-        ((sample.clientX - rect.left) * width) / rect.width,
-        ((sample.clientY - rect.top) * height) / rect.height,
-      ];
-      const last = current.stroke.points.at(-1);
-      if (!last || point[0] !== last[0] || point[1] !== last[1]) {
-        current.stroke.points.push(point);
-      }
-    }
-    if (current.stroke.points.length > 10000) {
-      cancelStroke();
-      return;
-    }
-    setInk([...strokes.current, { ...current.stroke }]);
-  };
-  const prepareEdit = () => {
-    onClearResult?.();
-    setAnswered(false);
-    setPersisted(false);
-    if (!questionIds.current.length) {
-      return;
-    }
-    const ids = questionIds.current;
-    questionIds.current = [];
-    submitted.current = "";
-    editing.current = editing.current
-      .then(async () => {
-        if (answer.collapsed && answer.count) {
-          await updateQuestionAnswer(api, ids[0]);
+    void insertQuestionFrame(api, placement)
+      .then(() => {
+        if (mounted.current) {
+          setFrames(questionFrames(api));
+          setSurface(readSurface());
         }
-        const available = new Set(visibleObjectIds(api));
-        const existing = ids.filter((id) => available.has(id));
-        if (existing.length) {
-          await classroomCommands.execute({
-            name: "canvas.erase",
-            args: { ids: existing },
-          });
-        }
-        setAnswer({ collapsed: false, count: 0 });
       })
-      .catch(fail);
-  };
-  const point = (event: {
-    clientX: number;
-    clientY: number;
-  }): [number, number] => {
-    const rect = svg.current!.getBoundingClientRect();
-    return [
-      ((event.clientX - rect.left) * width) / rect.width,
-      ((event.clientY - rect.top) * height) / rect.height,
-    ];
-  };
-  const erase = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const current = erasing.current;
-    if (!current || current.id !== event.pointerId) {
+      .catch((failure) => {
+        if (mounted.current) {
+          setError(String(failure));
+        }
+      });
+    void warmHandwriting().catch(() => {});
+  }, [api, placement, readSurface]);
+  const send = async (id: string) => {
+    if (requests.current.has(id)) {
       return;
     }
-    for (const sample of [
-      ...(event.nativeEvent.getCoalescedEvents?.() || []),
-      event,
-    ]) {
-      const next = point(sample);
-      strokes.current = eraseDocumentInk(
-        strokes.current,
-        current.previous,
-        next,
-        current.size,
-        current.size * 1.2,
-      );
-      current.previous = next;
+    const controller = new AbortController();
+    setError("");
+    try {
+      const source = framedQuestion(api, id);
+      if (!source.hasContent) {
+        throw new Error(
+          t("fcboard.no_content_recognized_select_the_area_again"),
+        );
+      }
+      requests.current.set(id, {
+        controller,
+        signature: source.signature,
+        target: target(),
+        transferred: false,
+      });
+      setBusy((previous) => [...previous, id]);
+      let image: Promise<string> | undefined;
+      const capture = () => (image ||= source.image());
+      const text =
+        source.ink.length || !source.text.trim()
+          ? await recognizeHandwriting(
+              capture,
+              controller.signal,
+              () => {},
+              "text",
+              undefined,
+              source.ink,
+            )
+          : source.text;
+      controller.signal.throwIfAborted();
+      if (framedQuestion(api, id).signature !== source.signature) {
+        throw new DOMException("Question contents changed", "AbortError");
+      }
+      if (!text.trim()) {
+        throw new Error(
+          t("fcboard.no_content_recognized_select_the_area_again"),
+        );
+      }
+      await onSubmit(text.trim(), controller.signal, source.ids, {
+        text: text.trim(),
+        image: await capture(),
+      });
+    } catch (failure) {
+      if (
+        mounted.current &&
+        !controller.signal.aborted &&
+        !(failure instanceof DOMException && failure.name === "AbortError")
+      ) {
+        setError(failure instanceof Error ? failure.message : String(failure));
+      }
+    } finally {
+      requests.current.delete(id);
+      if (mounted.current) {
+        setBusy((previous) => previous.filter((value) => value !== id));
+      }
     }
-    setInk(strokes.current);
   };
-
   return (
-    <MaterialPanel
-      ref={paper}
-      role="dialog"
-      tabIndex={-1}
-      aria-label={t("fcboard.handwritten_question")}
-      aria-busy={busy}
-      className="fc-ink-question fc-surface"
-      style={{
-        ...position,
-        background: "transparent",
-        boxShadow: "none",
-        pointerEvents: "auto",
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        if (event.key === "Escape") {
-          onClose();
+    <>
+      {frames.map((frame) => {
+        if (!surface) {
+          return null;
         }
-      }}
-    >
-      <svg
-        ref={svg}
-        viewBox={`0 0 ${width} ${height}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={t("fcboard.ask_the_ai_teacher")}
-        onContextMenu={(event) => event.preventDefault()}
-        onPointerDown={(event) => {
-          if (
-            lock.current ||
-            active.current ||
-            event.button !== 0 ||
-            event.isPrimary === false
-          ) {
-            return;
-          }
-          event.preventDefault();
-          prepareEdit();
-          if (
-            isPalmContact(
-              event.nativeEvent,
-              api.getAppState().palmEraserThreshold ?? 36,
-            ) ||
-            (event.pointerType === "pen" && !!(event.buttons & 34))
-          ) {
-            const rect = event.currentTarget.getBoundingClientRect();
-            erasing.current = {
-              id: event.pointerId,
-              previous: point(event),
-              before: strokes.current,
-              size: (Math.max(24, event.width || 0) * width) / rect.width,
-            };
-            event.currentTarget.setPointerCapture(event.pointerId);
-            erase(event);
-            return;
-          }
-          const surface = questionSurface(api);
-          active.current = {
-            id: event.pointerId,
-            stroke: {
-              id: crypto.randomUUID(),
-              points: [],
-              color: surface.color,
-              width: Math.min(4, Math.max(1, surface.width * surface.scale)),
-              fcInk: {
-                version: 2,
-                pen: "hard",
-                unit: 1 / (devicePixelRatio || 1),
-              },
-            },
-          };
-          event.currentTarget.setPointerCapture(event.pointerId);
-          append(event);
-        }}
-        onPointerMove={(event) =>
-          erasing.current ? erase(event) : append(event)
-        }
-        onPointerUp={(event) => {
-          if (erasing.current?.id === event.pointerId) {
-            erase(event);
-            erasing.current = undefined;
-            event.currentTarget.releasePointerCapture?.(event.pointerId);
-            return;
-          }
-          if (active.current?.id !== event.pointerId) {
-            return;
-          }
-          append(event);
-          const current = active.current;
-          if (current) {
-            const parts = clipInk([current.stroke.points], {
-              left: 0,
-              top: 0,
-              right: width,
-              bottom: height,
-            });
-            strokes.current = [
-              ...strokes.current,
-              ...parts.map((points) => ({
-                ...current.stroke,
-                id: crypto.randomUUID(),
-                points,
-              })),
-            ];
-          }
-          active.current = null;
-          setInk(strokes.current);
-          event.currentTarget.releasePointerCapture?.(event.pointerId);
-        }}
-        onPointerCancel={cancelStroke}
-        onLostPointerCapture={cancelStroke}
-      >
-        {!ink.length && (
-          <text x="16" y="30" className="fc-ink-question-hint">
-            {t("fcboard.write_your_question_here")}
-          </text>
-        )}
-        {!persisted &&
-          ink.map((stroke) => (
-            <path
-              key={stroke.id}
-              d={documentStrokeGeometry(stroke).path}
-              stroke={stroke.color}
-              strokeWidth={stroke.width}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          ))}
-      </svg>
+        const [left, top] = surface.point(0, 0);
+        const position = {
+          left: (frame.bounds.left - left) * surface.scale,
+          top: (frame.bounds.top - top) * surface.scale,
+          width: (frame.bounds.right - frame.bounds.left) * surface.scale,
+          height: (frame.bounds.bottom - frame.bounds.top) * surface.scale,
+        };
+        return (
+          <div
+            key={frame.id}
+            data-question-frame={frame.id}
+            role="dialog"
+            aria-label={t("fcboard.handwritten_question")}
+            aria-busy={busy.includes(frame.id)}
+            className="fc-ink-question"
+            style={{ ...position, pointerEvents: "none" }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                requests.current.get(frame.id)?.controller.abort();
+              }
+            }}
+          >
+            <IconButton
+              aria-label={t("fcboard.send_question")}
+              disabled={busy.includes(frame.id)}
+              className="fc-question-search"
+              size="small"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => void send(frame.id)}
+            >
+              {searchIcon}
+            </IconButton>
+          </div>
+        );
+      })}
       <TransientMessage message={error} role="alert" />
-      <footer style={{ pointerEvents: "auto" }}>
-        <IconButton
-          aria-label={t("fcboard.send_question")}
-          disabled={busy || !ink.length}
-          size="small"
-          onClick={() => void send()}
-        >
-          {searchIcon}
-        </IconButton>
-        <IconButton
-          aria-label={t(
-            collapsed ? "fcboard.expand_answer" : "fcboard.collapse_answer",
-          )}
-          disabled={busy || (!answer.count && !hasResult)}
-          aria-pressed={collapsed}
-          size="small"
-          onClick={() => {
-            if (hasResult && onToggleResult) {
-              onToggleResult();
-              return;
-            }
-            if (lock.current) {
-              return;
-            }
-            lock.current = true;
-            setBusy(true);
-            void updateQuestionAnswer(api, questionIds.current[0])
-              .then(setAnswer)
-              .catch(fail)
-              .finally(() => {
-                lock.current = false;
-                if (mounted.current) {
-                  setBusy(false);
-                }
-              });
-          }}
-        >
-          {chevronRight}
-        </IconButton>
-      </footer>
-    </MaterialPanel>
+    </>
   );
 };

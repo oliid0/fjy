@@ -5,7 +5,6 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { contentViewport } from "./board";
 import { classroomCommands } from "./commands";
-import { findVisibleContentPosition } from "./placement";
 
 import type { InkInput } from "./digitalInk";
 import type { ContentRect } from "./placement";
@@ -65,30 +64,22 @@ export const questionSurface = (api: FcboardImperativeAPI) => {
 };
 
 export const questionPosition = (api: FcboardImperativeAPI) => {
-  const { viewport, obstacles } = questionSurface(api);
-  for (const ratio of [1, 0.85, 0.7]) {
-    const width = Math.min(600 * ratio, viewport.right - viewport.left);
-    const height = Math.min(144 * ratio, viewport.bottom - viewport.top);
-    if (width < 180 || height < 96) {
-      break;
-    }
-    const point = findVisibleContentPosition(
-      {
-        x: (viewport.left + viewport.right - width) / 2,
-        y: (viewport.top + viewport.bottom - height) / 2,
-      },
-      { width, height },
-      viewport,
-      obstacles,
-      8,
+  const { viewport } = questionSurface(api);
+  const width = Math.min(600, viewport.right - viewport.left);
+  const height = Math.min(144, viewport.bottom - viewport.top);
+  if (width < 180 || height < 96) {
+    throw new Error(
+      t(
+        "fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing",
+      ),
     );
-    if (point) {
-      return { left: point.x, top: point.y, width, height };
-    }
   }
-  throw new Error(
-    t("fcboard.there_is_not_enough_visible_space_leave_some_room_for_writing"),
-  );
+  return {
+    left: (viewport.left + viewport.right - width) / 2,
+    top: (viewport.top + viewport.bottom - height) / 2,
+    width,
+    height,
+  };
 };
 
 /** Reject a whole malformed request before either canvas changes any object. */

@@ -31,7 +31,7 @@ it("uses the main canvas offset and zoom for displayed and submitted ink", () =>
   );
 });
 
-it("uses only the visible courseware's transform and obstacles", () => {
+it("uses the visible courseware transform and centers the hollow frame over existing content", () => {
   const api = sceneAPI();
   const stops = [
     classroomCommands.context("document", () => ({
@@ -48,12 +48,10 @@ it("uses only the visible courseware's transform and obstacles", () => {
     expect(surface.point(420, 230)).toEqual([200, 150]);
     const position = questionPosition(api);
     const obstacle = surface.obstacles[0];
-    expect(
-      position.left >= obstacle.right ||
-        position.left + position.width <= obstacle.left ||
-        position.top >= obstacle.bottom ||
-        position.top + position.height <= obstacle.top,
-    ).toBe(true);
+    expect(position.left).toBeLessThan(obstacle.right);
+    expect(position.left + position.width).toBeGreaterThan(obstacle.left);
+    expect(position.top).toBeLessThan(obstacle.bottom);
+    expect(position.top + position.height).toBeGreaterThan(obstacle.top);
   } finally {
     stops.forEach((stop) => stop());
   }
@@ -82,7 +80,7 @@ it("refuses to cover a full writing surface or accept malformed trajectories", (
   ]);
 });
 
-it("uses the compact writing height beside a portrait experiment without overlapping it or the toolbar", () => {
+it("centers a hollow frame on a portrait experiment without shrinking it to avoid the experiment", () => {
   const api = sceneAPI();
   const stops = [
     classroomCommands.context("document", () => ({
@@ -96,9 +94,10 @@ it("uses the compact writing height beside a portrait experiment without overlap
   ];
   try {
     const position = questionPosition(api);
-    expect(position.height).toBeCloseTo(100.8);
+    expect(position.height).toBe(144);
     expect(position.width).toBe(358);
-    expect(position.top).toBeGreaterThanOrEqual(594);
+    expect(position.left).toBe(16);
+    expect(position.top).toBe(291.5);
     expect(position.top + position.height).toBeLessThanOrEqual(711);
   } finally {
     stops.forEach((stop) => stop());

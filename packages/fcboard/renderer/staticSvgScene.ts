@@ -1,3 +1,4 @@
+import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
 import {
   FRAME_STYLE,
   MAX_DECIMALS_FOR_SVG_EXPORT,
@@ -396,9 +397,41 @@ const renderElementToSvg = (
               : element.strokeColor,
           );
           path.setAttribute("d", shape);
+          const native = nativeInkGradient(element);
+          if (native) {
+            const gradient = svgRoot.ownerDocument.createElementNS(
+              SVG_NS,
+              "linearGradient",
+            );
+            const id = `native-${element.id}`;
+            gradient.setAttribute("id", id);
+            gradient.setAttribute("gradientUnits", "userSpaceOnUse");
+            for (const [index, attribute] of [
+              "x1",
+              "y1",
+              "x2",
+              "y2",
+            ].entries()) {
+              gradient.setAttribute(
+                attribute,
+                String(native.coordinates[index]),
+              );
+            }
+            for (const [offset, color] of native.stops) {
+              const stop = svgRoot.ownerDocument.createElementNS(
+                SVG_NS,
+                "stop",
+              );
+              stop.setAttribute("offset", String(offset));
+              stop.setAttribute("stop-color", color);
+              gradient.appendChild(stop);
+            }
+            wrapper.appendChild(gradient);
+            path.setAttribute("fill", `url(#${id})`);
+          }
           if (isFactoryStroke(element)) {
             path.setAttribute("stroke", path.getAttribute("fill")!);
-            const rainbow = rainbowInkCoordinates(element);
+            const rainbow = !native && rainbowInkCoordinates(element);
             if (rainbow) {
               const gradient = svgRoot.ownerDocument.createElementNS(
                 SVG_NS,

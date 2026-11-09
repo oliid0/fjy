@@ -1,6 +1,7 @@
 import { factoryNibControls } from "./factoryNib";
 
 import type { FcboardFreeDrawElement } from "./types";
+import type { NativeInkPalette } from "./nativeInkColor";
 
 export type FactoryInkData = {
   version: 2 | 3;
@@ -18,6 +19,7 @@ export type FactoryInkData = {
   brushAngle?: number;
   dashOffset?: number;
   rainbow?: { x: number; width: number };
+  gradient?: { palette: NativeInkPalette; size: number };
 };
 
 /** Pointer-up is distinct from a live sample; HBezierObject.onUp tapers to zero. */

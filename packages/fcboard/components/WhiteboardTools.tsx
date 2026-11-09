@@ -160,6 +160,11 @@ export const WhiteboardTools = ({
             <FactoryIcon name="penBodyItalic" className="fc-pen-body" />
             <FactoryIcon
               name="penThinHead"
+              gradient={
+                (state.whiteboardPenTip || "fine") === "fine"
+                  ? state.currentItemInkGradient
+                  : state.whiteboardPenTips?.fine?.gradient
+              }
               className="fc-pen-thin"
               style={
                 {
@@ -173,6 +178,11 @@ export const WhiteboardTools = ({
             {state.whiteboardDualPen && (
               <FactoryIcon
                 name="penThickHead"
+                gradient={
+                  state.whiteboardPenTip === "thick"
+                    ? state.currentItemInkGradient
+                    : state.whiteboardPenTips?.thick?.gradient
+                }
                 className="fc-pen-thick"
                 style={
                   {

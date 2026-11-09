@@ -173,6 +173,7 @@ const APP_STATE_STORAGE_CONF = (<
   currentItemStrokeStyle: { browser: true, export: false, server: false },
   currentItemStrokeWidth: { browser: true, export: false, server: false },
   currentItemPenMode: { browser: true, export: false, server: false },
+  currentItemInkGradient: { browser: true, export: false, server: false },
   whiteboardPenWidths: { browser: true, export: false, server: false },
   whiteboardBrushVariation: { browser: true, export: false, server: false },
   whiteboardHardNib: { browser: true, export: false, server: false },

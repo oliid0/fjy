@@ -10,6 +10,8 @@ import type {
   StaticCanvasRenderConfig,
 } from "@fcboard/fcboard/scene/types";
 
+import { nativeInkGradient, nativeInkPalettes } from "../src/nativeInkColor";
+
 import { Scene } from "../src/Scene";
 import { syncInvalidIndices } from "../src/fractionalIndex";
 
@@ -229,3 +231,97 @@ describe("whiteboard vector ink", () => {
     },
   );
 });
+
+it.each(["hard", "brush"] as const)(
+  "renders native mirrored gradients for %s and preserves their coordinates through erasure/export",
+  async (pen) => {
+    const element = {
+      ...API.createElement({
+        type: "freedraw",
+        x: 100,
+        y: 200,
+        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(800, 30)],
+        strokeWidth: 15,
+      }),
+      customData: {
+        fcInk: {
+          version: pen === "brush" ? 3 : 2,
+          pen,
+          unit: 1,
+          gradient: { palette: "mint" as const, size: 320 },
+        },
+      },
+    };
+    const original = nativeInkGradient(element)!;
+    expect(original.stops.map(([, color]) => color)).toContain(
+      nativeInkPalettes.mint[0],
+    );
+    expect(original.stops.map(([, color]) => color)).toContain(
+      nativeInkPalettes.mint[1],
+    );
+    // Each mirror reverses its direction at the shared stop.
+    expect(original.stops.slice(0, 3).map(([, color]) => color)).toEqual([
+      "#4dd7af",
+      "#3b52c8",
+      "#4dd7af",
+    ]);
+    const parts = eraseStroke(
+      element,
+      { x: 500, y: 100 },
+      { x: 500, y: 300 },
+      10,
+      10,
+    )!;
+    expect(parts).toHaveLength(2);
+    const svg = await exportToSvg({
+      elements: parts,
+      appState: getDefaultAppState(),
+      files: {},
+    });
+    for (const part of parts) {
+      const gradient = svg.querySelector(`[id='native-${part.id}']`)!;
+      expect(gradient).not.toBeNull();
+      expect(gradient.getAttribute("gradientUnits")).toBe("userSpaceOnUse");
+      const paint = pen === "brush" ? "fill" : "stroke";
+      expect(
+        svg.querySelector(`path[${paint}='url(#native-${part.id})']`),
+      ).not.toBeNull();
+      // Transform local start/end back to world: both endpoints stay on x=y,
+      // and every 320 units is a mirror seam, independent of the new fragment origin.
+      const [x1, y1, x2, y2] = nativeInkGradient(part)!.coordinates;
+      expect(x1 + part.x).toBeCloseTo(y1 + part.y);
+      expect(x2 + part.x).toBeCloseTo(y2 + part.y);
+      expect((x1 + part.x) / 320).toBeCloseTo(Math.round((x1 + part.x) / 320));
+    }
+    const scene = new Scene(syncInvalidIndices([element]));
+    const map = scene.getNonDeletedElementsMap();
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d")!;
+    const gradient = vi.spyOn(context, "createLinearGradient");
+    renderElement(
+      element,
+      toBrandedType<RenderableElementsMap>(map),
+      map,
+      rough.canvas(canvas),
+      context,
+      {
+        imageCache: new Map(),
+        renderGrid: false,
+        isExporting: false,
+        canvasBackgroundColor: "#ffffff",
+        embedsValidationStatus: new Map(),
+        elementsPendingErasure: new Set(),
+        pendingFlowchartNodes: null,
+        theme: "light",
+      },
+      {
+        ...getDefaultAppState(),
+        width: 1000,
+        height: 600,
+        offsetLeft: 0,
+        offsetTop: 0,
+      },
+    );
+    expect(gradient).toHaveBeenCalledWith(...original.coordinates);
+  },
+);

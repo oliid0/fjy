@@ -7,6 +7,7 @@ import type {
 } from "@fcboard/common";
 
 import type { LinearElementEditor } from "@fcboard/element";
+import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
 
 import type { MaybeTransformHandleType } from "@fcboard/element";
 
@@ -358,6 +359,7 @@ export interface AppState {
   currentItemFillStyle: FcboardElement["fillStyle"];
   currentItemStrokeWidth: number;
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
+  currentItemInkGradient?: NativeInkPalette;
   whiteboardPenWidths?: { hard?: number; brush?: number };
   whiteboardBrushVariation?: number;
   whiteboardHardNib?: boolean;
@@ -371,6 +373,7 @@ export interface AppState {
       {
         mode: NonNullable<AppState["currentItemPenMode"]>;
         color: string;
+        gradient?: NativeInkPalette;
         width: number;
         widths?: AppState["whiteboardPenWidths"];
         assist?: AppState["currentItemInkAssist"];

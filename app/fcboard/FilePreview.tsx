@@ -1,3 +1,4 @@
+import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
@@ -87,7 +88,7 @@ import { currentSettings } from "./settings";
 import { answerFontSize, layoutBoardText } from "./textLayout";
 import { prepareQuestionWriting, questionStrokeStyle } from "./questionWriting";
 import { MaterialPanel } from "./MaterialPanel";
-import { documentStrokeGeometry } from "./documentInk";
+import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
   inkAssistMode,
   recognizeInkContent,
@@ -138,21 +139,26 @@ import type { LessonCommand } from "./lesson";
 const StrokePath = ({ stroke }: { stroke: InkStroke }) => {
   const id = useId();
   const geometry = documentStrokeGeometry(stroke);
-  const rainbow = stroke.fcInk?.pen === "rainbow";
+  const native = nativeInkGradient(documentInkElement(stroke));
+  const rainbow = !native && stroke.fcInk?.pen === "rainbow";
+  const paint = native || rainbow ? `url(#${id})` : stroke.color;
   const origin = stroke.fcInk?.rainbow?.x ?? 0;
   return (
     <>
-      {rainbow && (
+      {(native || rainbow) && (
         <defs>
           <linearGradient
             id={id}
             gradientUnits="userSpaceOnUse"
-            x1={origin}
-            x2={origin + (stroke.fcInk?.rainbow?.width ?? 1000)}
-            y1={0}
-            y2={0}
+            x1={native?.coordinates[0] ?? origin}
+            y1={native?.coordinates[1] ?? 0}
+            x2={
+              native?.coordinates[2] ??
+              origin + (stroke.fcInk?.rainbow?.width ?? 1000)
+            }
+            y2={native?.coordinates[3] ?? 0}
           >
-            {rainbowInkStops.map(([offset, color]) => (
+            {(native?.stops || rainbowInkStops).map(([offset, color]) => (
               <stop key={offset} offset={offset} stopColor={color} />
             ))}
           </linearGradient>
@@ -162,14 +168,8 @@ const StrokePath = ({ stroke }: { stroke: InkStroke }) => {
         data-language={stroke.language ? stroke.id : undefined}
         data-widget={stroke.widget?.id}
         d={geometry.path}
-        fill={geometry.filled ? stroke.color : stroke.fill || "none"}
-        stroke={
-          geometry.filled || !stroke.width
-            ? "none"
-            : rainbow
-            ? `url(#${id})`
-            : stroke.color
-        }
+        fill={geometry.filled ? paint : stroke.fill || "none"}
+        stroke={geometry.filled || !stroke.width ? "none" : paint}
         strokeWidth={stroke.width}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -180,7 +180,7 @@ const StrokePath = ({ stroke }: { stroke: InkStroke }) => {
       {geometry.nib && (
         <path
           d={geometry.nib}
-          fill={stroke.color}
+          fill={paint}
           opacity={(stroke.opacity ?? 100) / 100}
         />
       )}

@@ -1,3 +1,8 @@
+import { useId } from "react";
+import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
+
+import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
+
 import { xbhToolbarIcons } from "./xbhToolbarIcons";
 import multiPoint from "./xbh-toolbar-assets/multi.png";
 import singlePoint from "./xbh-toolbar-assets/single.png";
@@ -1459,11 +1464,14 @@ export const FactoryIcon = ({
   name,
   className,
   style,
+  gradient,
 }: {
   name: keyof typeof icons | keyof typeof xbhToolbarIcons;
   className?: string;
   style?: CSSProperties;
+  gradient?: NativeInkPalette;
 }) => {
+  const id = useId().replace(/:/g, "");
   if (name === "multi" || name === "single") {
     return (
       <img
@@ -1476,6 +1484,20 @@ export const FactoryIcon = ({
   }
   const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
   if (original) {
+    const colors = gradient && nativeInkPalettes[gradient];
+    const body = colors
+      ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">${colors
+          .map(
+            (color, index) =>
+              `<stop offset="${
+                index / (colors.length - 1)
+              }" stop-color="${color}"/>`,
+          )
+          .join("")}</linearGradient></defs>${original.body.replace(
+          /currentColor/g,
+          `url(#${id})`,
+        )}`
+      : original.body;
     return (
       <svg
         className={className}
@@ -1483,7 +1505,7 @@ export const FactoryIcon = ({
         viewBox={original.viewBox}
         aria-hidden="true"
         focusable="false"
-        dangerouslySetInnerHTML={{ __html: original.body }}
+        dangerouslySetInnerHTML={{ __html: body }}
       />
     );
   }

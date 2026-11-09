@@ -339,7 +339,9 @@ describe("APK-style whiteboard ink", () => {
       target: { value: "20" },
     });
     fireEvent.click(
-      settings.querySelector(`button[aria-label='${t("fcboard.pen")}']`)!,
+      settings.querySelector(
+        `button[aria-label='${t("fcboard.normal_brush")}']`,
+      )!,
     );
     pointer(canvas, "pointerdown", 100, 300);
     pointer(canvas, "pointermove", 200, 300);

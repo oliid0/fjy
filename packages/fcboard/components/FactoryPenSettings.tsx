@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 
 import { DEFAULT_ELEMENT_PROPS } from "@fcboard/common";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
+import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 
 import { t, useI18n } from "../i18n";
 
@@ -14,7 +15,7 @@ import type { FcboardImperativeAPI, UIAppState } from "../types";
 
 // menu_pen_select.xml; support_ai_pen=false, all other seven entries enabled.
 const pens = [
-  ["hard", "pen", "penCommonBody", "penNormalNib"],
+  ["hard", "normal_brush", "penCommonBody", "penNormalNib"],
   ["brush", "fountain", "penCommonBody", "penInkNib"],
   ["highlighter", "highlighter", "penCommonBody", "penMarkerNib"],
   ["text", "text_pen", "penTextBody", "penNormalNib"],
@@ -49,6 +50,15 @@ const PenPreview = ({
   thickness: number;
 }) => {
   const id = useId();
+  const palette =
+    state.currentItemInkGradient &&
+    nativeInkPalettes[state.currentItemInkGradient];
+  const stops = palette
+    ? palette.map(
+        (color, index) => [index / (palette.length - 1), color] as const,
+      )
+    : rainbowInkStops;
+  const gradient = !!palette || state.currentItemPenMode === "rainbow";
   const width = Math.max(1.5, Math.min(26 * 0.42, thickness * 0.24 + 1.3));
   const left = width / 2 + 2;
   const right = 187 - left;
@@ -75,13 +85,13 @@ const PenPreview = ({
     >
       <defs>
         <linearGradient id={id}>
-          {rainbowInkStops.map(([offset, color]) => (
+          {stops.map(([offset, color]) => (
             <stop key={color} offset={offset} stopColor={color} />
           ))}
         </linearGradient>
       </defs>
       {state.currentItemPenMode === "brush" ? (
-        <g fill="currentColor">
+        <g fill={gradient ? `url(#${id})` : "currentColor"}>
           {Array.from({ length: 45 }, (_, index) => {
             const t = index / 44;
             const pressure =
@@ -121,11 +131,7 @@ const PenPreview = ({
         <path
           d={d}
           fill="none"
-          stroke={
-            state.currentItemPenMode === "rainbow"
-              ? `url(#${id})`
-              : "currentColor"
-          }
+          stroke={gradient ? `url(#${id})` : "currentColor"}
           strokeWidth={width}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -277,7 +283,10 @@ export const FactoryPenSettings = ({
                 className="fc-native-pen-graphic"
                 style={{ color: state.currentItemStrokeColor }}
               >
-                <FactoryIcon name={nib} />
+                <FactoryIcon
+                  name={nib}
+                  gradient={state.currentItemInkGradient}
+                />
                 <FactoryIcon name={body} />
               </span>
               <span>{t(`fcboard.${label}`)}</span>
@@ -324,16 +333,51 @@ export const FactoryPenSettings = ({
             key={color}
             type="button"
             aria-label={t("fcboard.pen_colour_color", { color })}
-            aria-pressed={state.currentItemStrokeColor.toLowerCase() === color}
+            aria-pressed={
+              !state.currentItemInkGradient &&
+              state.currentItemStrokeColor.toLowerCase() === color
+            }
             onClick={() => {
               app.api.updateScene({
-                appState: { currentItemStrokeColor: color },
+                appState: {
+                  currentItemStrokeColor: color,
+                  currentItemInkGradient: undefined,
+                },
               });
             }}
           >
             <span style={{ background: color }} />
           </button>
         ))}
+        {Object.entries(nativeInkPalettes).map(([name, palette]) => {
+          const gradient = name as keyof typeof nativeInkPalettes;
+          return (
+            <button
+              key={name}
+              type="button"
+              aria-label={t("fcboard.pen_colour_color", {
+                color: palette.join("_"),
+              })}
+              aria-pressed={state.currentItemInkGradient === gradient}
+              onClick={() =>
+                app.api.updateScene({
+                  appState: {
+                    currentItemStrokeColor: palette[0],
+                    currentItemInkGradient: gradient,
+                  },
+                })
+              }
+            >
+              <span
+                style={{
+                  background: `linear-gradient(to bottom, ${palette.join(
+                    ",",
+                  )})`,
+                }}
+              />
+            </button>
+          );
+        })}
         <label
           title={t("fcboard.custom_colour")}
           className="fc-pen-custom-color"
@@ -344,7 +388,10 @@ export const FactoryPenSettings = ({
             value={state.currentItemStrokeColor}
             onChange={(event) =>
               app.api.updateScene({
-                appState: { currentItemStrokeColor: event.target.value },
+                appState: {
+                  currentItemStrokeColor: event.target.value,
+                  currentItemInkGradient: undefined,
+                },
               })
             }
           />

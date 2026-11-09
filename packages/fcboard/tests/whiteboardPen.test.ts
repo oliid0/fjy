@@ -102,3 +102,29 @@ it.each([0.5, 1, 2])(
     expect(courseware.simulatePressure).toBe(false);
   },
 );
+
+it("keeps independent native gradients through tip switches and restored browser preferences", () => {
+  const state = {
+    ...getDefaultAppState(),
+    currentItemInkGradient: "mint" as const,
+  };
+  const thick = {
+    ...state,
+    ...switchWhiteboardTip(state, "thick"),
+    currentItemInkGradient: "spectrum" as const,
+  };
+  const fine = { ...thick, ...switchWhiteboardTip(thick, "fine") };
+  const saved = restoreAppState(JSON.parse(JSON.stringify(fine)), null);
+  expect(saved.currentItemInkGradient).toBe("mint");
+  expect(switchWhiteboardTip(saved, "thick").currentItemInkGradient).toBe(
+    "spectrum",
+  );
+  expect(
+    whiteboardInkStyle(
+      saved,
+      { width: 1, height: 1, pointerType: "pen" },
+      undefined,
+      2,
+    ).customData.fcInk.gradient,
+  ).toEqual({ palette: "mint", size: 640 / Math.max(1, devicePixelRatio) });
+});

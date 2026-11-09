@@ -96,3 +96,34 @@ it("closes after choosing an eraser mode, preserves size, and reopens on a later
     clock.mockRestore();
   }
 });
+
+it("keeps the native twelve-slot palette, applies gradients to the pen and restores solid color", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  act(() => h.app.setActiveTool({ type: "freedraw" }));
+  tap(screen.getByRole("button", { name: t("fcboard.pen") }));
+  const colors = screen.getByRole("group", { name: t("fcboard.pen_colour") });
+  const buttons = within(colors).getAllByRole("button");
+  expect(buttons).toHaveLength(11);
+  expect(
+    within(colors).getByLabelText(t("fcboard.custom_pen_colour")),
+  ).toBeInTheDocument();
+  fireEvent.click(buttons[9]);
+  expect(h.state.currentItemInkGradient).toBe("mint");
+  expect(buttons[9]).toHaveAttribute("aria-pressed", "true");
+  expect(
+    screen
+      .getByRole("img", { name: t("fcboard.current_pen_preview") })
+      .querySelectorAll("stop"),
+  ).toHaveLength(2);
+  fireEvent.click(buttons[10]);
+  expect(h.state.currentItemInkGradient).toBe("spectrum");
+  act(() =>
+    h.app.api.updateScene({ appState: { currentItemStrokeColor: "#112233" } }),
+  );
+  expect(h.state.currentItemInkGradient).toBeUndefined();
+  fireEvent.click(buttons[10]);
+  expect(h.state.currentItemInkGradient).toBe("spectrum");
+  fireEvent.click(buttons[5]);
+  expect(h.state.currentItemInkGradient).toBeUndefined();
+  expect(h.state.currentItemStrokeColor).toBe("#ff0000");
+});

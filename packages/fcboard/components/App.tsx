@@ -4851,7 +4851,8 @@ class App extends React.Component<AppProps, AppState> {
        */
       captureUpdate?: SceneData["captureUpdate"];
     }) => {
-      const { elements, appState, collaborators, captureUpdate } = sceneData;
+      const { elements, collaborators, captureUpdate } = sceneData;
+      let { appState } = sceneData;
 
       if (captureUpdate) {
         const nextElements = elements ? elements : undefined;
@@ -4870,6 +4871,12 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (appState) {
+        if (
+          "currentItemStrokeColor" in appState &&
+          !("currentItemInkGradient" in appState)
+        ) {
+          appState = { ...appState, currentItemInkGradient: undefined };
+        }
         const update = appState as Partial<AppState>;
         this.setState((previous) => {
           const next = { ...previous, ...update };

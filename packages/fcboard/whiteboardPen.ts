@@ -11,6 +11,7 @@ export type PenPreferences = Pick<
   | "currentItemPenMode"
   | "whiteboardPenWidths"
   | "currentItemStrokeColor"
+  | "currentItemInkGradient"
   | "currentItemInkAssist"
   | "whiteboardPenTip"
   | "whiteboardPenTips"
@@ -35,6 +36,7 @@ export const switchWhiteboardTip = (
     [previous]: {
       mode: state.currentItemPenMode || "hard",
       color: state.currentItemStrokeColor,
+      gradient: state.currentItemInkGradient,
       width: state.currentItemStrokeWidth,
       widths: state.whiteboardPenWidths,
       assist: state.currentItemInkAssist,
@@ -44,6 +46,7 @@ export const switchWhiteboardTip = (
   const next = profiles[tip] || {
     mode: "hard" as const,
     color: state.currentItemStrokeColor,
+    gradient: state.currentItemInkGradient,
     width: DEFAULT_ELEMENT_PROPS.strokeWidth * (tip === "thick" ? 0.5 : 1),
     widths: undefined,
     assist: undefined,
@@ -53,6 +56,7 @@ export const switchWhiteboardTip = (
     whiteboardPenTips: profiles,
     currentItemPenMode: next.mode,
     currentItemStrokeColor: next.color,
+    currentItemInkGradient: next.gradient,
     currentItemStrokeWidth: next.width,
     whiteboardPenWidths: next.widths,
     currentItemInkAssist: next.assist,
@@ -102,6 +106,16 @@ export const whiteboardInkStyle = (
           nib:
             device?.hardNibAvailable !== false &&
             (state.whiteboardHardNib ?? device?.hardNib ?? false),
+        }
+      : {}),
+    ...(pen.currentItemInkGradient
+      ? {
+          gradient: {
+            palette: pen.currentItemInkGradient,
+            size:
+              (320 / Math.max(1, globalThis.devicePixelRatio || 1)) *
+              sceneUnitsPerCssPixel,
+          },
         }
       : {}),
     unit: ((device?.hardPenWidth ?? 4) / 4) * sceneUnitsPerCssPixel,

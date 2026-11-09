@@ -1,3 +1,4 @@
+import { isNativeInkPalette } from "@fcboard/element/nativeInkColor";
 import { isFiniteNumber, pointFrom } from "@fcboard/math";
 
 import {
@@ -948,6 +949,9 @@ export const restoreAppState = (
       nextAppState[key] = threshold;
     }
   }
+  if (isNativeInkPalette(inkPreferences.currentItemInkGradient)) {
+    nextAppState.currentItemInkGradient = inkPreferences.currentItemInkGradient;
+  }
   if (inkPreferences.whiteboardPenTips) {
     nextAppState.whiteboardPenTips = {};
     for (const tip of ["fine", "thick"] as const) {
@@ -978,6 +982,9 @@ export const restoreAppState = (
         nextAppState.whiteboardPenTips[tip] = {
           mode: saved.mode,
           color: saved.color,
+          ...(isNativeInkPalette(saved.gradient)
+            ? { gradient: saved.gradient }
+            : {}),
           width: saved.width,
           widths,
           ...(["text", "shape", "magic", "function", "calculation"].includes(

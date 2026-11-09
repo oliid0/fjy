@@ -21,6 +21,8 @@ import {
   contentViewport,
   objectSelection,
 } from "./board";
+import { currentSettings } from "./settings";
+import { insertGeneratedImage } from "./imageGeneration";
 import { documentStrokeBounds } from "./documents";
 import {
   alignmentOffset,
@@ -623,6 +625,33 @@ export const registerCanvasCommands = (
         }
         if (args.role !== undefined && args.role !== "title") {
           throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        if (
+          !args.id &&
+          args.presentation === "handwritten" &&
+          currentSettings().handwritingGeneration === "cloud" &&
+          currentSettings().apiKey.trim()
+        ) {
+          const signal =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : AbortSignal.timeout(90000);
+          try {
+            await insertGeneratedImage(
+              api,
+              `Render only this exact text as clear handwritten board writing, preserving every character, mathematical symbol and line break. No extra text, illustrations or decorations. Text: ${JSON.stringify(
+                args.text,
+              )}`,
+              signal,
+            );
+            return;
+          } catch (error) {
+            signal.throwIfAborted();
+            if (error instanceof DOMException && error.name === "AbortError") {
+              throw error;
+            }
+          }
+          // A failed optional output provider cannot disable local text writing.
         }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });

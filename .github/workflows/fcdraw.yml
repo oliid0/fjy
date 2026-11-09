@@ -63,7 +63,9 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Package web application
         # Models and runtime are shipped with the app; no first-use CDN download.
-        run: node scripts/fetch-ocr-models.mjs
+        run: |
+          node scripts/fetch-ocr-models.mjs
+          node scripts/fetch-local-models.mjs
       - name: Package whiteboard web assets
         run: pnpm --dir app exec vite build
         env:

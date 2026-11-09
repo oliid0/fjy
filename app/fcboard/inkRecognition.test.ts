@@ -3,7 +3,7 @@ import { recognizeInkContent } from "./inkRecognition";
 import { defaults, saveSettings } from "./settings";
 import { languageStudy } from "./test/language";
 import * as ocr from "./ocr";
-import * as localOcr from "./localOcr";
+import * as localTranslation from "./localTranslation";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -11,22 +11,18 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-it("starts direct vision without waiting for unavailable local recognition", async () => {
-  saveSettings(
-    { ...defaults, apiKey: "configured", ocrModel: "vision" },
-    false,
-  );
-  const model = vi
-    .spyOn(ai, "chat")
-    .mockResolvedValue(JSON.stringify(languageStudy));
-  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
-  vi.spyOn(localOcr, "recognizeLocalHandwriting").mockRejectedValue(
-    new Error("local unavailable"),
-  );
-  const image = "data:image/png;base64,handwriting";
+it("keeps local OCR and translation available without an AI key", async () => {
+  saveSettings({ ...defaults, apiKey: "", ocr: "local" }, false);
+  const model = vi.spyOn(ai, "chat");
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("hello");
+  const translate = vi
+    .spyOn(localTranslation, "translateLocally")
+    .mockResolvedValue({ language: "en", translation: "你好" });
   const result = await recognizeInkContent(
     "language",
-    async () => image,
+    vi.fn(),
     [
       [
         [20, 20],
@@ -37,35 +33,32 @@ it("starts direct vision without waiting for unavailable local recognition", asy
   );
   expect(result).toMatchObject({
     kind: "language",
-    text: languageStudy.term,
-    study: languageStudy,
+    text: "hello",
+    study: { backend: "local", translation: "你好", grammar: "", examples: [] },
   });
-  expect(model).toHaveBeenCalledTimes(1);
-  expect(JSON.stringify(model.mock.calls[0][0])).toContain(image);
-  expect(recognize).not.toHaveBeenCalled();
+  expect(recognize).toHaveBeenCalledOnce();
+  expect(translate).toHaveBeenCalledOnce();
+  expect(model).not.toHaveBeenCalled();
 });
 
-it("races local text plus its original image against direct vision and cancels the slower result", async () => {
+it("uses explicit cloud translation after independent local OCR without a competing vision request", async () => {
   saveSettings(
-    { ...defaults, apiKey: "configured", ocrModel: "vision" },
+    {
+      ...defaults,
+      apiKey: "configured",
+      ocr: "local",
+      translationProvider: "cloud",
+    },
     false,
   );
-  const capture = vi.fn().mockResolvedValue("data:image/png;base64,french");
-  vi.spyOn(localOcr, "recognizeLocalHandwriting").mockResolvedValue("Bonjour");
-  let directSignal: AbortSignal | undefined;
   const study = { ...languageStudy, term: "Bonjour", language: "fr" };
-  const model = vi
-    .spyOn(ai, "chat")
-    .mockImplementation(async (messages, signal) => {
-      if (JSON.stringify(messages).includes('\\"selection\\":\\"Bonjour\\"')) {
-        return JSON.stringify(study);
-      }
-      directSignal = signal;
-      return new Promise(() => {});
-    });
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("Bonjour");
+  const model = vi.spyOn(ai, "chat").mockResolvedValue(JSON.stringify(study));
   const result = await recognizeInkContent(
     "language",
-    capture,
+    vi.fn(),
     [
       [
         [0, 0],
@@ -75,14 +68,9 @@ it("races local text plus its original image against direct vision and cancels t
     new AbortController().signal,
   );
   expect(result).toMatchObject({ kind: "language", text: "Bonjour", study });
-  expect(capture).toHaveBeenCalledTimes(1);
-  expect(model).toHaveBeenCalledTimes(2);
-  expect(
-    model.mock.calls.every(([messages]) =>
-      JSON.stringify(messages).includes("data:image/png;base64,french"),
-    ),
-  ).toBe(true);
-  expect(directSignal?.aborted).toBe(true);
+  expect(recognize).toHaveBeenCalledOnce();
+  expect(model).toHaveBeenCalledOnce();
+  expect(JSON.stringify(model.mock.calls[0][0])).toContain("Bonjour");
 });
 it.each(["text", "drawing"])(
   "routes magic %s ink to the requested generation style",

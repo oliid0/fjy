@@ -1619,6 +1619,15 @@ describe("selection-driven classroom controls", () => {
             ],
           ],
         );
+        await act(async () => {
+          await classroomCommands.execute({
+            name: "panel.open",
+            args: { panel: "files" },
+          });
+        });
+        fireEvent.click(
+          screen.getByRole("button", { name: t("fcboard.close_tool_panel") }),
+        );
         if (changeSource) {
           document.selection = [];
         }

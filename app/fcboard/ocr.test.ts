@@ -5,6 +5,7 @@ const backend = vi.hoisted(() => ({
   cloud: vi.fn(),
   local: vi.fn(),
   native: vi.fn(),
+  math: vi.fn(),
   nativeAvailable: false,
 }));
 vi.mock("./digitalInk", () => ({
@@ -19,6 +20,7 @@ vi.mock("./ai", () => ({
     content: [text, image],
   }),
 }));
+vi.mock("./localMathOcr", () => ({ recognizeLocalMath: backend.math }));
 vi.mock("./localOcr", () => ({
   recognizeLocalHandwriting: backend.local,
   warmHandwriting: vi.fn(),
@@ -29,6 +31,9 @@ describe("explicit handwriting actions", () => {
     backend.cloud.mockReset();
     backend.local.mockReset();
     backend.native.mockReset();
+    backend.math
+      .mockReset()
+      .mockRejectedValue(new Error("Math model unavailable"));
     backend.nativeAvailable = false;
     saveSettings({ ...defaults, apiKey: "test-key" }, false);
   });
@@ -62,7 +67,7 @@ describe("explicit handwriting actions", () => {
     expect(capture).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("starts specialized cloud OCR and local OCR together, with bounded output", async () => {
+  it("finishes local math OCR without starting a cloud competitor", async () => {
     backend.cloud.mockResolvedValue("1+1=");
     backend.local.mockResolvedValue("1+1=");
     const result = await recognizeHandwriting(
@@ -72,14 +77,11 @@ describe("explicit handwriting actions", () => {
       "math",
     );
     expect(result).toBe("1+1=");
-    expect(backend.cloud).toHaveBeenCalledTimes(1);
+    expect(backend.cloud).not.toHaveBeenCalled();
     expect(backend.local).toHaveBeenCalledTimes(1);
-    expect(backend.cloud.mock.calls[0][3]).toEqual({
-      maxTokens: 256,
-      timeoutMs: 6000,
-    });
   });
-  it("silently uses local recognition when cloud errors instead of asking for another selection", async () => {
+  it("falls back from explicitly selected cloud recognition to local on network error", async () => {
+    saveSettings({ ...defaults, apiKey: "test-key", ocr: "cloud" }, false);
     backend.cloud.mockRejectedValue(new Error("network"));
     backend.local.mockResolvedValue("1+1=");
     expect(
@@ -164,12 +166,13 @@ describe("explicit handwriting actions", () => {
     expect(choose).toHaveBeenCalledWith(["你好", "你号"]);
     expect(capture).not.toHaveBeenCalled();
   });
-  it("reports an unavailable offline model without disguising a cloud response as local", async () => {
+  it("recovers from a native failure using bundled raster OCR without a cloud request", async () => {
     backend.nativeAvailable = true;
-    backend.native.mockRejectedValue(new Error("model not registered"));
+    backend.native.mockRejectedValue(new Error("Native backend unavailable"));
+    backend.local.mockResolvedValue("hello");
     saveSettings({ ...defaults, ocr: "local", apiKey: "test" }, false);
-    await expect(
-      recognizeHandwriting(
+    expect(
+      await recognizeHandwriting(
         "image",
         new AbortController().signal,
         vi.fn(),
@@ -177,9 +180,33 @@ describe("explicit handwriting actions", () => {
         undefined,
         [[[0, 0]]],
       ),
-    ).rejects.toThrow("model not registered");
+    ).toBe("hello");
+    expect(backend.local).toHaveBeenCalledOnce();
     expect(backend.cloud).not.toHaveBeenCalled();
-    expect(backend.local).not.toHaveBeenCalled();
+  });
+  it("reads structured math locally before native text recognition or rasterization", async () => {
+    backend.nativeAvailable = true;
+    backend.math.mockResolvedValue(String.raw`\frac{1}{2}`);
+    const capture = vi.fn();
+    saveSettings({ ...defaults, apiKey: "" }, false);
+    expect(
+      await recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        [
+          [
+            [0, 0],
+            [20, 20],
+          ],
+        ],
+      ),
+    ).toBe(String.raw`\frac{1}{2}`);
+    expect(capture).not.toHaveBeenCalled();
+    expect(backend.native).not.toHaveBeenCalled();
+    expect(backend.cloud).not.toHaveBeenCalled();
   });
   it("keeps the missing-language-pack flow local in automatic mode without sending a screenshot to another recognizer", async () => {
     backend.nativeAvailable = true;

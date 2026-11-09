@@ -9,6 +9,8 @@ import { act, fireEvent, render } from "@fcboard/fcboard/tests/test-utils";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { defaults, saveSettings } from "./settings";
+
 import {
   insertionDefaults,
   renderInsertion,
@@ -185,6 +187,10 @@ it("undoes a handwriting conversion in the real editor without losing the surfac
 });
 
 it("undoes a language translation and its metadata together while preserving the original ink", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test-only", translationProvider: "cloud" },
+    false,
+  );
   const { languageStudy } = await import("./test/language");
   const ai = await import("./ai");
   const { readLanguageCard } = await import("./LanguagePanel");

@@ -323,6 +323,17 @@ test("selecting a formula draws an editable graph and changing its parameter upd
     await slider.press("ArrowRight");
   }
   await expect(slider).toHaveValue("2");
+  const graph = page.getByRole("region", { name: "交互函数图表" });
+  await expect(graph.locator("svg.function-plot")).toBeVisible();
+  const curve = graph.locator(".graph path").first();
+  const beforeZoom = await curve.getAttribute("d");
+  await graph.locator(".zoom-and-drag").hover();
+  await page.mouse.wheel(0, -150);
+  await expect.poll(() => curve.getAttribute("d")).not.toBe(beforeZoom);
+  const expression = graph.getByRole("textbox");
+  await expression.fill("a*x^2+1");
+  await graph.getByRole("button", { name: "生成", exact: true }).click();
+  await expect(expression).toHaveValue("a*x^2+1");
   await page.getByRole("button", { name: "关闭工具浮层" }).click();
   await page.mouse.click(80, 400);
   await page.keyboard.press("v");

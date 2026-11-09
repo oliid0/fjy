@@ -9,13 +9,7 @@ import { mathNotation } from "./mathNotation";
 import { explainLanguage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
 import { fitInkShape, isShapeClosed } from "./shapeRecognition";
-import {
-  hasDigitalInk,
-  digitalInkEngine,
-  currentTextInkLanguage,
-} from "./digitalInk";
-import { recognizeLocalHandwriting } from "./localOcr";
-import { preferredRace } from "./preferredRace";
+import { hasDigitalInk, digitalInkEngine } from "./digitalInk";
 import { supportsImageLayers } from "./imageGeneration";
 
 import type { RecognizedShape } from "./shapeRecognition";
@@ -86,55 +80,6 @@ export const recognizeInkContent = async (
   languageHint?: "en-US",
   chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
 ): Promise<InkRecognitionResult> => {
-  if (
-    mode === "language" &&
-    currentSettings().ocr !== "local" &&
-    currentSettings().apiKey.trim()
-  ) {
-    const targetLanguage = getLanguage().code;
-    let raster: Promise<string> | undefined;
-    const image = () =>
-      (raster ||= capture().then((value) => {
-        if (!value.startsWith("data:image/")) {
-          throw new Error(
-            t("fcboard.no_content_recognized_select_the_area_again"),
-          );
-        }
-        return value;
-      }));
-    const study = await preferredRace(
-      async (request) =>
-        explainLanguage("", request, targetLanguage, await image()),
-      async (request) => {
-        const text =
-          hasDigitalInk() && strokes.length
-            ? (
-                await digitalInkEngine.recognize({
-                  strokes,
-                  language: languageHint || currentTextInkLanguage(),
-                })
-              ).candidates.find(
-                (candidate) =>
-                  typeof candidate === "string" && candidate.trim(),
-              )
-            : await recognizeLocalHandwriting(await image(), request, () => {});
-        request.throwIfAborted();
-        if (!text?.trim() || text.length > 4000) {
-          throw new Error(
-            t("fcboard.no_content_recognized_select_the_area_again"),
-          );
-        }
-        // The source image lets vision correct a local recognizer's language/script guess.
-        return explainLanguage(text, request, targetLanguage, await image());
-      },
-      signal,
-    );
-    signal.throwIfAborted();
-    if (targetLanguage !== getLanguage().code) {
-      throw new DOMException("Language changed", "AbortError");
-    }
-    return { kind: "language", text: study.term, study, targetLanguage };
-  }
   if (
     mode === "text" ||
     mode === "language" ||
@@ -235,6 +180,12 @@ export const recognizeInkContent = async (
         "fcboard.functions_can_be_plotted_directly_set_an_image_model_id_in_settings_to_generate_illustrations",
       ),
     );
+  }
+  if (
+    mode === "shape" &&
+    (currentSettings().ocr === "local" || !currentSettings().apiKey.trim())
+  ) {
+    throw new Error("No local shape match; keep the original ink");
   }
   const image = await capture();
   signal.throwIfAborted();

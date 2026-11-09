@@ -8,6 +8,8 @@ import { BoardBook } from "./boards";
 
 import { classroomCommands } from "./commands";
 
+import type { Board } from "./boards";
+
 describe("persistent whiteboard book", () => {
   afterEach(() => localStorage.removeItem("fcboard-board-recovery"));
   const setup = () => {
@@ -62,10 +64,9 @@ describe("persistent whiteboard book", () => {
     const resets = vi.mocked(api.resetScene).mock.calls.length;
     await book.reorder([second, first]);
     expect(book.value.boards.map((board) => board.id)).toEqual([second, first]);
-    expect(save.mock.lastCall?.[0].boards.map((board) => board.id)).toEqual([
-      second,
-      first,
-    ]);
+    expect(
+      save.mock.lastCall?.[0].boards.map((board: Board) => board.id),
+    ).toEqual([second, first]);
     expect(book.value.active).toBe(second);
     expect(api.getSceneElements()).toBe(canvas);
     expect(api.resetScene).toHaveBeenCalledTimes(resets);

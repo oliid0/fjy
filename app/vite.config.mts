@@ -167,6 +167,7 @@ export default defineConfig(({ mode }) => {
           // don't precache fonts, locales and separate chunks
           globIgnores: [
             "**/ocr/**",
+            "**/local-models/**",
             // The SDK also emits its default worker/runtime, but localOcr uses
             // the checksum-pinned /ocr/ copies. Never download these duplicates
             // during service-worker installation.

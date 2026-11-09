@@ -21,7 +21,7 @@ import {
 import { classroomCommands } from "./commands";
 import { selectionSignature, selectionToolbarPosition } from "./selection";
 import { handwritingText } from "./handwriting";
-import { recognizeHandwriting, warmHandwriting } from "./ocr";
+import { recognizeHandwriting } from "./ocr";
 import { selectionMathIntent, selectionAIAction } from "./intent";
 import { drawAxes, insertText } from "./board";
 import { currentSettings } from "./settings";
@@ -96,17 +96,6 @@ export const SelectionActions = ({
   const cache = useRef<{ signature: string; text: string } | undefined>(
     undefined,
   );
-  useEffect(() => {
-    const prepare = () => {
-      void warmHandwriting().catch(() => {});
-    };
-    if (typeof requestIdleCallback === "function") {
-      const task = requestIdleCallback(prepare, { timeout: 1500 });
-      return () => cancelIdleCallback(task);
-    }
-    const task = setTimeout(prepare, 300);
-    return () => clearTimeout(task);
-  }, []);
   useEffect(() => {
     let previous = "";
     const refresh = () => {

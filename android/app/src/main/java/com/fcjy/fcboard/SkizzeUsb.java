@@ -146,8 +146,9 @@ final class SkizzeUsb implements AutoCloseable {
             if (controlEndpoint == null || tipEndpoint == null) throw new IllegalStateException("Missing Skizze interrupt endpoint");
             usb = manager.openDevice(device);
             if (usb == null) throw new IllegalStateException("Cannot open Skizze USB device");
-            boolean claimed = usb.claimInterface(control, true);
-            boolean tipClaimed = claimed && (tip.getId() == control.getId() || usb.claimInterface(tip, true));
+            // Never detach the board's kernel HID driver: it may also own touch/keys.
+            boolean claimed = usb.claimInterface(control, false);
+            boolean tipClaimed = claimed && (tip.getId() == control.getId() || usb.claimInterface(tip, false));
             if (!tipClaimed) {
                 if (claimed) usb.releaseInterface(control);
                 usb.close(); commands.shutdownNow();

@@ -136,6 +136,7 @@ export const recognizeMath = async (
   } catch (failure) {
     const settings = currentSettings();
     if (
+      settings.mathTranscription !== "cloud" ||
       !settings.apiKey ||
       !settings.model.trim() ||
       (mode === "function" && !/\bx\b/.test(text))

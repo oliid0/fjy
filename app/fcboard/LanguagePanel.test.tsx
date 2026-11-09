@@ -26,6 +26,7 @@ import { observeInkAssistance } from "./inkAssistance";
 import { classroomCommands } from "./commands";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
+import { defaults, saveSettings } from "./settings";
 
 const setup = () => {
   let scene: readonly FcboardElement[] = [];
@@ -73,11 +74,17 @@ const setup = () => {
 };
 
 beforeEach(async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test-only", translationProvider: "cloud" },
+    false,
+  );
   await setLanguage(languages.find((language) => language.code === "zh-CN")!);
 });
 afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
   await setLanguage(defaultLang);
 });
 

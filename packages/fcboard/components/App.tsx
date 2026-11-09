@@ -1,4 +1,5 @@
 import clsx from "clsx";
+
 import { finishFactoryInk } from "@fcboard/element/factoryInk";
 import throttle from "lodash.throttle";
 import React, { useContext } from "react";
@@ -294,6 +295,8 @@ import type {
 } from "@fcboard/element/types";
 
 import type { Mutable, ValueOf } from "@fcboard/common/utility-types";
+
+import { canvasScale } from "../canvasScale";
 
 import { whiteboardInkStyle } from "../whiteboardPen";
 
@@ -1996,8 +1999,8 @@ class App extends React.Component<AppProps, AppState> {
       if (
         !isElementInViewport(
           f,
-          this.canvas.width / window.devicePixelRatio,
-          this.canvas.height / window.devicePixelRatio,
+          this.state.width,
+          this.state.height,
           {
             offsetLeft: this.state.offsetLeft,
             offsetTop: this.state.offsetTop,
@@ -2394,7 +2397,10 @@ class App extends React.Component<AppProps, AppState> {
                             selectionNonce={
                               this.state.selectionElement?.versionNonce
                             }
-                            scale={window.devicePixelRatio}
+                            scale={canvasScale(
+                              this.state.width,
+                              this.state.height,
+                            )}
                             appState={canvasAppState}
                             renderConfig={{
                               imageCache: this.imageCache,
@@ -2425,7 +2431,10 @@ class App extends React.Component<AppProps, AppState> {
                                   : undefined
                               }
                               appState={canvasAppState}
-                              scale={window.devicePixelRatio}
+                              scale={canvasScale(
+                                this.state.width,
+                                this.state.height,
+                              )}
                               rc={this.rc}
                               elementsMap={elementsMap}
                               allElementsMap={allElementsMap}
@@ -2456,7 +2465,10 @@ class App extends React.Component<AppProps, AppState> {
                             selectionNonce={
                               this.state.selectionElement?.versionNonce
                             }
-                            scale={window.devicePixelRatio}
+                            scale={canvasScale(
+                              this.state.width,
+                              this.state.height,
+                            )}
                             appState={this.state}
                             renderScrollbars={
                               this.props.renderScrollbars === true
@@ -5142,8 +5154,8 @@ class App extends React.Component<AppProps, AppState> {
             this.flowChartCreator.pendingNodes?.length &&
             !isElementCompletelyInViewport(
               this.flowChartCreator.pendingNodes,
-              this.canvas.width / window.devicePixelRatio,
-              this.canvas.height / window.devicePixelRatio,
+              this.state.width,
+              this.state.height,
               {
                 offsetLeft: this.state.offsetLeft,
                 offsetTop: this.state.offsetTop,
@@ -5199,8 +5211,8 @@ class App extends React.Component<AppProps, AppState> {
                 nextNode &&
                 !isElementCompletelyInViewport(
                   [nextNode],
-                  this.canvas.width / window.devicePixelRatio,
-                  this.canvas.height / window.devicePixelRatio,
+                  this.state.width,
+                  this.state.height,
                   {
                     offsetLeft: this.state.offsetLeft,
                     offsetTop: this.state.offsetTop,
@@ -5775,8 +5787,8 @@ class App extends React.Component<AppProps, AppState> {
           if (
             !isElementCompletelyInViewport(
               [firstNode],
-              this.canvas.width / window.devicePixelRatio,
-              this.canvas.height / window.devicePixelRatio,
+              this.state.width,
+              this.state.height,
               {
                 offsetLeft: this.state.offsetLeft,
                 offsetTop: this.state.offsetTop,

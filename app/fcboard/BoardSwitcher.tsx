@@ -23,7 +23,7 @@ import { BoardOpen } from "./BoardOpen";
 import { readCloudBzd } from "./cloudTransfers";
 import { loadCloudShare } from "./cloudShare";
 
-import type { PointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 
 export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
@@ -352,7 +352,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       return next;
     });
   };
-  const dragMove = (event: PointerEvent) => {
+  const dragMove = (event: ReactPointerEvent) => {
     if (drag.current?.pointer !== event.pointerId) {
       return;
     }

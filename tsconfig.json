@@ -19,6 +19,7 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
+      "ink-on/core": ["./node_modules/ink-on/dist-lib/types/core/index.d.ts"],
       "@paddleocr/paddleocr-js": ["./node_modules/@paddleocr/paddleocr-js/dist/index.d.ts", "./app/node_modules/@paddleocr/paddleocr-js/dist/index.d.ts"],
       "@fcboard/common": ["./packages/common/src/index.ts"],
       "@fcboard/common/*": ["./packages/common/src/*"],

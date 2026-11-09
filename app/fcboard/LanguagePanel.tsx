@@ -63,7 +63,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
   }
   try {
     return {
-      study: parseLanguageStudy(JSON.stringify(metadata.study)),
+      study: parseLanguageStudy(JSON.stringify(metadata.study), true),
       targetLanguage: metadata.targetLanguage,
       token: JSON.stringify([
         doc ? [doc.name, doc.page] : api.id,
@@ -175,7 +175,7 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
                 targetLanguage: target,
               },
             })) as { study: LanguageStudy };
-            study = parseLanguageStudy(JSON.stringify(result.study));
+            study = parseLanguageStudy(JSON.stringify(result.study), true);
           }
           controller.signal.throwIfAborted();
           if (
@@ -362,76 +362,80 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
                 >
                   {card.study.translation}
                 </p>
-                <Tabs
-                  value={tab}
-                  onChange={(_, value) => setTab(value)}
-                  variant="scrollable"
-                  allowScrollButtonsMobile
-                >
-                  <Tab label={t("fcboard.language_study")} />
-                  <Tab label={t("fcboard.word_and_sentence_structure")} />
-                  <Tab label={t("fcboard.example")} />
-                </Tabs>
-                <Box
-                  role="tabpanel"
-                  sx={{ py: 2, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
-                >
-                  {tab === 0 && (
-                    <>
-                      {card.study.pronunciation && (
-                        <p>
-                          {t("fcboard.pronunciation")}:{" "}
-                          {card.study.pronunciation}
-                          <Button
-                            disabled={
-                              !classroomCommands.isPublic("voice.speak")
-                            }
-                            onClick={() =>
-                              void classroomCommands
-                                .execute({
-                                  name: "voice.speak",
-                                  args: { text: card.study!.term },
-                                })
-                                .catch((failure) => setError(String(failure)))
-                            }
-                          >
-                            {t("fcboard.pronunciation")}
-                          </Button>
-                        </p>
-                      )}
-                      {card.study.syllables && (
-                        <p>
-                          {t("fcboard.syllables")}: {card.study.syllables}
-                        </p>
-                      )}
-                      {card.study.meanings.map((meaning, index) => (
+                {card.study.backend !== "local" && (
+                  <Tabs
+                    value={tab}
+                    onChange={(_, value) => setTab(value)}
+                    variant="scrollable"
+                    allowScrollButtonsMobile
+                  >
+                    <Tab label={t("fcboard.language_study")} />
+                    <Tab label={t("fcboard.word_and_sentence_structure")} />
+                    <Tab label={t("fcboard.example")} />
+                  </Tabs>
+                )}
+                {card.study.backend !== "local" && (
+                  <Box
+                    role="tabpanel"
+                    sx={{ py: 2, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
+                  >
+                    {tab === 0 && (
+                      <>
+                        {card.study.pronunciation && (
+                          <p>
+                            {t("fcboard.pronunciation")}:{" "}
+                            {card.study.pronunciation}
+                            <Button
+                              disabled={
+                                !classroomCommands.isPublic("voice.speak")
+                              }
+                              onClick={() =>
+                                void classroomCommands
+                                  .execute({
+                                    name: "voice.speak",
+                                    args: { text: card.study!.term },
+                                  })
+                                  .catch((failure) => setError(String(failure)))
+                              }
+                            >
+                              {t("fcboard.pronunciation")}
+                            </Button>
+                          </p>
+                        )}
+                        {card.study.syllables && (
+                          <p>
+                            {t("fcboard.syllables")}: {card.study.syllables}
+                          </p>
+                        )}
+                        {card.study.meanings.map((meaning, index) => (
+                          <p key={index}>
+                            <b>{meaning.partOfSpeech}</b> {meaning.definition}
+                          </p>
+                        ))}
+                        {!!card.study.synonyms?.length && (
+                          <p>
+                            {t("fcboard.synonyms")}:{" "}
+                            {card.study.synonyms.join(" · ")}
+                          </p>
+                        )}
+                      </>
+                    )}
+                    {tab === 1 && (
+                      <>
+                        <p>{card.study.grammar}</p>
+                        <p>{card.study.usage}</p>
+                      </>
+                    )}
+                    {tab === 2 &&
+                      card.study.examples.map((example, index) => (
                         <p key={index}>
-                          <b>{meaning.partOfSpeech}</b> {meaning.definition}
+                          {example.text}
+                          <br />
+                          {example.translation}
                         </p>
                       ))}
-                      {!!card.study.synonyms?.length && (
-                        <p>
-                          {t("fcboard.synonyms")}:{" "}
-                          {card.study.synonyms.join(" · ")}
-                        </p>
-                      )}
-                    </>
-                  )}
-                  {tab === 1 && (
-                    <>
-                      <p>{card.study.grammar}</p>
-                      <p>{card.study.usage}</p>
-                    </>
-                  )}
-                  {tab === 2 &&
-                    card.study.examples.map((example, index) => (
-                      <p key={index}>
-                        {example.text}
-                        <br />
-                        {example.translation}
-                      </p>
-                    ))}
-                </Box>
+                  </Box>
+                )}
               </>
             )}
           </Box>

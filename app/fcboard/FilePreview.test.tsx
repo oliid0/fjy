@@ -7,6 +7,8 @@ import { Fonts } from "@fcboard/fcboard/fonts";
 
 import type { AppState, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { defaults, saveSettings } from "./settings";
+
 import { render } from "./test/render";
 import { FilePreview } from "./FilePreview";
 import { MindMapControls } from "./MindMapControls";
@@ -297,6 +299,10 @@ it("applies assistant configuration to the next visible courseware stroke and ex
 });
 
 it("translates courseware ink on the visible page, opens and hides its card, and undoes the whole conversion", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test-only", translationProvider: "cloud" },
+    false,
+  );
   await setLanguage(languages.find((language) => language.code === "zh-CN")!);
   vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(languageStudy.term);
   const chat = vi

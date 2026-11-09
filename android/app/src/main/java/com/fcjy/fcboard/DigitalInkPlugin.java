@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class DigitalInkPlugin extends Plugin {
     private static final Executor DIRECT = Runnable::run;
     // Serialize short SDK submissions, never wait here for model checks or inference.
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
+    private final java.util.concurrent.Semaphore inference = new java.util.concurrent.Semaphore(1);
     private final Set<Request> pending = ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
     private DigitalInkPacks packs;
@@ -36,6 +37,7 @@ public class DigitalInkPlugin extends Plugin {
         final String language;
         final boolean preparing;
         final AtomicBoolean settled = new AtomicBoolean();
+        final long deadline = android.os.SystemClock.elapsedRealtime() + 45000;
         Request(PluginCall call, String language, boolean preparing) {
             this.call = call; this.language = language; this.preparing = preparing;
         }
@@ -83,6 +85,7 @@ public class DigitalInkPlugin extends Plugin {
     private void dispatch(Request request, Action action) {
         if (closed) { fail(request, new IllegalStateException("Handwriting recognition closed")); return; }
         if (request.settled.get()) return;
+        if (android.os.SystemClock.elapsedRealtime() >= request.deadline) { fail(request, new java.util.concurrent.TimeoutException("Offline handwriting timed out")); return; }
         try {
             worker.execute(() -> {
                 if (closed) { fail(request, new IllegalStateException("Handwriting recognition closed")); return; }
@@ -128,6 +131,7 @@ public class DigitalInkPlugin extends Plugin {
     }
 
     @PluginMethod public void recognize(PluginCall call) {
+        if (pending.size() >= 16) { call.reject("Offline handwriting queue is full; try a smaller selection"); return; }
         Request request = new Request(call, call.getString("language", "zh-Hani-CN"), false);
         pending.add(request);
         dispatch(request, () -> {
@@ -149,23 +153,36 @@ public class DigitalInkPlugin extends Plugin {
                 ink.addStroke(stroke.build());
             }
             if (ink.isEmpty()) throw new IllegalArgumentException("No handwriting in selection");
-            model(request.language).addOnCompleteListener(DIRECT, ready -> dispatch(request, () -> {
+            model(request.language).addOnCompleteListener(DIRECT, ready -> dispatch(request, new Action() {
+                public void run() throws Exception {
                 if (!ready.isSuccessful()) throw failure(ready);
                 // Each request owns its client; do not assume concurrent use of one client.
-                DigitalInkRecognizer recognizer = createRecognizer(ready.getResult());
-                if (closed || request.settled.get()) { recognizer.close(); return; }
+                // Async ML Kit tasks outlive dispatch(). Bound real inference,
+                // not only Java dispatch, so parallel pen regions cannot load
+                // an unbounded number of native clients on small ARM boards.
+                if (!inference.tryAcquire()) {
+                    worker.schedule(() -> dispatch(request, this), 40, TimeUnit.MILLISECONDS);
+                    return;
+                }
+                if (closed || request.settled.get()) { inference.release(); return; }
+                DigitalInkRecognizer recognizer;
+                try { recognizer = createRecognizer(ready.getResult()); }
+                catch (Exception | LinkageError error) { inference.release(); throw error; }
                 Task<RecognitionResult> actual;
                 try { actual = recognizer.recognize(ink.build()); }
-                catch (Exception | LinkageError error) { recognizer.close(); throw error; }
+                catch (Exception | LinkageError error) { recognizer.close(); inference.release(); throw error; }
                 // A timeout does not cancel the underlying Task. Keep its client alive
                 // until actual completion, even after deletion, timeout or plugin unload.
-                actual.addOnCompleteListener(DIRECT, ignored -> recognizer.close());
+                actual.addOnCompleteListener(DIRECT, ignored -> {
+                    try { recognizer.close(); } finally { inference.release(); }
+                });
                 Tasks.withTimeout(actual, 25, TimeUnit.SECONDS).addOnCompleteListener(DIRECT, result -> dispatch(request, () -> {
                     if (!result.isSuccessful()) throw failure(result);
                     JSArray candidates = new JSArray();
                     for (RecognitionCandidate candidate : result.getResult().getCandidates()) candidates.put(candidate.getText());
                     succeed(request, new JSObject().put("candidates", candidates).put("engine", "mlkit-digital-ink-18.1.0"));
                 }));
+                }
             }));
         });
     }

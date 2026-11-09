@@ -2,7 +2,7 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { chat, visualMessage } from "./ai";
 import { recognizeLocalHandwriting } from "./localOcr";
-import { preferredRace } from "./preferredRace";
+import { recognizeLocalMath } from "./localMathOcr";
 import { currentSettings } from "./settings";
 import {
   hasDigitalInk,
@@ -39,45 +39,6 @@ export const recognizeHandwriting = async (
   let raster: Promise<string> | undefined;
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
-  if (settings.ocr !== "cloud" && hasDigitalInk() && strokes?.length) {
-    progress(t("fcboard.recognizing_handwriting_locally"));
-    try {
-      const candidates = await recognizeDigitalInk(
-        strokes,
-        signal,
-        kind,
-        languageHint,
-      );
-      const text = candidates[0];
-      if (text && accept(text)) {
-        const chosen = chooseCandidate
-          ? await chooseCandidate(candidates.filter(accept))
-          : text;
-        signal.throwIfAborted();
-        return chosen;
-      }
-      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
-    } catch (error) {
-      signal.throwIfAborted();
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw error;
-      }
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "HANDWRITING_MODEL_REQUIRED" &&
-        kind !== "math"
-      ) {
-        throw error;
-      }
-      // Explicit local mode reports the real native failure. Auto can use the
-      // separately configured raster/cloud fallback; never call it Digital Ink.
-      if (settings.ocr === "local" && kind !== "math") {
-        throw error;
-      }
-    }
-  }
   const cloud = async (request: AbortSignal) => {
     const text = (
       await chat(
@@ -115,18 +76,79 @@ export const recognizeHandwriting = async (
     }
     return text;
   };
-  const text =
-    settings.ocr === "local" || !settings.apiKey
-      ? await local(signal)
-      : (() => {
-          progress(t("fcboard.recognizing_handwriting"));
-          return settings.ocr === "cloud"
-            ? cloud(signal)
-            : kind === "math"
-            ? preferredRace(local, cloud, signal, 0)
-            : preferredRace(cloud, local, signal);
-        })();
-  const value = await text;
-  signal.throwIfAborted();
-  return chooseCandidate ? chooseCandidate([value]) : value;
+  const useCloud = settings.ocr !== "local" && !!settings.apiKey.trim();
+  const cloudFirst = settings.ocr === "cloud" && useCloud;
+  if (cloudFirst) {
+    try {
+      const value = await cloud(signal);
+      signal.throwIfAborted();
+      return chooseCandidate ? chooseCandidate([value]) : value;
+    } catch {
+      signal.throwIfAborted();
+    }
+  }
+  if (kind === "math" && strokes?.length) {
+    progress(t("fcboard.recognizing_handwriting_locally"));
+    try {
+      const value = await recognizeLocalMath(strokes, signal);
+      signal.throwIfAborted();
+      if (accept(value)) {
+        return chooseCandidate ? chooseCandidate([value]) : value;
+      }
+    } catch {
+      signal.throwIfAborted();
+    }
+  }
+  if (hasDigitalInk() && strokes?.length) {
+    progress(t("fcboard.recognizing_handwriting_locally"));
+    try {
+      const candidates = await recognizeDigitalInk(
+        strokes,
+        signal,
+        kind,
+        languageHint,
+      );
+      const text = candidates[0];
+      if (text && accept(text)) {
+        const chosen = chooseCandidate
+          ? await chooseCandidate(candidates.filter(accept))
+          : text;
+        signal.throwIfAborted();
+        return chosen;
+      }
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "HANDWRITING_MODEL_REQUIRED" &&
+        kind !== "math"
+      ) {
+        throw error;
+      }
+      // A missing explicitly selected text pack is actionable; other native
+      // failures can use the separately bundled local raster model.
+    }
+  }
+  try {
+    const value = await local(signal);
+    signal.throwIfAborted();
+    return chooseCandidate ? chooseCandidate([value]) : value;
+  } catch (failure) {
+    signal.throwIfAborted();
+    if (!useCloud || cloudFirst) {
+      throw failure;
+    }
+    // Automatic routing is sequential: a successful local task never starts
+    // a cloud competitor, and cloud cancellation cannot cancel local inference.
+    progress(t("fcboard.recognizing_handwriting"));
+    const value = await cloud(signal);
+    signal.throwIfAborted();
+    return chooseCandidate ? chooseCandidate([value]) : value;
+  }
 };

@@ -1,9 +1,13 @@
 import { t } from "@fcboard/fcboard/i18n";
 import { all, create } from "mathjs";
 
+import { sampleCurve } from "./curveSampling";
+
 import { mathNotation } from "./mathNotation";
 import { allowedFunctions } from "./mathFunctions";
 import { continuousMathRange } from "./mathDomain";
+
+import type { CurveView } from "./curveSampling";
 
 const math = create(all);
 
@@ -104,7 +108,64 @@ export const project3D = (x: number, y: number, z: number) => [
   (x + y) * 0.3 - z,
 ];
 
+export const sampleFunctionCurve = (
+  expression: string,
+  view: CurveView,
+  scope: Record<string, number> = {},
+) => {
+  const compiled = compileExpression(expression);
+  const domain = math.parse(mathNotation(expression));
+  const evaluate = (x: number) => {
+    try {
+      const value = compiled.evaluate({ ...scope, x });
+      return typeof value === "number" && Number.isFinite(value)
+        ? value + (scope.z || 0)
+        : NaN;
+    } catch {
+      return NaN;
+    }
+  };
+  return sampleCurve(
+    evaluate,
+    (left, right) => {
+      const bounds = continuousMathRange(domain, {
+        ...Object.fromEntries(
+          Object.entries(scope).map(([key, value]) => [
+            key,
+            [value, value] as [number, number],
+          ]),
+        ),
+        x: [left, right],
+      });
+      return bounds
+        ? [bounds[0] + (scope.z || 0), bounds[1] + (scope.z || 0)]
+        : undefined;
+    },
+    view,
+  );
+};
+
 export const samplePlot = (plot: Plot): number[][][] => {
+  if (!Number.isFinite(plot.range) || plot.range <= 0 || plot.range > 1000) {
+    throw new Error(t("fcboard.coordinate_range_must_be_between_0_and_1000"));
+  }
+  if (!plot.surface) {
+    const lines = sampleFunctionCurve(
+      plotExpression(plot.expression),
+      {
+        left: plot.x - plot.range,
+        right: plot.x + plot.range,
+        bottom: -plot.range,
+        top: plot.range,
+      },
+      { x: plot.x, y: plot.y, z: plot.z, a: plot.a, b: plot.b, c: plot.c },
+    );
+    if (!lines.length && !plot.relation) {
+      throw new Error(t("fcboard.no_real_valued_plot_in_this_range"));
+    }
+    return lines.map((line) => line.map(([x, y]) => [x, -y]));
+  }
+
   const compiled = compileExpression(plotExpression(plot.expression));
   const domain = math.parse(mathNotation(plotExpression(plot.expression)));
   const lines: number[][][] = [];

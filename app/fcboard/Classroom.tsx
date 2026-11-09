@@ -68,6 +68,7 @@ import { backgroundCommands, registerBoardAgents } from "./boardAgents";
 import { BoardAgentStatus } from "./BoardAgentStatus";
 import { registerUICommands } from "./uiControls";
 import { localMathIntent, selectionMathIntent } from "./intent";
+import { InteractiveFunctionPlot } from "./InteractiveFunctionPlot";
 import { defaultPlot, plotExpression } from "./math";
 import { mathNotation } from "./mathNotation";
 import { calculateAsync } from "./mathComputation";
@@ -752,7 +753,6 @@ export const Classroom = ({
       sourceText?: string,
     ) => {
       const revision = classroomCommands.revision;
-      const generation = assistantGeneration.current;
       if (classroomCommands.has("document.snapshot")) {
         if (automatic) {
           return;
@@ -840,22 +840,14 @@ export const Classroom = ({
             undefined,
             strokes,
           ));
-        if (
-          revision !== classroomCommands.revision ||
-          generation !== assistantGeneration.current ||
-          !sourceCurrent()
-        ) {
+        if (revision !== classroomCommands.revision || !sourceCurrent()) {
           return { cancelled: true };
         }
         if (expression === "NONE") {
           throw new Error(t("fcboard.no_expression_found_to_calculate"));
         }
         const answer = await calculateAsync(expression, signal);
-        if (
-          revision !== classroomCommands.revision ||
-          generation !== assistantGeneration.current ||
-          !sourceCurrent()
-        ) {
+        if (revision !== classroomCommands.revision || !sourceCurrent()) {
           return { cancelled: true };
         }
         const inline = (!input || !!sourceIds?.length) && strokes.length > 0;
@@ -894,11 +886,7 @@ export const Classroom = ({
         : elements.filter((el) => !el.customData?.fcGenerated);
       const signature = selectionSignature(source);
       const expression = input || (await recognize());
-      if (
-        signal?.aborted ||
-        revision !== classroomCommands.revision ||
-        generation !== assistantGeneration.current
-      ) {
+      if (signal?.aborted || revision !== classroomCommands.revision) {
         return;
       }
       if (
@@ -923,7 +911,6 @@ export const Classroom = ({
       if (
         signal?.aborted ||
         revision !== classroomCommands.revision ||
-        generation !== assistantGeneration.current ||
         (!sourceIds?.length &&
           selectionSignature(selectedBoardElements(api)) !==
             selectionSignature(selected)) ||
@@ -1350,6 +1337,7 @@ export const Classroom = ({
             name: "canvas.text",
             args: {
               text: action.text,
+              presentation: currentSettings().answerStyle,
               ...(selection?.sourceIds?.length
                 ? {
                     sourceIds: selection.sourceIds,
@@ -3154,6 +3142,38 @@ export const Classroom = ({
                         </option>
                       </MaterialSelect>
                     </label>
+                    {(
+                      [
+                        ["mathTranscription", "math_transcription_provider"],
+                        ["translationProvider", "translation_provider"],
+                        [
+                          "handwritingGeneration",
+                          "handwriting_generation_provider",
+                        ],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <label key={key}>
+                        {t(`fcboard.${label}`)}
+                        <MaterialSelect
+                          aria-label={t(`fcboard.${label}`)}
+                          value={settings[key]}
+                          onChange={(event) =>
+                            setSettings({
+                              ...settings,
+                              [key]: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="local">
+                            {t("fcboard.local_provider")}
+                          </option>
+                          <option value="cloud">
+                            {t("fcboard.cloud_provider")}
+                          </option>
+                        </MaterialSelect>
+                      </label>
+                    ))}
+                    <p>{t("fcboard.independent_local_providers_help")}</p>
                     <label>
                       {t("fcboard.handwriting_language")}
                       <MaterialSelect
@@ -3515,6 +3535,17 @@ export const Classroom = ({
             )}
             {panel === "plot" && (
               <>
+                {!plot.surface && (
+                  <InteractiveFunctionPlot
+                    plot={plot}
+                    onExpression={(expression) =>
+                      createPlot(
+                        { ...plot, expression: plotExpression(expression) },
+                        true,
+                      )
+                    }
+                  />
+                )}
                 <p>
                   <strong>
                     {plot.surface ? "z" : "y"} = {plot.expression}

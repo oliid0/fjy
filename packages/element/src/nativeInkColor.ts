@@ -21,9 +21,10 @@ export const isNativeInkPalette = (value: unknown): value is NativeInkPalette =>
 /** Extend mirrored stops over the actual stroke for Canvas and cropped SVG alike. */
 export const nativeInkGradient = (element: FcboardFreeDrawElement) => {
   const data = element.customData?.fcInk?.gradient;
+  const palette: unknown = data?.palette;
   if (
     !data ||
-    !isNativeInkPalette(data.palette) ||
+    !isNativeInkPalette(palette) ||
     !Number.isFinite(data.size) ||
     data.size <= 0
   ) {
@@ -77,7 +78,7 @@ export const nativeInkGradient = (element: FcboardFreeDrawElement) => {
     ...local(first * size),
     ...local(last * size),
   ];
-  const colors = nativeInkPalettes[data.palette];
+  const colors = nativeInkPalettes[palette];
   const stops: [number, string][] = [];
   for (let period = first; period < last; period++) {
     const ordered = Math.abs(period % 2) === 1 ? [...colors].reverse() : colors;

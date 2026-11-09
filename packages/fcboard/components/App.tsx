@@ -4851,8 +4851,7 @@ class App extends React.Component<AppProps, AppState> {
        */
       captureUpdate?: SceneData["captureUpdate"];
     }) => {
-      const { elements, collaborators, captureUpdate } = sceneData;
-      let { appState } = sceneData;
+      const { elements, appState, collaborators, captureUpdate } = sceneData;
 
       if (captureUpdate) {
         const nextElements = elements ? elements : undefined;
@@ -4871,13 +4870,13 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (appState) {
-        if (
-          "currentItemStrokeColor" in appState &&
+        const update: Partial<AppState> = {
+          ...appState,
+          ...("currentItemStrokeColor" in appState &&
           !("currentItemInkGradient" in appState)
-        ) {
-          appState = { ...appState, currentItemInkGradient: undefined };
-        }
-        const update = appState as Partial<AppState>;
+            ? { currentItemInkGradient: undefined }
+            : {}),
+        };
         this.setState((previous) => {
           const next = { ...previous, ...update };
           if (
@@ -4885,7 +4884,7 @@ class App extends React.Component<AppProps, AppState> {
             update.selectedElementIds
           ) {
             return {
-              ...appState,
+              ...update,
               whiteboardSelection: isSelectionLikeTool(next.activeTool.type)
                 ? selectedRegion(
                     (elements || this.scene.getNonDeletedElements()).filter(
@@ -4904,7 +4903,7 @@ class App extends React.Component<AppProps, AppState> {
               editingGroupId: null,
             } as Pick<AppState, K>;
           }
-          return appState as Pick<AppState, K>;
+          return update as Pick<AppState, K>;
         });
       }
 

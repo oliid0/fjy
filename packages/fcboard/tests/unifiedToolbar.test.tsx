@@ -2,15 +2,51 @@ import { t } from "@fcboard/fcboard/i18n";
 import { waitFor, within } from "@testing-library/react";
 
 import { Fcboard, ToolbarExtras } from "../index";
+import { saveToolbarItems, TOOLBAR_STORAGE } from "../toolbarPreferences";
 
 import { render, screen, fireEvent } from "./test-utils";
 
 describe("unified bottom toolbar", () => {
+  afterEach(() => localStorage.removeItem(TOOLBAR_STORAGE));
+  it("updates pinned actions immediately and keeps all drawing controls when optional items are hidden", async () => {
+    await render(
+      <Fcboard UIOptions={{ unifiedToolbar: true }}>
+        <ToolbarExtras toolId="mindmap">
+          <button>Mapped mind map action</button>
+        </ToolbarExtras>
+      </Fcboard>,
+    );
+    const toolbar = screen.getByRole("toolbar", {
+      name: t("fcboard.whiteboard_toolbar"),
+    });
+    expect(within(toolbar).queryByText("Mapped mind map action")).toBeNull();
+    const { act } = await import("@testing-library/react");
+    act(() => saveToolbarItems(["mindmap", "shape"]));
+    expect(
+      await within(toolbar).findByText("Mapped mind map action"),
+    ).toBeVisible();
+    expect(
+      within(toolbar).queryByRole("button", { name: t("fcboard.toolbox") }),
+    ).toBeNull();
+    expect(
+      within(toolbar).getByRole("button", { name: t("fcboard.shape") }),
+    ).toBeVisible();
+    act(() => saveToolbarItems([]));
+    expect(within(toolbar).queryByText("Mapped mind map action")).toBeNull();
+    for (const label of ["pen", "eraser", "select"] as const) {
+      expect(
+        within(toolbar).getByRole("button", { name: t(`fcboard.${label}`) }),
+      ).toBeVisible();
+    }
+    expect(toolbar.querySelector(".fc-board-mode")).toBeInTheDocument();
+    expect(within(toolbar).getByTestId("button-undo")).toBeInTheDocument();
+    expect(within(toolbar).getByTestId("button-redo")).toBeInTheDocument();
+  });
   it("opens shapes without activating a drawing tool, dismisses outside, and reopens the insertion menu", async () => {
     const { container } = await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
-    const insert = screen.getByRole("button", { name: t("fcboard.insert") });
+    const insert = screen.getByRole("button", { name: t("fcboard.toolbox") });
     const original = window.h.state.activeTool.type;
     fireEvent.click(insert);
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
@@ -18,7 +54,7 @@ describe("unified bottom toolbar", () => {
     const modal = container.querySelector(".MuiDialog-root")!;
     expect(modal).not.toBeNull();
     fireEvent.keyDown(
-      screen.getByRole("dialog", { name: t("fcboard.insert_tools") }),
+      screen.getByRole("dialog", { name: t("fcboard.shape") }),
       { key: "Escape" },
     );
     await waitFor(() =>
@@ -50,13 +86,13 @@ describe("unified bottom toolbar", () => {
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(within(toolbar).queryByTestId("toolbar-rectangle")).toBeNull();
     expect(
-      within(toolbar).getByRole("button", { name: t("fcboard.insert") }),
+      within(toolbar).getByRole("button", { name: t("fcboard.toolbox") }),
     ).toHaveAttribute("data-board-insert");
     fireEvent.click(
-      within(toolbar).getByRole("button", { name: t("fcboard.insert") }),
+      within(toolbar).getByRole("button", { name: t("fcboard.toolbox") }),
     );
     expect(
-      screen.getByRole("dialog", { name: t("fcboard.insert_tools") }),
+      screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
     expect(screen.getByTestId("toolbar-rectangle")).toBeInTheDocument();
@@ -64,7 +100,7 @@ describe("unified bottom toolbar", () => {
     expect(window.h.state.activeTool.type).toBe("rectangle");
     await waitFor(() =>
       expect(
-        screen.queryByRole("dialog", { name: t("fcboard.insert_tools") }),
+        screen.queryByRole("dialog", { name: t("fcboard.shape") }),
       ).toBeNull(),
     );
     expect(toolbar.querySelector(".undo-redo-buttons")).toBeInTheDocument();

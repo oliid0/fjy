@@ -16,6 +16,7 @@ import { classroomCommands } from "./commands";
 import { TransientMessage } from "./TransientMessage";
 import { ThresholdSettings } from "./ThresholdSettings";
 import { BackgroundSettings } from "./BackgroundSettings";
+import { ToolbarSettings } from "./ToolbarSettings";
 
 export const BoardSettings = ({
   api,
@@ -52,6 +53,9 @@ export const BoardSettings = ({
   };
   return (
     <>
+      <SettingsSection id="toolbar">
+        <ToolbarSettings />
+      </SettingsSection>
       <SettingsSection id="background">
         {document ? (
           <p>

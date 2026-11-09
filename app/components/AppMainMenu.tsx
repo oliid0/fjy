@@ -28,7 +28,7 @@ export const AppMainMenu: React.FC<AppMenuProps> = React.memo(() => {
   return (
     <MainMenu>
       <MainMenu.Item
-        icon={<FactoryIcon name="document" />}
+        icon={<FactoryIcon name="open" />}
         onSelect={() => invoke("board.chooseOpen")}
         data-testid="load-button"
       >

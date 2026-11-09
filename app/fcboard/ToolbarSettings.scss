@@ -1,0 +1,85 @@
+.fc-toolbar-settings {
+  width: 100%;
+  padding: 8px 0 20px;
+  > p {
+    color: #8d8c90;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 16px 0 12px;
+  }
+  .fc-toolbar-setting-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    align-content: start;
+    min-height: 152px;
+    padding: 20px 16px;
+    border-radius: 8px;
+    background: #fcfcfe;
+    outline: 2px solid transparent;
+    &[data-drag-over="true"] {
+      outline-color: #0368ff;
+    }
+  }
+  .fc-toolbar-setting-tile {
+    position: relative;
+    min-width: 0;
+    min-height: 54px;
+    padding: 10px 2px 4px;
+    border: 1px solid #e6e6e8;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #010101;
+    font: 400 10px / 1.4 system-ui, sans-serif;
+    text-align: center;
+    overflow-wrap: anywhere;
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+    > svg {
+      width: 22px;
+      height: 22px;
+      margin-bottom: 2px;
+    }
+    &.is-fixed {
+      cursor: default;
+      background: #f5f5f7;
+    }
+    &.is-dragging {
+      opacity: 0.45;
+      outline: 2px solid #0368ff;
+    }
+    &:focus-visible {
+      outline: 2px solid #0368ff;
+    }
+    > button {
+      position: absolute;
+      top: -6px;
+      right: -5px;
+      width: 22px;
+      min-width: 22px;
+      height: 22px;
+      min-height: 22px;
+      padding: 0;
+      border: 2px solid #fcfcfe;
+      border-radius: 50%;
+      color: white;
+      font: 500 18px / 18px system-ui;
+      > svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      &.fc-toolbar-add {
+        background: #0368ff;
+      }
+      &.fc-toolbar-remove {
+        background: #ef4b55;
+      }
+    }
+  }
+}

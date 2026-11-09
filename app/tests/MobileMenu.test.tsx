@@ -53,6 +53,16 @@ describe("Test MobileMenu", () => {
       screen.queryByRole("button", { name: t("fcboard.toolbox") }),
     ).toBeNull();
     fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.toolbar_settings") }),
+    );
+    expect(
+      document.querySelector("[data-settings-page='toolbar']"),
+    ).not.toBeNull();
+    expect(
+      document.querySelectorAll(".fc-toolbar-setting-tile.is-fixed"),
+    ).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
+    fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.language") }),
     );
     expect(
@@ -138,11 +148,11 @@ describe("Test MobileMenu", () => {
     expect(document.querySelector(".welcome-screen-center")).toBeNull();
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(toolbar.querySelector(".undo-redo-buttons")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.insert") }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
     expect(
       screen
-        .getByRole("dialog", { name: t("fcboard.insert_tools") })
+        .getByRole("dialog", { name: t("fcboard.shape") })
         .querySelector(".zoom-actions"),
     ).toBeNull();
     expect(

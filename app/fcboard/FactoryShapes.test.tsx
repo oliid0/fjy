@@ -30,9 +30,13 @@ import type { InkStroke } from "./documents";
 
 vi.mock("@fcboard/fcboard", async (original) => ({
   ...(await original<typeof import("@fcboard/fcboard")>()),
-  ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  ToolbarExtras: ({
+    children,
+    toolId,
+  }: {
+    children: React.ReactNode;
+    toolId?: string;
+  }) => (toolId ? null : <>{children}</>),
 }));
 
 const pointer = (target: Element, type: string, x: number, y: number) =>

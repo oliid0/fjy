@@ -3,15 +3,22 @@ import { getDefaultAppState } from "@fcboard/fcboard/appState";
 import { Capacitor } from "@capacitor/core";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 
+import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
+
+import { Fcboard } from "@fcboard/fcboard";
+
 import type { FcboardElement } from "@fcboard/element/types";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { render } from "./test/render";
-
 import { TeachingTools } from "./TeachingTools";
 import { classroomCommands } from "./commands";
 import { readWidgets } from "./widgets";
+
+const render = (children: React.ReactElement) =>
+  renderEditor(
+    <Fcboard UIOptions={{ unifiedToolbar: true }}>{children}</Fcboard>,
+  );
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -32,19 +39,10 @@ const emptyApi = () =>
     updateScene: vi.fn(),
   } as unknown as FcboardImperativeAPI);
 
-vi.mock("@fcboard/fcboard", async (original) => ({
-  ...(await original<typeof import("@fcboard/fcboard")>()),
-  ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
-}));
-
 it("opens the built-in calculator without any installed OEM app and rejects unknown tools", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
-  render(<TeachingTools api={emptyApi()} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-  );
+  await render(<TeachingTools api={emptyApi()} />);
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
   fireEvent.click(
     screen.getByRole("button", {
       name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
@@ -58,7 +56,7 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
     "allow-scripts",
   );
   expect(
-    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
   ).not.toBeInTheDocument();
   await expect(
     classroomCommands.execute({
@@ -69,7 +67,7 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
 });
 
 it("restores the actual tool button after an opening failure", async () => {
-  render(<TeachingTools api={emptyApi()} />);
+  await render(<TeachingTools api={emptyApi()} />);
   const release = classroomCommands.register(
     "tools.curtain",
     "@internal",
@@ -78,9 +76,7 @@ it("restores the actual tool button after an opening failure", async () => {
     },
   );
   try {
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
     const button = screen.getByRole("button", {
       name: t("fcboard.open_name", { name: t("fcboard.curtain") }),
     });
@@ -95,102 +91,32 @@ it("restores the actual tool button after an opening failure", async () => {
 });
 
 it.each(["ltr", "rtl"])(
-  "swipes tool pages in %s without activating tools, wrapping, or consuming the next tap",
+  "exposes all tools together in %s without paging",
   async (direction) => {
-    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
-    const invoke = vi.fn();
-    const release = classroomCommands.register(
-      "ui.invoke",
-      "@internal",
-      invoke,
-    );
-    render(<TeachingTools api={emptyApi()} />);
-    try {
-      fireEvent.click(
-        screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-      );
-      const panel = screen.getByRole("dialog", {
-        name: t("fcboard.teaching_tools"),
-      });
-      panel.style.direction = direction;
-      const previous = () =>
-        screen.getByRole("button", { name: t("fcboard.previous_page") });
-      const next = () =>
-        screen.getByRole("button", { name: t("fcboard.next_page") });
-      const pointer = (
-        type: string,
-        x: number,
-        y: number,
-        id = 1,
-        primary = true,
-      ) =>
-        fireEvent(
-          panel,
-          Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
-            pointerId: id,
-            isPrimary: primary,
-            pointerType: "touch",
-            button: 0,
-            clientX: x,
-            clientY: y,
-          }),
-        );
-      const end = direction === "ltr" ? 120 : 280;
-      pointer("pointerdown", 200, 150);
-      pointer("pointermove", 205, 151);
-      pointer("pointerup", 205, 151);
-      expect(previous()).toHaveAttribute("aria-pressed", "true");
-      pointer("pointerdown", 200, 150);
-      pointer("pointermove", 205, 210);
-      pointer("pointerup", 205, 210);
-      expect(previous()).toHaveAttribute("aria-pressed", "true");
-      pointer("pointerdown", 200, 150);
-      pointer("pointermove", end, 153);
-      pointer("pointercancel", end, 153);
-      expect(previous()).toHaveAttribute("aria-pressed", "true");
-      pointer("pointerdown", 200, 150);
-      pointer("pointerdown", 190, 150, 2, false);
-      pointer("pointermove", end, 153);
-      pointer("pointerup", end, 153);
-      expect(previous()).toHaveAttribute("aria-pressed", "true");
-      pointer("pointerdown", 200, 150);
-      pointer("pointermove", end, 153);
-      pointer("pointerup", end, 153);
-      expect(next()).toHaveAttribute("aria-pressed", "true");
+    await render(<TeachingTools api={emptyApi()} />);
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
+    const panel = screen.getByRole("dialog", { name: t("fcboard.toolbox") });
+    panel.style.direction = direction;
+    for (const label of [
+      "recording",
+      "ai_summary",
+      "voice_commands",
+      "file_transfer",
+    ] as const) {
       expect(
-        screen.getByRole("button", { name: t("fcboard.recording") }),
+        screen.getByRole("button", { name: t(`fcboard.${label}`) }),
       ).toBeVisible();
-      pointer("pointerdown", 200, 150);
-      pointer("pointermove", end, 153);
-      pointer("pointerup", end, 153);
-      expect(next()).toHaveAttribute("aria-pressed", "true");
-      pointer("pointerdown", end, 150);
-      pointer("pointermove", 200, 153);
-      pointer("pointerup", 200, 153);
-      expect(previous()).toHaveAttribute("aria-pressed", "true");
-      expect(invoke).not.toHaveBeenCalled();
-      const transfer = screen.getByRole("button", {
-        name: t("fcboard.file_transfer"),
-      });
-      pointer("pointerdown", 200, 150);
-      pointer("pointerup", 200, 150);
-      fireEvent.click(transfer, { detail: 1 });
-      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
-      expect(invoke).toHaveBeenCalledWith(
-        expect.objectContaining({ command: "files.open", origin: "tools" }),
-      );
-    } finally {
-      release();
     }
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.next_page") }),
+    ).toBeNull();
   },
 );
 
 it("keeps every built-in tool available without OEM packages and places curtain after timer", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
-  render(<TeachingTools api={emptyApi()} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-  );
+  await render(<TeachingTools api={emptyApi()} />);
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
   expect(classroomCommands.has("tools.factory")).toBe(true);
   for (const label of [
     "split_screen",
@@ -206,26 +132,23 @@ it("keeps every built-in tool available without OEM packages and places curtain 
       }),
     ).toBeEnabled();
   }
+  const timer = screen.getByRole("button", {
+    name: t("fcboard.open_name", { name: t("fcboard.timer") }),
+  });
+  const curtain = screen.getByRole("button", {
+    name: t("fcboard.open_name", { name: t("fcboard.curtain") }),
+  });
   expect(
-    screen.getByRole("button", {
-      name: t("fcboard.open_name", { name: t("fcboard.timer") }),
-    }),
-  ).toHaveStyle({ order: "9" });
-  expect(
-    screen.getByRole("button", {
-      name: t("fcboard.open_name", { name: t("fcboard.curtain") }),
-    }),
-  ).toHaveStyle({ order: "10" });
+    timer.compareDocumentPosition(curtain) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 });
 
 it("uses one internal transfer entry even when a factory transfer application is available", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   const invoke = vi.fn();
   const release = classroomCommands.register("ui.invoke", "@internal", invoke);
-  const view = render(<TeachingTools api={emptyApi()} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-  );
+  const view = await render(<TeachingTools api={emptyApi()} />);
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
   await waitFor(() =>
     expect(screen.queryByRole("status")).not.toBeInTheDocument(),
   );
@@ -263,16 +186,11 @@ it.each([
       "@internal",
       invoke,
     );
-    const view = render(<TeachingTools api={emptyApi()} />);
+    const view = await render(<TeachingTools api={emptyApi()} />);
     try {
       fireEvent.click(
-        screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
+        screen.getByRole("button", { name: t("fcboard.toolbox") }),
       );
-      if (label !== "file_transfer") {
-        fireEvent.click(
-          screen.getByRole("button", { name: t("fcboard.next_page") }),
-        );
-      }
       if (label === "ai_questions") {
         expect(
           screen.getAllByRole("button", { name: t("fcboard.ai_questions") }),
@@ -288,7 +206,7 @@ it.each([
         expect(invoke).toHaveBeenCalledWith({ command, origin: "tools" }),
       );
       expect(
-        screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+        screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
       ).not.toBeInTheDocument();
     } finally {
       view.unmount();
@@ -297,38 +215,27 @@ it.each([
   },
 );
 
-it("keeps original tools on the first page, exposes additions with dots, and toggles closed on another toolbar tap", () => {
-  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
-  render(<TeachingTools api={emptyApi()} />);
-  const trigger = screen.getByRole("button", {
-    name: t("fcboard.teaching_tools"),
-  });
-  fireEvent.pointerDown(trigger);
+it("shows all tools together and toggles the unified toolbox closed", async () => {
+  await render(<TeachingTools api={emptyApi()} />);
+  const trigger = screen.getByRole("button", { name: t("fcboard.toolbox") });
   fireEvent.click(trigger);
   expect(
     screen.getByRole("button", {
       name: t("fcboard.insert_name", { name: t("fcboard.ruler") }),
     }),
-  ).toBeInTheDocument();
-  expect(
-    screen.queryByRole("button", { name: t("fcboard.ai_summary") }),
-  ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.next_page") }));
+  ).toBeVisible();
   expect(
     screen.getByRole("button", { name: t("fcboard.ai_summary") }),
-  ).toBeInTheDocument();
-  fireEvent.pointerDown(trigger);
+  ).toBeVisible();
   fireEvent.click(trigger);
   expect(
-    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
   ).toBeNull();
   fireEvent.click(trigger);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  fireEvent.click(document.body);
   expect(
-    screen.getByRole("button", { name: t("fcboard.previous_page") }),
-  ).toHaveAttribute("aria-pressed", "true");
-  fireEvent.pointerDown(document.body);
-  expect(
-    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
   ).toBeNull();
 });
 
@@ -341,19 +248,17 @@ it("closes the tool picker with the toolbar and allows the AI to show it again",
     change = () => callback([], state, {});
     return () => {};
   });
-  render(<TeachingTools api={api} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.teaching_tools") }),
-  );
+  await render(<TeachingTools api={api} />);
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
   expect(
-    screen.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
   ).toBeInTheDocument();
   act(() => {
     state.toolbarHidden = true;
     change();
   });
   expect(
-    screen.queryByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
   ).not.toBeInTheDocument();
   await act(async () => {
     await classroomCommands.execute({ name: "tools.open" });
@@ -362,7 +267,7 @@ it("closes the tool picker with the toolbar and allows the AI to show it again",
     appState: { toolbarHidden: false },
   });
   expect(
-    screen.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
   ).toBeInTheDocument();
 });
 
@@ -387,7 +292,7 @@ it("executes one AI request that inserts, configures and starts a timer before R
       }
     },
   } as unknown as FcboardImperativeAPI;
-  render(<TeachingTools api={api} />);
+  await render(<TeachingTools api={api} />);
   await act(async () => {
     await classroomCommands.execute({
       name: "tools.insert",

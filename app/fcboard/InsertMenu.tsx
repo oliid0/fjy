@@ -1,5 +1,5 @@
 import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { ToolbarExtras } from "@fcboard/fcboard";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
@@ -516,6 +516,32 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       setBusy(false);
     }
   };
+  const insertionButton = (kind: MenuKind) => (
+    <button
+      data-close-insert
+      type="button"
+      disabled={
+        busy ||
+        (kind === "signal" && (loading || !available.includes("signal")))
+      }
+      title={
+        kind === "signal" && !available.includes("signal")
+          ? t("fcboard.no_signal_app_is_available_on_this_display")
+          : t(`fcboard.${names[kind]}`)
+      }
+      onClick={() =>
+        void run(() =>
+          classroomCommands.execute({
+            name: "insert.open",
+            args: { kind },
+          }),
+        )
+      }
+    >
+      <FactoryIcon name={kind} />
+      <span>{t(`fcboard.${names[kind]}`)}</span>
+    </button>
+  );
   return (
     <>
       {placing && (
@@ -528,33 +554,14 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       )}
       <ToolbarExtras placement="insert">
         {(Object.keys(names) as MenuKind[]).map((kind) => (
-          <button
-            key={kind}
-            data-close-insert
-            type="button"
-            disabled={
-              busy ||
-              (kind === "signal" && (loading || !available.includes("signal")))
-            }
-            title={
-              kind === "signal" && !available.includes("signal")
-                ? t("fcboard.no_signal_app_is_available_on_this_display")
-                : t(`fcboard.${names[kind]}`)
-            }
-            onClick={() =>
-              void run(() =>
-                classroomCommands.execute({
-                  name: "insert.open",
-                  args: { kind },
-                }),
-              )
-            }
-          >
-            <FactoryIcon name={kind} />
-            <span>{t(`fcboard.${names[kind]}`)}</span>
-          </button>
+          <React.Fragment key={kind}>{insertionButton(kind)}</React.Fragment>
         ))}
       </ToolbarExtras>
+      {(Object.keys(names) as MenuKind[]).map((kind) => (
+        <ToolbarExtras key={kind} toolId={kind}>
+          {insertionButton(kind)}
+        </ToolbarExtras>
+      ))}
       <TransientMessage
         message={error}
         role="alert"

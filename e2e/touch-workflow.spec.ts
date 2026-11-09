@@ -412,7 +412,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await page.goto("/");
   const toolbar = page.getByRole("toolbar", { name: "白板工具栏" });
   await expect(toolbar).toBeVisible();
-  for (const name of ["画笔", "橡皮", "选择", "插入"]) {
+  for (const name of ["画笔", "橡皮", "选择", "工具箱"]) {
     await expect(
       toolbar.getByRole("button", { name, exact: true }),
     ).toBeVisible();
@@ -429,7 +429,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),
   ).toHaveCount(0);
-  await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+  await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
   await page.getByRole("button", { name: "图形", exact: true }).click();
   const shapes = page.locator(".fc-factory-shape-grid");
   await expect(shapes.getByRole("button")).toHaveCount(20);
@@ -476,21 +476,21 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     .getByRole("button", { name: "显示工具栏", exact: true })
     .click();
   await expect(menu).toBeVisible();
-  await toolbar.getByRole("button", { name: "教学工具", exact: true }).click();
+  await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: "教学工具", exact: true }),
+    page.getByRole("dialog", { name: "工具箱", exact: true }),
   ).toBeVisible();
   await toolbar
     .getByRole("button", { name: "隐藏工具栏", exact: true })
     .click();
   await expect(
-    page.getByRole("dialog", { name: "教学工具", exact: true }),
+    page.getByRole("dialog", { name: "工具箱", exact: true }),
   ).toHaveCount(0);
   await toolbar
     .getByRole("button", { name: "显示工具栏", exact: true })
     .click();
   await expect(
-    page.getByRole("dialog", { name: "教学工具", exact: true }),
+    page.getByRole("dialog", { name: "工具箱", exact: true }),
   ).toHaveCount(0);
   await pen.click();
   await pen.click();

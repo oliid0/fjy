@@ -6,19 +6,20 @@ for (const width of [390, 800, 1920]) {
   }, info) => {
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/");
-    await page.getByRole("button", { name: "教学工具", exact: true }).click();
+    await page.getByRole("button", { name: "工具箱", exact: true }).click();
     const group = page.getByRole("group", { name: "大屏工具", exact: true });
     await expect(group.getByRole("button")).toHaveCount(6);
     await expect(
-      page.getByRole("button", { name: "快传", exact: true }),
+      page
+        .getByRole("dialog", { name: "工具箱", exact: true })
+        .getByRole("button", { name: "快传", exact: true }),
     ).toBeVisible();
     await expect(
       group.getByRole("button", { name: "打开快传", exact: true }),
     ).toHaveCount(0);
-    // The semantic group uses display:contents so factory and built-in controls
-    // share the original three-column grid. Measure the rendered grid and buttons.
+    // All original controls share the merged toolbox grid.
     const { box, controls } = await group.evaluate((element) => {
-      const grid = element.closest(".fc-tools-grid");
+      const grid = element.closest(".fc-insert-grid");
       if (!grid) {
         throw new Error("Factory tools are outside their rendered grid");
       }
@@ -60,13 +61,13 @@ for (const width of [390, 800, 1920]) {
     await frame.locator('button[data-key="Enter"]').click();
     await expect(frame.locator("#result-display")).toHaveText("5");
     await expect(
-      page.getByRole("dialog", { name: "教学工具" }),
+      page.getByRole("dialog", { name: "工具箱" }),
     ).not.toBeVisible();
     await page
       .getByRole("dialog", { name: "计算器", exact: true })
       .getByRole("button", { name: "关闭", exact: true })
       .click();
-    await page.getByRole("button", { name: "教学工具", exact: true }).click();
+    await page.getByRole("button", { name: "工具箱", exact: true }).click();
     await group
       .getByRole("button", { name: "打开计时器", exact: true })
       .click();

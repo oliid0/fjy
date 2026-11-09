@@ -115,6 +115,45 @@ const setup = async (
   };
 };
 
+it("opens with exactly the pages selected in the board list and rejects stale page IDs", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+  vi.mocked(Classroom.stopShare).mockResolvedValue(undefined);
+  const stop = classroomCommands.register("board.pages", "@internal", () => ({
+    active: "first",
+    boards: [
+      { id: "first", name: "first", elements: [], files: {}, view: {} },
+      { id: "second", name: "second", elements: [], files: {}, view: {} },
+    ],
+  }));
+  const view = render(<BoardShare />);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "board.share",
+        args: { ids: ["second"] },
+      });
+    });
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes[0]).not.toBeChecked();
+    expect(boxes[1]).toBeChecked();
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "board.share",
+        args: { ids: ["missing"] },
+      });
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      t("fcboard.select_1_to_20_pages"),
+    );
+    expect(
+      screen.getByRole("button", { name: t("buttons.confirm") }),
+    ).toBeDisabled();
+  } finally {
+    view.unmount();
+    stop();
+  }
+});
+
 it("sends selected pages through the authenticated internal mailbox and reports real provider acceptance", async () => {
   vi.mocked(exportToBlob).mockResolvedValue(
     new Blob(["page"], { type: "image/png" }),

@@ -105,13 +105,13 @@ for (const width of [390, 1920]) {
     await expect(slider).toHaveValue(changed);
   });
 
-  test(`native touch swipes tool pages and preserves the next tool tap at ${width}`, async ({
+  test(`native touch keeps every tool together and preserves the next tool tap at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await page.getByRole("button", { name: "教学工具", exact: true }).click();
-    const menu = page.getByRole("dialog", { name: "教学工具", exact: true });
+    await page.getByRole("button", { name: "工具箱", exact: true }).click();
+    const menu = page.getByRole("dialog", { name: "工具箱", exact: true });
     const transfer = await menu
       .getByRole("button", { name: "快传", exact: true })
       .boundingBox();
@@ -122,8 +122,8 @@ for (const width of [390, 1920]) {
     await dragTouch(page, from, { x: from.x - 70, y: from.y + 2 });
     await expect(menu).toBeVisible();
     await expect(
-      menu.getByRole("button", { name: "下一页", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+      menu.getByRole("button", { name: "录制", exact: true }),
+    ).toBeVisible();
     const recording = await menu
       .getByRole("button", { name: "录制", exact: true })
       .boundingBox();
@@ -133,8 +133,8 @@ for (const width of [390, 1920]) {
     };
     await dragTouch(page, back, { x: back.x + 70, y: back.y + 2 });
     await expect(
-      menu.getByRole("button", { name: "上一页", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+      menu.getByRole("button", { name: "插入直尺", exact: true }),
+    ).toBeVisible();
     await expect(page.locator(".fc-recording-dialog")).toHaveCount(0);
     await menu.getByRole("button", { name: "插入直尺", exact: true }).tap();
     await expect(menu).toBeHidden();
@@ -157,10 +157,10 @@ for (const width of [390, 1920]) {
       ["setSquare", "三角板"],
     ]) {
       await toolbar
-        .getByRole("button", { name: "教学工具", exact: true })
+        .getByRole("button", { name: "工具箱", exact: true })
         .click();
       await page
-        .getByRole("dialog", { name: "教学工具", exact: true })
+        .getByRole("dialog", { name: "工具箱", exact: true })
         .getByRole("button", { name: `插入${label}`, exact: true })
         .click();
       const current = async () =>
@@ -245,7 +245,7 @@ for (const width of [390, 1920]) {
       name: "白板工具栏",
       exact: true,
     });
-    await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     await page.getByRole("button", { name: "表格", exact: true }).click();
     await page
       .getByRole("dialog", { name: "表格", exact: true })
@@ -314,9 +314,9 @@ for (const width of [390, 1920]) {
     });
     await page.goto("/");
     const openTool = async (name: string) => {
-      await page.getByRole("button", { name: "教学工具", exact: true }).click();
+      await page.getByRole("button", { name: "工具箱", exact: true }).click();
       await page
-        .getByRole("dialog", { name: "教学工具", exact: true })
+        .getByRole("dialog", { name: "工具箱", exact: true })
         .getByRole("button", { name: `打开${name}`, exact: true })
         .click();
     };
@@ -334,7 +334,7 @@ for (const width of [390, 1920]) {
     await expect(panes).toHaveCount(3);
     await expect(panes.first()).toHaveCSS(
       "background-color",
-      "rgb(92, 124, 98)",
+      "rgb(38, 55, 49)",
     );
     const first = await panes.first().boundingBox();
     await dragTouch(
@@ -355,10 +355,10 @@ for (const width of [390, 1920]) {
     await expect(board.locator("header")).toHaveCount(0);
     await expect(
       board.getByRole("button", { name: "关闭", exact: true }),
-    ).toHaveCount(2);
+    ).toHaveCount(1);
     await expect(board.locator(".fc-split-bottom").first()).toHaveCSS(
       "height",
-      "45px",
+      "52px",
     );
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),
@@ -445,9 +445,9 @@ for (const width of [390, 1920]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await page.getByRole("button", { name: "教学工具", exact: true }).click();
+    await page.getByRole("button", { name: "工具箱", exact: true }).click();
     await page
-      .getByRole("dialog", { name: "教学工具", exact: true })
+      .getByRole("dialog", { name: "工具箱", exact: true })
       .getByRole("button", { name: "打开聚光灯", exact: true })
       .click();
     const spotlight = page.getByRole("region", { name: "聚光灯", exact: true });
@@ -479,3 +479,82 @@ for (const width of [390, 1920]) {
     await expect(spotlight).toHaveCount(0);
   });
 }
+
+test("touch toolbar customization persists and board ordering confirms or cancels before selected-page sharing", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
+  await page.getByTestId("main-menu-trigger").click();
+  await page.getByRole("menuitem", { name: "设置", exact: true }).click();
+  const settings = page.locator(".fc-settings-dialog");
+  await settings
+    .getByRole("button", { name: "工具栏设置", exact: true })
+    .click();
+  const tile = settings.locator('[data-tool-id="mindmap"]');
+  const source = (await tile.boundingBox())!;
+  const destination = (await settings
+    .locator('[data-toolbar-zone="selected"]')
+    .boundingBox())!;
+  await dragTouch(
+    page,
+    { x: source.x + source.width / 2, y: source.y + source.height / 2 },
+    {
+      x: destination.x + destination.width - 12,
+      y: destination.y + destination.height - 12,
+    },
+  );
+  await expect(
+    page.locator('.fc-drawing-tools [data-toolbar-item="mindmap"]'),
+  ).toHaveCount(1);
+  await settings.press("Escape");
+  await page.reload();
+  await expect(
+    page.locator('.fc-drawing-tools [data-toolbar-item="mindmap"]'),
+  ).toHaveCount(1);
+  for (let index = 0; index < 2; index++) {
+    const add = page.getByRole("button", { name: "新建白板", exact: true });
+    await expect(add).toBeEnabled();
+    await add.click();
+    await expect(page.locator(".fc-board-count")).toContainText(
+      `${index + 2} / ${index + 2}`,
+    );
+  }
+  await page.locator("[data-board-switcher]").click();
+  const list = page.locator(".fc-board-picker");
+  const ids = () =>
+    list
+      .locator("[data-board-id]")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => (node as HTMLElement).dataset.boardId),
+      );
+  const before = await ids();
+  const reorder = async () => {
+    const handle = (await list.locator(".fc-board-drag").last().boundingBox())!;
+    const target = (await list
+      .locator("[data-board-id]")
+      .first()
+      .boundingBox())!;
+    await dragTouch(
+      page,
+      { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 },
+      { x: target.x + target.width / 2, y: target.y + target.height / 2 },
+    );
+  };
+  await reorder();
+  await expect.poll(ids).not.toEqual(before);
+  await list.getByRole("button", { name: "取消", exact: true }).click();
+  expect(await ids()).toEqual(before);
+  await reorder();
+  await list.getByRole("button", { name: "确定", exact: true }).click();
+  await expect(page.locator(".fc-board-count")).toContainText("1 / 3");
+  await list.getByRole("button", { name: "分享选中白板", exact: true }).click();
+  const sharing = page.locator(".fc-share-dialog");
+  await expect(sharing).toBeVisible();
+  await expect(sharing.locator('input[type="checkbox"]:checked')).toHaveCount(
+    1,
+  );
+});

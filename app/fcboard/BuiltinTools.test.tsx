@@ -233,7 +233,7 @@ it("opens original split settings first, applies a confirmed layout/background, 
   expect(
     (document.querySelector(".fc-split-pane canvas") as HTMLElement).style
       .background,
-  ).toBe("rgb(92, 124, 98)");
+  ).toBe("rgb(38, 55, 49)");
   await command("tools.split", { configure: true });
   const reopened = screen.getByRole("dialog", { name: title });
   fireEvent.click(within(reopened).getByRole("radio", { name: "2" }));
@@ -291,19 +291,25 @@ it("keeps independent split-pane ink through layout changes and erases only the 
   const first = screen.getByLabelText(t("fcboard.split_pane", { number: 1 }));
   const context = canvas()[0].getContext("2d")!;
   fireEvent.click(
-    within(first).getByRole("button", { name: t("fcboard.split_red") }),
+    within(first).getByRole("button", { name: t("fcboard.split_orange") }),
   );
   pointer(canvas()[0], "pointerdown", 5, 30);
   pointer(canvas()[0], "pointermove", 5, 100);
   pointer(canvas()[0], "pointerup", 5, 100);
-  expect(context.strokeStyle).toBe("#ff0000");
-  expect(context.lineWidth).toBe(2.5 * (window.devicePixelRatio || 1));
-  fireEvent.click(
-    within(first).getByRole("button", {
-      name: t("fcboard.split_large_eraser"),
+  expect(context.strokeStyle).toBe("#e95504");
+  expect(context.lineWidth).toBe(2.01 * (window.devicePixelRatio || 1));
+  fireEvent(
+    canvas()[0],
+    Object.assign(new Event("pointerdown", { bubbles: true }), {
+      pointerId: 6,
+      clientX: 40,
+      clientY: 20,
+      button: 0,
+      pointerType: "touch",
+      width: 180,
+      height: 180,
     }),
   );
-  pointer(canvas()[0], "pointerdown", 6, 40);
   pointer(canvas()[0], "pointerup", 6, 40);
   expect(context.globalCompositeOperation).toBe("destination-out");
   expect(context.lineCap).toBe("square");
@@ -342,7 +348,7 @@ it("uses the original edge exit controls and exports all actual panes through th
   expect(board.querySelector("header")).toBeNull();
   expect(
     within(board).getAllByRole("button", { name: t("buttons.close") }),
-  ).toHaveLength(2);
+  ).toHaveLength(1);
   expect(
     within(board).queryByRole("button", {
       name: t("fcboard.split_small_eraser"),
@@ -409,7 +415,7 @@ it("uses the original edge exit controls and exports all actual panes through th
     panes: [{ strokes: 1 }, { strokes: 0 }, { strokes: 0 }, { strokes: 0 }],
   });
   fireEvent.click(
-    within(board).getAllByRole("button", { name: t("buttons.close") })[1],
+    within(board).getAllByRole("button", { name: t("buttons.close") })[0],
   );
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.exit_without_saving") }),

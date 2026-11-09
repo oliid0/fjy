@@ -736,6 +736,7 @@ const LayerUI = ({
           <ExitViewModeButton actionManager={actionManager} />
         )}
         <div className="fc-toolbar-side fc-toolbar-trailing">
+          <tunnels.ToolbarActionsTunnel.Out />
           <tunnels.FooterCenterTunnel.Out />
           {renderTopRightUI?.(editorInterface.formFactor === "phone", appState)}
           <ToolButton

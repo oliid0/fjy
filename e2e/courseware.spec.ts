@@ -142,7 +142,7 @@ test("new boards preserve previous work and offer the original teaching tools", 
   await page
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
-  await page.getByRole("button", { name: "教学工具", exact: true }).click();
+  await page.getByRole("button", { name: "工具箱", exact: true }).click();
   for (const name of ["直尺", "量角器", "圆规", "三角板"]) {
     await expect(
       page.getByRole("button", { name: `插入${name}`, exact: true }),
@@ -151,13 +151,11 @@ test("new boards preserve previous work and offer the original teaching tools", 
   await expect(
     page.getByRole("button", { name: "打开计时器", exact: true }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "下一页", exact: true }).click();
   for (const name of ["骰子", "随机抽取", "单摆", "抛体运动"]) {
     await expect(
       page.getByRole("button", { name: `插入${name}`, exact: true }),
     ).toHaveCount(0);
   }
-  await page.getByRole("button", { name: "上一页", exact: true }).click();
   await page.getByRole("button", { name: "插入直尺", exact: true }).click();
   await expect(page.locator("[data-gizmo]")).toHaveCount(1);
   await expect(page.locator("[data-gizmo] rect").first()).toBeVisible();

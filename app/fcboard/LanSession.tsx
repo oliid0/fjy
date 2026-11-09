@@ -23,6 +23,7 @@ import closeIcon from "./factory-setting-icons/close.svg";
 import "./LiveShare.scss";
 
 import { classroomCommands } from "./commands";
+import { collaborationAddress } from "./collaborationAddress";
 
 import type { ScenePacket } from "./sceneSync";
 
@@ -47,6 +48,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   const native = Capacitor.isNativePlatform();
   const cloud = useRef<CloudShare | undefined>(undefined);
   const starting = useRef<AbortController | undefined>(undefined);
+  const guestRequest = useRef<AbortController | undefined>(undefined);
   const lifetime = useRef<AbortController | undefined>(undefined);
   const protection = useShareProtection((password) =>
     cloud.current
@@ -55,7 +57,11 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   );
   const resetProtection = protection.reset;
   const [panel, setPanel] = useState<"collab" | null>(null);
-  const [view, setView] = useState<"choose" | "cloud">("choose");
+  const [view, setView] = useState<"entry" | "choose" | "cloud" | "join">(
+    "entry",
+  );
+  const [joinInput, setJoinInput] = useState("");
+  const [joinAddress, setJoinAddress] = useState<string>();
   const [mode, setMode] = useState<"local" | "cloud" | undefined>(undefined);
   const [config, setConfig] = useState(loadCloudShare);
   const cloudConfig = useRef(config);
@@ -78,6 +84,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
 
   const leave = useCallback(async () => {
     starting.current?.abort();
+    guestRequest.current?.abort();
     if (cloud.current) {
       await cloud.current.end();
       cloud.current = undefined;
@@ -97,7 +104,8 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
     hosted.current = false;
     setSharing(false);
     setMode(undefined);
-    setView("choose");
+    setView("entry");
+    setJoinAddress(undefined);
     setUrls([]);
     setConnection("");
     setPeers(0);
@@ -343,12 +351,15 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   }, [api, native, leave]);
 
   useEffect(() => {
-    const token = /^#lan=([a-f0-9]{32})$/.exec(location.hash)?.[1];
-    if (!token || native) {
+    const destination = new URL(joinAddress || location.href);
+    const token = /^#lan=([a-f0-9]{32})$/.exec(destination.hash)?.[1];
+    if (!token || (native && !joinAddress)) {
       return;
     }
     let cancelled = false;
     let started = false;
+    const request = new AbortController();
+    guestRequest.current = request;
     const boot = async () => {
       const boards = classroomCommands.read("boards") as
         | { active: string; boards: { id: string }[] }
@@ -362,19 +373,20 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
         return;
       }
       started = true;
+      setBusy(true);
       setConnection("joining");
       try {
-        const key = `fcboard-lan-${location.host}-${token}`;
+        const key = `fcboard-lan-${destination.host}-${token}`;
         const existing = sessionStorage.getItem(key);
         if (existing && boards.boards.some((board) => board.id === existing)) {
           await classroomCommands.execute({
             name: "board.switch",
-            args: { id: existing },
+            args: { id: existing, signal: request.signal },
           });
         } else {
           await classroomCommands.execute({
             name: "board.new",
-            args: { name: t("fcboard.shared_board") },
+            args: { name: t("fcboard.shared_board"), signal: request.signal },
           });
         }
         const current = classroomCommands.read("boards") as { active: string };
@@ -406,8 +418,8 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
           if (!joined.current || cancelled) {
             return;
           }
-          const address = new URL(`board/${token}`, location.href);
-          address.protocol = location.protocol === "https:" ? "wss:" : "ws:";
+          const address = new URL(`board/${token}`, destination);
+          address.protocol = destination.protocol === "https:" ? "wss:" : "ws:";
           address.hash = "";
           const transport = new WebSocket(address.href);
           socket.current = transport;
@@ -495,20 +507,38 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
         };
         connect();
       } catch (error) {
-        setError(failureMessage(error));
+        if (!cancelled && !request.signal.aborted) {
+          setError(failureMessage(error));
+          setConnection("");
+          // Clear the failed destination so submitting the same code can retry.
+          setJoinAddress(undefined);
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+        }
       }
     };
     const watch = classroomCommands.watch("boards", () => void boot());
     void boot();
     return () => {
       cancelled = true;
+      request.abort();
+      if (guestRequest.current === request) {
+        guestRequest.current = undefined;
+      }
       watch();
     };
-  }, [api, native]);
+  }, [api, native, joinAddress]);
 
   const dismiss = () => {
     if (starting.current) {
       starting.current.abort();
+    }
+    if (joinAddress && !sharing) {
+      guestRequest.current?.abort();
+      setJoinAddress(undefined);
+      setBusy(false);
     }
     setPanel(null);
     setError("");
@@ -528,7 +558,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
             throw new Error(t("fcboard.this_panel_does_not_exist"));
           }
           if (!sharing) {
-            setView("choose");
+            setView("entry");
           }
           setPanel("collab");
           setError("");
@@ -593,6 +623,12 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
     ];
     return () => registrations.forEach((stop) => stop());
   });
+  let joinCandidate = "";
+  try {
+    joinCandidate = collaborationAddress(joinInput, config.endpoint);
+  } catch {
+    /* Keep Join disabled until valid. */
+  }
   return (
     <>
       {(panel || error) && (
@@ -600,7 +636,9 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
           centered
           onDismiss={dismiss}
           className={`fc-network-panel fc-surface ${
-            !sharing && !authentication && view === "choose"
+            !sharing &&
+            !authentication &&
+            (view === "choose" || view === "entry")
               ? "fc-live-share-picker"
               : sharing && !!urls.length
               ? "fc-share-qr-dialog"
@@ -681,12 +719,79 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
                       protection={protection}
                     />
                   )}
+                  {urls[0] &&
+                    /^#lan=[a-f0-9]{32}$/.test(new URL(urls[0]).hash) && (
+                      <p className="fc-collab-room">
+                        {t("fcboard.collab_room", {
+                          code: new URL(urls[0]).hash.slice(5),
+                        })}
+                      </p>
+                    )}
                   <button disabled={busy} onClick={() => void run(leave)}>
                     {hosted.current || cloud.current
                       ? t("fcboard.end_collaboration")
                       : t("fcboard.leave_collaboration")}
                   </button>
                 </>
+              ) : view === "entry" ? (
+                <div className="fc-collab-entry">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setView("choose")}
+                  >
+                    {t("fcboard.collab_create")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setJoinInput("");
+                      setView("join");
+                    }}
+                  >
+                    {t("fcboard.collab_join")}
+                  </button>
+                </div>
+              ) : view === "join" ? (
+                <form
+                  className="fc-live-share-cloud"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (joinCandidate && !busy && !sharing) {
+                      setError("");
+                      setConnection("joining");
+                      setJoinAddress(joinCandidate);
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="fc-live-share-back"
+                    onClick={() => setView("entry")}
+                  >
+                    {t("fcboard.back")}
+                  </button>
+                  <label>
+                    {t("fcboard.collab_code")}
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      maxLength={2048}
+                      value={joinInput}
+                      onChange={(event) => setJoinInput(event.target.value)}
+                    />
+                  </label>
+                  <p>{t("fcboard.collab_join_hint")}</p>
+                  <button type="submit" disabled={busy || !joinCandidate}>
+                    {t("fcboard.collab_join_action")}
+                  </button>
+                  {connection === "joining" && (
+                    <p role="status">{t("fcboard.joining")}</p>
+                  )}
+                </form>
               ) : view === "cloud" ? (
                 <form
                   className="fc-live-share-cloud"

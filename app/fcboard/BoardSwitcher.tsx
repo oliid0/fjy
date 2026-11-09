@@ -23,6 +23,8 @@ import { BoardOpen } from "./BoardOpen";
 import { readCloudBzd } from "./cloudTransfers";
 import { loadCloudShare } from "./cloudShare";
 
+import type { PointerEvent } from "react";
+
 export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const leavePresentation = async (source?: AbortSignal) => {
@@ -55,6 +57,13 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [order, setOrder] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [dragging, setDragging] = useState<string>();
+  const drag = useRef<
+    { id: string; pointer: number; before: string[] } | undefined
+  >(undefined);
   const panel = useRef<HTMLElement>(null);
   const panelStyle = useAnchoredPanel(
     panel,
@@ -178,6 +187,24 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
         controller.flush(),
       ),
       classroomCommands.register(
+        "board.reorder",
+        "按args.ids完整白板ID列表调整顺序，保留当前白板与笔迹",
+        (args) => {
+          if (
+            !Array.isArray(args.ids) ||
+            args.ids.some((id) => typeof id !== "string")
+          ) {
+            throw new Error(t("fcboard.board_reorder_invalid"));
+          }
+          return controller.reorder(
+            args.ids,
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : classroomCommands.interactionSource,
+          );
+        },
+      ),
+      classroomCommands.register(
         "board.export",
         "将全部白板保存为原厂 BZD 文件。显示实际文件保存位置选择；返回 saved=false 表示取消，不能声称成功。",
         async (args) => {
@@ -265,6 +292,9 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
     if (!open) {
       return;
     }
+    setEditing(false);
+    setOrder(book.current?.value.boards.map((board) => board.id) || []);
+    setChosen(book.current?.value.active ? [book.current.value.active] : []);
     panel.current
       ?.querySelector<HTMLButtonElement>(
         ".fc-board-select[aria-pressed='true']",
@@ -304,6 +334,59 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
     )!;
     await saveBoardFile([board], board.name);
   };
+  const beginEdit = () => {
+    setOrder(value.boards.map((board) => board.id));
+    setChosen([value.active]);
+    setEditing(true);
+  };
+  const move = (id: string, target: string) => {
+    setOrder((previous) => {
+      const next = [...previous];
+      const from = next.indexOf(id);
+      const to = next.indexOf(target);
+      if (from < 0 || to < 0 || from === to) {
+        return previous;
+      }
+      next.splice(from, 1);
+      next.splice(to, 0, id);
+      return next;
+    });
+  };
+  const dragMove = (event: PointerEvent) => {
+    if (drag.current?.pointer !== event.pointerId) {
+      return;
+    }
+    const card = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-board-id]");
+    if (card?.dataset.boardId) {
+      move(drag.current.id, card.dataset.boardId);
+    }
+    // Keep long lists reachable while a contact is captured by the handle.
+    const list = panel.current;
+    const bounds = list?.getBoundingClientRect();
+    if (list && bounds) {
+      if (event.clientY < bounds.top + 48) {
+        list.scrollTop -= 16;
+      }
+      if (event.clientY > bounds.bottom - 72) {
+        list.scrollTop += 16;
+      }
+    }
+  };
+  const sharePages = (command: "board.share" | "board.saveFile") =>
+    void run(async () => {
+      await classroomCommands.execute({
+        name: command,
+        args: { ids: editing ? chosen : [value.active] },
+      });
+      setOpen(false);
+    });
+  const visibleBoards = editing
+    ? order
+        .map((id) => value.boards.find((board) => board.id === id))
+        .filter((board): board is NonNullable<typeof board> => !!board)
+    : value.boards;
   return (
     <>
       <PageNavigation />
@@ -416,13 +499,88 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
           </header>
           <TransientMessage message={error} role="alert" />
           <div className="fc-board-list">
-            {value.boards.map((board, index) => (
+            {visibleBoards.map((board, index) => (
               <div
                 key={board.id}
+                data-board-id={board.id}
                 className={`fc-board-card ${
                   board.id === value.active ? "is-active" : ""
                 }`}
               >
+                <button
+                  type="button"
+                  className="fc-board-drag"
+                  disabled={busy}
+                  aria-label={t("fcboard.board_drag_page", { page: index + 1 })}
+                  aria-pressed={dragging === board.id}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) {
+                      return;
+                    }
+                    if (!editing) {
+                      beginEdit();
+                    }
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    drag.current = {
+                      id: board.id,
+                      pointer: event.pointerId,
+                      before: editing
+                        ? [...order]
+                        : value.boards.map((page) => page.id),
+                    };
+                    setDragging(board.id);
+                  }}
+                  onPointerMove={dragMove}
+                  onPointerUp={() => {
+                    drag.current = undefined;
+                    setDragging(undefined);
+                  }}
+                  onPointerCancel={() => {
+                    if (drag.current) {
+                      setOrder(drag.current.before);
+                    }
+                    drag.current = undefined;
+                    setDragging(undefined);
+                  }}
+                  onKeyDown={(event) => {
+                    if (["ArrowUp", "ArrowDown"].includes(event.key)) {
+                      event.preventDefault();
+                      if (!editing) {
+                        beginEdit();
+                      }
+                      const next =
+                        visibleBoards[
+                          index + (event.key === "ArrowUp" ? -1 : 1)
+                        ];
+                      if (next) {
+                        move(board.id, next.id);
+                      }
+                    }
+                  }}
+                >
+                  ⠿
+                </button>
+                {editing && (
+                  <input
+                    className="fc-board-check"
+                    type="checkbox"
+                    aria-label={t("fcboard.board_select_page", {
+                      page: index + 1,
+                    })}
+                    checked={chosen.includes(board.id)}
+                    disabled={
+                      busy ||
+                      (!chosen.includes(board.id) && chosen.length >= 20)
+                    }
+                    onChange={(event) =>
+                      setChosen((previous) =>
+                        event.target.checked
+                          ? [...previous, board.id]
+                          : previous.filter((id) => id !== board.id),
+                      )
+                    }
+                  />
+                )}
                 <button
                   className="fc-board-select"
                   disabled={busy}
@@ -431,6 +589,16 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
                   })}
                   aria-pressed={board.id === value.active}
                   onClick={() => {
+                    if (editing) {
+                      setChosen((previous) =>
+                        previous.includes(board.id)
+                          ? previous.filter((id) => id !== board.id)
+                          : previous.length < 20
+                          ? [...previous, board.id]
+                          : previous,
+                      );
+                      return;
+                    }
                     void run(async (source) => {
                       await leavePresentation(source);
                       await book.current!.switch(board.id, source);
@@ -459,6 +627,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
                     page: index + 1,
                   })}
                   defaultValue={board.name}
+                  disabled={busy || editing}
                   key={`${board.id}:${board.name}`}
                   onBlur={(event) => {
                     if (event.target.value !== board.name) {
@@ -474,9 +643,10 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
                   }}
                 />
                 <button
+                  className="fc-board-delete"
                   aria-label={t("fcboard.discard_name", { name: board.name })}
                   title={t("fcboard.discard")}
-                  disabled={busy}
+                  disabled={busy || editing}
                   onClick={() => {
                     void run((source) =>
                       book.current!.discard(board.id, source),
@@ -488,7 +658,55 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
               </div>
             ))}
           </div>
+          {editing && <p>{t("fcboard.board_sort_hint")}</p>}
           <footer>
+            <button
+              type="button"
+              disabled={busy || (editing ? !chosen.length : !value.active)}
+              onClick={() => sharePages("board.share")}
+            >
+              <FactoryIcon name="qr" />
+              <span>{t("fcboard.share_selected")}</span>
+            </button>
+            <button
+              type="button"
+              disabled={busy || (editing ? !chosen.length : !value.active)}
+              onClick={() => sharePages("board.saveFile")}
+            >
+              <FactoryIcon name="save" />
+              <span>{t("fcboard.save_selected")}</span>
+            </button>
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(false);
+                    setDragging(undefined);
+                    drag.current = undefined;
+                  }}
+                >
+                  {t("buttons.cancel")}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async (source) => {
+                      await book.current!.reorder(order, source);
+                      setEditing(false);
+                    })
+                  }
+                >
+                  {t("buttons.confirm")}
+                </button>
+              </>
+            ) : (
+              <button type="button" disabled={busy} onClick={beginEdit}>
+                {t("fcboard.board_edit")}
+              </button>
+            )}
             <button
               disabled={busy || !value.active}
               onClick={() => {

@@ -366,6 +366,27 @@ export class BoardBook {
     this.restore(next.active, source);
     this.emit();
   }
+  async reorder(ids: readonly string[], source?: AbortSignal) {
+    source?.throwIfAborted();
+    await this.flush();
+    source?.throwIfAborted();
+    const boards = this.value.boards;
+    if (
+      ids.length !== boards.length ||
+      new Set(ids).size !== boards.length ||
+      ids.some((id) => !boards.some((board) => board.id === id))
+    ) {
+      throw new Error(t("fcboard.board_reorder_invalid"));
+    }
+    await this.commitWorkspace(
+      {
+        ...this.value,
+        boards: ids.map((id) => boards.find((board) => board.id === id)!),
+      },
+      source,
+    );
+    this.emit();
+  }
   async rename(id: string, name: string) {
     const trimmed = name.trim().slice(0, 80);
     if (!trimmed) {

@@ -23,9 +23,13 @@ import { adaptGizmo } from "./adaptiveGizmo";
 
 vi.mock("@fcboard/fcboard", async (original) => ({
   ...(await original<typeof import("@fcboard/fcboard")>()),
-  ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  ToolbarExtras: ({
+    children,
+    toolId,
+  }: {
+    children: React.ReactNode;
+    toolId?: string;
+  }) => (toolId ? null : <>{children}</>),
 }));
 
 const pointer = (
@@ -263,7 +267,9 @@ it("measures with the protractor needle and inserts the measured arc rather than
       name: `${t("toolBar.freedraw")} 3`,
     });
     pointer(draw, "pointerdown", 750, 320);
-    expect(tools.container.querySelector("polyline")).not.toBeNull();
+    expect(
+      tools.container.querySelector(".fc-factory-gizmos polyline"),
+    ).not.toBeNull();
     expect(draw.querySelector("image")?.getAttribute("href")).toContain(
       "draw_arc_down",
     );
@@ -271,7 +277,9 @@ it("measures with the protractor needle and inserts the measured arc rather than
       api.getSceneElements().some((element) => element.type === "freedraw"),
     ).toBe(false);
     pointer(draw, "pointercancel", 750, 320);
-    expect(tools.container.querySelector("polyline")).toBeNull();
+    expect(
+      tools.container.querySelector(".fc-factory-gizmos polyline"),
+    ).toBeNull();
     pointer(draw, "pointerdown", 750, 320);
     pointer(draw, "pointerup", 750, 320);
     // The browser's follow-up click must not insert the same arc twice.
@@ -327,9 +335,6 @@ it("opens both added native gizmos from the original toolbox page and draws a co
   try {
     const toolbar = within(tools.container);
     fireEvent.click(
-      toolbar.getByRole("button", { name: t("fcboard.teaching_tools") }),
-    );
-    fireEvent.click(
       toolbar.getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.compass") }),
       }),
@@ -361,9 +366,6 @@ it("opens both added native gizmos from the original toolbox page and draws a co
     expect(circle.points.length).toBeGreaterThanOrEqual(360);
     expect(circle.points.at(-1)![0]).toBeCloseTo(0);
     expect(circle.points.at(-1)![1]).toBeCloseTo(0);
-    fireEvent.click(
-      toolbar.getByRole("button", { name: t("fcboard.teaching_tools") }),
-    );
     fireEvent.click(
       toolbar.getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.set_square") }),

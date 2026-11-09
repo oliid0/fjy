@@ -46,9 +46,13 @@ import type { InkStroke } from "./documents";
 
 vi.mock("@fcboard/fcboard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@fcboard/fcboard")>()),
-  ToolbarExtras: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  ToolbarExtras: ({
+    children,
+    toolId,
+  }: {
+    children: React.ReactNode;
+    toolId?: string;
+  }) => (toolId ? null : <>{children}</>),
 }));
 vi.mock("./BoardSwitcher", () => ({ BoardSwitcher: () => null }));
 

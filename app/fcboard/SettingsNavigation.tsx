@@ -17,6 +17,7 @@ const sections = {
   language: "language",
   pen: "pen",
   touch: "factorySettings.threshold",
+  toolbar: "toolbar_settings",
   ai: "ai_and_speech_settings",
   models: "models_and_connection",
   recognition: "handwriting_and_insertion",
@@ -57,7 +58,7 @@ export const SettingsNavigation = ({
   const back = () => setSection(inAI ? "ai" : "home");
   const rows =
     section === "home"
-      ? ["touch", "background", "language", "ai"]
+      ? ["touch", "background", "language", "toolbar", "ai"]
       : section === "ai"
       ? aiPages
       : [];

@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
-import blackPen from "./assets/multiscreen/ic_black_pen.svg";
-import bluePen from "./assets/multiscreen/ic_blue_pen.svg";
-import redPen from "./assets/multiscreen/ic_red_pen.svg";
-import smallEraser from "./assets/multiscreen/ic_small_eraser.svg";
-import largeEraser from "./assets/multiscreen/ic_big_eraser.svg";
-import exitIcon from "./assets/multiscreen/ic_exit.svg";
+import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import { MaterialPanel } from "./MaterialPanel";
 
@@ -16,11 +11,12 @@ import { savePageFiles } from "./boardFile";
 type Point = [number, number];
 type Stroke = { points: Point[]; color: string; width: number; erase: boolean };
 type Pane = { strokes: Stroke[] };
-const colors = ["#000000", "#0000ff", "#ff0000"];
-const toolIcons = [blackPen, bluePen, redPen, smallEraser, largeEraser];
+// MultiScreenView.f12491g and the first three PenUtil.PenSize resources.
+const colors = ["#f3f3f3", "#000000", "#e95504", "#0079c2"];
+const penWidths = [1.34, 2.01, 2.68];
 const backgrounds = [
   { color: "#ffffff", label: "split_background_0" },
-  { color: "#5c7c62", label: "split_background_1" },
+  { color: "#263731", label: "split_background_1" },
   { color: "#cfaa29", label: "split_background_3" },
   { color: "#312e2e", label: "split_background_2" },
 ] as const;
@@ -77,23 +73,20 @@ const drawSegment = (
     context.stroke();
   }
 };
-/** MultiBar / MultiCanvas: equal independent panes, three pens, two erasers. */
+/** com.xbh.whiteboard MultiScreenView: independent ink, four colors, three sizes. */
 const SplitPane = ({
   model,
   index,
   background,
-  count,
-  onExit,
 }: {
   model: Pane;
   index: number;
   background: string;
-  count: number;
-  onExit: () => void;
 }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   const active = useRef(new Map<number, Stroke>());
   const [tool, setTool] = useState(0);
+  const [penSize, setPenSize] = useState(1);
   const redraw = useCallback(() => {
     const node = canvas.current!;
     node.getContext("2d")?.clearRect(0, 0, node.width, node.height);
@@ -173,10 +166,12 @@ const SplitPane = ({
           event.preventDefault();
           event.currentTarget.focus({ preventScroll: true });
           event.currentTarget.setPointerCapture?.(event.pointerId);
+          const contact = Math.max(event.width || 0, event.height || 0);
+          const erase = event.pointerType === "touch" && contact >= 36;
           const stroke: Stroke = {
-            color: colors[tool] || colors[0],
-            width: tool === 3 ? 120 : tool === 4 ? 180 : 2.5,
-            erase: tool > 2,
+            color: colors[tool],
+            width: erase ? Math.max(36, contact) : penWidths[penSize],
+            erase,
             points: [point(event.clientX, event.clientY)],
           };
           model.strokes.push(stroke);
@@ -227,50 +222,50 @@ const SplitPane = ({
         onLostPointerCapture={(event) => active.current.delete(event.pointerId)}
       />
       <div className="fc-split-bottom">
-        {index === 0 && (
-          <button
-            className="fc-split-exit"
-            type="button"
-            aria-label={t("buttons.close")}
-            onClick={onExit}
-          >
-            <img src={exitIcon} alt="" />
-          </button>
-        )}
         <div className="fc-split-penbar">
-          {(
-            [
-              "split_black",
-              "split_blue",
-              "split_red",
-              "split_small_eraser",
-              "split_large_eraser",
-            ] as const
-          ).map((label, value) => (
-            <button
-              type="button"
-              key={label}
-              aria-label={t(`fcboard.${label}`)}
-              aria-pressed={tool === value}
-              hidden={value === 3}
-              data-tool={value}
-              onClick={() => setTool(value)}
-              style={{ color: colors[value] }}
-            >
-              <img src={toolIcons[value]} alt="" draggable={false} />
-            </button>
-          ))}
-        </div>
-        {index === count - 1 && (
-          <button
-            className="fc-split-exit fc-split-exit-right"
-            type="button"
-            aria-label={t("buttons.close")}
-            onClick={onExit}
+          <div
+            className="fc-split-colors"
+            role="group"
+            aria-label={t("fcboard.split_pen_colors")}
           >
-            <img src={exitIcon} alt="" />
-          </button>
-        )}
+            {(
+              [
+                "split_white",
+                "split_black",
+                "split_orange",
+                "split_blue",
+              ] as const
+            ).map((label, value) => (
+              <button
+                type="button"
+                key={label}
+                aria-label={t(`fcboard.${label}`)}
+                aria-pressed={tool === value}
+                onClick={() => setTool(value)}
+              >
+                <span style={{ background: colors[value] }} />
+              </button>
+            ))}
+          </div>
+          <span className="fc-split-divider" />
+          <div
+            className="fc-split-widths"
+            role="group"
+            aria-label={t("fcboard.split_pen_widths")}
+          >
+            {penWidths.map((width, value) => (
+              <button
+                type="button"
+                key={width}
+                aria-label={t("fcboard.split_pen_size", { size: value + 1 })}
+                aria-pressed={penSize === value}
+                onClick={() => setPenSize(value)}
+              >
+                <span style={{ width: 6 + value * 4, height: 6 + value * 4 }} />
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -278,7 +273,7 @@ const SplitPane = ({
 export const SplitBoard = () => {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(2);
-  const [background, setBackground] = useState(0);
+  const [background, setBackground] = useState(1);
   const [draft, setDraft] = useState<{
     count: number;
     background: number;
@@ -309,9 +304,9 @@ export const SplitBoard = () => {
       context.fillStyle = backgrounds[background].color;
       context.fillRect(0, 0, canvas.width, canvas.height);
       let x = 0;
-      context.strokeStyle = "#000000";
-      context.lineWidth = 1.5 * (window.devicePixelRatio || 1);
-      context.setLineDash([5, 5]);
+      context.strokeStyle = "#fcfcfe";
+      context.lineWidth = 2 * (window.devicePixelRatio || 1);
+      context.setLineDash([]);
       for (const pane of panes) {
         context.drawImage(pane, x, 0);
         if (x) {
@@ -439,16 +434,22 @@ export const SplitBoard = () => {
               <SplitPane
                 key={i}
                 index={i}
-                count={count}
-                onExit={() => {
-                  setError("");
-                  setExiting(true);
-                }}
                 model={model}
                 background={backgrounds[background].color}
               />
             ))}
           </div>
+          <button
+            className="fc-split-exit"
+            type="button"
+            aria-label={t("buttons.close")}
+            onClick={() => {
+              setError("");
+              setExiting(true);
+            }}
+          >
+            <FactoryIcon name="splitExit" />
+          </button>
         </section>
       )}
       {draft && (

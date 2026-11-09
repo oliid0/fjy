@@ -674,12 +674,15 @@ describe("APK-style whiteboard ink", () => {
       screen.queryByLabelText(t("fcboard.eraser_settings")),
     ).not.toBeInTheDocument();
     expect(h.state.activeTool.type).toBe("eraser");
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.insert") }));
-    fireEvent.keyDown(screen.getByLabelText(t("fcboard.insert_tools")), {
-      key: "Escape",
-    });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
+    fireEvent.keyDown(
+      screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
+      {
+        key: "Escape",
+      },
+    );
     expect(
-      screen.queryByLabelText(t("fcboard.insert_tools")),
+      screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
     ).not.toBeInTheDocument();
     expect(h.state.activeTool.type).toBe("eraser");
   });

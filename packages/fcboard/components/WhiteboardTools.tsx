@@ -12,6 +12,7 @@ import { t, useI18n } from "../i18n";
 
 import { useUIAppState } from "../context/ui-appState";
 import { useTunnels } from "../context/tunnels";
+import { useToolbarItems } from "../toolbarPreferences";
 
 import { useFcboardContainer } from "./App";
 import { ToolButton } from "./ToolButton";
@@ -21,7 +22,7 @@ import { SHAPES } from "./shapes";
 
 import type { ShapesSwitcher } from "./Actions";
 
-/** Compact APK toolbar; all original insertion tools remain in the insertion popover. */
+/** Fixed drawing controls and one toolbox for all host insertion/teaching tools. */
 export const WhiteboardTools = ({
   app,
   activeTool,
@@ -33,6 +34,7 @@ export const WhiteboardTools = ({
 }) => {
   useI18n();
   const [open, setOpen] = React.useState(false);
+  const toolbarItems = useToolbarItems();
   const [eraserOpen, setEraserOpen] = React.useState(false);
   const [clearProgress, setClearProgress] = React.useState(0);
   const [popupGap, setPopupGap] = React.useState(16);
@@ -86,6 +88,29 @@ export const WhiteboardTools = ({
     window.addEventListener("fcboard:shape-draw", close);
     return () => window.removeEventListener("fcboard:shape-draw", close);
   }, []);
+  React.useEffect(() => {
+    const show = () => {
+      const anchor = container?.querySelector<HTMLElement>(
+        "[data-board-insert], .fc-drawing-tools",
+      );
+      if (anchor) {
+        setInsertAnchor(anchor);
+        updateGap(anchor);
+      }
+      setShapesOpen(false);
+      setOpen(true);
+    };
+    const hide = () => {
+      setOpen(false);
+      setShapesOpen(false);
+    };
+    window.addEventListener("fcboard:toolbox-open", show);
+    window.addEventListener("fcboard:toolbox-close", hide);
+    return () => {
+      window.removeEventListener("fcboard:toolbox-open", show);
+      window.removeEventListener("fcboard:toolbox-close", hide);
+    };
+  }, [container]);
   return (
     <>
       <ToolButton
@@ -303,21 +328,50 @@ export const WhiteboardTools = ({
           )
         }
       />
-      <ToolButton
-        type="button"
-        className="fc-board-tool"
-        icon={<FactoryIcon name="insert" />}
-        aria-label={t("fcboard.insert")}
-        data-board-insert
-        selected={open}
-        showAriaLabel
-        onClick={(event) => {
-          updateGap(event.currentTarget as HTMLElement);
-          setInsertAnchor(event.currentTarget as HTMLElement);
-          setShapesOpen(false);
-          setOpen(!open);
-        }}
-      />
+      {toolbarItems.includes("shape") && (
+        <span
+          className="fc-toolbar-shortcut"
+          data-toolbar-item="shape"
+          style={{ order: 10 + toolbarItems.indexOf("shape") }}
+        >
+          <ToolButton
+            type="button"
+            className="fc-board-tool"
+            icon={<FactoryIcon name="shape" />}
+            aria-label={t("fcboard.shape")}
+            showAriaLabel
+            selected={open && shapesOpen}
+            onClick={() => {
+              setShapesOpen(true);
+              setOpen(true);
+            }}
+          />
+        </span>
+      )}
+      {toolbarItems.includes("toolbox") && (
+        <span
+          className="fc-toolbar-shortcut"
+          data-toolbar-item="toolbox"
+          style={{ order: 10 + toolbarItems.indexOf("toolbox") }}
+        >
+          <ToolButton
+            type="button"
+            className="fc-board-tool"
+            icon={<FactoryIcon name="toolbox" />}
+            aria-label={t("fcboard.toolbox")}
+            data-board-insert
+            data-teaching-tools
+            selected={open && !shapesOpen}
+            showAriaLabel
+            onClick={(event) => {
+              updateGap(event.currentTarget as HTMLElement);
+              setInsertAnchor(event.currentTarget as HTMLElement);
+              setShapesOpen(false);
+              setOpen(!open || shapesOpen);
+            }}
+          />
+        </span>
+      )}
       {open && !shapesOpen && (
         <ClickAwayListener onClickAway={() => setOpen(false)}>
           <Popper
@@ -338,9 +392,9 @@ export const WhiteboardTools = ({
             }}
           >
             <Paper
-              className="fc-insert-tools fc-insert-picker"
+              className="fc-insert-tools fc-insert-picker fc-combined-toolbox"
               role="dialog"
-              aria-label={t("fcboard.insert_tools")}
+              aria-label={t("fcboard.toolbox")}
             >
               <div
                 className="fc-insert-grid"
@@ -357,6 +411,7 @@ export const WhiteboardTools = ({
                   <span>{t("fcboard.shape")}</span>
                 </button>
                 <tunnels.ToolbarInsertTunnel.Out />
+                <tunnels.ToolbarToolboxTunnel.Out />
               </div>
             </Paper>
           </Popper>
@@ -372,14 +427,14 @@ export const WhiteboardTools = ({
           setOpen(false);
           setShapesOpen(false);
         }}
-        aria-label={t("fcboard.insert_tools")}
+        aria-label={t("fcboard.shape")}
         slotProps={{
           backdrop: {
             style: { pointerEvents: open && shapesOpen ? undefined : "none" },
           },
           paper: {
             style: { pointerEvents: open && shapesOpen ? undefined : "none" },
-            "aria-label": t("fcboard.insert_tools"),
+            "aria-label": t("fcboard.shape"),
             className:
               "fc-insert-tools fc-insert-picker fc-insert-picker-expanded",
             sx: { maxWidth: "calc(100% - 24px)" },

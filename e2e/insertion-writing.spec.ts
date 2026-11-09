@@ -34,7 +34,7 @@ for (const viewport of [
       await page.goto("/");
       await page
         .getByRole("toolbar", { name: "白板工具栏", exact: true })
-        .getByRole("button", { name: "插入", exact: true })
+        .getByRole("button", { name: "工具箱", exact: true })
         .click();
       await page.getByRole("button", { name: label, exact: true }).click();
       await expect(

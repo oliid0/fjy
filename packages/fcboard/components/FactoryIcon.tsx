@@ -1,3 +1,7 @@
+import { xbhToolbarIcons } from "./xbhToolbarIcons";
+import multiPoint from "./xbh-toolbar-assets/multi.png";
+import singlePoint from "./xbh-toolbar-assets/single.png";
+
 /** HWhiteBoard 5.42 vector drawables, decoded from the intact device APK.
  * Keep viewport/path geometry; Android bottom_bar_icon_tint becomes currentColor.
  * Source and device measurements: docs/apk-alignment.md. */
@@ -1449,8 +1453,33 @@ const icons = {
   },
 } as const;
 
-export const FactoryIcon = ({ name }: { name: keyof typeof icons }) => {
-  const icon = icons[name];
+export const FactoryIcon = ({
+  name,
+}: {
+  name: keyof typeof icons | keyof typeof xbhToolbarIcons;
+}) => {
+  if (name === "multi" || name === "single") {
+    return (
+      <img
+        className="fc-toolbar-icon"
+        src={name === "multi" ? multiPoint : singlePoint}
+        alt=""
+        aria-hidden="true"
+      />
+    );
+  }
+  const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
+  if (original) {
+    return (
+      <svg
+        viewBox={original.viewBox}
+        aria-hidden="true"
+        focusable="false"
+        dangerouslySetInnerHTML={{ __html: original.body }}
+      />
+    );
+  }
+  const icon = icons[name as keyof typeof icons];
   return (
     <svg viewBox={icon.viewBox} aria-hidden="true" focusable="false">
       {icon.paths.map((path, index) => (

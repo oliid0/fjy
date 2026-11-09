@@ -52,6 +52,41 @@ describe("persistent whiteboard book", () => {
     const book = new BoardBook(api, vi.fn(), async () => undefined, save);
     return { book, api, save };
   };
+  it("reorders persisted pages without changing the active canvas or its undo history", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const first = book.value.active;
+    await book.create("second");
+    const second = book.value.active;
+    const canvas = api.getSceneElements();
+    const resets = vi.mocked(api.resetScene).mock.calls.length;
+    await book.reorder([second, first]);
+    expect(book.value.boards.map((board) => board.id)).toEqual([second, first]);
+    expect(save.mock.lastCall?.[0].boards.map((board) => board.id)).toEqual([
+      second,
+      first,
+    ]);
+    expect(book.value.active).toBe(second);
+    expect(api.getSceneElements()).toBe(canvas);
+    expect(api.resetScene).toHaveBeenCalledTimes(resets);
+    book.dispose();
+  });
+  it("rejects incomplete/duplicate ordering and rolls back a failed order save", async () => {
+    const { book, save } = setup();
+    await book.initialize();
+    await book.create("second");
+    const previous = book.value;
+    const ids = previous.boards.map((board) => board.id);
+    await expect(book.reorder([ids[0]])).rejects.toThrow();
+    await expect(book.reorder([ids[0], ids[0]])).rejects.toThrow();
+    expect(book.value).toBe(previous);
+    save
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("quota"));
+    await expect(book.reorder([...ids].reverse())).rejects.toThrow("quota");
+    expect(book.value).toBe(previous);
+    book.dispose();
+  });
   it("keeps separate scenes and clears undo history when switching", async () => {
     const { book, api } = setup();
     await book.initialize();

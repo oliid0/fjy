@@ -15,7 +15,9 @@ type TunnelsContextValue = {
   FooterCenterTunnel: Tunnel;
   ToolbarExtrasTunnel: Tunnel;
   ToolbarNavigationTunnel: Tunnel;
+  ToolbarActionsTunnel: Tunnel;
   ToolbarInsertTunnel: Tunnel;
+  ToolbarToolboxTunnel: Tunnel;
   ToolbarShapesTunnel: ReturnType<typeof stableToolbarTunnel>;
   DefaultSidebarTriggerTunnel: Tunnel;
   DefaultSidebarTabTriggersTunnel: Tunnel;
@@ -43,7 +45,9 @@ export const useInitializeTunnels = () => {
       FooterCenterTunnel: tunnel(),
       ToolbarExtrasTunnel: stableToolbarTunnel(),
       ToolbarNavigationTunnel: stableToolbarTunnel(),
+      ToolbarActionsTunnel: stableToolbarTunnel(),
       ToolbarInsertTunnel: stableToolbarTunnel(),
+      ToolbarToolboxTunnel: stableToolbarTunnel(),
       ToolbarShapesTunnel: stableToolbarTunnel(),
       DefaultSidebarTriggerTunnel: tunnel(),
       DefaultSidebarTabTriggersTunnel: tunnel(),

@@ -103,12 +103,12 @@
     }
   }
 }
-// MultiScreen's activity_fullscreen and canvas_item_* place a 45dp bar over the canvas.
+// com.xbh.whiteboard activity_multi_screen / layout_multi_screen_view.
 .fc-classroom .fc-split-board {
   position: fixed;
   inset: 0;
   z-index: 70;
-  background: #fff;
+  background: #263731;
   .fc-split-panes {
     display: flex;
     width: 100%;
@@ -118,7 +118,7 @@
     position: relative;
     flex: 1;
     min-width: 0;
-    border-inline-end: 1.5px dashed #000;
+    border-inline-end: 2px solid #fcfcfe;
     &:last-child {
       border: 0;
     }
@@ -128,79 +128,99 @@
     width: 100%;
     height: 100%;
   }
-  .fc-split-bottom {
-    position: absolute;
-    inset: auto 0 0;
-    height: 45px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
   button {
     min-width: 0;
     min-height: 0;
     border: 0;
     background: transparent;
   }
+  .fc-split-bottom {
+    position: absolute;
+    inset: auto 0 30px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
   .fc-split-penbar {
     display: flex;
     align-items: center;
-    height: 45px;
-    max-width: 100%;
+    box-sizing: border-box;
+    height: 52px;
+    max-width: calc(100% - 12px);
     overflow-x: auto;
     scrollbar-width: none;
-    border: 1px solid #999;
+    padding: 8px;
     border-radius: 12px;
-    background: #f3f3f3f0;
+    background: #fcfcfe;
+    pointer-events: auto;
     button {
-      flex: 0 0 35px;
-      width: 35px;
-      height: 35px;
-      padding: 6px;
-      margin: 0 6px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+      padding: 0;
+    }
+    button:focus-visible {
+      outline: 2px solid #0368ff;
+      outline-offset: -1px;
+    }
+  }
+  .fc-split-colors {
+    display: flex;
+    gap: 6px;
+    button {
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
-      &[data-tool="2"] {
-        margin: 0;
-      }
-      &[data-tool="4"] {
-        padding: 3px;
-      }
-      &[hidden] {
-        display: none;
+      > span {
+        width: 24px;
+        height: 24px;
+        border: 1px solid #c9c9cb;
+        border-radius: 50%;
       }
       &[aria-pressed="true"] {
-        background: #e0e0e0;
-        box-shadow: inset 0 0 0 1px #888;
+        outline: 2px solid #0079c2;
+        outline-offset: -1px;
       }
     }
-    img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
+  }
+  .fc-split-divider {
+    flex: 0 0 1px;
+    height: 100%;
+    background: #e4e4e6;
+    margin-inline: 8px;
+  }
+  .fc-split-widths {
+    display: flex;
+    gap: 20px;
+    padding-inline: 8px;
+    button {
+      width: 26px;
+      height: 26px;
+      > span {
+        display: block;
+        border-radius: 50%;
+        background: #e4e4e6;
+      }
+      &[aria-pressed="true"] > span {
+        background: #0079c2;
+      }
     }
   }
-  .fc-split-pane:first-child .fc-split-penbar,
-  .fc-split-pane:last-child .fc-split-penbar {
-    max-width: calc(100% - 70px);
-  }
-  .fc-split-exit {
+  > .fc-split-exit {
     position: absolute;
-    left: 0;
-    width: 35px;
-    height: 35px;
-    padding: 10px;
-    border: 1px solid #999;
+    bottom: 30px;
+    left: 20px;
+    width: 52px;
+    height: 52px;
+    padding: 12px;
     border-radius: 12px;
-    background: #f3f3f3;
-    img {
-      display: block;
+    background: #fcfcfe;
+    > svg {
       width: 100%;
       height: 100%;
-    }
-    &.fc-split-exit-right {
-      left: auto;
-      right: 0;
     }
   }
 }

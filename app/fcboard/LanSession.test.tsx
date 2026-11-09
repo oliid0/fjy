@@ -49,6 +49,59 @@ afterEach(() => {
   history.replaceState(null, "", "/");
 });
 
+it("joins from the visible code form, preserves the existing board on failure, and allows retrying the same code", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  vi.mocked(Network.addListener).mockResolvedValue({ remove: vi.fn() });
+  const stopBoards = classroomCommands.context("boards", () => ({
+    active: "existing",
+    boards: [{ id: "existing" }],
+  }));
+  const create = vi.fn().mockRejectedValue(new Error("disk full"));
+  const stopCreate = classroomCommands.register(
+    "board.new",
+    "@internal",
+    create,
+  );
+  const api = board();
+  const view = render(<LanSession api={api} />);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "network.panel" });
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.collab_join") }),
+    );
+    const join = screen.getByRole("button", {
+      name: t("fcboard.collab_join_action"),
+    });
+    expect(join).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(t("fcboard.collab_code")), {
+      target: { value: "0123456789abcdef0123456789abcdef" },
+    });
+    fireEvent.click(join);
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("disk full"),
+    );
+    expect(api.updateScene).not.toHaveBeenCalled();
+    expect(classroomCommands.read("boards")).toMatchObject({
+      active: "existing",
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: t("fcboard.shared_board"),
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    fireEvent.click(join);
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(Network.startCollaboration).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    stopCreate();
+    stopBoards();
+  }
+});
+
 it("keeps the host's password switch and code when closing and reopening the live-share QR", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Network.addListener).mockResolvedValue({ remove: vi.fn() });
@@ -64,6 +117,11 @@ it("keeps the host's password switch and code when closing and reopening the liv
   await act(async () => {
     await classroomCommands.execute({ name: "network.panel" });
   });
+  if (screen.queryByRole("button", { name: t("fcboard.collab_create") })) {
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.collab_create") }),
+    );
+  }
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.live_share.local") }),
   );
@@ -85,6 +143,11 @@ it("keeps the host's password switch and code when closing and reopening the liv
   await act(async () => {
     await classroomCommands.execute({ name: "network.panel" });
   });
+  if (screen.queryByRole("button", { name: t("fcboard.collab_create") })) {
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.collab_create") }),
+    );
+  }
   expect(screen.getByRole("switch")).toBeChecked();
   expect(screen.getByRole("textbox")).toHaveValue(code);
   expect(Network.startCollaboration).toHaveBeenCalledTimes(1);
@@ -232,6 +295,11 @@ it("opens the original cloud/local chooser, autoretains cloud configuration and 
     await act(async () => {
       await classroomCommands.execute({ name: "network.panel" });
     });
+    if (screen.queryByRole("button", { name: t("fcboard.collab_create") })) {
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.collab_create") }),
+      );
+    }
     expect(
       screen.getByRole("button", { name: t("fcboard.live_share.local") }),
     ).toBeEnabled();
@@ -351,7 +419,7 @@ it("opens the original cloud/local chooser, autoretains cloud configuration and 
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.end_collaboration") }),
     );
-    await screen.findByRole("button", { name: t("fcboard.live_share.cloud") });
+    await screen.findByRole("button", { name: t("fcboard.collab_create") });
     expect(screen.queryByRole("switch")).toBeNull();
   } finally {
     stopBoards();
@@ -397,6 +465,11 @@ it("lets AI configure and start against the same controls, and cancel a pending 
     await act(async () => {
       await classroomCommands.execute({ name: "network.panel" });
     });
+    if (screen.queryByRole("button", { name: t("fcboard.collab_create") })) {
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.collab_create") }),
+      );
+    }
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.live_share.local") }),
     );
@@ -441,6 +514,11 @@ it("discards a late native publish failure after ending the share instead of reo
     await act(async () => {
       await classroomCommands.execute({ name: "network.panel" });
     });
+    if (screen.queryByRole("button", { name: t("fcboard.collab_create") })) {
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.collab_create") }),
+      );
+    }
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.live_share.local") }),
     );
@@ -449,7 +527,7 @@ it("discards a late native publish failure after ending the share instead of reo
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.end_collaboration") }),
     );
-    await screen.findByRole("button", { name: t("fcboard.live_share.cloud") });
+    await screen.findByRole("button", { name: t("fcboard.collab_create") });
     await act(async () => {
       fail(new Error("The old session has ended"));
     });

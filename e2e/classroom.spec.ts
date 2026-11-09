@@ -41,7 +41,7 @@ for (const viewport of [
     await expect(toolbar).toBeVisible();
     const bounds = (await toolbar.boundingBox())!;
     const maxToolbarHeight =
-      viewport.width <= 600 ? 200 : viewport.width <= 1000 ? 120 : 80;
+      viewport.width <= 600 ? 200 : viewport.width <= 1000 ? 170 : 80;
     expect(bounds.y).toBeGreaterThanOrEqual(viewport.height - maxToolbarHeight);
     expect(
       Math.abs(bounds.y + bounds.height - viewport.height),
@@ -207,7 +207,7 @@ for (const viewport of [
       ),
     ).toBeLessThanOrEqual(penBounds.width / 2 + 12);
     await page.keyboard.press("Escape");
-    await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     const insertIconWidth = (await page
       .locator(".fc-insert-grid button svg")
       .first()
@@ -217,7 +217,7 @@ for (const viewport of [
     await expect(table.locator(".fc-table-picker-grid")).toBeVisible();
     const tableBounds = (await table.boundingBox())!;
     const insertBounds = (await toolbar
-      .getByRole("button", { name: "插入", exact: true })
+      .getByRole("button", { name: "工具箱", exact: true })
       .boundingBox())!;
     expect(tableBounds.y).toBeGreaterThanOrEqual(0);
     expect(tableBounds.y + tableBounds.height).toBeLessThanOrEqual(
@@ -235,40 +235,39 @@ for (const viewport of [
       path: testInfo.outputPath(`table-picker-${viewport.width}.png`),
     });
     await table.press("Escape");
-    await toolbar
-      .getByRole("button", { name: "教学工具", exact: true })
-      .click();
-    const tools = page.getByRole("dialog", { name: "教学工具", exact: true });
+    await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
+    const tools = page.getByRole("dialog", { name: "工具箱", exact: true });
     await expect(tools.getByText("更多工具", { exact: true })).toHaveCount(0);
     await expect(
       tools.getByRole("button", { name: "语音指令", exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     const toolsBounds = (await tools.boundingBox())!;
     expect(
       await tools
-        .locator(".fc-tools-grid button svg")
+        .locator(".fc-insert-grid button svg")
         .first()
         .evaluate((element) => element.getBoundingClientRect().width),
     ).toBeCloseTo(insertIconWidth, 1);
-    expect(toolsBounds.width).toBeLessThanOrEqual(240);
+    expect(toolsBounds.width).toBeLessThanOrEqual(
+      Math.min(520, viewport.width - 24),
+    );
     const columns = await tools
-      .locator(".fc-tools-grid")
+      .locator(".fc-insert-grid")
       .last()
       .evaluate(
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(" ").length,
       );
-    expect(columns).toBe(3);
+    expect(columns).toBe(viewport.width <= 600 ? 4 : 6);
     await page.screenshot({
       path: testInfo.outputPath(`tools-${viewport.width}.png`),
     });
-    await tools.getByRole("button", { name: "下一页", exact: true }).click();
     await expect(
       tools.getByRole("button", { name: "语音指令", exact: true }),
     ).toBeVisible();
     await tools.press("Escape");
     await expect(tools).toBeHidden();
-    await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     await page.getByRole("button", { name: "教学资源", exact: true }).click();
     const resources = page.getByRole("dialog", {
       name: "教学资源",
@@ -539,7 +538,7 @@ test("inserting four-line writing paper immediately accepts ink on its surface",
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/");
-  await page.getByRole("button", { name: "插入", exact: true }).click();
+  await page.getByRole("button", { name: "工具箱", exact: true }).click();
   await page.getByRole("button", { name: "四线格", exact: true }).click();
   await expect(page.locator(".fc-insertion-properties")).toHaveCount(0);
   await expect

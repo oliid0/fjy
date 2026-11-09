@@ -11,7 +11,7 @@ for (const [kind, width, height, nets, face] of [
     await page.setViewportSize({ width, height });
     await page.goto("/");
     const toolbar = page.getByRole("toolbar", { name: "白板工具栏" });
-    await toolbar.getByRole("button", { name: "插入", exact: true }).click();
+    await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     await page.getByRole("button", { name: "图形", exact: true }).click();
     await page
       .getByTestId(`factory-shape-${kind === "立方体" ? "cube" : "cylinder"}`)

@@ -108,7 +108,7 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
     await page.keyboard.press("Escape");
     await page.locator("[data-board-insert]").click();
     await page
-      .getByRole("dialog", { name: labels.insert_tools, exact: true })
+      .getByRole("dialog", { name: labels.toolbox, exact: true })
       .getByRole("button", { name: labels.teaching_resources, exact: true })
       .click();
     const resources = page.locator(".fc-resource-library");
@@ -128,9 +128,6 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
     }
     await page.keyboard.press("Escape");
     await page.locator("[data-teaching-tools]").click();
-    await page
-      .getByRole("button", { name: labels.next_page, exact: true })
-      .click();
     await page
       .getByRole("button", { name: labels.recording, exact: true })
       .click();

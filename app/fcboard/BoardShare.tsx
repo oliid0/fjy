@@ -84,7 +84,11 @@ export const BoardShare = () => {
     [],
   );
   useEffect(() => {
-    const openPages = async (email: boolean, saveFile = false) => {
+    const openPages = async (
+      email: boolean,
+      saveFile = false,
+      ids?: unknown,
+    ) => {
       exportRequest.current?.abort();
       const current = ++generation.current;
       setMail(email);
@@ -97,6 +101,8 @@ export const BoardShare = () => {
       setError("");
       setStatus("");
       setUrls([]);
+      setPages([]);
+      setSelected([]);
       try {
         if (cloud.current) {
           await cloud.current.end();
@@ -113,7 +119,24 @@ export const BoardShare = () => {
         }
         setPages(workspace.boards);
         setCanvasSize(workspace.canvasSize ?? boardCanvasSize());
-        setSelected(workspace.boards.map((board) => board.id).slice(0, 20));
+        if (
+          ids !== undefined &&
+          (!Array.isArray(ids) ||
+            !ids.length ||
+            ids.length > 20 ||
+            ids.some(
+              (id) =>
+                typeof id !== "string" ||
+                !workspace.boards.some((board) => board.id === id),
+            ))
+        ) {
+          throw new Error(t("fcboard.select_1_to_20_pages"));
+        }
+        setSelected(
+          ids === undefined
+            ? workspace.boards.map((board) => board.id).slice(0, 20)
+            : [...new Set(ids as string[])],
+        );
       } catch (failure) {
         if (current === generation.current) {
           setError(String(failure));
@@ -127,17 +150,17 @@ export const BoardShare = () => {
     const stopShare = classroomCommands.register(
       "board.share",
       "选择白板页面以导出图片或扫码分享",
-      () => openPages(false),
+      (args) => openPages(false, false, args.ids),
     );
     const stopSave = classroomCommands.register(
       "board.saveFile",
       "选择白板页面并保存原厂 BZD / JPG / PDF 文件",
-      () => openPages(false, true),
+      (args) => openPages(false, true, args.ids),
     );
     const stopMail = classroomCommands.register(
       "board.mail",
       "选择白板页面并打开邮件；Android 使用原版账户 / 提供方 / 写信 / SMTP 配置层级，可由 mail.action 和 mail.configure 操作，发送选中页面 PDF；浏览器打开系统分享",
-      () => openPages(true),
+      (args) => openPages(true, false, args.ids),
     );
     return () => {
       stopShare();
@@ -484,6 +507,10 @@ export const BoardShare = () => {
               <label key={page.id} className="fc-share-page">
                 <input
                   type="checkbox"
+                  disabled={
+                    busy ||
+                    (!selected.includes(page.id) && selected.length >= 20)
+                  }
                   checked={selected.includes(page.id)}
                   onChange={(event) =>
                     setSelected((previous) =>

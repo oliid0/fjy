@@ -108,7 +108,7 @@ for (const viewport of [
     await page.goto("/");
     await page
       .getByRole("toolbar", { name: "白板工具栏" })
-      .getByRole("button", { name: "插入", exact: true })
+      .getByRole("button", { name: "工具箱", exact: true })
       .click();
     await page.getByRole("button", { name: "教学资源", exact: true }).click();
     const library = page.getByRole("dialog", { name: "教学资源", exact: true });
@@ -142,7 +142,7 @@ for (const viewport of [
     await page.goto("/");
     await page
       .getByRole("toolbar", { name: "白板工具栏" })
-      .getByRole("button", { name: "插入", exact: true })
+      .getByRole("button", { name: "工具箱", exact: true })
       .click();
     await page.getByRole("button", { name: "教学资源", exact: true }).click();
     const library = page.getByRole("dialog", { name: "教学资源", exact: true });
@@ -187,7 +187,7 @@ for (const viewport of [
     const openLibrary = async () => {
       await page
         .getByRole("toolbar", { name: "白板工具栏" })
-        .getByRole("button", { name: "插入", exact: true })
+        .getByRole("button", { name: "工具箱", exact: true })
         .click();
       await page.getByRole("button", { name: "教学资源", exact: true }).click();
       return page.getByRole("dialog", { name: "教学资源", exact: true });
@@ -254,7 +254,7 @@ for (const viewport of [
     const openMathTools = async () => {
       await page
         .getByRole("toolbar", { name: "白板工具栏" })
-        .getByRole("button", { name: "插入", exact: true })
+        .getByRole("button", { name: "工具箱", exact: true })
         .click();
       await page.getByRole("button", { name: "教学资源", exact: true }).click();
       const library = page.getByRole("dialog", {

@@ -26,6 +26,10 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MailPlugin.class);
         registerPlugin(SkizzePenPlugin.class);
         super.onCreate(savedInstanceState);
+        // Native toolbar labels are 6sp / 6.7dp. WebView defaults to an 8px minimum.
+        // https://developer.android.com/reference/android/webkit/WebSettings#setMinimumFontSize(int)
+        getBridge().getWebView().getSettings().setMinimumFontSize(1);
+        getBridge().getWebView().getSettings().setMinimumLogicalFontSize(1);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 }

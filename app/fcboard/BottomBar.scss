@@ -53,7 +53,7 @@
   right: auto;
   left: 0;
 }
-.app .fcboard .fc-unified-toolbar .fc-toolbar-group,
+.app .fcboard .fc-unified-toolbar .fc-toolbar-group:not(.fc-drawing-tools),
 .app .fcboard .fc-unified-toolbar .fc-toolbar-extras {
   gap: 0;
 }
@@ -405,6 +405,13 @@
 .app .fcboard .fc-unified-toolbar .undo-redo-buttons {
   display: contents;
 }
+.app .fcboard .fc-unified-toolbar .undo-redo-buttons button {
+  // Actions.scss marks the generic history controls important.
+  font-size: calc(10 * var(--fc-unit)) !important;
+  background: transparent !important;
+  border-radius: calc(12 * var(--fc-unit)) !important;
+}
+
 .app .fcboard .fc-unified-toolbar .fc-pen-thin path:first-child,
 .app .fcboard .fc-unified-toolbar .fc-pen-thick path:first-child {
   fill: var(--fc-pen-color);

@@ -43,7 +43,7 @@ self.onmessage = async (
       env.backends.onnx.wasm!.numThreads = 1;
       env.backends.onnx.wasm!.proxy = false;
       env.backends.onnx.wasm!.wasmPaths = `${base}runtime/translation/`;
-      translator ||= await pipeline(
+      translator ||= await pipeline<"translation">(
         "translation",
         `Xenova/opus-mt-${task.source}-${task.target}`,
         { device: "wasm", dtype: "q8", local_files_only: true },

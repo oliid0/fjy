@@ -319,9 +319,11 @@ export const FilePreview = ({
     position: [number, number];
     width: number;
     height: number;
+    path?: [number, number][];
   } | null>(null);
   const erasing = useRef<{
-    mode: "stroke" | "object";
+    mode: "stroke" | "object" | "region";
+    path?: [number, number][];
     previous: [number, number];
     width: number;
     height: number;
@@ -2471,6 +2473,13 @@ export const FilePreview = ({
     if (!gesture) {
       return;
     }
+    if (gesture.path) {
+      const last = gesture.path.at(-1)!;
+      if (last[0] !== position[0] || last[1] !== position[1]) {
+        gesture.path.push(position);
+      }
+      return;
+    }
     const previous = inkRef.current[gesturePage.current] || [];
     const next = (
       gesture.mode === "object" ? eraseDocumentObjects : eraseDocumentInk
@@ -2593,6 +2602,13 @@ export const FilePreview = ({
       height:
         (palm ? Math.max(size * 1.2, contact.height) : size * 1.2) * scale,
     };
+    if (erasing.current.mode === "region") {
+      if (palm) {
+        erasing.current.mode = "object";
+      } else {
+        erasing.current.path = [position];
+      }
+    }
     draftRef.current = null;
     setDraft(null);
   };
@@ -3055,6 +3071,25 @@ export const FilePreview = ({
               if (!updateInkGesture(event)) {
                 return;
               }
+              if (erasing.current?.path) {
+                const ids = new Set(
+                  selectDocumentLasso(
+                    gestureBefore.current,
+                    erasing.current.path,
+                  ),
+                );
+                if (ids.size) {
+                  commitInk(
+                    {
+                      ...inkRef.current,
+                      [page]: gestureBefore.current.filter(
+                        (stroke) => !ids.has(stroke.id),
+                      ),
+                    },
+                    false,
+                  );
+                }
+              }
               if (selecting && selectionGesture.current) {
                 const area = visibleDocumentArea(
                   stage.current,
@@ -3363,7 +3398,20 @@ export const FilePreview = ({
                 <StrokePath key={stroke.id} stroke={stroke} />
               ),
             )}
-            {eraserPreview && (
+            {eraserPreview?.path ? (
+              <polyline
+                aria-hidden="true"
+                pointerEvents="none"
+                points={eraserPreview.path
+                  .map((point) => point.join(","))
+                  .join(" ")}
+                fill="none"
+                stroke="#0368ff"
+                strokeWidth="1.5"
+                strokeDasharray="5 5"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : eraserPreview ? (
               <image
                 aria-hidden="true"
                 pointerEvents="none"
@@ -3373,7 +3421,7 @@ export const FilePreview = ({
                 width={eraserPreview.width}
                 height={eraserPreview.height}
               />
-            )}
+            ) : null}
           </svg>
         </div>
       </div>

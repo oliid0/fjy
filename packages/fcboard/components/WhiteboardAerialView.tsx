@@ -37,13 +37,16 @@ const AerialMap = ({ app }: { app: AppClassProperties }) => {
     );
     return { x: left, y: top, width: width * scale, height: height * scale };
   });
-  const drag = React.useRef<{
-    pointer: number;
-    x: number;
-    y: number;
-    scrollX: number;
-    scrollY: number;
-  }>();
+  const drag = React.useRef<
+    | {
+        pointer: number;
+        x: number;
+        y: number;
+        scrollX: number;
+        scrollY: number;
+      }
+    | undefined
+  >(undefined);
   React.useEffect(() => {
     let live = true;
     const elements = app.scene.getNonDeletedElements();
@@ -77,7 +80,7 @@ const AerialMap = ({ app }: { app: AppClassProperties }) => {
     };
   }, [app, bounds, initial]);
   const move = (scrollX: number, scrollY: number) => {
-    app.setState({ scrollX, scrollY });
+    app.api.updateScene({ appState: { scrollX, scrollY } });
   };
   const viewport = {
     x: ((-view.scrollX - bounds.x) / bounds.width) * 300,
@@ -90,7 +93,7 @@ const AerialMap = ({ app }: { app: AppClassProperties }) => {
       {error ? (
         <p role="alert">{error}</p>
       ) : !image ? (
-        <p role="status">{t("labels.loading")}</p>
+        <p role="status">{t("labels.loadingScene")}</p>
       ) : null}
       <svg
         className="fc-aerial-map"

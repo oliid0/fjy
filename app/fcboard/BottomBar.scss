@@ -740,7 +740,7 @@
   .fc-pen-types {
     grid-template-columns: repeat(5, calc(44 * var(--fc-unit)));
     gap: calc(12 * var(--fc-unit));
-    min-height: 0;
+    min-height: calc(144 * var(--fc-unit));
     margin-top: calc(8 * var(--fc-unit));
     button {
       height: calc(66 * var(--fc-unit));

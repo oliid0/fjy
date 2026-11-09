@@ -1759,6 +1759,48 @@ it.each(["pointercancel", "lostpointercapture", "blur", "pointerup"])(
   },
 );
 
+it.each(["pointerup", "pointercancel"])(
+  "uses the shared region eraser only on release and handles %s without partial deletion",
+  async (end) => {
+    const { draw, pointer, svg, unmount } = await setup(undefined, {
+      eraserMode: "region",
+    });
+    try {
+      draw();
+      pointer("pointerdown", 500, 300);
+      pointer("pointerup", 600, 300);
+      const before = currentInk();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
+      );
+      pointer("pointerdown", 80, 80);
+      pointer("pointermove", 220, 80);
+      pointer("pointermove", 220, 160);
+      pointer("pointermove", 80, 160);
+      expect(currentInk()).toEqual(before);
+      expect(
+        svg.querySelector("polyline[aria-hidden='true']"),
+      ).toBeInTheDocument();
+      pointer(end, 80, 80);
+      if (end === "pointercancel") {
+        expect(currentInk()).toEqual(before);
+      } else {
+        expect(currentInk().map((stroke) => stroke.id)).toEqual([before[1].id]);
+        await act(async () => {
+          await classroomCommands.execute({ name: "document.undo" });
+        });
+        expect(currentInk()).toEqual(before);
+        await act(async () => {
+          await classroomCommands.execute({ name: "document.redo" });
+        });
+        expect(currentInk().map((stroke) => stroke.id)).toEqual([before[1].id]);
+      }
+    } finally {
+      unmount();
+    }
+  },
+);
+
 it("opens compact eraser properties from the existing entry, updates real mode and closes without requiring a selection", async () => {
   const { api, unmount } = await setup();
   try {

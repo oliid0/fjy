@@ -626,10 +626,13 @@ const LayerUI = ({
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
   const toolbarHidden = !!appState.toolbarHidden;
   const toolbarItems = useToolbarItems();
-  const lastToolbarAction = React.useRef<{
-    target: HTMLElement;
-    time: number;
-  }>();
+  const lastToolbarAction = React.useRef<
+    | {
+        target: HTMLElement;
+        time: number;
+      }
+    | undefined
+  >(undefined);
   const toolbarElement = React.useRef<HTMLDivElement>(null);
   React.useLayoutEffect(() => {
     const toolbar = toolbarElement.current;

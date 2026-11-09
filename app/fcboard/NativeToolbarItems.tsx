@@ -58,7 +58,7 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
-  const operation = useRef<AbortController>();
+  const operation = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => operation.current?.abort(), []);
   const addSite = async (site: typeof sites[number]) => {
     if (pending.current) {

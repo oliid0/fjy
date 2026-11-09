@@ -184,8 +184,9 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).toHaveBeenCalledTimes(1);
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("reads structured math locally before native text recognition or rasterization", async () => {
+  it("falls back to structured math when the native first candidate fails validation", async () => {
     backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["unreadable"]);
     backend.math.mockResolvedValue(String.raw`\frac{1}{2}`);
     const capture = vi.fn();
     saveSettings({ ...defaults, apiKey: "" }, false);
@@ -195,7 +196,7 @@ describe("explicit handwriting actions", () => {
         new AbortController().signal,
         vi.fn(),
         "math",
-        undefined,
+        (text) => text === String.raw`\frac{1}{2}`,
         [
           [
             [0, 0],
@@ -205,7 +206,7 @@ describe("explicit handwriting actions", () => {
       ),
     ).toBe(String.raw`\frac{1}{2}`);
     expect(capture).not.toHaveBeenCalled();
-    expect(backend.native).not.toHaveBeenCalled();
+    expect(backend.native).toHaveBeenCalledTimes(1);
     expect(backend.cloud).not.toHaveBeenCalled();
   });
   it("keeps the missing-language-pack flow local in automatic mode without sending a screenshot to another recognizer", async () => {

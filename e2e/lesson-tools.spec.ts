@@ -164,7 +164,7 @@ for (const viewport of [
       .getByRole("toolbar", { name: "白板工具栏" })
       .getByRole("button", { name: "工具箱", exact: true })
       .click();
-    await page.getByRole("button", { name: "教学资源", exact: true }).click();
+    await page.getByRole("button", { name: "学科工具", exact: true }).click();
     const library = page.getByRole("dialog", { name: "教学资源", exact: true });
     await library
       .getByRole("textbox", { name: "搜索资源" })

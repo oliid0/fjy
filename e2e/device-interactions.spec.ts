@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
+import { openTeachingTools } from "./menu";
+
 import type { Page } from "@playwright/test";
 
 test.use({ hasTouch: true });
@@ -48,7 +50,7 @@ for (const width of [390, 1920]) {
     await page.goto("/");
     const pen = page
       .getByRole("toolbar", { name: "白板工具栏", exact: true })
-      .getByRole("button", { name: "画笔", exact: true });
+      .getByRole("button", { name: "笔", exact: true });
     await pen.click();
     const settings = page.locator(".fc-factory-pen-settings");
     if (!(await settings.isVisible())) {
@@ -110,8 +112,8 @@ for (const width of [390, 1920]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await page.getByRole("button", { name: "工具箱", exact: true }).click();
-    const menu = page.getByRole("dialog", { name: "工具箱", exact: true });
+    await openTeachingTools(page);
+    const menu = page.getByRole("dialog", { name: "教学工具", exact: true });
     const transfer = await menu
       .getByRole("button", { name: "快传", exact: true })
       .boundingBox();
@@ -289,15 +291,13 @@ for (const width of [390, 1920]) {
     await expect(page.locator("[data-insertion-placement=table]")).toHaveCount(
       0,
     );
-    await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
-    await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
+    await toolbar.getByRole("button", { name: "板擦", exact: true }).click();
+    await toolbar.getByRole("button", { name: "板擦", exact: true }).click();
     await page
-      .locator(".fc-eraser-mode")
-      .getByRole("button", { name: "整个对象擦除", exact: true })
+      .locator(".fc-native-eraser-row")
+      .getByRole("button", { name: "框选擦除", exact: true })
       .click();
-    await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
-    await toolbar.getByRole("button", { name: "画笔", exact: true }).click();
-    await dragTouch(page, { x: 40, y: 185 }, { x: 65, y: 210 }, 40);
+    await dragTouch(page, { x: 40, y: 185 }, { x: 65, y: 210 }, 2);
     await expect.poll(table).toEqual([]);
   });
 }
@@ -491,22 +491,11 @@ test("touch toolbar customization persists and board ordering confirms or cancel
   await page.getByTestId("main-menu-trigger").click();
   await page.getByRole("menuitem", { name: "设置", exact: true }).click();
   const settings = page.locator(".fc-settings-dialog");
-  await settings
-    .getByRole("button", { name: "工具栏设置", exact: true })
-    .click();
+  await settings.getByRole("button", { name: "工具栏", exact: true }).click();
   const tile = settings.locator('[data-tool-id="mindmap"]');
-  const source = (await tile.boundingBox())!;
-  const destination = (await settings
-    .locator('[data-toolbar-zone="selected"]')
-    .boundingBox())!;
-  await dragTouch(
-    page,
-    { x: source.x + source.width / 2, y: source.y + source.height / 2 },
-    {
-      x: destination.x + destination.width - 12,
-      y: destination.y + destination.height - 12,
-    },
-  );
+  await tile
+    .getByRole("button", { name: "将思维导图添加到底部栏", exact: true })
+    .tap();
   await expect(
     page.locator('.fc-drawing-tools [data-toolbar-item="mindmap"]'),
   ).toHaveCount(1);

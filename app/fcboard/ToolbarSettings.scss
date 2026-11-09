@@ -1,85 +1,153 @@
+// x.apk fragment_settings_tools.xml / item_tools_layout.xml.
 .fc-toolbar-settings {
+  --fc-unit: 0.67px;
+  box-sizing: border-box;
+  width: auto;
+  margin: calc(8 * var(--fc-unit)) calc(36 * var(--fc-unit)) 0;
+  padding: 0;
+  color: #010101;
+  font-family: system-ui, sans-serif;
+}
+.fc-toolbar-settings .fc-toolbar-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: calc(62 * var(--fc-unit));
+  justify-items: start;
+  align-content: start;
+  gap: 0;
+  box-sizing: border-box;
+  height: calc(180 * var(--fc-unit));
+  padding: calc(24 * var(--fc-unit)) calc(25 * var(--fc-unit)) 0;
+  border-radius: calc(12 * var(--fc-unit));
+  background: #fcfcfe;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.fc-toolbar-settings .fc-toolbar-setting-grid[data-toolbar-zone="available"] {
+  height: calc(198 * var(--fc-unit));
+  margin-top: calc(12 * var(--fc-unit));
+}
+.fc-classroom .fc-toolbar-settings > p {
+  margin: calc(20 * var(--fc-unit)) 0 0;
+  padding: 0;
+  color: #979797;
+  text-align: center;
+  font: 400 10px / 1.2 system-ui, sans-serif;
+}
+.fc-toolbar-settings .fc-toolbar-setting-tile {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: start;
+  width: calc(58 * var(--fc-unit));
+  height: calc(54 * var(--fc-unit));
+  min-height: 0;
+  margin-top: calc(8 * var(--fc-unit));
+  margin-right: calc(8 * var(--fc-unit));
+  padding: calc(10 * var(--fc-unit)) 0 0;
+  border: calc(1 * var(--fc-unit)) solid #e4e4e6;
+  border-radius: calc(12 * var(--fc-unit));
+  background: transparent;
+  color: #010101;
+  font: 400 6px / 1.2 system-ui, sans-serif;
+  text-align: center;
+  touch-action: pan-y;
+  user-select: none;
+  cursor: default;
+}
+.fc-toolbar-settings .fc-toolbar-setting-tile > svg {
+  flex: 0 0 auto;
+  width: calc(18 * var(--fc-unit));
+  height: calc(18 * var(--fc-unit));
+  margin: 0 0 calc(2 * var(--fc-unit));
+}
+.fc-toolbar-settings .fc-toolbar-setting-tile > span {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  font: inherit;
+}
+.fc-toolbar-settings .fc-toolbar-setting-tile.is-fixed {
+  cursor: default;
+}
+.fc-classroom .fc-toolbar-settings .fc-toolbar-setting-tile > button {
+  position: absolute;
+  top: calc(-8 * var(--fc-unit));
+  right: calc(-8 * var(--fc-unit));
+  width: calc(20 * var(--fc-unit));
+  min-width: 0;
+  height: calc(20 * var(--fc-unit));
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.fc-toolbar-settings .fc-toolbar-setting-tile > button > svg {
+  display: block;
   width: 100%;
-  padding: 8px 0 20px;
-  > p {
-    color: #8d8c90;
-    text-align: center;
-    font-size: 12px;
-    line-height: 1.6;
-    margin: 16px 0 12px;
-  }
-  .fc-toolbar-setting-grid {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 8px;
-    align-content: start;
-    min-height: 152px;
-    padding: 20px 16px;
-    border-radius: 8px;
-    background: #fcfcfe;
-    outline: 2px solid transparent;
-    &[data-drag-over="true"] {
-      outline-color: #0368ff;
-    }
-  }
-  .fc-toolbar-setting-tile {
-    position: relative;
-    min-width: 0;
-    min-height: 54px;
-    padding: 10px 2px 4px;
-    border: 1px solid #e6e6e8;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #010101;
-    font: 400 10px / 1.4 system-ui, sans-serif;
-    text-align: center;
-    overflow-wrap: anywhere;
-    touch-action: none;
-    user-select: none;
-    cursor: grab;
-    > svg {
-      width: 22px;
-      height: 22px;
-      margin-bottom: 2px;
-    }
-    &.is-fixed {
-      cursor: default;
-      background: #f5f5f7;
-    }
-    &.is-dragging {
-      opacity: 0.45;
-      outline: 2px solid #0368ff;
-    }
-    &:focus-visible {
-      outline: 2px solid #0368ff;
-    }
-    > button {
-      position: absolute;
-      top: -6px;
-      right: -5px;
-      width: 22px;
-      min-width: 22px;
-      height: 22px;
-      min-height: 22px;
-      padding: 0;
-      border: 2px solid #fcfcfe;
-      border-radius: 50%;
-      color: white;
-      font: 500 18px / 18px system-ui;
-      > svg {
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-      &.fc-toolbar-add {
-        background: #0368ff;
-      }
-      &.fc-toolbar-remove {
-        background: #ef4b55;
-      }
-    }
-  }
+  height: 100%;
+}
+.fc-classroom .fc-settings-dialog[data-settings-page="toolbar"] {
+  --fc-unit: 0.67px;
+  box-sizing: border-box;
+  width: min(calc(640 * var(--fc-unit)), calc(100vw - 24px));
+  height: calc(560 * var(--fc-unit));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
+  padding: 0;
+  border: calc(1 * var(--fc-unit)) solid #dbdbdb;
+  border-radius: calc(32 * var(--fc-unit));
+  background: #f6f6f8;
+  box-shadow: none;
+}
+.fc-classroom .fc-settings-dialog[data-settings-page="toolbar"] > header {
+  flex: 0 0 auto;
+  height: calc(84 * var(--fc-unit));
+  min-height: 0;
+  padding: 0 calc(36 * var(--fc-unit)) calc(12 * var(--fc-unit));
+}
+.fc-classroom .fc-settings-dialog[data-settings-page="toolbar"] > header h2 {
+  font: 700 calc(24 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+}
+.fc-classroom
+  .fc-settings-dialog[data-settings-page="toolbar"]
+  > header
+  .fc-settings-back {
+  font: 400 calc(16 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+  white-space: nowrap;
+}
+.fc-classroom
+  .fc-settings-dialog[data-settings-page="toolbar"]
+  > header
+  > button:last-child {
+  width: calc(24 * var(--fc-unit));
+  height: calc(24 * var(--fc-unit));
+  min-height: 0;
+  min-width: 0;
+  padding: calc(3 * var(--fc-unit));
+}
+.fc-classroom
+  .fc-settings-dialog[data-settings-page="toolbar"]
+  > header
+  > button:last-child
+  img {
+  width: 100%;
+  height: 100%;
+}
+.fc-classroom
+  .fc-settings-dialog[data-settings-page="toolbar"]
+  > .fc-panel-body {
+  margin-top: calc(8 * var(--fc-unit));
+}
+.fc-classroom
+  .fc-settings-dialog[data-settings-page="toolbar"]
+  .fc-settings-content {
+  padding: 0;
+}
+.fc-classroom
+  .fc-settings-dialog[data-settings-page="toolbar"]
+  .fc-settings-actions {
+  display: none;
 }

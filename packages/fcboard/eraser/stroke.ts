@@ -379,3 +379,58 @@ export const isPalmContact = (
 ) =>
   event.pointerType === "touch" &&
   Math.max(event.width || 0, event.height || 0) >= threshold;
+
+/** x.apk draw.mode.e: keep ink while circling, erase intersected/enclosed objects on lift. */
+export const eraseSceneRegion = (
+  elements: readonly FcboardElement[],
+  path: GlobalPoint[],
+  tappedIds: readonly string[] = [],
+) => {
+  const elementsMap = new Map(elements.map((element) => [element.id, element]));
+  const live = elements.filter(
+    (element) => !element.isDeleted && !element.locked,
+  );
+  const selected = new Set(
+    path.length > 2
+      ? getLassoSelectedElementIds({
+          lassoPath: path,
+          elements: live,
+          elementsMap,
+          elementsSegments: new Map(
+            live.map((element) => [
+              element.id,
+              getElementLineSegments(element, elementsMap),
+            ]),
+          ),
+          intersectedElements: new Set(),
+          enclosedElements: new Set(),
+        }).selectedElementIds
+      : tappedIds,
+  );
+  const groups = new Set(
+    live
+      .filter((element) => selected.has(element.id))
+      .flatMap((element) => element.groupIds.slice(-1)),
+  );
+  for (const element of live) {
+    if (
+      selected.has(element.id) ||
+      element.groupIds.some((id) => groups.has(id))
+    ) {
+      selected.add(element.id);
+      element.boundElements
+        ?.filter((bound) => bound.type === "text")
+        .forEach((bound) => selected.add(bound.id));
+      if (element.type === "text" && element.containerId) {
+        selected.add(element.containerId);
+      }
+    }
+  }
+  return selected.size
+    ? elements.map((element) =>
+        !element.locked && selected.has(element.id)
+          ? newElementWith(element, { isDeleted: true })
+          : element,
+      )
+    : elements;
+};

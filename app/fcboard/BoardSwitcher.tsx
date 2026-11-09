@@ -311,6 +311,19 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
     window.addEventListener("pointerdown", dismiss);
     return () => window.removeEventListener("pointerdown", dismiss);
   }, [open]);
+  useEffect(() => {
+    const action = (event: Event) => {
+      if (
+        !(event as CustomEvent<HTMLElement>).detail.closest(
+          "[data-board-switcher]",
+        )
+      ) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("fcboard:toolbar-action", action);
+    return () => window.removeEventListener("fcboard:toolbar-action", action);
+  }, []);
   const run = async (operation: (source?: AbortSignal) => Promise<void>) => {
     const source = classroomCommands.interactionSource;
     if (busy) {
@@ -424,7 +437,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
               if (book.current) {
                 setValue({ ...book.current.value });
               }
-              setOpen(!open);
+              setOpen(true);
             }}
           >
             <span className="fc-board-count">

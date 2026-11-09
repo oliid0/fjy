@@ -30,6 +30,7 @@ const booleans = {
   multiStroke: "multiStroke",
   toolbarReversed: "toolbarReversed",
   toolbarText: "whiteboardToolbarText",
+  toolbarCollapse: "toolbarCollapseEnabled",
 } as const;
 const invalid = () => new Error(t("fcboard.invalid_style_parameters"));
 const documentOnly = () =>
@@ -74,7 +75,7 @@ export const canvasConfigurationSnapshot = (
     },
     eraser: {
       mode: state.eraserMode || "stroke",
-      modes: ["stroke", "object"],
+      modes: ["stroke", "object", "region"],
       size: state.eraserSize ?? device?.eraserSize ?? 60,
       palm: state.palmEraser !== false,
       palmThreshold: state.palmEraserThreshold ?? device?.palmThreshold ?? 36,
@@ -84,6 +85,7 @@ export const canvasConfigurationSnapshot = (
       reversed: !!state.toolbarReversed,
       text: state.whiteboardToolbarText !== false,
       visible: !state.toolbarHidden,
+      collapseControl: !!state.toolbarCollapseEnabled,
     },
   };
 };
@@ -165,10 +167,10 @@ export const canvasConfigurationPatch = (
     Object.assign(patch, switchWhiteboardTip(state, input.tip));
   }
   if ("eraserMode" in input) {
-    if (input.eraserMode !== "stroke" && input.eraserMode !== "object") {
+    if (!["stroke", "object", "region"].includes(String(input.eraserMode))) {
       throw invalid();
     }
-    patch.eraserMode = input.eraserMode;
+    patch.eraserMode = input.eraserMode as AppState["eraserMode"];
   }
   if (
     classroomCommands.read("document") &&

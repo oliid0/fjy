@@ -25,13 +25,13 @@ import { UIAppStateContext } from "../context/ui-appState";
 import { useAtom, useAtomValue } from "../editor-jotai";
 
 import { t, useI18n } from "../i18n";
+import { useToolbarItems } from "../toolbarPreferences";
 import { calculateScrollCenter } from "../scene";
 
 import {
   SelectedShapeActions,
   ShapesSwitcher,
   CompactShapeActions,
-  UndoRedoActions,
   ExitViewModeButton,
 } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
@@ -220,11 +220,11 @@ const LayerUI = ({
       const toolbar = anchor
         .closest(".fc-unified-toolbar")
         ?.getBoundingClientRect();
-      const unit = Math.min(1, bounds.height / 48);
+      const unit = bounds.height / 58;
       const width = Math.max(
         0,
         Math.min(
-          (appState.activeTool.type === "freedraw" ? 215 : 280) * unit,
+          (appState.activeTool.type === "freedraw" ? 316 : 280) * unit,
           root.width - 24,
         ),
       );
@@ -237,8 +237,8 @@ const LayerUI = ({
             root.width - width - 12,
           ),
         ),
-        bottom: root.bottom - top + 16 * unit,
-        maxHeight: Math.max(0, top - root.top - 16 * unit - 12),
+        bottom: root.bottom - top + 10 * unit,
+        maxHeight: Math.max(0, top - root.top - 10 * unit - 12),
         maxWidth: Math.max(0, root.width - 24),
       });
     },
@@ -625,6 +625,39 @@ const LayerUI = ({
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
   const toolbarHidden = !!appState.toolbarHidden;
+  const toolbarItems = useToolbarItems();
+  const lastToolbarAction = React.useRef<{
+    target: HTMLElement;
+    time: number;
+  }>();
+  const toolbarElement = React.useRef<HTMLDivElement>(null);
+  React.useLayoutEffect(() => {
+    const toolbar = toolbarElement.current;
+    if (!toolbar || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const update = () => {
+      toolbar.classList.remove("fc-toolbar-tight");
+      const navigation = toolbar.querySelector<HTMLElement>(
+        ".fc-toolbar-leading",
+      );
+      const tools = toolbar.querySelector<HTMLElement>(".fc-drawing-tools");
+      if (!navigation || !tools) {
+        return;
+      }
+      // DrawBoardActivity.Z: hide co-board and switch when groups no longer fit.
+      const available =
+        toolbar.clientWidth - tools.offsetWidth - navigation.offsetWidth - 10;
+      toolbar.classList.toggle("fc-toolbar-tight", available <= 0);
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(toolbar);
+    for (const child of toolbar.children) {
+      observer.observe(child);
+    }
+    update();
+    return () => observer.disconnect();
+  }, [toolbarItems, appState.toolbarReversed, toolbarHidden]);
 
   const renderUnifiedToolbar = () => (
     <>
@@ -665,12 +698,47 @@ const LayerUI = ({
         </div>
       )}
       <div
+        ref={toolbarElement}
         className={clsx("fc-unified-toolbar", {
           "fc-toolbar-collapsed": toolbarHidden,
           "fc-toolbar-reversed": appState.toolbarReversed,
         })}
         role="toolbar"
         aria-label={t("fcboard.whiteboard_toolbar")}
+        onContextMenu={(event) => event.preventDefault()}
+        onClickCapture={(event) => {
+          const target = (event.target as Element).closest<HTMLElement>(
+            "button",
+          );
+          if (
+            !target ||
+            !event.currentTarget.contains(target) ||
+            target.hasAttribute("disabled")
+          ) {
+            return;
+          }
+          // r6.g.d: same view within 400ms is ignored; changing controls resets it.
+          // The pen's onTouch/onPenClicked route bypasses that click guard.
+          if (!target.hasAttribute("data-toolbar-pen")) {
+            const now = Date.now();
+            const previous = lastToolbarAction.current;
+            if (previous?.target === target && now - previous.time < 400) {
+              event.preventDefault();
+              event.stopPropagation();
+              return;
+            }
+            lastToolbarAction.current = { target, time: now };
+          }
+          if (!target.hasAttribute("data-toolbar-pen")) {
+            setShowProperties(false);
+          }
+          if (!target.classList.contains("main-menu-trigger")) {
+            setAppState({ openMenu: null });
+          }
+          window.dispatchEvent(
+            new CustomEvent("fcboard:toolbar-action", { detail: target }),
+          );
+        }}
       >
         <div className="fc-toolbar-side fc-toolbar-leading">
           <div
@@ -678,14 +746,7 @@ const LayerUI = ({
             role="group"
             aria-label={t("fcboard.files_and_resources")}
           >
-            {renderTopLeftUI?.(
-              editorInterface.formFactor === "phone",
-              appState,
-            )}
             <tunnels.MainMenuTunnel.Out />
-            {UIOptions.library !== false && (
-              <tunnels.DefaultSidebarTriggerTunnel.Out />
-            )}
           </div>
           <tunnels.ToolbarNavigationTunnel.Out />
         </div>
@@ -703,42 +764,25 @@ const LayerUI = ({
               onProperties={openProperties}
             />
             <tunnels.ToolbarExtrasTunnel.Out />
-            <UndoRedoActions renderAction={actionManager.renderAction} />
-            <ToolButton
-              type="button"
-              className="fc-board-tool fc-board-mode"
-              icon={
-                <FactoryIcon
-                  name={appState.multiStroke !== false ? "multi" : "single"}
-                />
-              }
-              aria-label={
-                appState.multiStroke !== false
-                  ? t("fcboard.multi_touch_writing")
-                  : t("fcboard.single_touch_writing")
-              }
-              title={t(
-                "fcboard.multi_write_together_single_accept_one_contact_pinch_to_zoom_with_select_or_hand",
-              )}
-              selected={appState.multiStroke !== false}
-              onClick={() =>
-                setAppState({ multiStroke: appState.multiStroke === false })
-              }
-            >
-              <span className="ToolIcon__label">
-                {appState.multiStroke !== false
-                  ? t("fcboard.multi")
-                  : t("fcboard.single")}
-              </span>
-            </ToolButton>
+            <div className="undo-redo-buttons">
+              {(["undo", "redo"] as const)
+                .filter((id) => toolbarItems.includes(id))
+                .map((id) => (
+                  <span
+                    key={id}
+                    className="fc-toolbar-shortcut"
+                    data-toolbar-item={id}
+                    style={{ order: 10 + toolbarItems.indexOf(id) }}
+                  >
+                    {actionManager.renderAction(id)}
+                  </span>
+                ))}
+            </div>
           </div>
         ) : (
           <ExitViewModeButton actionManager={actionManager} />
         )}
         <div className="fc-toolbar-side fc-toolbar-trailing">
-          <tunnels.ToolbarActionsTunnel.Out />
-          <tunnels.FooterCenterTunnel.Out />
-          {renderTopRightUI?.(editorInterface.formFactor === "phone", appState)}
           <ToolButton
             type="button"
             className="fc-board-tool"
@@ -747,9 +791,14 @@ const LayerUI = ({
             title={t("fcboard.swap_toolbar_sides")}
             showAriaLabel
             onClick={() =>
-              setAppState({ toolbarReversed: !appState.toolbarReversed })
+              setAppState({
+                toolbarReversed: !appState.toolbarReversed,
+                openMenu: null,
+              })
             }
           />
+        </div>
+        {(appState.toolbarCollapseEnabled || toolbarHidden) && (
           <ToolButton
             type="button"
             className="fc-board-tool fc-toolbar-visibility"
@@ -763,12 +812,8 @@ const LayerUI = ({
               setShowProperties(false);
               setAppState({ toolbarHidden: !toolbarHidden, openMenu: null });
             }}
-          >
-            <span className="ToolIcon__label">
-              {toolbarHidden ? t("fcboard.show") : t("fcboard.hide")}
-            </span>
-          </ToolButton>
-        </div>
+          />
+        )}
       </div>
     </>
   );

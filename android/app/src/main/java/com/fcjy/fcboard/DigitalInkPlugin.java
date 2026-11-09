@@ -27,7 +27,7 @@ public class DigitalInkPlugin extends Plugin {
     private static final Executor DIRECT = Runnable::run;
     // Serialize short SDK submissions, never wait here for model checks or inference.
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
-    private final java.util.concurrent.Semaphore inference = new java.util.concurrent.Semaphore(1);
+    private final java.util.concurrent.Semaphore inference = new java.util.concurrent.Semaphore(2);
     private final Set<Request> pending = ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
     private DigitalInkPacks packs;

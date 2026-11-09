@@ -146,7 +146,7 @@ export const offlineInference = (
       }
       await result.catch(() => {});
       running = false;
-      idle = setTimeout(release, 15000);
+      idle = setTimeout(release, 120000);
     });
   return result.finally(() => {
     queued--;

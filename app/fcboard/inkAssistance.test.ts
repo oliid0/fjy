@@ -524,7 +524,7 @@ it.each(["12\nx3\n----", "12x3"])(
   },
 );
 
-it("quietly preserves an invalid function and discards late math after erasing", async () => {
+it("reports an invalid function while preserving its ink and discards late math after erasing", async () => {
   vi.useFakeTimers();
   const { api, ink, draw, erase } = setup("function");
   saveSettings({ ...defaults, apiKey: "", model: "" }, false);
@@ -540,7 +540,8 @@ it("quietly preserves an invalid function and discards late math after erasing",
     });
     expect(api.getSceneElements()).toEqual([ink]);
     expect(api.updateScene).not.toHaveBeenCalled();
-    expect(error).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).toBeInstanceOf(Error);
     erase();
     let finish!: (value: string) => void;
     recognize.mockImplementation(

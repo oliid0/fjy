@@ -22,12 +22,12 @@ test("real touch input distinguishes a single-mode pinch from committed and mult
   await expect(
     toolbar.getByRole("button", { name: "单点书写", exact: true }),
   ).toBeVisible();
-  await toolbar.getByRole("button", { name: "画笔", exact: true }).click();
+  await toolbar.getByRole("button", { name: "笔", exact: true }).click();
   if (await page.locator(".fc-editor-properties").isVisible()) {
     await page.keyboard.press("Escape");
   }
   await expect(
-    toolbar.getByRole("button", { name: "画笔", exact: true }),
+    toolbar.getByRole("button", { name: "笔", exact: true }),
   ).toHaveClass(/ToolIcon--selected/);
   const client = await page.context().newCDPSession(page);
   const touch = (
@@ -70,7 +70,7 @@ test("real touch input distinguishes a single-mode pinch from committed and mult
   await expect.poll(zoom).toBeCloseTo(1.5);
   await expect.poll(inkCount).toBe(0);
   await expect(
-    toolbar.getByRole("button", { name: "画笔", exact: true }),
+    toolbar.getByRole("button", { name: "笔", exact: true }),
   ).toHaveClass(/ToolIcon--selected/);
   await touch("touchStart", [{ id: 3, x: 400, y: 280 }]);
   await touch("touchMove", [{ id: 3, x: 460, y: 280 }]);

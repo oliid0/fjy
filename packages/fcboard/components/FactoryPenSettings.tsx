@@ -8,48 +8,36 @@ import { t, useI18n } from "../i18n";
 import { switchWhiteboardPen, switchWhiteboardTip } from "../whiteboardPen";
 import { useSwipePages } from "../hooks/useSwipePages";
 
-import hard from "./factory-pen-icons/hard.svg?url";
-import hardSelected from "./factory-pen-icons/hard-selected.svg?url";
-import brush from "./factory-pen-icons/brush.svg?url";
-import brushSelected from "./factory-pen-icons/brush-selected.svg?url";
-import highlighter from "./factory-pen-icons/highlighter.svg?url";
-import highlighterSelected from "./factory-pen-icons/highlighter-selected.svg?url";
-import dashed from "./factory-pen-icons/dashed.svg?url";
-import dashedSelected from "./factory-pen-icons/dashed-selected.svg?url";
-import text from "./factory-pen-icons/text.svg?url";
-import textSelected from "./factory-pen-icons/text-selected.svg?url";
-import shape from "./factory-pen-icons/shape.svg?url";
-import shapeSelected from "./factory-pen-icons/shape-selected.svg?url";
-import magic from "./factory-pen-icons/magic.svg?url";
-import magicSelected from "./factory-pen-icons/magic-selected.svg?url";
-import rainbow from "./factory-pen-icons/rainbow.svg?url";
-import rainbowSelected from "./factory-pen-icons/rainbow-selected.svg?url";
+import { FactoryIcon } from "./FactoryIcon";
 
 import type { FcboardImperativeAPI, UIAppState } from "../types";
 
+// menu_pen_select.xml; support_ai_pen=false, all other seven entries enabled.
 const pens = [
-  ["hard", "pen", hard, hardSelected],
-  ["brush", "fountain", brush, brushSelected],
-  ["highlighter", "highlighter", highlighter, highlighterSelected],
-  ["dashed", "dashed_pen", dashed, dashedSelected],
-  ["text", "text_pen", text, textSelected],
-  ["shape", "shape_pen", shape, shapeSelected],
-  ["magic", "magic_pen", magic, magicSelected],
-  ["rainbow", "rainbow_pen", rainbow, rainbowSelected],
-  ["function", "function_pen", shape, shapeSelected],
-  ["calculation", "calculation_pen", text, textSelected],
-  ["language", "language_pen", text, textSelected],
+  ["hard", "pen", "penCommonBody", "penNormalNib"],
+  ["brush", "fountain", "penCommonBody", "penInkNib"],
+  ["highlighter", "highlighter", "penCommonBody", "penMarkerNib"],
+  ["text", "text_pen", "penTextBody", "penNormalNib"],
+  ["shape", "shape_pen", "penShapeBody", "penNormalNib"],
+  ["laser", "laser_pen", "penLaserBody", "penLaserNib"],
+  ["magic", "magic_pen", "penMagicBody", "penMagicNib"],
+  // Existing additional local capabilities remain on the next page.
+  ["dashed", "dashed_pen", "penCommonBody", "penNormalNib"],
+  ["rainbow", "rainbow_pen", "penCommonBody", "penNormalNib"],
+  ["function", "function_pen", "penShapeBody", "penNormalNib"],
+  ["calculation", "calculation_pen", "penTextBody", "penNormalNib"],
+  ["language", "language_pen", "penTextBody", "penNormalNib"],
 ] as const;
 const colors = [
+  "#f3f3f3",
+  "#7b7b7b",
   "#000000",
-  "#ffffff",
+  "#ff964f",
+  "#7fec50",
   "#ff0000",
-  "#ffff00",
-  "#00ff00",
-  "#ff8e45",
-  "#62fdff",
-  "#0c00ff",
-  "#e100ff",
+  "#3b52c8",
+  "#eecf00",
+  "#15c5c3",
 ];
 
 /** The preview geometry and pressure envelope follow PenPreviewView.java. */
@@ -159,7 +147,7 @@ export const FactoryPenSettings = ({
   close,
 }: {
   app: {
-    api: Pick<FcboardImperativeAPI, "updateScene">;
+    api: Pick<FcboardImperativeAPI, "updateScene" | "setActiveTool">;
     props: { UIOptions: { inkProfile?: { penWidthMax?: 20 | 40 } } };
   };
   state: UIAppState;
@@ -172,7 +160,7 @@ export const FactoryPenSettings = ({
   const active =
     state.currentItemInkAssist || state.currentItemPenMode || "hard";
   const [page, setPage] = useState(
-    pens.slice(8).some(([mode]) => mode === active) ? 1 : 0,
+    pens.slice(7).some(([mode]) => mode === active) ? 1 : 0,
   );
   const pageSwipe = useSwipePages(setPage, 2);
   return (
@@ -194,6 +182,9 @@ export const FactoryPenSettings = ({
                 })
               }
             >
+              <FactoryIcon
+                name={tip === "fine" ? "penThinHead" : "penThickHead"}
+              />
               {t(tip === "fine" ? "fcboard.fine_pen" : "fcboard.thick_pen")}
             </button>
           ))}
@@ -225,8 +216,8 @@ export const FactoryPenSettings = ({
         {...pageSwipe}
       >
         {pens
-          .slice(page === 0 ? 0 : 8, page === 0 ? 8 : undefined)
-          .map(([mode, label, normal, selected]) => (
+          .slice(page === 0 ? 0 : 7, page === 0 ? 7 : undefined)
+          .map(([mode, label, body, nib]) => (
             <button
               key={mode}
               type="button"
@@ -250,6 +241,11 @@ export const FactoryPenSettings = ({
                   : t(`fcboard.${label}`)
               }
               onClick={() => {
+                if (mode === "laser") {
+                  app.api.setActiveTool({ type: "laser" });
+                  close();
+                  return;
+                }
                 if (
                   mode === "text" ||
                   mode === "shape" ||
@@ -272,10 +268,18 @@ export const FactoryPenSettings = ({
                     },
                   });
                 }
-                close();
+                if (page === 1) {
+                  close();
+                }
               }}
             >
-              <img src={active === mode ? selected : normal} alt="" />
+              <span
+                className="fc-native-pen-graphic"
+                style={{ color: state.currentItemStrokeColor }}
+              >
+                <FactoryIcon name={nib} />
+                <FactoryIcon name={body} />
+              </span>
               <span>{t(`fcboard.${label}`)}</span>
             </button>
           ))}
@@ -325,7 +329,6 @@ export const FactoryPenSettings = ({
               app.api.updateScene({
                 appState: { currentItemStrokeColor: color },
               });
-              close();
             }}
           >
             <span style={{ background: color }} />

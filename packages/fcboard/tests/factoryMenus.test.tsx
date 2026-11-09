@@ -18,7 +18,7 @@ const tap = (target: Element) => {
   fireEvent.click(target);
 };
 
-it("toggles the pen menu with real pointer-down taps and keeps the original eight pens together", async () => {
+it("toggles the pen menu with real pointer-down taps and keeps the original seven visible pens together", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   act(() => h.app.setActiveTool({ type: "freedraw" }));
   const pen = screen.getByRole("button", { name: t("fcboard.pen") });
@@ -29,7 +29,7 @@ it("toggles the pen menu with real pointer-down taps and keeps the original eigh
   const penTypes = within(dialog).getAllByRole("group", {
     name: t("fcboard.pen_type"),
   })[0];
-  expect(within(penTypes).getAllByRole("button")).toHaveLength(8);
+  expect(within(penTypes).getAllByRole("button")).toHaveLength(7);
   expect(
     within(dialog).queryByRole("button", {
       name: t("fcboard.calculation_pen"),
@@ -67,26 +67,32 @@ it("toggles the pen menu with real pointer-down taps and keeps the original eigh
   ).toHaveAttribute("aria-pressed", "true");
 });
 
-it("switches eraser modes horizontally without leaving the menu or changing its selected size", async () => {
+it("closes after choosing an eraser mode, preserves size, and reopens on a later tap", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
-  const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
-  tap(eraser);
-  tap(eraser);
-  const dialog = screen.getByRole("dialog", {
-    name: t("fcboard.eraser_settings"),
-  });
-  const modes = within(dialog).getByRole("group", {
-    name: t("fcboard.erase_mode"),
-  });
-  const size = h.state.eraserSize;
-  fireEvent.keyDown(modes, { key: "ArrowRight" });
-  expect(h.state.eraserMode).toBe("object");
-  expect(dialog).toBeInTheDocument();
-  fireEvent.keyDown(modes, { key: "ArrowLeft" });
-  expect(h.state.eraserMode).toBe("stroke");
-  expect(h.state.eraserSize).toBe(size);
-  tap(eraser);
-  expect(
-    screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
-  ).toBeNull();
+  let time = 1000;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => time);
+  try {
+    const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
+    tap(eraser);
+    const size = h.state.eraserSize;
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.erase_entire_object") }),
+    );
+    expect(h.state.eraserMode).toBe("region");
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeNull();
+    time += 400;
+    tap(eraser);
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.erase_part_of_a_stroke") }),
+    );
+    expect(h.state.eraserMode).toBe("stroke");
+    expect(h.state.eraserSize).toBe(size);
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeNull();
+  } finally {
+    clock.mockRestore();
+  }
 });

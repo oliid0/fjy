@@ -7,7 +7,10 @@ import { saveToolbarItems, TOOLBAR_STORAGE } from "../toolbarPreferences";
 import { render, screen, fireEvent } from "./test-utils";
 
 describe("unified bottom toolbar", () => {
-  afterEach(() => localStorage.removeItem(TOOLBAR_STORAGE));
+  afterEach(() => {
+    localStorage.removeItem(TOOLBAR_STORAGE);
+    vi.restoreAllMocks();
+  });
   it("updates pinned actions immediately and keeps all drawing controls when optional items are hidden", async () => {
     await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }}>
@@ -38,19 +41,24 @@ describe("unified bottom toolbar", () => {
         within(toolbar).getByRole("button", { name: t(`fcboard.${label}`) }),
       ).toBeVisible();
     }
-    expect(toolbar.querySelector(".fc-board-mode")).toBeInTheDocument();
-    expect(within(toolbar).getByTestId("button-undo")).toBeInTheDocument();
-    expect(within(toolbar).getByTestId("button-redo")).toBeInTheDocument();
+    expect(toolbar.querySelector(".fc-board-mode")).toBeNull();
+    expect(within(toolbar).queryByTestId("button-undo")).toBeNull();
+    expect(within(toolbar).queryByTestId("button-redo")).toBeNull();
   });
-  it("opens shapes without activating a drawing tool, dismisses outside, and reopens the insertion menu", async () => {
+  it("activates the current shape before opening its picker, dismisses outside, and reopens the insertion menu", async () => {
     const { container } = await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const insert = screen.getByRole("button", { name: t("fcboard.toolbox") });
-    const original = window.h.state.activeTool.type;
+    let clock = 1000;
+    vi.spyOn(Date, "now").mockImplementation(() => clock);
     fireEvent.click(insert);
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
-    expect(window.h.state.activeTool.type).toBe(original);
+    fireEvent.click(
+      within(screen.getByRole("toolbar")).getByRole("button", {
+        name: t("fcboard.shape"),
+      }),
+    );
+    expect(window.h.state.activeTool.type).toBe("line");
     const modal = container.querySelector(".MuiDialog-root")!;
     expect(modal).not.toBeNull();
     fireEvent.keyDown(
@@ -60,6 +68,7 @@ describe("unified bottom toolbar", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("toolbar-rectangle")).toBeNull(),
     );
+    clock += 400;
     fireEvent.click(insert);
     expect(
       screen.getByRole("button", { name: t("fcboard.shape") }),
@@ -80,9 +89,7 @@ describe("unified bottom toolbar", () => {
     expect(
       within(toolbar).getByTestId("main-menu-trigger"),
     ).toBeInTheDocument();
-    expect(
-      toolbar.querySelector(".default-sidebar-trigger"),
-    ).toBeInTheDocument();
+    expect(toolbar.querySelector(".default-sidebar-trigger")).toBeNull();
     expect(toolbar.querySelector(".zoom-actions")).toBeNull();
     expect(within(toolbar).queryByTestId("toolbar-rectangle")).toBeNull();
     expect(
@@ -94,7 +101,11 @@ describe("unified bottom toolbar", () => {
     expect(
       screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.shape") }));
+    fireEvent.click(
+      within(screen.getByRole("toolbar")).getByRole("button", {
+        name: t("fcboard.shape"),
+      }),
+    );
     expect(screen.getByTestId("toolbar-rectangle")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("toolbar-rectangle"));
     expect(window.h.state.activeTool.type).toBe("rectangle");
@@ -136,5 +147,76 @@ describe("unified bottom toolbar", () => {
         name: t("fcboard.pen_and_object_properties"),
       }),
     ).toBeNull();
+  });
+
+  it("matches first/repeated/rapid clicks and activates a held pen only on release", async () => {
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    let time = 1000;
+    vi.spyOn(Date, "now").mockImplementation(() => time);
+    const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
+    const pen = screen.getByRole("button", { name: t("fcboard.pen") });
+    fireEvent.click(eraser);
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.eraser_sizes") }),
+    );
+    expect(
+      screen.getByRole("slider", { name: t("fcboard.eraser_sizes") }),
+    ).toBeVisible();
+    time += 399;
+    fireEvent.click(eraser);
+    expect(
+      screen.getByRole("slider", { name: t("fcboard.eraser_sizes") }),
+    ).toBeVisible();
+    time++;
+    fireEvent.click(eraser);
+    expect(
+      screen.queryByRole("slider", { name: t("fcboard.eraser_sizes") }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeVisible();
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(pen, {
+        pointerId: 1,
+        pointerType: "touch",
+        button: 0,
+      });
+      await vi.advanceTimersByTimeAsync(600);
+      expect(window.h.state.activeTool.type).toBe("eraser");
+      expect(
+        screen.queryByRole("dialog", {
+          name: t("fcboard.pen_and_object_properties"),
+        }),
+      ).toBeNull();
+      fireEvent.pointerUp(pen, {
+        pointerId: 1,
+        pointerType: "touch",
+        button: 0,
+      });
+      fireEvent.click(pen);
+      expect(window.h.state.activeTool.type).toBe("freedraw");
+      expect(
+        screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
+      ).toBeNull();
+      fireEvent.click(pen);
+      expect(
+        screen.getByRole("dialog", {
+          name: t("fcboard.pen_and_object_properties"),
+        }),
+      ).toBeVisible();
+      fireEvent.click(pen);
+      expect(
+        screen.queryByRole("dialog", {
+          name: t("fcboard.pen_and_object_properties"),
+        }),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
   });
 });

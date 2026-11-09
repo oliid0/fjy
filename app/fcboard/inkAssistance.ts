@@ -476,8 +476,6 @@ export const observeInkAssistance = (
               }
               if (
                 !target &&
-                mode !== "function" &&
-                mode !== "calculation" &&
                 !(
                   failure instanceof Error &&
                   failure.message === "Shape incomplete"

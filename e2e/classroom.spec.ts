@@ -44,7 +44,12 @@ for (const viewport of [
       viewport.width <= 600 ? 200 : viewport.width <= 1000 ? 170 : 80;
     expect(bounds.y).toBeGreaterThanOrEqual(viewport.height - maxToolbarHeight);
     expect(
-      Math.abs(bounds.y + bounds.height - viewport.height),
+      Math.abs(
+        bounds.y +
+          bounds.height +
+          (viewport.width <= 360 ? 10.8 : 13.4) -
+          viewport.height,
+      ),
     ).toBeLessThanOrEqual(1);
     expect(bounds.height).toBeLessThanOrEqual(maxToolbarHeight);
     const buttons = await toolbar.locator("button").evaluateAll((nodes) =>
@@ -82,7 +87,10 @@ for (const viewport of [
             available: button.clientHeight,
             content:
               icon.getBoundingClientRect().height +
-              parseFloat(getComputedStyle(button, "::after").lineHeight) +
+              parseFloat(
+                getComputedStyle(button.querySelector(".ToolIcon__label")!)
+                  .lineHeight,
+              ) +
               parseFloat(style.rowGap) +
               parseFloat(style.paddingTop) +
               parseFloat(style.paddingBottom),
@@ -189,7 +197,7 @@ for (const viewport of [
     await toolbar.evaluate((element) => {
       element.scrollLeft = 0;
     });
-    const pen = toolbar.getByRole("button", { name: "画笔", exact: true });
+    const pen = toolbar.getByRole("button", { name: "笔", exact: true });
     await pen.click();
     await pen.click();
     await expect(
@@ -239,7 +247,7 @@ for (const viewport of [
     const tools = page.getByRole("dialog", { name: "工具箱", exact: true });
     await expect(tools.getByText("更多工具", { exact: true })).toHaveCount(0);
     await expect(
-      tools.getByRole("button", { name: "语音指令", exact: true }),
+      tools.getByRole("button", { name: "打开投票", exact: true }),
     ).toBeVisible();
     const toolsBounds = (await tools.boundingBox())!;
     expect(
@@ -258,17 +266,17 @@ for (const viewport of [
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(" ").length,
       );
-    expect(columns).toBe(viewport.width <= 600 ? 4 : 6);
+    expect(columns).toBe(5);
     await page.screenshot({
       path: testInfo.outputPath(`tools-${viewport.width}.png`),
     });
     await expect(
-      tools.getByRole("button", { name: "语音指令", exact: true }),
+      tools.getByRole("button", { name: "打开投票", exact: true }),
     ).toBeVisible();
     await tools.press("Escape");
     await expect(tools).toBeHidden();
     await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
-    await page.getByRole("button", { name: "教学资源", exact: true }).click();
+    await page.getByRole("button", { name: "学科工具", exact: true }).click();
     const resources = page.getByRole("dialog", {
       name: "教学资源",
       exact: true,

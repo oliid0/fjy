@@ -1,156 +1,300 @@
-// com.xbh.whiteboard layout_drawboard_tool / main_bar_image_item_layout.
+// x.apk values/dimens.xml x1=.67dp; layout_drawboard_tool and menu_bar.
+// Plain CSS also permits measuring this stylesheet in the installed WebView.
 .app .fcboard .fc-unified-toolbar {
-  inset: auto max(12px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-  gap: 12px;
+  --fc-unit: 0.67px;
   --icon-fill-color: #010101;
-  .fc-toolbar-leading,
-  .fc-drawing-tools,
-  .fc-toolbar-trailing {
-    padding: calc(8 * var(--fc-unit));
-    border: 0;
-    border-radius: calc(12 * var(--fc-unit));
-    background: #fcfcfe;
-    gap: calc(6 * var(--fc-unit));
-    box-shadow: 0 2px 12px #0000000a;
-  }
-  .fc-drawing-tools {
-    display: flex;
-    flex-wrap: nowrap;
-    width: max-content;
-    max-width: 100%;
-    overflow-x: auto;
-    > .fc-board-mode {
-      order: 3;
-    }
-    .undo-redo-buttons {
-      display: contents;
-    }
-    [data-testid="button-undo"] {
-      order: 4;
-    }
-    [data-testid="button-redo"] {
-      order: 5;
-    }
-  }
-  .fc-toolbar-shortcut {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-  }
-  .ToolIcon,
-  .fc-toolbar-shortcut button,
-  .main-menu-trigger,
-  .undo-redo-buttons button,
-  .fc-toolbar-extras > button {
-    width: calc(58 * var(--fc-unit));
-    min-width: calc(58 * var(--fc-unit));
-    height: calc(58 * var(--fc-unit));
-    min-height: calc(58 * var(--fc-unit));
-    flex-direction: column;
-    justify-content: center;
-    gap: calc(2 * var(--fc-unit));
-    padding: calc(4 * var(--fc-unit));
-    border: 0;
-    border-radius: calc(8 * var(--fc-unit));
-    background: transparent;
-    color: #010101;
-    font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit)) system-ui,
-      sans-serif;
-    > span {
-      font: inherit;
-    }
-    &.ToolIcon--selected:not(.fc-board-mode) {
-      background: #0368ff;
-      color: #fff;
-      --icon-fill-color: #fff;
-    }
-    &:focus-visible {
-      outline: 2px solid #0368ff;
-      outline-offset: -2px;
-    }
-  }
-  .ToolIcon__icon {
-    width: calc(28 * var(--fc-unit));
-    height: calc(28 * var(--fc-unit));
-    flex-basis: calc(28 * var(--fc-unit));
-  }
-  svg {
-    width: calc(28 * var(--fc-unit));
-    height: calc(28 * var(--fc-unit));
-    padding: 0;
-  }
-  .fc-toolbar-shortcut > button {
-    display: flex;
-    align-items: center;
-  }
-  .fc-toolbar-shortcut img {
-    width: calc(28 * var(--fc-unit));
-    height: calc(28 * var(--fc-unit));
-  }
-  .fc-toolbar-extras {
-    gap: calc(6 * var(--fc-unit));
-  }
-  .fc-board-controls {
-    background: #f2f3f7;
-    border-radius: 6px;
-    padding: 0 4px;
-  }
-  .fc-board-controls button {
-    height: calc(44 * var(--fc-unit));
-    min-height: calc(44 * var(--fc-unit));
-  }
-  .fc-board-controls button svg {
-    width: 22px;
-    height: 22px;
-    padding: 3px;
-  }
+  --default-button-size: calc(58 * var(--fc-unit));
+  --lg-button-size: calc(58 * var(--fc-unit));
+  position: absolute;
+  inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right))
+    max(calc(20 * var(--fc-unit)), env(safe-area-inset-bottom))
+    max(calc(20 * var(--fc-unit)), env(safe-area-inset-left));
+  display: block;
+  height: calc(74 * var(--fc-unit));
+  gap: 0;
+  overflow: visible;
 }
-.app .fcboard .fc-combined-toolbox {
-  width: min(calc(520 * var(--fc-unit)), calc(100vw - 24px));
-  padding: calc(20 * var(--fc-unit));
+.app .fcboard .fc-unified-toolbar .fc-toolbar-leading,
+.app .fcboard .fc-unified-toolbar .fc-drawing-tools,
+.app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  width: max-content;
+  max-width: none;
+  height: calc(74 * var(--fc-unit));
+  padding: calc(8 * var(--fc-unit));
   border: 0;
-  border-radius: calc(16 * var(--fc-unit));
+  border-radius: calc(12 * var(--fc-unit));
   background: #fcfcfe;
-  max-height: calc(var(--fc-viewport-height, 100vh) - 170px);
+  gap: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-leading {
+  left: 0;
+}
+.app .fcboard .fc-unified-toolbar .fc-drawing-tools {
+  left: 50%;
+  transform: translateX(-50%);
+  gap: calc(6 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
+  right: 0;
+  padding-left: calc(14 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-reversed .fc-toolbar-leading {
+  left: auto;
+  right: 0;
+  flex-direction: row-reverse;
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-reversed .fc-toolbar-trailing {
+  right: auto;
+  left: 0;
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-group,
+.app .fcboard .fc-unified-toolbar .fc-toolbar-extras {
+  gap: 0;
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-shortcut {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.app .fcboard .fc-unified-toolbar button,
+.app .fcboard .fc-unified-toolbar button.ToolIcon {
+  display: flex;
+  box-sizing: border-box;
+  width: calc(58 * var(--fc-unit));
+  min-width: calc(58 * var(--fc-unit));
+  height: calc(58 * var(--fc-unit));
+  min-height: calc(58 * var(--fc-unit));
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(2 * var(--fc-unit));
+  padding: 0;
+  border: 0;
+  border-radius: calc(12 * var(--fc-unit));
+  background: transparent;
+  color: #010101;
+  box-shadow: none;
+  font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit)) system-ui,
+    sans-serif;
+  touch-action: manipulation;
+  opacity: 1;
+}
+.app .fcboard .fc-unified-toolbar button.ToolIcon--selected {
+  background: #0368ff;
+  color: #fff;
+  --icon-fill-color: #fff;
+}
+.app
+  .fcboard
+  .fc-unified-toolbar
+  button:active:not(:disabled):not(.ToolIcon--selected) {
+  background: #ebebeb;
+  opacity: 1;
+}
+.app .fcboard .fc-unified-toolbar button:disabled {
+  color: #979797;
+  --icon-fill-color: #979797;
+  opacity: 1;
+}
+.app .fcboard .fc-unified-toolbar button:focus-visible {
+  outline: calc(2 * var(--fc-unit)) solid #0368ff;
+  outline-offset: 0;
+}
+.app .fcboard .fc-unified-toolbar .ToolIcon__label,
+.app .fcboard .fc-unified-toolbar button > span,
+.app .fcboard .fc-unified-toolbar button::after {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  line-height: calc(18 * var(--fc-unit));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+.app .fcboard .fc-unified-toolbar [data-testid="button-undo"]::after,
+.app .fcboard .fc-unified-toolbar [data-testid="button-redo"]::after {
+  content: none;
+}
+.app .fcboard .fc-unified-toolbar .ToolIcon__icon,
+.app .fcboard .fc-unified-toolbar svg,
+.app .fcboard .fc-unified-toolbar .fc-toolbar-icon {
+  width: calc(28 * var(--fc-unit));
+  min-width: 0;
+  height: calc(28 * var(--fc-unit));
+  min-height: 0;
+  flex: 0 0 calc(28 * var(--fc-unit));
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+.app .fcboard .fc-unified-toolbar .fc-pen-icon {
+  position: relative;
+  display: block;
+  width: calc(30 * var(--fc-unit));
+  height: calc(30 * var(--fc-unit));
+  overflow: visible;
+}
+.app .fcboard .fc-unified-toolbar .fc-pen-icon svg {
+  position: absolute;
+}
+.app .fcboard .fc-unified-toolbar .fc-pen-icon .fc-pen-body {
+  left: calc(5 * var(--fc-unit));
+  top: calc(5 * var(--fc-unit));
+  width: calc(20 * var(--fc-unit));
+  height: calc(20 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-pen-icon .fc-pen-thin {
+  left: 0;
+  top: calc(23 * var(--fc-unit));
+  width: calc(5 * var(--fc-unit));
+  height: calc(5 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-pen-icon .fc-pen-thick {
+  left: calc(22 * var(--fc-unit));
+  top: calc(2 * var(--fc-unit));
+  width: calc(6 * var(--fc-unit));
+  height: calc(6 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-board-controls {
+  display: flex;
+  box-sizing: border-box;
+  width: calc(210 * var(--fc-unit));
+  height: calc(58 * var(--fc-unit));
+  margin-inline: calc(6 * var(--fc-unit));
+  padding: calc(15 * var(--fc-unit)) calc(8 * var(--fc-unit));
+  border-radius: calc(12 * var(--fc-unit));
+  background: #f2f2f2;
+  gap: 0;
+}
+.app .fcboard .fc-unified-toolbar .fc-board-controls button,
+.app .fcboard .fc-unified-toolbar .fc-board-controls button svg {
+  width: calc(28 * var(--fc-unit));
+  min-width: calc(28 * var(--fc-unit));
+  height: calc(28 * var(--fc-unit));
+  min-height: calc(28 * var(--fc-unit));
+  padding: 0;
+}
+.app .fcboard .fc-unified-toolbar .fc-board-controls [data-board-switcher] {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+}
+.app .fcboard .fc-unified-toolbar .fc-board-controls button:last-child {
+  margin-left: calc(12 * var(--fc-unit));
+  margin-right: calc(8 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-board-controls .fc-board-count {
+  font: 400 calc(20 * var(--fc-unit)) / 1 system-ui, sans-serif;
+}
+.app
+  .fcboard
+  .fc-unified-toolbar.fc-toolbar-reversed
+  .fc-board-controls
+  button:last-child {
+  order: -1;
+  margin-left: calc(8 * var(--fc-unit));
+  margin-right: calc(12 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
+  position: absolute;
+  left: 50%;
+  bottom: calc(84 * var(--fc-unit));
+  transform: translateX(-50%);
+  width: calc(40 * var(--fc-unit));
+  min-width: calc(40 * var(--fc-unit));
+  height: calc(20 * var(--fc-unit));
+  min-height: calc(20 * var(--fc-unit));
+  pointer-events: auto;
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-visibility .ToolIcon__icon,
+.app .fcboard .fc-unified-toolbar .fc-toolbar-visibility svg {
+  width: 100%;
+  height: 100%;
+  flex-basis: auto;
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-leading,
+.app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-drawing-tools,
+.app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-trailing {
+  display: none;
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-visibility {
+  bottom: calc(10 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-tight .fc-toolbar-cloud {
+  display: none;
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-tight .fc-toolbar-trailing {
+  visibility: hidden;
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-cloud {
+  margin-left: calc(6 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar .fc-toolbar-extras {
+  padding: 0;
+  border: 0;
+}
+
+.app .fcboard .fc-combined-toolbox {
+  --fc-unit: 0.67px;
+  box-sizing: border-box;
+  width: min(calc(354 * var(--fc-unit)), calc(100vw - 24px));
+  padding: calc(12 * var(--fc-unit));
+  border: 0;
+  border-radius: calc(12 * var(--fc-unit));
+  background: #fcfcfe;
+  max-height: calc(var(--fc-viewport-height, 100vh) - 80px);
   overflow-y: auto;
-  box-shadow: 0 4px 24px #00000024;
-  .fc-insert-grid {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 12px 8px;
-    .fc-factory-tools {
-      display: contents;
-    }
-    > button,
-    .fc-factory-tools > button {
-      width: 100%;
-      min-width: 0;
-      height: auto;
-      min-height: 62px;
-      order: 0 !important;
-      padding: 4px 2px;
-      gap: 6px;
-      font: 400 11px / 1.35 system-ui, sans-serif;
-    }
-    button > svg,
-    button > img {
-      width: 28px;
-      height: 28px;
-    }
-    button > span {
-      max-width: 100%;
-      white-space: normal;
-      overflow-wrap: anywhere;
-    }
-    button:disabled {
-      opacity: 0.35;
-    }
-    button:focus-visible {
-      outline: 2px solid #0368ff;
-      border-radius: 8px;
-    }
-  }
+  box-shadow: none;
+}
+.app .fcboard .fc-combined-toolbox .fc-insert-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: calc(12 * var(--fc-unit)) calc(10 * var(--fc-unit));
+}
+.app .fcboard .fc-combined-toolbox .fc-factory-tools {
+  display: contents;
+}
+.app .fcboard .fc-combined-toolbox .fc-insert-grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: calc(58 * var(--fc-unit));
+  height: calc(58 * var(--fc-unit));
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(12 * var(--fc-unit));
+  background: transparent;
+  color: #010101;
+  gap: calc(2 * var(--fc-unit));
+  font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit)) system-ui,
+    sans-serif;
+}
+.app .fcboard .fc-combined-toolbox .fc-insert-grid button svg {
+  width: calc(28 * var(--fc-unit));
+  height: calc(28 * var(--fc-unit));
+}
+.app .fcboard .fc-combined-toolbox .fc-insert-grid button > span {
+  white-space: nowrap;
+  font: inherit;
+}
+.app .fcboard .fc-combined-toolbox .fc-insert-grid button:active {
+  background: #ebebeb;
+}
+.app .fcboard .fc-combined-toolbox .fc-insert-grid button:disabled {
+  color: #979797;
+  opacity: 1;
 }
 .app .fc-board-preview-list {
   .fc-board-list {
@@ -210,74 +354,6 @@
     gap: 8px;
   }
 }
-@media (max-width: 1000px) {
-  .app .fcboard .fc-unified-toolbar {
-    gap: 6px;
-  }
-  .app .fcboard .fc-unified-toolbar .fc-drawing-tools {
-    width: 100%;
-    justify-content: center;
-  }
-}
-@media (max-width: 600px) {
-  .app .fcboard .fc-unified-toolbar {
-    inset-inline: 8px;
-    .fc-drawing-tools {
-      display: grid;
-      grid-template-columns: repeat(7, minmax(0, 1fr));
-      overflow-x: hidden;
-      padding: 6px;
-    }
-    .fc-drawing-tools .ToolIcon,
-    .fc-toolbar-shortcut,
-    .fc-toolbar-shortcut > button {
-      min-width: 0;
-      width: 100%;
-    }
-    .fc-drawing-tools .ToolIcon {
-      height: 48px;
-      min-height: 48px;
-    }
-    .fc-toolbar-leading,
-    .fc-toolbar-trailing {
-      padding: 4px;
-      max-width: 100%;
-    }
-    .fc-toolbar-leading {
-      grid-column: 1 / -1;
-      grid-row: 2;
-      flex-wrap: nowrap;
-      width: 100%;
-      justify-content: space-between;
-    }
-    .fc-toolbar-trailing {
-      grid-column: 1 / -1;
-      grid-row: 3;
-      width: 100%;
-      justify-content: end;
-    }
-    &.fc-toolbar-reversed .fc-toolbar-leading {
-      grid-column: 1 / -1;
-      grid-row: 3;
-    }
-    &.fc-toolbar-reversed .fc-toolbar-trailing {
-      grid-column: 1 / -1;
-      grid-row: 2;
-    }
-    &.fc-toolbar-collapsed .fc-toolbar-trailing {
-      grid-row: 1;
-      width: max-content;
-    }
-  }
-  .app .fcboard .fc-combined-toolbox .fc-insert-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .fc-toolbar-settings .fc-toolbar-setting-grid {
-    padding: 16px 6px;
-    gap: 10px 6px;
-  }
-}
-
 .app .fc-split-launcher {
   position: absolute;
   z-index: 25;
@@ -326,8 +402,459 @@
   display: none;
 }
 
-.app .fcboard .fc-unified-toolbar .fc-toolbar-icon {
-  width: calc(28 * var(--fc-unit));
-  height: calc(28 * var(--fc-unit));
-  object-fit: contain;
+.app .fcboard .fc-unified-toolbar .undo-redo-buttons {
+  display: contents;
+}
+.app .fcboard .fc-unified-toolbar .fc-pen-thin path:first-child,
+.app .fcboard .fc-unified-toolbar .fc-pen-thick path:first-child {
+  fill: var(--fc-pen-color);
+}
+.app .fcboard .fc-unified-toolbar [data-toolbar-pen] .ToolIcon__icon {
+  width: calc(30 * var(--fc-unit));
+  height: calc(30 * var(--fc-unit));
+  flex-basis: calc(30 * var(--fc-unit));
+}
+.app .fcboard .fc-unified-toolbar [data-toolbar-pen] {
+  gap: 0;
+}
+.app .fcboard .fc-aerial-view {
+  --fc-unit: 0.67px;
+  width: calc(316 * var(--fc-unit));
+  padding: calc(8 * var(--fc-unit));
+  border-radius: calc(8 * var(--fc-unit));
+  background: #f2f2f2;
+  box-shadow: none;
+}
+.app .fcboard .fc-aerial-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  border-radius: calc(8 * var(--fc-unit));
+}
+.app .fcboard .fc-aerial-return {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: calc(8 * var(--fc-unit));
+  margin-top: calc(8 * var(--fc-unit));
+  padding: calc(6 * var(--fc-unit));
+  border: 0;
+  border-radius: calc(8 * var(--fc-unit));
+  background: transparent;
+  color: #010101;
+  font: 400 calc(14 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+}
+.app .fcboard .fc-aerial-return:active {
+  background: #ebebeb;
+}
+.app .fcboard .fc-aerial-return svg {
+  width: calc(16 * var(--fc-unit));
+  height: calc(16 * var(--fc-unit));
+}
+
+.app
+  .fcboard
+  .fc-unified-toolbar.fc-toolbar-reversed
+  .fc-toolbar-navigation-actions {
+  flex-direction: row-reverse;
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-reversed .fc-toolbar-cloud {
+  margin-left: 0;
+  margin-right: calc(6 * var(--fc-unit));
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="image"] {
+  order: 0 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="table"] {
+  order: 1 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="ruler"] {
+  order: 2 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="signal"] {
+  order: 3 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="mindmap"] {
+  order: 4 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="document"] {
+  order: 5 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="media"] {
+  order: 6 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="website"] {
+  order: 7 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="vote"] {
+  order: 8 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="timer"] {
+  order: 9 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="files"] {
+  order: 10 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="fourline"] {
+  order: 11 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="areaBg"] {
+  order: 12 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="sticky"] {
+  order: 13 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="period"] {
+  order: 14 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="resources"] {
+  order: 15 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="questions"] {
+  order: 16 !important;
+}
+
+.app .fcboard .fc-eraser-settings {
+  --fc-unit: 0.67px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #010101;
+}
+.app .fcboard .fc-native-eraser-row {
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--fc-unit));
+  height: calc(72 * var(--fc-unit));
+  box-sizing: border-box;
+  padding: calc(12 * var(--fc-unit));
+  border-radius: calc(12 * var(--fc-unit));
+  background: #fcfcfe;
+}
+.app .fcboard .fc-native-eraser-path {
+  display: flex;
+  border: calc(1 * var(--fc-unit)) solid #e4e4e6;
+  border-radius: calc(12 * var(--fc-unit));
+  overflow: hidden;
+}
+.app .fcboard .fc-native-eraser-row button {
+  box-sizing: border-box;
+  width: calc(48 * var(--fc-unit));
+  height: calc(48 * var(--fc-unit));
+  min-width: 0;
+  min-height: 0;
+  padding: calc(10 * var(--fc-unit));
+  border: 0;
+  border-radius: calc(12 * var(--fc-unit));
+  color: #010101;
+  background: transparent;
+}
+.app .fcboard .fc-native-eraser-row button svg {
+  width: 100%;
+  height: 100%;
+}
+.app .fcboard .fc-native-eraser-row button[aria-pressed="true"] {
+  color: white;
+  background: #0368ff;
+}
+.app .fcboard .fc-native-eraser-row .fc-native-eraser-path button {
+  border-radius: 0;
+}
+.app .fcboard .fc-native-eraser-path button:last-child {
+  width: calc(24 * var(--fc-unit));
+  padding-inline: calc(4 * var(--fc-unit));
+  border-left: calc(1 * var(--fc-unit)) solid #e4e4e6;
+}
+.app .fcboard .fc-native-eraser-row .fc-clear-slider {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: calc(156 * var(--fc-unit));
+  height: calc(48 * var(--fc-unit));
+  margin: 0;
+  padding: 0 0 0 calc(52 * var(--fc-unit));
+  border-radius: calc(4 * var(--fc-unit));
+  background: #ebebeb;
+  font: 400 calc(14 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+}
+.app .fcboard .fc-native-eraser-row .fc-clear-slider > svg {
+  position: absolute;
+  left: calc(38 * var(--fc-unit));
+  width: calc(14 * var(--fc-unit));
+  height: calc(14 * var(--fc-unit));
+}
+.app .fcboard .fc-native-eraser-row .fc-clear-slider input {
+  height: 100%;
+}
+.app
+  .fcboard
+  .fc-native-eraser-row
+  .fc-clear-slider
+  input::-webkit-slider-runnable-track {
+  height: calc(48 * var(--fc-unit));
+}
+.app
+  .fcboard
+  .fc-native-eraser-row
+  .fc-clear-slider
+  input::-webkit-slider-thumb {
+  width: calc(32 * var(--fc-unit));
+  height: calc(48 * var(--fc-unit));
+  border-radius: 0;
+  background: var(--fc-cleaning-icon) center / 100% 100% no-repeat;
+}
+.app .fcboard .fc-eraser-size-panel {
+  width: calc(324 * var(--fc-unit));
+  margin: 0 auto calc(8 * var(--fc-unit));
+}
+.app .fcboard .fc-eraser-size-preview {
+  display: flex;
+  height: calc(200 * var(--fc-unit));
+  align-items: end;
+  justify-content: center;
+  padding-bottom: calc(12 * var(--fc-unit));
+  box-sizing: border-box;
+}
+.app .fcboard .fc-eraser-size-panel input {
+  box-sizing: border-box;
+  display: block;
+  width: calc(300 * var(--fc-unit));
+  margin: auto;
+  padding: calc(5 * var(--fc-unit)) calc(12 * var(--fc-unit));
+  background: #fcfcfe;
+  border-radius: calc(12 * var(--fc-unit));
+  accent-color: #0368ff;
+}
+.fc-classroom .fc-native-area {
+  --fc-unit: 0.67px;
+  width: calc(640 * var(--fc-unit));
+  height: calc(560 * var(--fc-unit));
+  padding: 0;
+  border-radius: calc(32 * var(--fc-unit));
+  background: #fcfcfe;
+}
+.fc-classroom .fc-native-area > header {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: calc(84 * var(--fc-unit));
+  padding-bottom: calc(12 * var(--fc-unit));
+  box-sizing: border-box;
+}
+.fc-classroom .fc-native-area h2 {
+  font: 700 calc(24 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+}
+.fc-classroom .fc-native-area header button {
+  position: absolute;
+  right: calc(36 * var(--fc-unit));
+  width: calc(24 * var(--fc-unit));
+  min-width: 0;
+  height: calc(24 * var(--fc-unit));
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.fc-classroom .fc-native-area > div {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: calc(8 * var(--fc-unit)) calc(24 * var(--fc-unit))
+    calc(30 * var(--fc-unit));
+  gap: calc(16 * var(--fc-unit));
+  overflow-y: auto;
+}
+.fc-classroom .fc-native-area > div button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: calc(113 * var(--fc-unit));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: calc(8 * var(--fc-unit));
+  font: 400 calc(14 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+}
+.fc-classroom .fc-native-area > div img {
+  width: calc(113 * var(--fc-unit));
+  height: calc(100 * var(--fc-unit));
+}
+
+/* popupwindow_pen.xml: native 316-wide panel, 44x66 pens, 5 columns. */
+.app :is(.fcboard, .fc-classroom) .fc-pen-properties {
+  --fc-unit: 0.67px;
+  width: calc(316 * var(--fc-unit));
+  padding: 0;
+  border: 0;
+  border-radius: calc(12 * var(--fc-unit));
+  background: #fcfcfe;
+  box-shadow: none;
+  color: #010101;
+  overflow: hidden;
+}
+.app :is(.fcboard, .fc-classroom) .fc-factory-pen-settings {
+  padding: 0 calc(16 * var(--fc-unit)) calc(16 * var(--fc-unit));
+  font: 400 calc(14 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+  .fc-pen-tip-tabs {
+    height: calc(40 * var(--fc-unit));
+    margin: 0 calc(-16 * var(--fc-unit));
+    gap: 0;
+    background: #ebebeb;
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: calc(8 * var(--fc-unit));
+      height: 100%;
+      border-radius: calc(12 * var(--fc-unit));
+      background: transparent;
+      color: #979797;
+      font-size: calc(16 * var(--fc-unit));
+      &[aria-pressed="true"] {
+        background: #fcfcfe;
+        color: #010101;
+      }
+      svg {
+        width: calc(10 * var(--fc-unit));
+        height: calc(10 * var(--fc-unit));
+      }
+    }
+  }
+  .fc-pen-heading {
+    height: auto;
+    margin-top: calc(16 * var(--fc-unit));
+    font-size: calc(16 * var(--fc-unit));
+    color: #010101;
+  }
+  .fc-pen-heading:first-of-type {
+    margin-top: calc(14 * var(--fc-unit));
+    font-size: calc(14 * var(--fc-unit));
+  }
+  .fc-pen-types {
+    grid-template-columns: repeat(5, calc(44 * var(--fc-unit)));
+    gap: calc(12 * var(--fc-unit));
+    min-height: 0;
+    margin-top: calc(8 * var(--fc-unit));
+    button {
+      height: calc(66 * var(--fc-unit));
+      padding: 0;
+      gap: calc(4 * var(--fc-unit));
+      background: transparent;
+      color: #010101;
+      border-radius: 0;
+      > span:last-child {
+        font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit))
+            system-ui,
+          sans-serif;
+        white-space: nowrap;
+      }
+      &[aria-pressed="true"] {
+        background: transparent;
+        color: #010101;
+      }
+      .fc-native-pen-graphic {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: calc(44 * var(--fc-unit));
+        height: calc(44 * var(--fc-unit));
+        border: calc(1 * var(--fc-unit)) solid transparent;
+        border-radius: calc(12 * var(--fc-unit));
+        background: #f6f6f8;
+        svg:first-child {
+          width: calc(32 * var(--fc-unit));
+          height: calc(11 * var(--fc-unit));
+        }
+        svg:last-child {
+          width: calc(32 * var(--fc-unit));
+          height: calc(21 * var(--fc-unit));
+        }
+      }
+      &[aria-pressed="true"] .fc-native-pen-graphic {
+        border-color: #0368ff;
+        background: #edf5ff;
+      }
+    }
+  }
+  .fc-pen-mode {
+    grid-template-columns: calc(236 * var(--fc-unit)) minmax(0, 1fr);
+    column-gap: calc(8 * var(--fc-unit));
+    margin-top: calc(16 * var(--fc-unit));
+    > span {
+      margin-bottom: calc(8 * var(--fc-unit));
+    }
+    input {
+      height: calc(24 * var(--fc-unit));
+    }
+    output {
+      font-size: calc(14 * var(--fc-unit));
+    }
+  }
+  .fc-pen-colors {
+    grid-template-columns: repeat(6, 1fr);
+    height: calc(84 * var(--fc-unit));
+    margin-top: calc(12 * var(--fc-unit));
+    padding: 0;
+    gap: 0;
+    button,
+    .fc-pen-custom-color {
+      width: calc(32 * var(--fc-unit));
+      height: calc(32 * var(--fc-unit));
+      margin: auto;
+    }
+  }
+  > svg {
+    height: calc(48 * var(--fc-unit));
+    margin-top: calc(8 * var(--fc-unit));
+    border-radius: calc(16 * var(--fc-unit));
+    background: #f2f2f2;
+  }
+}
+
+.app .fc-extended-tools {
+  width: min(560px, calc(100vw - 24px));
+  padding: 16px;
+  border-radius: 12px;
+  > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  > .fc-insert-grid {
+    grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+    max-height: calc(100vh - 160px);
+    overflow: auto;
+  }
+  .fc-factory-tools {
+    display: contents;
+  }
+}
+
+/* Preserve the app's existing phone support; tablet/VM uses the native row. */
+@media (max-width: 1000px) {
+  .app .fcboard .fc-unified-toolbar {
+    height: calc(158 * var(--fc-unit));
+  }
+  .app .fcboard .fc-unified-toolbar .fc-toolbar-leading,
+  .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
+    top: 0;
+    bottom: auto;
+  }
+  .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
+    bottom: calc(168 * var(--fc-unit));
+  }
+}
+@media (max-width: 360px) {
+  .app .fcboard .fc-unified-toolbar {
+    --fc-unit: 0.54px;
+  }
 }

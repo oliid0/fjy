@@ -87,18 +87,6 @@ export const recognizeHandwriting = async (
       signal.throwIfAborted();
     }
   }
-  if (kind === "math" && strokes?.length) {
-    progress(t("fcboard.recognizing_handwriting_locally"));
-    try {
-      const value = await recognizeLocalMath(strokes, signal);
-      signal.throwIfAborted();
-      if (accept(value)) {
-        return chooseCandidate ? chooseCandidate([value]) : value;
-      }
-    } catch {
-      signal.throwIfAborted();
-    }
-  }
   if (hasDigitalInk() && strokes?.length) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
@@ -133,6 +121,18 @@ export const recognizeHandwriting = async (
       }
       // A missing explicitly selected text pack is actionable; other native
       // failures can use the separately bundled local raster model.
+    }
+  }
+  if (kind === "math" && strokes?.length) {
+    progress(t("fcboard.recognizing_handwriting_locally"));
+    try {
+      const value = await recognizeLocalMath(strokes, signal);
+      signal.throwIfAborted();
+      if (accept(value)) {
+        return chooseCandidate ? chooseCandidate([value]) : value;
+      }
+    } catch {
+      signal.throwIfAborted();
     }
   }
   try {

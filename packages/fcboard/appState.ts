@@ -187,6 +187,7 @@ const APP_STATE_STORAGE_CONF = (<
   toolbarReversed: { browser: true, export: false, server: false },
   whiteboardToolbarText: { browser: true, export: false, server: false },
   toolbarHidden: { browser: false, export: false, server: false },
+  toolbarCollapseEnabled: { browser: true, export: false, server: false },
   eraserMode: { browser: true, export: false, server: false },
   eraserSize: { browser: true, export: false, server: false },
   palmEraser: { browser: true, export: false, server: false },

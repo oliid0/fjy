@@ -1,17 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+import { openTeachingTools } from "./menu";
+
 for (const width of [390, 800, 1920]) {
   test(`built-in toolbox works without OEM packages and remains reachable at ${width}px`, async ({
     page,
   }, info) => {
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/");
-    await page.getByRole("button", { name: "工具箱", exact: true }).click();
+    await openTeachingTools(page);
     const group = page.getByRole("group", { name: "大屏工具", exact: true });
     await expect(group.getByRole("button")).toHaveCount(6);
     await expect(
       page
-        .getByRole("dialog", { name: "工具箱", exact: true })
+        .getByRole("dialog", { name: "教学工具", exact: true })
         .getByRole("button", { name: "快传", exact: true }),
     ).toBeVisible();
     await expect(
@@ -61,13 +63,13 @@ for (const width of [390, 800, 1920]) {
     await frame.locator('button[data-key="Enter"]').click();
     await expect(frame.locator("#result-display")).toHaveText("5");
     await expect(
-      page.getByRole("dialog", { name: "工具箱" }),
+      page.getByRole("dialog", { name: "教学工具" }),
     ).not.toBeVisible();
     await page
       .getByRole("dialog", { name: "计算器", exact: true })
       .getByRole("button", { name: "关闭", exact: true })
       .click();
-    await page.getByRole("button", { name: "工具箱", exact: true }).click();
+    await openTeachingTools(page);
     await group
       .getByRole("button", { name: "打开计时器", exact: true })
       .click();

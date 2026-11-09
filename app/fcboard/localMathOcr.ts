@@ -1,3 +1,5 @@
+import { preprocessStrokes } from "./mathInkPreprocessing";
+
 import { offlineInference } from "./offlineInference";
 
 import type { InkInput } from "./digitalInk";
@@ -29,7 +31,6 @@ export const recognizeLocalMath = async (
     bottom = Math.max(bottom, y);
   }
   const scale = 480 / Math.max(1, right - left, bottom - top);
-  const { preprocessStrokes } = await import("ink-on/core");
   signal.throwIfAborted();
   const input = preprocessStrokes(
     ink.map((stroke) => ({

@@ -15,6 +15,7 @@ import {
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
+import { classroomCommands } from "./commands";
 import { registerCanvasCommands } from "./canvasCommands";
 import { TeachingTools } from "./TeachingTools";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
@@ -333,6 +334,9 @@ it("opens both added native gizmos from the original toolbox page and draws a co
   act(() => api.setActiveTool({ type: "freedraw" }));
   const tools = render(<TeachingTools api={api} />);
   try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "tools.extended" });
+    });
     const toolbar = within(tools.container);
     fireEvent.click(
       toolbar.getByRole("button", {
@@ -366,6 +370,9 @@ it("opens both added native gizmos from the original toolbox page and draws a co
     expect(circle.points.length).toBeGreaterThanOrEqual(360);
     expect(circle.points.at(-1)![0]).toBeCloseTo(0);
     expect(circle.points.at(-1)![1]).toBeCloseTo(0);
+    await act(async () => {
+      await classroomCommands.execute({ name: "tools.extended" });
+    });
     fireEvent.click(
       toolbar.getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.set_square") }),

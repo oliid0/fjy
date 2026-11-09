@@ -393,7 +393,8 @@ export interface AppState {
   toolbarReversed?: boolean;
   whiteboardToolbarText?: boolean;
   toolbarHidden?: boolean;
-  eraserMode?: "stroke" | "object";
+  toolbarCollapseEnabled?: boolean;
+  eraserMode?: "stroke" | "object" | "region";
   eraserSize?: number;
   palmEraser?: boolean;
   palmEraserThreshold?: number;

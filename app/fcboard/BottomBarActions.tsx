@@ -60,50 +60,43 @@ export const BottomBarActions = () => {
       setBusy(false);
     }
   };
+  useEffect(() => {
+    const action = (event: Event) => {
+      if (
+        !(event as CustomEvent<HTMLElement>).detail.closest(
+          "[data-split-launcher]",
+        )
+      ) {
+        setSplit(false);
+      }
+    };
+    window.addEventListener("fcboard:toolbar-action", action);
+    return () => window.removeEventListener("fcboard:toolbar-action", action);
+  }, []);
   return (
     <>
       <ToolbarExtras placement="navigation">
-        <div className="fc-toolbar-extras">
+        <div className="fc-toolbar-extras fc-toolbar-navigation-actions">
           <button
             type="button"
             data-split-launcher
             disabled={busy}
             aria-label={t("fcboard.split_screen")}
             aria-expanded={split}
-            onClick={() => setSplit(!split)}
+            onClick={() => setSplit(true)}
           >
             <FactoryIcon name="split" />
             <span>{t("fcboard.split_screen")}</span>
           </button>
           <button
             type="button"
+            className="fc-toolbar-cloud"
             disabled={busy}
             onClick={() => void invoke("network.panel", { panel: "collab" })}
           >
             <FactoryIcon name="collaboration" />
             <span>{t("fcboard.live_collaboration")}</span>
           </button>
-        </div>
-      </ToolbarExtras>
-      <ToolbarExtras placement="actions">
-        <div className="fc-toolbar-extras">
-          {(
-            [
-              ["board.share", "qr", "share_board"],
-              ["files.open", "transfer", "file_transfer"],
-              ["board.saveFile", "save", "save"],
-            ] as const
-          ).map(([command, icon, label]) => (
-            <button
-              key={command}
-              type="button"
-              disabled={busy}
-              onClick={() => void invoke(command)}
-            >
-              <FactoryIcon name={icon} />
-              <span>{t(`fcboard.${label}`)}</span>
-            </button>
-          ))}
         </div>
       </ToolbarExtras>
       {split && (

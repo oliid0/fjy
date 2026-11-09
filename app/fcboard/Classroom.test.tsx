@@ -2650,7 +2650,7 @@ describe("selection-driven classroom controls", () => {
       screen.getByRole("toolbar", { name: t("fcboard.selection_actions") }),
     ).toBeVisible();
     expect(screen.getAllByRole("button", { name: "AI" })).toHaveLength(1);
-    for (const label of ["calculate", "image", "questions"]) {
+    for (const label of ["calculate", "questions"]) {
       expect(
         screen.queryByRole("button", {
           name: t(`fcboard.${label}` as "fcboard.calculate"),

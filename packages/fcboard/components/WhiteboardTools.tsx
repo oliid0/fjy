@@ -3,8 +3,6 @@ import Popper from "@mui/material/Popper";
 import Paper from "@mui/material/Paper";
 import Dialog from "@mui/material/Dialog";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 import { CaptureUpdateAction } from "@fcboard/element";
 
@@ -17,7 +15,8 @@ import { useToolbarItems } from "../toolbarPreferences";
 import { useFcboardContainer } from "./App";
 import { ToolButton } from "./ToolButton";
 import { FactoryIcon } from "./FactoryIcon";
-import cleaningIcon from "./FactoryCleaning.svg?url";
+import { WhiteboardAerialView } from "./WhiteboardAerialView";
+import cleaningIcon from "./xbh-toolbar-assets/eraser-thumb.png";
 import { SHAPES } from "./shapes";
 
 import type { ShapesSwitcher } from "./Actions";
@@ -37,23 +36,33 @@ export const WhiteboardTools = ({
   const toolbarItems = useToolbarItems();
   const [eraserOpen, setEraserOpen] = React.useState(false);
   const [clearProgress, setClearProgress] = React.useState(0);
-  const [popupGap, setPopupGap] = React.useState(16);
+  const [eraserExpanded, setEraserExpanded] = React.useState(false);
+  const [popupGap, setPopupGap] = React.useState(6.7);
   const [eraserAnchor, setEraserAnchor] = React.useState<HTMLElement | null>(
     null,
   );
   const [insertAnchor, setInsertAnchor] = React.useState<HTMLElement | null>(
     null,
   );
-  const updateGap = (anchor: HTMLElement) =>
-    setPopupGap((16 * anchor.getBoundingClientRect().height) / 48);
+  const updateGap = (anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
+    const top =
+      anchor.closest(".fc-unified-toolbar")?.getBoundingClientRect().top ??
+      rect.top;
+    setPopupGap(rect.top - top + (10 * rect.height) / 58);
+  };
   const state = useUIAppState();
   const tunnels = useTunnels();
   const hasHostShapes = tunnels.ToolbarShapesTunnel.useHasEntries();
   const [shapesOpen, setShapesOpen] = React.useState(false);
+  const lastShape = React.useRef<
+    "rectangle" | "diamond" | "ellipse" | "arrow" | "line"
+  >("line");
+  const openingShape = React.useRef(false);
   const { container } = useFcboardContainer();
   const finishClear = (value: number) => {
     setClearProgress(0);
-    if (value < 98) {
+    if (value < 90) {
       return;
     }
     app.api.updateScene({
@@ -74,6 +83,17 @@ export const WhiteboardTools = ({
     [app],
   );
   React.useEffect(() => {
+    if (
+      ["rectangle", "diamond", "ellipse", "arrow", "line"].includes(
+        activeTool.type,
+      )
+    ) {
+      lastShape.current = activeTool.type as typeof lastShape.current;
+    }
+    if (openingShape.current && !state.toolbarHidden) {
+      openingShape.current = false;
+      return;
+    }
     setOpen(false);
     setShapesOpen(false);
     if (activeTool.type !== "eraser" || state.toolbarHidden) {
@@ -111,19 +131,64 @@ export const WhiteboardTools = ({
       window.removeEventListener("fcboard:toolbox-close", hide);
     };
   }, [container]);
+  React.useEffect(() => {
+    const dismiss = (event: Event) => {
+      const target = (event as CustomEvent<HTMLElement>).detail;
+      if (!target.closest("[data-toolbar-eraser]")) {
+        setEraserOpen(false);
+      }
+      if (
+        !target.closest(
+          '[data-toolbar-item="shape"], [data-toolbar-item="toolbox"]',
+        )
+      ) {
+        setOpen(false);
+        setShapesOpen(false);
+      }
+    };
+    window.addEventListener("fcboard:toolbar-action", dismiss);
+    return () => window.removeEventListener("fcboard:toolbar-action", dismiss);
+  }, []);
   return (
     <>
       <ToolButton
         type="button"
         className="fc-board-tool"
-        icon={<FactoryIcon name="pen" />}
+        data-toolbar-pen
+        icon={
+          <span className="fc-pen-icon">
+            <FactoryIcon name="penBodyItalic" className="fc-pen-body" />
+            <FactoryIcon
+              name="penThinHead"
+              className="fc-pen-thin"
+              style={
+                {
+                  "--fc-pen-color":
+                    (state.whiteboardPenTip || "fine") === "fine"
+                      ? state.currentItemStrokeColor
+                      : state.whiteboardPenTips?.fine?.color || "#d71e1e",
+                } as React.CSSProperties
+              }
+            />
+            {state.whiteboardDualPen && (
+              <FactoryIcon
+                name="penThickHead"
+                className="fc-pen-thick"
+                style={
+                  {
+                    "--fc-pen-color":
+                      state.whiteboardPenTip === "thick"
+                        ? state.currentItemStrokeColor
+                        : state.whiteboardPenTips?.thick?.color || "#26c255",
+                  } as React.CSSProperties
+                }
+              />
+            )}
+          </span>
+        }
         aria-label={t("fcboard.pen")}
         showAriaLabel
         selected={activeTool.type === "freedraw"}
-        onLongPress={(anchor) => {
-          app.setActiveTool({ type: "freedraw" });
-          onProperties?.(anchor);
-        }}
         onClick={(event) => {
           if (activeTool.type === "freedraw") {
             if (event.currentTarget instanceof HTMLElement) {
@@ -137,24 +202,18 @@ export const WhiteboardTools = ({
       <ToolButton
         type="button"
         className="fc-board-tool"
+        data-toolbar-eraser
         icon={<FactoryIcon name="eraser" />}
         aria-label={t("fcboard.eraser")}
         showAriaLabel
         selected={activeTool.type === "eraser"}
-        onLongPress={(anchor) => {
-          setEraserAnchor(anchor);
-          updateGap(anchor);
-          app.setActiveTool({ type: "eraser" });
-          setEraserOpen(true);
-        }}
         onClick={(event) => {
           updateGap(event.currentTarget as HTMLElement);
           setEraserAnchor(event.currentTarget as HTMLElement);
-          if (activeTool.type !== "eraser") {
-            app.setActiveTool({ type: "eraser" });
-          } else {
-            setEraserOpen(!eraserOpen);
-          }
+          app.setActiveTool({ type: "eraser" });
+          setEraserExpanded(false);
+          setClearProgress(0);
+          setEraserOpen(true);
         }}
       />
       {eraserOpen && (
@@ -181,131 +240,105 @@ export const WhiteboardTools = ({
               role="dialog"
               aria-label={t("fcboard.eraser_settings")}
             >
-              <label className="fc-clear-slider">
-                <span>{t("fcboard.slide_to_erase")}</span>
-                <input
-                  type="range"
-                  aria-label={t("fcboard.slide_to_clear_this_board")}
-                  style={
-                    {
-                      "--fc-cleaning-icon": `url("${cleaningIcon}")`,
-                    } as React.CSSProperties
-                  }
-                  min="0"
-                  max="100"
-                  value={clearProgress}
-                  onChange={(event) =>
-                    setClearProgress(Number(event.target.value))
-                  }
-                  onPointerUp={(event) =>
-                    finishClear(Number(event.currentTarget.value))
-                  }
-                  onKeyUp={(event) => {
-                    if (["ArrowRight", "End", "Enter"].includes(event.key)) {
-                      finishClear(Number(event.currentTarget.value));
+              {eraserExpanded && (
+                <div className="fc-eraser-size-panel">
+                  <div className="fc-eraser-size-preview">
+                    <FactoryIcon
+                      name="eraser"
+                      style={{
+                        width: state.eraserSize ?? 60,
+                        height: (state.eraserSize ?? 60) * 0.6,
+                      }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0.24"
+                    max="2"
+                    step="0.01"
+                    aria-label={t("fcboard.eraser_sizes")}
+                    value={
+                      (state.eraserSize ??
+                        app.props.UIOptions.inkProfile?.eraserSize ??
+                        60) / (app.props.UIOptions.inkProfile?.eraserSize ?? 60)
                     }
-                  }}
-                  onPointerCancel={() => setClearProgress(0)}
-                />
-              </label>
+                    onChange={(event) =>
+                      props.setAppState({
+                        eraserSize:
+                          Number(event.target.value) *
+                          (app.props.UIOptions.inkProfile?.eraserSize ?? 60),
+                      })
+                    }
+                  />
+                </div>
+              )}
               <div
-                className="fc-eraser-presets"
+                className="fc-native-eraser-row"
                 role="group"
-                aria-label={t("fcboard.eraser_sizes")}
+                aria-label={t("fcboard.erase_mode")}
               >
-                <button
-                  type="button"
-                  aria-label={t("fcboard.erase_entire_object")}
-                  aria-pressed={state.eraserMode === "object"}
-                  onClick={() => {
-                    props.setAppState({ eraserMode: "object" });
-                    setEraserOpen(false);
-                  }}
-                >
-                  <FactoryIcon name="areaErase" />
-                </button>
-                {(
-                  [
-                    [100, "small_eraser"],
-                    [150, "medium_eraser"],
-                    [200, "large_eraser"],
-                  ] as const
-                ).map(([pixels, label]) => (
+                <div className="fc-native-eraser-path">
                   <button
-                    key={pixels}
                     type="button"
-                    aria-label={t(`fcboard.${label}`)}
+                    aria-label={t("fcboard.erase_part_of_a_stroke")}
                     aria-pressed={
-                      state.eraserMode !== "object" &&
-                      Math.abs(
-                        (state.eraserSize ??
-                          app.props.UIOptions.inkProfile?.eraserSize ??
-                          60) -
-                          (pixels / 150) *
-                            (app.props.UIOptions.inkProfile?.eraserSize ?? 60),
-                      ) < 1
+                      !state.eraserMode || state.eraserMode === "stroke"
                     }
                     onClick={() => {
-                      props.setAppState({
-                        eraserMode: "stroke",
-                        eraserSize:
-                          (pixels / 150) *
-                          (app.props.UIOptions.inkProfile?.eraserSize ?? 60),
-                      });
+                      props.setAppState({ eraserMode: "stroke" });
                       setEraserOpen(false);
                     }}
                   >
-                    <span
-                      className="fc-eraser-dot"
-                      style={
-                        {
-                          "--fc-dot-size":
-                            pixels === 100 ? 14 : pixels === 150 ? 21 : 29,
-                        } as React.CSSProperties
-                      }
-                    />
+                    <FactoryIcon name="eraser" />
                   </button>
-                ))}
-              </div>
-              <div className="fc-eraser-mode">
-                <span>{t("fcboard.erase_mode")}</span>
-                <ToggleButtonGroup
-                  aria-label={t("fcboard.erase_mode")}
-                  value={state.eraserMode || "stroke"}
-                  exclusive
-                  size="small"
-                  orientation="horizontal"
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === "ArrowLeft" ||
-                      event.key === "ArrowRight"
-                    ) {
-                      event.preventDefault();
-                      props.setAppState({
-                        eraserMode:
-                          event.key === "ArrowLeft" ? "stroke" : "object",
-                      });
-                    }
-                  }}
-                  onChange={(_event, value: "stroke" | "object" | null) => {
-                    if (value) {
-                      props.setAppState({ eraserMode: value });
-                    }
+                  <button
+                    type="button"
+                    aria-label={t("fcboard.eraser_sizes")}
+                    aria-expanded={eraserExpanded}
+                    onClick={() => setEraserExpanded((value) => !value)}
+                  >
+                    <FactoryIcon name="eraseSize" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  aria-label={t("fcboard.erase_entire_object")}
+                  aria-pressed={state.eraserMode === "region"}
+                  onClick={() => {
+                    props.setAppState({ eraserMode: "region" });
+                    setEraserOpen(false);
                   }}
                 >
-                  <ToggleButton
-                    value="stroke"
-                    aria-label={t("fcboard.erase_part_of_a_stroke")}
-                  >
-                    {t("fcboard.erase_part_of_a_stroke")}
-                  </ToggleButton>
-                  <ToggleButton
-                    value="object"
-                    aria-label={t("fcboard.erase_entire_object")}
-                  >
-                    {t("fcboard.erase_entire_object")}
-                  </ToggleButton>
-                </ToggleButtonGroup>
+                  <FactoryIcon name="eraseChoose" />
+                </button>
+                <label className="fc-clear-slider">
+                  <FactoryIcon name="eraseDirection" />
+                  <span>{t("fcboard.slide_to_erase")}</span>
+                  <input
+                    type="range"
+                    aria-label={t("fcboard.slide_to_clear_this_board")}
+                    style={
+                      {
+                        "--fc-cleaning-icon": `url("${cleaningIcon}")`,
+                      } as React.CSSProperties
+                    }
+                    min="0"
+                    max="100"
+                    value={clearProgress}
+                    onChange={(event) =>
+                      setClearProgress(Number(event.target.value))
+                    }
+                    onPointerUp={(event) =>
+                      finishClear(Number(event.currentTarget.value))
+                    }
+                    onKeyUp={(event) => {
+                      if (["ArrowRight", "End", "Enter"].includes(event.key)) {
+                        finishClear(Number(event.currentTarget.value));
+                      }
+                    }}
+                    onPointerCancel={() => setClearProgress(0)}
+                  />
+                </label>
               </div>
             </Paper>
           </Popper>
@@ -340,8 +373,21 @@ export const WhiteboardTools = ({
             icon={<FactoryIcon name="shape" />}
             aria-label={t("fcboard.shape")}
             showAriaLabel
-            selected={open && shapesOpen}
-            onClick={() => {
+            selected={[
+              "rectangle",
+              "diamond",
+              "ellipse",
+              "arrow",
+              "line",
+              "custom",
+            ].includes(activeTool.type)}
+            onClick={(event) => {
+              if (activeTool.type !== lastShape.current) {
+                openingShape.current = true;
+                app.setActiveTool({ type: lastShape.current });
+              }
+              updateGap(event.currentTarget as HTMLElement);
+              setInsertAnchor(event.currentTarget as HTMLElement);
               setShapesOpen(true);
               setOpen(true);
             }}
@@ -367,9 +413,18 @@ export const WhiteboardTools = ({
               updateGap(event.currentTarget as HTMLElement);
               setInsertAnchor(event.currentTarget as HTMLElement);
               setShapesOpen(false);
-              setOpen(!open || shapesOpen);
+              setOpen(true);
             }}
           />
+        </span>
+      )}
+      {toolbarItems.includes("aerial") && (
+        <span
+          className="fc-toolbar-shortcut"
+          data-toolbar-item="aerial"
+          style={{ order: 10 + toolbarItems.indexOf("aerial") }}
+        >
+          <WhiteboardAerialView app={app} />
         </span>
       )}
       {open && !shapesOpen && (
@@ -406,10 +461,6 @@ export const WhiteboardTools = ({
                   }
                 }}
               >
-                <button type="button" onClick={() => setShapesOpen(true)}>
-                  <FactoryIcon name="shape" />
-                  <span>{t("fcboard.shape")}</span>
-                </button>
                 <tunnels.ToolbarInsertTunnel.Out />
                 <tunnels.ToolbarToolboxTunnel.Out />
               </div>

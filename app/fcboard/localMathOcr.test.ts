@@ -1,9 +1,9 @@
-import { preprocessStrokes } from "ink-on/core";
+import { preprocessStrokes } from "./mathInkPreprocessing";
 
 import { recognizeLocalMath } from "./localMathOcr";
 import { offlineInference } from "./offlineInference";
 vi.mock("./offlineInference", () => ({ offlineInference: vi.fn() }));
-vi.mock("ink-on/core", () => ({
+vi.mock("./mathInkPreprocessing", () => ({
   preprocessStrokes: vi.fn(() => ({
     tensor: new Float32Array(4),
     mask: new Uint8Array(1),

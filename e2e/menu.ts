@@ -18,16 +18,13 @@ export const selectMenu = async (page: Page, label: string) => {
       "语音指令",
     ].includes(label)
   ) {
-    await page.locator("[data-teaching-tools]").click();
+    await openTeachingTools(page);
     const names: Record<string, string> = {
-      提问与讲解: "AI 出题",
+      提问与讲解: "AI出題",
       课堂录制: "录制",
       总结白板: "AI 总结",
       "课件 / 局域网快传": "快传",
     };
-    if (["提问与讲解", "课堂录制", "总结白板", "语音指令"].includes(label)) {
-      await page.getByRole("button", { name: "下一页", exact: true }).click();
-    }
     await page
       .getByRole("button", { name: names[label] || label, exact: true })
       .click();
@@ -52,4 +49,13 @@ export const selectMenu = async (page: Page, label: string) => {
   throw new Error(
     `Settings action must have an explicit current route: ${label}`,
   );
+};
+
+export const openTeachingTools = async (page: Page) => {
+  await openSettingsMenu(page);
+  await page
+    .getByRole("button", { name: "AI 与语音设置", exact: true })
+    .click();
+  await page.getByRole("button", { name: "教学偏好", exact: true }).click();
+  await page.getByRole("button", { name: "教学工具", exact: true }).click();
 };

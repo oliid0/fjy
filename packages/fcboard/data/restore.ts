@@ -1033,7 +1033,9 @@ export const restoreAppState = (
   ) {
     nextAppState.currentItemInkAssist = inkPreferences.currentItemInkAssist;
   }
-  if (["stroke", "object"].includes(String(inkPreferences.eraserMode))) {
+  if (
+    ["stroke", "object", "region"].includes(String(inkPreferences.eraserMode))
+  ) {
     nextAppState.eraserMode = inkPreferences.eraserMode;
   }
   if (typeof inkPreferences.palmEraser === "boolean") {
@@ -1041,6 +1043,9 @@ export const restoreAppState = (
   }
   if (typeof inkPreferences.multiStroke === "boolean") {
     nextAppState.multiStroke = inkPreferences.multiStroke;
+  }
+  if (typeof inkPreferences.toolbarCollapseEnabled === "boolean") {
+    nextAppState.toolbarCollapseEnabled = inkPreferences.toolbarCollapseEnabled;
   }
   if (typeof inkPreferences.toolbarReversed === "boolean") {
     nextAppState.toolbarReversed = inkPreferences.toolbarReversed;

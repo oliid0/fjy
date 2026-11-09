@@ -377,7 +377,11 @@ it("uses device defaults and refuses hidden-board changes while courseware is vi
       configuration: {
         background: { available: false },
         pen: { thickThreshold: 12, dualPen: true },
-        eraser: { size: 75, palmThreshold: 40, modes: ["stroke", "object"] },
+        eraser: {
+          size: 75,
+          palmThreshold: 40,
+          modes: ["stroke", "object", "region"],
+        },
       },
     });
     for (const args of [

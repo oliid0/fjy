@@ -445,6 +445,7 @@ import { EraserTrail } from "../eraser";
 import {
   eraseStroke,
   eraseSceneObjects,
+  eraseSceneRegion,
   isPalmContact,
   pointerSamples,
 } from "../eraser/stroke";
@@ -7865,6 +7866,19 @@ class App extends React.Component<AppProps, AppState> {
         event.pointerType === "pen" &&
         (event.button === 5 || !!(event.buttons & 34))
       );
+    const regionMode =
+      !palm &&
+      this.state.eraserMode === "region" &&
+      !(
+        event.pointerType === "pen" &&
+        (event.button === 5 || !!(event.buttons & 34))
+      );
+    const regionPath = [viewportCoordsToSceneCoords(event, this.state)].map(
+      ({ x, y }) => pointFrom<GlobalPoint>(x, y),
+    );
+    if (regionMode) {
+      this.lassoTrail.startPath(regionPath[0][0], regionPath[0][1]);
+    }
     const zoom = this.state.zoom.value;
     const size = Math.max(
       12,
@@ -7889,6 +7903,7 @@ class App extends React.Component<AppProps, AppState> {
     target.setPointerCapture?.(event.pointerId);
     const preview = document.createElement("div");
     preview.className = "fc-eraser-preview";
+    preview.hidden = regionMode;
     preview.setAttribute("aria-hidden", "true");
     Object.assign(preview.style, {
       position: "fixed",
@@ -7906,6 +7921,15 @@ class App extends React.Component<AppProps, AppState> {
       let update = false;
       for (const sample of samples) {
         const next = viewportCoordsToSceneCoords(sample, this.state);
+        if (regionMode) {
+          const last = regionPath[regionPath.length - 1];
+          if (last[0] !== next.x || last[1] !== next.y) {
+            regionPath.push(pointFrom<GlobalPoint>(next.x, next.y));
+            this.lassoTrail.addPointToPath(next.x, next.y);
+          }
+          previous = next;
+          continue;
+        }
         preview.style.left = `${sample.clientX}px`;
         preview.style.top = `${sample.clientY}px`;
         if (objectMode) {
@@ -7973,6 +7997,23 @@ class App extends React.Component<AppProps, AppState> {
       unsubscribe();
       this.stopInkErasure = null;
       preview.remove();
+      if (regionMode) {
+        this.lassoTrail.endPath();
+        if (!cancelled) {
+          const point = regionPath[0];
+          const tapped =
+            regionPath.length === 1
+              ? this.getElementsAtPosition(point[0], point[1])
+                  .slice(-1)
+                  .map((element) => element.id)
+              : [];
+          const next = eraseSceneRegion(before, regionPath, tapped);
+          changed = next !== before;
+          if (changed) {
+            this.scene.replaceAllElements(next);
+          }
+        }
+      }
       if (cancelled && changed) {
         this.scene.replaceAllElements(before);
       } else if (changed) {

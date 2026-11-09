@@ -53,6 +53,18 @@ export const BoardSettings = ({
   };
   return (
     <>
+      <SettingsSection id="teaching">
+        <button
+          type="button"
+          onClick={() =>
+            void classroomCommands
+              .execute({ name: "tools.extended" })
+              .catch((failure) => setError(String(failure)))
+          }
+        >
+          {t("fcboard.teaching_tools")}
+        </button>
+      </SettingsSection>
       <SettingsSection id="toolbar">
         <ToolbarSettings />
       </SettingsSection>
@@ -77,6 +89,13 @@ export const BoardSettings = ({
                 !(state.whiteboardThickThreshold ?? device?.thickThreshold)
               }
               onChange={(_, value) => update({ dualPen: value })}
+            />
+          </label>
+          <label>
+            {t("fcboard.toolbar_collapse_control")}
+            <Switch
+              checked={!!state.toolbarCollapseEnabled}
+              onChange={(_, checked) => update({ toolbarCollapse: checked })}
             />
           </label>
           <label>

@@ -60,7 +60,7 @@ describe("Test MobileMenu", () => {
     ).not.toBeNull();
     expect(
       document.querySelectorAll(".fc-toolbar-setting-tile.is-fixed"),
-    ).toHaveLength(6);
+    ).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.language") }),

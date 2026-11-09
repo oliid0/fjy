@@ -36,8 +36,8 @@ it("keeps local OCR and translation available without an AI key", async () => {
     text: "hello",
     study: { backend: "local", translation: "你好", grammar: "", examples: [] },
   });
-  expect(recognize).toHaveBeenCalledOnce();
-  expect(translate).toHaveBeenCalledOnce();
+  expect(recognize).toHaveBeenCalledTimes(1);
+  expect(translate).toHaveBeenCalledTimes(1);
   expect(model).not.toHaveBeenCalled();
 });
 
@@ -68,8 +68,8 @@ it("uses explicit cloud translation after independent local OCR without a compet
     new AbortController().signal,
   );
   expect(result).toMatchObject({ kind: "language", text: "Bonjour", study });
-  expect(recognize).toHaveBeenCalledOnce();
-  expect(model).toHaveBeenCalledOnce();
+  expect(recognize).toHaveBeenCalledTimes(1);
+  expect(model).toHaveBeenCalledTimes(1);
   expect(JSON.stringify(model.mock.calls[0][0])).toContain("Bonjour");
 });
 it.each(["text", "drawing"])(

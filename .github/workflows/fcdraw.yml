@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Node 22.21+ fetch otherwise ignores the runner's trusted proxy environment.
+env:
+  NODE_USE_ENV_PROXY: "1"
+
 permissions:
   contents: read
 

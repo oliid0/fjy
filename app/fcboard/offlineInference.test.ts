@@ -46,7 +46,7 @@ it("aborting a queued local request cannot terminate another caller's inference"
   worker.complete([{ translation_text: "你好" }]);
   await expect(first).resolves.toEqual([{ translation_text: "你好" }]);
   await vi.advanceTimersByTimeAsync(15001);
-  expect(worker.terminate).toHaveBeenCalledOnce();
+  expect(worker.terminate).toHaveBeenCalledTimes(1);
 });
 it("terminates hung local WASM and lets the next request use a fresh worker", async () => {
   const { offlineInference } = await import("./offlineInference");

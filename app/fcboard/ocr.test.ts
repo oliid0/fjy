@@ -181,7 +181,7 @@ describe("explicit handwriting actions", () => {
         [[[0, 0]]],
       ),
     ).toBe("hello");
-    expect(backend.local).toHaveBeenCalledOnce();
+    expect(backend.local).toHaveBeenCalledTimes(1);
     expect(backend.cloud).not.toHaveBeenCalled();
   });
   it("reads structured math locally before native text recognition or rasterization", async () => {

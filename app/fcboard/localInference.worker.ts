@@ -48,11 +48,14 @@ self.onmessage = async (
         `Xenova/opus-mt-${task.source}-${task.target}`,
         { device: "wasm", dtype: "q8", local_files_only: true },
       );
-      const result = await translator(task.text, {
+      // Upstream's callback type requires a full GenerationConfig, while
+      // _call() merges these documented partial overrides into model defaults.
+      const generation = {
         max_new_tokens: 256,
         num_beams: 1,
         do_sample: false,
-      });
+      } as NonNullable<Parameters<NonNullable<typeof translator>>[1]>;
+      const result = await translator(task.text, generation);
       self.postMessage({ id, ok: true, result });
     }
   } catch (error) {

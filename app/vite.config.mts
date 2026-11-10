@@ -10,6 +10,7 @@ import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
 
 import { vegaAssetAliases } from "../config/vegaAssets";
+import { assertClientRuntimeBoundary } from "../config/clientRuntimeBoundary";
 
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
@@ -86,6 +87,9 @@ export default defineConfig(({ mode }) => {
           app: path.resolve(__dirname, "index.html"),
         },
         output: {
+          // Keep shared geometry dependencies out of inference chunks. Otherwise
+          // the UI's clipper-lib import also initializes OpenCV's embedded WASM.
+          onlyExplicitManualChunks: true,
           assetFileNames(chunkInfo) {
             if (chunkInfo?.name?.endsWith(".woff2")) {
               const family = chunkInfo.name.split("-")[0];
@@ -136,6 +140,13 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 8192,
     },
     plugins: [
+      {
+        name: "fcboard-client-runtime-boundary",
+        apply: "build",
+        generateBundle(_options, bundle) {
+          assertClientRuntimeBoundary(bundle);
+        },
+      },
       Sitemap({
         hostname: "http://www.fcjyboard.com",
         outDir: "build",

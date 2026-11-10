@@ -608,16 +608,16 @@ it("reports an invalid function while preserving its ink and discards late math 
 it("keeps a normally written multi-stroke character intact until the last pen lift has settled", async () => {
   vi.useFakeTimers();
   const { api, ink, draw } = setup("text");
-  const bars = [100, 140, 180].map((y, index) =>
-    newFreeDrawElement({
+  const bars = [100, 140, 180].map((y, index) => ({
+    ...newFreeDrawElement({
       ...ink,
-      id: `bar-${index}`,
       type: "freedraw",
       x: 100,
       y,
       points: [pointFrom(0, 0), pointFrom(100, 0)],
     }),
-  );
+    id: `bar-${index}`,
+  }));
   const recognize = vi
     .spyOn(ocr, "recognizeHandwriting")
     .mockResolvedValue("三");

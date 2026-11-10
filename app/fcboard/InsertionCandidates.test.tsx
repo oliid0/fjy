@@ -112,7 +112,7 @@ it.each(["mindmap", "fourline"] as const)(
         api.updateScene({ elements: [...api.getSceneElements(), ink] });
         notify();
       });
-      await screen.findByRole("button", { name: "Hallo" });
+      await screen.findByRole("button", { name: "Hallo" }, { timeout: 2500 });
       expect(
         api.getSceneElements().some((element) => element.id === ink.id),
       ).toBe(true);

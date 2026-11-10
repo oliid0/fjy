@@ -13,7 +13,7 @@ type GraphPlot = {
   compare?: readonly string[];
 };
 
-/** Domain edits are live Vega state. Expression/parameter changes replace the
+/** Domain/parameter edits are live Vega state. Expression changes replace the
  * document; persisted HTML still contains the latest domain for a fresh mount. */
 export const functionGraphFrameState = (
   id: string,
@@ -23,7 +23,7 @@ export const functionGraphFrameState = (
   if (!plot || typeof plot.expression !== "string") {
     return undefined;
   }
-  const { view, range, ...definition } = plot;
+  const { view, range, a, b, c, ...definition } = plot;
   const bounds = view || {
     left: plot.x - range,
     right: plot.x + range,
@@ -40,6 +40,7 @@ export const functionGraphFrameState = (
       type: "restore",
       id,
       view: bounds,
+      parameters: { a, b, c },
     },
   };
 };

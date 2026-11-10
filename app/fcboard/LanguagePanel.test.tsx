@@ -108,7 +108,7 @@ it("keeps original ink, translates below it at matching size, opens cached card,
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     expect(error).not.toHaveBeenCalled();
     const original = api
@@ -199,7 +199,7 @@ it("copies a bilingual object with an independent card and never exposes hidden-
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     const originalGroup =
       api.getSceneElements()[0].customData?.fcLanguage.group;
@@ -246,7 +246,7 @@ it("discards a translation when its source is erased while the model is still re
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     expect(chat).toHaveBeenCalledTimes(1);
     api.updateScene({ elements: [] });
@@ -268,7 +268,7 @@ it("hides a loading card on double click and ignores a late translation", async 
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     api.updateScene({
       elements: api.getSceneElements().map((element) =>

@@ -247,8 +247,9 @@ export default defineConfig(({ mode }) => {
               },
             },
           ],
-          // Include the pinned 5.15 MB Office WASM engine for offline document previews.
-          maximumFileSizeToCacheInBytes: 6 * 1024 ** 2,
+          // Precache the measured 6.32 MB UI bundle (including first-paint SVGs)
+          // and the 5.15 MB Office engine. Model/worker exclusions stay above.
+          maximumFileSizeToCacheInBytes: 8 * 1024 ** 2,
         },
         manifest: {
           short_name: "Fcboard",

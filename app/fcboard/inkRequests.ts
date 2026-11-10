@@ -1,6 +1,40 @@
 import { latestFunctionInk } from "./functionInk";
+import { latestShapeInk } from "./shapeRecognition";
 
 import type { InkInput } from "./digitalInk";
+
+const region = (ink: InkInput, mode: string) => {
+  if (mode === "shape") {
+    return latestShapeInk(ink);
+  }
+  if (mode === "text" || mode === "language") {
+    // Detached dots and horizontal Chinese strokes still belong to a word.
+    // Derive the gap from local stroke size, so zoom and handwriting size do
+    // not turn every pen lift into a separate recognition request.
+    const sizes = ink
+      .map((stroke) => {
+        let left = Infinity;
+        let right = -Infinity;
+        let top = Infinity;
+        let bottom = -Infinity;
+        for (const [x, y] of stroke) {
+          left = Math.min(left, x);
+          right = Math.max(right, x);
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y);
+        }
+        return Math.max(right - left, bottom - top);
+      })
+      .filter((size) => Number.isFinite(size) && size > 0)
+      .sort((a, b) => a - b);
+    return latestFunctionInk(
+      ink,
+      0.8,
+      Math.max(8, (sizes[Math.floor(sizes.length / 2)] || 0) / 2),
+    );
+  }
+  return latestFunctionInk(ink, mode === "calculation" ? 1.1 : 0.35);
+};
 
 /** Independent ink regions keep separate requests; adding to the same region revises only it. */
 export class InkRequests {
@@ -28,11 +62,8 @@ export class InkRequests {
     ink: (items: readonly T[]) => InkInput,
   ) {
     let fresh = pending.filter((item) => this.available(id(item)));
-    const region = latestFunctionInk(
-      ink(fresh),
-      mode === "calculation" ? 1.1 : 0.35,
-    );
-    fresh = fresh.filter((_, index) => region.has(index));
+    const included = region(ink(fresh), mode);
+    fresh = fresh.filter((_, index) => included.has(index));
     if (!fresh.length) {
       return [];
     }
@@ -41,10 +72,7 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
-      const group = latestFunctionInk(
-        [...entry.ink, ...ink(fresh)],
-        mode === "calculation" ? 1.1 : 0.35,
-      );
+      const group = region([...entry.ink, ...ink(fresh)], mode);
       if (
         Array.from(group).some((index) => index < entry.ink.length) &&
         Array.from(group).some((index) => index >= entry.ink.length)
@@ -91,13 +119,10 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
-      const region = latestFunctionInk(
-        [...entry.ink, ...ink],
-        mode === "calculation" ? 1.1 : 0.35,
-      );
+      const included = region([...entry.ink, ...ink], mode);
       if (
-        Array.from(region).some((index) => index < entry.ink.length) &&
-        Array.from(region).some((index) => index >= entry.ink.length)
+        Array.from(included).some((index) => index < entry.ink.length) &&
+        Array.from(included).some((index) => index >= entry.ink.length)
       ) {
         this.cancel(request);
       }

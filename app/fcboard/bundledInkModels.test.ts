@@ -81,7 +81,7 @@ it("registers every model group for this package and maps each downloaded archiv
     "zxx-Zsye-x-emoji",
     "zxx-Zsym-x-shapes",
   ]);
-  expect(manifest.version).toBe(2);
+  expect(manifest.version).toBe(3);
   expect(manifest.files.filter((file) => /emoji/.test(file.path))).toHaveLength(
     2,
   );

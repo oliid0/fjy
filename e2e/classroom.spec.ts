@@ -312,35 +312,36 @@ for (const viewport of [
   });
 }
 
-test("selecting a formula draws an editable graph and changing its parameter updates the same graph", async ({
+test("selecting a formula creates an interactive iframe and parameter/range edits keep its document", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "y=a*x+1");
   await page.getByRole("button", { name: "AI", exact: true }).click();
-  const slider = page.getByRole("slider", { name: "调节 a", exact: true });
+  const graph = page.frameLocator("iframe[data-resource-object-id]").last();
+  const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
+  await graph.locator("html").evaluate((html) => {
+    html.dataset.mount = "original";
+  });
+  const curve = graph.locator("#fc-vega .mark-line path").first();
+  const initial = await curve.getAttribute("d");
   await slider.focus();
   for (let i = 0; i < 10; i++) {
     await slider.press("ArrowRight");
   }
   await expect(slider).toHaveValue("2");
-  const graph = page.getByRole("region", { name: "交互函数图表" });
-  await expect(graph.locator("svg.function-plot")).toBeVisible();
-  const curve = graph.locator(".graph path").first();
+  await expect.poll(() => curve.getAttribute("d")).not.toBe(initial);
   const beforeZoom = await curve.getAttribute("d");
-  await graph.locator(".zoom-and-drag").hover();
+  await graph.locator("#fc-vega").hover();
   await page.mouse.wheel(0, -150);
   await expect.poll(() => curve.getAttribute("d")).not.toBe(beforeZoom);
-  const expression = graph.getByRole("textbox");
-  await expression.fill("a*x^2+1");
-  await graph.getByRole("button", { name: "生成", exact: true }).click();
-  await expect(expression).toHaveValue("a*x^2+1");
-  await page.getByRole("button", { name: "关闭工具浮层" }).click();
-  await page.mouse.click(80, 400);
-  await page.keyboard.press("v");
-  await page.keyboard.press("Control+a");
+  const minimum = graph.getByRole("spinbutton", { name: "x min", exact: true });
+  await minimum.fill("-5");
+  await minimum.press("Tab");
+  await expect(minimum).toHaveValue("-5");
+  await expect(graph.locator("html")).toHaveAttribute("data-mount", "original");
   await expect(slider).toHaveValue("2");
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });
 });

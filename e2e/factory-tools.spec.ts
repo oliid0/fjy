@@ -65,15 +65,26 @@ for (const width of [390, 800, 1920]) {
     await expect(
       page.getByRole("dialog", { name: "教学工具" }),
     ).not.toBeVisible();
-    await page
-      .getByRole("dialog", { name: "计算器", exact: true })
-      .getByRole("button", { name: "关闭", exact: true })
+    await frame
+      .getByRole("button", { name: "Close calculator", exact: true })
       .click();
     await openTeachingTools(page);
     await group
       .getByRole("button", { name: "打开计时器", exact: true })
       .click();
-    await page.getByLabel("时长（秒）", { exact: true }).fill("2");
+    const timer = page.getByRole("dialog", { name: "计时器", exact: true });
+    await timer.getByRole("button", { name: "设置", exact: true }).click();
+    for (const unit of ["HH", "MM", "SS"]) {
+      await timer
+        .getByRole("spinbutton", { name: unit, exact: true })
+        .press("Home");
+    }
+    await timer
+      .getByRole("spinbutton", { name: "SS", exact: true })
+      .press("ArrowUp");
+    await timer
+      .getByRole("spinbutton", { name: "SS", exact: true })
+      .press("ArrowUp");
     await page.getByRole("button", { name: "播放工具", exact: true }).click();
     await expect(page.getByRole("timer")).toHaveText("00:00:00", {
       timeout: 5000,

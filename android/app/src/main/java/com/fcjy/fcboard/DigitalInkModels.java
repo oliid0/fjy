@@ -56,7 +56,10 @@ final class DigitalInkModels {
             }
         }
         // The original archive's registry is package-scoped (zzfx/zzwa/zzwe).
-        // Add newly bundled models on upgrade, preserving later SDK state.
+        // Own the manifest's bundled file/group keys during versioned installation.
+        // A prior download may leave a key pointing to a removed directory even
+        // though isModelDownloaded() returns true. Re-register the verified APK
+        // files on upgrade; keys for other downloaded languages remain intact.
         SharedPreferences seed = context.getSharedPreferences("fcboard-digital-ink", 0);
         int version = manifest.optInt("version", 1);
         if (seed.getInt("version", 0) != version) {
@@ -68,7 +71,7 @@ final class DigitalInkModels {
                 SharedPreferences.Editor edit = registered.edit();
                 JSONObject values = preferences.getJSONObject(name);
                 Iterator<String> keys = values.keys();
-                while (keys.hasNext()) { String key = keys.next(); if (!registered.contains(key)) edit.putString(key, values.getString(key)); }
+                while (keys.hasNext()) { String key = keys.next(); edit.putString(key, values.getString(key)); }
                 if (!edit.commit()) { throw new IllegalStateException("Cannot register offline handwriting models"); }
             }
             if (!context.getSharedPreferences("gms_icing_mdd_manager_metadatamlkit_digital_ink_recognition", 0)

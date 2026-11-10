@@ -79,7 +79,7 @@ public class OfflineInkTest {
     @Test public void bundledEmojiModelRecognizesASmilingFaceWithoutDownloading() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         DigitalInkModels.install(context);
-        assertEquals(2, context.getSharedPreferences("fcboard-digital-ink", 0).getInt("version", 0));
+        assertEquals(3, context.getSharedPreferences("fcboard-digital-ink", 0).getInt("version", 0));
         Ink.Stroke.Builder outline = Ink.Stroke.builder(), mouth = Ink.Stroke.builder();
         for (int i = 0; i <= 64; i++) {
             double angle = 2 * Math.PI * i / 64;

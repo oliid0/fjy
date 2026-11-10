@@ -88,6 +88,9 @@ const setup = async () => {
     getAppState: () => state,
     getSceneElements: () => elements,
     getFiles: () => ({}),
+    setActiveTool: vi.fn((tool) => {
+      state = { ...state, activeTool: { ...state.activeTool, ...tool } };
+    }),
     resetScene: vi.fn(() => {
       elements = [];
     }),

@@ -153,6 +153,30 @@ export const FunctionGraphInteraction = ({
               )[0] || null,
           });
         } else {
+          if (message.parameters !== undefined) {
+            const parameters = message.parameters;
+            if (
+              !parameters ||
+              typeof parameters !== "object" ||
+              Array.isArray(parameters) ||
+              Object.keys(parameters).some(
+                (key) => !["a", "b", "c"].includes(key),
+              ) ||
+              Object.values(parameters).some(
+                (value) =>
+                  typeof value !== "number" ||
+                  !Number.isFinite(value) ||
+                  Math.abs(value) > 1000,
+              )
+            ) {
+              return;
+            }
+            for (const key of ["a", "b", "c"] as const) {
+              if (parameters[key] !== undefined) {
+                plot[key] = parameters[key];
+              }
+            }
+          }
           updateFunctionGraph(api, plot, {
             ids: graph.ids,
             onError: (error) =>

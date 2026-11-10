@@ -266,7 +266,10 @@ export async function recognizeInkContent(
         );
         signal.throwIfAborted();
         const shape = result.candidates[0]?.toLowerCase();
-        if (["rectangle", "ellipse", "triangle", "arrow"].includes(shape)) {
+        // This branch only handles closed contours. A four-class model can
+        // still label an unsupported polygon ARROW; its nearby endpoints
+        // cannot define a shaft and must never collapse into a tiny arrow.
+        if (["rectangle", "ellipse", "triangle"].includes(shape)) {
           return { kind: "shape", shape: shape as RecognizedShape["shape"] };
         }
       } catch {

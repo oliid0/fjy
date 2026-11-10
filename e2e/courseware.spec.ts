@@ -409,22 +409,17 @@ test("voice draws into the visible PPT and function controls update its transpar
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("画y=a*x+1的函数图像"),
   );
-  const slider = page.getByRole("slider", { name: "调节 a", exact: true });
+  const graph = page.frameLocator("iframe[data-resource-object-id]").last();
+  const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
   await slider.focus();
   await slider.press("ArrowRight");
   await expect(slider).toHaveValue("1.1");
-  const panelBounds = (await page.locator(".fc-panel").boundingBox())!;
-  const curveBounds = (await page
-    .locator(".fc-document-ink path")
-    .last()
-    .boundingBox())!;
-  expect(panelBounds.x).toBeGreaterThan(curveBounds.x + curveBounds.width);
+  await expect(graph.locator("#fc-vega .mark-line path").first()).toBeVisible();
   await expect(
-    page.locator(".fc-document-ink text").filter({ hasText: "x+1" }),
+    graph.getByRole("heading", { name: "y = a*x+1", exact: true }),
   ).toHaveCount(1);
   await page.screenshot({ path: info.outputPath("voice-ppt-function.png") });
-  await page.getByRole("button", { name: "关闭工具浮层", exact: true }).click();
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("写一个1+1=2"),
   );

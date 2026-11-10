@@ -25,7 +25,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-const setup = async () => {
+const setup = async (expression = "x") => {
   await renderEditor(
     <EditorJotaiProvider store={editorJotaiStore}>
       <Fcboard UIOptions={{ unifiedToolbar: true }} />
@@ -36,11 +36,7 @@ const setup = async () => {
   const api = window.h.app.api;
   let ids: string[] = [];
   act(() => {
-    ids = drawPlot(
-      api,
-      { ...defaultPlot, expression: "x" },
-      { x: 350, y: 300 },
-    );
+    ids = drawPlot(api, { ...defaultPlot, expression }, { x: 350, y: 300 });
     api.setActiveTool({ type: "selection" });
     api.updateScene({
       appState: objectSelection(
@@ -184,6 +180,37 @@ it("rejects forged sources and invalid domains without touching the board", asyn
   });
   expect(reply).not.toHaveBeenCalled();
   expect(graph()).toBe(before);
+});
+it("updates a real parameter on the same iframe and restores it on undo", async () => {
+  const { api, graph, frame, send, reply } = await setup("a*x+1");
+  const html = frame.getAttribute("srcdoc");
+  expect(html).toContain('data-parameter="a"');
+  send("commit", { parameters: { a: 2 } });
+  await waitFor(() => expect(graph().customData!.fcPlot.plot.a).toBe(2));
+  expect(
+    document.querySelector(`iframe[data-resource-object-id="${graph().id}"]`),
+  ).toBe(frame);
+  expect(frame.getAttribute("srcdoc")).toBe(html);
+  expect(reply).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "restore",
+      parameters: { a: 2, b: defaultPlot.b, c: defaultPlot.c },
+    }),
+    "*",
+  );
+  send("sample");
+  const points = reply.mock.lastCall![0].points as { x: number; y: number }[];
+  expect(points.every(({ x, y }) => Math.abs(y - (2 * x + 1)) < 1e-9)).toBe(
+    true,
+  );
+  fireEvent.click(screen.getByTestId("button-undo"));
+  await waitFor(() => expect(graph().customData!.fcPlot.plot.a).toBe(1));
+  expect(frame.getAttribute("srcdoc")).toBe(html);
+  expect(
+    api
+      .getSceneElements()
+      .filter((element) => !element.isDeleted && element.type === "iframe"),
+  ).toHaveLength(1);
 });
 
 it("keeps comparison curves in one coordinate system and preserves them through serialization", () => {

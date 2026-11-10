@@ -1,5 +1,6 @@
 import { dataURLToString } from "@fcboard/fcboard/data/blob";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import { t } from "@fcboard/fcboard/i18n";
 
 import type { DataURL } from "@fcboard/fcboard/types";
 
@@ -48,6 +49,27 @@ export const functionGraphResource = (
     input.value = String(bounds[key]);
     control.append(input);
     nav.append(control);
+  }
+  for (const key of ["a", "b", "c"] as const) {
+    if (
+      ![plot.expression, ...(plot.compare || [])].some((expression) =>
+        new RegExp(`\\b${key}\\b`).test(expression),
+      )
+    ) {
+      continue;
+    }
+    const label = page.createElement("label");
+    label.textContent = key;
+    const input = page.createElement("input");
+    input.type = "range";
+    input.min = String(Math.min(-10, plot[key]));
+    input.max = String(Math.max(10, plot[key]));
+    input.step = "0.1";
+    input.value = String(plot[key]);
+    input.dataset.parameter = key;
+    input.setAttribute("aria-label", t("fcboard.adjust_key", { key }));
+    label.append(input);
+    nav.append(label);
   }
   const root = page.createElement("main");
   root.id = "fc-vega";

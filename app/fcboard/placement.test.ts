@@ -539,7 +539,7 @@ it("retains the original equation and its actual residual in the saved function 
     .getSceneElements()
     .find((element) => element.customData?.fcPlot);
   expect(graph).toMatchObject({
-    type: "image",
+    type: "iframe",
     customData: {
       fcPlot: {
         plot: { equation: "x^2+1/x-1=0", expression: plot.expression },

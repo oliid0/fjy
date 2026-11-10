@@ -605,6 +605,44 @@ it("reports an invalid function while preserving its ink and discards late math 
   }
 });
 
+it("keeps a normally written multi-stroke character intact until the last pen lift has settled", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("text");
+  const bars = [100, 140, 180].map((y, index) =>
+    newFreeDrawElement({
+      ...ink,
+      id: `bar-${index}`,
+      type: "freedraw",
+      x: 100,
+      y,
+      points: [pointFrom(0, 0), pointFrom(100, 0)],
+    }),
+  );
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("三");
+  const stop = observeInkAssistance(api, vi.fn(), vi.fn());
+  try {
+    for (let index = 0; index < bars.length; index++) {
+      draw(bars.slice(0, index + 1));
+      await act(async () => vi.advanceTimersByTimeAsync(500));
+      expect(api.getSceneElements()).toEqual(bars.slice(0, index + 1));
+      expect(recognize).not.toHaveBeenCalled();
+    }
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(recognize.mock.calls[0][5]).toHaveLength(3);
+    expect(api.getSceneElements()).toHaveLength(1);
+    expect(api.getSceneElements()[0]).toMatchObject({
+      type: "text",
+      originalText: "三",
+      customData: { fcRecognizedSource: bars.map((stroke) => stroke.id) },
+    });
+  } finally {
+    stop();
+  }
+});
+
 it("retries the whole unfinished word when new ink cancels a pending text recognition", async () => {
   vi.useFakeTimers();
   const { api, ink, draw, append } = setup("text");

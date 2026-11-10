@@ -5,6 +5,13 @@
   const id = root.dataset.functionResource;
   const output = document.querySelector("output");
   const fields = [...document.querySelectorAll("input[data-bound]")];
+  const parameters = [...document.querySelectorAll("input[data-parameter]")];
+  const parameterValues = () =>
+    Object.fromEntries(
+      parameters.map((field) => [field.dataset.parameter, Number(field.value)]),
+    );
+  const snapshot = () => JSON.stringify([domain(), parameterValues()]);
+  let appliedParameters = JSON.stringify(parameterValues());
   let view;
   let pending = 0;
   let revision = 0;
@@ -18,7 +25,7 @@
   };
   const send = (type, extra = {}) => {
     if (view && type === "commit") {
-      const next = JSON.stringify(domain());
+      const next = snapshot();
       if (next === saved) {
         return;
       }
@@ -32,6 +39,7 @@
           type,
           request: revision,
           view: domain(),
+          ...(type === "commit" ? { parameters: parameterValues() } : {}),
           ...extra,
         },
         "*",
@@ -64,7 +72,7 @@
           .signal("ydom", [restored.bottom, restored.top])
           .run();
       }
-      saved = JSON.stringify(domain());
+      saved = snapshot();
       view.addSignalListener("xdom", refresh);
       view.addSignalListener("ydom", refresh);
       view.addSignalListener("clicked", (_name, point) => {
@@ -101,15 +109,32 @@
         return;
       }
       restored = bounds;
-      saved = JSON.stringify(bounds);
-      if (view && JSON.stringify(domain()) !== saved) {
+      const previousParameters = appliedParameters;
+      parameters.forEach((field) => {
+        const value = message.parameters?.[field.dataset.parameter];
+        if (Number.isFinite(value) && Math.abs(value) <= 1000) {
+          field.min = Math.min(-10, value);
+          field.max = Math.max(10, value);
+          field.value = value;
+        }
+      });
+      appliedParameters = JSON.stringify(parameterValues());
+      if (
+        view &&
+        (JSON.stringify(domain()) !== JSON.stringify(bounds) ||
+          previousParameters !== appliedParameters)
+      ) {
         view
           .signal("xdom", [bounds.left, bounds.right])
           .signal("ydom", [bounds.bottom, bounds.top])
           .runAsync()
+          .then(refresh)
           .catch((error) => {
             output.textContent = error.message;
           });
+      }
+      if (view) {
+        saved = snapshot();
       }
       return;
     }
@@ -142,6 +167,10 @@
     }
   });
   document.addEventListener("change", (event) => {
+    if (view && event.target.matches("input[data-parameter]")) {
+      commit();
+      return;
+    }
     if (!view || !event.target.matches("input[data-bound]")) {
       return;
     }

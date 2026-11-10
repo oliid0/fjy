@@ -14,6 +14,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import { TeachingTools } from "./TeachingTools";
 import { classroomCommands } from "./commands";
 import { readWidgets } from "./widgets";
+import { registerCanvasCommands } from "./canvasCommands";
 
 const render = (children: React.ReactElement) =>
   renderEditor(
@@ -41,31 +42,54 @@ const emptyApi = () =>
 
 it("opens the built-in calculator without any installed OEM app and rejects unknown tools", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
-  await render(<TeachingTools api={emptyApi()} />);
-  await act(async () => {
-    await classroomCommands.execute({ name: "tools.extended" });
-  });
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
-    }),
+  let api!: FcboardImperativeAPI;
+  const editor = (tools = false) => (
+    <Fcboard
+      UIOptions={{ unifiedToolbar: true }}
+      onFcboardAPI={(value) => {
+        api = value;
+      }}
+    >
+      {tools && <TeachingTools api={api} />}
+    </Fcboard>
   );
-  await waitFor(() =>
-    expect(screen.getByTitle(t("fcboard.calculator"))).toBeInTheDocument(),
-  );
-  expect(screen.getByTitle(t("fcboard.calculator"))).toHaveAttribute(
-    "sandbox",
-    "allow-scripts",
-  );
-  expect(
-    screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
-  ).not.toBeInTheDocument();
-  await expect(
-    classroomCommands.execute({
-      name: "tools.factory",
-      args: { tool: "signal" },
-    }),
-  ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
+  const view = await renderEditor(editor());
+  const stop = registerCanvasCommands(api);
+  view.rerender(editor(true));
+  try {
+    await act(async () => {
+      api.updateScene({ appState: { width: 1600, height: 900 } });
+      await classroomCommands.execute({ name: "tools.extended" });
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTitle(t("fcboard.calculator"))).toBeInTheDocument(),
+    );
+    expect(screen.getByTitle(t("fcboard.calculator"))).toHaveAttribute(
+      "sandbox",
+      "allow-scripts",
+    );
+    expect(
+      screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
+    ).not.toBeInTheDocument();
+    await expect(
+      classroomCommands.execute({
+        name: "tools.factory",
+        args: { tool: "signal" },
+      }),
+    ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
+    expect(
+      api.getSceneElements().find((element) => element.type === "iframe")
+        ?.customData?.fcInteractiveResource?.id,
+    ).toBe("builtin-calculator");
+  } finally {
+    stop();
+    view.unmount();
+  }
 });
 
 it("restores the actual tool button after an opening failure", async () => {

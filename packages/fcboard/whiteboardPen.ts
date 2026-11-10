@@ -24,7 +24,7 @@ export const switchWhiteboardTip = (
   state: PenPreferences,
   tip: "fine" | "thick",
 ) => {
-  const previous = state.whiteboardPenTip || "fine";
+  const previous = state.whiteboardPenTip || "thick";
   if (tip === previous) {
     return {
       currentItemStrokeColor: state.currentItemStrokeColor,
@@ -42,12 +42,12 @@ export const switchWhiteboardTip = (
       assist: state.currentItemInkAssist,
     },
   };
-  // BaseApplication.PEN_WIDTH_THICK=2; the fine hard pen defaults to 4.
+  // User-confirmed defaults: fine2, thick4; retain each edited profile.
   const next = profiles[tip] || {
     mode: "hard" as const,
     color: state.currentItemStrokeColor,
     gradient: state.currentItemInkGradient,
-    width: DEFAULT_ELEMENT_PROPS.strokeWidth * (tip === "thick" ? 0.5 : 1),
+    width: DEFAULT_ELEMENT_PROPS.strokeWidth * (tip === "fine" ? 0.5 : 1),
     widths: undefined,
     assist: undefined,
   };
@@ -100,7 +100,7 @@ export const whiteboardInkStyle = (
     pen: mode,
     subpixel: true,
     assist: pen.currentItemInkAssist,
-    tip: pen.whiteboardPenTip || "fine",
+    tip: pen.whiteboardPenTip || "thick",
     variation: state.whiteboardBrushVariation ?? 45,
     ...(mode === "hard"
       ? {

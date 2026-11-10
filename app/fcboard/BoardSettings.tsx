@@ -166,7 +166,7 @@ export const BoardSettings = ({
               }}
               size="small"
               exclusive
-              value={state.whiteboardPenTip || "fine"}
+              value={state.whiteboardPenTip || "thick"}
               aria-label={t("fcboard.pen_tip")}
               onChange={(_, tip) => {
                 if (tip) {

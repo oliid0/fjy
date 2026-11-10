@@ -65,6 +65,16 @@ it("pins a real multi/single toggle and changes actual two-contact writing on ea
         isPrimary: id === 1,
       }),
     );
+  const icon = (label: string) => {
+    const button = row().getByRole("button", { name: label });
+    expect(button.querySelector("img")).toBeNull();
+    const paths = button.querySelectorAll("svg path");
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      expect(path).toHaveAttribute("stroke", "currentColor");
+    }
+  };
+  icon(t("fcboard.single_touch_writing"));
   const draw = () => {
     pointer("pointerdown", 1, 100, 200);
     pointer("pointermove", 1, 150, 200);
@@ -82,6 +92,7 @@ it("pins a real multi/single toggle and changes actual two-contact writing on ea
     row().getByRole("button", { name: t("fcboard.single_touch_writing") }),
   );
   expect(api.getAppState().multiStroke).toBe(true);
+  icon(t("fcboard.multi_touch_writing"));
   draw();
   expect(
     api.getSceneElements().filter((item) => item.type === "freedraw"),

@@ -246,6 +246,7 @@ it("applies background and calibrated preferences atomically, reads committed st
       api.updateScene({
         elements: source,
         appState: {
+          whiteboardPenTip: "fine",
           currentItemStrokeColor: "#aa2222",
           currentItemStrokeWidth: 3,
           currentItemPenMode: "brush",

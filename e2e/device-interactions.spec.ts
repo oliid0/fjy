@@ -44,7 +44,7 @@ const dragTouch = async (
 };
 
 for (const width of [390, 1920]) {
-  test(`native pen swipes stay inside pen choices and leave lower controls working at ${width}`, async ({
+  test(`native pen swipes retain all twelve choices and leave tip/width controls working at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -58,6 +58,12 @@ for (const width of [390, 1920]) {
       await pen.click();
     }
     const types = settings.locator(".fc-pen-types");
+    await expect(types.getByRole("button")).toHaveCount(12);
+    const slider = settings.getByRole("slider");
+    await settings.getByRole("button", { name: "细笔", exact: true }).tap();
+    await expect(slider).toHaveValue("2");
+    await settings.getByRole("button", { name: "粗笔", exact: true }).tap();
+    await expect(slider).toHaveValue("4");
     const lowerBounds = () =>
       settings.locator(".fc-pen-mode,.fc-pen-colors").evaluateAll((nodes) =>
         nodes.map((node) => {
@@ -72,8 +78,7 @@ for (const width of [390, 1920]) {
       y: first!.y + first!.height / 2,
     };
     await dragTouch(page, from, { x: from.x - 60, y: from.y + 2 });
-    const next = settings.getByRole("button", { name: "下一页", exact: true });
-    await expect(next).toHaveAttribute("aria-pressed", "true");
+    await expect(types.getByRole("button")).toHaveCount(12);
     await expect(
       types.getByRole("button", { name: "函数笔", exact: true }),
     ).toBeVisible();
@@ -84,8 +89,7 @@ for (const width of [390, 1920]) {
       y: preview!.y + preview!.height / 2,
     };
     await dragTouch(page, point, { x: point.x + 50, y: point.y });
-    await expect(next).toHaveAttribute("aria-pressed", "true");
-    const slider = settings.getByRole("slider");
+    await expect(types.getByRole("button")).toHaveCount(12);
     const value = await slider.inputValue();
     const bar = await slider.boundingBox();
     await dragTouch(
@@ -94,7 +98,7 @@ for (const width of [390, 1920]) {
       { x: bar!.x + bar!.width * 0.8, y: bar!.y + bar!.height / 2 },
     );
     await expect(slider).not.toHaveValue(value);
-    await expect(next).toHaveAttribute("aria-pressed", "true");
+    await expect(types.getByRole("button")).toHaveCount(12);
     const changed = await slider.inputValue();
     const back = await types.getByRole("button").first().boundingBox();
     const start = {
@@ -102,9 +106,7 @@ for (const width of [390, 1920]) {
       y: back!.y + back!.height / 2,
     };
     await dragTouch(page, start, { x: start.x + 60, y: start.y + 2 });
-    await expect(
-      settings.getByRole("button", { name: "上一页", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expect(types.getByRole("button")).toHaveCount(12);
     await expect(slider).toHaveValue(changed);
   });
 
@@ -136,10 +138,14 @@ for (const width of [390, 1920]) {
     };
     await dragTouch(page, back, { x: back.x + 70, y: back.y + 2 });
     await expect(
-      menu.getByRole("button", { name: "插入直尺", exact: true }),
+      menu.getByRole("button", { name: "尺规", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".fc-recording-dialog")).toHaveCount(0);
-    await menu.getByRole("button", { name: "插入直尺", exact: true }).tap();
+    await menu.getByRole("button", { name: "尺规", exact: true }).tap();
+    await page
+      .getByRole("dialog", { name: "尺规", exact: true })
+      .getByRole("button", { name: "插入直尺", exact: true })
+      .tap();
     await expect(menu).toBeHidden();
     await expect(page.locator("[data-gizmo]")).toHaveCount(1);
   });

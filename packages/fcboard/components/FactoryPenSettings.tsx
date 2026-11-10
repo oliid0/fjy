@@ -187,7 +187,7 @@ export const FactoryPenSettings = ({
           <button
             key={tip}
             type="button"
-            aria-pressed={(state.whiteboardPenTip || "fine") === tip}
+            aria-pressed={(state.whiteboardPenTip || "thick") === tip}
             onClick={() =>
               app.api.updateScene({
                 appState: switchWhiteboardTip(state, tip),

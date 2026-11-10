@@ -4,8 +4,6 @@ import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
 
 import { xbhToolbarIcons } from "./xbhToolbarIcons";
-import multiPoint from "./xbh-toolbar-assets/multi.png";
-import singlePoint from "./xbh-toolbar-assets/single.png";
 
 import type { CSSProperties } from "react";
 
@@ -1472,16 +1470,6 @@ export const FactoryIcon = ({
   gradient?: NativeInkPalette;
 }) => {
   const id = useId().replace(/:/g, "");
-  if (name === "multi" || name === "single") {
-    return (
-      <img
-        className="fc-toolbar-icon"
-        src={name === "multi" ? multiPoint : singlePoint}
-        alt=""
-        aria-hidden="true"
-      />
-    );
-  }
   const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
   if (original) {
     const colors = gradient && nativeInkPalettes[gradient];

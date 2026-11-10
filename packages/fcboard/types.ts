@@ -364,6 +364,7 @@ export interface AppState {
   whiteboardBrushVariation?: number;
   whiteboardHardNib?: boolean;
   whiteboardPenTip?: "fine" | "thick";
+  whiteboardPenTipsVersion?: 2;
   whiteboardDualPen?: boolean;
   whiteboardThickThreshold?: number;
   whiteboardFineThreshold?: number;

@@ -59,7 +59,7 @@ export const canvasConfigurationSnapshot = (
           custom: state.whiteboardBackground?.pattern === 14,
         },
     pen: {
-      tip: state.whiteboardPenTip || "fine",
+      tip: state.whiteboardPenTip || "thick",
       mode: state.currentItemInkAssist || state.currentItemPenMode || "hard",
       brushVariation: state.whiteboardBrushVariation ?? 45,
       hardNib:

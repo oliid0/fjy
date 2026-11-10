@@ -929,6 +929,17 @@ export const restoreAppState = (
   }
 
   const inkPreferences = { ...localAppState, ...appState };
+  if (inkPreferences.whiteboardPenTipsVersion !== 2) {
+    const tip = inkPreferences.whiteboardPenTip;
+    if (tip === "fine" || tip === "thick") {
+      inkPreferences.whiteboardPenTip = tip === "fine" ? "thick" : "fine";
+    }
+    if (inkPreferences.whiteboardPenTips) {
+      const { fine, thick } = inkPreferences.whiteboardPenTips;
+      inkPreferences.whiteboardPenTips = { fine: thick, thick: fine };
+    }
+  }
+  nextAppState.whiteboardPenTipsVersion = 2;
   if (["fine", "thick"].includes(String(inkPreferences.whiteboardPenTip))) {
     nextAppState.whiteboardPenTip = inkPreferences.whiteboardPenTip;
   }

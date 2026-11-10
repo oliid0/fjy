@@ -9,6 +9,7 @@ import {
 it("retains distinct fine/thick modes, widths, colours and assistance across saving and switching", () => {
   const fine = {
     ...getDefaultAppState(),
+    whiteboardPenTip: "fine" as const,
     currentItemStrokeColor: "#ff0000",
     currentItemStrokeWidth: 2,
     currentItemPenMode: "brush" as const,
@@ -41,6 +42,7 @@ it("retains distinct fine/thick modes, widths, colours and assistance across sav
 it("selects profiles per contact with a measured threshold and never mutates the other active pen", () => {
   const state = {
     ...getDefaultAppState(),
+    whiteboardPenTip: "fine" as const,
     whiteboardDualPen: true,
     whiteboardThickThreshold: 8,
     whiteboardPenTips: {
@@ -50,7 +52,7 @@ it("selects profiles per contact with a measured threshold and never mutates the
   const snapshot = JSON.stringify(state);
   expect(
     contactPenPreferences(state, { width: 9, height: 7 }).whiteboardPenTip,
-  ).toBeUndefined();
+  ).toBe("fine");
   const thick = contactPenPreferences(state, { width: 8, height: 9 });
   expect(thick).toMatchObject({
     whiteboardPenTip: "thick",
@@ -63,14 +65,14 @@ it("selects profiles per contact with a measured threshold and never mutates the
       { ...state, whiteboardThickThreshold: undefined },
       { width: 100, height: 100 },
     ).whiteboardPenTip,
-  ).toBeUndefined();
+  ).toBe(state.whiteboardPenTip);
   expect(
     contactPenPreferences(
       { ...state, whiteboardDualPen: false },
       { width: 100, height: 100 },
       { dualPen: true, thickThreshold: 8 },
     ).whiteboardPenTip,
-  ).toBeUndefined();
+  ).toBe(state.whiteboardPenTip);
 });
 
 it.each([0.5, 1, 2])(
@@ -106,6 +108,7 @@ it.each([0.5, 1, 2])(
 it("keeps independent native gradients through tip switches and restored browser preferences", () => {
   const state = {
     ...getDefaultAppState(),
+    whiteboardPenTip: "fine" as const,
     currentItemInkGradient: "mint" as const,
   };
   const thick = {
@@ -127,4 +130,34 @@ it("keeps independent native gradients through tip switches and restored browser
       2,
     ).customData.fcInk.gradient,
   ).toEqual({ palette: "mint", size: 640 / Math.max(1, devicePixelRatio) });
+});
+
+it("migrates reversed stored tip names once without losing custom styles or changing ink width", () => {
+  const legacy = {
+    ...getDefaultAppState(),
+    whiteboardPenTipsVersion: undefined,
+    whiteboardPenTip: "fine" as const,
+    currentItemStrokeWidth: 2,
+    currentItemStrokeColor: "#ff0000",
+    whiteboardPenTips: {
+      thick: { mode: "hard" as const, color: "#0000ff", width: 1 },
+    },
+  };
+  const saved = restoreAppState(legacy, null);
+  expect(saved).toMatchObject({
+    whiteboardPenTip: "thick",
+    currentItemStrokeWidth: 2,
+  });
+  expect(switchWhiteboardTip(saved, "fine")).toMatchObject({
+    currentItemStrokeWidth: 1,
+    currentItemStrokeColor: "#0000ff",
+  });
+  const reloaded = restoreAppState(JSON.parse(JSON.stringify(saved)), null);
+  expect(reloaded.whiteboardPenTipsVersion).toBe(2);
+  expect(reloaded.whiteboardPenTip).toBe(saved.whiteboardPenTip);
+  expect(reloaded.whiteboardPenTips).toEqual(saved.whiteboardPenTips);
+  expect(reloaded.currentItemStrokeWidth).toBe(saved.currentItemStrokeWidth);
+  expect(switchWhiteboardTip(reloaded, "fine")).toEqual(
+    switchWhiteboardTip(saved, "fine"),
+  );
 });

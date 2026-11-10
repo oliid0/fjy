@@ -128,3 +128,54 @@ it("keeps the expanded palette, applies gradients to the pen and restores solid 
   expect(h.state.currentItemInkGradient).toBeUndefined();
   expect(h.state.currentItemStrokeColor).toBe("#ff0000");
 });
+
+it("uses fine 2 and thick 4, retains each adjusted width and writes the selected actual stroke width", async () => {
+  const view = await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  act(() => h.app.setActiveTool({ type: "freedraw" }));
+  tap(screen.getByRole("button", { name: t("fcboard.pen") }));
+  const fine = () =>
+    screen.getByRole("button", { name: t("fcboard.fine_pen") });
+  const thick = () =>
+    screen.getByRole("button", { name: t("fcboard.thick_pen") });
+  const width = () =>
+    screen.getByRole("slider", { name: t("fcboard.pen_thickness") });
+  fireEvent.click(fine());
+  expect(fine()).toHaveAttribute("aria-pressed", "true");
+  expect(width()).toHaveValue("2");
+  fireEvent.click(thick());
+  expect(thick()).toHaveAttribute("aria-pressed", "true");
+  expect(width()).toHaveValue("4");
+  fireEvent.change(width(), { target: { value: "10" } });
+  fireEvent.click(fine());
+  expect(width()).toHaveValue("2");
+  fireEvent.change(width(), { target: { value: "6" } });
+  fireEvent.click(thick());
+  expect(width()).toHaveValue("10");
+  fireEvent.click(fine());
+  expect(width()).toHaveValue("6");
+  tap(screen.getByRole("button", { name: t("fcboard.pen") }));
+  const canvas = view.container.querySelector("canvas.interactive")!;
+  for (const [type, x] of [
+    ["pointerdown", 100],
+    ["pointermove", 180],
+    ["pointerup", 220],
+  ] as const) {
+    fireEvent(
+      canvas,
+      Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        pointerId: 1,
+        pointerType: "pen",
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        clientX: x,
+        clientY: 150,
+        pressure: 0.5,
+        width: 1,
+        height: 1,
+      }),
+    );
+  }
+  const stroke = h.elements.find((element) => element.type === "freedraw")!;
+  expect(stroke.strokeWidth).toBe(6);
+  expect(stroke.customData?.fcInk?.tip).toBe("fine");
+});

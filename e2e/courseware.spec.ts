@@ -143,6 +143,7 @@ test("new boards preserve previous work and offer the original teaching tools", 
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
   await page.getByRole("button", { name: "工具箱", exact: true }).click();
+  await page.getByRole("button", { name: "尺规", exact: true }).click();
   for (const name of ["直尺", "量角器", "圆规", "三角板"]) {
     await expect(
       page.getByRole("button", { name: `插入${name}`, exact: true }),

@@ -73,7 +73,7 @@ jobs:
       - name: Package whiteboard web assets
         run: pnpm --dir app exec vite build
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          NODE_OPTIONS: "--max-old-space-size=6144"
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
       - name: Upload deployable live-share service and matching viewer

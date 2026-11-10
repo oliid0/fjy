@@ -31,6 +31,10 @@ public class DigitalInkPlugin extends Plugin {
     private final Set<Request> pending = ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
     private DigitalInkPacks packs;
+    private DigitalInkRecognizer idleRecognizer;
+    private String idleLanguage;
+    private java.util.concurrent.ScheduledFuture<?> idleRelease;
+    private final java.util.Map<String, Long> retired = new ConcurrentHashMap<>();
     private interface Action { void run() throws Exception; }
     private static final class Request {
         final PluginCall call;
@@ -51,7 +55,9 @@ public class DigitalInkPlugin extends Plugin {
         if (packs == null) packs = new DigitalInkPacks(getContext(), () -> notifyListeners("packsChanged", packs.snapshot()), this::retireLanguage);
         return packs;
     }
-    void retireLanguage(String tag) {
+    synchronized void retireLanguage(String tag) {
+        retired.merge(tag, 1L, Long::sum);
+        if (tag.equals(idleLanguage)) closeIdle();
         for (Request request : pending) {
             if (tag.equals(request.language)) fail(request, new ModelRequiredException(tag));
         }
@@ -61,6 +67,42 @@ public class DigitalInkPlugin extends Plugin {
             public void success(JSObject result) { call.resolve(result); }
             public void failure(Exception error) { call.reject("Handwriting language pack operation failed: " + error.getMessage(), error); }
         };
+    }
+    private synchronized void closeIdle() {
+        if (idleRelease != null) idleRelease.cancel(false);
+        idleRelease = null;
+        if (idleRecognizer != null) idleRecognizer.close();
+        idleRecognizer = null; idleLanguage = null;
+    }
+    private synchronized DigitalInkRecognizer borrow(DigitalInkRecognitionModel model, Request request) {
+        if (Boolean.TRUE.equals(request.call.getBoolean("reuse", false)) && request.language.equals(idleLanguage)) {
+            if (idleRelease != null) idleRelease.cancel(false);
+            idleRelease = null;
+            DigitalInkRecognizer result = idleRecognizer;
+            idleRecognizer = null; idleLanguage = null;
+            return result;
+        }
+        if (Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) closeIdle();
+        return createRecognizer(model);
+    }
+    private synchronized void release(DigitalInkRecognizer recognizer, Request request, long revision, boolean success) {
+        if (closed || request.settled.get() || !success || revision != retired.getOrDefault(request.language, 0L) || !Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) {
+            recognizer.close(); return;
+        }
+        closeIdle();
+        idleRecognizer = recognizer; idleLanguage = request.language;
+        idleRelease = worker.schedule(() -> {
+            synchronized (DigitalInkPlugin.this) {
+                if (idleRecognizer == recognizer) closeIdle();
+            }
+        }, 60, TimeUnit.SECONDS);
+    }
+    @PluginMethod public void cancel(PluginCall call) {
+        String id = call.getString("id", "");
+        if (!id.isEmpty()) for (Request request : pending) {
+            if (id.equals(request.call.getString("id"))) fail(request, new CancellationException("Handwriting changed"));
+        }
+        call.resolve();
     }
     @PluginMethod public void listPacks(PluginCall call) { packs().list(packResult(call)); }
     @PluginMethod public void downloadPack(PluginCall call) { packs().operate(call.getString("tag", ""), false, packResult(call)); }
@@ -106,7 +148,7 @@ public class DigitalInkPlugin extends Plugin {
         return DigitalInkRecognition.getClient(DigitalInkRecognizerOptions.builder(model).build());
     }
     private Task<DigitalInkRecognitionModel> model(String language) throws Exception {
-        if (!DigitalInkPacks.supported(language) && !language.equals("zxx-Zsym-x-shapes")) {
+        if (!DigitalInkPacks.supported(language) && !language.equals("zxx-Zsym-x-shapes") && !language.equals("zxx-Zsye-x-emoji")) {
             throw new IllegalArgumentException("This offline handwriting language is not installed");
         }
         DigitalInkModels.install(getContext());
@@ -148,7 +190,9 @@ public class DigitalInkPlugin extends Plugin {
                     JSONArray xy = points.getJSONArray(point);
                     double x = xy.getDouble(0), y = xy.getDouble(1);
                     if (!Double.isFinite(x) || !Double.isFinite(y) || Math.abs(x) > 1e7 || Math.abs(y) > 1e7) throw new IllegalArgumentException("Invalid handwriting point");
-                    stroke.addPoint(Ink.Point.create((float)x, (float)y, (long)count));
+                    // Original scene samples contain no real timestamps. The SDK
+                    // accepts untimed points; artificial 1ms timing distorts speed.
+                    stroke.addPoint(Ink.Point.create((float)x, (float)y));
                 }
                 ink.addStroke(stroke.build());
             }
@@ -166,15 +210,16 @@ public class DigitalInkPlugin extends Plugin {
                 }
                 if (closed || request.settled.get()) { inference.release(); return; }
                 DigitalInkRecognizer recognizer;
-                try { recognizer = createRecognizer(ready.getResult()); }
+                try { recognizer = borrow(ready.getResult(), request); }
                 catch (Exception | LinkageError error) { inference.release(); throw error; }
+                long modelRevision = retired.getOrDefault(request.language, 0L);
                 Task<RecognitionResult> actual;
                 try { actual = recognizer.recognize(ink.build()); }
                 catch (Exception | LinkageError error) { recognizer.close(); inference.release(); throw error; }
                 // A timeout does not cancel the underlying Task. Keep its client alive
                 // until actual completion, even after deletion, timeout or plugin unload.
                 actual.addOnCompleteListener(DIRECT, ignored -> {
-                    try { recognizer.close(); } finally { inference.release(); }
+                    try { release(recognizer, request, modelRevision, ignored.isSuccessful()); } finally { inference.release(); }
                 });
                 Tasks.withTimeout(actual, 25, TimeUnit.SECONDS).addOnCompleteListener(DIRECT, result -> dispatch(request, () -> {
                     if (!result.isSuccessful()) throw failure(result);
@@ -189,6 +234,7 @@ public class DigitalInkPlugin extends Plugin {
 
     @Override protected void handleOnDestroy() {
         closed = true;
+        closeIdle();
         if (packs != null) packs.close();
         for (Request request : pending) fail(request, new IllegalStateException("Handwriting recognition closed"));
         worker.shutdown();

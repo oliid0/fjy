@@ -3093,62 +3093,83 @@
   }
 }
 .fc-selection-actions {
-  --fc-unit: 1px;
+  --fc-unit: 0.67px;
   position: fixed;
   z-index: 25;
   width: max-content;
   max-width: calc(100vw - 24px);
   pointer-events: auto;
-  color: #333;
-  font-size: calc(11 * var(--fc-unit, 1px));
+  color: #010101;
+  font-size: calc(11 * var(--fc-unit));
   > [role="toolbar"] {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
-    padding: 0 calc(4 * var(--fc-unit, 1px));
-    background: #c8c8c8;
-    border-radius: calc(6 * var(--fc-unit, 1px));
+    box-sizing: border-box;
+    padding: calc(6 * var(--fc-unit)) calc(12 * var(--fc-unit))
+      calc(6 * var(--fc-unit)) 0;
+    background: #fcfcfe;
+    border-radius: calc(18 * var(--fc-unit));
+    box-shadow: 0 2px 8px #00000026;
     button {
-      width: calc(44 * var(--fc-unit, 1px));
-      height: calc(42 * var(--fc-unit, 1px));
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      width: calc(50 * var(--fc-unit));
+      height: calc(50 * var(--fc-unit));
+      margin-left: calc(6 * var(--fc-unit));
+      padding: calc(4 * var(--fc-unit)) 0;
       min-width: 0;
       flex: 0 0 auto;
-      border-radius: calc(5 * var(--fc-unit, 1px));
+      border-radius: calc(12 * var(--fc-unit));
       color: inherit;
       font: inherit;
-      &:active {
-        background: #0b6ff3;
+      line-height: calc(16 * var(--fc-unit));
+      white-space: nowrap;
+      &:active,
+      &[aria-pressed="true"],
+      &[aria-expanded="true"] {
+        background: #0368ff;
         color: #fff;
+        .fc-selection-icon-normal {
+          display: none;
+        }
+        .fc-selection-icon-focus {
+          display: block;
+        }
       }
       &:disabled {
         opacity: 0.4;
-        cursor: wait;
       }
-      svg {
-        width: calc(18 * var(--fc-unit, 1px));
-        height: calc(18 * var(--fc-unit, 1px));
-      }
+      svg,
       img {
-        width: calc(24 * var(--fc-unit, 1px));
-        height: calc(24 * var(--fc-unit, 1px));
+        width: calc(24 * var(--fc-unit));
+        height: calc(24 * var(--fc-unit));
+        flex: 0 0 auto;
       }
-    }
-    > button[aria-pressed="true"] {
-      background: #0b6ff3;
-      color: #fff;
+      .fc-selection-icon-focus {
+        display: none;
+      }
+      > span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     }
   }
   > [role="status"],
   > [role="alert"] {
-    max-width: calc(260 * var(--fc-unit, 1px));
-    padding: calc(6 * var(--fc-unit, 1px));
+    max-width: 260px;
+    padding: 6px;
     margin-top: 4px;
     background: #fafafa;
     border-radius: 6px;
     white-space: normal;
     line-height: 1.4;
-    max-height: calc(60 * var(--fc-unit, 1px));
+    max-height: 60px;
     overflow: auto;
     overflow-wrap: anywhere;
+    font-size: 11px;
   }
 }
 
@@ -3764,7 +3785,7 @@
     }
     .fc-background-colors {
       display: grid;
-      grid-template-columns: repeat(6, 34px);
+      grid-template-columns: repeat(7, 34px);
       justify-content: space-between;
       max-width: 414px;
       gap: 0;
@@ -3833,72 +3854,6 @@
     padding-inline: 18px;
     .fc-settings-fields .fc-background-settings .fc-background-picker {
       grid-template-columns: repeat(5, 34px);
-    }
-  }
-}
-.fc-factory-color-wheel {
-  width: 160px;
-  min-height: 212px;
-  box-sizing: border-box;
-  padding: 14px;
-  background: #fafafa;
-  border: 1px solid #00000038;
-  border-radius: 22px;
-  box-shadow: 0 4px 12px #0002;
-  .fc-color-disc {
-    width: 126px;
-    height: 126px;
-    position: relative;
-    touch-action: none;
-    border-radius: 50%;
-    background: radial-gradient(circle closest-side, #fff, #fff0),
-      conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red);
-    padding: 5px;
-    background-clip: content-box;
-    background-origin: content-box;
-    box-sizing: border-box;
-    span {
-      position: absolute;
-      width: 4px;
-      height: 4px;
-      border: 1px solid #000;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
-  }
-  .fc-color-shade {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 16px;
-    > span {
-      width: 20px;
-      height: 20px;
-      border: 1px solid #ddd;
-      border-radius: 50%;
-    }
-    input {
-      width: 94px;
-      min-width: 0;
-      height: 8px;
-      appearance: none;
-      border-radius: 5px;
-    }
-    input::-webkit-slider-thumb {
-      appearance: none;
-      width: 12px;
-      height: 12px;
-      border: 1px solid #aaa;
-      background: #fff;
-      border-radius: 50%;
-    }
-    input::-moz-range-thumb {
-      width: 12px;
-      height: 12px;
-      border: 1px solid #aaa;
-      background: #fff;
-      border-radius: 50%;
     }
   }
 }
@@ -4360,3 +4315,61 @@
 }
 
 @import "./BottomBar.scss";
+
+.fc-classroom .fc-language-pack-inline {
+  width: 100%;
+  height: 374px;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+// layout_select_ai: original nominal dimensions use the APK's 0.67dp unit.
+.fc-selection-ai-menu {
+  display: flex;
+  padding: calc(16px * 0.67) calc(8px * 0.67) calc(10px * 0.67);
+  border-radius: calc(24px * 0.67);
+  background: #fcfcfe;
+  color: #333;
+  box-shadow: 0 2px 8px #00000026;
+  > button {
+    display: flex;
+    flex-direction: column;
+    margin: 0 calc(8px * 0.67);
+    padding: 0;
+    min-width: calc(36px * 0.67);
+    font: 400 calc(11px * 0.67) / 1.5 system-ui, "Microsoft YaHei", sans-serif;
+    img {
+      width: calc(36px * 0.67);
+      height: calc(36px * 0.67);
+    }
+    .fc-selection-ai-focus {
+      display: none;
+    }
+    &:active,
+    &:focus-visible {
+      .fc-selection-ai-normal {
+        display: none;
+      }
+      .fc-selection-ai-focus {
+        display: block;
+      }
+    }
+  }
+}
+.fc-selection-actions > [role="toolbar"] .fc-selection-ai > button {
+  display: flex;
+  flex-direction: column;
+  font-weight: 400;
+  gap: 0;
+  img {
+    width: calc(24px * 0.67);
+    height: calc(24px * 0.67);
+  }
+  span {
+    line-height: calc(16px * 0.67);
+  }
+}

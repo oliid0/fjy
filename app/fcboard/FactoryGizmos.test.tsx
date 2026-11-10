@@ -338,8 +338,34 @@ it("opens both added native gizmos from the original toolbox page and draws a co
       await classroomCommands.execute({ name: "tools.extended" });
     });
     const toolbar = within(tools.container);
+    const openPicker = () =>
+      fireEvent.click(
+        within(
+          toolbar.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
+        ).getByRole("button", { name: t("fcboard.geometry_tools") }),
+      );
+    openPicker();
+    expect(
+      within(document.body).getByRole("dialog", {
+        name: t("fcboard.geometry_tools"),
+      }),
+    ).toBeVisible();
+    openPicker();
+    expect(
+      within(document.body).queryByRole("dialog", {
+        name: t("fcboard.geometry_tools"),
+      }),
+    ).toBeNull();
+    openPicker();
+    expect(
+      within(
+        within(document.body).getByRole("dialog", {
+          name: t("fcboard.geometry_tools"),
+        }),
+      ).getAllByRole("button"),
+    ).toHaveLength(4);
     fireEvent.click(
-      toolbar.getByRole("button", {
+      within(document.body).getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.compass") }),
       }),
     );
@@ -373,8 +399,9 @@ it("opens both added native gizmos from the original toolbox page and draws a co
     await act(async () => {
       await classroomCommands.execute({ name: "tools.extended" });
     });
+    openPicker();
     fireEvent.click(
-      toolbar.getByRole("button", {
+      within(document.body).getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.set_square") }),
       }),
     );

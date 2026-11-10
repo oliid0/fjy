@@ -5,6 +5,11 @@ import { recognizeLocalHandwriting } from "./localOcr";
 import { recognizeLocalMath } from "./localMathOcr";
 import { currentSettings } from "./settings";
 import {
+  calculationInk,
+  hasStructuredMathInk,
+  preservesMathInkStructure,
+} from "./calculationInk";
+import {
   hasDigitalInk,
   prepareDigitalInk,
   recognizeDigitalInk,
@@ -29,13 +34,21 @@ export const recognizeHandwriting = async (
   signal: AbortSignal,
   progress: (message: string) => void,
   kind: "math" | "text" = "text",
-  accept: (text: string) => boolean = (text) => !!text.trim(),
+  accept: (text: string) => boolean | Promise<boolean> = (text) =>
+    !!text.trim(),
   strokes?: InkInput,
-  languageHint?: "en-US",
+  languageHint?: string,
   chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
+  localOnly = false,
 ) => {
   signal.throwIfAborted();
   const settings = currentSettings();
+  const structured =
+    kind === "math" && !!strokes?.length && hasStructuredMathInk(strokes);
+  const recognitionStrokes =
+    kind === "math" && strokes ? calculationInk(strokes).strokes : strokes;
+  const accepted = (text: string) =>
+    (!structured || preservesMathInkStructure(strokes!, text)) && accept(text);
   let raster: Promise<string> | undefined;
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
@@ -49,7 +62,7 @@ export const recognizeHandwriting = async (
               languageHint === "en-US"
                 ? " The writing surface is for English letters and words."
                 : kind === "math"
-                ? " Use calculable math syntax: ^ for powers, * for multiplication, integrate(expr,x), defint(expr,a,b,x), diff(expr,x), limit(expr,x,a), solve(expr,x). Preserve complete function definitions such as fx=1/x^2+x, denominators, superscripts, and distinguish variable x from multiplication. Preserve operand rows and horizontal bars in vertical arithmetic; long division is divisor)dividend. Preserve values and structure; do not calculate the answer."
+                ? " For a simple horizontal arithmetic expression return plain digits and + - * / =. For complex or two-dimensional mathematics return standard LaTeX, not flattened prose: use \\frac{numerator}{denominator}, braced superscripts/subscripts, \\sqrt[n]{...}, \\log_{base}, explicit \\sin/\\cos/etc., degree markers ^\\circ only if written, complete integral/sum/product bounds and differentials, and matrix environments with exact rows/columns. Identify fraction bars by operands above AND below, distinguish minus from fraction bars and variable x from multiplication. Do not add parentheses, degrees, multiplication signs, missing terms, or change a function's scope without visual evidence. Keep leading signs, decimal points, nested fractions and parentheses. Preserve complete definitions such as f(x)=1/x^2+x. For vertical arithmetic preserve operand line breaks and the final horizontal bar as ----; do not confuse it with a minus or equals sign, and never drop the written operator. Long division is divisor)dividend. Return only the exact transcription without Markdown, explanation, inferred correction or answer. If any essential symbol or scope is ambiguous return an empty string."
                 : ""
             }`,
           },
@@ -57,10 +70,10 @@ export const recognizeHandwriting = async (
         ],
         request,
         { ...settings, model: settings.ocrModel || settings.model },
-        { maxTokens: kind === "math" ? 256 : 1024, timeoutMs: 6000 },
+        { maxTokens: 1024, timeoutMs: 6000 },
       )
     ).trim();
-    if (!accept(text)) {
+    if (!(await accepted(text))) {
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
     return text;
@@ -71,12 +84,13 @@ export const recognizeHandwriting = async (
       request,
       progress,
     );
-    if (!accept(text)) {
+    if (!(await accepted(text))) {
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
     return text;
   };
-  const useCloud = settings.ocr !== "local" && !!settings.apiKey.trim();
+  const useCloud =
+    !localOnly && settings.ocr !== "local" && !!settings.apiKey.trim();
   const cloudFirst = settings.ocr === "cloud" && useCloud;
   if (cloudFirst) {
     try {
@@ -87,20 +101,28 @@ export const recognizeHandwriting = async (
       signal.throwIfAborted();
     }
   }
-  if (hasDigitalInk() && strokes?.length) {
+  if (!structured && hasDigitalInk() && recognitionStrokes?.length) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
       const candidates = await recognizeDigitalInk(
-        strokes,
+        recognitionStrokes,
         signal,
         kind,
         languageHint,
       );
-      const text = candidates[0];
-      if (text && accept(text)) {
-        const chosen = chooseCandidate
-          ? await chooseCandidate(candidates.filter(accept))
-          : text;
+      const accepted: string[] = [];
+      for (const candidate of candidates) {
+        signal.throwIfAborted();
+        if (await accept(candidate)) {
+          accepted.push(candidate);
+          if (!chooseCandidate) {
+            break;
+          }
+        }
+      }
+      const text = accepted[0];
+      if (text) {
+        const chosen = chooseCandidate ? await chooseCandidate(accepted) : text;
         signal.throwIfAborted();
         return chosen;
       }
@@ -119,6 +141,9 @@ export const recognizeHandwriting = async (
       ) {
         throw error;
       }
+      if (localOnly) {
+        throw error;
+      }
       // A missing explicitly selected text pack is actionable; other native
       // failures can use the separately bundled local raster model.
     }
@@ -126,9 +151,9 @@ export const recognizeHandwriting = async (
   if (kind === "math" && strokes?.length) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
-      const value = await recognizeLocalMath(strokes, signal);
+      const value = await recognizeLocalMath(recognitionStrokes!, signal);
       signal.throwIfAborted();
-      if (accept(value)) {
+      if (await accepted(value)) {
         return chooseCandidate ? chooseCandidate([value]) : value;
       }
     } catch {
@@ -136,6 +161,9 @@ export const recognizeHandwriting = async (
     }
   }
   try {
+    if (structured) {
+      throw new Error("Structured mathematics requires a math recognizer");
+    }
     const value = await local(signal);
     signal.throwIfAborted();
     return chooseCandidate ? chooseCandidate([value]) : value;

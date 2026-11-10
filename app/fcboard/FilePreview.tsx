@@ -1,4 +1,5 @@
 import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
+
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
@@ -51,11 +52,19 @@ import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
+import { validatedPlot } from "./mathRecognition";
+
 import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands, commandObjectIds } from "./commands";
+import {
+  documentSelectionIds,
+  reorderDocumentSelection,
+} from "./documentSelection";
 import { alignmentOffset, resizeAnchor } from "./canvasTransform";
 import { documentSharing } from "./documentSharing";
+import { DocumentTextEditor } from "./DocumentTextEditor";
+import { validImageCrop } from "./imageCropGeometry";
 import { renderInsertion } from "./insertObjects";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
@@ -73,6 +82,7 @@ import {
   moveDocumentStroke,
   scaleDocumentStroke,
   eraseDocumentInk,
+  eraseDocumentRegion,
   eraseDocumentObjects,
   htmlText,
   loadInk,
@@ -91,6 +101,7 @@ import { MaterialPanel } from "./MaterialPanel";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
   inkAssistMode,
+  inkRecognitionDelay,
   recognizeInkContent,
   settleInkRecognition,
 } from "./inkRecognition";
@@ -109,7 +120,7 @@ import {
 
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { drawPlot } from "./board";
-import { insertGeneratedImage } from "./imageGeneration";
+import { insertMagicInk } from "./magicPen";
 import { InkRequests } from "./inkRequests";
 import { changeQuestionAnswer } from "./questionAnswer";
 import { resourcePlacement } from "./resourcePlacement";
@@ -294,6 +305,7 @@ export const FilePreview = ({
     ? "eraser"
     : "freedraw";
   const selectedInkRef = useRef<string[]>([]);
+  const [editingText, setEditingText] = useState<string>();
   const [lasso, setLasso] = useState<[number, number][]>([]);
   const selectionGesture = useRef<{
     before: [number, number][];
@@ -340,6 +352,7 @@ export const FilePreview = ({
   const [html, setHtml] = useState("");
   const [page, setPage] = useState(0);
   const pageRef = useRef(0);
+  useEffect(() => setEditingText(undefined), [file, page]);
   const [pages, setPages] = useState<{ index: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -872,6 +885,9 @@ export const FilePreview = ({
         args.ids === undefined ? selectedInkRef.current : args.ids,
         all,
       );
+      if (all.some((stroke) => ids.has(stroke.id) && stroke.locked)) {
+        throw new Error(t("fcboard.selection_unlock_first"));
+      }
       const bounds = all
         .filter((stroke) => ids.has(stroke.id))
         .map(documentStrokeBounds);
@@ -992,6 +1008,13 @@ export const FilePreview = ({
             ids,
             inkRef.current[pageRef.current] || [],
           );
+          if (
+            (inkRef.current[pageRef.current] || []).some(
+              (stroke) => chosen.has(stroke.id) && stroke.locked,
+            )
+          ) {
+            throw new Error(t("fcboard.selection_unlock_first"));
+          }
           commitInk({
             ...inkRef.current,
             [pageRef.current]: (inkRef.current[pageRef.current] || []).filter(
@@ -1114,6 +1137,52 @@ export const FilePreview = ({
           commitInk({ ...inkRef.current, [page]: [...all, ...copies] });
         },
       ),
+      classroomCommands.register("document.action", "@internal", (args) => {
+        const action = String(args.action);
+        if (
+          ![
+            "bringForward",
+            "sendBackward",
+            "bringToFront",
+            "sendToBack",
+            "toggleElementLock",
+          ].includes(action)
+        ) {
+          throw new Error(t("fcboard.this_board_action_is_unavailable"));
+        }
+        const page = pageRef.current;
+        const all = inkRef.current[page] || [];
+        const ids = documentSelectionIds(all, new Set(selectedInkRef.current));
+        if (!ids.size) {
+          throw new Error(t("fcboard.circle_annotations_first"));
+        }
+        const selected = all.filter((stroke) => ids.has(stroke.id));
+        if (action === "toggleElementLock") {
+          const locked = selected.every((stroke) => !stroke.locked);
+          commitInk({
+            ...inkRef.current,
+            [page]: all.map((stroke) =>
+              ids.has(stroke.id) ? { ...stroke, locked } : stroke,
+            ),
+          });
+        } else {
+          if (selected.some((stroke) => stroke.locked)) {
+            throw new Error(t("fcboard.selection_unlock_first"));
+          }
+          const next = reorderDocumentSelection(
+            all,
+            ids,
+            action as
+              | "bringForward"
+              | "sendBackward"
+              | "bringToFront"
+              | "sendToBack",
+          );
+          if (next !== all) {
+            commitInk({ ...inkRef.current, [page]: next });
+          }
+        }
+      }),
       classroomCommands.register(
         "document.tool",
         "切换课件板书工具，args.tool=freedraw|eraser|selection",
@@ -1137,6 +1206,50 @@ export const FilePreview = ({
           }
         },
       ),
+      classroomCommands.register("document.cropImage", "@internal", (args) => {
+        const all = inkRef.current[pageRef.current] || [];
+        const current = all.find((stroke) => stroke.id === args.id);
+        const crop = args.crop as InkStroke["imageCrop"];
+        if (
+          args.page !== pageRef.current + 1 ||
+          !current?.image ||
+          current.locked ||
+          documentSourceSignature([current]) !== args.sourceSignature ||
+          !crop ||
+          !validImageCrop(crop) ||
+          ![args.x, args.y, args.width, args.height].every(
+            (value) => typeof value === "number" && Number.isFinite(value),
+          ) ||
+          (args.width as number) <= 0 ||
+          (args.height as number) <= 0
+        ) {
+          throw new Error(t("fcboard.this_board_action_is_unavailable"));
+        }
+        commitInk({
+          ...inkRef.current,
+          [pageRef.current]: all.map((stroke) =>
+            stroke.id === current.id
+              ? {
+                  ...stroke,
+                  points: [[args.x as number, args.y as number]],
+                  imageWidth: args.width as number,
+                  imageHeight: args.height as number,
+                  imageCrop: crop,
+                }
+              : stroke,
+          ),
+        });
+        setLasso([]);
+      }),
+      classroomCommands.register("document.editText", "@internal", () => {
+        const selected = (inkRef.current[pageRef.current] || []).filter(
+          (stroke) => selectedInkRef.current.includes(stroke.id),
+        );
+        if (selected.length !== 1 || !selected[0].text || selected[0].locked) {
+          throw new Error(t("fcboard.this_board_action_is_unavailable"));
+        }
+        setEditingText(selected[0].id);
+      }),
       classroomCommands.register(
         "document.style",
         "更改板书或圈选板书：args.color 十六进制颜色，width=1..30,fontSize=8..200,opacity=0..100,pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language",
@@ -1145,7 +1258,17 @@ export const FilePreview = ({
             !Object.keys(args).length ||
             Object.keys(args).some(
               (key) =>
-                !["color", "width", "fontSize", "opacity", "pen"].includes(key),
+                ![
+                  "color",
+                  "background",
+                  "fillStyle",
+                  "strokeStyle",
+                  "width",
+                  "fontSize",
+                  "fontWeight",
+                  "opacity",
+                  "pen",
+                ].includes(key),
             )
           ) {
             throw new Error(
@@ -1153,6 +1276,47 @@ export const FilePreview = ({
                 "fcboard.you_can_adjust_annotation_color_pen_width_text_size_and_opacity",
               ),
             );
+          }
+          if (
+            args.fontWeight !== undefined &&
+            !(inkRef.current[pageRef.current] || []).some(
+              (stroke) =>
+                selectedInkRef.current.includes(stroke.id) && stroke.text,
+            )
+          ) {
+            throw new Error(t("fcboard.invalid_style_parameters"));
+          }
+          if (
+            args.fontWeight !== undefined &&
+            args.fontWeight !== 400 &&
+            args.fontWeight !== 700
+          ) {
+            throw new Error(t("fcboard.invalid_style_parameters"));
+          }
+          if (
+            args.background !== undefined &&
+            (typeof args.background !== "string" ||
+              (args.background !== "transparent" &&
+                !/^#[a-f0-9]{3}(?:[a-f0-9]{3})?$/i.test(args.background)))
+          ) {
+            throw new Error(t("fcboard.invalid_annotation_color"));
+          }
+          if (
+            args.strokeStyle !== undefined &&
+            !["solid", "dashed", "dotted"].includes(String(args.strokeStyle))
+          ) {
+            throw new Error(t("fcboard.invalid_style_parameters"));
+          }
+          if (args.fillStyle !== undefined && args.fillStyle !== "solid") {
+            throw new Error(t("fcboard.invalid_style_parameters"));
+          }
+          if (
+            (inkRef.current[pageRef.current] || []).some(
+              (stroke) =>
+                selectedInkRef.current.includes(stroke.id) && stroke.locked,
+            )
+          ) {
+            throw new Error(t("fcboard.selection_unlock_first"));
           }
           const penMode = (
             ["hard", "brush", "highlighter", "dashed", "rainbow"] as const
@@ -1245,6 +1409,34 @@ export const FilePreview = ({
                   ids.has(stroke.id)
                     ? {
                         ...stroke,
+                        ...(args.fontWeight !== undefined && stroke.text
+                          ? { fontWeight: args.fontWeight as 400 | 700 }
+                          : {}),
+                        ...(typeof args.background === "string"
+                          ? {
+                              fill:
+                                args.background === "transparent"
+                                  ? undefined
+                                  : args.background,
+                            }
+                          : {}),
+                        ...(args.strokeStyle !== undefined
+                          ? {
+                              strokeStyle:
+                                args.strokeStyle as InkStroke["strokeStyle"],
+                            }
+                          : {}),
+                        ...(typeof args.color === "string" && stroke.fcInk
+                          ? {
+                              fcInk: {
+                                ...stroke.fcInk,
+                                gradient: undefined,
+                                ...(stroke.fcInk.pen === "rainbow"
+                                  ? { pen: "hard" as const }
+                                  : {}),
+                              },
+                            }
+                          : {}),
                         color:
                           typeof args.color === "string"
                             ? args.color
@@ -1291,7 +1483,7 @@ export const FilePreview = ({
         const language =
           args.language === undefined
             ? undefined
-            : parseLanguageStudy(JSON.stringify(args.language));
+            : parseLanguageStudy(JSON.stringify(args.language), true);
         if (
           language &&
           (args.text !== language.translation ||
@@ -1547,7 +1739,7 @@ export const FilePreview = ({
         text: currentTextRef.current,
         ink: inkRef.current[pageRef.current] || [],
         selection: selectedInkRef.current,
-        selectionInProgress: !!activePointer.current,
+        selectionInProgress: !!activePointer.current || !!editingText,
         region: lasso,
         viewport: {
           left: stage.current?.getBoundingClientRect().left || 0,
@@ -2039,6 +2231,55 @@ export const FilePreview = ({
           before === undefined && args.remember !== false,
         );
       }),
+      classroomCommands.register(
+        "document.plot.update",
+        "@internal",
+        (args) => {
+          const ids = new Set(args.ids as string[]);
+          const current = inkRef.current[pageRef.current] || [];
+          const plot = validatedPlot(args.plot as Record<string, unknown>);
+          if (
+            typeof args.image !== "string" ||
+            !current.some(
+              (stroke) =>
+                ids.has(stroke.id) && stroke.plot?.renderer === "vega",
+            )
+          ) {
+            throw new Error("The function plot was removed");
+          }
+          commitInk(
+            {
+              ...inkRef.current,
+              [pageRef.current]: current.map((stroke) =>
+                ids.has(stroke.id) && stroke.plot?.renderer === "vega"
+                  ? {
+                      ...stroke,
+                      image: args.image as string,
+                      plot: { ...stroke.plot, plot },
+                    }
+                  : stroke,
+              ),
+            },
+            args.before === undefined && args.remember !== false,
+          );
+          if (Array.isArray(args.before) && args.remember !== false) {
+            const history = (past.current[pageRef.current] ||= []);
+            const original = new Map(
+              (args.before as InkStroke[])
+                .filter((stroke) => ids.has(stroke.id))
+                .map((stroke) => [stroke.id, stroke]),
+            );
+            history.push(
+              current.map((stroke) => original.get(stroke.id) || stroke),
+            );
+            if (history.length > 100) {
+              history.shift();
+            }
+            future.current[pageRef.current] = [];
+            refreshHistory((value) => value + 1);
+          }
+        },
+      ),
       classroomCommands.register("document.plot", "@internal", (args) => {
         setInkOn(true);
         if (!args.keepTool) {
@@ -2047,7 +2288,11 @@ export const FilePreview = ({
         setErase(false);
         const remove = new Set(args.replaceIds as string[]);
         const strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
-          shapeInk(shape, "plot"),
+          shapeInk(
+            shape,
+            "plot",
+            typeof args.image === "string" ? args.image : undefined,
+          ),
         );
         selectedInkRef.current = strokes.map((stroke) => stroke.id);
         commitInk({
@@ -2077,6 +2322,7 @@ export const FilePreview = ({
     isImage,
     file,
     lasso,
+    editingText,
     undoInk,
     color,
     penWidth,
@@ -2253,6 +2499,37 @@ export const FilePreview = ({
               return;
             }
           }
+          if (assistMode === "magic") {
+            const rect = stage.current?.getBoundingClientRect();
+            const scale = (rect?.width || 1000) / 1000;
+            await insertMagicInk(
+              api,
+              () =>
+                inkSnapshot(source, bottom - top + 32, undefined, top - 16, {
+                  transparent: true,
+                  left: left - 16,
+                  width: right - left + 32,
+                }),
+              source.map((stroke) => stroke.points),
+              request.signal,
+              {
+                bounds: { left, top, right, bottom },
+                clientBounds: {
+                  left: (rect?.left || 0) + left * scale,
+                  right: (rect?.left || 0) + right * scale,
+                  top: (rect?.top || 0) + (top - scroll) * scale,
+                  bottom: (rect?.top || 0) + (bottom - scroll) * scale,
+                },
+                replaceIds: sourceIds,
+                sourceSignature: signature,
+                sourcePage: page + 1,
+                opacity: source[0].opacity ?? 100,
+              },
+              current,
+            );
+            sourceIds.forEach((id) => recognized.current.add(id));
+            return;
+          }
           const result = await recognizeInkContent(
             assistMode,
             () => inkSnapshot(source, bottom - top + 32, undefined, top - 16),
@@ -2277,7 +2554,12 @@ export const FilePreview = ({
                 }
               : undefined,
           );
-          await settleInkRecognition(assistMode, since, request.signal);
+          await settleInkRecognition(
+            assistMode,
+            since,
+            request.signal,
+            source.map((stroke) => stroke.points),
+          );
           if (!current()) {
             return;
           }
@@ -2332,7 +2614,7 @@ export const FilePreview = ({
               name: "document.text",
               args: {
                 text: result.study.translation,
-                presentation: "handwritten",
+                presentation: "text",
                 placement: "below",
                 sourceIds,
                 sourceSignature: signature,
@@ -2381,15 +2663,6 @@ export const FilePreview = ({
               true,
               { left, top, right, bottom },
             );
-          } else if (result.kind === "magic") {
-            await insertGeneratedImage(api, result.prompt, request.signal, {
-              referenceImage: result.image,
-              transparent: result.transparent,
-              bounds: { left, top, right, bottom },
-              replaceIds: sourceIds,
-              sourceSignature: signature,
-              sourcePage: page + 1,
-            });
           } else {
             const shape = recognizedShapeSkeleton(
               result,
@@ -2431,13 +2704,10 @@ export const FilePreview = ({
             requests.finish(request, failedRecognition.current.has(requestKey)),
           );
       },
-      assistMode === "function" || assistMode === "calculation"
-        ? 350
-        : assistMode === "magic"
-        ? 1600
-        : assistMode === "shape"
-        ? 450
-        : 700,
+      inkRecognitionDelay(
+        assistMode,
+        source.map((stroke) => stroke.points),
+      ),
     );
   }, [
     ink,
@@ -3011,6 +3281,20 @@ export const FilePreview = ({
                   };
                   classroomCommands.changed("document");
                   if (handle) {
+                    if (
+                      gestureBefore.current.some(
+                        (stroke) =>
+                          selectedInkRef.current.includes(stroke.id) &&
+                          stroke.locked,
+                      )
+                    ) {
+                      selectionGesture.current = null;
+                      activePointer.current = null;
+                      event.currentTarget.releasePointerCapture(
+                        event.pointerId,
+                      );
+                      classroomCommands.changed("document");
+                    }
                     return;
                   }
                   selectedInkRef.current = [];
@@ -3072,19 +3356,17 @@ export const FilePreview = ({
                 return;
               }
               if (erasing.current?.path) {
-                const ids = new Set(
-                  selectDocumentLasso(
-                    gestureBefore.current,
-                    erasing.current.path,
-                  ),
+                const rect = event.currentTarget.getBoundingClientRect();
+                const next = eraseDocumentRegion(
+                  gestureBefore.current,
+                  erasing.current.path,
+                  (0.125 * 1000) / (rect.width || 1000),
                 );
-                if (ids.size) {
+                if (next !== gestureBefore.current) {
                   commitInk(
                     {
                       ...inkRef.current,
-                      [page]: gestureBefore.current.filter(
-                        (stroke) => !ids.has(stroke.id),
-                      ),
+                      [page]: next,
                     },
                     false,
                   );
@@ -3356,6 +3638,30 @@ export const FilePreview = ({
                     }}
                   />
                 </foreignObject>
+              ) : stroke.image && stroke.imageCrop ? (
+                <svg
+                  key={stroke.id}
+                  x={stroke.points[0][0]}
+                  y={stroke.points[0][1]}
+                  width={stroke.imageWidth}
+                  height={stroke.imageHeight}
+                  viewBox={[
+                    stroke.imageCrop.x,
+                    stroke.imageCrop.y,
+                    stroke.imageCrop.width,
+                    stroke.imageCrop.height,
+                  ].join(" ")}
+                  preserveAspectRatio="none"
+                  overflow="hidden"
+                  opacity={(stroke.opacity ?? 100) / 100}
+                >
+                  <image
+                    href={stroke.image}
+                    width={stroke.imageCrop.naturalWidth}
+                    height={stroke.imageCrop.naturalHeight}
+                    preserveAspectRatio="none"
+                  />
+                </svg>
               ) : stroke.image ? (
                 <image
                   key={stroke.id}
@@ -3366,6 +3672,38 @@ export const FilePreview = ({
                   href={stroke.image}
                   opacity={(stroke.opacity ?? 100) / 100}
                 />
+              ) : stroke.text && editingText === stroke.id ? (
+                <DocumentTextEditor
+                  key={stroke.id}
+                  stroke={stroke}
+                  onCancel={() => setEditingText(undefined)}
+                  onSubmit={(text) => {
+                    setEditingText(undefined);
+                    if (pageRef.current !== page) {
+                      return;
+                    }
+                    const all = inkRef.current[page] || [];
+                    const current = all.find((item) => item.id === stroke.id);
+                    if (
+                      !current ||
+                      current.locked ||
+                      current.text !== stroke.text ||
+                      text === current.text
+                    ) {
+                      return;
+                    }
+                    commitInk({
+                      ...inkRef.current,
+                      [page]: text.trim()
+                        ? all.map((item) =>
+                            item.id === stroke.id ? { ...item, text } : item,
+                          )
+                        : all.filter((item) => item.id !== stroke.id),
+                    });
+                    setLasso([]);
+                    selectedInkRef.current = text.trim() ? [stroke.id] : [];
+                  }}
+                />
               ) : stroke.text ? (
                 <text
                   data-language={stroke.language ? stroke.id : undefined}
@@ -3374,6 +3712,7 @@ export const FilePreview = ({
                   y={stroke.points[0][1]}
                   fill={stroke.color}
                   fontSize={stroke.fontSize || 26}
+                  fontWeight={stroke.fontWeight}
                   fontFamily={getFontFamilyString({
                     fontFamily: stroke.fontFamily || FONT_FAMILY.Helvetica,
                   })}
@@ -3405,10 +3744,10 @@ export const FilePreview = ({
                 points={eraserPreview.path
                   .map((point) => point.join(","))
                   .join(" ")}
-                fill="none"
-                stroke="#0368ff"
-                strokeWidth="1.5"
-                strokeDasharray="5 5"
+                fill="#ff000030"
+                stroke="#ff0000"
+                strokeWidth="2"
+                strokeDasharray="8 16"
                 vectorEffect="non-scaling-stroke"
               />
             ) : eraserPreview ? (

@@ -121,6 +121,9 @@ export const actionPasteStyles = register({
             newElement = newElementWith(newElement, {
               fontSize,
               fontFamily,
+              fontWeight:
+                (elementStylesToCopyFrom as FcboardTextElement).fontWeight ||
+                400,
               textAlign:
                 (elementStylesToCopyFrom as FcboardTextElement).textAlign ||
                 DEFAULT_TEXT_ALIGN,

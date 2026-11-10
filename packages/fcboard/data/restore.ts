@@ -393,6 +393,9 @@ export const restoreElement = (
       element = restoreElementWithProperties(element, {
         fontSize,
         fontFamily,
+        ...(element.fontWeight !== undefined
+          ? { fontWeight: element.fontWeight === 700 ? 700 : 400 }
+          : {}),
         text,
         textAlign: element.textAlign || DEFAULT_TEXT_ALIGN,
         verticalAlign: element.verticalAlign || DEFAULT_VERTICAL_ALIGN,

@@ -24,7 +24,14 @@ import { FactoryColorWheel } from "./FactoryColorWheel";
 import { TransientMessage } from "./TransientMessage";
 import { pickImageFile } from "./boardFile";
 
-const colors = ["#212121", "#576269", "#000000", "#253a35", "#60a96c"];
+const colors = [
+  "#212121",
+  "#FFFFF9",
+  "#576269",
+  "#000000",
+  "#253a35",
+  "#60a96c",
+];
 
 /** NewSlideBackgroundView: choose an image, tap its preview to reuse it,
  * long-press to replace. Background pixels remain outside erasable objects. */

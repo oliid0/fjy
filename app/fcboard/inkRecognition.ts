@@ -6,11 +6,13 @@ import { localMathResult, recognizeMath } from "./mathRecognition";
 import { prepareCalculation } from "./math";
 import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
-import { explainLanguage } from "./languageStudy";
+import { explainLanguage, translateLanguageImage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
+import { calculationInk } from "./calculationInk";
+import { calculateAsync } from "./mathComputation";
 import { fitInkShape, isShapeClosed } from "./shapeRecognition";
-import { hasDigitalInk, digitalInkEngine } from "./digitalInk";
-import { supportsImageLayers } from "./imageGeneration";
+import { hasDigitalInk, recognizeNativeInk } from "./digitalInk";
+import { selectionImagePrompt } from "./selectionImagePrompt";
 
 import type { RecognizedShape } from "./shapeRecognition";
 
@@ -44,15 +46,30 @@ export type InkRecognitionResult =
   | { kind: "magic"; prompt: string; image?: string; transparent?: boolean }
   | (MathResult & { text: string });
 
-/** Start math recognition early, but preserve the existing whole-expression pause. */
+export const inkRecognitionDelay = (mode: InkAssistMode, strokes: InkInput) =>
+  mode === "calculation" && calculationInk(strokes).complete
+    ? 0
+    : mode === "function" || mode === "calculation"
+    ? 350
+    : mode === "magic"
+    ? 1600
+    : mode === "shape"
+    ? 450
+    : mode === "language"
+    ? 250
+    : 700;
+
+/** An explicit completion mark needs no additional whole-expression pause. */
 export const settleInkRecognition = async (
   mode: InkAssistMode,
   since: number,
   signal: AbortSignal,
+  strokes: InkInput = [],
 ) => {
   signal.throwIfAborted();
   const remaining =
-    mode === "function" || mode === "calculation"
+    (mode === "function" || mode === "calculation") &&
+    !(mode === "calculation" && calculationInk(strokes).complete)
       ? 700 - (Date.now() - since)
       : 0;
   if (remaining <= 0) {
@@ -71,15 +88,35 @@ export const settleInkRecognition = async (
   });
 };
 
+type InkRecognitionOptions = [
+  capture: () => Promise<string>,
+  strokes: InkInput,
+  signal: AbortSignal,
+  languageHint?: string,
+  chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
+];
+
+export function recognizeInkContent(
+  mode: "magic",
+  ...options: InkRecognitionOptions
+): Promise<Extract<InkRecognitionResult, { kind: "magic" }>>;
+export function recognizeInkContent(
+  mode: Exclude<InkAssistMode, "magic">,
+  ...options: InkRecognitionOptions
+): Promise<Exclude<InkRecognitionResult, { kind: "magic" }>>;
+export function recognizeInkContent(
+  mode: InkAssistMode,
+  ...options: InkRecognitionOptions
+): Promise<InkRecognitionResult>;
 /** Both visible surfaces submit raw ink first and receive validated objects, never a rendered math image. */
-export const recognizeInkContent = async (
+export async function recognizeInkContent(
   mode: InkAssistMode,
   capture: () => Promise<string>,
   strokes: InkInput,
   signal: AbortSignal,
-  languageHint?: "en-US",
+  languageHint?: string,
   chooseCandidate?: (candidates: readonly string[]) => Promise<string>,
-): Promise<InkRecognitionResult> => {
+): Promise<InkRecognitionResult> {
   if (
     mode === "text" ||
     mode === "language" ||
@@ -87,15 +124,54 @@ export const recognizeInkContent = async (
     mode === "calculation"
   ) {
     const targetLanguage = getLanguage().code;
+    const languageConfiguration = () => {
+      const settings = currentSettings();
+      return JSON.stringify([
+        getLanguage().code,
+        settings.inkLanguage,
+        settings.translationProvider,
+      ]);
+    };
+    const languageStamp = languageConfiguration();
+    const assertLanguageCurrent = () => {
+      signal.throwIfAborted();
+      if (languageStamp !== languageConfiguration()) {
+        throw new DOMException("Language changed", "AbortError");
+      }
+    };
+    if (
+      mode === "language" &&
+      currentSettings().translationProvider === "cloud"
+    ) {
+      if (!currentSettings().apiKey.trim()) {
+        throw new Error(
+          t(
+            "fcboard.set_an_api_key_and_a_vision_model_or_endpoint_id_in_ai_settings",
+          ),
+        );
+      }
+      const image = await capture();
+      assertLanguageCurrent();
+      const study = await translateLanguageImage(image, signal, targetLanguage);
+      assertLanguageCurrent();
+      return { kind: "language", text: study.term, study, targetLanguage };
+    }
+    const calculations = new Map<
+      string,
+      Extract<MathResult, { kind: "calculation" }>
+    >();
     const recognitionOptions: [
-      language?: "en-US",
+      language?: string,
       choose?: (candidates: readonly string[]) => Promise<string>,
-    ] = chooseCandidate
-      ? [languageHint, chooseCandidate]
-      : languageHint ||
-        (mode === "language" && currentSettings().inkLanguage === "auto")
-      ? [languageHint || "en-US"]
-      : [];
+      localOnly?: boolean,
+    ] =
+      mode === "language"
+        ? [languageHint, chooseCandidate, true]
+        : chooseCandidate
+        ? [languageHint, chooseCandidate]
+        : languageHint
+        ? [languageHint]
+        : [];
     const text = await recognizeHandwriting(
       capture,
       signal,
@@ -103,19 +179,27 @@ export const recognizeInkContent = async (
       mode === "text" || mode === "language" ? "text" : "math",
       mode === "text" || mode === "language"
         ? undefined
-        : (candidate) => {
+        : async (candidate) => {
             try {
               if (mode === "calculation") {
-                const parsed = prepareCalculation(mathNotation(candidate));
+                const latex = /\\[A-Za-z]+/.test(candidate);
+                const parsed = latex
+                  ? undefined
+                  : prepareCalculation(candidate);
                 // A partial or truncated numeral is not a complete automatic
                 // calculation. Let OCR try its configured fallback instead of
                 // confidently writing that same numeral as the answer.
                 if (
-                  parsed.node?.type === "ConstantNode" &&
+                  parsed?.node?.type === "ConstantNode" &&
                   !/[=＝]/.test(candidate)
                 ) {
                   return false;
                 }
+                calculations.set(candidate, {
+                  kind: "calculation",
+                  expression: latex ? candidate : mathNotation(candidate),
+                  answer: await calculateAsync(candidate, signal),
+                });
               } else {
                 localMathResult(candidate, "function");
               }
@@ -135,15 +219,13 @@ export const recognizeInkContent = async (
       return { kind: "text", text };
     }
     if (mode === "language") {
+      assertLanguageCurrent();
       const study = await explainLanguage(text, signal, targetLanguage);
-      signal.throwIfAborted();
-      if (targetLanguage !== getLanguage().code) {
-        throw new DOMException("Language changed", "AbortError");
-      }
+      assertLanguageCurrent();
       return { kind: "language", text, study, targetLanguage };
     }
     return {
-      ...(await recognizeMath(text, mode, signal)),
+      ...(calculations.get(text) || (await recognizeMath(text, mode, signal))),
       text,
       ...(mode === "calculation"
         ? { layout: columnCalculation(strokes, text) }
@@ -160,10 +242,13 @@ export const recognizeInkContent = async (
     }
     if (hasDigitalInk()) {
       try {
-        const result = await digitalInkEngine.recognize({
-          strokes,
-          language: "zxx-Zsym-x-shapes",
-        });
+        const result = await recognizeNativeInk(
+          {
+            strokes,
+            language: "zxx-Zsym-x-shapes",
+          },
+          signal,
+        );
         signal.throwIfAborted();
         const shape = result.candidates[0]?.toLowerCase();
         if (["rectangle", "ellipse", "triangle", "arrow"].includes(shape)) {
@@ -193,49 +278,11 @@ export const recognizeInkContent = async (
     throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
   }
   if (mode === "magic") {
-    const intent = parseJSON(
-      await chat(
-        [
-          {
-            role: "system",
-            content:
-              '辨别魔法笔墨迹是文字要求还是绘画。只返回 {"version":1,"kind":"text","text":"逐字转录的完整要求","transparent":false} 或 {"version":1,"kind":"drawing","transparent":false}。完整可读的词句是 text，逐字保留原语种的主体、风格和背景要求，例如“一个二次元女孩”；用户明确要求透明、去背景或同义要求时 transparent=true，未要求则false。人物、动物、物体草图是 drawing，例如手绘小狗。不能把绘画猜成文字，不能补写未写完的句子；“一个二次”等未完成描述返回 {"none":true}。混合且无法确定也返回 {"none":true}。',
-          },
-          visualMessage(
-            "辨别已经停笔的墨迹，不生成图片、不回答文字内容。",
-            image,
-          ),
-        ],
-        signal,
-        currentSettings(),
-        { maxTokens: 500, timeoutMs: 15000 },
-      ),
-    ) as Record<string, unknown>;
-    signal.throwIfAborted();
-    if (
-      intent?.version !== 1 ||
-      !["text", "drawing"].includes(String(intent.kind)) ||
-      (intent.transparent !== undefined &&
-        typeof intent.transparent !== "boolean") ||
-      (intent.kind === "text" &&
-        (typeof intent.text !== "string" ||
-          !intent.text.trim() ||
-          intent.text.length > 2000))
-    ) {
-      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
-    }
-    const transparent = supportsImageLayers(currentSettings().imageModel);
-    const background = transparent
-      ? "主体完整、轮廓清晰，保留主体自身的颜色与白色细节。后续会拆出主体透明图层放到白板上，背景保持简洁，不要纸张、边框、投影或额外装饰。"
-      : "主体完整、轮廓清晰，保留主体自身的颜色与白色细节，背景简洁，不要纸张、边框或额外装饰。";
     return {
       kind: "magic",
-      ...(intent.kind === "drawing" ? { image } : {}),
-      transparent,
-      prompt:
-        intent.kind === "text"
-          ? `严格按手写描述中的主体、画风、颜色、动作与背景要求生成图片。用户原文：${intent.text}。${background}不要把描述文字本身画成图片中的文字。`
-          : `根据参考草图生成完整、精致的图片。草图只用于识别主体和构图，保留主体、数量、姿态与主要比例，按合理结构补全断开的轮廓，使头部、身体与四肢自然连接；清除草稿辅助线，不生成悬浮碎片，不逐线复制未完成笔画。${background}`,
+      image,
+      transparent: true,
+      prompt: selectionImagePrompt("magic"),
     };
   }
   const instruction =
@@ -267,4 +314,4 @@ export const recognizeInkContent = async (
     };
   }
   throw new Error("No recognized ink object");
-};
+}

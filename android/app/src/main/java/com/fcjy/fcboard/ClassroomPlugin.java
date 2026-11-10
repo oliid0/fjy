@@ -117,7 +117,7 @@ public class ClassroomPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 String url = WebResourceDialog.checkedUrl(call.getString("url"));
-                if (webResource != null && webResource.isShowing()) webResource.dismiss();
+                if (webResource != null) webResource.dismiss();
                 webResource = new WebResourceDialog(getActivity(), url, call.getString("language", java.util.Locale.getDefault().toLanguageTag()), selected -> notifyListeners("webSelection", selected), call.getBoolean("teaching", false));
                 webResource.show();
                 call.resolve();
@@ -475,7 +475,7 @@ public class ClassroomPlugin extends Plugin {
         closeSignalResource();
         WebResourceDialog resource = webResource;
         webResource = null;
-        if (resource != null) getActivity().runOnUiThread(() -> { if (resource.isShowing()) resource.dismiss(); });
+        if (resource != null) getActivity().runOnUiThread(resource::dismiss);
         stopBoardShare();
         imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }

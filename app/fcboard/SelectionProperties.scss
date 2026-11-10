@@ -1,0 +1,175 @@
+.fc-selection-properties {
+  display: contents;
+}
+.fc-selection-property-menu.MuiPaper-root {
+  --fc-selection-unit: 0.67px;
+  box-sizing: border-box;
+  width: calc(316 * var(--fc-selection-unit));
+  max-width: calc(100vw - 16px);
+  padding: calc(16 * var(--fc-selection-unit));
+  border-radius: calc(24 * var(--fc-selection-unit));
+  background: #fcfcfe;
+  color: #010101;
+  box-shadow: 0 2px 8px #00000026;
+  font: 400 calc(14 * var(--fc-selection-unit)) / 1.5 system-ui,
+    "Microsoft YaHei", sans-serif;
+  button,
+  input {
+    font: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+  .fc-selection-color-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: calc(12 * var(--fc-selection-unit));
+    label {
+      display: flex;
+      align-items: center;
+    }
+    input {
+      accent-color: #0368ff;
+    }
+  }
+  .fc-selection-color-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: calc(42 * var(--fc-selection-unit));
+    place-items: center;
+    button {
+      width: calc(28 * var(--fc-selection-unit));
+      height: calc(28 * var(--fc-selection-unit));
+      border: 1px solid #ccc;
+      border-radius: 50%;
+      padding: 0;
+    }
+    button[aria-pressed="true"] {
+      outline: 2px solid #0368ff;
+      outline-offset: 2px;
+    }
+    .fc-selection-custom-color {
+      background: conic-gradient(red, #ff0, #0f0, #0ff, blue, #f0f, red);
+    }
+  }
+  .fc-factory-color-wheel {
+    margin: 8px auto 0;
+  }
+  .fc-selection-property-range {
+    display: flex;
+    align-items: center;
+    gap: calc(8 * var(--fc-selection-unit));
+    height: calc(22 * var(--fc-selection-unit));
+    input {
+      width: 0;
+      flex: 1;
+      margin: 0;
+      min-width: 0;
+      accent-color: #0368ff;
+    }
+    output {
+      min-width: calc(40 * var(--fc-selection-unit));
+      text-align: right;
+    }
+  }
+  .fc-selection-border-choices,
+  .fc-selection-alpha-choices {
+    display: flex;
+    align-items: center;
+    margin: calc(8 * var(--fc-selection-unit)) 0
+      calc(16 * var(--fc-selection-unit));
+    gap: calc(9 * var(--fc-selection-unit));
+    button {
+      display: grid;
+      place-items: center;
+      width: calc(40 * var(--fc-selection-unit));
+      height: calc(40 * var(--fc-selection-unit));
+      padding: 0;
+      border: 0;
+      border-radius: calc(10 * var(--fc-selection-unit));
+      background: #fff;
+      &[aria-pressed="true"] {
+        background: #ebebeb;
+      }
+    }
+    img {
+      width: calc(24 * var(--fc-selection-unit));
+      height: calc(24 * var(--fc-selection-unit));
+    }
+  }
+  .fc-selection-alpha-choices {
+    justify-content: space-between;
+    gap: 0;
+    margin-top: calc(16 * var(--fc-selection-unit));
+    margin-bottom: 0;
+  }
+}
+.fc-selection-property-menu.fc-selection-property-layers {
+  width: max-content;
+  min-width: calc(186px * 0.67);
+  padding: calc(12px * 0.67);
+  .fc-selection-layer-choices {
+    display: flex;
+    flex-direction: column;
+  }
+  button {
+    display: flex;
+    align-items: center;
+    gap: calc(12px * 0.67);
+    height: calc(38px * 0.67);
+    padding: calc(9px * 0.67) calc(12px * 0.67);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    white-space: nowrap;
+    font-size: calc(15px * 0.67);
+    &:active,
+    &:focus-visible {
+      background: #ebebeb;
+    }
+  }
+  img {
+    width: calc(20px * 0.67);
+    height: calc(20px * 0.67);
+  }
+}
+
+.fc-selection-actions .fc-selection-size-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(24px * 0.67);
+  font-size: calc(16px * 0.67);
+  img {
+    width: calc(8px * 0.67) !important;
+    height: calc(8px * 0.67) !important;
+    margin-left: calc(2px * 0.67);
+  }
+}
+.fc-selection-property-menu.fc-selection-property-size {
+  width: calc(48px * 0.67);
+  padding: calc(2px * 0.67) calc(8px * 0.67) calc(8px * 0.67);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  button {
+    display: block;
+    width: 100%;
+    height: calc(20px * 0.67);
+    margin-top: calc(6px * 0.67);
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font-size: calc(12px * 0.67);
+    &[aria-selected="true"],
+    &:active {
+      background: #ebebeb;
+    }
+  }
+}

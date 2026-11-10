@@ -592,7 +592,7 @@ export const Teacher = ({
       }),
       classroomCommands.register(
         "quiz.generate",
-        "根据args.prompt联网核实资料并生成可作答卡片测验，支持任意学科与题型，例：出10道高一数学选择题。完成后返回真实标题/题数。无需打开手写输入框；该命令会等待生成完成。",
+        "根据args.prompt联网核实资料并生成可作答卡片测验，支持任意学科与题型，例：出10道高一数学选择题。完成后返回真实标题/题数。无需打开手写输入框；可选args.context={text,image}只基于已经圈选的截图/文字出题，未传则读取当前白板。该命令会等待生成完成。",
         async (args) => {
           if (typeof args.prompt !== "string" || !args.prompt.trim()) {
             throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
@@ -601,7 +601,34 @@ export const Teacher = ({
             args.signal instanceof AbortSignal
               ? args.signal
               : new AbortController().signal;
-          const result = await createQuiz(args.prompt, signal, undefined, true);
+          const context = args.context as
+            | { text?: unknown; image?: unknown }
+            | undefined;
+          if (
+            context !== undefined &&
+            (!context ||
+              typeof context !== "object" ||
+              Array.isArray(context) ||
+              Object.keys(context).some(
+                (key) => !["text", "image"].includes(key),
+              ) ||
+              typeof context.text !== "string" ||
+              context.text.length > 12000 ||
+              (context.image !== undefined &&
+                (typeof context.image !== "string" ||
+                  !context.image.startsWith("data:image/") ||
+                  context.image.length > 12000000)) ||
+              (!context.text.trim() && !context.image))
+          ) {
+            throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
+          }
+          const result = await createQuiz(
+            args.prompt,
+            signal,
+            undefined,
+            true,
+            context as { text: string; image?: string } | undefined,
+          );
           signal.throwIfAborted();
           if (!result) {
             throw new Error(t("fcboard.generate_a_quiz_first"));

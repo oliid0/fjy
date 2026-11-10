@@ -227,7 +227,7 @@ it.each([
   },
 );
 
-it("keeps the original toolbox open on a later repeated tap and dismisses outside", async () => {
+it("toggles the toolbox on each repeated tap and exposes requested real tools", async () => {
   await render(<TeachingTools api={emptyApi()} />);
   let time = 1000;
   vi.spyOn(Date, "now").mockImplementation(() => time);
@@ -235,11 +235,19 @@ it("keeps the original toolbox open on a later repeated tap and dismisses outsid
   fireEvent.click(trigger);
   expect(
     screen.getByRole("button", {
-      name: t("fcboard.insert_name", { name: t("fcboard.ruler") }),
+      name: t("fcboard.geometry_tools"),
     }),
   ).toBeVisible();
   expect(
-    screen.queryByRole("button", { name: t("fcboard.ai_summary") }),
+    screen.getByRole("button", { name: t("fcboard.ai_summary") }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: t("fcboard.voice_commands") }),
+  ).toBeVisible();
+  time += 400;
+  fireEvent.click(trigger);
+  expect(
+    screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
   ).toBeNull();
   time += 400;
   fireEvent.click(trigger);

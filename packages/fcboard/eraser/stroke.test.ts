@@ -5,7 +5,12 @@ import type { LocalPoint, Radians } from "@fcboard/math";
 
 import { API } from "../tests/helpers/api";
 
-import { eraseStroke, eraseSceneObjects, isPalmContact } from "./stroke";
+import {
+  eraseStroke,
+  eraseSceneObjects,
+  eraseSceneRegion,
+  isPalmContact,
+} from "./stroke";
 
 const stroke = () => ({
   ...API.createElement({
@@ -19,6 +24,117 @@ const stroke = () => ({
   customData: { fcInk: { pen: "hard" } },
   simulatePressure: false,
   pressures: [0.2, 0.8],
+});
+
+describe("factory circle erasure", () => {
+  const loop = (coordinates: [number, number][]) =>
+    coordinates.map(([x, y]) =>
+      pointFrom<import("@fcboard/math").GlobalPoint>(x, y),
+    );
+  const middle = loop([
+    [40, -20],
+    [60, -20],
+    [60, 20],
+    [40, 20],
+  ]);
+  it("removes the hit source without clipping it or expanding to its neighboring group", () => {
+    const ink = stroke();
+    const neighbor = { ...stroke(), id: "neighbor", y: 200 };
+    const locked = { ...stroke(), id: "locked", locked: true };
+    const result = eraseSceneRegion([ink, neighbor, locked], middle);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toMatchObject({
+      id: ink.id,
+      isDeleted: true,
+      points: ink.points,
+      pressures: ink.pressures,
+    });
+    expect(result[1]).toBe(neighbor);
+    expect(result[2]).toBe(locked);
+    expect(ink.isDeleted).toBe(false);
+    expect(eraseSceneRegion([neighbor], middle)).toEqual([neighbor]);
+  });
+  it("erases only the top covered image, even when the circle is fully inside it", () => {
+    const underneath = { ...stroke(), groupIds: [] };
+    const image = API.createElement({
+      type: "image",
+      x: 30,
+      y: -30,
+      width: 40,
+      height: 60,
+    });
+    const result = eraseSceneRegion([underneath, image], middle);
+    expect(result[0]).toBe(underneath);
+    expect(result[1].isDeleted).toBe(true);
+  });
+  it.each(["rectangle", "diamond", "ellipse"] as const)(
+    "matches closed %s hit/region subtraction even when the circle covers only its interior",
+    (type) => {
+      const covered = API.createElement({
+        type,
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        backgroundColor: "#abcdef",
+      });
+      const underneath = API.createElement({
+        type: "freedraw",
+        x: 70,
+        y: 100,
+        points: [pointFrom(0, 0), pointFrom(50, 0)],
+      });
+      const result = eraseSceneRegion(
+        [underneath, covered],
+        loop([
+          [80, 80],
+          [120, 80],
+          [120, 120],
+          [80, 120],
+        ]),
+      );
+      expect(result[0]).toBe(underneath);
+      expect(result[1].isDeleted).toBe(true);
+    },
+  );
+  it("collects only the top object per motion segment even for a non-enclosing open gesture", () => {
+    const first = { ...stroke(), id: "bottom" };
+    const top = { ...stroke(), id: "top" };
+    const result = eraseSceneRegion(
+      [first, top],
+      loop([
+        [50, -20],
+        [50, 20],
+      ]),
+    );
+    expect(result[0]).toBe(first);
+    expect(result[1].isDeleted).toBe(true);
+  });
+  it("accepts the same direct parent as the first hit and does not expand a group", () => {
+    const first = { ...stroke(), id: "first", groupIds: ["one"] };
+    const second = { ...stroke(), id: "second", y: 100, groupIds: ["two"] };
+    const neighbor = { ...stroke(), id: "neighbor", y: 200, groupIds: ["one"] };
+    const result = eraseSceneRegion(
+      [first, second, neighbor],
+      loop([
+        [50, -20],
+        [50, 120],
+      ]),
+    );
+    expect(result[0].isDeleted).toBe(false);
+    expect(result[1].isDeleted).toBe(true);
+    expect(result[2]).toBe(neighbor);
+  });
+  it("does not mutate source geometry or delete locked objects on a tap", () => {
+    const ink = stroke();
+    const locked = { ...stroke(), id: "locked", locked: true };
+    expect(
+      eraseSceneRegion([ink, locked], loop([[50, 0]]), [locked.id]),
+    ).toEqual([ink, locked]);
+    expect(
+      eraseSceneRegion([ink], loop([[50, 0]]), [ink.id])[0].points,
+    ).toEqual(ink.points);
+  });
 });
 
 describe("local stroke erasure", () => {

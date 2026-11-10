@@ -155,6 +155,7 @@ export const WhiteboardTools = ({
         type="button"
         className="fc-board-tool"
         data-toolbar-pen
+        data-menu-toggle
         icon={
           <span className="fc-pen-icon">
             <FactoryIcon name="penBodyItalic" className="fc-pen-body" />
@@ -200,12 +201,11 @@ export const WhiteboardTools = ({
         showAriaLabel
         selected={activeTool.type === "freedraw"}
         onClick={(event) => {
-          if (activeTool.type === "freedraw") {
-            if (event.currentTarget instanceof HTMLElement) {
-              onProperties?.(event.currentTarget);
-            }
-          } else {
+          if (activeTool.type !== "freedraw") {
             app.setActiveTool({ type: "freedraw" });
+          }
+          if (event.currentTarget instanceof HTMLElement) {
+            onProperties?.(event.currentTarget);
           }
         }}
       />
@@ -213,6 +213,7 @@ export const WhiteboardTools = ({
         type="button"
         className="fc-board-tool"
         data-toolbar-eraser
+        data-menu-toggle
         icon={<FactoryIcon name="eraser" />}
         aria-label={t("fcboard.eraser")}
         showAriaLabel
@@ -223,7 +224,7 @@ export const WhiteboardTools = ({
           app.setActiveTool({ type: "eraser" });
           setEraserExpanded(false);
           setClearProgress(0);
-          setEraserOpen(true);
+          setEraserOpen((visible) => !visible);
         }}
       />
       {eraserOpen && (
@@ -380,6 +381,7 @@ export const WhiteboardTools = ({
           <ToolButton
             type="button"
             className="fc-board-tool"
+            data-menu-toggle
             icon={<FactoryIcon name="shape" />}
             aria-label={t("fcboard.shape")}
             showAriaLabel
@@ -399,7 +401,7 @@ export const WhiteboardTools = ({
               updateGap(event.currentTarget as HTMLElement);
               setInsertAnchor(event.currentTarget as HTMLElement);
               setShapesOpen(true);
-              setOpen(true);
+              setOpen(!(open && shapesOpen));
             }}
           />
         </span>
@@ -417,13 +419,14 @@ export const WhiteboardTools = ({
             aria-label={t("fcboard.toolbox")}
             data-board-insert
             data-teaching-tools
+            data-menu-toggle
             selected={open && !shapesOpen}
             showAriaLabel
             onClick={(event) => {
               updateGap(event.currentTarget as HTMLElement);
               setInsertAnchor(event.currentTarget as HTMLElement);
               setShapesOpen(false);
-              setOpen(true);
+              setOpen(!(open && !shapesOpen));
             }}
           />
         </span>
@@ -481,7 +484,8 @@ export const WhiteboardTools = ({
       <Dialog
         open={open && shapesOpen}
         // Preserve the fade, but release the first drawing contact immediately.
-        style={{ pointerEvents: open && shapesOpen ? undefined : "none" }}
+        style={{ pointerEvents: "none" }}
+        disableEnforceFocus
         container={container}
         maxWidth={false}
         onClose={() => {
@@ -491,10 +495,10 @@ export const WhiteboardTools = ({
         aria-label={t("fcboard.shape")}
         slotProps={{
           backdrop: {
-            style: { pointerEvents: open && shapesOpen ? undefined : "none" },
+            style: { pointerEvents: "none" },
           },
           paper: {
-            style: { pointerEvents: open && shapesOpen ? undefined : "none" },
+            style: { pointerEvents: open && shapesOpen ? "auto" : "none" },
             "aria-label": t("fcboard.shape"),
             className:
               "fc-insert-tools fc-insert-picker fc-insert-picker-expanded",

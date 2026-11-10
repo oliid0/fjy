@@ -13,7 +13,7 @@ export type Settings = {
   textModel: string;
   imageModel: string;
   ocr: "auto" | "local" | "cloud";
-  inkLanguage: "auto" | "zh-Hani-CN" | "en-US";
+  inkLanguage: "auto" | import("./languagePacks").HandwritingPack["tag"];
   mathTranscription: "local" | "cloud";
   translationProvider: "local" | "cloud";
   handwritingGeneration: "local" | "cloud";

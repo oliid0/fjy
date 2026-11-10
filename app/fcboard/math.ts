@@ -87,6 +87,7 @@ export type Plot = {
   c: number;
   range: number;
   relation?: ">" | ">=" | "<" | "<=";
+  view?: { left: number; right: number; bottom: number; top: number };
 };
 export const defaultPlot: Plot = {
   expression: "x+1",
@@ -107,6 +108,14 @@ export const project3D = (x: number, y: number, z: number) => [
   (x - y) * 0.7,
   (x + y) * 0.3 - z,
 ];
+
+export const functionView = (plot: Plot) =>
+  plot.view || {
+    left: plot.x - plot.range,
+    right: plot.x + plot.range,
+    bottom: -plot.range,
+    top: plot.range,
+  };
 
 export const sampleFunctionCurve = (
   expression: string,
@@ -152,15 +161,10 @@ export const samplePlot = (plot: Plot): number[][][] => {
   if (!plot.surface) {
     const lines = sampleFunctionCurve(
       plotExpression(plot.expression),
-      {
-        left: plot.x - plot.range,
-        right: plot.x + plot.range,
-        bottom: -plot.range,
-        top: plot.range,
-      },
+      functionView(plot),
       { x: plot.x, y: plot.y, z: plot.z, a: plot.a, b: plot.b, c: plot.c },
     );
-    if (!lines.length && !plot.relation) {
+    if (!lines.length && !plot.relation && !plot.view) {
       throw new Error(t("fcboard.no_real_valued_plot_in_this_range"));
     }
     return lines.map((line) => line.map(([x, y]) => [x, -y]));

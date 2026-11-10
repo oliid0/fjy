@@ -65,11 +65,24 @@ const setup = () => {
   const recognize = vi
     .spyOn(ocr, "recognizeHandwriting")
     .mockResolvedValue(languageStudy.term);
+  vi.spyOn(ai, "boardContext").mockImplementation(
+    async (_api, _whole, elements) => ({
+      elements: elements || [],
+      text: "",
+      image:
+        "data:image/png;base64,source" as import("@fcboard/fcboard/types").DataURL,
+    }),
+  );
   const chat = vi
     .spyOn(ai, "chat")
     .mockResolvedValue(JSON.stringify(languageStudy));
   const error = vi.fn();
-  const release = observeInkAssistance(api, vi.fn(), error);
+  const stopTranslate = registerLanguageCommands(api);
+  const stopObserve = observeInkAssistance(api, vi.fn(), error);
+  const release = () => {
+    stopObserve();
+    stopTranslate();
+  };
   return { api, source, recognize, chat, error, release };
 };
 
@@ -119,16 +132,17 @@ it("keeps original ink, translates below it at matching size, opens cached card,
       translation.type === "text" && translation.fontSize,
     ).toBeLessThanOrEqual(40);
     expect(translation.groupIds.at(-1)).toBe(original.groupIds.at(-1));
-    expect(recognize.mock.calls[0][5]).toEqual([
-      [
-        [200, 150],
-        [280, 190],
-        [330, 150],
-      ],
-    ]);
-    expect(recognize.mock.calls[0][6]).toBe("en-US");
-    expect(chat.mock.calls[0][0].at(-1)?.content).toContain(
-      '"explanationLanguage":"zh-CN"',
+    expect(recognize).not.toHaveBeenCalled();
+    expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
+      "data:image/png;base64,source",
+    );
+    expect(chat.mock.calls[0][0].at(-1)?.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          text: JSON.stringify({ targetLanguage: "zh-CN" }),
+        }),
+      ]),
     );
     await act(async () => {
       await classroomCommands.execute({
@@ -155,8 +169,8 @@ it("keeps original ink, translates below it at matching size, opens cached card,
       });
     });
     expect(screen.getByRole("dialog")).toBeVisible();
-    expect(chat).toHaveBeenCalledTimes(1);
-    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(recognize).not.toHaveBeenCalled();
     await act(async () => {
       api.updateScene({
         elements: api.getSceneElements().map((element) =>
@@ -198,7 +212,11 @@ it("copies a bilingual object with an independent card and never exposes hidden-
     )!;
     api.updateScene({ elements: copies });
     expect(copy.customData?.fcLanguage.group).not.toBe(originalGroup);
-    expect(readLanguageCard(api, copy.id)?.study).toEqual(languageStudy);
+    expect(readLanguageCard(api, copy.id)?.study).toMatchObject({
+      term: languageStudy.term,
+      translation: languageStudy.translation,
+      backend: "translation",
+    });
     expect(readLanguageCard(api, source.id)).toBeUndefined();
     const stop = classroomCommands.context("document", () => ({
       name: "slides.pdf",

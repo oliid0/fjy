@@ -16,6 +16,7 @@ import { classroomCommands } from "./commands";
 import { insertElements, insertionPoint, objectSelection } from "./board";
 import { MaterialPanel } from "./MaterialPanel";
 import { TransientMessage } from "./TransientMessage";
+import dialogClose from "./native-toolbar-assets/dialog-close.svg?url";
 import site0 from "./native-toolbar-assets/area_badminton_court_bg.svg?url";
 import preview0 from "./native-toolbar-assets/area_type_badminton.svg?url";
 import site1 from "./native-toolbar-assets/area_baseball_field_bg.svg?url";
@@ -54,6 +55,27 @@ const controls = ["image", "areaBg", "sticky", "period"] as const;
 /** The remaining x.apk entries use the existing real scene/file/resource paths. */
 export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
   const selected = useToolbarItems();
+  const [pointMode, setPointMode] = useState(() => ({
+    multi: api.getAppState().multiStroke !== false,
+    document: !!classroomCommands.read("document"),
+  }));
+  useEffect(() => {
+    const refresh = () => {
+      const multi = api.getAppState().multiStroke !== false;
+      const document = !!classroomCommands.read("document");
+      setPointMode((old) =>
+        old.multi === multi && old.document === document
+          ? old
+          : { multi, document },
+      );
+    };
+    const stops = [
+      api.onChange(refresh),
+      classroomCommands.watch("document", refresh),
+    ];
+    refresh();
+    return () => stops.forEach((stop) => stop());
+  }, [api]);
   const [area, setArea] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -98,10 +120,10 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
         return;
       }
       // AreaShape.initBitmapLocation: intrinsic drawable size, fit the viewport,
-      // never enlarge. x.apk's drawable units use the same .67dp resource scale.
+      // never enlarge. These vectors declare literal dp, not scaled x* dimens.
       const state = api.getAppState();
       const scale = Math.min(
-        0.67,
+        1,
         state.width / state.zoom.value / intrinsic[2],
         state.height / state.zoom.value / intrinsic[3],
       );
@@ -139,13 +161,32 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
           .find((element) => element.customData?.fcNativeArea);
         if (existing?.type === "image") {
           api.updateScene({
-            elements: api
-              .getSceneElements()
-              .map((element) =>
-                element.id === existing.id
-                  ? newElementWith(existing, { fileId })
-                  : element,
-              ),
+            elements: api.getSceneElements().map((element) =>
+              element.id === existing.id
+                ? newElementWith(existing, {
+                    fileId,
+                    width:
+                      typeof existing.customData?.fcNativeAreaWidth ===
+                        "number" && existing.customData.fcNativeAreaWidth > 0
+                        ? (existing.width /
+                            existing.customData.fcNativeAreaWidth) *
+                          intrinsic[2]
+                        : width,
+                    height:
+                      typeof existing.customData?.fcNativeAreaHeight ===
+                        "number" && existing.customData.fcNativeAreaHeight > 0
+                        ? (existing.height /
+                            existing.customData.fcNativeAreaHeight) *
+                          intrinsic[3]
+                        : height,
+                    customData: {
+                      ...existing.customData,
+                      fcNativeAreaWidth: intrinsic[2],
+                      fcNativeAreaHeight: intrinsic[3],
+                    },
+                  })
+                : element,
+            ),
             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
           });
         } else {
@@ -157,7 +198,11 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
               height,
               fileId,
               locked: true,
-              customData: { fcNativeArea: true },
+              customData: {
+                fcNativeArea: true,
+                fcNativeAreaWidth: intrinsic[2],
+                fcNativeAreaHeight: intrinsic[3],
+              },
             },
           ]);
         }
@@ -230,6 +275,25 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
   );
   return (
     <>
+      <ToolbarExtras toolId="multi">
+        <button
+          type="button"
+          data-menu-toggle
+          aria-label={t(
+            pointMode.multi
+              ? "fcboard.multi_touch_writing"
+              : "fcboard.single_touch_writing",
+          )}
+          aria-pressed={pointMode.multi}
+          disabled={pointMode.document}
+          onClick={() =>
+            api.updateScene({ appState: { multiStroke: !pointMode.multi } })
+          }
+        >
+          <FactoryIcon name={pointMode.multi ? "multi" : "single"} />
+          <span>{t(pointMode.multi ? "fcboard.multi" : "fcboard.single")}</span>
+        </button>
+      </ToolbarExtras>
       <ToolbarExtras placement="insert">
         {controls.filter((id) => !selected.includes(id)).map(button)}
       </ToolbarExtras>
@@ -259,10 +323,11 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
                 setArea(false);
               }}
             >
-              ×
+              <img src={dialogClose} alt="" draggable={false} />
             </button>
           </header>
-          <div>
+          <TransientMessage message={error} role="alert" />
+          <div className="fc-native-area-grid" aria-busy={busy}>
             {sites.map((site) => (
               <button
                 key={site.name}
@@ -277,7 +342,7 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
           </div>
         </MaterialPanel>
       )}
-      <TransientMessage message={error} role="alert" />
+      {!area && <TransientMessage message={error} role="alert" />}
     </>
   );
 };

@@ -1000,6 +1000,7 @@ export interface FcboardImperativeAPI {
     name: import("./actions/types").ActionName,
     value?: unknown,
   ) => void;
+  editTextElement: InstanceType<typeof App>["editTextElement"];
   updateScene: InstanceType<typeof App>["updateScene"];
   applyDeltas: InstanceType<typeof App>["applyDeltas"];
   mutateElement: InstanceType<typeof App>["mutateElement"];

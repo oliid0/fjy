@@ -67,6 +67,12 @@ export const fitPlot = (
         return {
           ...shape,
           ...transform({ x: shape.x ?? 0, y: shape.y ?? 0 }),
+          ...(shape.type === "image"
+            ? {
+                width: (shape.width || 0) * scale,
+                height: (shape.height || 0) * scale,
+              }
+            : {}),
           ...(shape.type === "text"
             ? { fontSize: (shape.fontSize || 20) * scale }
             : {}),

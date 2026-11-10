@@ -20,7 +20,6 @@ import {
   readInsertions,
 } from "./insertObjects";
 import { sceneAPI } from "./test/scene";
-import * as transparent from "./transparentInkImage";
 
 it("grows a table cell around its raw handwriting without invoking recognition", async () => {
   const base = sceneAPI();
@@ -65,6 +64,21 @@ afterEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
+
+// Model the user's explicit choice of the AI cell after its preview is ready.
+const confirmMagicImage = () =>
+  classroomCommands.register("magic.candidates", "@internal", async (args) => {
+    const generate =
+      args.generate as import("./magicPen").MagicCandidateInput["generate"];
+    try {
+      return {
+        kind: "image",
+        image: await generate(args.signal as AbortSignal),
+      };
+    } catch {
+      throw new DOMException("Image choice cancelled", "AbortError");
+    }
+  });
 
 const setup = (
   mode?: "text" | "shape" | "function" | "calculation" | "magic",
@@ -332,9 +346,9 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
     });
     expect(recognize.mock.calls[0][3]).toBe("math");
     const accepts = recognize.mock.calls[0][4]!;
-    expect(accepts("7")).toBe(false);
-    expect(accepts("6+7=")).toBe(true);
-    expect(accepts("65×3+12=")).toBe(true);
+    expect(await accepts("7")).toBe(false);
+    expect(await accepts("6+7=")).toBe(true);
+    expect(await accepts("65×3+12=")).toBe(true);
     expect(api.getSceneElements()).toEqual([ink]);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(350);
@@ -503,7 +517,7 @@ it.each(["12\nx3\n----", "12x3"])(
     const release = observeInkAssistance(api, vi.fn(), errors);
     try {
       draw(source);
-      await act(async () => vi.advanceTimersByTimeAsync(700));
+      await act(async () => vi.advanceTimersByTimeAsync(0));
       const result = api
         .getSceneElements()
         .filter((element) => !source.some((input) => input.id === element.id));
@@ -523,6 +537,24 @@ it.each(["12\nx3\n----", "12x3"])(
     }
   },
 );
+
+it("keeps the original calculation strokes after an evaluation failure", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("calculation");
+  saveSettings({ ...defaults, apiKey: "", model: "" }, false);
+  vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue("1/0=");
+  const error = vi.fn();
+  const stop = observeInkAssistance(api, vi.fn(), error);
+  try {
+    draw();
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    expect(api.getSceneElements()).toEqual([ink]);
+  } finally {
+    stop();
+  }
+});
 
 it("reports an invalid function while preserving its ink and discards late math after erasing", async () => {
   vi.useFakeTimers();
@@ -607,7 +639,7 @@ it("retries the whole unfinished word when new ink cancels a pending text recogn
 });
 
 it.each([true, false])(
-  "turns a drawn dog into a generated image at its original location with supported layers=%s",
+  "inserts a drawn dog from a single transparent PNG request after confirmation, default model=%s",
   async (layers) => {
     vi.useFakeTimers();
     const { api, ink, draw } = setup("magic");
@@ -621,11 +653,6 @@ it.each([true, false])(
       false,
     );
     vi.spyOn(ai, "chat").mockResolvedValue('{"version":1,"kind":"drawing"}');
-    vi.spyOn(transparent, "transparentInkImage").mockReturnValue({
-      dataURL: "data:image/png;base64,transparent" as DataURL,
-      width: 100,
-      height: 100,
-    });
     const fetcher = vi.fn().mockResolvedValue({
       status: 200,
       json: async () => ({
@@ -651,27 +678,24 @@ it.each([true, false])(
     );
     const error = vi.fn();
     const stop = observeInkAssistance(api, () => {}, error);
+    const choice = confirmMagicImage();
     try {
       draw();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1600);
       });
-      expect(fetcher).toHaveBeenCalledTimes(layers ? 2 : 1);
+      expect(fetcher).toHaveBeenCalledTimes(1);
       expect(error).not.toHaveBeenCalled();
       const request = JSON.parse(fetcher.mock.calls[0][1].body);
       expect(request.model).toBe(layers ? defaults.imageModel : "illustrator");
       expect(request.image).toMatch(/^data:image\//);
-      expect(ai.chat).toHaveBeenCalledTimes(1);
-      expect(request.prompt).toContain("参考草图");
-      if (layers) {
-        expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
-          layer_decomposition: true,
-          image: expect.stringMatching(/^data:image\/png;base64,/),
-        });
-      } else {
-        expect(request.layer_decomposition).toBeUndefined();
-        expect(request.prompt).not.toContain("透明图层");
-      }
+      expect(ai.chat).not.toHaveBeenCalled();
+      expect(request.prompt).toContain("若没有文字要求，仅按图生图");
+      expect(request).toMatchObject({
+        background: "transparent",
+        output_format: "png",
+      });
+      expect(request.layer_decomposition).toBeUndefined();
       expect(api.getSceneElements()).toHaveLength(1);
       const generated = api.getSceneElements()[0];
       expect(generated).toMatchObject({
@@ -686,6 +710,7 @@ it.each([true, false])(
       expect(api.updateScene).toHaveBeenCalledTimes(1);
     } finally {
       stop();
+      choice();
     }
   },
 );
@@ -709,16 +734,18 @@ it("keeps a magic sketch and sends no recognition request when its capture is un
   });
   vi.spyOn(ai, "chat").mockResolvedValue('{"description":"猜测的图示"}');
   const stop = observeInkAssistance(api, () => {}, vi.fn());
+  const choice = confirmMagicImage();
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1700);
     });
     expect(ai.chat).not.toHaveBeenCalled();
     expect(api.getSceneElements()).toEqual([ink]);
     expect(api.addFiles).not.toHaveBeenCalled();
   } finally {
     stop();
+    choice();
   }
 });
 
@@ -795,13 +822,7 @@ it.each([1700, 400])(
       { ...ink, id: "magic-text", x: 500 },
       { ...ink, id: "magic-third", x: 900 },
     ];
-    const model = vi
-      .spyOn(ai, "chat")
-      .mockResolvedValueOnce('{"version":1,"kind":"drawing"}')
-      .mockResolvedValueOnce(
-        '{"version":1,"kind":"text","text":"一个二次元女孩"}',
-      )
-      .mockResolvedValueOnce('{"version":1,"kind":"drawing"}');
+    const model = vi.spyOn(ai, "chat");
     const generations: {
       resolve: (value: object) => void;
       reject: (error: Error) => void;
@@ -832,6 +853,7 @@ it.each([1700, 400])(
     const busy = vi.fn();
     const error = vi.fn();
     const release = observeInkAssistance(api, busy, error);
+    const choice = confirmMagicImage();
     const success = {
       status: 200,
       json: async () => ({
@@ -849,11 +871,18 @@ it.each([1700, 400])(
         await act(async () => vi.advanceTimersByTimeAsync(pause));
       }
       await act(async () => vi.advanceTimersByTimeAsync(1700));
-      expect(model).toHaveBeenCalledTimes(3);
+      expect(model).not.toHaveBeenCalled();
       expect(generations).toHaveLength(3);
       expect(generations[0].body.image).toBeDefined();
-      expect(generations[1].body.image).toBeUndefined();
-      expect(generations[1].body.prompt).toContain("一个二次元女孩");
+      expect(generations[1].body.image).toBeDefined();
+      expect(
+        generations.every(
+          ({ body }) =>
+            body.background === "transparent" &&
+            body.output_format === "png" &&
+            body.layer_decomposition === undefined,
+        ),
+      ).toBe(true);
       expect(generations[2].body.image).toBeDefined();
       expect(
         vi
@@ -891,7 +920,7 @@ it.each([1700, 400])(
       await act(async () => {
         generations[0].reject(new Error("first generation failed"));
       });
-      expect(error).toHaveBeenCalledTimes(1);
+      expect(error).not.toHaveBeenCalled();
       expect(
         api.getSceneElements().filter((element) => element.type === "image"),
       ).toEqual(images);
@@ -901,6 +930,7 @@ it.each([1700, 400])(
       expect(busy).toHaveBeenLastCalledWith(false);
     } finally {
       release();
+      choice();
     }
   },
 );

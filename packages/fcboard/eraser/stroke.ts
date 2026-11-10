@@ -27,7 +27,9 @@ import type {
 } from "@fcboard/element/types";
 import type { GlobalPoint, LocalPoint, Radians } from "@fcboard/math";
 
-import { getLassoSelectedElementIds } from "../lasso/utils";
+import { getLassoBounds, getLassoSelectedElementIds } from "../lasso/utils";
+
+import { factoryCircleHits, factoryCircleObject } from "./factoryRegion";
 
 type Point = { x: number; y: number };
 type Sample = Point & {
@@ -380,50 +382,54 @@ export const isPalmContact = (
   event.pointerType === "touch" &&
   Math.max(event.width || 0, event.height || 0) >= threshold;
 
-/** x.apk draw.mode.e: keep ink while circling, erase intersected/enclosed objects on lift. */
+/** Match draw/mode/e: erase hit objects together on lift, not their pixels. */
 export const eraseSceneRegion = (
   elements: readonly FcboardElement[],
   path: GlobalPoint[],
   tappedIds: readonly string[] = [],
+  precision = 0.125,
 ) => {
   const elementsMap = new Map(elements.map((element) => [element.id, element]));
   const live = elements.filter(
     (element) => !element.isDeleted && !element.locked,
   );
-  const selected = new Set(
-    path.length > 2
-      ? getLassoSelectedElementIds({
-          lassoPath: path,
-          elements: live,
-          elementsMap,
-          elementsSegments: new Map(
-            live.map((element) => [
-              element.id,
-              getElementLineSegments(element, elementsMap),
-            ]),
-          ),
-          intersectedElements: new Set(),
-          enclosedElements: new Set(),
-        }).selectedElementIds
-      : tappedIds,
+  const area = getLassoBounds(path);
+  const candidates = live.filter((element) => {
+    const bounds = getElementBounds(element, elementsMap);
+    const padding = element.type === "freedraw" ? element.strokeWidth * 12 : 0;
+    return (
+      bounds[2] + padding >= area[0] &&
+      bounds[0] - padding <= area[2] &&
+      bounds[3] + padding >= area[1] &&
+      bounds[1] - padding <= area[3]
+    );
+  });
+  const selected = factoryCircleHits(
+    candidates.map((element) =>
+      factoryCircleObject(element, elementsMap, area),
+    ),
+    path,
+    tappedIds,
+    precision,
   );
-  const groups = new Set(
-    live
-      .filter((element) => selected.has(element.id))
-      .flatMap((element) => element.groupIds.slice(-1)),
-  );
+  // A bound label is stored separately in this editor, but belongs to its
+  // container. Preserve locked relationships and avoid dangling text references.
   for (const element of live) {
-    if (
-      selected.has(element.id) ||
-      element.groupIds.some((id) => groups.has(id))
-    ) {
-      selected.add(element.id);
-      element.boundElements
-        ?.filter((bound) => bound.type === "text")
-        .forEach((bound) => selected.add(bound.id));
-      if (element.type === "text" && element.containerId) {
-        selected.add(element.containerId);
-      }
+    if (!selected.has(element.id)) {
+      continue;
+    }
+    const related = [
+      ...(element.boundElements || [])
+        .filter((bound) => bound.type === "text")
+        .map((bound) => bound.id),
+      ...(element.type === "text" && element.containerId
+        ? [element.containerId]
+        : []),
+    ];
+    if (related.some((id) => elementsMap.get(id)?.locked)) {
+      selected.delete(element.id);
+    } else {
+      related.forEach((id) => selected.add(id));
     }
   }
   return selected.size

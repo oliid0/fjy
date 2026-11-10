@@ -1,0 +1,105 @@
+/* layout_select_emoji.xml / layout_emoji_item.xml / shape_emoji_select_* */
+.fc-magic-candidates {
+  --fc-magic-unit: 0.67px;
+  position: fixed;
+  z-index: 1700;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border: calc(1 * var(--fc-magic-unit)) solid #dbdbdb;
+  border-radius: calc(32 * var(--fc-magic-unit));
+  background: #f6f6f8;
+  color: #010101;
+  outline: none;
+  overflow: hidden;
+  .fc-magic-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: calc(136 * var(--fc-magic-unit));
+    align-content: start;
+    padding: calc(16 * var(--fc-magic-unit)) calc(12 * var(--fc-magic-unit)) 0
+      calc(22 * var(--fc-magic-unit));
+    overflow-y: auto;
+    scrollbar-width: thin;
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      margin: calc(16 * var(--fc-magic-unit)) calc(10 * var(--fc-magic-unit)) 0;
+      padding: 0;
+      border: 0;
+      border-radius: calc(20 * var(--fc-magic-unit));
+      background: #fff;
+      box-shadow: inset 0 0 0 calc(1 * var(--fc-magic-unit)) #ebebeb;
+      overflow: hidden;
+      cursor: pointer;
+      &[aria-pressed="true"] {
+        box-shadow: inset 0 0 0 calc(3 * var(--fc-magic-unit)) #0368ff;
+      }
+      &:focus-visible {
+        outline: 2px solid #0368ff;
+      }
+    }
+    .fc-magic-emoji {
+      font: calc(100 * var(--fc-magic-unit)) / 1 "Noto Color Emoji",
+        "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+    }
+    .fc-magic-image {
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      > span {
+        display: block;
+        padding: 4px;
+        font: 400 10px / 1.3 system-ui;
+        overflow-wrap: anywhere;
+      }
+      [role="alert"] > span {
+        display: block;
+        margin-top: 4px;
+        color: #0368ff;
+      }
+      .fc-magic-error {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        overflow: hidden;
+        color: #010101;
+      }
+      &:disabled {
+        cursor: progress;
+      }
+    }
+  }
+  > footer {
+    display: flex;
+    flex: none;
+    gap: calc(24 * var(--fc-magic-unit));
+    padding: calc(20 * var(--fc-magic-unit)) calc(24 * var(--fc-magic-unit));
+    button {
+      flex: 1;
+      height: calc(40 * var(--fc-magic-unit));
+      min-width: calc(57 * var(--fc-magic-unit));
+      padding: calc(8 * var(--fc-magic-unit)) 0;
+      border: 0;
+      border-radius: calc(100 * var(--fc-magic-unit));
+      font: 400 calc(16 * var(--fc-magic-unit)) / 1.2 system-ui;
+      background: #ebebeb;
+      color: #010101;
+      cursor: pointer;
+      &:last-child {
+        background: #0368ff;
+        color: #fcfcfe;
+      }
+      &:disabled {
+        background: #cae2ff;
+        cursor: default;
+      }
+    }
+  }
+}

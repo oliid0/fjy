@@ -306,6 +306,17 @@ export const registerCanvasCommands = (
           ) {
             return classroomCommands.execute({ name: "document.zoom", args });
           }
+          if (
+            [
+              "bringForward",
+              "sendBackward",
+              "bringToFront",
+              "sendToBack",
+              "toggleElementLock",
+            ].includes(String(args.action))
+          ) {
+            return classroomCommands.execute({ name: "document.action", args });
+          }
           if (args.action === "duplicateSelection") {
             return classroomCommands.execute({ name: "document.duplicate" });
           }
@@ -394,9 +405,22 @@ export const registerCanvasCommands = (
         return { tool: api.getAppState().activeTool };
       },
     ),
+    classroomCommands.register("canvas.editText", "@internal", () => {
+      if (classroomCommands.has("document.editText")) {
+        return classroomCommands.execute({ name: "document.editText" });
+      }
+      const selected = selectedBoardElements(api);
+      if (
+        selected.length !== 1 ||
+        selected[0].type !== "text" ||
+        !api.editTextElement(selected[0].id)
+      ) {
+        throw new Error(t("fcboard.this_board_action_is_unavailable"));
+      }
+    }),
     classroomCommands.register(
       "canvas.style",
-      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language 设置白板后续书写笔型",
+      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontWeight=400|700,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language 设置白板后续书写笔型",
       (args) => {
         if (classroomCommands.has("document.style")) {
           return classroomCommands.execute({ name: "document.style", args });
@@ -407,6 +431,7 @@ export const registerCanvasCommands = (
           "width",
           "fontSize",
           "fontFamily",
+          "fontWeight",
           "opacity",
           "roughness",
           "textAlign",
@@ -475,6 +500,21 @@ export const registerCanvasCommands = (
           throw new Error(t("fcboard.unknown_font"));
         }
         if (
+          args.fontWeight !== undefined &&
+          args.fontWeight !== 400 &&
+          args.fontWeight !== 700
+        ) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const textIds = new Set(
+          (args.fontWeight !== undefined ? selectedBoardElements(api) : [])
+            .filter((element) => element.type === "text" && !element.locked)
+            .map((element) => element.id),
+        );
+        if (args.fontWeight !== undefined && !textIds.size) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        if (
           args.width !== undefined &&
           (typeof args.width !== "number" ||
             !Number.isFinite(args.width) ||
@@ -517,6 +557,9 @@ export const registerCanvasCommands = (
           if (args[key] !== undefined) {
             api.executeAction(action, args[key]);
           }
+        }
+        if (args.fontWeight !== undefined) {
+          api.executeAction("changeFontWeight", args.fontWeight);
         }
         if (args.fontFamily !== undefined) {
           api.executeAction("changeFontFamily", {

@@ -334,9 +334,13 @@ it("uses the original edge exit controls and exports all actual panes through th
     "getBoundingClientRect",
   ).mockReturnValue({ width: 300, height: 500, left: 0, top: 0 } as DOMRect);
   const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+  const encodedSizes: { width: number; height: number }[] = [];
   const encode = vi
     .spyOn(HTMLCanvasElement.prototype, "toBlob")
-    .mockImplementation((callback) => callback(blob));
+    .mockImplementation(function (this: HTMLCanvasElement, callback) {
+      encodedSizes.push({ width: this.width, height: this.height });
+      callback(blob);
+    });
   const save = vi
     .spyOn(boardFile, "savePageFiles")
     .mockResolvedValueOnce(false)
@@ -388,8 +392,12 @@ it("uses the original edge exit controls and exports all actual panes through th
   );
   expect(encode).toHaveBeenCalledWith(expect.any(Function), "image/jpeg", 1);
   const canvas = encode.mock.contexts[0] as HTMLCanvasElement;
-  expect(canvas.width).toBe(600 * (window.devicePixelRatio || 1));
-  expect(canvas.height).toBe(500 * (window.devicePixelRatio || 1));
+  expect(encodedSizes[0]).toEqual({
+    width: 600 * (window.devicePixelRatio || 1),
+    height: 500 * (window.devicePixelRatio || 1),
+  });
+  expect(canvas.width).toBe(1);
+  expect(canvas.height).toBe(1);
   expect(canvas.getContext("2d")!.drawImage).toHaveBeenCalledWith(
     panes[0],
     0,

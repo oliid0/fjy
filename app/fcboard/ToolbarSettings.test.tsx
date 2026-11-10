@@ -46,13 +46,13 @@ it("places toolbar settings before AI and opens its own page", () => {
   ).toBeVisible();
 });
 
-it("matches the APK defaults and 25-item catalogue, fixes only three tools, and persists badge actions in native order", () => {
+it("preserves native defaults and adds the user-requested optional multipoint item to the original catalogue", () => {
   const view = render(<ToolbarSettings />);
   expect(readToolbarItems()).toEqual(DEFAULT_TOOLBAR_ITEMS);
-  expect(NATIVE_TOOLBAR_ITEMS.length + 3).toBe(25);
+  expect(NATIVE_TOOLBAR_ITEMS.length + 3).toBe(26);
   expect(view.container.querySelectorAll(".is-fixed")).toHaveLength(3);
   expect(
-    screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 25 })),
+    screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 26 })),
   ).toBeVisible();
   fireEvent.click(badge(t("fcboard.mind_map")));
   expect(readToolbarItems()).toEqual([...DEFAULT_TOOLBAR_ITEMS, "mindmap"]);
@@ -108,4 +108,13 @@ it("reports a real persistence failure and preserves the previous toolbar", () =
   fireEvent.click(badge(t("fcboard.mind_map")));
   expect(screen.getByRole("alert")).toHaveTextContent("quota");
   expect(readToolbarItems()).toEqual(DEFAULT_TOOLBAR_ITEMS);
+});
+
+it("adds and removes the optional multipoint switch through the real settings badge", () => {
+  render(<ToolbarSettings />);
+  fireEvent.click(badge(t("fcboard.multi_point_switch")));
+  expect(readToolbarItems()).toContain("multi");
+  expect(JSON.parse(localStorage.getItem(TOOLBAR_STORAGE)!)).toContain("multi");
+  fireEvent.click(badge(t("fcboard.multi_point_switch"), true));
+  expect(readToolbarItems()).not.toContain("multi");
 });

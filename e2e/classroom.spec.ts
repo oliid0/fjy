@@ -44,12 +44,7 @@ for (const viewport of [
       viewport.width <= 600 ? 200 : viewport.width <= 1000 ? 170 : 80;
     expect(bounds.y).toBeGreaterThanOrEqual(viewport.height - maxToolbarHeight);
     expect(
-      Math.abs(
-        bounds.y +
-          bounds.height +
-          (viewport.width <= 360 ? 10.8 : 13.4) -
-          viewport.height,
-      ),
+      Math.abs(bounds.y + bounds.height - viewport.height),
     ).toBeLessThanOrEqual(1);
     expect(bounds.height).toBeLessThanOrEqual(maxToolbarHeight);
     const buttons = await toolbar.locator("button").evaluateAll((nodes) =>

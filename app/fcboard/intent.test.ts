@@ -1,6 +1,8 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import {
+  visualizationRequest,
+  visualizationTopic,
   localMathIntent,
   selectionMathIntent,
   selectionRequest,
@@ -111,3 +113,35 @@ it("routes the single AI entry without calculating or generating images during c
     expect(selectionAIAction(value)).toBe("question");
   }
 });
+
+it.each([
+  "生成一个人口增长可视化",
+  "可视化比较 y=x+1 和 y=1/x",
+  "请生成可视化 y=x+1",
+  "展示世界地图",
+  "生成统计图表",
+  "Create charts comparing population growth",
+  "Please generate plots of y=x+1 and y=1/x",
+  "Show maps of the supplied locations",
+])("routes the explicit visualization request %s directly", (text) => {
+  expect(visualizationRequest(text)).toBe(text);
+});
+it.each(["charts", "plots", "maps", "人口增长可视化", "两种函数的可视化比较"])(
+  "recognizes the resource topic %s without requiring a command verb",
+  (text) => {
+    expect(visualizationTopic(text)).toBe(true);
+  },
+);
+it.each([
+  "不要生成人口增长可视化",
+  "停止生成统计图",
+  "Don't generate charts",
+  "解释可视化是什么意思",
+  "What is a chart?",
+  "画 y=x+1",
+])(
+  "leaves non-generation/ordinary math request %s with its existing route",
+  (text) => {
+    expect(visualizationRequest(text)).toBeNull();
+  },
+);

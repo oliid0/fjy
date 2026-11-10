@@ -6,20 +6,20 @@ export const selectionSignature = (elements: readonly FcboardElement[]) =>
     .sort()
     .join(",");
 
-/** SelectCacheLayer: 44px cells, 42px panel, 28px gap; flip above before clamping. */
+/** layout_select_shape_submenu:50dp cells,6dp margins,12dp right/vertical padding. */
 export const selectionToolbarPosition = (
   bounds: { left: number; right: number; top: number; bottom: number },
   viewport: { left: number; right: number; top: number; bottom: number },
-  unit = 1,
+  unit = 0.67,
   items = 4,
 ) => {
   const available = Math.max(1, viewport.right - viewport.left - 24 * unit);
   const columns = Math.max(
     1,
-    Math.min(items, Math.floor((available / unit - 8) / 44)),
+    Math.min(items, Math.floor((available / unit - 12) / 56)),
   );
-  const width = Math.min(available, (columns * 44 + 8) * unit);
-  const height = Math.ceil(items / columns) * 42 * unit;
+  const width = Math.min(available, (columns * 56 + 12) * unit);
+  const height = (Math.ceil(items / columns) * 50 + 12) * unit;
   const gap = 28 * unit;
   const margin = 12 * unit;
   const below = bounds.bottom + gap;

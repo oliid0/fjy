@@ -442,6 +442,7 @@ import {
 } from "../lasso/region";
 
 import { EraserTrail } from "../eraser";
+import { FactoryCircleTrail } from "../eraser/FactoryCircleTrail";
 import {
   eraseStroke,
   eraseSceneObjects,
@@ -737,6 +738,7 @@ class App extends React.Component<AppProps, AppState> {
     y: number;
   } | null = null;
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
+  circleEraserTrail = new FactoryCircleTrail(this.animationFrameHandler, this);
 
   onChangeEmitter = new Emitter<
     [
@@ -852,6 +854,7 @@ class App extends React.Component<AppProps, AppState> {
           );
         }
       },
+      editTextElement: this.editTextElement,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -2280,6 +2283,7 @@ class App extends React.Component<AppProps, AppState> {
                               this.laserTrails,
                               this.lassoTrail,
                               this.eraserTrail,
+                              this.circleEraserTrail,
                             ]}
                           />
                           {selectedElements.length === 1 &&
@@ -4781,16 +4785,21 @@ class App extends React.Component<AppProps, AppState> {
 
   /**
    * adds supplied files to existing files in the appState.
-   * NOTE if file already exists in editor state, the file data is not updated
+   * Existing files change only when supplied with an explicit newer version.
+   * Keep previous file ids immutable when their contents belong to undo history.
    * */
   public addFiles: FcboardImperativeAPI["addFiles"] = withBatchedUpdates(
     (files) => {
       const { addedFiles } = this.addMissingFiles(files);
 
-      this.clearImageShapeCache(addedFiles);
+      const images = getInitializedImageElements(
+        this.scene.getNonDeletedElements(),
+      ).filter((element) => addedFiles[element.fileId]);
+      images.forEach((element) => ShapeCache.delete(element));
       this.scene.triggerUpdate();
 
-      this.addNewImagesToImageCache();
+      // Keep the decoded image visible until the newer version is ready.
+      this.addNewImagesToImageCache(images, this.files, true);
     },
   );
 
@@ -4804,7 +4813,14 @@ class App extends React.Component<AppProps, AppState> {
     const _files = Array.isArray(files) ? files : Object.values(files);
 
     for (const fileData of _files) {
-      if (nextFiles[fileData.id]) {
+      const previous = nextFiles[fileData.id];
+      if (
+        previous &&
+        !(
+          Number.isSafeInteger(fileData.version) &&
+          fileData.version! > (previous.version ?? 1)
+        )
+      ) {
         continue;
       }
 
@@ -6377,6 +6393,22 @@ class App extends React.Component<AppProps, AppState> {
     return isTextBindableContainer(hitElement, false) ? hitElement : null;
   }
 
+  editTextElement = (id: string) => {
+    const element = this.scene.getNonDeletedElementsMap().get(id);
+    if (
+      !element ||
+      !isTextElement(element) ||
+      element.locked ||
+      this.state.viewModeEnabled ||
+      this.state.editingTextElement
+    ) {
+      return false;
+    }
+    this.setState({ editingTextElement: element });
+    this.handleTextWysiwyg(element, { isExistingElement: true });
+    return true;
+  };
+
   private startTextEditing = ({
     sceneX,
     sceneY,
@@ -7883,7 +7915,7 @@ class App extends React.Component<AppProps, AppState> {
       ({ x, y }) => pointFrom<GlobalPoint>(x, y),
     );
     if (regionMode) {
-      this.lassoTrail.startPath(regionPath[0][0], regionPath[0][1]);
+      this.circleEraserTrail.startPath(regionPath[0][0], regionPath[0][1]);
     }
     const zoom = this.state.zoom.value;
     const size = Math.max(
@@ -7931,7 +7963,7 @@ class App extends React.Component<AppProps, AppState> {
           const last = regionPath[regionPath.length - 1];
           if (last[0] !== next.x || last[1] !== next.y) {
             regionPath.push(pointFrom<GlobalPoint>(next.x, next.y));
-            this.lassoTrail.addPointToPath(next.x, next.y);
+            this.circleEraserTrail.addPointToPath(next.x, next.y);
           }
           previous = next;
           continue;
@@ -8004,7 +8036,7 @@ class App extends React.Component<AppProps, AppState> {
       this.stopInkErasure = null;
       preview.remove();
       if (regionMode) {
-        this.lassoTrail.endPath();
+        this.circleEraserTrail.endPath();
         if (!cancelled) {
           const point = regionPath[0];
           const tapped =
@@ -8013,7 +8045,12 @@ class App extends React.Component<AppProps, AppState> {
                   .slice(-1)
                   .map((element) => element.id)
               : [];
-          const next = eraseSceneRegion(before, regionPath, tapped);
+          const next = eraseSceneRegion(
+            before,
+            regionPath,
+            tapped,
+            0.125 / zoom,
+          );
           changed = next !== before;
           if (changed) {
             this.scene.replaceAllElements(next);
@@ -13092,9 +13129,11 @@ class App extends React.Component<AppProps, AppState> {
       this.scene.getNonDeletedElements(),
     ),
     files: BinaryFiles = this.files,
+    reload = false,
   ) => {
     const uncachedImageElements = imageElements.filter(
-      (element) => !element.isDeleted && !this.imageCache.has(element.fileId),
+      (element) =>
+        !element.isDeleted && (reload || !this.imageCache.has(element.fileId)),
     );
 
     if (uncachedImageElements.length) {

@@ -63,3 +63,29 @@ it("terminates hung local WASM and lets the next request use a fresh worker", as
   ModelWorker.instances[1].complete([{ translation_text: "你好" }]);
   await expect(second).resolves.toEqual([{ translation_text: "你好" }]);
 });
+
+it("releases the resident inference worker before OCR can allocate its own heap", async () => {
+  const { offlineInference } = await import("./offlineInference");
+  const { queueLocalInference } = await import("./localInferenceQueue");
+  const first = offlineInference(task, new AbortController().signal);
+  await vi.advanceTimersByTimeAsync(0);
+  const worker = ModelWorker.instances[0];
+  const releaseOCR = vi.fn();
+  const recognizeOCR = vi.fn(async () => {
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+  const next = queueLocalInference("ocr", releaseOCR, recognizeOCR);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(recognizeOCR).not.toHaveBeenCalled();
+  expect(worker.terminate).not.toHaveBeenCalled();
+  worker.complete([{ translation_text: "你好" }]);
+  await first;
+  await next;
+  expect(recognizeOCR).toHaveBeenCalledTimes(1);
+  const again = offlineInference(task, new AbortController().signal);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(releaseOCR).toHaveBeenCalledTimes(1);
+  expect(ModelWorker.instances).toHaveLength(2);
+  ModelWorker.instances[1].complete([{ translation_text: "你好" }]);
+  await again;
+});

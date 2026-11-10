@@ -767,6 +767,9 @@ const renderElementToSvg = (
           text.setAttribute("y", `${i * lineHeightPx + verticalOffset}`);
           text.setAttribute("font-family", getFontFamilyString(element));
           text.setAttribute("font-size", `${element.fontSize}px`);
+          if (element.fontWeight === 700) {
+            text.setAttribute("font-weight", "700");
+          }
           text.setAttribute(
             "fill",
             renderConfig.theme === THEME.DARK

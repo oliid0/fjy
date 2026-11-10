@@ -1,4 +1,6 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import ClickAwayListener from "@mui/material/ClickAwayListener";
+import Popper from "@mui/material/Popper";
 
 import { DEFAULT_ELEMENT_PROPS } from "@fcboard/common";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
@@ -7,13 +9,13 @@ import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 import { t, useI18n } from "../i18n";
 
 import { switchWhiteboardPen, switchWhiteboardTip } from "../whiteboardPen";
-import { useSwipePages } from "../hooks/useSwipePages";
 
 import { FactoryIcon } from "./FactoryIcon";
+import { FactoryColorWheel } from "./FactoryColorWheel";
 
 import type { FcboardImperativeAPI, UIAppState } from "../types";
 
-// menu_pen_select.xml; support_ai_pen=false, all other seven entries enabled.
+// menu_pen_select.xml icons and spacing, extended to the requested 12 pens.
 const pens = [
   ["hard", "normal_brush", "penCommonBody", "penNormalNib"],
   ["brush", "fountain", "penCommonBody", "penInkNib"],
@@ -22,7 +24,6 @@ const pens = [
   ["shape", "shape_pen", "penShapeBody", "penNormalNib"],
   ["laser", "laser_pen", "penLaserBody", "penLaserNib"],
   ["magic", "magic_pen", "penMagicBody", "penMagicNib"],
-  // Existing additional local capabilities remain on the next page.
   ["dashed", "dashed_pen", "penCommonBody", "penNormalNib"],
   ["rainbow", "rainbow_pen", "penCommonBody", "penNormalNib"],
   ["function", "function_pen", "penShapeBody", "penNormalNib"],
@@ -39,6 +40,8 @@ const colors = [
   "#3b52c8",
   "#eecf00",
   "#15c5c3",
+  "#fe09fd",
+  "#0b24fe",
 ];
 
 /** The preview geometry and pressure envelope follow PenPreviewView.java. */
@@ -91,7 +94,10 @@ const PenPreview = ({
         </linearGradient>
       </defs>
       {state.currentItemPenMode === "brush" ? (
-        <g fill={gradient ? `url(#${id})` : "currentColor"}>
+        <g
+          fill={gradient ? `url(#${id})` : "currentColor"}
+          opacity={state.currentItemOpacity / 100}
+        >
           {Array.from({ length: 45 }, (_, index) => {
             const t = index / 44;
             const pressure =
@@ -135,7 +141,10 @@ const PenPreview = ({
           strokeWidth={width}
           strokeLinecap="round"
           strokeLinejoin="round"
-          opacity={state.currentItemPenMode === "highlighter" ? 110 / 255 : 1}
+          opacity={
+            (state.currentItemOpacity / 100) *
+            (state.currentItemPenMode === "highlighter" ? 110 / 255 : 1)
+          }
           strokeDasharray={
             state.currentItemPenMode === "dashed"
               ? `${Math.max(1.6 * width, 8)} ${Math.max(1.8 * width, 10)}`
@@ -165,133 +174,104 @@ export const FactoryPenSettings = ({
     (state.currentItemStrokeWidth / DEFAULT_ELEMENT_PROPS.strokeWidth) * base;
   const active =
     state.currentItemInkAssist || state.currentItemPenMode || "hard";
-  const [page, setPage] = useState(
-    pens.slice(7).some(([mode]) => mode === active) ? 1 : 0,
-  );
-  const pageSwipe = useSwipePages(setPage, 2);
+  const [wheel, setWheel] = useState(false);
+  const colorButton = useRef<HTMLButtonElement>(null);
   return (
     <div className="fc-factory-pen-settings">
-      {state.whiteboardDualPen && (
-        <div
-          className="fc-pen-tip-tabs"
-          role="group"
-          aria-label={t("fcboard.pen_tip")}
-        >
-          {(["fine", "thick"] as const).map((tip) => (
-            <button
-              key={tip}
-              type="button"
-              aria-pressed={(state.whiteboardPenTip || "fine") === tip}
-              onClick={() =>
-                app.api.updateScene({
-                  appState: switchWhiteboardTip(state, tip),
-                })
-              }
-            >
-              <FactoryIcon
-                name={tip === "fine" ? "penThinHead" : "penThickHead"}
-              />
-              {t(tip === "fine" ? "fcboard.fine_pen" : "fcboard.thick_pen")}
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        className="fc-pen-tip-tabs"
+        role="group"
+        aria-label={t("fcboard.pen_tip")}
+      >
+        {(["fine", "thick"] as const).map((tip) => (
+          <button
+            key={tip}
+            type="button"
+            aria-pressed={(state.whiteboardPenTip || "fine") === tip}
+            onClick={() =>
+              app.api.updateScene({
+                appState: switchWhiteboardTip(state, tip),
+              })
+            }
+          >
+            <FactoryIcon
+              name={tip === "fine" ? "penThinHead" : "penThickHead"}
+            />
+            {t(tip === "fine" ? "fcboard.fine_pen" : "fcboard.thick_pen")}
+          </button>
+        ))}
+      </div>
       <div className="fc-pen-heading">
         <span>{t("fcboard.pen")}</span>
-        <nav className="fc-menu-pages" aria-label={t("fcboard.pen_type")}>
-          {[0, 1].map((index) => (
-            <button
-              key={index}
-              type="button"
-              aria-label={t(
-                index === 0 ? "fcboard.previous_page" : "fcboard.next_page",
-              )}
-              aria-pressed={page === index}
-              onClick={() => setPage(index)}
-            >
-              <span />
-            </button>
-          ))}
-        </nav>
       </div>
       <div
         role="group"
         aria-label={t("fcboard.pen_type")}
         className="fc-pen-types"
-        style={{ touchAction: "pan-y" }}
-        {...pageSwipe}
       >
-        {pens
-          .slice(page === 0 ? 0 : 7, page === 0 ? 7 : undefined)
-          .map(([mode, label, body, nib]) => (
-            <button
-              key={mode}
-              type="button"
-              aria-label={t(`fcboard.${label}`)}
-              aria-pressed={active === mode}
-              title={
-                [
-                  "text",
-                  "shape",
-                  "magic",
-                  "function",
-                  "calculation",
-                  "language",
-                ].includes(mode)
-                  ? t(
-                      "fcboard.name_recognized_after_writing_pauses_original_ink_is_kept_until_recognition_finishes",
-                      {
-                        name: t(`fcboard.${label}`),
-                      },
-                    )
-                  : t(`fcboard.${label}`)
+        {pens.map(([mode, label, body, nib]) => (
+          <button
+            key={mode}
+            type="button"
+            aria-label={t(`fcboard.${label}`)}
+            aria-pressed={active === mode}
+            title={
+              [
+                "text",
+                "shape",
+                "magic",
+                "function",
+                "calculation",
+                "language",
+              ].includes(mode)
+                ? t(
+                    "fcboard.name_recognized_after_writing_pauses_original_ink_is_kept_until_recognition_finishes",
+                    {
+                      name: t(`fcboard.${label}`),
+                    },
+                  )
+                : t(`fcboard.${label}`)
+            }
+            onClick={() => {
+              if (mode === "laser") {
+                app.api.setActiveTool({ type: "laser" });
+                close();
+                return;
               }
-              onClick={() => {
-                if (mode === "laser") {
-                  app.api.setActiveTool({ type: "laser" });
-                  close();
-                  return;
-                }
-                if (
-                  mode === "text" ||
-                  mode === "shape" ||
-                  mode === "magic" ||
-                  mode === "function" ||
-                  mode === "calculation" ||
-                  mode === "language"
-                ) {
-                  app.api.updateScene({
-                    appState: {
-                      ...switchWhiteboardPen(state, "hard"),
-                      currentItemInkAssist: mode,
-                    },
-                  });
-                } else {
-                  app.api.updateScene({
-                    appState: {
-                      ...switchWhiteboardPen(state, mode),
-                      currentItemInkAssist: undefined,
-                    },
-                  });
-                }
-                if (page === 1) {
-                  close();
-                }
-              }}
+              if (
+                mode === "text" ||
+                mode === "shape" ||
+                mode === "magic" ||
+                mode === "function" ||
+                mode === "calculation" ||
+                mode === "language"
+              ) {
+                app.api.updateScene({
+                  appState: {
+                    ...switchWhiteboardPen(state, "hard"),
+                    currentItemInkAssist: mode,
+                  },
+                });
+              } else {
+                app.api.updateScene({
+                  appState: {
+                    ...switchWhiteboardPen(state, mode),
+                    currentItemInkAssist: undefined,
+                  },
+                });
+              }
+            }}
+          >
+            <span
+              className="fc-native-pen-graphic"
+              style={{ color: state.currentItemStrokeColor }}
             >
-              <span
-                className="fc-native-pen-graphic"
-                style={{ color: state.currentItemStrokeColor }}
-              >
-                <FactoryIcon
-                  name={nib}
-                  gradient={state.currentItemInkGradient}
-                />
-                <FactoryIcon name={body} />
-              </span>
-              <span>{t(`fcboard.${label}`)}</span>
-            </button>
-          ))}
+              <FactoryIcon name={nib} gradient={state.currentItemInkGradient} />
+              <FactoryIcon name={body} />
+            </span>
+            <span>{t(`fcboard.${label}`)}</span>
+          </button>
+        ))}
       </div>
       <label className="fc-pen-mode">
         <span>{t("fcboard.thickness")}</span>
@@ -378,24 +358,56 @@ export const FactoryPenSettings = ({
             </button>
           );
         })}
-        <label
-          title={t("fcboard.custom_colour")}
-          className="fc-pen-custom-color"
-        >
-          <input
-            type="color"
-            aria-label={t("fcboard.custom_pen_colour")}
-            value={state.currentItemStrokeColor}
-            onChange={(event) =>
-              app.api.updateScene({
-                appState: {
-                  currentItemStrokeColor: event.target.value,
-                  currentItemInkGradient: undefined,
+        <ClickAwayListener onClickAway={() => setWheel(false)}>
+          <div className="fc-pen-color-picker">
+            <button
+              ref={colorButton}
+              type="button"
+              className="fc-pen-custom-color"
+              aria-label={t("fcboard.custom_pen_colour")}
+              aria-expanded={wheel}
+              onClick={() => setWheel(!wheel)}
+            />
+            <Popper
+              open={wheel}
+              anchorEl={colorButton.current}
+              placement="right-start"
+              modifiers={[
+                {
+                  name: "flip",
+                  options: { fallbackPlacements: ["top-end", "left-start"] },
                 },
-              })
-            }
-          />
-        </label>
+                { name: "preventOverflow", options: { padding: 12 } },
+              ]}
+              sx={{ zIndex: 1400 }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  setWheel(false);
+                  colorButton.current?.focus();
+                }
+              }}
+            >
+              <FactoryColorWheel
+                value={state.currentItemStrokeColor}
+                opacity={state.currentItemOpacity}
+                onChange={(color) =>
+                  app.api.updateScene({
+                    appState: {
+                      currentItemStrokeColor: color,
+                      currentItemInkGradient: undefined,
+                    },
+                  })
+                }
+                onOpacityChange={(opacity) =>
+                  app.api.updateScene({
+                    appState: { currentItemOpacity: opacity },
+                  })
+                }
+              />
+            </Popper>
+          </div>
+        </ClickAwayListener>
       </div>
       <div className="fc-pen-heading">{t("fcboard.preview")}</div>
       <PenPreview state={state} thickness={thickness} />

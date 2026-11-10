@@ -237,6 +237,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
     prompt: string,
     signal?: AbortSignal,
     prepare = false,
+    kind: "auto" | "experiment" | "visualization" = "auto",
   ) => {
     signal?.throwIfAborted();
     const controller = new AbortController();
@@ -276,6 +277,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
         prompt,
         controller.signal,
         context,
+        kind,
       );
       controller.signal.throwIfAborted();
       setGenerated(await generatedResources());
@@ -605,8 +607,18 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
   useEffect(() => {
     const stops = [
       classroomCommands.register(
+        "visualizations.generate",
+        "Generate and insert a teaching visualization from args.prompt. Honor explicit HTML/Canvas/SVG or Vega choices; use free-form HTML for direct manipulation and simulations, built-in Vega/Vega-Lite for suitable charts/plots/maps, and choose the best medium for a generic visualization. Save to My resources and preserve other content. args.signal cancels generation.",
+        (args) =>
+          generate(
+            typeof args.prompt === "string" ? args.prompt : "",
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+            false,
+          ),
+      ),
+      classroomCommands.register(
         "resources.generate",
-        "Generate a scientifically grounded interactive HTML teaching experiment from args.prompt, save it to My resources and embed its iframe in the visible whiteboard or courseware. Preserve existing content.",
+        "Generate a scientifically grounded teaching resource from args.prompt: honor explicit HTML/Vega requests; choose free-form HTML for direct manipulation/experiments and Vega/Vega-Lite for suitable charts/plots/maps. Save to My resources and insert in the visible whiteboard or courseware, preserving existing content.",
         (args) =>
           generate(
             typeof args.prompt === "string" ? args.prompt : "",
@@ -615,7 +627,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.prepare",
-        "Prepare and save a reusable interactive teaching resource from args.prompt without inserting it. Return its real id and title; call resources.use at the intended lesson step.",
+        "Prepare and save a reusable teaching resource from args.prompt without inserting: honor explicit HTML/Vega requests; generic visualizations can use either free-form interactive HTML or Vega/Vega-Lite according to the teaching task. Return its real id/title; call resources.use at the intended lesson step.",
         (args) =>
           generate(
             typeof args.prompt === "string" ? args.prompt : "",

@@ -6,8 +6,7 @@
   --default-button-size: calc(58 * var(--fc-unit));
   --lg-button-size: calc(58 * var(--fc-unit));
   position: absolute;
-  inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right))
-    max(calc(20 * var(--fc-unit)), env(safe-area-inset-bottom))
+  inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right)) 0
     max(calc(20 * var(--fc-unit)), env(safe-area-inset-left));
   display: block;
   height: calc(74 * var(--fc-unit));
@@ -426,7 +425,7 @@
 }
 .app .fcboard .fc-aerial-view {
   --fc-unit: 0.67px;
-  width: calc(316 * var(--fc-unit));
+  width: calc(372 * var(--fc-unit));
   padding: calc(8 * var(--fc-unit));
   border-radius: calc(8 * var(--fc-unit));
   background: #f2f2f2;
@@ -519,8 +518,26 @@
 .app .fcboard .fc-combined-toolbox [data-native-tool="resources"] {
   order: 15 !important;
 }
-.app .fcboard .fc-combined-toolbox [data-native-tool="questions"] {
+.app .fcboard .fc-combined-toolbox [data-native-tool="calculator"] {
   order: 16 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="spotlight"] {
+  order: 17 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="curtain"] {
+  order: 18 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="summary"] {
+  order: 19 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="record"] {
+  order: 20 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="voice"] {
+  order: 21 !important;
+}
+.app .fcboard .fc-combined-toolbox [data-native-tool="questions"] {
+  order: 22 !important;
 }
 
 .app .fcboard .fc-eraser-settings {
@@ -646,6 +663,8 @@
   padding: 0;
   border-radius: calc(32 * var(--fc-unit));
   background: #fcfcfe;
+  border: 1px solid #dbdbdb;
+  color: #010101;
 }
 .fc-classroom .fc-native-area > header {
   position: relative;
@@ -662,23 +681,29 @@
 .fc-classroom .fc-native-area header button {
   position: absolute;
   right: calc(36 * var(--fc-unit));
-  width: calc(24 * var(--fc-unit));
+  width: calc(18 * var(--fc-unit));
   min-width: 0;
-  height: calc(24 * var(--fc-unit));
+  height: calc(18 * var(--fc-unit));
   min-height: 0;
   padding: 0;
   border: 0;
   background: transparent;
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
 }
-.fc-classroom .fc-native-area > div {
+.fc-classroom .fc-native-area-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   padding: calc(8 * var(--fc-unit)) calc(24 * var(--fc-unit))
     calc(30 * var(--fc-unit));
   gap: calc(16 * var(--fc-unit));
   overflow-y: auto;
+  min-height: 0;
 }
-.fc-classroom .fc-native-area > div button {
+.fc-classroom .fc-native-area-grid button {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -688,16 +713,22 @@
   background: transparent;
   gap: calc(8 * var(--fc-unit));
   font: 400 calc(14 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
+  color: #010101;
+  &:active img {
+    background: #ebebeb;
+  }
 }
-.fc-classroom .fc-native-area > div img {
+.fc-classroom .fc-native-area-grid img {
   width: calc(113 * var(--fc-unit));
   height: calc(100 * var(--fc-unit));
+  border-radius: calc(24 * var(--fc-unit));
+  background: #f6f6f8;
 }
 
-/* popupwindow_pen.xml: native 316-wide panel, 44x66 pens, 5 columns. */
+/* Retain native 44x66 pens and 12-unit gaps; widen for six columns. */
 .app :is(.fcboard, .fc-classroom) .fc-pen-properties {
   --fc-unit: 0.67px;
-  width: calc(316 * var(--fc-unit));
+  width: calc(372 * var(--fc-unit));
   padding: 0;
   border: 0;
   border-radius: calc(12 * var(--fc-unit));
@@ -745,7 +776,7 @@
     font-size: calc(14 * var(--fc-unit));
   }
   .fc-pen-types {
-    grid-template-columns: repeat(5, calc(44 * var(--fc-unit)));
+    grid-template-columns: repeat(6, calc(44 * var(--fc-unit)));
     gap: calc(12 * var(--fc-unit));
     min-height: calc(144 * var(--fc-unit));
     margin-top: calc(8 * var(--fc-unit));
@@ -793,7 +824,7 @@
     }
   }
   .fc-pen-mode {
-    grid-template-columns: calc(236 * var(--fc-unit)) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) calc(40 * var(--fc-unit));
     column-gap: calc(8 * var(--fc-unit));
     margin-top: calc(16 * var(--fc-unit));
     > span {
@@ -807,7 +838,7 @@
     }
   }
   .fc-pen-colors {
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, calc(284 / 6 * var(--fc-unit)));
     height: calc(84 * var(--fc-unit));
     margin-top: calc(12 * var(--fc-unit));
     padding: 0;

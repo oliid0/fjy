@@ -1,5 +1,5 @@
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
-import { t, useI18n, languages } from "@fcboard/fcboard/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCommonBounds } from "@fcboard/element";
@@ -14,7 +14,11 @@ import settingsCloseIcon from "./factory-setting-icons/close.svg?url";
 
 import { MaterialPanel } from "./MaterialPanel";
 import { LanguagePacks } from "./HandwritingLanguagePacks";
-import { openLanguagePacks } from "./languagePacks";
+import {
+  openLanguagePacks,
+  handwritingPackTags,
+  handwritingLanguageName,
+} from "./languagePacks";
 import {
   SettingsNavigation,
   SettingsSection,
@@ -36,6 +40,7 @@ import {
   insertText,
   selectedPlot,
   objectSelection,
+  updateFunctionGraph,
 } from "./board";
 import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
@@ -67,8 +72,12 @@ import { registerCanvasCommands } from "./canvasCommands";
 import { backgroundCommands, registerBoardAgents } from "./boardAgents";
 import { BoardAgentStatus } from "./BoardAgentStatus";
 import { registerUICommands } from "./uiControls";
-import { localMathIntent, selectionMathIntent } from "./intent";
-import { InteractiveFunctionPlot } from "./InteractiveFunctionPlot";
+import {
+  localMathIntent,
+  selectionMathIntent,
+  visualizationRequest,
+} from "./intent";
+import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
 import { defaultPlot, plotExpression } from "./math";
 import { mathNotation } from "./mathNotation";
 import { calculateAsync } from "./mathComputation";
@@ -100,6 +109,7 @@ import {
 } from "./settings";
 import { selectionSignature } from "./selection";
 import { SelectionActions } from "./SelectionActions";
+import { IntegratedSearch } from "./IntegratedSearch";
 import { LanguagePanel } from "./LanguagePanel";
 import { Spotlight } from "./Spotlight";
 import { BoardSettings } from "./BoardSettings";
@@ -155,6 +165,8 @@ export const Classroom = ({
   const [exitOpen, setExitOpen] = useState(false);
   const [settings, setSettingsState] = useState(currentSettings);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("home");
+  const [languagePackContainer, setLanguagePackContainer] =
+    useState<HTMLDivElement | null>(null);
   const [remember, setRemember] = useState(() => {
     const saved = loadSettings();
     return !!(saved.apiKey || saved.speechKey || saved.ttsKey);
@@ -445,7 +457,9 @@ export const Classroom = ({
       const graph = selectedPlot(api);
       if (graph) {
         const graphId = graph.ids.join(",");
-        if (graphId !== previousGraph) {
+        if (graph.image) {
+          setPanel((value) => (value === "plot" ? null : value));
+        } else if (graphId !== previousGraph) {
           setPanel((value) => (!value || value === "plot" ? "plot" : value));
         }
         previousGraph = graphId;
@@ -499,7 +513,7 @@ export const Classroom = ({
         return;
       }
       const graph = selectedPlot(api);
-      if (!graph) {
+      if (!graph || graph.image) {
         return;
       }
       const state = api.getAppState();
@@ -970,6 +984,14 @@ export const Classroom = ({
       quiet = false,
       sourceIds: string[] = [],
     ) => {
+      if (replace) {
+        const updated = updateFunctionGraph(api, next);
+        if (updated) {
+          plotRef.current = updated;
+          setPlot(next);
+          return;
+        }
+      }
       const existing = plotRef.current;
       if (
         replace &&
@@ -1197,6 +1219,18 @@ export const Classroom = ({
           await summarize();
           return;
         }
+        const visualization = visualizationRequest(text);
+        if (visualization) {
+          await classroomCommands.execute({
+            name: "visualizations.generate",
+            args: { prompt: visualization, signal: request.signal },
+          });
+          return;
+        }
+        if (/^(?:帮我)?(?:计算|求值)(?:一下)?[，。!！\s]*$/.test(text)) {
+          await solveMath();
+          return;
+        }
         const localIntent =
           /改|调|删|擦|移|设|关闭|暂停|放大|缩小|清空|保存|丢弃|切换/.test(text)
             ? null
@@ -1215,7 +1249,9 @@ export const Classroom = ({
             false,
             selection?.sourceIds,
           );
-          setPanel("plot");
+          if (localIntent.surface) {
+            setPanel("plot");
+          }
           return;
         }
         if (localIntent?.action === "calculate") {
@@ -1226,10 +1262,6 @@ export const Classroom = ({
             selection?.signal,
             text,
           );
-          return;
-        }
-        if (/^(?:帮我)?(?:计算|求值)(?:一下)?[，。!！\s]*$/.test(text)) {
-          await solveMath();
           return;
         }
         const document =
@@ -1309,7 +1341,9 @@ export const Classroom = ({
             surface: !!action.surface,
           };
           createPlot(next, false, undefined, false, selection?.sourceIds);
-          setPanel("plot");
+          if (next.surface) {
+            setPanel("plot");
+          }
         } else if (
           action.action === "calculate" &&
           typeof action.expression === "string"
@@ -2558,7 +2592,8 @@ export const Classroom = ({
           ),
       ),
       classroomCommands.register("math.inspect", "@internal", () => {
-        if (selectedPlot(api)) {
+        const graph = selectedPlot(api);
+        if (graph && !graph.image) {
           setPanel("plot");
         }
       }),
@@ -2845,14 +2880,23 @@ export const Classroom = ({
           });
         }}
       />
+      <IntegratedSearch api={api} />
       <BoardSwitcher api={api} />
+      <FunctionGraphInteraction api={api} />
       <BottomBarActions />
       <SkizzePen api={api} />
       <BoardShare />
       <InsertMenu api={api} />
       <TeachingResources api={api} />
       <LanSession api={api} />
-      <LanguagePacks />
+      <LanguagePacks
+        container={languagePackContainer}
+        onNavigate={() => {
+          setSettingsPage("languagePacks");
+          setPanel("settings");
+        }}
+        onSelect={(tag) => setSettings({ ...settings, inkLanguage: tag })}
+      />
       <Teacher
         api={api}
         voiceActive={listening}
@@ -3048,6 +3092,30 @@ export const Classroom = ({
                       {t("labels.language")}
                       <LanguageList />
                     </label>
+                    <label>
+                      {t("fcboard.handwriting_language")}
+                      <MaterialSelect
+                        aria-label={t("fcboard.handwriting_language")}
+                        value={settings.inkLanguage}
+                        onChange={(event) =>
+                          setSettings({
+                            ...settings,
+                            inkLanguage: event.target
+                              .value as Settings["inkLanguage"],
+                          })
+                        }
+                      >
+                        <option value="auto">
+                          {t("fcboard.follow_interface_language")}
+                        </option>
+                        {handwritingPackTags.map((tag) => (
+                          <option key={tag} value={tag}>
+                            {handwritingLanguageName(tag, langCode)}
+                          </option>
+                        ))}
+                      </MaterialSelect>
+                    </label>
+
                     <button
                       type="button"
                       className="fc-language-packs-entry"
@@ -3056,6 +3124,9 @@ export const Classroom = ({
                     >
                       {t("fcboard.languagePacks.title")} ›
                     </button>
+                  </SettingsSection>
+                  <SettingsSection id="languagePacks">
+                    <div ref={setLanguagePackContainer} />
                   </SettingsSection>
                   <SettingsSection id="teaching">
                     <LearningSettings />
@@ -3174,32 +3245,6 @@ export const Classroom = ({
                       </label>
                     ))}
                     <p>{t("fcboard.independent_local_providers_help")}</p>
-                    <label>
-                      {t("fcboard.handwriting_language")}
-                      <MaterialSelect
-                        aria-label={t("fcboard.handwriting_language")}
-                        value={settings.inkLanguage}
-                        onChange={(event) =>
-                          setSettings({
-                            ...settings,
-                            inkLanguage: event.target
-                              .value as Settings["inkLanguage"],
-                          })
-                        }
-                      >
-                        <option value="auto">
-                          {t("fcboard.follow_interface_language")}
-                        </option>
-                        <option value="zh-Hani-CN">
-                          {
-                            languages.find(
-                              (language) => language.code === "zh-CN",
-                            )?.label
-                          }
-                        </option>
-                        <option value="en-US">English</option>
-                      </MaterialSelect>
-                    </label>
                     {settings.ocr !== "local" && (
                       <label className="fc-settings-input">
                         {t("fcboard.ocr_model_id_blank_to_use_the_main_model")}
@@ -3247,28 +3292,6 @@ export const Classroom = ({
                     </label>
                   </SettingsSection>
                   <SettingsSection id="voice">
-                    <label>
-                      {t("fcboard.language")}
-                      <MaterialSelect
-                        aria-label={t("fcboard.language")}
-                        value={settings.speechLanguage}
-                        onChange={(event) =>
-                          setSettings({
-                            ...settings,
-                            speechLanguage: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="auto">
-                          {t("fcboard.follow_system_language")}
-                        </option>
-                        {languages.map((language) => (
-                          <option key={language.code} value={language.code}>
-                            {language.label}
-                          </option>
-                        ))}
-                      </MaterialSelect>
-                    </label>
                     <label>
                       {t("fcboard.voice_assistant_mode")}
                       <MaterialSelect
@@ -3535,17 +3558,6 @@ export const Classroom = ({
             )}
             {panel === "plot" && (
               <>
-                {!plot.surface && (
-                  <InteractiveFunctionPlot
-                    plot={plot}
-                    onExpression={(expression) =>
-                      createPlot(
-                        { ...plot, expression: plotExpression(expression) },
-                        true,
-                      )
-                    }
-                  />
-                )}
                 <p>
                   <strong>
                     {plot.surface ? "z" : "y"} = {plot.expression}

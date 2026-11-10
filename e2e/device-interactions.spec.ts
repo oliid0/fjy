@@ -12,6 +12,7 @@ const dragTouch = async (
   from: { x: number; y: number },
   to: { x: number; y: number },
   radius = 2,
+  cancel = false,
 ) => {
   const session = await page.context().newCDPSession(page);
   try {
@@ -34,7 +35,7 @@ const dragTouch = async (
       });
     }
     await session.send("Input.dispatchTouchEvent", {
-      type: "touchEnd",
+      type: cancel ? "touchCancel" : "touchEnd",
       touchPoints: [],
     });
   } finally {
@@ -358,7 +359,7 @@ for (const width of [390, 1920]) {
     ).toHaveCount(1);
     await expect(board.locator(".fc-split-bottom").first()).toHaveCSS(
       "height",
-      "52px",
+      "32.16px",
     );
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),
@@ -480,7 +481,7 @@ for (const width of [390, 1920]) {
   });
 }
 
-test("touch toolbar customization persists and board ordering confirms or cancels before selected-page sharing", async ({
+test("touch toolbar customization and page sorting persist, cancelled drags restore order and edit selection opens sharing", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -521,7 +522,7 @@ test("touch toolbar customization persists and board ordering confirms or cancel
         nodes.map((node) => (node as HTMLElement).dataset.boardId),
       );
   const before = await ids();
-  const reorder = async () => {
+  const reorder = async (cancel = false) => {
     const handle = (await list.locator(".fc-board-drag").last().boundingBox())!;
     const target = (await list
       .locator("[data-board-id]")
@@ -531,19 +532,32 @@ test("touch toolbar customization persists and board ordering confirms or cancel
       page,
       { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 },
       { x: target.x + target.width / 2, y: target.y + target.height / 2 },
+      2,
+      cancel,
     );
   };
+  await expect(
+    list.getByRole("button", { name: "分享选中白板", exact: true }),
+  ).toHaveCount(0);
+  await reorder(true);
+  await expect.poll(ids).toEqual(before);
   await reorder();
-  await expect.poll(ids).not.toEqual(before);
-  await list.getByRole("button", { name: "取消", exact: true }).click();
-  expect(await ids()).toEqual(before);
-  await reorder();
-  await list.getByRole("button", { name: "确定", exact: true }).click();
+  const sorted = [before[2], before[0], before[1]];
+  await expect.poll(ids).toEqual(sorted);
   await expect(page.locator(".fc-board-count")).toContainText("1 / 3");
+  await page.reload();
+  await expect(page.locator(".fc-board-count")).toContainText("1 / 3");
+  await page.locator("[data-board-switcher]").click();
+  await expect.poll(ids).toEqual(sorted);
+  await list.getByRole("button", { name: "编辑页面", exact: true }).click();
+  await list.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(list.locator('input[type="checkbox"]')).toHaveCount(0);
+  await list.getByRole("button", { name: "编辑页面", exact: true }).click();
+  await list.getByRole("button", { name: "全部选中", exact: true }).click();
+  await list.getByRole("checkbox", { name: "选择第1页", exact: true }).check();
+  await expect(list.locator('input[type="checkbox"]:checked')).toHaveCount(1);
   await list.getByRole("button", { name: "分享选中白板", exact: true }).click();
-  const sharing = page.locator(".fc-share-dialog");
+  const sharing = page.getByRole("dialog", { name: "扫码分享", exact: true });
   await expect(sharing).toBeVisible();
-  await expect(sharing.locator('input[type="checkbox"]:checked')).toHaveCount(
-    1,
-  );
+  await expect(page.locator(".fc-share-pages")).toHaveCount(0);
 });

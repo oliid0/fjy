@@ -60,11 +60,15 @@ it("uses the current language's actual handwriting model and preserves explicit 
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "de-DE",
+    id: expect.any(String),
+    reuse: true,
   });
   await recognizeDigitalInk(strokes, signal, "math");
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "en-US",
+    id: expect.any(String),
+    reuse: true,
   });
   vi.mocked(currentSettings).mockReturnValue({
     ...currentSettings(),
@@ -74,6 +78,8 @@ it("uses the current language's actual handwriting model and preserves explicit 
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "zh-Hani-CN",
+    id: expect.any(String),
+    reuse: true,
   });
 });
 

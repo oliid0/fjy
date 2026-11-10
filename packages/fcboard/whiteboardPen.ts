@@ -98,6 +98,7 @@ export const whiteboardInkStyle = (
   const fcInk: FactoryInkData = {
     version: mode === "brush" ? 3 : 2,
     pen: mode,
+    subpixel: true,
     assist: pen.currentItemInkAssist,
     tip: pen.whiteboardPenTip || "fine",
     variation: state.whiteboardBrushVariation ?? 45,

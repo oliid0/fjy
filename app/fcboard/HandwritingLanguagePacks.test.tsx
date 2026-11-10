@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { t } from "@fcboard/fcboard/i18n";
 
@@ -167,4 +168,38 @@ it("does not invent installed packs when the native model backend is unavailable
   );
   expect(backend.listPacks).not.toHaveBeenCalled();
   expect(document.querySelector(".fc-language-pack-row")).toBeNull();
+});
+
+it("opens the real pack manager inside the settings page and selects an installed language without another dialog", async () => {
+  const select = vi.fn();
+  const Harness = () => {
+    const [visible, setVisible] = useState(false);
+    const [container, setContainer] = useState<HTMLDivElement | null>(null);
+    return (
+      <>
+        <LanguagePacks
+          container={container}
+          onNavigate={() => setVisible(true)}
+          onSelect={select}
+        />
+        {visible && (
+          <section aria-label="language settings">
+            <div ref={setContainer} />
+          </section>
+        )}
+      </>
+    );
+  };
+  render(<Harness />);
+  act(() => openLanguagePacks());
+  const page = await screen.findByRole("region", { name: "language settings" });
+  await screen.findByRole("button", {
+    name: `German ${t("fcboard.languagePacks.download")}`,
+  });
+  expect(page.querySelector(".fc-language-pack-list")).not.toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: `${t("fcboard.select")} Chinese` }),
+  );
+  expect(select).toHaveBeenCalledWith("zh-Hani-CN");
 });

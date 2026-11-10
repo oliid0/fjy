@@ -9,4 +9,6 @@
     <string name="web_load_failed">网页加载失败，请检查网络后刷新</string>
     <string name="web_move">移动网页</string>
     <string name="web_resize">调整网页大小</string>
+    <string name="web_renderer_stopped">网页意外停止，已关闭。可以重新打开。</string>
+    <string name="webview_recovery_message">白板显示再次停止。重新加载可恢复最近保存的白板内容。</string>
 </resources>

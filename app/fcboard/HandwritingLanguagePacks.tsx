@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 
 import {
@@ -6,7 +7,11 @@ import {
   hasDigitalInk,
   currentTextInkLanguage,
 } from "./digitalInk";
-import { handwritingPackTags, languagePacksEvent } from "./languagePacks";
+import {
+  handwritingPackTags,
+  languagePacksEvent,
+  handwritingLanguageName,
+} from "./languagePacks";
 import { MaterialPanel } from "./MaterialPanel";
 import { TransientMessage } from "./TransientMessage";
 
@@ -28,9 +33,22 @@ const states = [
 
 /** LanguagePackDialogFragment / LanguagePackAdapter: current language first,
  * bundled packs protected, serial downloads and confirmed deletion. */
-export const LanguagePacks = () => {
+export const LanguagePacks = ({
+  container,
+  onNavigate,
+  onSelect,
+}: {
+  container?: HTMLElement | null;
+  onNavigate?: () => void;
+  onSelect?: (tag: string) => void;
+}) => {
   useI18n();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setOpen] = useState(false);
+  const open = onNavigate ? !!container : localOpen;
+  const navigate = useRef(onNavigate);
+  navigate.current = onNavigate;
+  const showList = () =>
+    navigate.current ? navigate.current() : setOpen(true);
   const [packs, setPacks] = useState<HandwritingPack[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,17 +64,7 @@ export const LanguagePacks = () => {
   const list = useRef<HTMLDivElement>(null);
   const locale = getLanguage().code;
   const current = currentTextInkLanguage();
-  const name = (tag: string) => {
-    try {
-      return (
-        new Intl.DisplayNames([locale], { type: "language" }).of(
-          tag.split("-")[0],
-        ) || tag
-      );
-    } catch {
-      return tag;
-    }
-  };
+  const name = (tag: string) => handwritingLanguageName(tag, locale);
   useEffect(() => {
     const show = (event: Event) => {
       const detail = (
@@ -71,7 +79,7 @@ export const LanguagePacks = () => {
       if (detail?.required) {
         setConfirm({ kind: "required", tag: requested.current });
       } else {
-        setOpen(true);
+        showList();
       }
     };
     window.addEventListener(languagePacksEvent, show);
@@ -183,9 +191,125 @@ export const LanguagePacks = () => {
       Number(b.bundled) - Number(a.bundled) ||
       name(a.tag).localeCompare(name(b.tag), locale),
   );
+  const content = (
+    <>
+      {!onNavigate && (
+        <header>
+          <h2>{t("fcboard.languagePacks.title")}</h2>
+          <button type="button" aria-label={t("fcboard.close")} onClick={close}>
+            ×
+          </button>
+        </header>
+      )}
+      <p className="fc-language-pack-description">
+        {t("fcboard.languagePacks.description")}
+      </p>
+      <div className="fc-language-pack-list" ref={list} aria-busy={loading}>
+        {!hasDigitalInk() && (
+          <p role="status">{t("fcboard.languagePacks.android_only")}</p>
+        )}
+        {loading && <p role="status">{t("fcboard.languagePacks.checking")}</p>}
+        {sorted.map((pack) => (
+          <div
+            className="fc-language-pack-row"
+            key={pack.tag}
+            data-pack={pack.tag}
+          >
+            <div>
+              <strong>{name(pack.tag)}</strong>
+              {pack.tag === current && (
+                <b>{t("fcboard.languagePacks.current")}</b>
+              )}
+              <small>{pack.tag}</small>
+              {onSelect && [1, 4].includes(pack.state) && pack.tag !== current && (
+                <button type="button" onClick={() => onSelect(pack.tag)}>
+                  {t("fcboard.select")} {name(pack.tag)}
+                </button>
+              )}
+            </div>
+            <span>{t(`fcboard.languagePacks.${states[pack.state]}`)}</span>
+            {[3, 5].includes(pack.state) ? (
+              <progress
+                aria-label={`${name(pack.tag)} ${t(
+                  `fcboard.languagePacks.${states[pack.state]}`,
+                )}`}
+              />
+            ) : (
+              <button
+                type="button"
+                className={
+                  pack.state === 4 || pack.bundled
+                    ? "fc-language-pack-secondary"
+                    : ""
+                }
+                disabled={
+                  (pack.bundled && pack.state !== 7) ||
+                  [0, 6, 8].includes(pack.state)
+                }
+                aria-label={`${name(pack.tag)} ${t(
+                  `fcboard.languagePacks.${
+                    pack.state === 4
+                      ? "delete"
+                      : pack.state === 7
+                      ? "retry"
+                      : pack.bundled
+                      ? "builtin"
+                      : pack.state === 8
+                      ? "waiting"
+                      : pack.state === 6
+                      ? "not_supported"
+                      : "download"
+                  }`,
+                )}`}
+                onClick={() => {
+                  if (pack.state === 4) {
+                    setConfirm({ kind: "remove", tag: pack.tag });
+                  } else {
+                    void operate(pack, false);
+                  }
+                }}
+              >
+                {t(
+                  `fcboard.languagePacks.${
+                    pack.state === 4
+                      ? "delete"
+                      : pack.state === 7
+                      ? "retry"
+                      : pack.bundled
+                      ? "builtin"
+                      : pack.state === 8
+                      ? "waiting"
+                      : pack.state === 6
+                      ? "not_supported"
+                      : "download"
+                  }`,
+                )}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {error && (
+        <>
+          <TransientMessage role="alert" message={error} className="fc-error" />
+          <button type="button" onClick={() => setAttempt(attempt + 1)}>
+            {t("fcboard.languagePacks.retry")}
+          </button>
+        </>
+      )}
+    </>
+  );
   return (
     <>
-      {open && (
+      {open &&
+        container &&
+        createPortal(
+          <section className="fc-language-pack-dialog fc-language-pack-inline">
+            {content}
+          </section>,
+          container,
+        )}
+      {open && !onNavigate && (
         <MaterialPanel
           centered
           className="fc-language-pack-dialog"
@@ -200,113 +324,7 @@ export const LanguagePacks = () => {
             }
           }}
         >
-          <header>
-            <h2>{t("fcboard.languagePacks.title")}</h2>
-            <button
-              type="button"
-              aria-label={t("fcboard.close")}
-              onClick={close}
-            >
-              ×
-            </button>
-          </header>
-          <p className="fc-language-pack-description">
-            {t("fcboard.languagePacks.description")}
-          </p>
-          <div className="fc-language-pack-list" ref={list} aria-busy={loading}>
-            {!hasDigitalInk() && (
-              <p role="status">{t("fcboard.languagePacks.android_only")}</p>
-            )}
-            {loading && (
-              <p role="status">{t("fcboard.languagePacks.checking")}</p>
-            )}
-            {sorted.map((pack) => (
-              <div
-                className="fc-language-pack-row"
-                key={pack.tag}
-                data-pack={pack.tag}
-              >
-                <div>
-                  <strong>{name(pack.tag)}</strong>
-                  {pack.tag === current && (
-                    <b>{t("fcboard.languagePacks.current")}</b>
-                  )}
-                  <small>{pack.tag}</small>
-                </div>
-                <span>{t(`fcboard.languagePacks.${states[pack.state]}`)}</span>
-                {[3, 5].includes(pack.state) ? (
-                  <progress
-                    aria-label={`${name(pack.tag)} ${t(
-                      `fcboard.languagePacks.${states[pack.state]}`,
-                    )}`}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className={
-                      pack.state === 4 || pack.bundled
-                        ? "fc-language-pack-secondary"
-                        : ""
-                    }
-                    disabled={
-                      (pack.bundled && pack.state !== 7) ||
-                      [0, 6, 8].includes(pack.state)
-                    }
-                    aria-label={`${name(pack.tag)} ${t(
-                      `fcboard.languagePacks.${
-                        pack.state === 4
-                          ? "delete"
-                          : pack.state === 7
-                          ? "retry"
-                          : pack.bundled
-                          ? "builtin"
-                          : pack.state === 8
-                          ? "waiting"
-                          : pack.state === 6
-                          ? "not_supported"
-                          : "download"
-                      }`,
-                    )}`}
-                    onClick={() => {
-                      if (pack.state === 4) {
-                        setConfirm({ kind: "remove", tag: pack.tag });
-                      } else {
-                        void operate(pack, false);
-                      }
-                    }}
-                  >
-                    {t(
-                      `fcboard.languagePacks.${
-                        pack.state === 4
-                          ? "delete"
-                          : pack.state === 7
-                          ? "retry"
-                          : pack.bundled
-                          ? "builtin"
-                          : pack.state === 8
-                          ? "waiting"
-                          : pack.state === 6
-                          ? "not_supported"
-                          : "download"
-                      }`,
-                    )}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          {error && (
-            <>
-              <TransientMessage
-                role="alert"
-                message={error}
-                className="fc-error"
-              />
-              <button type="button" onClick={() => setAttempt(attempt + 1)}>
-                {t("fcboard.languagePacks.retry")}
-              </button>
-            </>
-          )}
+          {content}
         </MaterialPanel>
       )}
       {confirm && (
@@ -351,7 +369,7 @@ export const LanguagePacks = () => {
               type="button"
               onClick={() => {
                 if (confirm.kind === "required") {
-                  setOpen(true);
+                  showList();
                 } else {
                   const pack = packs.find((item) => item.tag === confirm.tag);
                   if (pack && !pack.bundled && pack.state === 4) {

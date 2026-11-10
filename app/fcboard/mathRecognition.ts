@@ -64,6 +64,32 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
       plot[key] = number;
     }
   }
+  if (value.view !== undefined) {
+    const view = value.view as NonNullable<Plot["view"]> | null;
+    if (
+      surface ||
+      relation ||
+      !view ||
+      ![view.left, view.right, view.bottom, view.top].every(
+        (number) =>
+          typeof number === "number" &&
+          Number.isFinite(number) &&
+          Math.abs(number) <= 1e6,
+      ) ||
+      view.right - view.left < 0.0001 ||
+      view.right - view.left > 2000 ||
+      view.top - view.bottom < 0.0001 ||
+      view.top - view.bottom > 2000
+    ) {
+      throw new Error("Invalid function viewport");
+    }
+    plot.view = {
+      left: view.left,
+      right: view.right,
+      bottom: view.bottom,
+      top: view.top,
+    };
+  }
   if (typeof value.equation === "string" && value.equation.length <= 500) {
     const equation = mathNotation(value.equation);
     const sides = equation.match(/^([^=<>]+)=([^=<>]+)$/);
@@ -125,7 +151,11 @@ export const recognizeMath = async (
   signal.throwIfAborted();
   try {
     if (mode === "calculation") {
-      const expression = mathNotation(text);
+      // Keep two-dimensional LaTeX intact for the structural parser. Flattening
+      // before parsing loses limits, fractional bases and nested scripts.
+      const expression = /\\[A-Za-z]+/.test(text)
+        ? text.trim()
+        : mathNotation(text);
       return {
         kind: mode,
         expression,

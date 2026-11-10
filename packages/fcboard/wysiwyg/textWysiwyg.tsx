@@ -138,6 +138,12 @@ export const textWysiwyg = ({
     if (`${updatedTextElement.fontSize}px` !== editable.style.fontSize) {
       return true;
     }
+    if (
+      String(updatedTextElement.fontWeight || 400) !==
+      (editable.style.fontWeight || "400")
+    ) {
+      return true;
+    }
     return false;
   };
 
@@ -261,6 +267,7 @@ export const textWysiwyg = ({
         (appState.height - viewportY) / appState.zoom.value;
       Object.assign(editable.style, {
         font,
+        fontWeight: updatedTextElement.fontWeight || 400,
         // must be defined *after* font ¯\_(ツ)_/¯
         lineHeight: updatedTextElement.lineHeight,
         width: `${width}px`,

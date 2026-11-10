@@ -18,7 +18,7 @@ const tap = (target: Element) => {
   fireEvent.click(target);
 };
 
-it("toggles the pen menu with real pointer-down taps and keeps the original seven visible pens together", async () => {
+it("toggles the pen menu with real pointer-down taps and offers all twelve pens together", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   act(() => h.app.setActiveTool({ type: "freedraw" }));
   const pen = screen.getByRole("button", { name: t("fcboard.pen") });
@@ -29,12 +29,12 @@ it("toggles the pen menu with real pointer-down taps and keeps the original seve
   const penTypes = within(dialog).getAllByRole("group", {
     name: t("fcboard.pen_type"),
   })[0];
-  expect(within(penTypes).getAllByRole("button")).toHaveLength(7);
+  expect(within(penTypes).getAllByRole("button")).toHaveLength(12);
   expect(
     within(dialog).queryByRole("button", {
       name: t("fcboard.calculation_pen"),
     }),
-  ).toBeNull();
+  ).toBeInTheDocument();
   tap(pen);
   expect(
     screen.queryByRole("dialog", {
@@ -46,13 +46,12 @@ it("toggles the pen menu with real pointer-down taps and keeps the original seve
     name: t("fcboard.pen_and_object_properties"),
   });
   fireEvent.click(
-    within(dialog).getByRole("button", { name: t("fcboard.next_page") }),
-  );
-  fireEvent.click(
     within(dialog).getByRole("button", { name: t("fcboard.calculation_pen") }),
   );
   expect(h.state.currentItemInkAssist).toBe("calculation");
   expect(h.state.activeTool.type).toBe("freedraw");
+  expect(dialog).toBeInTheDocument();
+  tap(pen);
   expect(
     screen.queryByRole("dialog", {
       name: t("fcboard.pen_and_object_properties"),
@@ -97,31 +96,33 @@ it("closes after choosing an eraser mode, preserves size, and reopens on a later
   }
 });
 
-it("keeps the native twelve-slot palette, applies gradients to the pen and restores solid color", async () => {
+it("keeps the expanded palette, applies gradients to the pen and restores solid color", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   act(() => h.app.setActiveTool({ type: "freedraw" }));
   tap(screen.getByRole("button", { name: t("fcboard.pen") }));
   const colors = screen.getByRole("group", { name: t("fcboard.pen_colour") });
   const buttons = within(colors).getAllByRole("button");
-  expect(buttons).toHaveLength(11);
+  expect(buttons).toHaveLength(14);
   expect(
-    within(colors).getByLabelText(t("fcboard.custom_pen_colour")),
+    within(colors).getByRole("button", {
+      name: t("fcboard.custom_pen_colour"),
+    }),
   ).toBeInTheDocument();
-  fireEvent.click(buttons[9]);
+  fireEvent.click(buttons[11]);
   expect(h.state.currentItemInkGradient).toBe("mint");
-  expect(buttons[9]).toHaveAttribute("aria-pressed", "true");
+  expect(buttons[11]).toHaveAttribute("aria-pressed", "true");
   expect(
     screen
       .getByRole("img", { name: t("fcboard.current_pen_preview") })
       .querySelectorAll("stop"),
   ).toHaveLength(2);
-  fireEvent.click(buttons[10]);
+  fireEvent.click(buttons[12]);
   expect(h.state.currentItemInkGradient).toBe("spectrum");
   act(() =>
     h.app.api.updateScene({ appState: { currentItemStrokeColor: "#112233" } }),
   );
   expect(h.state.currentItemInkGradient).toBeUndefined();
-  fireEvent.click(buttons[10]);
+  fireEvent.click(buttons[12]);
   expect(h.state.currentItemInkGradient).toBe("spectrum");
   fireEvent.click(buttons[5]);
   expect(h.state.currentItemInkGradient).toBeUndefined();

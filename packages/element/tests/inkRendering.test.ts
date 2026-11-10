@@ -19,13 +19,59 @@ import { getDefaultAppState } from "../../fcboard/appState";
 import { getNormalizedZoom } from "../../fcboard/scene";
 import { API } from "../../fcboard/tests/helpers/api";
 import { renderElement, elementWithCanvasCache } from "../src/renderElement";
-import { factoryInkPath } from "../src/factoryInk";
+import {
+  factoryInkPath,
+  factoryInkSamples,
+  traceFactoryInk,
+} from "../src/factoryInk";
+import { factoryPath2D } from "../src/factoryPath";
 import { factoryBrushPath } from "../src/factoryBrush";
 import { rainbowInkCoordinates, rainbowInkStops } from "../src/rainbowInk";
 import { getElementAbsoluteCoords } from "../src/bounds";
 import { eraseStroke } from "../../fcboard/eraser/stroke";
 
 describe("whiteboard vector ink", () => {
+  it("retains signed subpixel samples across live vectors, erasure geometry and SVG while preserving older ink", async () => {
+    const element = {
+      ...API.createElement({
+        type: "freedraw",
+        points: [
+          pointFrom<LocalPoint>(0, 0),
+          pointFrom<LocalPoint>(-0.34, -0.44),
+          pointFrom<LocalPoint>(0.62, 0.82),
+        ],
+        strokeWidth: 2,
+      }),
+      customData: {
+        fcInk: { version: 2, pen: "hard", unit: 1, subpixel: true },
+      },
+    };
+    const quadraticCurveTo = vi.fn();
+    traceFactoryInk(element, {
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      quadraticCurveTo,
+    });
+    expect(quadraticCurveTo.mock.calls[0]).toEqual([0, 0, -0.17, -0.22]);
+    expect(factoryInkSamples(element).at(-1)).toMatchObject({
+      x: 0.62,
+      y: 0.82,
+    });
+    const precise = factoryInkPath(element);
+    const live = factoryPath2D(element);
+    expect(factoryPath2D(element)).toBe(live);
+    const svg = await exportToSvg({
+      elements: [element],
+      appState: getDefaultAppState(),
+      files: {},
+    });
+    expect(
+      svg.querySelector("path[stroke-linecap='round']")?.getAttribute("d"),
+    ).toBe(precise);
+    element.customData.fcInk.subpixel = false;
+    expect(factoryInkPath(element)).not.toBe(precise);
+    expect(factoryPath2D(element)).not.toBe(live);
+  });
   it.each([0, Math.PI / 3])(
     "keeps the board-wide rainbow colors through partial erasure and cropped SVG export at angle %s",
     async (angle) => {

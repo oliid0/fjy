@@ -9,6 +9,8 @@ import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
 
+import { vegaAssetAliases } from "../config/vegaAssets";
+
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
   // To load .env variables
@@ -25,6 +27,7 @@ export default defineConfig(({ mode }) => {
     worker: { format: "es" },
     resolve: {
       alias: [
+        ...vegaAssetAliases,
         {
           find: /^@fcboard\/common$/,
           replacement: path.resolve(
@@ -99,8 +102,7 @@ export default defineConfig(({ mode }) => {
             if (
               id.includes("@paddleocr/paddleocr-js") ||
               id.includes("@techstark/opencv-js") ||
-              id.includes("onnxruntime-web") ||
-              id.includes("clipper-lib")
+              id.includes("onnxruntime-web")
             ) {
               return "fcboard-ocr.chunk";
             }

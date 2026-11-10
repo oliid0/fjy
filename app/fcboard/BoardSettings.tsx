@@ -82,13 +82,11 @@ export const BoardSettings = ({
       <SettingsSection id="home">
         <>
           <label>
-            {t("fcboard.factorySettings.dual_pen")}
+            {t("fcboard.multi_point_switch")}
             <Switch
-              checked={state.whiteboardDualPen ?? device?.dualPen ?? false}
-              disabled={
-                !(state.whiteboardThickThreshold ?? device?.thickThreshold)
-              }
-              onChange={(_, value) => update({ dualPen: value })}
+              checked={state.multiStroke !== false}
+              disabled={document}
+              onChange={(_, value) => update({ multiStroke: value })}
             />
           </label>
           <label>

@@ -27,6 +27,7 @@ import { classroomCommands } from "./commands";
 import { animateSolid } from "./solidAnimation";
 import { adaptGizmo, gizmoViewport } from "./adaptiveGizmo";
 import { FactoryGizmos } from "./FactoryGizmos";
+import { GizmoPicker } from "./GizmoPicker";
 import { FactoryShapes } from "./FactoryShapes";
 import { Calculator } from "./Calculator";
 import { ToolTimer } from "./ToolTimer";
@@ -834,7 +835,13 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       key={command}
       data-close-insert
       data-native-tool={
-        command === "files.open"
+        command === "canvas.summary"
+          ? "summary"
+          : command === "record.open"
+          ? "record"
+          : command === "voice.toggle"
+          ? "voice"
+          : command === "files.open"
           ? "files"
           : command === "assistant.open"
           ? "questions"
@@ -870,12 +877,12 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
     [t("fcboard.file_transfer"), "files.open", <FactoryIcon name="transfer" />],
     [t("fcboard.ai_summary"), "canvas.summary", TextIcon],
     [t("fcboard.recording"), "record.open", microphoneIcon],
+    [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
     [
       t("fcboard.ai_questions"),
       "assistant.open",
       <FactoryIcon name="questions" />,
     ],
-    [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
   ] as const;
   const actionIds = {
     "files.open": "files",
@@ -937,7 +944,20 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
             >
               {factory.map(factoryButton)}
             </div>
-            {entries.map(widgetButton)}
+            {entries
+              .filter(
+                ([kind]) => !factoryGizmoKinds.has(kind) || kind === "ruler",
+              )
+              .map((entry) =>
+                entry[0] === "ruler" ? (
+                  <GizmoPicker
+                    key="gizmos"
+                    onInsert={(kind) => attempt(() => insert(kind))}
+                  />
+                ) : (
+                  widgetButton(entry)
+                ),
+              )}
             {actions.map(actionButton)}
           </div>
         </MaterialPanel>
@@ -958,21 +978,19 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           aria-label={t("fcboard.display_tools")}
         >
           {factory
-            .filter(
-              (tool) =>
-                ["vote", "timer"].includes(tool) && !pinned.includes(tool),
-            )
+            .filter((tool) => tool !== "split" && !pinned.includes(tool))
             .map((tool) => factoryButton(tool))}
         </div>
         {entries
           .filter(([kind]) => kind === "ruler" && !pinned.includes("ruler"))
-          .map(widgetButton)}
+          .map(() => (
+            <GizmoPicker
+              key="gizmos"
+              onInsert={(kind) => attempt(() => insert(kind))}
+            />
+          ))}
         {actions
-          .filter(
-            (entry) =>
-              ["files.open", "assistant.open"].includes(entry[1]) &&
-              !pinned.includes(actionIds[entry[1]]),
-          )
+          .filter((entry) => !pinned.includes(actionIds[entry[1]]))
           .map(actionButton)}
       </ToolbarExtras>
       {factory.map((tool) => (
@@ -989,7 +1007,11 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
               entry[0] as "ruler" | "compass" | "protractor" | "setSquare"
             }
           >
-            {widgetButton(entry)}
+            {entry[0] === "ruler" ? (
+              <GizmoPicker onInsert={(kind) => attempt(() => insert(kind))} />
+            ) : (
+              widgetButton(entry)
+            )}
           </ToolbarExtras>
         ))}
       {actions.map((entry) => (

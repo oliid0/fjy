@@ -9,29 +9,30 @@ import { currentSettings, validateEndpoint } from "./settings";
 import { contentViewport, insertElements, insertionPoint } from "./board";
 import { classroomCommands } from "./commands";
 import { selectionSignature } from "./selection";
-import { transparentInkImage } from "./transparentInkImage";
 
 import type { ContentRect } from "./placement";
 
-/** The supplied Ark documentation confirms layer decomposition for these models. */
-export const supportsImageLayers = (model: string) =>
-  /^doubao-seedream-5-0-(?:flash|pro)-/.test(model.trim());
+export type GeneratedImage = {
+  dataURL: DataURL;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  width: number;
+  height: number;
+};
+export type ImagePlacement = {
+  bounds?: ContentRect;
+  replaceIds?: string[];
+  sourceSignature?: string;
+  sourcePage?: number;
+  referenceImage?: string;
+  transparent?: boolean;
+};
 
-export const insertGeneratedImage = async (
-  api: FcboardImperativeAPI,
+/** Produce a real preview without changing the board before the user chooses it. */
+export const generateImage = async (
   prompt: string,
   signal: AbortSignal,
-  placement: {
-    bounds?: ContentRect;
-    replaceIds?: string[];
-    sourceSignature?: string;
-    sourcePage?: number;
-    referenceImage?: string;
-    transparent?: boolean;
-  } = {},
-) => {
-  const revision = classroomCommands.revision;
-  const onDocument = classroomCommands.has("document.draw");
+  placement: ImagePlacement = {},
+): Promise<GeneratedImage> => {
   const settings = currentSettings();
   if (!settings.apiKey || !settings.imageModel.trim()) {
     throw new Error(
@@ -61,10 +62,12 @@ export const insertGeneratedImage = async (
     size: /^doubao-seedream-5-0-(flash|pro)-/.test(settings.imageModel)
       ? "1.5K"
       : "2048x2048",
-    ...(/^doubao-seedream-5-0-/.test(settings.imageModel)
-      ? { output_format: "png" }
-      : {}),
+    output_format: "png",
     ...(placement.referenceImage ? { image: placement.referenceImage } : {}),
+    ...(placement.transparent ? { background: "transparent" } : {}),
+    ...(/^doubao-seedream-5-0-pro-/.test(settings.imageModel)
+      ? { optimize_prompt_options: { mode: "fast" } }
+      : {}),
     watermark: false,
   };
   const requestImage = async (dataBody: Record<string, unknown>) => {
@@ -108,8 +111,6 @@ export const insertGeneratedImage = async (
     const items = data?.data as
       | {
           b64_json?: string;
-          z_index?: number;
-          bounding_box?: { absolute?: number[] };
           error?: { message?: string };
         }[]
       | undefined;
@@ -159,65 +160,56 @@ export const insertGeneratedImage = async (
     return { image, dataURL, mimeType };
   };
   const generated = await decodeImage((await requestImage(body))[0].b64_json);
-  let { dataURL, mimeType } = generated;
-  let drawing;
-  if (placement.transparent && supportsImageLayers(settings.imageModel)) {
-    try {
-      // New text/sketch generations first require decomposition. The transparent
-      // background option alone only supports an already-transparent input.
-      const items = await requestImage({
-        ...body,
-        image: dataURL,
-        prompt: `仅拆出以下要求对应的完整主体，多个主体保持相对位置。人物或动物的头、身体、四肢及其服饰合为完整主体图层；主体自身的白色和细节保留。背景、纸张、地面、投影、边框、装饰归入底图，不要拆成前景图层。要求：${prompt}`,
-        layer_decomposition: true,
-        size: "1.5K",
-        output_format: "png",
-      });
-      const layers = items.filter((item) => (item.z_index ?? 0) > 0);
-      if (!layers.length || layers.length > 16) {
-        throw new Error(t("fcboard.no_subject_layers_returned"));
-      }
-      drawing = transparentInkImage(
-        await Promise.all(
-          layers.map(async (item) => {
-            const box = item.bounding_box?.absolute;
-            if (!Array.isArray(box) || box.length !== 4) {
-              throw new Error(t("fcboard.no_subject_layers_returned"));
-            }
-            const decoded = await decodeImage(item.b64_json);
-            if (decoded.mimeType !== "image/png") {
-              throw new Error(t("fcboard.subject_layer_requires_transparency"));
-            }
-            return {
-              image: decoded.image,
-              zIndex: item.z_index!,
-              bounds: {
-                left: box[0],
-                top: box[1],
-                right: box[2],
-                bottom: box[3],
-              },
-            };
-          }),
-        ),
-      );
-    } catch {
-      // Generation already succeeded. Optional background removal must not discard it.
-      signal.throwIfAborted();
-    }
-  }
-  if (drawing) {
-    dataURL = drawing.dataURL;
-    mimeType = "image/png";
-  }
-  const naturalWidth = drawing?.width || generated.image.naturalWidth;
-  const naturalHeight = drawing?.height || generated.image.naturalHeight;
   signal.throwIfAborted();
+  return {
+    dataURL: generated.dataURL,
+    mimeType: generated.mimeType,
+    width: generated.image.naturalWidth,
+    height: generated.image.naturalHeight,
+  };
+};
+
+/** Existing callers still generate and insert atomically; candidate menus may
+ * insert a previously generated preview without a second network request. */
+export const insertGeneratedImage = async (
+  api: FcboardImperativeAPI,
+  prompt: string,
+  signal: AbortSignal,
+  placement: ImagePlacement = {},
+) => {
+  const revision = classroomCommands.revision;
+  const onDocument = classroomCommands.has("document.draw");
+  const image = await generateImage(prompt, signal, placement);
   if (
     classroomCommands.revision !== revision ||
     onDocument !== classroomCommands.has("document.draw")
   ) {
     throw new DOMException("Canvas changed", "AbortError");
+  }
+  return insertImageResult(api, image, signal, placement);
+};
+
+export const insertImageResult = async (
+  api: FcboardImperativeAPI,
+  image: GeneratedImage,
+  signal: AbortSignal,
+  placement: ImagePlacement = {},
+) => {
+  signal.throwIfAborted();
+  const onDocument = classroomCommands.has("document.draw");
+  const {
+    dataURL,
+    mimeType,
+    width: naturalWidth,
+    height: naturalHeight,
+  } = image;
+  if (
+    !Number.isFinite(naturalWidth) ||
+    !Number.isFinite(naturalHeight) ||
+    naturalWidth <= 0 ||
+    naturalHeight <= 0
+  ) {
+    throw new Error(t("fcboard.the_image_service_returned_no_valid_image"));
   }
   if (
     !onDocument &&

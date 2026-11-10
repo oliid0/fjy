@@ -1,9 +1,10 @@
 import { t } from "@fcboard/fcboard/i18n";
 
-import { offlineInference } from "./offlineInference";
+import { hasNativeTranslation, translateNatively } from "./nativeTranslation";
+import { currentSettings } from "./settings";
 
-/** Bundled OPUS models support Chinese/English. Never silently use an online
- * endpoint or claim that translation-only models produced grammar analysis. */
+/** Android uses one native multilingual translator. Web retains bundled zh/en
+ * OPUS; no online fallback or invented grammar analysis. */
 export const translateLocally = async (
   text: string,
   targetLanguage: string,
@@ -13,13 +14,27 @@ export const translateLocally = async (
   if (!text.trim() || text.length > 4000) {
     throw new Error(t("fcboard.text_is_empty_or_too_long"));
   }
+  const configured = currentSettings().inkLanguage;
+  if (hasNativeTranslation()) {
+    return translateNatively(
+      text,
+      targetLanguage,
+      signal,
+      configured === "auto" ? "auto" : configured,
+    );
+  }
+  const { offlineInference } = await import("./offlineInference");
   const target = targetLanguage.toLowerCase().split("-")[0];
   const source = /[\u3400-\u9fff]/.test(text)
     ? "zh"
     : /^[\p{Script=Latin}\p{N}\p{P}\p{Z}\s\p{S}]+$/u.test(text)
     ? "en"
     : undefined;
-  if (!source || (target !== "zh" && target !== "en")) {
+  if (
+    (configured !== "auto" && !/^(zh|en)(-|$)/.test(configured)) ||
+    !source ||
+    (target !== "zh" && target !== "en")
+  ) {
     throw new Error(t("fcboard.local_translation_pair_unavailable"));
   }
   if (source === target) {

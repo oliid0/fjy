@@ -386,7 +386,7 @@ it("routes text, shapes, selection and plots into the visible document instead o
     classroomCommands.register("document.duplicate", "@internal", duplicate),
     classroomCommands.register("document.plot", "@internal", (args) => {
       strokes = (args.shapes as FcboardElementSkeleton[]).map((shape) =>
-        shapeInk(shape, "plot"),
+        shapeInk(shape, "plot", args.image as string),
       );
     }),
     classroomCommands.context("document", () => ({
@@ -418,7 +418,8 @@ it("routes text, shapes, selection and plots into the visible document instead o
     expect(text).toHaveBeenCalledWith({ text: "课件批注" });
     expect(draw).toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith({ ids: ["ink"] });
-    expect(strokes.length).toBeGreaterThan(10);
+    expect(strokes).toHaveLength(1);
+    expect(strokes[0].image).toMatch(/^data:image\/svg\+xml;base64,/);
     await classroomCommands.execute({
       name: "canvas.action",
       args: { action: "selectAll" },

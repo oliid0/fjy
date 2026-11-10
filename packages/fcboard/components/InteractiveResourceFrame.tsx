@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { interactiveHtml } from "../interactiveHtml";
 import { t } from "../i18n";
@@ -28,6 +35,37 @@ export const InteractiveResourceFrame = ({
   >;
 }) => {
   const [revision, setRevision] = useState(0);
+  const [visualizationDocument, setVisualizationDocument] = useState<{
+    source: InteractiveResource;
+    html?: string;
+    error?: string;
+  }>();
+  useEffect(() => {
+    if (!resource.visualization) {
+      return;
+    }
+    let active = true;
+    void import("../visualizationHtml")
+      .then(({ visualizationHtml }) => visualizationHtml(resource))
+      .then(
+        (html) => {
+          if (active) {
+            setVisualizationDocument({ source: resource, html });
+          }
+        },
+        (error) => {
+          if (active) {
+            setVisualizationDocument({
+              source: resource,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [resource, revision]);
   const controls = useRef<ReturnType<typeof attachResourceControls> | null>(
     null,
   );
@@ -58,7 +96,7 @@ export const InteractiveResourceFrame = ({
         iframeRef.current = null;
       }
     };
-  }, [iframeRef, resource.html, revision]);
+  }, [iframeRef, resource.html, revision, visualizationDocument]);
   const html = useMemo(() => {
     try {
       return interactiveHtml(resource.html);
@@ -66,6 +104,16 @@ export const InteractiveResourceFrame = ({
       return undefined;
     }
   }, [resource.html]);
+  const visual =
+    visualizationDocument?.source === resource
+      ? visualizationDocument
+      : undefined;
+  if (resource.visualization && visual?.error) {
+    return <p role="alert">{visual.error}</p>;
+  }
+  if (resource.visualization && !visual?.html) {
+    return <p role="status">{t("fcboard.opening_resource")}</p>;
+  }
   if (!html) {
     return (
       <p role="alert">
@@ -80,7 +128,7 @@ export const InteractiveResourceFrame = ({
       onLoad={() => controls.current?.loaded()}
       className="fcboard__embeddable"
       title={resource.title}
-      srcDoc={html}
+      srcDoc={resource.visualization ? visual?.html : html}
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"

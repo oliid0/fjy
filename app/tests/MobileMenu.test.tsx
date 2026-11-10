@@ -73,11 +73,15 @@ describe("Test MobileMenu", () => {
         name: t("fcboard.languagePacks.title"),
       }),
     );
-    const packs = screen.getByRole("dialog", {
+    const packs = screen.getByRole("region", {
       name: t("fcboard.languagePacks.title"),
     });
     expect(packs).toBeVisible();
-    fireEvent.click(packs.querySelector("header button")!);
+    expect(document.querySelector(".fc-language-pack-inline")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
+    expect(
+      screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.background") }),

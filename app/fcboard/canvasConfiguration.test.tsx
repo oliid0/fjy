@@ -490,3 +490,30 @@ it("returns actual committed settings to the assistant before its next model dec
     close();
   }
 });
+
+it("replaces the dual-color UI with a working multipoint switch independent of contact calibration", async () => {
+  const { api, close } = await setup();
+  const panel = renderSettings(
+    <SettingsNavigation initialPage="home">
+      <BoardSettings api={api} />
+    </SettingsNavigation>,
+  );
+  try {
+    expect(
+      screen.queryByText(t("fcboard.factorySettings.dual_pen")),
+    ).toBeNull();
+    const toggle = screen.getByRole("switch", {
+      name: t("fcboard.multi_point_switch"),
+    });
+    expect(toggle).toBeEnabled();
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(api.getAppState().multiStroke).toBe(false);
+    fireEvent.click(toggle);
+    expect(api.getAppState().multiStroke).toBe(true);
+    expect(api.getAppState().whiteboardDualPen).toBeUndefined();
+  } finally {
+    panel.unmount();
+    close();
+  }
+});

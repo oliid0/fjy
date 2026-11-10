@@ -14,11 +14,7 @@ import { classroomCommands } from "./commands";
 import { boardInk } from "./digitalInk";
 import { selectedBoardElements } from "./ai";
 import { selectionSignature } from "./selection";
-import {
-  explainLanguage,
-  languageInkSignature,
-  parseLanguageStudy,
-} from "./languageStudy";
+import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
 
 import type { InkStroke } from "./documents";
 import type { LanguageInk, LanguageStudy } from "./languageStudy";
@@ -28,6 +24,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
   const doc = classroomCommands.read("document") as
     | { name: string; page: number; ink: InkStroke[] }
     | undefined;
+  let sourceIds: string[] = [];
   let metadata: LanguageInk | undefined;
   let signature = "";
   if (doc) {
@@ -38,6 +35,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
     const source = doc.ink.filter(
       (stroke) => stroke.language?.group === group && stroke.language.source,
     );
+    sourceIds = source.map((stroke) => stroke.id);
     metadata = source.find((stroke) => stroke.language?.study)?.language;
     signature = languageInkSignature(source.map((stroke) => stroke.points));
   } else {
@@ -54,6 +52,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
         element.customData?.fcLanguage?.group === group &&
         element.customData?.fcLanguage?.source,
     );
+    sourceIds = source.map((element) => element.id);
     metadata = source.find((element) => element.customData?.fcLanguage?.study)
       ?.customData?.fcLanguage;
     signature = languageInkSignature(boardInk(source));
@@ -63,6 +62,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
   }
   try {
     return {
+      sourceIds,
       study: parseLanguageStudy(JSON.stringify(metadata.study), true),
       targetLanguage: metadata.targetLanguage,
       token: JSON.stringify([
@@ -142,33 +142,28 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
         request.current = controller;
         const target = getLanguage().code;
         const key = `${token}:${JSON.stringify(args.region || null)}:${target}`;
+        const readySource =
+          source?.targetLanguage === target && !source.study.backend;
         setError("");
         setCard({
           id: ids[0],
           token,
-          study: source?.study,
+          study: readySource ? source.study : undefined,
           ids: source ? undefined : ids,
         });
-        setBusy(
-          source?.targetLanguage !== target && !translations.current.has(key),
-        );
+        setBusy(!readySource && !translations.current.has(key));
         try {
           let study: LanguageStudy;
-          if (source?.targetLanguage === target) {
+          if (readySource) {
             study = source.study;
           } else if (translations.current.has(key)) {
             study = translations.current.get(key)!;
-          } else if (source) {
-            study = await explainLanguage(
-              source.study.term,
-              controller.signal,
-              target,
-            );
           } else {
             const result = (await classroomCommands.execute({
               name: "language.translate",
               args: {
-                sourceIds: ids,
+                sourceIds: source?.sourceIds || ids,
+                study: true,
                 region: args.region,
                 insert: false,
                 signal: controller.signal,
@@ -362,7 +357,7 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
                 >
                   {card.study.translation}
                 </p>
-                {card.study.backend !== "local" && (
+                {!card.study.backend && (
                   <Tabs
                     value={tab}
                     onChange={(_, value) => setTab(value)}
@@ -374,7 +369,7 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
                     <Tab label={t("fcboard.example")} />
                   </Tabs>
                 )}
-                {card.study.backend !== "local" && (
+                {!card.study.backend && (
                   <Box
                     role="tabpanel"
                     sx={{ py: 2, lineHeight: 1.7, whiteSpace: "pre-wrap" }}

@@ -38,6 +38,109 @@ describe("explicit handwriting actions", () => {
     saveSettings({ ...defaults, apiKey: "test-key" }, false);
   });
   afterEach(() => vi.useRealTimers());
+  it("prefers structural math over a plausible flattened native answer", async () => {
+    backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["12"]);
+    backend.math.mockResolvedValue(String.raw`\frac{1}{2}`);
+    const capture = vi.fn();
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [20, 10],
+        [35, 35],
+      ],
+      [
+        [10, 45],
+        [55, 45],
+      ],
+      [
+        [20, 55],
+        [35, 80],
+      ],
+    ];
+    const validate = vi.fn(
+      async (text: string) => text === String.raw`\frac{1}{2}`,
+    );
+    expect(
+      await recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        validate,
+        strokes,
+      ),
+    ).toBe(String.raw`\frac{1}{2}`);
+    expect(backend.native).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+    expect(backend.local).not.toHaveBeenCalled();
+    expect(backend.cloud).not.toHaveBeenCalled();
+    expect(validate).toHaveBeenCalledTimes(1);
+  });
+  it("rejects a flattened math-model fraction and asks configured vision for exact LaTeX", async () => {
+    backend.nativeAvailable = true;
+    backend.math.mockResolvedValue("12");
+    backend.cloud.mockResolvedValue(String.raw`\frac{1}{2}`);
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [20, 10],
+        [35, 35],
+      ],
+      [
+        [10, 45],
+        [55, 45],
+      ],
+      [
+        [20, 55],
+        [35, 80],
+      ],
+    ];
+    expect(
+      await recognizeHandwriting(
+        "selected-ink",
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        strokes,
+      ),
+    ).toBe(String.raw`\frac{1}{2}`);
+    expect(backend.native).not.toHaveBeenCalled();
+    expect(backend.local).not.toHaveBeenCalled();
+    const prompt = backend.cloud.mock.calls[0][0][0].content;
+    expect(prompt).toContain("standard LaTeX");
+    expect(prompt).toContain("without solving");
+    expect(prompt).toContain("fraction bars");
+  });
+  it("excludes only a confirmed final column bar from native recognition", async () => {
+    backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["12\n+3"]);
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [20, 10],
+        [30, 40],
+      ],
+      [
+        [20, 65],
+        [30, 95],
+      ],
+      [
+        [0, 105],
+        [70, 105],
+      ],
+    ];
+    expect(
+      await recognizeHandwriting(
+        vi.fn(),
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        strokes,
+      ),
+    ).toBe("12\n+3");
+    expect(backend.native.mock.calls[0][0]).toEqual(strokes.slice(0, 2));
+    expect(strokes).toHaveLength(3);
+  });
   it("passes the alphabet surface's English context to bundled Digital Ink without rasterizing", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["Hello"]);
@@ -141,6 +244,33 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
+  it("accepts a valid later native math candidate without allocating a raster model", async () => {
+    backend.nativeAvailable = true;
+    backend.native.mockResolvedValue(["ll+ll=", "11+11=", "11+1="]);
+    const capture = vi.fn();
+    const choose = vi.fn().mockResolvedValue("11+11=");
+    const result = await recognizeHandwriting(
+      capture,
+      new AbortController().signal,
+      vi.fn(),
+      "math",
+      (text) => text === "11+11=",
+      [
+        [
+          [10, 10],
+          [20, 20],
+        ],
+      ],
+      undefined,
+      choose,
+    );
+    expect(result).toBe("11+11=");
+    expect(choose).toHaveBeenCalledWith(["11+11="]);
+    expect(capture).not.toHaveBeenCalled();
+    expect(backend.math).not.toHaveBeenCalled();
+    expect(backend.local).not.toHaveBeenCalled();
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
   it("passes actual ranked native alternatives to the writing surface and waits for its choice", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["你好", "你号"]);
@@ -230,9 +360,9 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("does not choose a lower ranked candidate just because it produces an answer", async () => {
+  it("preserves native ranking when more than one complete math candidate is valid", async () => {
     backend.nativeAvailable = true;
-    backend.native.mockResolvedValue(["illegible", "1+1="]);
+    backend.native.mockResolvedValue(["11+11=", "1+1="]);
     saveSettings({ ...defaults, ocr: "local" }, false);
     await expect(
       recognizeHandwriting(
@@ -240,10 +370,10 @@ describe("explicit handwriting actions", () => {
         new AbortController().signal,
         vi.fn(),
         "math",
-        (text) => text === "1+1=",
+        (text) => text === "1+1=" || text === "11+11=",
         [[[0, 0]]],
       ),
-    ).rejects.toThrow();
+    ).resolves.toBe("11+11=");
     expect(backend.cloud).not.toHaveBeenCalled();
   });
 });

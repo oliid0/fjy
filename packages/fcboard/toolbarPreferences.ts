@@ -11,7 +11,7 @@ export const toolbarItems = {
   areaBg: { label: "area_background", icon: "areaBg" },
   sticky: { label: "sticky_notes", icon: "sticky" },
   period: { label: "periodic_table", icon: "period" },
-  ruler: { label: "ruler", icon: "ruler" },
+  ruler: { label: "geometry_tools", icon: "ruler" },
   compass: { label: "compass", icon: "compass" },
   protractor: { label: "protractor", icon: "protractor" },
   setSquare: { label: "set_square", icon: "setSquare" },
@@ -34,6 +34,7 @@ export const toolbarItems = {
   record: { label: "recording", icon: "media" },
   questions: { label: "ai_questions", icon: "resources" },
   voice: { label: "voice_commands", icon: "media" },
+  multi: { label: "multi_point_switch", icon: "multi" },
 } as const;
 export type ToolbarItem = keyof typeof toolbarItems;
 // tool_config.xml order, with insert_camera_visible=2 excluded by the APK.
@@ -60,6 +61,7 @@ export const NATIVE_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   "period",
   "resources",
   "questions",
+  "multi",
 ];
 export const TOOLBAR_LIMIT = 13;
 export const FIXED_TOOL_COUNT = 3;

@@ -200,6 +200,20 @@ const cappedElementCanvasSize = (
     scale = Math.sqrt(AREA_LIMIT / (width * height));
   }
 
+  if (isArrowElement(element) && getBoundTextElement(element, elementsMap)) {
+    // Labelled arrows rotate a second, square canvas. A long thin arrow's
+    // first canvas can fit the area limit while this one requests gigabytes.
+    // Both backing stores must use the same scale to preserve positioning.
+    const labelledSide =
+      Math.max(elementWidth, elementHeight) * window.devicePixelRatio +
+      padding * 10;
+    scale = Math.min(
+      scale,
+      WIDTH_HEIGHT_LIMIT / labelledSide,
+      Math.sqrt(AREA_LIMIT) / labelledSide,
+    );
+  }
+
   width = Math.floor(width * scale);
   height = Math.floor(height * scale);
 

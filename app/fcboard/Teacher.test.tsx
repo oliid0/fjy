@@ -9,6 +9,7 @@ import { render } from "./test/render";
 import { classroomCommands } from "./commands";
 import { TeachingEngine } from "./teaching";
 import * as ai from "./ai";
+import * as quizzes from "./quiz";
 import { defaults, saveSettings } from "./settings";
 
 vi.mock("./materials", () => ({ searchMaterials: async () => [] }));
@@ -363,5 +364,53 @@ it("keeps quiz jobs independent and returns each job's own result when they fini
   } finally {
     view.unmount();
     release();
+  }
+});
+
+it("uses the supplied selected PNG for Quiz without recapturing the whole canvas", async () => {
+  const { view } = setup();
+  const generate = vi.spyOn(quizzes, "generateQuiz").mockResolvedValue({
+    title: "Selection quiz",
+    questions: [
+      {
+        type: "short",
+        question: "What is shown?",
+        answer: ["A dog"],
+        explanation: "The selection shows a dog.",
+      },
+    ],
+    sources: [],
+  });
+  const snapshot = vi.fn();
+  const stop = classroomCommands.register(
+    "canvas.snapshot",
+    "@internal",
+    snapshot,
+  );
+  const controller = new AbortController();
+  try {
+    await act(async () => {
+      expect(
+        await classroomCommands.execute({
+          name: "quiz.generate",
+          args: {
+            prompt: "出题",
+            context: { text: "", image: "data:image/png;base64,selected" },
+            signal: controller.signal,
+          },
+        }),
+      ).toEqual({ title: "Selection quiz", count: 1 });
+    });
+    expect(generate).toHaveBeenCalledWith(
+      "出题",
+      expect.any(AbortSignal),
+      "",
+      "data:image/png;base64,selected",
+    );
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(ai.boardContext).not.toHaveBeenCalled();
+  } finally {
+    stop();
+    view.unmount();
   }
 });

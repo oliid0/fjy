@@ -2,6 +2,8 @@ import path from "path";
 
 import { defineConfig } from "vitest/config";
 
+import { vegaAssetAliases } from "./config/vegaAssets";
+
 export default defineConfig({
   plugins: [
     {
@@ -21,6 +23,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
+      ...vegaAssetAliases,
       {
         find: /^@fcboard\/common$/,
         replacement: path.resolve(__dirname, "./packages/common/src/index.ts"),

@@ -8,6 +8,8 @@ import { MaterialPanel } from "./MaterialPanel";
 import { useAnchoredPanel } from "./floating";
 import { TransientMessage } from "./TransientMessage";
 
+import "./SplitBoard.scss";
+
 /** menu_bar / popupwindow_multiscreen: choose 2/3/4, then enter real canvases. */
 export const BottomBarActions = () => {
   const [split, setSplit] = useState(false);
@@ -80,10 +82,11 @@ export const BottomBarActions = () => {
           <button
             type="button"
             data-split-launcher
+            data-menu-toggle
             disabled={busy}
             aria-label={t("fcboard.split_screen")}
             aria-expanded={split}
-            onClick={() => setSplit(true)}
+            onClick={() => setSplit((value) => !value)}
           >
             <FactoryIcon name="split" />
             <span>{t("fcboard.split_screen")}</span>

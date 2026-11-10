@@ -9,9 +9,9 @@ import { pointFrom } from "@fcboard/math";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
-import type { FcboardElement } from "@fcboard/element/types";
+import type { FcboardElement, FileId } from "@fcboard/element/types";
 
-import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { project3D, samplePlot, sampleInequality } from "./math";
 import { classroomCommands } from "./commands";
@@ -25,6 +25,7 @@ import {
 import { findContentPosition, findVisibleContentPosition } from "./placement";
 import { answerFontSize, layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
+import { functionGraphImage, plotSize } from "./functionVisualization";
 
 import type { TextPlacement } from "./textLayout";
 
@@ -624,6 +625,30 @@ export const drawPlot = (
   keepTool = false,
   sourceBounds?: ContentRect,
 ) => {
+  if (!plot.surface && !plot.relation) {
+    const color = api.getAppState().currentItemStrokeColor || "#1e1e1e";
+    const image = functionGraphImage(plot, color);
+    return insertPlot(
+      api,
+      plot,
+      [
+        {
+          type: "image",
+          x: position.x - plotSize.width / 2,
+          y: position.y - plotSize.height / 2,
+          ...plotSize,
+          fileId: crypto.randomUUID() as FileId,
+          strokeColor: color,
+        },
+      ],
+      position,
+      replaceIds,
+      sourceSignature,
+      keepTool,
+      sourceBounds,
+      image,
+    );
+  }
   const lines = samplePlot(plot);
   const scale = 200 / plot.range;
   const skeletons: FcboardElementSkeleton[] = [
@@ -765,6 +790,29 @@ export const drawPlot = (
         plot.relation === ">" || plot.relation === "<" ? "dashed" : "solid",
     });
   }
+  return insertPlot(
+    api,
+    plot,
+    skeletons,
+    position,
+    replaceIds,
+    sourceSignature,
+    keepTool,
+    sourceBounds,
+  );
+};
+
+const insertPlot = (
+  api: FcboardImperativeAPI,
+  plot: Plot,
+  skeletons: FcboardElementSkeleton[],
+  position: { x: number; y: number },
+  replaceIds: string[],
+  sourceSignature?: string,
+  keepTool = false,
+  sourceBounds?: ContentRect,
+  image?: DataURL,
+) => {
   const documentLayout = classroomCommands.read("document.layout") as
     | {
         viewport: ContentRect;
@@ -801,6 +849,7 @@ export const drawPlot = (
       fcPlot: {
         id: plotId,
         plot,
+        ...(image ? { renderer: "vega" } : {}),
         position: fitted.center,
         origin: { x: shape.x || 0, y: shape.y || 0 },
       },
@@ -809,9 +858,22 @@ export const drawPlot = (
   if (classroomCommands.has("document.plot")) {
     void classroomCommands.execute({
       name: "document.plot",
-      args: { shapes, replaceIds, keepTool },
+      args: { shapes, replaceIds, keepTool, image },
     });
     return shapes.map((shape) => shape.id);
+  }
+  if (image) {
+    const shape = shapes[0];
+    if (shape.type === "image" && shape.fileId) {
+      api.addFiles([
+        {
+          id: shape.fileId,
+          dataURL: image,
+          mimeType: "image/svg+xml",
+          created: Date.now(),
+        },
+      ]);
+    }
   }
   const ids = insertElements(api, shapes, replaceIds);
   return ids;
@@ -830,6 +892,17 @@ export const selectedPlot = (api: FcboardImperativeAPI) => {
     }
     return {
       plot: stroke.plot.plot,
+      image:
+        stroke.image && stroke.plot.renderer === "vega"
+          ? {
+              x: stroke.anchor?.x ?? stroke.points[0][0],
+              y: stroke.anchor?.y ?? stroke.points[0][1],
+              width: stroke.imageWidth!,
+              height: stroke.imageHeight!,
+              angle: 0,
+              color: stroke.color,
+            }
+          : undefined,
       ids: document.ink
         .filter((item) => item.plot?.id === stroke.plot!.id)
         .map((item) => item.id),
@@ -871,6 +944,17 @@ export const selectedPlot = (api: FcboardImperativeAPI) => {
   }
   return {
     plot: metadata.plot as Plot,
+    image:
+      selected.type === "image" && metadata.renderer === "vega"
+        ? {
+            x: selected.x,
+            y: selected.y,
+            width: selected.width,
+            height: selected.height,
+            angle: selected.angle,
+            color: selected.strokeColor,
+          }
+        : undefined,
     ids: elements
       .filter((el) => el.customData?.fcPlot?.id === metadata.id)
       .map((el) => el.id),
@@ -879,6 +963,84 @@ export const selectedPlot = (api: FcboardImperativeAPI) => {
       y: metadata.position.y + selected.y - metadata.origin.y,
     },
   };
+};
+
+/** Parameter edits keep the object's identity, transform, selection and colour. */
+export const updateFunctionGraph = (
+  api: FcboardImperativeAPI,
+  plot: Plot,
+  options: {
+    preview?: boolean;
+    fileId?: FileId;
+    before?: InkStroke[];
+    onError?: (error: unknown) => void;
+  } = {},
+) => {
+  const graph = selectedPlot(api);
+  if (!graph?.image) {
+    return null;
+  }
+  const image = functionGraphImage(plot, graph.image.color);
+  if (classroomCommands.has("document.plot.update")) {
+    void classroomCommands
+      .execute({
+        name: "document.plot.update",
+        args: {
+          ids: graph.ids,
+          plot,
+          image,
+          remember: !options.preview,
+          before: options.before,
+        },
+      })
+      .catch((failure) => {
+        if (options.onError) {
+          options.onError(failure);
+        } else {
+          api.updateScene({
+            appState: {
+              errorMessage:
+                failure instanceof Error ? failure.message : String(failure),
+            },
+          });
+        }
+      });
+  } else {
+    const selected = api
+      .getSceneElements()
+      .find((element) => graph.ids.includes(element.id));
+    if (!selected || selected.type !== "image") {
+      return null;
+    }
+    const fileId = options.fileId || (crypto.randomUUID() as FileId);
+    const previous = api.getFiles()[fileId];
+    api.addFiles([
+      {
+        id: fileId,
+        dataURL: image,
+        mimeType: "image/svg+xml",
+        created: previous?.created ?? Date.now(),
+        version: (previous?.version ?? 0) + 1,
+      },
+    ]);
+    api.updateScene({
+      elements: api.getSceneElements().map((element) =>
+        element.type === "image" && element.id === selected.id
+          ? newElementWith(element, {
+              fileId,
+              customData: {
+                ...element.customData,
+                fcPlot: { ...element.customData!.fcPlot, plot },
+              },
+            })
+          : element,
+      ),
+      captureUpdate: options.preview
+        ? CaptureUpdateAction.EVENTUALLY
+        : CaptureUpdateAction.IMMEDIATELY,
+    });
+  }
+  return { ...graph, plot };
 };
 
 export const validateShapes = (value: unknown): FcboardElementSkeleton[] => {

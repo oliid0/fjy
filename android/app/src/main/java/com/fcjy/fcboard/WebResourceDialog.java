@@ -35,7 +35,7 @@ import org.json.JSONTokener;
 
 /** HMinWebWindow's in-app browsing flow, with the same controls available to the board agent. */
 final class WebResourceDialog extends Dialog {
-    final WebView web;
+    WebView web;
     final TextView moveHandle;
     final ImageButton resizeHandle;
     private final TextView status;
@@ -144,7 +144,7 @@ final class WebResourceDialog extends Dialog {
             @Override public void onStartTrackingTouch(SeekBar bar) {}
             @Override public void onStopTrackingTouch(SeekBar bar) { syncHorizontalScroll(); }
             @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                if (fromUser) web.evaluateJavascript("(function(){var e=window.__fcHorizontalTarget;if(e&&e.isConnected)e.scrollLeft=Math.max(0,e.scrollWidth-e.clientWidth)*" + progress + "/1000;})()", null);
+                if (fromUser && !closed) web.evaluateJavascript("(function(){var e=window.__fcHorizontalTarget;if(e&&e.isConnected)e.scrollLeft=Math.max(0,e.scrollWidth-e.clientWidth)*" + progress + "/1000;})()", null);
             }
         });
         final float[] touch = new float[2];
@@ -156,7 +156,7 @@ final class WebResourceDialog extends Dialog {
         });
         web.setOnLongClickListener(view -> {
             final int expectedPage = pageEpoch;
-            if (loading || touchPage[0] != expectedPage) return true;
+            if (closed || loading || touchPage[0] != expectedPage) return true;
             float scale = Math.max(0.1f, web.getScale());
             String script = controlRuntime + "\nwindow.fcNativeWebSelection(" + (touch[0] / scale) + "," + (touch[1] / scale) + ")";
             web.evaluateJavascript(script, raw -> {
@@ -228,6 +228,7 @@ final class WebResourceDialog extends Dialog {
                 catch (Exception unsupported) { status.setVisibility(android.view.View.VISIBLE); status.setText(text.getString(R.string.web_external_app)); return true; }
             }
             @Override public void onPageStarted(WebView view, String current, Bitmap favicon) {
+                if (closed || view != web) return;
                 cancelControls("WEB_PAGE_CHANGED_READ_AGAIN");
                 pageEpoch++;
                 loading = true;
@@ -239,6 +240,7 @@ final class WebResourceDialog extends Dialog {
                 forward.setEnabled(view.canGoForward());
             }
             @Override public void onPageFinished(WebView view, String current) {
+                if (closed || view != web) return;
                 moveHandle.setText(view.getTitle());
                 loading = false;
                 spinner.setVisibility(android.view.View.GONE);
@@ -251,22 +253,26 @@ final class WebResourceDialog extends Dialog {
                 forward.setEnabled(view.canGoForward());
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
-                if (request.isForMainFrame()) {
+                if (!closed && view == web && request.isForMainFrame()) {
                     pageFailed = true;
                     spinner.setVisibility(android.view.View.GONE);
                     status.setVisibility(android.view.View.VISIBLE);
                     status.setText(text.getString(R.string.web_load_failed));
                 }
             }
+            @Override public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                // A dead renderer cannot be reloaded or reused. Handle this
+                // specific WebView so a failed search video/page cannot kill
+                // the whiteboard host process as well.
+                if (view == web) {
+                    releaseWebView(true);
+                    dismiss();
+                    android.widget.Toast.makeText(text, R.string.web_renderer_stopped, android.widget.Toast.LENGTH_LONG).show();
+                }
+                return true;
+            }
         });
-        setOnDismissListener(dialog -> {
-            closed = true;
-            if (clearImageDrag != null) clearImageDrag.run();
-            cancelControls("WEB_PAGE_CLOSED");
-            controlTimer.removeCallbacksAndMessages(null);
-            activity.getWindow().getDecorView().removeOnLayoutChangeListener(displayLayout);
-            content.removeView(web); web.stopLoading(); web.destroy();
-        });
+        setOnDismissListener(dialog -> releaseWebView(false));
         web.loadUrl(checkedUrl(url));
     }
 
@@ -282,7 +288,38 @@ final class WebResourceDialog extends Dialog {
         button.setOnClickListener(view -> action.run()); return button;
     }
 
+    private void releaseWebView(boolean rendererGone) {
+        if (closed) return;
+        closed = true;
+        pageEpoch++;
+        loading = false;
+        if (clearImageDrag != null) clearImageDrag.run();
+        cancelControls("WEB_PAGE_CLOSED");
+        controlTimer.removeCallbacksAndMessages(null);
+        Activity activity = getOwnerActivity();
+        if (activity != null) activity.getWindow().getDecorView().removeOnLayoutChangeListener(displayLayout);
+        WebView view = web;
+        web = null;
+        if (view != null) {
+            if (!rendererGone) view.stopLoading();
+            if (view.getParent() instanceof ViewGroup) ((ViewGroup)view.getParent()).removeView(view);
+            view.destroy();
+        }
+    }
+
+    @Override public void dismiss() {
+        // Release even while hidden by an image drag. OnDismiss alone runs on
+        // a later UI turn, allowing a late drag-end to re-show the old window.
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            controlTimer.post(this::dismiss);
+            return;
+        }
+        releaseWebView(false);
+        super.dismiss();
+    }
+
     @Override public void show() {
+        if (closed) return;
         super.show();
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         getOwnerActivity().getWindow().getDecorView().addOnLayoutChangeListener(displayLayout);
@@ -415,7 +452,7 @@ final class WebResourceDialog extends Dialog {
     }
 
     private void syncHorizontalScroll() {
-        if (!isShowing() || loading) return;
+        if (closed || !isShowing() || loading) return;
         final int expected = pageEpoch;
         web.evaluateJavascript("(function(){var all=[document.scrollingElement,...document.querySelectorAll('*')],best=null,score=0;for(var e of all){if(!e)continue;var r=e.getBoundingClientRect(),max=e.scrollWidth-e.clientWidth;if(max>1&&e.clientWidth>0&&r.bottom>0&&r.top<innerHeight){var s=max*Math.min(r.height,innerHeight);if(s>score){score=s;best=e;}}}window.__fcHorizontalTarget=best;return best?{max:best.scrollWidth-best.clientWidth,x:best.scrollLeft}:{max:0,x:0};})()", raw -> {
             if (!isShowing() || expected != pageEpoch) return;
@@ -429,6 +466,7 @@ final class WebResourceDialog extends Dialog {
     }
 
     private void navigate(String action) {
+        if (closed) return;
         if (("back".equals(action) && !web.canGoBack()) || ("forward".equals(action) && !web.canGoForward())) return;
         cancelControls("WEB_PAGE_CHANGED_READ_AGAIN");
         pageEpoch++;
@@ -505,6 +543,7 @@ final class WebResourceDialog extends Dialog {
     }
 
     void action(JSObject args, PluginCall call) {
+        if (closed) { call.reject("WEB_PAGE_CLOSED"); return; }
         try {
             String action = args.optString("action", "read");
             if (!java.util.Arrays.asList("read", "click", "set", "scroll", "key", "back", "forward", "reload", "close", "move", "resize").contains(action)) {

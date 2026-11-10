@@ -224,7 +224,7 @@ const LayerUI = ({
       const width = Math.max(
         0,
         Math.min(
-          (appState.activeTool.type === "freedraw" ? 316 : 280) * unit,
+          (appState.activeTool.type === "freedraw" ? 372 : 280) * unit,
           root.width - 24,
         ),
       );
@@ -720,18 +720,21 @@ const LayerUI = ({
           ) {
             return;
           }
-          // r6.g.d: same view within 400ms is ignored; changing controls resets it.
-          // The pen's onTouch/onPenClicked route bypasses that click guard.
-          if (!target.hasAttribute("data-toolbar-pen")) {
-            const now = Date.now();
+          // Keep the native action guard for commands. Menu toggles must handle
+          // every deliberate tap, including a rapid tap to close the menu.
+          const now = Date.now();
+          if (
+            !target.hasAttribute("data-menu-toggle") &&
+            !target.classList.contains("main-menu-trigger")
+          ) {
             const previous = lastToolbarAction.current;
             if (previous?.target === target && now - previous.time < 400) {
               event.preventDefault();
               event.stopPropagation();
               return;
             }
-            lastToolbarAction.current = { target, time: now };
           }
+          lastToolbarAction.current = { target, time: now };
           if (!target.hasAttribute("data-toolbar-pen")) {
             setShowProperties(false);
           }

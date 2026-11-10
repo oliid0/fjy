@@ -17,17 +17,19 @@ it.each([
         bottom: height - 70,
       };
       const position = selectionToolbarPosition(bounds, viewport);
-      expect(position.left).toBeGreaterThanOrEqual(12);
-      expect(position.left + 184).toBeLessThanOrEqual(width - 12);
-      expect(position.top + 42).toBeLessThan(bounds.top);
-      expect(position.top).toBeGreaterThanOrEqual(12);
+      expect(position.left).toBeGreaterThanOrEqual(12 * 0.67);
+      expect(position.left + (4 * 56 + 12) * 0.67).toBeLessThanOrEqual(
+        width - 12 * 0.67,
+      );
+      expect(position.top + (50 + 12) * 0.67).toBeLessThan(bounds.top);
+      expect(position.top).toBeGreaterThanOrEqual(12 * 0.67);
     }
     expect(
       selectionToolbarPosition(
         { left: 100, right: 300, top: 100, bottom: 200 },
         viewport,
       ),
-    ).toEqual({ left: 108, top: 228, width: 184 });
+    ).toEqual({ left: 120.94, top: 218.76, width: 158.12 });
   },
 );
 
@@ -41,9 +43,11 @@ it.each([240, 320, 390])(
       7,
     );
     expect(position.width).toBeLessThanOrEqual(width - 24);
-    expect(position.left).toBeGreaterThanOrEqual(12);
+    expect(position.left).toBeGreaterThanOrEqual(12 * 0.67);
     expect(position.left + position.width).toBeLessThanOrEqual(width - 12);
-    const columns = Math.floor((position.width - 8) / 44);
-    expect(position.top + Math.ceil(7 / columns) * 42).toBeLessThanOrEqual(588);
+    const columns = Math.floor((position.width - 12) / 56);
+    expect(
+      position.top + (Math.ceil(7 / columns) * 50 + 12),
+    ).toBeLessThanOrEqual(588);
   },
 );

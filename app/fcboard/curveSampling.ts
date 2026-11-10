@@ -7,8 +7,8 @@ export type CurveView = {
   tolerance?: number;
 };
 
-/** Interval-guided, viewport-aware subdivision, following function-plot's
- * compile/sample/render separation. Unresolved poles remain gaps. A hard work
+/** Interval-guided, viewport-aware subdivision, with separate
+ * compile, sample and render stages. Unresolved poles remain gaps. A hard work
  * budget bounds CPU and output size on small ARM boards. */
 export const sampleCurve = (
   value: (x: number) => number,

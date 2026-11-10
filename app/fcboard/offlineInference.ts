@@ -1,5 +1,7 @@
 import { t } from "@fcboard/fcboard/i18n";
 
+import { queueLocalInference } from "./localInferenceQueue";
+
 export type OfflineTask =
   | {
       kind: "math";
@@ -20,7 +22,6 @@ let worker: Worker | undefined;
 let model = "";
 let sequence = 0;
 let queued = 0;
-let tail: Promise<unknown> = Promise.resolve();
 let idle: ReturnType<typeof setTimeout> | undefined;
 const release = () => {
   clearTimeout(idle);
@@ -77,19 +78,20 @@ export const offlineInference = (
       signal.reason || new DOMException("Aborted", "AbortError"),
     );
   signal.addEventListener("abort", abort, { once: true });
-  tail = tail
-    .catch(() => {})
-    .then(async () => {
+  const key =
+    input.kind === "translation"
+      ? `${input.kind}:${input.source}:${input.target}`
+      : input.kind;
+  void queueLocalInference(
+    key,
+    release,
+    async () => {
       if (done || !payload) {
         return;
       }
       const task = payload;
       running = true;
       clearTimeout(idle);
-      const key =
-        task.kind === "translation"
-          ? `${task.kind}:${task.source}:${task.target}`
-          : task.kind;
       try {
         if (model !== key) {
           release();
@@ -147,7 +149,9 @@ export const offlineInference = (
       await result.catch(() => {});
       running = false;
       idle = setTimeout(release, 120000);
-    });
+    },
+    () => !done,
+  ).catch((error) => settle(undefined, error));
   return result.finally(() => {
     queued--;
   });

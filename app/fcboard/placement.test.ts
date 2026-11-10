@@ -527,7 +527,7 @@ it("places a function beside its source rather than at the old distant lower-rig
   expect(graph[3]).toBeLessThanOrEqual(816);
 });
 
-it("retains the original equation and its actual residual label through the public plot validator", () => {
+it("retains the original equation and its actual residual in the saved function object", () => {
   const result = localMathResult("x^2+1/x-1=0", "function");
   if (result.kind !== "function") {
     throw new Error("Expected equation graph");
@@ -535,14 +535,16 @@ it("retains the original equation and its actual residual label through the publ
   const api = sceneAPI();
   const plot = validatedPlot(result.plot);
   drawPlot(api, plot, { x: 500, y: 400 });
-  const label = api
+  const graph = api
     .getSceneElements()
-    .find(
-      (element) =>
-        element.type === "text" && element.originalText.includes("=0"),
-    );
-  expect(label).toMatchObject({
-    originalText: `x^2+1/x-1=0\ny = ${plot.expression}`,
+    .find((element) => element.customData?.fcPlot);
+  expect(graph).toMatchObject({
+    type: "image",
+    customData: {
+      fcPlot: {
+        plot: { equation: "x^2+1/x-1=0", expression: plot.expression },
+      },
+    },
   });
   expect(validatedPlot({ ...plot, equation: "x=9" }).equation).toBeUndefined();
 });

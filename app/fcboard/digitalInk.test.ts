@@ -2,6 +2,11 @@ import { newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
 import { boardInk, clipInk } from "./digitalInk";
+const native = vi.hoisted(() => ({ recognize: vi.fn(), cancel: vi.fn() }));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: () => true },
+  registerPlugin: () => native,
+}));
 
 it("preserves raw stroke order and applies moved/rotated object coordinates", () => {
   const ink = newFreeDrawElement({
@@ -43,4 +48,43 @@ it("clips sparse crossings and separates exits without reading neighbouring hand
     ],
   ]);
   expect(clipInk([[[5, 5]], [[20, 20]]], region)).toEqual([[[20, 20]]]);
+});
+
+it("cancels a native handwriting request immediately and ignores its late result", async () => {
+  const { recognizeNativeInk } = await import("./digitalInk");
+  let finish!: (value: { candidates: string[]; engine: string }) => void;
+  const recognize = native.recognize.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const cancel = native.cancel.mockResolvedValue(undefined);
+  const controller = new AbortController();
+  try {
+    const task = recognizeNativeInk(
+      {
+        strokes: [
+          [
+            [0, 0],
+            [10, 10],
+          ],
+        ],
+        language: "es-ES",
+      },
+      controller.signal,
+    );
+    const failure = expect(task).rejects.toMatchObject({ name: "AbortError" });
+    controller.abort();
+    await failure;
+    expect(recognize.mock.calls[0][0]).toMatchObject({
+      language: "es-ES",
+      reuse: true,
+    });
+    expect(cancel).toHaveBeenCalledWith({ id: recognize.mock.calls[0][0].id });
+    finish({ candidates: ["late"], engine: "mlkit" });
+    await Promise.resolve();
+  } finally {
+    vi.restoreAllMocks();
+  }
 });

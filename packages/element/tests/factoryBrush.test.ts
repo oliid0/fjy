@@ -13,6 +13,7 @@ import {
   factoryBrushPath,
   factoryBrushSamples,
   factoryBrushWidths,
+  traceFactoryBrush,
 } from "../src/factoryBrush";
 
 const brush = () => ({
@@ -26,6 +27,35 @@ const brush = () => ({
 });
 
 describe("factory brush geometry", () => {
+  it("actually dashes selected brush stamps with stable phase across Canvas prefix caching and SVG export", () => {
+    const input = {
+      ...brush(),
+      strokeWidth: 2,
+      points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 0)],
+      customData: {
+        fcInk: { version: 3, pen: "brush", unit: 1, brushWidths: [1, 1] },
+      },
+    };
+    const solid = factoryBrushPath(input);
+    const cached = factoryPath2D(input);
+    input.strokeStyle = "dashed";
+    input.version++;
+    const points: number[] = [];
+    traceFactoryBrush(input, (point) => points.push(point.x));
+    expect(points.some((x) => x > 9 && x < 17)).toBe(false);
+    expect(points.some((x) => x >= 18 && x < 26)).toBe(true);
+    expect(factoryBrushPath(input)).not.toBe(solid);
+    expect(factoryPath2D(input)).not.toBe(cached);
+    const dashed = factoryPath2D(input);
+    Object.assign(input.customData.fcInk, { dashOffset: 10 });
+    input.version++;
+    expect(factoryPath2D(input)).not.toBe(dashed);
+    expect(factoryBrushPath(input)).not.toMatch(/NaN|Infinity/);
+    input.strokeStyle = "solid";
+    input.version++;
+    expect(factoryBrushPath(input)).toBe(solid);
+  });
+
   it("computes only appended brush geometry after validating the prefix, and recomputes edited pressure / lift correctly", () => {
     const input = {
       ...brush(),

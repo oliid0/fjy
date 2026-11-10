@@ -126,9 +126,13 @@ describe("unified bottom toolbar", () => {
     expect(container.querySelector(".FixedSideContainer_side_top")).toBeNull();
     expect(container.querySelector(".layer-ui__wrapper__footer")).toBeNull();
     expect(container.querySelector(".fc-editor-properties")).toBeNull();
-    const pen = within(toolbar).getByRole("button", {
-      name: t("fcboard.pen"),
-    });
+    const pen = within(toolbar).getByRole("button", { name: t("fcboard.pen") });
+    fireEvent.click(pen);
+    expect(
+      screen.getByRole("dialog", {
+        name: t("fcboard.pen_and_object_properties"),
+      }),
+    ).toBeVisible();
     fireEvent.click(pen);
     expect(
       screen.queryByRole("dialog", {
@@ -140,13 +144,7 @@ describe("unified bottom toolbar", () => {
       screen.getByRole("dialog", {
         name: t("fcboard.pen_and_object_properties"),
       }),
-    ).toBeInTheDocument();
-    fireEvent.click(pen);
-    expect(
-      screen.queryByRole("dialog", {
-        name: t("fcboard.pen_and_object_properties"),
-      }),
-    ).toBeNull();
+    ).toBeVisible();
   });
 
   it("matches first/repeated/rapid clicks and activates a held pen only on release", async () => {
@@ -168,8 +166,8 @@ describe("unified bottom toolbar", () => {
     time += 399;
     fireEvent.click(eraser);
     expect(
-      screen.getByRole("slider", { name: t("fcboard.eraser_sizes") }),
-    ).toBeVisible();
+      screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
+    ).toBeNull();
     time++;
     fireEvent.click(eraser);
     expect(
@@ -202,7 +200,6 @@ describe("unified bottom toolbar", () => {
       expect(
         screen.queryByRole("dialog", { name: t("fcboard.eraser_settings") }),
       ).toBeNull();
-      fireEvent.click(pen);
       expect(
         screen.getByRole("dialog", {
           name: t("fcboard.pen_and_object_properties"),
@@ -214,9 +211,41 @@ describe("unified bottom toolbar", () => {
           name: t("fcboard.pen_and_object_properties"),
         }),
       ).toBeNull();
+      fireEvent.click(pen);
+      expect(
+        screen.getByRole("dialog", {
+          name: t("fcboard.pen_and_object_properties"),
+        }),
+      ).toBeVisible();
     } finally {
       vi.useRealTimers();
       vi.restoreAllMocks();
     }
   });
+  it.each(["eraser", "toolbox", "shape"] as const)(
+    "toggles %s on every rapid repeated tap",
+    async (tool) => {
+      await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+      vi.spyOn(Date, "now").mockReturnValue(1000);
+      const trigger = screen.getByRole("button", {
+        name: t(`fcboard.${tool}`),
+      });
+      const label = t(
+        tool === "eraser" ? "fcboard.eraser_settings" : `fcboard.${tool}`,
+      );
+      fireEvent.click(trigger);
+      expect(screen.getByRole("dialog", { name: label })).toBeVisible();
+      if (tool === "shape") {
+        expect(screen.getByRole("dialog", { name: label })).toHaveStyle({
+          pointerEvents: "auto",
+        });
+      }
+      fireEvent.click(trigger);
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: label })).toBeNull(),
+      );
+      fireEvent.click(trigger);
+      expect(screen.getByRole("dialog", { name: label })).toBeVisible();
+    },
+  );
 });

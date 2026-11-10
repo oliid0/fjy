@@ -1,12 +1,12 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import { currentSettings } from "./settings";
+import { queueLocalInference } from "./localInferenceQueue";
 
 type Engine = Awaited<
   ReturnType<typeof import("@paddleocr/paddleocr-js")["PaddleOCR"]["create"]>
 >;
 let engine: Promise<Engine> | undefined;
-let queue: Promise<unknown> = Promise.resolve();
 let worker: Worker | undefined;
 let generation = 0;
 let pending = 0;
@@ -73,7 +73,13 @@ export const warmHandwriting = async () => {
   if (currentSettings().ocr === "cloud" || typeof Worker === "undefined") {
     return;
   }
-  await getEngine();
+  await queueLocalInference("ocr", reset, async () => {
+    clearTimeout(idle);
+    await getEngine();
+    if (!pending) {
+      idle = setTimeout(reset, 15000);
+    }
+  });
 };
 
 export const recognizeLocalHandwriting = async (
@@ -119,9 +125,10 @@ export const recognizeLocalHandwriting = async (
       signal.reason || new DOMException("Aborted", "AbortError"),
     );
   signal.addEventListener("abort", abort, { once: true });
-  queue = queue
-    .catch(() => {})
-    .then(async () => {
+  void queueLocalInference(
+    "ocr",
+    reset,
+    async () => {
       if (settled || !frame) {
         return;
       }
@@ -163,7 +170,9 @@ export const recognizeLocalHandwriting = async (
       })().catch((error) => finish(undefined, error));
       await result.catch(() => {});
       running = false;
-    });
+    },
+    () => !settled,
+  ).catch((error) => finish(undefined, error));
   return result.finally(() => {
     pending--;
     if (!pending) {

@@ -18,20 +18,24 @@ export type OfflineTask =
       source: "en" | "zh";
       target: "en" | "zh";
     };
-let worker: Worker | undefined;
-let model = "";
+const createModel = () => {
+  let worker: Worker | undefined;
+  return {
+    getWorker: () =>
+      (worker ||= new Worker(
+        new URL("./localInference.worker.ts", import.meta.url),
+        { type: "module" },
+      )),
+    dispose: () => {
+      worker?.terminate();
+      worker = undefined;
+    },
+  };
+};
 let sequence = 0;
 let queued = 0;
-let idle: ReturnType<typeof setTimeout> | undefined;
-const release = () => {
-  clearTimeout(idle);
-  worker?.terminate();
-  worker = undefined;
-  model = "";
-};
 
-/** Only one heavy local worker runs at once. A queued/aborted task never cancels
- * another caller. Switching models releases the previous WASM heap first. */
+/** Each running request owns its worker slot, including abort and timeout. */
 export const offlineInference = (
   input: OfflineTask,
   signal: AbortSignal,
@@ -47,7 +51,7 @@ export const offlineInference = (
   let payload: OfflineTask | undefined = input;
   const id = ++sequence;
   let done = false;
-  let running = false;
+  let model: ReturnType<typeof createModel> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let resolve!: (value: unknown) => void;
   let reject!: (error: unknown) => void;
@@ -64,9 +68,7 @@ export const offlineInference = (
     clearTimeout(timer);
     signal.removeEventListener("abort", abort);
     if (error !== undefined) {
-      if (running) {
-        release();
-      }
+      model?.dispose();
       reject(error);
     } else {
       resolve(value);
@@ -84,23 +86,15 @@ export const offlineInference = (
       : input.kind;
   void queueLocalInference(
     key,
-    release,
-    async () => {
+    createModel,
+    async (resident) => {
       if (done || !payload) {
         return;
       }
       const task = payload;
-      running = true;
-      clearTimeout(idle);
+      model = resident;
       try {
-        if (model !== key) {
-          release();
-        }
-        worker ||= new Worker(
-          new URL("./localInference.worker.ts", import.meta.url),
-          { type: "module" },
-        );
-        model = key;
+        const worker = resident.getWorker();
         worker.onmessage = (
           event: MessageEvent<{
             id: number;
@@ -147,8 +141,7 @@ export const offlineInference = (
         settle(undefined, error);
       }
       await result.catch(() => {});
-      running = false;
-      idle = setTimeout(release, 120000);
+      model = undefined;
     },
     () => !done,
   ).catch((error) => settle(undefined, error));

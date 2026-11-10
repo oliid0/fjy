@@ -356,6 +356,7 @@ export interface AppState {
   exportScale: number;
   currentItemStrokeColor: string;
   currentItemBackgroundColor: string;
+  whiteboardShapeStyle?: { color: string; fill: boolean };
   currentItemFillStyle: FcboardElement["fillStyle"];
   currentItemStrokeWidth: number;
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";

@@ -32,6 +32,7 @@ describe("persistent whiteboard book", () => {
         elements = [];
       }),
       addFiles: vi.fn(),
+      setActiveTool: vi.fn(),
       history: { clear: vi.fn() },
       updateScene: (value: {
         elements?: readonly FcboardElement[];
@@ -95,6 +96,7 @@ describe("persistent whiteboard book", () => {
     await book.create("几何课");
     const second = book.value.active;
     expect(api.getSceneElements()).toHaveLength(0);
+    expect(api.setActiveTool).toHaveBeenLastCalledWith({ type: "freedraw" });
     const shapes = convertToFcboardElements([
       { type: "rectangle", x: 20, y: 30, width: 80, height: 60 },
     ]);

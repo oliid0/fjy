@@ -344,7 +344,7 @@ export const actionChangeStrokeColor = register<
       }),
       appState: {
         ...appState,
-        ...value,
+        ...(isSomeElementSelected(elements, appState) ? {} : value),
       },
       captureUpdate: !!value?.currentItemStrokeColor
         ? CaptureUpdateAction.IMMEDIATELY
@@ -431,7 +431,7 @@ export const actionChangeBackgroundColor = register<
       elements: nextElements,
       appState: {
         ...appState,
-        ...value,
+        ...(selectedElements.length ? {} : value),
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };

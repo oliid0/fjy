@@ -581,13 +581,14 @@ describe("selection-driven classroom controls", () => {
   );
 
   it.each(["sphere", "cone", "frustum", "prism", "pyramid"] as const)(
-    "keeps %s as one factory-colored object with only its compact shape actions",
+    "keeps %s as one factory-colored object with independent shape color and common object actions",
     async (kind) => {
       api.setActiveTool = vi.fn();
       const state = api.getAppState;
       vi.spyOn(api, "getAppState").mockImplementation(() => ({
         ...state(),
         currentItemStrokeColor: "#dc2626",
+        whiteboardShapeStyle: { color: "#17243c", fill: false },
       }));
       vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
         left: 100,
@@ -608,7 +609,7 @@ describe("selection-driven classroom controls", () => {
         });
       });
       expect(scene.length).toBeGreaterThan(1);
-      expect(scene.every((element) => element.strokeColor === "#dc2626")).toBe(
+      expect(scene.every((element) => element.strokeColor === "#17243c")).toBe(
         true,
       );
       expect(new Set(scene.map((element) => element.groupIds[0])).size).toBe(1);
@@ -619,18 +620,20 @@ describe("selection-driven classroom controls", () => {
         row.queryByRole("button", { name: t("fcboard.unfold_shape") }),
       ).toBeNull();
       fireEvent.click(
-        row.getByRole("button", { name: t("fcboard.shape_color") }),
+        row.getByRole("button", { name: t("fcboard.selection_color") }),
       );
       fireEvent.click(
         within(
-          screen.getByRole("dialog", { name: t("fcboard.shape_color") }),
-        ).getByRole("button", { name: "#17243c" }),
+          screen.getByRole("dialog", { name: t("fcboard.selection_color") }),
+        ).getByRole("button", { name: "#ff0000" }),
       );
       await waitFor(() =>
         expect(
-          scene.every((element) => element.strokeColor === "#17243c"),
+          scene.every((element) => element.strokeColor === "#ff0000"),
         ).toBe(true),
       );
+      expect(api.getAppState().currentItemStrokeColor).toBe("#dc2626");
+      expect(readWidgets(api)[0].params.solid?.stroke).toBe("#ff0000");
       expect(
         screen.queryByRole("button", { name: t("fcboard.close_tool_panel") }),
       ).toBeNull();
@@ -3062,18 +3065,20 @@ describe("selection-driven classroom controls", () => {
     },
   );
 
-  it("opens handwriting packs as a language settings child page and offers Spanish as an independent source", async () => {
+  it("uses one language selector and opens handwriting packs as its child page", async () => {
     render(<Classroom api={api} />);
     await act(async () => {
       await classroomCommands.execute({ name: "board.settings" });
     });
     fireEvent.click(screen.getByText(t("fcboard.language")));
-    const source = screen.getByRole("combobox", {
-      name: t("fcboard.handwriting_language"),
-    });
-    fireEvent.mouseDown(source);
-    fireEvent.click(await screen.findByRole("option", { name: "Spanish" }));
-    expect(currentSettings().inkLanguage).toBe("es-ES");
+    expect(
+      screen.queryByRole("combobox", {
+        name: t("fcboard.handwriting_language"),
+      }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
+    ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.languagePacks.title") }),
     );
@@ -3087,8 +3092,9 @@ describe("selection-driven classroom controls", () => {
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
     expect(
-      screen.getByRole("combobox", { name: t("fcboard.handwriting_language") }),
-    ).toHaveTextContent("Spanish");
+      screen.getByRole("combobox", { name: t("buttons.selectLanguage") }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
   });
 
   it("saves the selection screenshot switch from handwriting settings", async () => {
@@ -3824,7 +3830,7 @@ describe("selection-driven classroom controls", () => {
     },
   );
 
-  it("plots the selection as one SVG object and edits its parameters without a separate panel", async () => {
+  it("plots the selection as one interactive object and edits its parameters without a separate panel", async () => {
     selectText("y=a*x+1");
     await act(async () => {
       render(<Classroom api={api} />);
@@ -3835,7 +3841,10 @@ describe("selection-driven classroom controls", () => {
     );
     const original = scene.filter((el) => el.customData?.fcPlot);
     expect(original).toHaveLength(1);
-    expect(original[0].type).toBe("image");
+    expect(original[0].type).toBe("iframe");
+    expect(
+      original[0].customData?.fcInteractiveResource.visualization.mode,
+    ).toBe("vega");
     await act(async () => {
       await classroomCommands.execute({
         name: "math.parameters",

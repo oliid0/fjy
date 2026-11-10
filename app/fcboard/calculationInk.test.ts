@@ -56,7 +56,7 @@ const fraction: InkInput = [
 
 afterEach(() => vi.useRealTimers());
 
-it("starts and commits immediately after an explicit ending, without waiting 350/700ms", async () => {
+it("starts and commits immediately after an explicit ending, without an additional completion delay", async () => {
   vi.useFakeTimers();
   for (const ink of [equals, vertical]) {
     expect(calculationInk(ink).complete).toBe(true);
@@ -76,7 +76,7 @@ it("starts and commits immediately after an explicit ending, without waiting 350
 it("retains fraction bars, single minus signs, and incomplete equals signs", () => {
   for (const ink of [fraction, equals.slice(0, -1), equals.slice(0, 2)]) {
     expect(calculationInk(ink)).toEqual({ complete: false, strokes: ink });
-    expect(inkRecognitionDelay("calculation", ink)).toBe(350);
+    expect(inkRecognitionDelay("calculation", ink)).toBe(1200);
   }
 });
 

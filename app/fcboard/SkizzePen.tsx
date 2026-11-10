@@ -9,7 +9,7 @@ import { SkizzePen as nativePen } from "./skizze";
 import { classroomCommands } from "./commands";
 import { boardCanvasSize, boardPageExportOptions } from "./boardExport";
 import { TransientMessage } from "./TransientMessage";
-import pointerArrow from "./factory-skizze-icons/pointer-arrow.png";
+import pointerArrow from "./factory-skizze-icons/pointer-arrow.svg";
 import white from "./factory-skizze-icons/ffffff.svg?url";
 import red from "./factory-skizze-icons/ff0000.svg?url";
 import green from "./factory-skizze-icons/00ff00.svg?url";

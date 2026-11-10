@@ -228,6 +228,10 @@ export const SelectionActions = ({
             ));
         const canAI = canSearch && !solid;
         const properties = documentSelectionProperties(selected);
+        if (solid) {
+          properties.border = true;
+          properties.fill = false;
+        }
         const propertyCount =
           Number(properties.color) +
           Number(properties.border) +
@@ -310,7 +314,9 @@ export const SelectionActions = ({
                     2 +
                     Number(canAI) +
                     Number(canSearch) +
-                    (solid ? 6 : 0) +
+                    (solid && ["cube", "cylinder"].includes(solid.kind)
+                      ? 3
+                      : 0) +
                     (table ? 4 : 0) +
                     (answerAnchor ? 1 : 0),
                 ),
@@ -388,6 +394,10 @@ export const SelectionActions = ({
         : getCommonBounds(source);
       const unit = 0.67; // x50=33.5dp in the original resources.
       const properties = boardSelectionProperties(source);
+      if (solid) {
+        properties.border = true;
+        properties.fill = false;
+      }
       const propertyCount =
         Number(properties.color) +
         Number(properties.border) +
@@ -426,7 +436,7 @@ export const SelectionActions = ({
           2 +
           Number(canAI) +
           Number(canSearch) +
-          (solid ? 6 : 0) +
+          (solid && ["cube", "cylinder"].includes(solid.kind) ? 3 : 0) +
           (table ? 4 : 0) +
           (answerAnchor ? 1 : 0),
       );
@@ -1039,7 +1049,28 @@ export const SelectionActions = ({
       onStyle={(args) => {
         setError("");
         void classroomCommands
-          .execute({ name: "canvas.style", args })
+          .execute(
+            target.solid
+              ? {
+                  name: "tools.configure",
+                  args: {
+                    id: target.solid.id,
+                    ...(typeof args.color === "string"
+                      ? { solid: { stroke: args.color } }
+                      : {}),
+                    ...(typeof args.width === "number"
+                      ? { strokeWidth: args.width }
+                      : {}),
+                    ...(typeof args.opacity === "number"
+                      ? { opacity: args.opacity }
+                      : {}),
+                    ...(args.strokeStyle
+                      ? { strokeStyle: args.strokeStyle }
+                      : {}),
+                  },
+                }
+              : { name: "canvas.style", args },
+          )
           .catch((failure) => setError(String(failure)));
       }}
       onAction={(action) => {

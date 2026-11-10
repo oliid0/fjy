@@ -703,6 +703,124 @@
           min-height: 110px !important;
         }
       }
+
+      /* One compact 3:1 object; the copied calculator controls stay inside it. */
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      #calculator-wrapper,
+      #calculator-wrapper.scientific-open {
+        position: absolute;
+        width: 180px !important;
+        height: 540px !important;
+        max-width: none !important;
+        transform-origin: top left;
+      }
+      #calculator-wrapper > .glass-panel {
+        height: 100% !important;
+        max-height: none !important;
+        overflow: hidden;
+      }
+      #calculator-wrapper > .glass-panel > .flex-1 {
+        flex: 1;
+        min-height: 260px;
+        padding: 6px !important;
+        gap: 4px;
+      }
+      #calculator-wrapper #calculator-header {
+        display: flex;
+        flex: 0 0 24px;
+        align-items: center;
+        gap: 2px;
+        margin: 0;
+        touch-action: none;
+      }
+      #calculator-title {
+        flex: 1;
+        min-width: 12px;
+        font: 10px system-ui;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: move;
+      }
+      #calculator-header button {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        min-width: 0;
+        min-height: 20px;
+        height: 20px;
+        padding: 2px 3px;
+        font: 9px system-ui;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+      }
+      #calculator-header #theme-toggle,
+      #calculator-header #calculator-close {
+        width: 20px;
+        height: 20px;
+      }
+      #calculator-header svg {
+        width: 14px;
+        height: 14px;
+      }
+      #calculator-header button.mode-selected {
+        color: #ff9f0a;
+        background: #8882;
+      }
+      #calculator-wrapper #result_display_container {
+        flex: 0 0 72px;
+        min-height: 0 !important;
+        padding: 2px;
+        overflow: hidden;
+      }
+      #calculator-wrapper #result-display {
+        font-size: 24px !important;
+        line-height: 28px;
+        min-height: 28px;
+        height: 28px;
+        white-space: nowrap;
+      }
+      #input-display,
+      #history-display {
+        min-height: 12px;
+        height: 12px;
+        font: 10px/12px monospace;
+      }
+      #calculator-wrapper .grid.grid-cols-4.gap-3 {
+        flex: 1;
+        gap: 4px !important;
+        grid-auto-rows: minmax(20px, 1fr);
+      }
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+        height: 100% !important;
+        min-height: 0 !important;
+        min-width: 0;
+        padding: 2px !important;
+        font-size: 17px !important;
+        border-radius: 12px !important;
+      }
+      #mobile-scientific-drawer {
+        flex: 0 1 205px;
+        min-height: 0;
+        overflow: auto;
+        padding: 4px 6px 8px;
+        gap: 3px;
+      }
+      #mobile-scientific-drawer button {
+        min-height: 25px;
+        font-size: 11px;
+        padding: 3px;
+      }
+      #calculator-wrapper * {
+        transition-property: background-color, color, transform;
+      }
     </style>
   </head>
   <body>
@@ -716,66 +834,51 @@
       >
         <!-- Main Calculator Section -->
         <div class="flex-1 flex flex-col px-3 py-3 relative">
-          <!-- Header / Mode Toggle -->
-          <div class="flex justify-between items-center mb-6 pl-2.5">
-            <div class="flex items-center gap-2">
-              <div class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-red-500"></div>
-              <div
-                class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-amber-400"
-              ></div>
-              <div
-                class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-emerald-500"
-              ></div>
-            </div>
-
-            <div class="flex gap-2">
-              <button
-                id="theme-toggle"
-                aria-label="Toggle color theme"
-                title="Toggle color theme"
-                class="w-9 h-9 rounded-full glass-panel flex items-center justify-center text-brand-600 dark:text-brand-400 hover:scale-110 active:scale-95 relative overflow-hidden group shadow-2xl border-2 border-gray-300 dark:border-2 dark:border-brand-600"
-                style="border-radius: 100vh !important"
+          <header id="calculator-header">
+            <span id="calculator-title" tabindex="0">Calculator</span>
+            <button
+              id="theme-toggle"
+              aria-label="Toggle color theme"
+              title="Toggle color theme"
+            >
+              <svg
+                id="icon-sun"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
               >
-                <div
-                  class="absolute inset-0 bg-brand-500/10 dark:bg-brand-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                ></div>
-                <i
-                  id="icon-sun"
-                  class="fas fa-sun text-xl absolute transition-all duration-500 rotate-0 scale-100 opacity-100 dark:rotate-180 dark:scale-0 dark:opacity-0"
-                  >☀</i
-                >
-                <i
-                  id="icon-moon"
-                  class="fas fa-moon text-xl absolute transition-all duration-500 rotate-180 scale-0 opacity-0 dark:rotate-0 dark:scale-100 dark:opacity-100"
-                  >☾</i
-                >
-              </button>
-
-              <!-- Mode Switcher -->
-              <div
-                class="bg-slate-200 dark:bg-slate-800/50 p-1 rounded-full flex relative"
+                <circle cx="12" cy="12" r="4" />
+                <path
+                  d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"
+                />
+              </svg>
+              <svg
+                id="icon-moon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
               >
-                <div
-                  id="mode-indicator"
-                  class="absolute top-1 left-1 w-[calc(50%-4px)] h-[calc(100%-8px)] bg-white dark:bg-slate-700 rounded-full shadow-sm transition-all duration-300"
-                ></div>
-                <button
-                  onclick="setMode('basic')"
-                  class="relative z-10 px-2 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-colors duration-300 text-brand-600 dark:text-brand-400"
-                  id="btn-basic"
-                >
-                  Basic
-                </button>
-                <button
-                  onclick="setMode('scientific')"
-                  class="relative z-10 px-3 py-4 text-xs font-bold uppercase tracking-wider rounded-full transition-colors duration-300 text-slate-500 dark:text-slate-400"
-                  id="btn-scientific"
-                >
-                  Sci
-                </button>
-              </div>
-            </div>
-          </div>
+                <path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z" />
+              </svg>
+            </button>
+            <span id="mode-indicator" hidden></span>
+            <button id="btn-basic" onclick="setMode('basic')">Basic</button>
+            <button id="btn-scientific" onclick="setMode('scientific')">
+              Sci
+            </button>
+            <button id="calculator-close" aria-label="Close calculator">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </header>
 
           <!-- Display Screen -->
           <div
@@ -1421,7 +1524,11 @@
         ).matches;
         html.classList.toggle(
           "dark",
-          savedTheme ? savedTheme === "dark" : prefersDark,
+          html.dataset.boardTheme
+            ? html.dataset.boardTheme === "dark"
+            : savedTheme
+            ? savedTheme === "dark"
+            : prefersDark,
         );
       }
 
@@ -1433,6 +1540,66 @@
           localStorage.setItem("theme", isDark ? "dark" : "light");
         } catch {}
       });
+
+      addEventListener("message", (event) => {
+        if (
+          event.source === parent &&
+          event.data?.channel === "fc-calculator-theme" &&
+          typeof event.data.dark === "boolean"
+        ) {
+          html.dataset.boardTheme = event.data.dark ? "dark" : "light";
+          html.classList.toggle("dark", event.data.dark);
+        }
+      });
+      const windowMessage = (type, event) =>
+        parent.postMessage(
+          {
+            channel: "fc-resource-window",
+            type,
+            x: event?.screenX,
+            y: event?.screenY,
+          },
+          "*",
+        );
+      document
+        .getElementById("calculator-close")
+        .addEventListener("click", () => windowMessage("close"));
+      const handle = document.getElementById("calculator-title");
+      let moving = false;
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.isPrimary === false || event.button > 0) return;
+        event.preventDefault();
+        moving = true;
+        handle.setPointerCapture(event.pointerId);
+        windowMessage("move-start", event);
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (moving) windowMessage("move", event);
+      });
+      handle.addEventListener("pointerup", (event) => {
+        if (moving) {
+          moving = false;
+          windowMessage("move-end", event);
+        }
+      });
+      handle.addEventListener("pointercancel", () => {
+        moving = false;
+        windowMessage("move-cancel");
+      });
+      handle.addEventListener("lostpointercapture", () => {
+        if (moving) {
+          moving = false;
+          windowMessage("move-cancel");
+        }
+      });
+      function fitCalculator() {
+        const scale = Math.min(innerWidth / 180, innerHeight / 540);
+        calculatorWrapper.style.transform = `scale(${scale})`;
+        calculatorWrapper.style.left = `${(innerWidth - 180 * scale) / 2}px`;
+        calculatorWrapper.style.top = `${(innerHeight - 540 * scale) / 2}px`;
+      }
+      addEventListener("resize", fitCalculator);
+      fitCalculator();
 
       function getExpression() {
         return expression + currentInput;
@@ -1642,7 +1809,7 @@
       function updateDisplay() {
         const fullExpression = getExpression();
         clearButton.textContent = currentInput || hasError ? "C" : "AC";
-        inputDisplay.textContent = expression
+        inputDisplay.textContent = (shouldResetDisplay ? "" : fullExpression)
           .replace(/\*/g, "×")
           .replace(/\//g, "÷");
         resultDisplay.textContent = hasError ? "Error" : currentInput || "0";

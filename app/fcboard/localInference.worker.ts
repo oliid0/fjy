@@ -28,7 +28,7 @@ self.onmessage = async (
         encoderUrl: `${base}comer/encoder_int8.onnx`,
         decoderUrl: `${base}comer/decoder_int8.onnx`,
         executionProvider: "wasm",
-        beamWidth: 1,
+        beamWidth: 3,
         maxDecodeSteps: 96,
       });
       await math.init();

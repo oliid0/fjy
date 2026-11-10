@@ -929,6 +929,17 @@ export const restoreAppState = (
   }
 
   const inkPreferences = { ...localAppState, ...appState };
+  const shapeStyle = inkPreferences.whiteboardShapeStyle;
+  if (
+    shapeStyle &&
+    /^#[\da-f]{6}$/i.test(shapeStyle.color) &&
+    typeof shapeStyle.fill === "boolean"
+  ) {
+    nextAppState.whiteboardShapeStyle = {
+      color: shapeStyle.color,
+      fill: shapeStyle.fill,
+    };
+  }
   if (inkPreferences.whiteboardPenTipsVersion !== 2) {
     const tip = inkPreferences.whiteboardPenTip;
     if (tip === "fine" || tip === "thick") {
@@ -939,7 +950,14 @@ export const restoreAppState = (
       inkPreferences.whiteboardPenTips = { fine: thick, thick: fine };
     }
   }
-  nextAppState.whiteboardPenTipsVersion = 2;
+  if (
+    inkPreferences.whiteboardPenTipsVersion === 2 ||
+    inkPreferences.whiteboardPenTips ||
+    inkPreferences.whiteboardPenTip === "fine" ||
+    inkPreferences.whiteboardPenTip === "thick"
+  ) {
+    nextAppState.whiteboardPenTipsVersion = 2;
+  }
   if (["fine", "thick"].includes(String(inkPreferences.whiteboardPenTip))) {
     nextAppState.whiteboardPenTip = inkPreferences.whiteboardPenTip;
   }

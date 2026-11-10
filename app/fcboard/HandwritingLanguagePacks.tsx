@@ -36,11 +36,9 @@ const states = [
 export const LanguagePacks = ({
   container,
   onNavigate,
-  onSelect,
 }: {
   container?: HTMLElement | null;
   onNavigate?: () => void;
-  onSelect?: (tag: string) => void;
 }) => {
   useI18n();
   const [localOpen, setOpen] = useState(false);
@@ -221,11 +219,6 @@ export const LanguagePacks = ({
                 <b>{t("fcboard.languagePacks.current")}</b>
               )}
               <small>{pack.tag}</small>
-              {onSelect && [1, 4].includes(pack.state) && pack.tag !== current && (
-                <button type="button" onClick={() => onSelect(pack.tag)}>
-                  {t("fcboard.select")} {name(pack.tag)}
-                </button>
-              )}
             </div>
             <span>{t(`fcboard.languagePacks.${states[pack.state]}`)}</span>
             {[3, 5].includes(pack.state) ? (
@@ -253,7 +246,7 @@ export const LanguagePacks = ({
                       : pack.state === 7
                       ? "retry"
                       : pack.bundled
-                      ? "builtin"
+                      ? "downloaded"
                       : pack.state === 8
                       ? "waiting"
                       : pack.state === 6
@@ -276,7 +269,7 @@ export const LanguagePacks = ({
                       : pack.state === 7
                       ? "retry"
                       : pack.bundled
-                      ? "builtin"
+                      ? "downloaded"
                       : pack.state === 8
                       ? "waiting"
                       : pack.state === 6

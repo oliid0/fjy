@@ -104,7 +104,13 @@ export const FactoryMenu = ({
         <span>{t("buttons.menu")}</span>
       </button>
       {open && (
-        <ClickAwayListener onClickAway={finish}>
+        <ClickAwayListener
+          onClickAway={(event) => {
+            if (!trigger.current?.contains(event.target as Node)) {
+              finish();
+            }
+          }}
+        >
           <Popper
             open
             anchorEl={anchor || trigger.current}

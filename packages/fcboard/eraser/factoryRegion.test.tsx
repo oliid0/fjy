@@ -54,7 +54,7 @@ it("does not treat an unfilled handwritten loop as a filled geometric shape", ()
 });
 
 it.each([0, Math.PI / 3])(
-  "hits the actual nib at rotation %s and deletes its source without changing the surviving undo geometry",
+  "clips the actual nib at rotation %s while retaining the body and immutable undo geometry",
   (angle) => {
     const ink = {
       ...API.createElement({
@@ -89,15 +89,27 @@ it.each([0, Math.PI / 3])(
     const before = factoryNibPath(ink);
     const body = factoryInkPath(ink);
     const result = eraseSceneRegion([ink], square(tip[0], tip[1], 0.4));
-    expect(result[0].isDeleted).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result.every((element) => !element.isDeleted)).toBe(true);
     expect(ink.isDeleted).toBe(false);
-    expect(factoryNibPath(result[0] as typeof ink)).toBe(before);
-    expect(factoryInkPath(result[0] as typeof ink)).toBe(body);
-    expect((result[0] as typeof ink).points).toBe(ink.points);
+    expect(factoryNibPath(ink)).toBe(before);
+    expect(factoryInkPath(ink)).toBe(body);
+    const retained = factoryCircleObject(
+      result[0],
+      new Map([[result[0].id, result[0]]]),
+    );
+    expect(retained.paths[0].points[0][0]).toBeCloseTo(
+      object.paths[0].points[0][0],
+      8,
+    );
+    expect(retained.paths[0].points[0][1]).toBeCloseTo(
+      object.paths[0].points[0][1],
+      8,
+    );
   },
 );
 
-it("hits the thin end of the same brush ellipses used to paint the source, without splitting its widths", () => {
+it("does not discard a complete connected brush when a circle touches only its thin tip footprint", () => {
   const ink = {
     ...API.createElement({
       type: "freedraw",
@@ -121,7 +133,7 @@ it("hits the thin end of the same brush ellipses used to paint the source, witho
     },
   };
   const result = eraseSceneRegion([ink], square(200.6, 100.05, 0.05), [], 0);
-  expect(result[0].isDeleted).toBe(true);
+  expect(result[0].isDeleted).toBe(false);
   expect(result[0].customData).toBe(ink.customData);
   expect(ink.isDeleted).toBe(false);
 });

@@ -5,29 +5,34 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { Fcboard, CaptureUpdateAction } from "@fcboard/fcboard";
+import { Fcboard } from "@fcboard/fcboard";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 import {
   EditorJotaiProvider,
   editorJotaiStore,
 } from "@fcboard/fcboard/editor-jotai";
-import { t } from "@fcboard/fcboard/i18n";
+import { createInlineVegaView } from "@fcboard/fcboard/visualizationRuntime";
+
+import type { Spec } from "@fcboard/fcboard/visualizationRuntime";
 
 import { drawPlot, objectSelection } from "./board";
 import { defaultPlot } from "./math";
+import { localMathResult } from "./mathRecognition";
 import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
+import { functionGraphResource } from "./functionGraphResource";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-
 const setup = async () => {
   await renderEditor(
     <EditorJotaiProvider store={editorJotaiStore}>
       <Fcboard UIOptions={{ unifiedToolbar: true }} />
     </EditorJotaiProvider>,
   );
+  window.h.state.width = 1600;
+  window.h.state.height = 900;
   const api = window.h.app.api;
   let ids: string[] = [];
   act(() => {
@@ -36,6 +41,7 @@ const setup = async () => {
       { ...defaultPlot, expression: "x" },
       { x: 350, y: 300 },
     );
+    api.setActiveTool({ type: "selection" });
     api.updateScene({
       appState: objectSelection(
         api.getSceneElements().filter((element) => ids.includes(element.id)),
@@ -43,200 +49,144 @@ const setup = async () => {
     });
   });
   const { render } = await import("./test/render");
-  const view = render(<FunctionGraphInteraction api={api} />);
+  render(<FunctionGraphInteraction api={api} />);
   const graph = () =>
     api.getSceneElements().find((element) => ids.includes(element.id))!;
-  const state = api.getAppState();
-  const image = graph();
-  const x =
-    (image.x + image.width * 0.52 + state.scrollX) * state.zoom.value +
-    state.offsetLeft;
-  const y =
-    (image.y + image.height * 0.5 + state.scrollY) * state.zoom.value +
-    state.offsetTop;
-  const canvas =
-    document.querySelector<HTMLCanvasElement>("canvas.interactive")!;
-  return { api, graph, x, y, canvas, view };
+  let frame!: HTMLIFrameElement;
+  await waitFor(() => {
+    frame = document.querySelector(
+      `iframe[data-resource-object-id="${ids[0]}"]`,
+    )!;
+    expect(frame).not.toBeNull();
+  });
+  const reply = vi
+    .spyOn(frame.contentWindow!, "postMessage")
+    .mockImplementation(() => {});
+  const send = (
+    type: string,
+    extra: Record<string, unknown> = {},
+    source = frame.contentWindow,
+  ) => {
+    act(() =>
+      fireEvent(
+        window,
+        new MessageEvent("message", {
+          source,
+          data: {
+            channel: "fc-function-graph",
+            id: graph().customData!.fcInteractiveResource.id,
+            request: 1,
+            type,
+            view: { left: -10, right: 10, bottom: -10, top: 10 },
+            ...extra,
+          },
+        }),
+      ),
+    );
+  };
+  return { api, graph, frame, reply, send };
 };
 
-it("shows x/y on a curve tap, leaves empty-space drags with the editor and adds no sliders", async () => {
-  const { x, y, canvas, graph } = await setup();
-  const delegate = vi.fn();
-  canvas.addEventListener("pointerdown", delegate);
-  fireEvent.pointerDown(canvas, {
-    clientX: x,
-    clientY: y,
-    pointerId: 1,
-    pointerType: "mouse",
-    button: 0,
-  });
-  fireEvent.pointerUp(canvas, {
-    clientX: x,
-    clientY: y,
-    pointerId: 1,
-    pointerType: "mouse",
-  });
-  expect(
-    screen.getByLabelText(t("fcboard.interactive_function_plot")),
-  ).toHaveTextContent("x=0, y=0");
-  expect(delegate).not.toHaveBeenCalled();
-  expect(
-    screen.queryByRole("slider", {
-      name: t("fcboard.adjust_key", { key: "x" }),
-    }),
-  ).toBeNull();
-  fireEvent.pointerDown(canvas, {
-    clientX: x - 80,
-    clientY: y - 80,
-    pointerId: 2,
-    pointerType: "mouse",
-    button: 0,
-  });
-  expect(delegate).toHaveBeenCalledTimes(1);
-  fireEvent.pointerCancel(canvas, { pointerId: 2, pointerType: "mouse" });
-  expect(graph().customData?.fcPlot.plot.view).toBeUndefined();
-  canvas.removeEventListener("pointerdown", delegate);
+it("inserts a selectable iframe object with real range controls and Vega pan/pinch signals", async () => {
+  const { graph, frame } = await setup();
+  expect(graph().type).toBe("iframe");
+  expect(frame).toHaveAttribute("sandbox", "allow-scripts");
+  const resource = graph().customData!.fcInteractiveResource;
+  const html = new DOMParser().parseFromString(resource.html, "text/html");
+  expect(html.querySelectorAll("input[data-bound]")).toHaveLength(4);
+  expect(html.querySelector("output")).not.toBeNull();
+  expect(html.querySelector("svg .mark-line path")).not.toBeNull();
+  const view = createInlineVegaView(resource.visualization.spec as Spec);
+  try {
+    view.run();
+    expect(view.signal("xdom")).toEqual([-10, 10]);
+    view.signal("xdom", [-2, 3]).run();
+    expect(view.scale("x")(-2)).toBeCloseTo(0);
+    expect(view.scale("x")(3)).toBeCloseTo(view.width());
+  } finally {
+    view.finalize();
+  }
 });
 
-it("resamples a wheel zoom while retaining object geometry and undoes the whole gesture once", async () => {
-  const { api, x, y, canvas, graph } = await setup();
-  const original = graph();
-  fireEvent.wheel(canvas, { clientX: x, clientY: y, deltaY: -100 });
+it("queries exact curve values and resamples another range without rewriting canvas objects or image files", async () => {
+  const { api, graph, send, reply } = await setup();
+  const before = graph();
+  const files = Object.keys(api.getFiles());
+  const zoom = api.getAppState().zoom.value;
+  send("point", { point: [0.5, 0.5], width: 440, height: 400 });
+  expect(reply).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      type: "point",
+      point: { expression: "x", x: 0, y: 0 },
+    }),
+    "*",
+  );
+  send("sample", { view: { left: 10, right: 20, bottom: 10, top: 20 } });
+  const data = reply.mock.lastCall![0].points as { x: number; y: number }[];
+  expect(data.length).toBeGreaterThan(2);
+  expect(data.every(({ x, y }) => x >= 10 && x <= 20 && y === x)).toBe(true);
+  expect(graph()).toBe(before);
+  expect(Object.keys(api.getFiles())).toEqual(files);
+  expect(api.getAppState().zoom.value).toBe(zoom);
+});
+
+it("persists a completed range on the same movable/resizable object and undoes the whole gesture once", async () => {
+  const { api, graph, send } = await setup();
+  const before = graph();
+  const bounds = { left: -2, right: 4, bottom: -3, top: 5 };
+  send("commit", { view: bounds });
   await waitFor(() =>
-    expect(graph().customData?.fcPlot.plot.view).toBeDefined(),
+    expect(graph().customData!.fcPlot.plot.view).toEqual(bounds),
   );
   expect(graph()).toMatchObject({
-    id: original.id,
-    x: original.x,
-    y: original.y,
-    width: original.width,
-    height: original.height,
-    angle: original.angle,
-    groupIds: original.groupIds,
+    id: before.id,
+    x: before.x,
+    y: before.y,
+    width: before.width,
+    height: before.height,
+    groupIds: before.groupIds,
   });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  });
+  expect(Object.keys(api.getFiles())).toHaveLength(0);
   fireEvent.click(screen.getByTestId("button-undo"));
   await waitFor(() =>
-    expect(graph().customData?.fcPlot.plot.view).toBeUndefined(),
+    expect(graph().customData!.fcPlot.plot.view).toBeUndefined(),
   );
-  expect(api.getSceneElements()).toHaveLength(1);
 });
 
-it("takes over two touch contacts for graph zoom without zooming the board", async () => {
-  const { api, x, y, canvas, graph } = await setup();
-  const zoom = api.getAppState().zoom.value;
-  fireEvent.pointerDown(canvas, {
-    clientX: x,
-    clientY: y,
-    pointerId: 1,
-    pointerType: "touch",
-    button: 0,
+it("rejects forged sources and invalid domains without touching the board", async () => {
+  const { graph, send, reply } = await setup();
+  const before = graph();
+  send("commit", { view: { left: 1, right: 1, bottom: -1, top: 1 } });
+  send("point", { point: [0.5, 0.5], width: 440, height: 400 }, window);
+  send("sample", {
+    view: { left: -Infinity, right: 20, bottom: -10, top: 10 },
   });
-  fireEvent.pointerDown(canvas, {
-    clientX: x + 40,
-    clientY: y,
-    pointerId: 2,
-    pointerType: "touch",
-    button: 0,
-  });
-  fireEvent.pointerMove(canvas, {
-    clientX: x + 100,
-    clientY: y,
-    pointerId: 2,
-    pointerType: "touch",
-  });
-  await waitFor(() =>
-    expect(graph().customData?.fcPlot.plot.view).toBeDefined(),
-  );
-  fireEvent.pointerUp(canvas, { pointerId: 1, pointerType: "touch" });
-  fireEvent.pointerUp(canvas, { pointerId: 2, pointerType: "touch" });
-  expect(api.getAppState().zoom.value).toBe(zoom);
-  expect(graph().customData?.fcPlot.plot.range).toBeLessThan(10);
+  expect(reply).not.toHaveBeenCalled();
+  expect(graph()).toBe(before);
 });
 
-it("discards a pending zoom when a different graph is selected", async () => {
-  const { api, x, y, canvas, graph } = await setup();
-  let second: string[] = [];
-  act(() => {
-    second = drawPlot(
-      api,
-      { ...defaultPlot, expression: "x^2" },
-      { x: 1100, y: 400 },
-    );
-  });
-  fireEvent.wheel(canvas, { clientX: x, clientY: y, deltaY: -100 });
-  act(() =>
-    api.updateScene({
-      appState: { selectedElementIds: { [second[0]]: true } },
-      captureUpdate: CaptureUpdateAction.NEVER,
-    }),
-  );
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  });
-  expect(graph().customData?.fcPlot.plot.view).toBeUndefined();
+it("keeps comparison curves in one coordinate system and preserves them through serialization", () => {
+  const result = localMathResult("y=x\ny=x^2", "function");
+  if (result.kind !== "function") {
+    throw new Error("Expected functions");
+  }
+  expect(result.plot.compare).toEqual(["x^2"]);
+  const resource = functionGraphResource(result.plot, "#000000", "comparison");
+  const view = createInlineVegaView(resource.visualization!.spec as Spec);
+  try {
+    view.run();
+    const points = view.data("curves") as {
+      expression: string;
+      color: string;
+    }[];
+    expect(new Set(points.map((point) => point.expression)).size).toBe(2);
+    expect(new Set(points.map((point) => point.color)).size).toBe(2);
+  } finally {
+    view.finalize();
+  }
   expect(
-    api.getSceneElements().find((element) => second.includes(element.id))
-      ?.customData?.fcPlot.plot,
-  ).toMatchObject({ expression: "x^2", range: 10 });
-});
-
-it("reuses one preview file across many frames and keeps committed pixels for undo/redo", async () => {
-  const { api, x, y, canvas, graph } = await setup();
-  const original = graph();
-  const initialHistory = window.h.history.undoStack.length;
-  if (original.type !== "image" || !original.fileId) {
-    throw new Error("Expected a function image");
-  }
-  const originalData = api.getFiles()[original.fileId].dataURL;
-  const initialCount = Object.keys(api.getFiles()).length;
-  const ids = new Set<string>();
-  for (let index = 0; index < 8; index++) {
-    const range = graph().customData!.fcPlot.plot.range;
-    fireEvent.wheel(canvas, { clientX: x, clientY: y, deltaY: -10 });
-    await waitFor(() =>
-      expect(graph().customData!.fcPlot.plot.range).toBeLessThan(range),
-    );
-    const current = graph();
-    if (current.type !== "image" || !current.fileId) {
-      throw new Error("Expected a function image");
-    }
-    ids.add(current.fileId);
-    expect(Object.keys(api.getFiles())).toHaveLength(initialCount + 1);
-    expect(api.getFiles()[original.fileId].dataURL).toBe(originalData);
-  }
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  });
-  expect(ids.size).toBe(1);
-  expect(window.h.history.undoStack).toHaveLength(initialHistory + 1);
-  expect(Object.keys(api.getFiles())).toHaveLength(initialCount + 1);
-  const first = graph();
-  if (first.type !== "image" || !first.fileId) {
-    throw new Error("Expected a function image");
-  }
-  const firstData = api.getFiles()[first.fileId].dataURL;
-  fireEvent.wheel(canvas, { clientX: x, clientY: y, deltaY: -30 });
-  await waitFor(() =>
-    expect(Object.keys(api.getFiles())).toHaveLength(initialCount + 2),
-  );
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  });
-  expect(api.getFiles()[first.fileId].dataURL).toBe(firstData);
-  expect(window.h.history.undoStack).toHaveLength(initialHistory + 2);
-  fireEvent.click(screen.getByTestId("button-undo"));
-  await waitFor(() => expect(graph()).toMatchObject({ fileId: first.fileId }));
-  expect(api.getFiles()[first.fileId].dataURL).toBe(firstData);
-  // The native toolbar suppresses the same command for 400 ms.
-  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 401);
-  fireEvent.click(screen.getByTestId("button-undo"));
-  await waitFor(() =>
-    expect(graph()).toMatchObject({ fileId: original.fileId }),
-  );
-  fireEvent.click(screen.getByTestId("button-redo"));
-  await waitFor(() => expect(graph()).toMatchObject({ fileId: first.fileId }));
-  expect(api.getFiles()[first.fileId].dataURL).toBe(firstData);
+    JSON.parse(JSON.stringify(resource)).visualization.spec.signals.some(
+      (signal: { name: string }) => signal.name === "dist2",
+    ),
+  ).toBe(true);
 });

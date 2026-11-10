@@ -50,14 +50,12 @@ export const inkRecognitionDelay = (mode: InkAssistMode, strokes: InkInput) =>
   mode === "calculation" && calculationInk(strokes).complete
     ? 0
     : mode === "function" || mode === "calculation"
-    ? 350
+    ? 1200
     : mode === "magic"
     ? 1600
     : mode === "shape"
     ? 450
-    : mode === "language"
-    ? 250
-    : 700;
+    : 1200;
 
 /** An explicit completion mark needs no additional whole-expression pause. */
 export const settleInkRecognition = async (
@@ -70,7 +68,7 @@ export const settleInkRecognition = async (
   const remaining =
     (mode === "function" || mode === "calculation") &&
     !(mode === "calculation" && calculationInk(strokes).complete)
-      ? 700 - (Date.now() - since)
+      ? inkRecognitionDelay(mode, strokes) - (Date.now() - since)
       : 0;
   if (remaining <= 0) {
     return;
@@ -220,9 +218,26 @@ export async function recognizeInkContent(
     }
     if (mode === "language") {
       assertLanguageCurrent();
-      const study = await explainLanguage(text, signal, targetLanguage);
+      const target = targetLanguage.toLowerCase().split("-")[0];
+      const source = /[\u3400-\u9fff]/.test(text)
+        ? "zh"
+        : /^\p{ASCII}+$/u.test(text)
+        ? "en"
+        : undefined;
+      const translationTarget =
+        source && source === target
+          ? source === "zh"
+            ? "en"
+            : "zh"
+          : targetLanguage;
+      const study = await explainLanguage(text, signal, translationTarget);
       assertLanguageCurrent();
-      return { kind: "language", text, study, targetLanguage };
+      return {
+        kind: "language",
+        text,
+        study,
+        targetLanguage: translationTarget,
+      };
     }
     return {
       ...(calculations.get(text) || (await recognizeMath(text, mode, signal))),

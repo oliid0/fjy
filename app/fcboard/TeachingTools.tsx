@@ -35,7 +35,6 @@ import { Curtain } from "./Curtain";
 import { SplitBoard } from "./SplitBoard";
 import { Voting } from "./Voting";
 import { ToolMedia } from "./ToolMedia";
-import curtainIcon from "./assets/curtain/icon.png";
 
 import "./BuiltinTools.scss";
 import {
@@ -66,7 +65,7 @@ const factoryTools = {
   timer: { label: "timer", icon: <FactoryIcon name="timer" /> },
   curtain: {
     label: "curtain",
-    icon: <img src={curtainIcon} alt="" width={40} height={40} />,
+    icon: <FactoryIcon name="curtain" />,
   },
 } as const;
 
@@ -399,9 +398,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
               ? "#ffffff"
               : api.getAppState().viewBackgroundColor || "#ffffff",
           )
-        : document?.pen?.color ||
-          api.getAppState().currentItemStrokeColor ||
-          "#17243c";
+        : api.getAppState().whiteboardShapeStyle?.color || "#000000";
     }
     if (kind === "ruler" || kind === "setSquare") {
       const state = api.getAppState();
@@ -965,7 +962,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       <NativeToolbarItems api={api} />
       <FactoryGizmos api={api} />
       <FactoryShapes api={api} />
-      <Calculator />
+      <Calculator api={api} />
       <ToolTimer />
       <Curtain />
       <SplitBoard />

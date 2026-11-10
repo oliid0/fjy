@@ -37,8 +37,8 @@ import icon17selected from "./factory-background-icons/ic_color_green_active.svg
 import icon17normal from "./factory-background-icons/ic_color_green_disable.svg?url";
 import icon18selected from "./factory-background-icons/ic_color_lightgreen_active.svg?url";
 import icon18normal from "./factory-background-icons/ic_color_lightgreen_disable.svg?url";
-import icon19selected from "./factory-background-icons/ic_pen_muti_s.png?url";
-import icon19normal from "./factory-background-icons/ic_pen_muti.png?url";
+import icon19selected from "./factory-background-icons/ic_pen_muti_s.svg?url";
+import icon19normal from "./factory-background-icons/ic_pen_muti.svg?url";
 
 export const factoryBackgroundPatternIcons = [
   { normal: icon0normal, selected: icon0selected },

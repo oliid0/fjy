@@ -3,7 +3,11 @@ import {
   CaptureUpdateAction,
   convertToFcboardElements,
 } from "@fcboard/fcboard";
-import { getCommonBounds, newElementWith } from "@fcboard/element";
+import {
+  getCommonBounds,
+  newElementWith,
+  newIframeElement,
+} from "@fcboard/element";
 import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@fcboard/common";
 import { pointFrom } from "@fcboard/math";
 
@@ -26,6 +30,7 @@ import { findContentPosition, findVisibleContentPosition } from "./placement";
 import { answerFontSize, layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
 import { functionGraphImage, plotSize } from "./functionVisualization";
+import { functionGraphResource } from "./functionGraphResource";
 
 import type { TextPlacement } from "./textLayout";
 
@@ -632,14 +637,14 @@ export const drawPlot = (
       api,
       plot,
       [
-        {
-          type: "image",
+        newIframeElement({
+          type: "iframe",
           x: position.x - plotSize.width / 2,
           y: position.y - plotSize.height / 2,
           ...plotSize,
-          fileId: crypto.randomUUID() as FileId,
+          strokeWidth: 0,
           strokeColor: color,
-        },
+        }),
       ],
       position,
       replaceIds,
@@ -839,22 +844,41 @@ const insertPlot = (
     sourceBounds,
   );
   const plotId = crypto.randomUUID();
-  const shapes = fitted.shapes.map((shape) => ({
-    strokeColor: api.getAppState().currentItemStrokeColor,
-    ...shape,
-    id: crypto.randomUUID(),
-    groupIds: [plotId],
-    customData: {
-      fcSelectionSource: sourceSignature,
-      fcPlot: {
-        id: plotId,
-        plot,
-        ...(image ? { renderer: "vega" } : {}),
-        position: fitted.center,
-        origin: { x: shape.x || 0, y: shape.y || 0 },
+  const shapes = fitted.shapes.map((shape) => {
+    const resource =
+      shape.type === "iframe" && image
+        ? functionGraphResource(
+            plot,
+            shape.strokeColor || "#1e1e1e",
+            plotId,
+            image,
+          )
+        : undefined;
+    return {
+      strokeColor: api.getAppState().currentItemStrokeColor,
+      ...shape,
+      id: crypto.randomUUID(),
+      groupIds: [plotId],
+      customData: {
+        fcSelectionSource: sourceSignature,
+        ...(resource
+          ? {
+              fcInteractiveResource: resource,
+              generationData: { status: "done", html: resource.html },
+            }
+          : {}),
+        fcPlot: {
+          id: plotId,
+          plot,
+          ...(image
+            ? { renderer: shape.type === "iframe" ? "iframe" : "vega" }
+            : {}),
+          position: fitted.center,
+          origin: { x: shape.x || 0, y: shape.y || 0 },
+        },
       },
-    },
-  }));
+    };
+  });
   if (classroomCommands.has("document.plot")) {
     void classroomCommands.execute({
       name: "document.plot",
@@ -879,13 +903,17 @@ const insertPlot = (
   return ids;
 };
 
-export const selectedPlot = (api: FcboardImperativeAPI) => {
+export const selectedPlot = (
+  api: FcboardImperativeAPI,
+  ids?: readonly string[],
+) => {
   const document = classroomCommands.read("document") as
     | { ink: InkStroke[]; selection: string[] }
     | undefined;
   if (document) {
     const stroke = document.ink.find(
-      (stroke) => document.selection.includes(stroke.id) && stroke.plot,
+      (stroke) =>
+        (ids || document.selection).includes(stroke.id) && stroke.plot,
     );
     if (!stroke?.plot) {
       return null;
@@ -893,12 +921,12 @@ export const selectedPlot = (api: FcboardImperativeAPI) => {
     return {
       plot: stroke.plot.plot,
       image:
-        stroke.image && stroke.plot.renderer === "vega"
+        stroke.resource || (stroke.image && stroke.plot.renderer === "vega")
           ? {
               x: stroke.anchor?.x ?? stroke.points[0][0],
               y: stroke.anchor?.y ?? stroke.points[0][1],
-              width: stroke.imageWidth!,
-              height: stroke.imageHeight!,
+              width: stroke.resource?.width ?? stroke.imageWidth!,
+              height: stroke.resource?.height ?? stroke.imageHeight!,
               angle: 0,
               color: stroke.color,
             }
@@ -921,7 +949,9 @@ export const selectedPlot = (api: FcboardImperativeAPI) => {
   const elements = api.getSceneElements();
   const selected = elements.find(
     (el) =>
-      api.getAppState().selectedElementIds[el.id] && el.customData?.fcPlot,
+      (ids
+        ? ids.includes(el.id)
+        : api.getAppState().selectedElementIds[el.id]) && el.customData?.fcPlot,
   );
   const metadata = selected?.customData?.fcPlot;
   if (
@@ -945,7 +975,8 @@ export const selectedPlot = (api: FcboardImperativeAPI) => {
   return {
     plot: metadata.plot as Plot,
     image:
-      selected.type === "image" && metadata.renderer === "vega"
+      selected.type === "iframe" ||
+      (selected.type === "image" && metadata.renderer === "vega")
         ? {
             x: selected.x,
             y: selected.y,
@@ -970,17 +1001,24 @@ export const updateFunctionGraph = (
   api: FcboardImperativeAPI,
   plot: Plot,
   options: {
+    ids?: readonly string[];
     preview?: boolean;
     fileId?: FileId;
     before?: InkStroke[];
     onError?: (error: unknown) => void;
   } = {},
 ) => {
-  const graph = selectedPlot(api);
+  const graph = selectedPlot(api, options.ids);
   if (!graph?.image) {
     return null;
   }
   const image = functionGraphImage(plot, graph.image.color);
+  const resource = functionGraphResource(
+    plot,
+    graph.image.color,
+    graph.ids[0],
+    image,
+  );
   if (classroomCommands.has("document.plot.update")) {
     void classroomCommands
       .execute({
@@ -989,6 +1027,7 @@ export const updateFunctionGraph = (
           ids: graph.ids,
           plot,
           image,
+          resource,
           remember: !options.preview,
           before: options.before,
         },
@@ -1009,8 +1048,30 @@ export const updateFunctionGraph = (
     const selected = api
       .getSceneElements()
       .find((element) => graph.ids.includes(element.id));
-    if (!selected || selected.type !== "image") {
+    if (
+      !selected ||
+      (selected.type !== "image" && selected.type !== "iframe")
+    ) {
       return null;
+    }
+    if (selected.type === "iframe") {
+      api.updateScene({
+        elements: api.getSceneElements().map((element) =>
+          element.id === selected.id
+            ? newElementWith(element, {
+                customData: {
+                  ...element.customData,
+                  fcInteractiveResource: resource,
+                  fcPlot: { ...element.customData!.fcPlot, plot },
+                },
+              })
+            : element,
+        ),
+        captureUpdate: options.preview
+          ? CaptureUpdateAction.NEVER
+          : CaptureUpdateAction.IMMEDIATELY,
+      });
+      return { ...graph, plot };
     }
     const fileId = options.fileId || (crypto.randomUUID() as FileId);
     const previous = api.getFiles()[fileId];

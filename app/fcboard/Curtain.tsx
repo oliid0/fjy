@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
+import { CloseIcon, palette } from "@fcboard/fcboard/components/icons";
 
 import { MaterialPanel } from "./MaterialPanel";
 
@@ -66,6 +67,23 @@ export const Curtain = () => {
   const [theme, setTheme] = useState(0);
   const [color, setColor] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
+  const [controls, setControls] = useState(true);
+  const hideControls = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const reveal = useCallback(() => {
+    setControls(true);
+    clearTimeout(hideControls.current);
+    if (!settings) {
+      hideControls.current = setTimeout(() => setControls(false), 3000);
+    }
+  }, [settings]);
+  useEffect(() => {
+    if (open) {
+      reveal();
+    }
+    return () => clearTimeout(hideControls.current);
+  }, [open, reveal]);
   const [tab, setTab] = useState<"color" | "theme">("color");
   const [rect, setRect] = useState<Bounds>({
     left: 0,
@@ -161,6 +179,9 @@ export const Curtain = () => {
       <section
         className="fc-curtain"
         aria-label={t("fcboard.curtain")}
+        data-controls={controls}
+        onPointerDownCapture={reveal}
+        onKeyDownCapture={reveal}
         style={{
           left: rect.left,
           top: rect.top,
@@ -233,11 +254,25 @@ export const Curtain = () => {
               }
             }}
           >
-            {edge === "move"
-              ? "✥"
-              : ["left", "right"].includes(edge)
-              ? "↔"
-              : "↕"}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d={
+                  edge === "move"
+                    ? "M3 12h18M12 3v18M3 12l4-4M3 12l4 4M21 12l-4-4M21 12l-4 4M12 3l-4 4M12 3l4 4M12 21l-4-4M12 21l4-4"
+                    : ["left", "right"].includes(edge)
+                    ? "M3 12h18M3 12l5-5M3 12l5 5M21 12l-5-5M21 12l-5 5"
+                    : "M12 3v18M12 3l-5 5M12 3l5 5M12 21l-5-5M12 21l5-5"
+                }
+              />
+            </svg>
           </button>
         ))}
         <div className="fc-curtain-actions">
@@ -246,14 +281,14 @@ export const Curtain = () => {
             onClick={() => setSettings(true)}
             aria-label={t("fcboard.curtain_theme")}
           >
-            ◐
+            {palette}
           </button>
           <button
             type="button"
             onClick={() => setOpen(false)}
             aria-label={t("buttons.close")}
           >
-            ×
+            {CloseIcon}
           </button>
         </div>
       </section>
@@ -289,7 +324,7 @@ export const Curtain = () => {
               onClick={() => setSettings(false)}
               aria-label={t("buttons.close")}
             >
-              ×
+              {CloseIcon}
             </button>
           </header>
           <div

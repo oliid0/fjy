@@ -18,7 +18,7 @@ import {
 } from "@fcboard/fcboard/whiteboardPen";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 import { finishFactoryInk } from "@fcboard/element/factoryInk";
-import factoryEraser from "@fcboard/fcboard/components/FactoryEraser.png?url";
+import factoryEraser from "@fcboard/fcboard/components/FactoryEraser.svg?url";
 import {
   circleRegion,
   hasRegionArea,
@@ -1368,38 +1368,42 @@ export const FilePreview = ({
               },
             });
           }
-          if (typeof args.color === "string") {
-            api.updateScene({
-              appState: { currentItemStrokeColor: args.color },
-            });
+          if (!selectedInkRef.current.length) {
+            if (typeof args.color === "string") {
+              api.updateScene({
+                appState: { currentItemStrokeColor: args.color },
+              });
+            }
+            if (typeof args.width === "number") {
+              api.updateScene({
+                appState: { currentItemStrokeWidth: args.width },
+              });
+            }
+            if (typeof args.fontSize === "number") {
+              setFontSize(args.fontSize);
+            }
+            if (typeof args.opacity === "number") {
+              api.updateScene({
+                appState: { currentItemOpacity: args.opacity },
+              });
+            }
+            pen.current = {
+              color:
+                typeof args.color === "string" ? args.color : pen.current.color,
+              penWidth:
+                typeof args.width === "number"
+                  ? args.width
+                  : pen.current.penWidth,
+              fontSize:
+                typeof args.fontSize === "number"
+                  ? args.fontSize
+                  : pen.current.fontSize,
+              opacity:
+                typeof args.opacity === "number"
+                  ? args.opacity
+                  : pen.current.opacity,
+            };
           }
-          if (typeof args.width === "number") {
-            api.updateScene({
-              appState: { currentItemStrokeWidth: args.width },
-            });
-          }
-          if (typeof args.fontSize === "number") {
-            setFontSize(args.fontSize);
-          }
-          if (typeof args.opacity === "number") {
-            api.updateScene({ appState: { currentItemOpacity: args.opacity } });
-          }
-          pen.current = {
-            color:
-              typeof args.color === "string" ? args.color : pen.current.color,
-            penWidth:
-              typeof args.width === "number"
-                ? args.width
-                : pen.current.penWidth,
-            fontSize:
-              typeof args.fontSize === "number"
-                ? args.fontSize
-                : pen.current.fontSize,
-            opacity:
-              typeof args.opacity === "number"
-                ? args.opacity
-                : pen.current.opacity,
-          };
           const ids = new Set(selectedInkRef.current);
           if (ids.size) {
             commitInk({
@@ -1480,6 +1484,7 @@ export const FilePreview = ({
           sourceIds.includes(stroke.id),
         );
         const sourceSignature = documentSourceSignature(selected);
+        const interfaceLanguage = getLanguage().code;
         const language =
           args.language === undefined
             ? undefined
@@ -1488,7 +1493,8 @@ export const FilePreview = ({
           language &&
           (args.text !== language.translation ||
             !selected.length ||
-            args.targetLanguage !== getLanguage().code)
+            typeof args.targetLanguage !== "string" ||
+            !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(args.targetLanguage))
         ) {
           throw new DOMException("Language source changed", "AbortError");
         }
@@ -1630,7 +1636,7 @@ export const FilePreview = ({
         );
         if (
           (args.signal instanceof AbortSignal && args.signal.aborted) ||
-          (language && args.targetLanguage !== getLanguage().code) ||
+          (language && interfaceLanguage !== getLanguage().code) ||
           targetPage !== pageRef.current ||
           documentSourceSignature(
             (inkRef.current[targetPage] || []).filter((stroke) =>
@@ -2046,7 +2052,11 @@ export const FilePreview = ({
           zoomRef.current,
           scroll,
         );
-        const position = resourcePlacement(viewport, scale);
+        const position = resourcePlacement(
+          viewport,
+          scale,
+          resource.id === "builtin-calculator",
+        );
         const element = newIframeElement({
           type: "iframe",
           ...position,
@@ -2242,20 +2252,40 @@ export const FilePreview = ({
             typeof args.image !== "string" ||
             !current.some(
               (stroke) =>
-                ids.has(stroke.id) && stroke.plot?.renderer === "vega",
+                ids.has(stroke.id) &&
+                ["vega", "iframe"].includes(stroke.plot?.renderer || ""),
             )
           ) {
             throw new Error("The function plot was removed");
           }
+          const resource = args.resource
+            ? validateInteractiveResource(args.resource)
+            : undefined;
           commitInk(
             {
               ...inkRef.current,
               [pageRef.current]: current.map((stroke) =>
-                ids.has(stroke.id) && stroke.plot?.renderer === "vega"
+                ids.has(stroke.id) &&
+                ["vega", "iframe"].includes(stroke.plot?.renderer || "")
                   ? {
                       ...stroke,
                       image: args.image as string,
-                      plot: { ...stroke.plot, plot },
+                      ...(resource
+                        ? {
+                            resource: {
+                              ...resource,
+                              width:
+                                stroke.resource?.width ?? stroke.imageWidth!,
+                              height:
+                                stroke.resource?.height ?? stroke.imageHeight!,
+                            },
+                          }
+                        : {}),
+                      plot: {
+                        ...stroke.plot!,
+                        plot,
+                        ...(resource ? { renderer: "iframe" as const } : {}),
+                      },
                     }
                   : stroke,
               ),

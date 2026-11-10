@@ -16,7 +16,7 @@ import { useFcboardContainer } from "./App";
 import { ToolButton } from "./ToolButton";
 import { FactoryIcon } from "./FactoryIcon";
 import { WhiteboardAerialView } from "./WhiteboardAerialView";
-import cleaningIcon from "./xbh-toolbar-assets/eraser-thumb.png";
+import cleaningIcon from "./xbh-toolbar-assets/eraser-thumb.svg";
 import { SHAPES } from "./shapes";
 
 import type { ShapesSwitcher } from "./Actions";
@@ -228,7 +228,13 @@ export const WhiteboardTools = ({
         }}
       />
       {eraserOpen && (
-        <ClickAwayListener onClickAway={() => setEraserOpen(false)}>
+        <ClickAwayListener
+          onClickAway={(event) => {
+            if (!eraserAnchor?.contains(event.target as Node)) {
+              setEraserOpen(false);
+            }
+          }}
+        >
           <Popper
             open={eraserOpen}
             anchorEl={eraserAnchor}
@@ -441,7 +447,13 @@ export const WhiteboardTools = ({
         </span>
       )}
       {open && !shapesOpen && (
-        <ClickAwayListener onClickAway={() => setOpen(false)}>
+        <ClickAwayListener
+          onClickAway={(event) => {
+            if (!insertAnchor?.contains(event.target as Node)) {
+              setOpen(false);
+            }
+          }}
+        >
           <Popper
             open
             anchorEl={insertAnchor}

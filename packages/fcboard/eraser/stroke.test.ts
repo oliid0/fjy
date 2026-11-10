@@ -37,20 +37,21 @@ describe("factory circle erasure", () => {
     [60, 20],
     [40, 20],
   ]);
-  it("removes the hit source without clipping it or expanding to its neighboring group", () => {
+  it("clips only the circled source section without expanding to its neighboring group", () => {
     const ink = stroke();
     const neighbor = { ...stroke(), id: "neighbor", y: 200 };
     const locked = { ...stroke(), id: "locked", locked: true };
     const result = eraseSceneRegion([ink, neighbor, locked], middle);
-    expect(result).toHaveLength(3);
+    expect(result).toHaveLength(4);
     expect(result[0]).toMatchObject({
       id: ink.id,
-      isDeleted: true,
-      points: ink.points,
-      pressures: ink.pressures,
+      x: 0,
+      width: 40,
+      isDeleted: false,
     });
-    expect(result[1]).toBe(neighbor);
-    expect(result[2]).toBe(locked);
+    expect(result[1]).toMatchObject({ x: 60, width: 40, isDeleted: false });
+    expect(result[2]).toBe(neighbor);
+    expect(result[3]).toBe(locked);
     expect(ink.isDeleted).toBe(false);
     expect(eraseSceneRegion([neighbor], middle)).toEqual([neighbor]);
   });
@@ -97,7 +98,7 @@ describe("factory circle erasure", () => {
       expect(result[1].isDeleted).toBe(true);
     },
   );
-  it("collects only the top object per motion segment even for a non-enclosing open gesture", () => {
+  it("does not delete continuous handwriting with a non-enclosing open gesture", () => {
     const first = { ...stroke(), id: "bottom" };
     const top = { ...stroke(), id: "top" };
     const result = eraseSceneRegion(
@@ -107,8 +108,7 @@ describe("factory circle erasure", () => {
         [50, 20],
       ]),
     );
-    expect(result[0]).toBe(first);
-    expect(result[1].isDeleted).toBe(true);
+    expect(result).toEqual([first, top]);
   });
   it("accepts the same direct parent as the first hit and does not expand a group", () => {
     const first = { ...stroke(), id: "first", groupIds: ["one"] };
@@ -118,12 +118,20 @@ describe("factory circle erasure", () => {
       [first, second, neighbor],
       loop([
         [50, -20],
+        [60, -20],
+        [60, 120],
         [50, 120],
       ]),
     );
-    expect(result[0].isDeleted).toBe(false);
-    expect(result[1].isDeleted).toBe(true);
-    expect(result[2]).toBe(neighbor);
+    expect(result).toHaveLength(4);
+    expect(result[0]).toBe(first);
+    expect(result[1]).toMatchObject({
+      id: second.id,
+      isDeleted: false,
+      width: 50,
+    });
+    expect(result[2]).toMatchObject({ isDeleted: false, x: 60, width: 40 });
+    expect(result[3]).toBe(neighbor);
   });
   it("does not mutate source geometry or delete locked objects on a tap", () => {
     const ink = stroke();
@@ -387,4 +395,71 @@ describe("local stroke erasure", () => {
       isPalmContact({ pointerType: "pen", width: 60, height: 60 }, 36),
     ).toBe(false);
   });
+});
+
+it("cuts only circled pieces of a connected stroke and retains exterior pressure, dash phase and unrelated ink", () => {
+  const ink = {
+    ...stroke(),
+    groupIds: [],
+    customData: {
+      fcInk: {
+        version: 2,
+        pen: "dashed",
+        unit: 1,
+        centerline: true,
+        dashOffset: 10,
+      },
+    },
+  };
+  const outside = { ...stroke(), id: "outside", y: 100, groupIds: [] };
+  const result = eraseSceneRegion(
+    [ink, outside],
+    [
+      pointFrom<import("@fcboard/math").GlobalPoint>(40, -20),
+      pointFrom<import("@fcboard/math").GlobalPoint>(60, -20),
+      pointFrom<import("@fcboard/math").GlobalPoint>(60, 20),
+      pointFrom<import("@fcboard/math").GlobalPoint>(40, 20),
+    ],
+  );
+  const pieces = result.filter((element) => element.id !== outside.id);
+  expect(pieces).toHaveLength(2);
+  expect(pieces.every((element) => !element.isDeleted)).toBe(true);
+  expect(pieces[0]).toMatchObject({ id: ink.id, x: 0, width: 40 });
+  if (pieces[0].type !== "freedraw") {
+    throw new Error("Expected retained handwriting");
+  }
+  expect(pieces[0].pressures[0]).toBe(0.2);
+  expect(pieces[0].pressures.at(-1)).toBeCloseTo(0.44, 10);
+  expect(pieces[1]).toMatchObject({ x: 60, width: 40 });
+  expect(pieces[1].customData?.fcInk?.dashOffset).toBeCloseTo(70);
+  expect(result.at(-1)).toBe(outside);
+  expect(ink.isDeleted).toBe(false);
+  expect(ink.points).toHaveLength(2);
+});
+
+it("retains every exterior interval when a concave circle crosses the same connected stroke twice", () => {
+  const ink = { ...stroke(), groupIds: [] };
+  const path = [
+    [20, -20],
+    [40, -20],
+    [40, 10],
+    [60, 10],
+    [60, -20],
+    [80, -20],
+    [80, 20],
+    [20, 20],
+  ].map(([x, y]) => pointFrom<import("@fcboard/math").GlobalPoint>(x, y));
+  const result = eraseSceneRegion([ink], path);
+  expect(result).toHaveLength(3);
+  expect(result.map((piece) => [piece.x, piece.width])).toEqual([
+    [0, 20],
+    [40, 20],
+    [80, 20],
+  ]);
+  expect(
+    result.every(
+      (piece) => !piece.isDeleted && piece.strokeWidth === ink.strokeWidth,
+    ),
+  ).toBe(true);
+  expect(ink.isDeleted).toBe(false);
 });

@@ -6,43 +6,43 @@ import Popper from "@mui/material/Popper";
 import { t } from "@fcboard/fcboard/i18n";
 
 import { FactoryColorWheel } from "./FactoryColorWheel";
-import color from "./factory-selection-icons/color.svg";
-import colorFocus from "./factory-selection-icons/color-focus.svg";
-import border from "./factory-selection-icons/border.svg";
-import borderFocus from "./factory-selection-icons/border-focus.svg";
-import opacity from "./factory-selection-icons/opacity.svg";
-import opacityFocus from "./factory-selection-icons/opacity-focus.svg";
-import layers from "./factory-selection-icons/layers.svg";
-import layersFocus from "./factory-selection-icons/layers-focus.svg";
-import copy from "./factory-selection-icons/copy.svg";
-import copyFocus from "./factory-selection-icons/copy-focus.svg";
-import remove from "./factory-selection-icons/delete.svg";
-import removeFocus from "./factory-selection-icons/delete-focus.svg";
-import search from "./factory-selection-icons/search.svg";
-import searchFocus from "./factory-selection-icons/search-focus.svg";
-import solid from "./factory-selection-icons/solid.svg";
-import dashed from "./factory-selection-icons/dashed.svg";
-import lock from "./factory-selection-icons/lock.svg";
-import unlock from "./factory-selection-icons/unlock.svg";
-import bringForward from "./factory-selection-icons/bringForward.svg";
-import sendBackward from "./factory-selection-icons/sendBackward.svg";
-import bringToFront from "./factory-selection-icons/bringToFront.svg";
-import sendToBack from "./factory-selection-icons/sendToBack.svg";
-import alpha20 from "./factory-selection-icons/alpha20.svg";
-import alpha50 from "./factory-selection-icons/alpha50.svg";
-import alpha70 from "./factory-selection-icons/alpha70.svg";
-import alpha100 from "./factory-selection-icons/alpha100.svg";
-import bold from "./factory-selection-icons/bold.svg";
-import cropIcon from "./factory-selection-icons/crop.svg";
-import cropFocus from "./factory-selection-icons/crop-focus.svg";
-import cancelIcon from "./factory-selection-icons/cancel.svg";
-import cancelFocus from "./factory-selection-icons/cancel-focus.svg";
-import confirmIcon from "./factory-selection-icons/confirm.svg";
-import confirmFocus from "./factory-selection-icons/confirm-focus.svg";
-import editIcon from "./factory-selection-icons/edit-text.svg";
-import editFocus from "./factory-selection-icons/edit-text-focus.svg";
-import boldFocus from "./factory-selection-icons/bold-focus.svg";
-import sizeArrow from "./factory-selection-icons/textsize-arrow.svg";
+import color from "./factory-selection-icons/color.svg?raw";
+import colorFocus from "./factory-selection-icons/color-focus.svg?raw";
+import border from "./factory-selection-icons/border.svg?raw";
+import borderFocus from "./factory-selection-icons/border-focus.svg?raw";
+import opacity from "./factory-selection-icons/opacity.svg?raw";
+import opacityFocus from "./factory-selection-icons/opacity-focus.svg?raw";
+import layers from "./factory-selection-icons/layers.svg?raw";
+import layersFocus from "./factory-selection-icons/layers-focus.svg?raw";
+import copy from "./factory-selection-icons/copy.svg?raw";
+import copyFocus from "./factory-selection-icons/copy-focus.svg?raw";
+import remove from "./factory-selection-icons/delete.svg?raw";
+import removeFocus from "./factory-selection-icons/delete-focus.svg?raw";
+import search from "./factory-selection-icons/search.svg?raw";
+import searchFocus from "./factory-selection-icons/search-focus.svg?raw";
+import solid from "./factory-selection-icons/solid.svg?raw";
+import dashed from "./factory-selection-icons/dashed.svg?raw";
+import lock from "./factory-selection-icons/lock.svg?raw";
+import unlock from "./factory-selection-icons/unlock.svg?raw";
+import bringForward from "./factory-selection-icons/bringForward.svg?raw";
+import sendBackward from "./factory-selection-icons/sendBackward.svg?raw";
+import bringToFront from "./factory-selection-icons/bringToFront.svg?raw";
+import sendToBack from "./factory-selection-icons/sendToBack.svg?raw";
+import alpha20 from "./factory-selection-icons/alpha20.svg?raw";
+import alpha50 from "./factory-selection-icons/alpha50.svg?raw";
+import alpha70 from "./factory-selection-icons/alpha70.svg?raw";
+import alpha100 from "./factory-selection-icons/alpha100.svg?raw";
+import bold from "./factory-selection-icons/bold.svg?raw";
+import cropIcon from "./factory-selection-icons/crop.svg?raw";
+import cropFocus from "./factory-selection-icons/crop-focus.svg?raw";
+import cancelIcon from "./factory-selection-icons/cancel.svg?raw";
+import cancelFocus from "./factory-selection-icons/cancel-focus.svg?raw";
+import confirmIcon from "./factory-selection-icons/confirm.svg?raw";
+import confirmFocus from "./factory-selection-icons/confirm-focus.svg?raw";
+import editIcon from "./factory-selection-icons/edit-text.svg?raw";
+import editFocus from "./factory-selection-icons/edit-text-focus.svg?raw";
+import boldFocus from "./factory-selection-icons/bold-focus.svg?raw";
+import sizeArrow from "./factory-selection-icons/textsize-arrow.svg?raw";
 import "./SelectionProperties.scss";
 
 import type { SelectionPropertiesState } from "./selectionCapabilities";
@@ -61,19 +61,37 @@ const icons = {
   delete: [remove, removeFocus],
   search: [search, searchFocus],
 };
+/** Original static vector paths, bundled with the controls rather than fetched
+ * and decoded on first selection. Foreground follows the native button tint. */
+const SelectionVector = ({
+  source,
+  className,
+}: {
+  source: string;
+  className?: string;
+}) => (
+  <svg
+    viewBox={source.match(/viewBox="([^"]+)"/)?.[1]}
+    className={className}
+    aria-hidden="true"
+    focusable="false"
+    dangerouslySetInnerHTML={{
+      __html: source
+        .replace(/^.*?<svg[^>]*>/s, "")
+        .replace(/<\/svg>\s*$/, "")
+        .replace(/#(?:010101|ffffff)(?=[";])/gi, "currentColor"),
+    }}
+  />
+);
 export const SelectionIcon = ({ name }: { name: keyof typeof icons }) => (
   <>
-    <img
+    <SelectionVector
       className="fc-selection-icon-normal"
-      src={icons[name][0]}
-      alt=""
-      draggable={false}
+      source={icons[name][0]}
     />
-    <img
+    <SelectionVector
       className="fc-selection-icon-focus"
-      src={icons[name][1]}
-      alt=""
-      draggable={false}
+      source={icons[name][1]}
     />
   </>
 );
@@ -142,7 +160,13 @@ export const SelectionProperties = ({
       fill ? { background: value, fillStyle: "solid" } : { color: value },
     );
   return (
-    <ClickAwayListener onClickAway={() => setPanel(undefined)}>
+    <ClickAwayListener
+      onClickAway={(event) => {
+        if (!anchor.current?.contains(event.target as Node)) {
+          setPanel(undefined);
+        }
+      }}
+    >
       <div className="fc-selection-properties">
         {state.text && section === "style" && (
           <>
@@ -166,7 +190,7 @@ export const SelectionProperties = ({
             >
               <span className="fc-selection-size-value">
                 {Math.round(state.value.fontSize)}
-                <img src={sizeArrow} alt="" />
+                <SelectionVector source={sizeArrow} />
               </span>
               <span>{t("fcboard.selection_size")}</span>
             </ButtonBase>
@@ -321,7 +345,9 @@ export const SelectionProperties = ({
                       aria-pressed={state.value.strokeStyle === style}
                       onClick={() => onStyle({ strokeStyle: style })}
                     >
-                      <img src={style === "solid" ? solid : dashed} alt="" />
+                      <SelectionVector
+                        source={style === "solid" ? solid : dashed}
+                      />
                     </button>
                   ))}
                 </div>
@@ -374,7 +400,7 @@ export const SelectionProperties = ({
                       aria-pressed={state.value.opacity === value}
                       onClick={() => onStyle({ opacity: value })}
                     >
-                      {icon && <img src={icon} alt="" />}
+                      {icon && <SelectionVector source={icon} />}
                     </button>
                   ))}
                 </div>
@@ -390,7 +416,7 @@ export const SelectionProperties = ({
                       setPanel(undefined);
                     }}
                   >
-                    <img src={state.locked ? unlock : lock} alt="" />
+                    <SelectionVector source={state.locked ? unlock : lock} />
                     <span>
                       {t(
                         state.locked
@@ -414,7 +440,7 @@ export const SelectionProperties = ({
                     disabled={state.locked}
                     onClick={() => onAction(action)}
                   >
-                    <img src={icon} alt="" />
+                    <SelectionVector source={icon} />
                     <span>
                       {t(`labels.${action}` as "labels.bringForward")}
                     </span>

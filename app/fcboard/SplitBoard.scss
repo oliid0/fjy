@@ -5,16 +5,20 @@
   .fc-split-pane {
     border-inline-end-width: calc(2 * var(--fc-split-unit, 0.67px));
   }
+  .fc-split-pane:first-child .fc-split-bottom {
+    left: calc(64 * var(--fc-split-unit, 0.67px));
+  }
   .fc-split-bottom {
-    bottom: calc(30 * var(--fc-split-unit, 0.67px));
+    bottom: 0;
     height: calc(54 * var(--fc-split-unit, 0.67px));
   }
   .fc-split-penbar {
     height: auto;
     min-height: calc(52 * var(--fc-split-unit, 0.67px));
     max-width: calc(100% - 12 * var(--fc-split-unit, 0.67px));
-    padding: calc(8 * var(--fc-split-unit, 0.67px));
-    border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
     overscroll-behavior: contain;
     &::-webkit-scrollbar {
       display: none;
@@ -39,33 +43,6 @@
         height: calc(26 * var(--fc-split-unit, 0.67px));
         border: 0;
       }
-      &[aria-pressed="true"] {
-        outline: 0;
-        > span::after {
-          content: "";
-          position: absolute;
-          box-sizing: border-box;
-          width: calc(19.25 * var(--fc-split-unit, 0.67px));
-          height: calc(19.25 * var(--fc-split-unit, 0.67px));
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          border: calc(3 * var(--fc-split-unit, 0.67px)) solid #fcfcfe;
-          border-radius: 50%;
-        }
-      }
-      &:first-child::before {
-        content: "";
-        position: absolute;
-        width: calc(32 * var(--fc-split-unit, 0.67px));
-        height: calc(32 * var(--fc-split-unit, 0.67px));
-        box-sizing: border-box;
-        border: calc(1 * var(--fc-split-unit, 0.67px)) solid #e5e5e5;
-        border-radius: 50%;
-      }
-      &:first-child[aria-pressed="true"] > span::after {
-        border-color: #010101;
-      }
       &:focus-visible {
         outline: calc(2 * var(--fc-split-unit, 0.67px)) solid #0368ff;
       }
@@ -79,7 +56,7 @@
   }
   .fc-split-widths {
     flex: 0 0 auto;
-    gap: calc(20 * var(--fc-split-unit, 0.67px));
+    gap: calc(6 * var(--fc-split-unit, 0.67px));
     padding-inline: calc(8 * var(--fc-split-unit, 0.67px));
     button {
       width: calc(26 * var(--fc-split-unit, 0.67px));
@@ -87,7 +64,7 @@
     }
   }
   > .fc-split-exit {
-    bottom: calc(30 * var(--fc-split-unit, 0.67px));
+    bottom: 0;
     left: calc(20 * var(--fc-split-unit, 0.67px));
     width: calc(52 * var(--fc-split-unit, 0.67px));
     height: calc(52 * var(--fc-split-unit, 0.67px));

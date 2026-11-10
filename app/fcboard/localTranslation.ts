@@ -1,10 +1,9 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import { hasNativeTranslation, translateNatively } from "./nativeTranslation";
-import { currentSettings } from "./settings";
 
-/** Android uses one native multilingual translator. Web retains bundled zh/en
- * OPUS; no online fallback or invented grammar analysis. */
+/** The packaged zh/en OPUS pair works offline on every platform. Other pairs
+ * use the native translator and its explicit model download lifecycle. */
 export const translateLocally = async (
   text: string,
   targetLanguage: string,
@@ -14,32 +13,22 @@ export const translateLocally = async (
   if (!text.trim() || text.length > 4000) {
     throw new Error(t("fcboard.text_is_empty_or_too_long"));
   }
-  const configured = currentSettings().inkLanguage;
-  if (hasNativeTranslation()) {
-    return translateNatively(
-      text,
-      targetLanguage,
-      signal,
-      configured === "auto" ? "auto" : configured,
-    );
-  }
-  const { offlineInference } = await import("./offlineInference");
   const target = targetLanguage.toLowerCase().split("-")[0];
   const source = /[\u3400-\u9fff]/.test(text)
     ? "zh"
-    : /^[\p{Script=Latin}\p{N}\p{P}\p{Z}\s\p{S}]+$/u.test(text)
+    : /^\p{ASCII}+$/u.test(text)
     ? "en"
     : undefined;
-  if (
-    (configured !== "auto" && !/^(zh|en)(-|$)/.test(configured)) ||
-    !source ||
-    (target !== "zh" && target !== "en")
-  ) {
+  if (!source || (target !== "zh" && target !== "en")) {
+    if (hasNativeTranslation()) {
+      return translateNatively(text, targetLanguage, signal);
+    }
     throw new Error(t("fcboard.local_translation_pair_unavailable"));
   }
   if (source === target) {
     return { language: source, translation: text };
   }
+  const { offlineInference } = await import("./offlineInference");
   // Keep every character while bounding encoder/decoder memory per inference.
   const chunks =
     text.match(/[^。！？.!?\n]{1,80}[。！？.!?\n]?|[。！？.!?\n]/gu) || [];

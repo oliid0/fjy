@@ -46,10 +46,13 @@ public class WebViewRecoveryTest {
         return null;
     }
 
-    @Test public void failedMainRendererRecreatesOnceThenWaitsForAnExplicitRetry() {
+    @Test public void failedMainRendererWaitsForExplicitRetryWithoutRestarting() {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             AtomicReference<MainActivity> first = new AtomicReference<>();
             onActivity(scenario, activity -> { first.set(activity); stopRenderer(activity); });
+            onView(withText(R.string.webview_recovery_message)).check(matches(isDisplayed()));
+            onActivity(scenario, activity -> assertSame("A failed renderer must never silently restart the board", first.get(), activity));
+            onView(withText(R.string.web_reload)).perform(click());
             MainActivity recovered = awaitReplacement(scenario, first.get());
             onActivity(scenario, activity -> {
                 assertSame(recovered, activity);

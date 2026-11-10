@@ -141,7 +141,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
         .map(([kind]) => kind)
         .join(
           "|",
-        )}; args.start=[x,y] and args.end=[x,y] use the current canvas.inspect coordinate space (scene or document units), and args.revision must match its observed revision. Uses the current visible pen color/width/opacity and shape fill setting; returns the actual widget id and committed object ids. All parts remain one editable/erasable object. Inspect again after opening or changing the visible page.`,
+        )}; args.start=[x,y] and args.end=[x,y] use the current canvas.inspect coordinate space (scene or document units), and args.revision must match its observed revision. Uses the independent shape color/fill settings and current width/opacity; returns the actual widget id and committed object ids. All parts remain one editable/erasable object. Inspect again after opening or changing the visible page.`,
       async (args) => {
         const index = factoryShapeCatalog.findIndex(
           ([kind]) => kind === args.kind,
@@ -210,16 +210,13 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
         }
         const state = api.getAppState();
         const widget = draggedFactoryShape(index, args.start, args.end, {
-          color:
-            document?.pen?.color || state.currentItemStrokeColor || "#000000",
+          color: state.whiteboardShapeStyle?.color || "#000000",
           width:
             document?.pen?.penWidth ||
             state.currentItemStrokeWidth /
               (state.currentItemPenMode === "brush" ? 2 : 1),
           opacity: document?.pen?.opacity ?? state.currentItemOpacity,
-          fill:
-            !!state.currentItemBackgroundColor &&
-            state.currentItemBackgroundColor !== "transparent",
+          fill: state.whiteboardShapeStyle?.fill ?? false,
         });
         assertCurrent();
         let commit: Promise<unknown> | undefined;
@@ -268,8 +265,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
         previous.toolbarHidden === next.toolbarHidden &&
         (
           [
-            "currentItemStrokeColor",
-            "currentItemBackgroundColor",
+            "whiteboardShapeStyle",
             "currentItemStrokeWidth",
             "currentItemPenMode",
             "currentItemOpacity",
@@ -335,10 +331,8 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
     state.activeTool.customType?.startsWith(prefix)
       ? Number(state.activeTool.customType.slice(prefix.length))
       : -1;
-  const color = state.currentItemStrokeColor || "#000000";
-  const filled =
-    !!state.currentItemBackgroundColor &&
-    state.currentItemBackgroundColor !== "transparent";
+  const color = state.whiteboardShapeStyle?.color || "#000000";
+  const filled = state.whiteboardShapeStyle?.fill ?? false;
   const point = (event: ReactPointerEvent): ShapePoint => {
     if (documentStage) {
       const bounds = documentStage.getBoundingClientRect();
@@ -471,7 +465,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
             start,
             end: start,
             style: {
-              color: document?.pen?.color || color,
+              color,
               width:
                 document?.pen?.penWidth ||
                 state.currentItemStrokeWidth /
@@ -603,14 +597,14 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
                 type="button"
                 aria-label={t("fcboard.pen_colour_color", { color })}
                 aria-pressed={
-                  (state.currentItemStrokeColor || "#000000").toLowerCase() ===
-                  color
+                  (
+                    state.whiteboardShapeStyle?.color || "#000000"
+                  ).toLowerCase() === color
                 }
                 onClick={() =>
                   api.updateScene({
                     appState: {
-                      currentItemStrokeColor: color,
-                      ...(filled ? { currentItemBackgroundColor: color } : {}),
+                      whiteboardShapeStyle: { color, fill: filled },
                     },
                   })
                 }
@@ -625,7 +619,7 @@ export const FactoryShapes = ({ api }: { api: FcboardImperativeAPI }) => {
               onClick={() =>
                 api.updateScene({
                   appState: {
-                    currentItemBackgroundColor: !filled ? color : "transparent",
+                    whiteboardShapeStyle: { color, fill: !filled },
                   },
                 })
               }

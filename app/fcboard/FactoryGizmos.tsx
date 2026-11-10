@@ -17,9 +17,9 @@ import {
   compactGizmoControl,
   gizmoViewport,
 } from "./adaptiveGizmo";
-import deleteIcon from "./factory-gizmo-icons/delete.png?url";
-import rotateIcon from "./factory-gizmo-icons/rotate.png?url";
-import stretchIcon from "./factory-gizmo-icons/stretch.png?url";
+import deleteIcon from "./factory-gizmo-icons/delete.svg?url";
+import rotateIcon from "./factory-gizmo-icons/rotate.svg?url";
+import stretchIcon from "./factory-gizmo-icons/stretch.svg?url";
 import compassStretchIcon from "./factory-gizmo-icons/compass_stretch.svg?url";
 import compassRotateIcon from "./factory-gizmo-icons/rotate_button.svg?url";
 import drawAngleIcon from "./factory-gizmo-icons/draw_angle.svg?url";

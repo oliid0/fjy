@@ -457,7 +457,7 @@ import { tryParseSpreadsheet } from "../charts";
 
 import { InteractiveResourceFrame } from "./InteractiveResourceFrame";
 
-import factoryEraser from "./FactoryEraser.png?url";
+import factoryEraser from "./FactoryEraser.svg?url";
 
 import ConvertElementTypePopup, {
   getConversionTypeFromElements,
@@ -3109,15 +3109,16 @@ class App extends React.Component<AppProps, AppState> {
       // update the state outside of initialData (e.g. when loading the app
       // with a library install link, which should auto-open the library)
       openSidebar: restoredAppState?.openSidebar || this.state.openSidebar,
-      activeTool:
-        activeTool.type === "image" ||
-        activeTool.type === "lasso" ||
-        activeTool.type === "selection"
-          ? {
-              ...activeTool,
-              type: restoredAppState.preferredSelectionTool.type,
-            }
-          : restoredAppState.activeTool,
+      activeTool: this.props.UIOptions.unifiedToolbar
+        ? { ...activeTool, type: "freedraw" }
+        : activeTool.type === "image" ||
+          activeTool.type === "lasso" ||
+          activeTool.type === "selection"
+        ? {
+            ...activeTool,
+            type: restoredAppState.preferredSelectionTool.type,
+          }
+        : restoredAppState.activeTool,
       isLoading: false,
       toast: this.state.toast,
     };

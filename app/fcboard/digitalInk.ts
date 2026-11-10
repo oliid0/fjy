@@ -4,7 +4,6 @@ import { getElementAbsoluteCoords } from "@fcboard/element";
 
 import type { FcboardElement } from "@fcboard/element/types";
 
-import { currentSettings } from "./settings";
 import { packForLocale, openLanguagePacks } from "./languagePacks";
 
 import type { PluginListenerHandle } from "@capacitor/core";
@@ -218,7 +217,4 @@ export const recognizeDigitalInk = async (
     (text) => typeof text === "string" && text.trim(),
   );
 };
-export const currentTextInkLanguage = () => {
-  const language = currentSettings().inkLanguage;
-  return language === "auto" ? packForLocale(getLanguage().code) : language;
-};
+export const currentTextInkLanguage = () => packForLocale(getLanguage().code);

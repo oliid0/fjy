@@ -270,6 +270,7 @@ export class BoardBook {
       },
     });
     this.api.history.clear();
+    this.api.setActiveTool({ type: "freedraw" });
     this.switching = false;
   }
   /** Persist the destination while in-flight edits still belong to the visible source page. */

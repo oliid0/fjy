@@ -20,14 +20,29 @@ export const releaseFunctionGraph = (view: VisualizationView) => {
   view.finalize();
 };
 
-/** Function mathematics stays in the bounded adaptive sampler. Vega owns the
- * same transparent vector scene used for saving, exports and point gestures. */
-export const renderFunctionGraph = (
-  target: HTMLElement,
+export const functionGraphData = (plot: Plot, color: string) =>
+  [plot.expression, ...(plot.compare || [])].flatMap((expression, curve) =>
+    sampleFunctionCurve(
+      expression,
+      functionView(plot),
+      plotScope(plot),
+    ).flatMap((points, segment) =>
+      points.map(([x, y]) => ({
+        x,
+        y,
+        segment: `${curve}:${segment}`,
+        expression,
+        color: [color, "#2563eb", "#ef4444", "#16a34a"][curve],
+      })),
+    ),
+  );
+
+/** The saved preview and isolated interactive view share the same Vega scene. */
+export const functionGraphSpec = (
   plot: Plot,
   color: string,
   size = plotSize,
-) => {
+): Spec => {
   if (
     plot.surface ||
     plot.relation ||
@@ -38,12 +53,8 @@ export const renderFunctionGraph = (
     throw new Error("Invalid two-dimensional function graph");
   }
   const domain = functionView(plot);
-  const segments = sampleFunctionCurve(
-    plot.expression,
-    domain,
-    plotScope(plot),
-  );
-  if (!segments.length && !plot.view) {
+  const points = functionGraphData(plot, color);
+  if (!points.length && !plot.view) {
     throw new Error("No real-valued plot in this range");
   }
   const axis = {
@@ -61,10 +72,7 @@ export const renderFunctionGraph = (
     height: size.height - 40,
     padding: { left: 40, right: 20, top: 20, bottom: 20 },
     autosize: "none",
-    data: segments.map((points, index) => ({
-      name: `curve${index}`,
-      values: points.map(([x, y]) => ({ x, y })),
-    })),
+    data: [{ name: "curves", values: points }],
     scales: [
       {
         name: "x",
@@ -104,22 +112,40 @@ export const renderFunctionGraph = (
         tickCount: 8,
       },
     ],
-    marks: segments.map((_, index) => ({
-      type: "line",
-      from: { data: `curve${index}` },
-      clip: true,
-      encode: {
-        update: {
-          x: { scale: "x", field: "x" },
-          y: { scale: "y", field: "y" },
-          stroke: { value: color },
-          strokeWidth: { value: 2 },
-          strokeCap: { value: "round" },
-          strokeJoin: { value: "round" },
-        },
+    marks: [
+      {
+        type: "group",
+        from: { facet: { name: "curve", data: "curves", groupby: "segment" } },
+        marks: [
+          {
+            type: "line",
+            from: { data: "curve" },
+            clip: true,
+            encode: {
+              update: {
+                x: { scale: "x", field: "x" },
+                y: { scale: "y", field: "y" },
+                stroke: { field: "color" },
+                strokeWidth: { value: 2 },
+                strokeCap: { value: "round" },
+                strokeJoin: { value: "round" },
+              },
+            },
+          },
+        ],
       },
-    })),
+    ],
   };
+  return spec;
+};
+
+export const renderFunctionGraph = (
+  target: HTMLElement,
+  plot: Plot,
+  color: string,
+  size = plotSize,
+) => {
+  const spec = functionGraphSpec(plot, color, size);
   const loader = inlineVisualizationLoader();
   const view = createInlineVegaView(spec);
   try {

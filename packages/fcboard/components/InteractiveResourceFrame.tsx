@@ -111,9 +111,6 @@ export const InteractiveResourceFrame = ({
   if (resource.visualization && visual?.error) {
     return <p role="alert">{visual.error}</p>;
   }
-  if (resource.visualization && !visual?.html) {
-    return <p role="status">{t("fcboard.opening_resource")}</p>;
-  }
   if (!html) {
     return (
       <p role="alert">
@@ -128,7 +125,9 @@ export const InteractiveResourceFrame = ({
       onLoad={() => controls.current?.loaded()}
       className="fcboard__embeddable"
       title={resource.title}
-      srcDoc={resource.visualization ? visual?.html : html}
+      data-resource-object-id={objectId}
+      srcDoc={visual?.html || html}
+      aria-busy={!!resource.visualization && !visual?.html}
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"
@@ -139,6 +138,7 @@ export const InteractiveResourceFrame = ({
     <ResourceWindow
       {...window}
       title={resource.title}
+      embeddedHeader={resource.id === "builtin-calculator"}
       onReload={() => setRevision((value) => value + 1)}
     >
       {content}

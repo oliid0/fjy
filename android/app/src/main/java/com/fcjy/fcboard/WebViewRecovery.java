@@ -2,7 +2,6 @@ package com.fcjy.fcboard;
 
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebView;
@@ -10,8 +9,6 @@ import com.getcapacitor.WebViewListener;
 
 /** Recover the Capacitor surface, never reload an unusable WebView instance. */
 final class WebViewRecovery extends WebViewListener {
-    private static final long AUTOMATIC_RETRY_INTERVAL_MS = 60000;
-    private static long lastAutomaticRetry = -1;
     private final MainActivity activity;
     private boolean handled;
 
@@ -26,20 +23,16 @@ final class WebViewRecovery extends WebViewListener {
         if (activity.getBridge() == null || view != activity.getBridge().getWebView()) return false;
         handled = true;
         android.util.Log.e("FcboardWebView", detail.didCrash()
-            ? "Whiteboard renderer crashed; replacing the surface"
-            : "Whiteboard renderer reclaimed; replacing the surface");
+            ? "Whiteboard renderer crashed; awaiting explicit recovery"
+            : "Whiteboard renderer reclaimed; awaiting explicit recovery");
         // Android requires removing and destroying this specific failed view.
         // The existing BoardBook reloads its last persisted workspace when the
         // new Capacitor Activity starts; no JS can run in the failed renderer.
         if (view.getParent() instanceof ViewGroup) ((ViewGroup)view.getParent()).removeView(view);
         view.destroy();
-        long now = SystemClock.elapsedRealtime();
-        boolean automatic = lastAutomaticRetry < 0 || now - lastAutomaticRetry >= AUTOMATIC_RETRY_INTERVAL_MS;
-        if (automatic) lastAutomaticRetry = now;
         new Handler(Looper.getMainLooper()).post(() -> {
             if (activity.isFinishing() || activity.isDestroyed()) return;
-            if (automatic) activity.recreate();
-            else new android.app.AlertDialog.Builder(activity)
+            new android.app.AlertDialog.Builder(activity)
                 .setTitle(R.string.app_name)
                 .setMessage(R.string.webview_recovery_message)
                 .setPositiveButton(R.string.web_reload, (dialog, which) -> activity.recreate())

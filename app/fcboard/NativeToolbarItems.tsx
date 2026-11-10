@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { newElementWith, CaptureUpdateAction } from "@fcboard/element";
+import { isColorDark } from "@fcboard/common";
 import { ToolbarExtras } from "@fcboard/fcboard";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
@@ -115,7 +116,16 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
       ) {
         throw new Error(t("fcboard.this_teaching_tool_is_unavailable"));
       }
-      const dataURL = await getDataURL(blob);
+      const background = api.getAppState().viewBackgroundColor;
+      const lineColor = isColorDark(background) ? "#ffffff" : "#010101";
+      svg.querySelectorAll('[stroke="#ffffff"]').forEach((path) => {
+        path.setAttribute("stroke", lineColor);
+      });
+      const dataURL = await getDataURL(
+        new Blob([new XMLSerializer().serializeToString(svg)], {
+          type: "image/svg+xml",
+        }),
+      );
       controller.signal.throwIfAborted();
       if (revision !== classroomCommands.revision) {
         return;

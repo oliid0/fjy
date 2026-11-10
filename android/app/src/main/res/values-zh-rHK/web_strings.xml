@@ -9,5 +9,5 @@
     <string name="web_move">移動網頁</string>
     <string name="web_resize">調整網頁大小</string>
     <string name="web_renderer_stopped">網頁意外停止，已關閉。可以重新開啟。</string>
-    <string name="webview_recovery_message">白板顯示再次停止。重新載入可恢復最近儲存的白板內容。</string>
+    <string name="webview_recovery_message">白板顯示已停止。重新載入可恢復最近儲存的白板內容。</string>
 </resources>

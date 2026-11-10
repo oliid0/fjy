@@ -92,8 +92,8 @@ public class GeneratedResourceTest {
                 onActivity(scenario, activity -> activity.getBridge().getWebView().reload());
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('.fc-unified-toolbar')");
                 evaluate(scenario, "document.querySelector('[data-board-insert]').click();true");
-                until(scenario, "Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='教学资源')");
-                evaluate(scenario, "Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='教学资源').click();true");
+                until(scenario, "!!document.querySelector('[data-native-tool=resources]')");
+                evaluate(scenario, "document.querySelector('[data-native-tool=resources]').click();true");
                 until(scenario, "!!document.querySelector('.fc-resource-library input')");
                 evaluate(scenario, "(()=>{const input=document.querySelector('.fc-resource-library input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'牛顿第一定律演示');input.dispatchEvent(new Event('input',{bubbles:true}));})();true");
                 until(scenario, "document.querySelector('.fc-resource-generation button')?.disabled===false");

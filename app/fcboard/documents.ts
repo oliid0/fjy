@@ -1,7 +1,11 @@
 import { t } from "@fcboard/fcboard/i18n";
 import { createStore, get, set } from "idb-keyval";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
-import { eraseStroke } from "@fcboard/fcboard/eraser/stroke";
+import {
+  eraseStroke,
+  eraseStrokeInRegion,
+} from "@fcboard/fcboard/eraser/stroke";
+import { createEraseRegion } from "@fcboard/fcboard/eraser/region";
 import {
   factoryCircleHits,
   factoryCircleObject,
@@ -85,7 +89,7 @@ export type InkStroke = {
   plot?: {
     id: string;
     plot: Plot;
-    renderer?: "vega";
+    renderer?: "vega" | "iframe";
     position: { x: number; y: number };
     origin: { x: number; y: number };
   };
@@ -119,8 +123,9 @@ const documentInkFragments = (
       part.x + x,
       part.y + y,
     ]),
-    ...(stroke.fcInk
-      ? { fcInk: part.customData?.fcInk, pressures: [...part.pressures] }
+    ...(stroke.fcInk ? { fcInk: part.customData?.fcInk } : {}),
+    ...(stroke.fcInk || stroke.pressures
+      ? { pressures: [...part.pressures] }
       : {}),
   }));
 
@@ -159,7 +164,7 @@ export const eraseDocumentInk = (
   return changed ? next : strokes;
 };
 
-/** Courseware follows the same original circle-object eraser as the board. */
+/** Courseware preserves the same exterior handwriting fragments as the board. */
 export const eraseDocumentRegion = (
   strokes: InkStroke[],
   path: [number, number][],
@@ -221,9 +226,33 @@ export const eraseDocumentRegion = (
     topmost ? [topmost.id] : [],
     precision,
   );
-  return selected.size
-    ? strokes.filter((stroke) => !selected.has(stroke.id))
-    : strokes;
+  const region = createEraseRegion(points, precision);
+  let changed = false;
+  const next = strokes.flatMap((stroke) => {
+    if (!selected.has(stroke.id) || stroke.locked) {
+      return [stroke];
+    }
+    if (
+      !stroke.text &&
+      !stroke.image &&
+      !stroke.widget &&
+      !stroke.resource &&
+      (!stroke.shapeType || stroke.shapeType === "freedraw") &&
+      (!stroke.fill || stroke.fill === "transparent")
+    ) {
+      const parts = region
+        ? eraseStrokeInRegion(documentInkElement(stroke), region)
+        : null;
+      if (!parts) {
+        return [stroke];
+      }
+      changed = true;
+      return documentInkFragments(stroke, parts);
+    }
+    changed = true;
+    return [];
+  });
+  return changed ? next : strokes;
 };
 
 /** Object erasing shares the board's swept hit geometry, then removes the composite. */

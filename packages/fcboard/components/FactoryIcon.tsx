@@ -11,6 +11,19 @@ import type { CSSProperties } from "react";
  * Keep viewport/path geometry; Android bottom_bar_icon_tint becomes currentColor.
  * Source and device measurements: docs/apk-alignment.md. */
 const icons = {
+  curtain: {
+    viewBox: "0 0 52 52",
+    paths: [
+      {
+        d: "M5 9h42M8 9v34l10-6 8 6 8-6 10 6V9M18 10v25M26 10v31M34 10v25",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "3.25",
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      },
+    ],
+  },
   pen: {
     viewBox: "0 0 52.0 52.0",
     paths: [

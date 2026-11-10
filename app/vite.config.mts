@@ -132,8 +132,8 @@ export default defineConfig(({ mode }) => {
         },
       },
       sourcemap: envVars.VITE_APP_DISABLE_SENTRY !== "true",
-      // don't auto-inline small assets (i.e. fonts hosted on CDN)
-      assetsInlineLimit: 0,
+      // Keep small toolbar vectors/sprites in their owning bundle, ready at first paint.
+      assetsInlineLimit: 8192,
     },
     plugins: [
       Sitemap({

@@ -4,7 +4,7 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { searchDuration } from "./searchService";
 import play from "./factory-search-icons/play.svg";
-import loadingIcon from "./factory-search-icons/loading.png";
+import loadingIcon from "./factory-search-icons/loading.svg";
 
 import type { SearchMedia } from "./searchService";
 

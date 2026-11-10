@@ -65,7 +65,7 @@ it("counts actual elapsed time across suspension, pauses without drift and reset
     remaining: 0,
     running: false,
   });
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.reset") }));
+  await command("tools.timer", { action: "reset" });
   expect(screen.getByRole("timer")).toHaveTextContent("00:00:10");
   await command("tools.timer", { action: "close" });
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -90,9 +90,50 @@ it("matches the vendor timer's idle controls and restores them without pausing t
     screen.getByRole("button", { name: t("fcboard.fullscreen") }),
   );
   await act(async () => vi.advanceTimersByTime(8000));
+  expect(screen.getByRole("timer")).toHaveTextContent("00:00:47");
+  expect(screen.queryByRole("button")).toBeNull();
+  fireEvent.click(screen.getByRole("timer"));
   expect(
     screen.getByRole("button", { name: t("fcboard.pause_tool") }),
   ).toBeEnabled();
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    running: true,
+  });
+});
+it("edits the original three wheels without committing until play, wraps values and disables zero time", async () => {
+  render(<ToolTimer />);
+  await command("tools.timer", {
+    action: "configure",
+    seconds: 60,
+    muted: true,
+  });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.fullscreen") }),
+  ).toBeNull();
+  const hours = screen.getByRole("spinbutton", { name: "HH" });
+  const minutes = screen.getByRole("spinbutton", { name: "MM" });
+  const seconds = screen.getByRole("spinbutton", { name: "SS" });
+  fireEvent.keyDown(hours, { key: "End" });
+  fireEvent.keyDown(hours, { key: "ArrowUp" });
+  expect(hours).toHaveAttribute("aria-valuenow", "0");
+  fireEvent.keyDown(minutes, { key: "Home" });
+  fireEvent.wheel(seconds, { deltaY: -1 });
+  expect(seconds).toHaveAttribute("aria-valuenow", "59");
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    duration: 60000,
+    running: false,
+  });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.reset") }));
+  expect(
+    screen.getByRole("button", { name: t("fcboard.play_tool") }),
+  ).toBeDisabled();
+  fireEvent.keyDown(seconds, { key: "ArrowUp" });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.play_tool") }));
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    duration: 1000,
+    running: true,
+  });
 });
 it("repeats the completed timer alarm every minute and cancels it when muted, reset or closed", async () => {
   vi.useFakeTimers();

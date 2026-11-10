@@ -584,11 +584,41 @@ export const SplitBoard = () => {
                     aria-label={String(number)}
                     onChange={() => setDraft({ ...draft, count: number })}
                   />
-                  <span
+                  <svg
                     className="fc-split-preview"
                     data-count={number}
+                    viewBox="0 0 42 42"
                     aria-hidden="true"
-                  />
+                  >
+                    <rect
+                      x="2"
+                      y="6"
+                      width="38"
+                      height="30"
+                      fill="none"
+                      stroke="currentColor"
+                    />
+                    {Array.from({ length: number - 1 }, (_, index) => (
+                      <path
+                        key={index}
+                        d={`M${2 + ((index + 1) * 38) / number} 6v30`}
+                        stroke="currentColor"
+                        strokeDasharray="1 1"
+                      />
+                    ))}
+                    <text
+                      x="21"
+                      y="27"
+                      textAnchor="middle"
+                      fill="currentColor"
+                      stroke="#ffffff"
+                      strokeWidth="0.5"
+                      fontFamily="Arial"
+                      fontSize="16"
+                    >
+                      {number}
+                    </text>
+                  </svg>
                 </label>
               ))}
             </div>
@@ -605,12 +635,21 @@ export const SplitBoard = () => {
                     checked={draft.background === value}
                     onChange={() => setDraft({ ...draft, background: value })}
                   />
-                  <span
+                  <svg
                     className="fc-split-preview"
                     data-background={value + 1}
-                    style={{ background: color }}
+                    viewBox="0 0 42 42"
                     aria-hidden="true"
-                  />
+                  >
+                    <rect
+                      x="2"
+                      y="6"
+                      width="38"
+                      height="30"
+                      fill={color}
+                      stroke="currentColor"
+                    />
+                  </svg>
                 </label>
               ))}
             </div>

@@ -596,3 +596,57 @@ test("inserting four-line writing paper immediately accepts ink on its surface",
     )
     .toBe(1);
 });
+
+for (const background of ["#ffffff", "#123d32"]) {
+  test(`compact bare toolbar remains visible on ${background}`, async ({
+    page,
+  }) => {
+    await page.addInitScript((color) => {
+      localStorage.setItem(
+        "fcboard-state",
+        JSON.stringify({ viewBackgroundColor: color, theme: "light" }),
+      );
+    }, background);
+    await page.goto("/");
+    const toolbar = page.getByRole("toolbar", {
+      name: "白板工具栏",
+      exact: true,
+    });
+    await expect(toolbar).toBeVisible();
+    const style = await toolbar.evaluate((node) => {
+      const groups = [
+        ...node.querySelectorAll<HTMLElement>(
+          ":scope > .fc-toolbar-side, :scope > .fc-drawing-tools",
+        ),
+      ];
+      const pen = node.querySelector<HTMLElement>('button[aria-label="笔"]')!;
+      const other = node.querySelector<HTMLElement>(
+        'button[aria-label="板擦"]',
+      )!;
+      return {
+        backgrounds: groups.map(
+          (group) => getComputedStyle(group).backgroundColor,
+        ),
+        padding: groups.map((group) => [
+          getComputedStyle(group).paddingTop,
+          getComputedStyle(group).paddingBottom,
+        ]),
+        height: node.getBoundingClientRect().height,
+        buttonHeight: pen.getBoundingClientRect().height,
+        color: getComputedStyle(other).color,
+        iconWidth: other.querySelector("svg")!.getBoundingClientRect().width,
+      };
+    });
+    expect(
+      style.backgrounds.every((value) => value === "rgba(0, 0, 0, 0)"),
+    ).toBe(true);
+    expect(
+      style.padding.every((value) => value.every((side) => side === "0px")),
+    ).toBe(true);
+    expect(style.height).toBeCloseTo(style.buttonHeight, 1);
+    expect(style.iconWidth).toBeGreaterThan(15);
+    expect(style.color).toBe(
+      background === "#ffffff" ? "rgb(1, 1, 1)" : "rgb(252, 252, 254)",
+    );
+  });
+}

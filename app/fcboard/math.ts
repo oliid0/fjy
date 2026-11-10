@@ -78,6 +78,7 @@ export {
 export type Plot = {
   expression: string;
   equation?: string;
+  compare?: string[];
   surface: boolean;
   x: number;
   y: number;

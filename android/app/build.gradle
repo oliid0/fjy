@@ -16,6 +16,11 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    androidResources {
+        // Direct packaged reads: no on-demand ZIP inflation for local UI/code/models.
+        // AndroidResources.noCompress is the public Android Gradle API.
+        noCompress += ["js", "css", "svg", "json", "wasm", "onnx", "bin", "woff2"]
+    }
     packagingOptions {
         resources { pickFirsts += ["META-INF/LICENSE.txt", "META-INF/NOTICE.txt", "META-INF/LICENSE.md", "META-INF/NOTICE.md"] }
     }

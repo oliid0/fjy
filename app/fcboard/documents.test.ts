@@ -435,3 +435,50 @@ it("keeps the original courseware nib through erasure, moving and uniform resizi
   });
   expect(documentStrokeGeometry(scaled).nib).not.toMatch(/NaN|Infinity/);
 });
+
+it("preserves both exterior parts of connected courseware ink when only its middle is circled", () => {
+  const ink: InkStroke = {
+    id: "connected",
+    color: "#123456",
+    width: 4,
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+    simulatePressure: false,
+    pressures: [0.2, 0.8],
+  };
+  const outside: InkStroke = {
+    ...ink,
+    id: "outside",
+    points: [
+      [0, 100],
+      [100, 100],
+    ],
+  };
+  const result = eraseDocumentRegion(
+    [ink, outside],
+    [
+      [40, -20],
+      [60, -20],
+      [60, 20],
+      [40, 20],
+    ],
+  );
+  expect(result).toHaveLength(3);
+  expect(result[0].points).toEqual([
+    [0, 0],
+    [40, 0],
+  ]);
+  expect(result[1].points).toEqual([
+    [60, 0],
+    [100, 0],
+  ]);
+  expect(result[0].pressures?.at(-1)).toBeCloseTo(0.44);
+  expect(result[1].pressures?.[0]).toBeCloseTo(0.56);
+  expect(result[2]).toBe(outside);
+  expect(ink.points).toEqual([
+    [0, 0],
+    [100, 0],
+  ]);
+});

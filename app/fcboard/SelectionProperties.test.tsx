@@ -115,6 +115,12 @@ it("retains a live popup while changing real selected ink color and opacity, the
     opacity: 100,
   });
   select([ink]);
+  act(() =>
+    API.setAppState({
+      currentItemStrokeColor: "#123456",
+      whiteboardShapeStyle: { color: "#ff964f", fill: true },
+    }),
+  );
   click(t("fcboard.selection_color"));
   fireEvent.click(screen.getByRole("button", { name: "#ff0000" }));
   await waitFor(() =>
@@ -123,6 +129,21 @@ it("retains a live popup while changing real selected ink color and opacity, the
   expect(
     screen.getByRole("dialog", { name: t("fcboard.selection_color") }),
   ).toBeVisible();
+  expect(api.getAppState().currentItemStrokeColor).toBe("#123456");
+  expect(api.getAppState().whiteboardShapeStyle).toEqual({
+    color: "#ff964f",
+    fill: true,
+  });
+  expect(
+    row()
+      .getByRole("button", { name: t("fcboard.selection_color") })
+      .querySelector("svg path"),
+  ).not.toBeNull();
+  expect(
+    row()
+      .getByRole("button", { name: t("fcboard.selection_color") })
+      .querySelector("img"),
+  ).toBeNull();
   click(t("labels.opacity"));
   expect(
     screen.queryByRole("dialog", { name: t("fcboard.selection_color") }),
@@ -168,6 +189,7 @@ it("fills a geometric object with the selected color and removes fill without ch
     fillStyle: "solid",
   });
   select([box]);
+  const penBackground = api.getAppState().currentItemBackgroundColor;
   click(t("fcboard.selection_color"));
   fireEvent.click(screen.getByRole("checkbox", { name: t("labels.fill") }));
   fireEvent.click(screen.getByRole("button", { name: "#ff0000" }));
@@ -175,6 +197,7 @@ it("fills a geometric object with the selected color and removes fill without ch
     expect(api.getSceneElements()[0].backgroundColor).toBe("#ff0000"),
   );
   expect(api.getSceneElements()[0].strokeColor).toBe("#000000");
+  expect(api.getAppState().currentItemBackgroundColor).toBe(penBackground);
   fireEvent.click(screen.getByRole("checkbox", { name: t("labels.fill") }));
   expect(api.getSceneElements()[0].backgroundColor).toBe("transparent");
 });

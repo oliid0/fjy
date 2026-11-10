@@ -32,7 +32,7 @@ it("detects Spanish natively and returns Chinese without starting any renderer m
   });
   expect(offlineInference).not.toHaveBeenCalled();
 });
-it("uses the downloaded handwriting source pack for ambiguous short words", async () => {
+it("does not let a legacy handwriting preference override native language detection", async () => {
   saveSettings({ ...defaults, inkLanguage: "es-ES" }, false);
   native.translate.mockResolvedValue({
     language: "es",
@@ -40,7 +40,7 @@ it("uses the downloaded handwriting source pack for ambiguous short words", asyn
   });
   await translateLocally("Hola", "ja-JP", new AbortController().signal);
   expect(native.translate.mock.calls[0][0]).toMatchObject({
-    source: "es-ES",
+    source: "auto",
     target: "ja-JP",
   });
 });
@@ -69,11 +69,11 @@ it("rejects native failures and invalid outputs without a hidden WASM or cloud r
     new Error("model download unavailable"),
   );
   await expect(
-    translateLocally("hola", "zh-CN", new AbortController().signal),
+    translateLocally("¿Hola?", "zh-CN", new AbortController().signal),
   ).rejects.toThrow("model download unavailable");
   native.translate.mockResolvedValueOnce({ language: "es", translation: "" });
   await expect(
-    translateLocally("hola", "zh-CN", new AbortController().signal),
+    translateLocally("¿Hola?", "zh-CN", new AbortController().signal),
   ).rejects.toThrow("Invalid local translation result");
   expect(offlineInference).not.toHaveBeenCalled();
 });

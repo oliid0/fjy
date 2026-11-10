@@ -21,6 +21,17 @@ it("runs the copied offline calculator's actual buttons, keyboard and scientific
       document.dispatchEvent(
         new dom.window.KeyboardEvent("keydown", { key, bubbles: true }),
       );
+    for (const key of ["9", "+", "9"]) {
+      press(key);
+    }
+    expect(document.getElementById("input-display").textContent).toBe("9+9");
+    expect(document.getElementById("result-display").textContent).toBe("18");
+    press("Enter");
+    expect(document.getElementById("history-display").textContent).toBe(
+      "9+9 =",
+    );
+    expect(document.getElementById("result-display").textContent).toBe("18");
+    press("Escape");
     for (const key of ["2", "+", "3", "*", "4", "Enter"]) {
       press(key);
     }

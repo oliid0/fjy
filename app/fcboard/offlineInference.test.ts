@@ -32,7 +32,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-it("aborting a queued local request cannot terminate another caller's inference", async () => {
+it("aborting an independent local request cannot terminate another caller's inference", async () => {
   const { offlineInference } = await import("./offlineInference");
   const first = offlineInference(task, new AbortController().signal);
   await vi.advanceTimersByTimeAsync(0);
@@ -40,6 +40,8 @@ it("aborting a queued local request cannot terminate another caller's inference"
   const controller = new AbortController();
   const second = offlineInference(task, controller.signal);
   const cancelled = expect(second).rejects.toThrow();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(ModelWorker.instances).toHaveLength(2);
   controller.abort();
   await cancelled;
   expect(worker.terminate).not.toHaveBeenCalled();
@@ -48,7 +50,8 @@ it("aborting a queued local request cannot terminate another caller's inference"
   await vi.advanceTimersByTimeAsync(15001);
   expect(worker.terminate).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(105000);
-  expect(worker.terminate).toHaveBeenCalledTimes(1);
+  expect(worker.terminate).not.toHaveBeenCalled();
+  expect(ModelWorker.instances[1].terminate).toHaveBeenCalledTimes(1);
 });
 it("terminates hung local WASM and lets the next request use a fresh worker", async () => {
   const { offlineInference } = await import("./offlineInference");
@@ -64,28 +67,28 @@ it("terminates hung local WASM and lets the next request use a fresh worker", as
   await expect(second).resolves.toEqual([{ translation_text: "你好" }]);
 });
 
-it("releases the resident inference worker before OCR can allocate its own heap", async () => {
+it("OCR can start while translation is running without unloading either model", async () => {
   const { offlineInference } = await import("./offlineInference");
   const { queueLocalInference } = await import("./localInferenceQueue");
   const first = offlineInference(task, new AbortController().signal);
   await vi.advanceTimersByTimeAsync(0);
   const worker = ModelWorker.instances[0];
-  const releaseOCR = vi.fn();
+  const dispose = vi.fn();
   const recognizeOCR = vi.fn(async () => {
-    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(worker.terminate).not.toHaveBeenCalled();
   });
-  const next = queueLocalInference("ocr", releaseOCR, recognizeOCR);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(recognizeOCR).not.toHaveBeenCalled();
-  expect(worker.terminate).not.toHaveBeenCalled();
+  await queueLocalInference("ocr", () => ({ dispose }), recognizeOCR);
+  expect(recognizeOCR).toHaveBeenCalledTimes(1);
   worker.complete([{ translation_text: "你好" }]);
   await first;
-  await next;
-  expect(recognizeOCR).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(0);
   const again = offlineInference(task, new AbortController().signal);
   await vi.advanceTimersByTimeAsync(0);
-  expect(releaseOCR).toHaveBeenCalledTimes(1);
-  expect(ModelWorker.instances).toHaveLength(2);
-  ModelWorker.instances[1].complete([{ translation_text: "你好" }]);
+  expect(dispose).not.toHaveBeenCalled();
+  expect(ModelWorker.instances).toHaveLength(1);
+  const last = worker.postMessage.mock.calls.at(-1)![0];
+  worker.onmessage?.({
+    data: { id: last.id, ok: true, result: [{ translation_text: "你好" }] },
+  });
   await again;
 });

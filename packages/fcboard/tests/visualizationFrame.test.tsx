@@ -28,9 +28,12 @@ it("reports the actual iframe after asynchronous runtime loading and clears it o
       iframeRef={ref}
     />,
   );
-  expect(screen.getByRole("status")).toBeVisible();
-  expect(ref.current).toBeNull();
-  await waitFor(() => expect(ref.current).toBeInstanceOf(HTMLIFrameElement));
+  expect(ref.current).toBeInstanceOf(HTMLIFrameElement);
+  expect(ref.current).toHaveAttribute("aria-busy", "true");
+  expect(ref.current!.srcdoc).toContain("Comparison");
+  await waitFor(() =>
+    expect(ref.current).toHaveAttribute("aria-busy", "false"),
+  );
   expect(ref.current).toHaveAttribute("sandbox", "allow-scripts");
   expect(ref.current!.srcdoc).toContain("ast:true");
   expect(ref.current!.srcdoc).toContain("structuredClone");
@@ -60,8 +63,11 @@ it("does not show a stale resource when the previous async load completes later"
   );
   await waitFor(() => expect(pending).toHaveLength(2));
   await act(async () => pending[0]("<svg>Old</svg>"));
-  expect(screen.getByRole("status")).toBeVisible();
-  expect(document.querySelector("iframe")).toBeNull();
+  expect(screen.getByTitle("New")).toHaveAttribute("aria-busy", "true");
+  expect(screen.getByTitle("New")).not.toHaveAttribute(
+    "srcdoc",
+    "<svg>Old</svg>",
+  );
   await act(async () => pending[1]("<svg>New</svg>"));
   expect(screen.getByTitle("New")).toHaveAttribute("srcdoc", "<svg>New</svg>");
 });

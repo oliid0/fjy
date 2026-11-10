@@ -67,7 +67,7 @@ export const fitPlot = (
         return {
           ...shape,
           ...transform({ x: shape.x ?? 0, y: shape.y ?? 0 }),
-          ...(shape.type === "image"
+          ...(shape.type === "image" || shape.type === "iframe"
             ? {
                 width: (shape.width || 0) * scale,
                 height: (shape.height || 0) * scale,

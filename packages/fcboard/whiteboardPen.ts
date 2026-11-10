@@ -29,6 +29,8 @@ export const switchWhiteboardTip = (
     return {
       currentItemStrokeColor: state.currentItemStrokeColor,
       currentItemStrokeWidth: state.currentItemStrokeWidth,
+      currentItemInkGradient: state.currentItemInkGradient,
+      whiteboardPenTipsVersion: 2 as const,
     };
   }
   const profiles = {
@@ -53,6 +55,7 @@ export const switchWhiteboardTip = (
   };
   return {
     whiteboardPenTip: tip,
+    whiteboardPenTipsVersion: 2 as const,
     whiteboardPenTips: profiles,
     currentItemPenMode: next.mode,
     currentItemStrokeColor: next.color,

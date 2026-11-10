@@ -1,72 +1,114 @@
 beforeEach(() => vi.resetModules());
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+const flush = async () => {
+  for (let i = 0; i < 12; i++) {
+    await Promise.resolve();
+  }
+};
 
-it("finishes OCR before releasing its heap and starting math, then releases math before translation", async () => {
+it("runs two regions concurrently, bounds active heaps and reuses a ready model", async () => {
   const { queueLocalInference } = await import("./localInferenceQueue");
-  const events: string[] = [];
-  let finish!: () => void;
-  const ocr = queueLocalInference(
-    "ocr",
-    () => events.push("release OCR"),
-    async () => {
-      events.push("start OCR");
-      await new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      events.push("finish OCR");
-    },
+  const gates = [deferred(), deferred()];
+  const residents: { dispose: ReturnType<typeof vi.fn> }[] = [];
+  const create = vi.fn(() => {
+    const resident = { dispose: vi.fn() };
+    residents.push(resident);
+    return resident;
+  });
+  const started: number[] = [];
+  const tasks = gates.map((gate, index) =>
+    queueLocalInference("math", create, async () => {
+      started.push(index);
+      await gate.promise;
+    }),
   );
-  const math = queueLocalInference(
+  const third = queueLocalInference("math", create, async () => {
+    started.push(2);
+  });
+  await flush();
+  expect(started).toEqual([0, 1]);
+  expect(create).toHaveBeenCalledTimes(2);
+  gates[1].resolve();
+  await flush();
+  expect(started).toEqual([0, 1, 2]);
+  expect(create).toHaveBeenCalledTimes(2);
+  expect(residents.every((model) => !model.dispose.mock.calls.length)).toBe(
+    true,
+  );
+  gates[0].resolve();
+  await Promise.all([...tasks, third]);
+});
+
+it("skips cancelled queued work and evicts only an idle model", async () => {
+  const { queueLocalInference } = await import("./localInferenceQueue");
+  const gate = deferred();
+  const active = { dispose: vi.fn() };
+  const idle = { dispose: vi.fn() };
+  const first = queueLocalInference(
     "math",
-    () => events.push("release math"),
-    async () => {
-      events.push("start math");
-    },
+    () => active,
+    () => gate.promise,
   );
-  const translation = queueLocalInference(
+  await queueLocalInference(
+    "ocr",
+    () => idle,
+    async () => {},
+  );
+  await flush();
+  const cancelled = vi.fn();
+  await queueLocalInference(
     "translation:en:zh",
     vi.fn(),
-    async () => {
-      events.push("start translation");
-    },
+    cancelled,
+    () => false,
   );
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(events).toEqual(["start OCR"]);
-  finish();
-  await Promise.all([ocr, math, translation]);
-  expect(events).toEqual([
-    "start OCR",
-    "finish OCR",
-    "release OCR",
-    "start math",
-    "release math",
-    "start translation",
-  ]);
-});
-
-it("reuses the same model for consecutive requests and skips an invalidated request before switching heaps", async () => {
-  const { queueLocalInference } = await import("./localInferenceQueue");
-  const release = vi.fn();
-  const cancelled = vi.fn();
-  await queueLocalInference("math", release, async () => {});
-  await queueLocalInference("ocr", vi.fn(), cancelled, () => false);
-  await queueLocalInference("math", release, async () => {});
-  expect(release).not.toHaveBeenCalled();
   expect(cancelled).not.toHaveBeenCalled();
-  await queueLocalInference("translation:en:zh", vi.fn(), async () => {});
-  expect(release).toHaveBeenCalledTimes(1);
+  expect(idle.dispose).not.toHaveBeenCalled();
+  await queueLocalInference(
+    "translation:en:zh",
+    () => ({ dispose: vi.fn() }),
+    async () => {},
+  );
+  expect(idle.dispose).toHaveBeenCalledTimes(1);
+  expect(active.dispose).not.toHaveBeenCalled();
+  gate.resolve();
+  await first;
 });
 
-it("allows another model to run after initialization fails", async () => {
+it("a failed slot cannot dispose another running region or block subsequent work", async () => {
   const { queueLocalInference } = await import("./localInferenceQueue");
-  const release = vi.fn();
-  const next = vi.fn().mockResolvedValue(undefined);
+  const gate = deferred();
+  const active = { dispose: vi.fn() };
+  const failed = { dispose: vi.fn() };
+  const first = queueLocalInference(
+    "math",
+    () => active,
+    () => gate.promise,
+  );
   await expect(
-    queueLocalInference("ocr", release, async () => {
-      throw new Error("model unavailable");
-    }),
+    queueLocalInference(
+      "ocr",
+      () => failed,
+      async () => {
+        throw new Error("model unavailable");
+      },
+    ),
   ).rejects.toThrow("model unavailable");
-  await queueLocalInference("math", vi.fn(), next);
-  expect(release).toHaveBeenCalledTimes(1);
+  expect(failed.dispose).toHaveBeenCalledTimes(1);
+  const next = vi.fn().mockResolvedValue(undefined);
+  await queueLocalInference(
+    "translation:en:zh",
+    () => ({ dispose: vi.fn() }),
+    next,
+  );
   expect(next).toHaveBeenCalledTimes(1);
+  expect(active.dispose).not.toHaveBeenCalled();
+  gate.resolve();
+  await first;
 });

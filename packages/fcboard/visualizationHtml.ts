@@ -30,6 +30,7 @@ export const visualizationHtml = async (resource: InteractiveResource) => {
     var loader={load:function(){return Promise.reject(Error('External data is disabled'))},sanitize:function(uri){return /^data:image\\/(png|jpeg|webp|gif);base64,/i.test(uri)?Promise.resolve({href:uri}):Promise.reject(Error('External assets are disabled'))}};
     vegaEmbed(root,input.spec,{mode:input.mode,renderer:'svg',actions:false,defaultStyle:false,ast:true,loader:loader}).then(function(value){
       result=value;
+      document.dispatchEvent(new CustomEvent('fc-visualization-ready',{detail:result.view}));
       function resize(){if(root.clientWidth>0&&root.clientHeight>0){result.view.width(Math.max(100,root.clientWidth-72)).height(Math.max(100,root.clientHeight-64)).resize().runAsync().catch(failed)}}
       observer=new ResizeObserver(resize);observer.observe(root);resize();
     }).catch(failed);

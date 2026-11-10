@@ -781,7 +781,11 @@ export const registerCanvasCommands = (
         }
         const viewport = contentViewport(api);
         const scale = api.getAppState().zoom.value;
-        const position = resourcePlacement(viewport, scale);
+        const position = resourcePlacement(
+          viewport,
+          scale,
+          resource.id === "builtin-calculator",
+        );
         const ids = insertElements(api, [
           newIframeElement({
             type: "iframe",

@@ -14,11 +14,7 @@ import settingsCloseIcon from "./factory-setting-icons/close.svg?url";
 
 import { MaterialPanel } from "./MaterialPanel";
 import { LanguagePacks } from "./HandwritingLanguagePacks";
-import {
-  openLanguagePacks,
-  handwritingPackTags,
-  handwritingLanguageName,
-} from "./languagePacks";
+import { openLanguagePacks } from "./languagePacks";
 import {
   SettingsNavigation,
   SettingsSection,
@@ -114,7 +110,12 @@ import { LanguagePanel } from "./LanguagePanel";
 import { Spotlight } from "./Spotlight";
 import { BoardSettings } from "./BoardSettings";
 import { recognizeHandwriting } from "./ocr";
-import { boardInk, clipInk } from "./digitalInk";
+import {
+  boardInk,
+  clipInk,
+  hasDigitalInk,
+  prepareDigitalInk,
+} from "./digitalInk";
 import { placePanel, useAnchoredPanel } from "./floating";
 import { startSystemSpeech, transcribe } from "./speech";
 import { createVoiceTurns } from "./voiceTurns";
@@ -175,6 +176,22 @@ export const Classroom = ({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!hasDigitalInk()) {
+      return;
+    }
+    let mounted = true;
+    // Copies and verifies all bundled text/shape/emoji packs into SDK data storage.
+    // This precedes any pen mode, including magic without an AI configuration.
+    void prepareDigitalInk().catch((failure) => {
+      if (mounted) {
+        setError(errorMessage(failure));
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
   const persistSettings = (next: Settings, rememberKeys = remember) => {
     setSettingsState(next);
     try {
@@ -2895,7 +2912,6 @@ export const Classroom = ({
           setSettingsPage("languagePacks");
           setPanel("settings");
         }}
-        onSelect={(tag) => setSettings({ ...settings, inkLanguage: tag })}
       />
       <Teacher
         api={api}
@@ -3091,29 +3107,6 @@ export const Classroom = ({
                     <label>
                       {t("labels.language")}
                       <LanguageList />
-                    </label>
-                    <label>
-                      {t("fcboard.handwriting_language")}
-                      <MaterialSelect
-                        aria-label={t("fcboard.handwriting_language")}
-                        value={settings.inkLanguage}
-                        onChange={(event) =>
-                          setSettings({
-                            ...settings,
-                            inkLanguage: event.target
-                              .value as Settings["inkLanguage"],
-                          })
-                        }
-                      >
-                        <option value="auto">
-                          {t("fcboard.follow_interface_language")}
-                        </option>
-                        {handwritingPackTags.map((tag) => (
-                          <option key={tag} value={tag}>
-                            {handwritingLanguageName(tag, langCode)}
-                          </option>
-                        ))}
-                      </MaterialSelect>
                     </label>
 
                     <button

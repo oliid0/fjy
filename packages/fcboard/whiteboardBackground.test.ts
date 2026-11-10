@@ -1,3 +1,9 @@
+import rough from "roughjs";
+
+import { arrayToMap } from "@fcboard/common";
+
+import { renderStaticScene } from "./renderer/staticScene";
+
 import { getDefaultAppState } from "./appState";
 import { restoreAppState } from "./data/restore";
 import { exportToSvg } from "./scene/export";
@@ -7,6 +13,9 @@ import {
   loadBackground,
   validWhiteboardBackground,
 } from "./whiteboardBackground";
+
+import type { StaticSceneRenderConfig } from "./scene/types";
+import type { Zoom } from "./types";
 
 import type { DataURL } from "./types";
 
@@ -92,3 +101,67 @@ it("rejects external or unsupported backgrounds and allows retry after an actual
   const images = mockImages();
   expect(await loadBackground(background)).toBe(images[0]);
 });
+
+it.each([
+  [1920, 1080, 1, 1],
+  [1920, 1080, 2, 0.5],
+  [480, 1080, 2, 2],
+  [960, 540, 1.5, 1.25],
+])(
+  "paints the full current %sx%s viewport at pixel ratio %s and zoom %s, ignoring saved board dimensions",
+  async (width, height, scale, zoom) => {
+    mockImages();
+    const background = { pattern: 3, width: 640, height: 360 };
+    const image = await loadBackground(background);
+    const canvas = document.createElement("canvas");
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const context = canvas.getContext("2d")!;
+    const draw = vi.spyOn(context, "drawImage");
+    const config: StaticSceneRenderConfig = {
+      canvas,
+      rc: rough.canvas(canvas),
+      scale,
+      elementsMap: arrayToMap([]),
+      allElementsMap: arrayToMap([]),
+      visibleElements: [],
+      appState: {
+        ...getDefaultAppState(),
+        width,
+        height,
+        zoom: { value: zoom } as Zoom,
+        scrollX: 123,
+        scrollY: -456,
+        whiteboardBackground: background,
+      },
+      renderConfig: {
+        canvasBackgroundColor: "#fffff9",
+        imageCache: new Map(),
+        renderGrid: false,
+        isExporting: false,
+        embedsValidationStatus: new Map(),
+        elementsPendingErasure: new Set(),
+        pendingFlowchartNodes: null,
+        theme: "light",
+      },
+    };
+    renderStaticScene(config);
+    expect(draw).toHaveBeenLastCalledWith(
+      image,
+      0,
+      0,
+      width / zoom,
+      height / zoom,
+    );
+    canvas.width = (width * scale) / 2;
+    config.appState = { ...config.appState, width: width / 2 };
+    renderStaticScene(config);
+    expect(draw).toHaveBeenLastCalledWith(
+      image,
+      0,
+      0,
+      width / zoom / 2,
+      height / zoom,
+    );
+  },
+);

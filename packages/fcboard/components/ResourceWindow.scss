@@ -83,3 +83,16 @@
     }
   }
 }
+
+.fc-resource-window[data-embedded-header="true"] {
+  border-radius: calc(6 * var(--resource-unit, 1px));
+  .fc-resource-window-content {
+    overflow: hidden;
+  }
+  .fc-resource-window-resize {
+    width: calc(12 * var(--resource-unit, 1px));
+    height: calc(12 * var(--resource-unit, 1px));
+    min-height: 0;
+    color: var(--fc-ink, #777);
+  }
+}

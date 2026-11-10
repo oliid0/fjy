@@ -778,6 +778,9 @@ describe("APK-style whiteboard ink", () => {
     const slider = screen.getByRole("slider", {
       name: t("fcboard.pen_thickness"),
     });
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.fine_pen") }),
+    );
     const fineWidth = h.state.currentItemStrokeWidth;
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.thick_pen") }),
@@ -1296,7 +1299,7 @@ describe("APK-style whiteboard ink", () => {
   });
 });
 
-it("erases the circled handwriting object on lift with one undo step and no group-wide deletion", async () => {
+it("erases only the circled handwriting segment on lift with one undo and preserves the rest of its group", async () => {
   const { container } = await render(
     <Fcboard UIOptions={{ unifiedToolbar: true }} />,
   );
@@ -1343,7 +1346,15 @@ it("erases the circled handwriting object on lift with one undo step and no grou
   expect(live()).toEqual([source, neighbor]);
   circle();
   pointer(canvas, "pointerup", 220, 170);
-  expect(live()).toEqual([neighbor]);
+  expect(live()).toHaveLength(3);
+  expect(live()[0]).toMatchObject({
+    id: source.id,
+    x: 100,
+    width: 120,
+    isDeleted: false,
+  });
+  expect(live()[1]).toMatchObject({ x: 280, width: 220, isDeleted: false });
+  expect(live()[2]).toBe(neighbor);
   expect(source.points).toHaveLength(2);
   fireEvent.click(screen.getByTestId("button-undo"));
   expect(live()).toHaveLength(2);

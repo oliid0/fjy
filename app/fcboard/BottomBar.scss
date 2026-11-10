@@ -2,14 +2,14 @@
 // Plain CSS also permits measuring this stylesheet in the installed WebView.
 .app .fcboard .fc-unified-toolbar {
   --fc-unit: 0.67px;
-  --icon-fill-color: #010101;
+  --icon-fill-color: var(--fc-toolbar-ink, #010101);
   --default-button-size: calc(58 * var(--fc-unit));
   --lg-button-size: calc(58 * var(--fc-unit));
   position: absolute;
   inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right)) 0
     max(calc(20 * var(--fc-unit)), env(safe-area-inset-left));
   display: block;
-  height: calc(74 * var(--fc-unit));
+  height: calc(58 * var(--fc-unit));
   gap: 0;
   overflow: visible;
 }
@@ -22,11 +22,11 @@
   flex-wrap: nowrap;
   width: max-content;
   max-width: none;
-  height: calc(74 * var(--fc-unit));
-  padding: calc(8 * var(--fc-unit));
+  height: calc(58 * var(--fc-unit));
+  padding: 0;
   border: 0;
-  border-radius: calc(12 * var(--fc-unit));
-  background: #fcfcfe;
+  border-radius: 0;
+  background: transparent;
   gap: 0;
   box-shadow: none;
   overflow: visible;
@@ -41,7 +41,7 @@
 }
 .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
   right: 0;
-  padding-left: calc(14 * var(--fc-unit));
+  padding-left: calc(6 * var(--fc-unit));
 }
 .app .fcboard .fc-unified-toolbar.fc-toolbar-reversed .fc-toolbar-leading {
   left: auto;
@@ -78,7 +78,7 @@
   border: 0;
   border-radius: calc(12 * var(--fc-unit));
   background: transparent;
-  color: #010101;
+  color: var(--fc-toolbar-ink, #010101);
   box-shadow: none;
   font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit)) system-ui,
     sans-serif;
@@ -86,15 +86,16 @@
   opacity: 1;
 }
 .app .fcboard .fc-unified-toolbar button.ToolIcon--selected {
-  background: #0368ff;
-  color: #fff;
-  --icon-fill-color: #fff;
+  background: transparent;
+  color: #0368ff;
+  --icon-fill-color: #0368ff;
 }
 .app
   .fcboard
   .fc-unified-toolbar
   button:active:not(:disabled):not(.ToolIcon--selected) {
-  background: #ebebeb;
+  background: transparent;
+  color: #0368ff;
   opacity: 1;
 }
 .app .fcboard .fc-unified-toolbar button:disabled {
@@ -122,8 +123,7 @@
   content: none;
 }
 .app .fcboard .fc-unified-toolbar .ToolIcon__icon,
-.app .fcboard .fc-unified-toolbar svg,
-.app .fcboard .fc-unified-toolbar .fc-toolbar-icon {
+.app .fcboard .fc-unified-toolbar svg {
   width: calc(28 * var(--fc-unit));
   min-width: 0;
   height: calc(28 * var(--fc-unit));
@@ -133,6 +133,11 @@
   color: inherit;
   background: transparent;
   box-shadow: none;
+}
+.app .fcboard .fc-unified-toolbar svg {
+  filter: drop-shadow(
+    0 0 calc(0.75 * var(--fc-unit)) var(--fc-toolbar-contrast, #fcfcfe)
+  );
 }
 .app .fcboard .fc-unified-toolbar .fc-pen-icon {
   position: relative;
@@ -169,8 +174,8 @@
   height: calc(58 * var(--fc-unit));
   margin-inline: calc(6 * var(--fc-unit));
   padding: calc(15 * var(--fc-unit)) calc(8 * var(--fc-unit));
-  border-radius: calc(12 * var(--fc-unit));
-  background: #f2f2f2;
+  border-radius: 0;
+  background: transparent;
   gap: 0;
 }
 .app .fcboard .fc-unified-toolbar .fc-board-controls button,
@@ -205,7 +210,7 @@
 .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
   position: absolute;
   left: 50%;
-  bottom: calc(84 * var(--fc-unit));
+  bottom: 100%;
   transform: translateX(-50%);
   width: calc(40 * var(--fc-unit));
   min-width: calc(40 * var(--fc-unit));
@@ -225,7 +230,7 @@
   display: none;
 }
 .app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-visibility {
-  bottom: calc(10 * var(--fc-unit));
+  bottom: 0;
 }
 .app .fcboard .fc-unified-toolbar.fc-toolbar-tight .fc-toolbar-cloud {
   display: none;
@@ -880,7 +885,7 @@
 /* Preserve the app's existing phone support; tablet/VM uses the native row. */
 @media (max-width: 1000px) {
   .app .fcboard .fc-unified-toolbar {
-    height: calc(158 * var(--fc-unit));
+    height: calc(122 * var(--fc-unit));
   }
   .app .fcboard .fc-unified-toolbar .fc-toolbar-leading,
   .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
@@ -888,7 +893,7 @@
     bottom: auto;
   }
   .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
-    bottom: calc(168 * var(--fc-unit));
+    bottom: 100%;
   }
 }
 @media (max-width: 360px) {

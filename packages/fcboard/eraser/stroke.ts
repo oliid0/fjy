@@ -30,6 +30,9 @@ import type { GlobalPoint, LocalPoint, Radians } from "@fcboard/math";
 import { getLassoBounds, getLassoSelectedElementIds } from "../lasso/utils";
 
 import { factoryCircleHits, factoryCircleObject } from "./factoryRegion";
+import { createEraseRegion, mergeEraseIntervals } from "./region";
+
+import type { EraseRegion } from "./region";
 
 type Point = { x: number; y: number };
 type Sample = Point & {
@@ -122,6 +125,7 @@ export const eraseStroke = (
   to: Point,
   width: number,
   height: number,
+  region?: EraseRegion,
 ): FcboardFreeDrawElement[] | null => {
   if (element.locked || element.isDeleted || !element.points.length) {
     return null;
@@ -151,15 +155,25 @@ export const eraseStroke = (
   const nibOutline = factoryNibSamples(element).map(globalPoint);
   const nibArea = sweptRectangle(from, to, width, height);
   const nibPolygon = nibOutline.map(({ x, y }) => pointFrom<GlobalPoint>(x, y));
-  const nibHit =
-    nibOutline.some(
-      (point, index) =>
-        index > 0 && insideInterval(nibOutline[index - 1], point, nibArea),
-    ) ||
-    (nibPolygon.length > 0 &&
-      [from, to].some(({ x, y }) =>
-        polygonIncludesPointNonZero(pointFrom<GlobalPoint>(x, y), nibPolygon),
-      ));
+  const nibHit = region
+    ? nibOutline.some((point) => region.contains(point)) ||
+      nibOutline.some(
+        (point, index) =>
+          index > 0 &&
+          region.intervals(nibOutline[index - 1], point).length > 0,
+      ) ||
+      (nibPolygon.length > 0 &&
+        region.path.some((point) =>
+          polygonIncludesPointNonZero(point, nibPolygon),
+        ))
+    : nibOutline.some(
+        (point, index) =>
+          index > 0 && insideInterval(nibOutline[index - 1], point, nibArea),
+      ) ||
+      (nibPolygon.length > 0 &&
+        [from, to].some(({ x, y }) =>
+          polygonIncludesPointNonZero(pointFrom<GlobalPoint>(x, y), nibPolygon),
+        ));
   const brushAngle =
     (element.customData?.fcInk?.brushAngle || 0) + element.angle;
   const ellipse = brush
@@ -208,20 +222,35 @@ export const eraseStroke = (
     brushWidth: a.brushWidth + (b.brushWidth - a.brushWidth) * t,
   });
   if (samples.length === 1) {
-    return insideInterval(samples[0], samples[0], area, ellipse) ? [] : null;
+    return (
+      region
+        ? region.contains(samples[0])
+        : insideInterval(samples[0], samples[0], area, ellipse)
+    )
+      ? []
+      : null;
   }
   for (let i = 1; i < samples.length; i++) {
     const a = samples[i - 1];
     const b = samples[i];
-    const hit = insideInterval(a, b, area, ellipse);
-    const cut = hit && hit[1] - hit[0] > 1e-10;
-    touched ||= !!cut;
-    const intervals = !cut
-      ? [[0, 1]]
-      : [
-          ...(hit[0] > 0 ? [[0, hit[0]]] : []),
-          ...(hit[1] < 1 ? [[hit[1], 1]] : []),
-        ];
+    const hit = region ? null : insideInterval(a, b, area, ellipse);
+    const cuts = region
+      ? mergeEraseIntervals(region.intervals(a, b))
+      : hit && hit[1] - hit[0] > 1e-10
+      ? [hit]
+      : [];
+    touched ||= cuts.length > 0;
+    const intervals: [number, number][] = [];
+    let start = 0;
+    for (const [enter, exit] of cuts) {
+      if (enter > start) {
+        intervals.push([start, enter]);
+      }
+      start = Math.max(start, exit);
+    }
+    if (start < 1) {
+      intervals.push([start, 1]);
+    }
     if (!intervals.length) {
       flush();
     }
@@ -299,6 +328,19 @@ export const eraseStroke = (
     });
   });
 };
+
+export const eraseStrokeInRegion = (
+  element: FcboardFreeDrawElement,
+  region: EraseRegion,
+) =>
+  eraseStroke(
+    element,
+    { x: region.bounds.left, y: region.bounds.top },
+    { x: region.bounds.right, y: region.bounds.bottom },
+    0,
+    0,
+    region,
+  );
 
 export const pointerSamples = (event: PointerEvent) => {
   const samples = event.getCoalescedEvents?.() || [];
@@ -382,7 +424,7 @@ export const isPalmContact = (
   event.pointerType === "touch" &&
   Math.max(event.width || 0, event.height || 0) >= threshold;
 
-/** Match draw/mode/e: erase hit objects together on lift, not their pixels. */
+/** Preserve exterior handwriting fragments; non-ink objects retain native hit/parent rules. */
 export const eraseSceneRegion = (
   elements: readonly FcboardElement[],
   path: GlobalPoint[],
@@ -432,11 +474,27 @@ export const eraseSceneRegion = (
       related.forEach((id) => selected.add(id));
     }
   }
-  return selected.size
-    ? elements.map((element) =>
-        !element.locked && selected.has(element.id)
-          ? newElementWith(element, { isDeleted: true })
-          : element,
-      )
-    : elements;
+  const region = createEraseRegion(path, precision);
+  let changed = false;
+  const next = elements.flatMap((element) => {
+    if (element.locked || element.isDeleted || !selected.has(element.id)) {
+      return [element];
+    }
+    if (
+      element.type === "freedraw" &&
+      element.backgroundColor === "transparent"
+    ) {
+      const parts = region ? eraseStrokeInRegion(element, region) : null;
+      if (!parts) {
+        return [element];
+      }
+      changed = true;
+      return parts.length
+        ? parts
+        : [newElementWith(element, { isDeleted: true })];
+    }
+    changed = true;
+    return [newElementWith(element, { isDeleted: true })];
+  });
+  return changed ? next : elements;
 };

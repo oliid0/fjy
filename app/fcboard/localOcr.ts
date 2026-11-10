@@ -6,79 +6,81 @@ import { queueLocalInference } from "./localInferenceQueue";
 type Engine = Awaited<
   ReturnType<typeof import("@paddleocr/paddleocr-js")["PaddleOCR"]["create"]>
 >;
-let engine: Promise<Engine> | undefined;
-let worker: Worker | undefined;
-let generation = 0;
-let pending = 0;
-let idle: ReturnType<typeof setTimeout> | undefined;
-const reset = () => {
-  clearTimeout(idle);
-  generation++;
-  worker?.terminate();
-  worker = undefined;
-  const previous = engine;
-  engine = undefined;
-  void previous?.then((instance) => instance.dispose()).catch(() => {});
-};
+const createOcr = () => {
+  let engine: Promise<Engine> | undefined;
+  let worker: Worker | undefined;
+  let generation = 0;
+  const dispose = () => {
+    generation++;
+    worker?.terminate();
+    worker = undefined;
+    const previous = engine;
+    engine = undefined;
+    void previous?.then((instance) => instance.dispose()).catch(() => {});
+  };
 
-const getEngine = () => {
-  const version = generation;
-  engine ||= import("@paddleocr/paddleocr-js")
-    .then(({ PaddleOCR }) =>
-      PaddleOCR.create({
-        worker: {
-          createWorker: () => {
-            if (version !== generation) {
-              throw new DOMException("Aborted", "AbortError");
-            }
-            worker = new Worker(
-              new URL(
-                `${import.meta.env.BASE_URL}ocr/worker.js`,
-                location.href,
-              ),
-              { type: "module" },
-            );
-            return worker;
+  const getEngine = () => {
+    const version = generation;
+    engine ||= import("@paddleocr/paddleocr-js")
+      .then(({ PaddleOCR }) =>
+        PaddleOCR.create({
+          worker: {
+            createWorker: () => {
+              if (version !== generation) {
+                throw new DOMException("Aborted", "AbortError");
+              }
+              worker = new Worker(
+                new URL(
+                  `${import.meta.env.BASE_URL}ocr/worker.js`,
+                  location.href,
+                ),
+                { type: "module" },
+              );
+              return worker;
+            },
           },
-        },
-        textDetectionModelName: "PP-OCRv5_mobile_det",
-        textRecognitionModelName: "PP-OCRv5_mobile_rec",
-        textDetectionModelAsset: {
-          url: `${import.meta.env.BASE_URL}ocr/models/PP-OCRv5_mobile_det.tar`,
-        },
-        textRecognitionModelAsset: {
-          url: `${import.meta.env.BASE_URL}ocr/models/PP-OCRv5_mobile_rec.tar`,
-        },
-        ortOptions: {
-          backend: "wasm",
-          numThreads: 1,
-          wasmPaths: new URL(
-            `${import.meta.env.BASE_URL}ocr/ort/`,
-            location.href,
-          ).href,
-        },
-      }),
-    )
-    .catch((error) => {
-      if (version === generation) {
-        engine = undefined;
-      }
-      throw error;
-    });
-  return engine;
-};
+          textDetectionModelName: "PP-OCRv5_mobile_det",
+          textRecognitionModelName: "PP-OCRv5_mobile_rec",
+          textDetectionModelAsset: {
+            url: `${
+              import.meta.env.BASE_URL
+            }ocr/models/PP-OCRv5_mobile_det.tar`,
+          },
+          textRecognitionModelAsset: {
+            url: `${
+              import.meta.env.BASE_URL
+            }ocr/models/PP-OCRv5_mobile_rec.tar`,
+          },
+          ortOptions: {
+            backend: "wasm",
+            numThreads: 1,
+            wasmPaths: new URL(
+              `${import.meta.env.BASE_URL}ocr/ort/`,
+              location.href,
+            ).href,
+          },
+        }),
+      )
+      .catch((error) => {
+        if (version === generation) {
+          engine = undefined;
+        }
+        throw error;
+      });
+    return engine;
+  };
 
-/** Explicit recognition UI may prepare bundled assets; never called at app startup. */
+  return { getEngine, dispose };
+};
+let pending = 0;
+
+/** Prepare one reusable bundled OCR model through the same bounded pool. */
 export const warmHandwriting = async () => {
   if (currentSettings().ocr === "cloud" || typeof Worker === "undefined") {
     return;
   }
-  await queueLocalInference("ocr", reset, async () => {
-    clearTimeout(idle);
-    await getEngine();
-    if (!pending) {
-      idle = setTimeout(reset, 15000);
-    }
+  await queueLocalInference("ocr", createOcr, async (model) => {
+    await model.getEngine();
   });
 };
 
@@ -94,7 +96,7 @@ export const recognizeLocalHandwriting = async (
   pending++;
   let frame: string | undefined = image;
   let settled = false;
-  let running = false;
+  let model: ReturnType<typeof createOcr> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let resolve!: (value: string) => void;
   let reject!: (error: unknown) => void;
@@ -111,9 +113,7 @@ export const recognizeLocalHandwriting = async (
     clearTimeout(timer);
     signal.removeEventListener("abort", abort);
     if (failure !== undefined) {
-      if (running) {
-        reset();
-      }
+      model?.dispose();
       reject(failure);
     } else {
       resolve(value!);
@@ -127,13 +127,12 @@ export const recognizeLocalHandwriting = async (
   signal.addEventListener("abort", abort, { once: true });
   void queueLocalInference(
     "ocr",
-    reset,
-    async () => {
+    createOcr,
+    async (resident) => {
       if (settled || !frame) {
         return;
       }
-      running = true;
-      clearTimeout(idle);
+      model = resident;
       timer = setTimeout(
         () =>
           finish(undefined, new Error(t("fcboard.local_inference_timeout"))),
@@ -141,7 +140,7 @@ export const recognizeLocalHandwriting = async (
       );
       void (async () => {
         progress(t("fcboard.preparing_local_handwriting_recognition"));
-        const instance = await getEngine();
+        const instance = await resident.getEngine();
         if (settled) {
           return;
         }
@@ -169,14 +168,11 @@ export const recognizeLocalHandwriting = async (
         finish(items.map((item) => item.text).join("\n"));
       })().catch((error) => finish(undefined, error));
       await result.catch(() => {});
-      running = false;
+      model = undefined;
     },
     () => !settled,
   ).catch((error) => finish(undefined, error));
   return result.finally(() => {
     pending--;
-    if (!pending) {
-      idle = setTimeout(reset, 15000);
-    }
   });
 };

@@ -779,7 +779,7 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
   pointer("pointerdown", target.x + 25, target.y + 20);
   pointer("pointermove", target.x + 45, target.y + 25);
   pointer("pointerup", target.x + 55, target.y + 25);
-  await act(async () => vi.advanceTimersByTimeAsync(700));
+  await act(async () => vi.advanceTimersByTimeAsync(1200));
   expect(recognize).toHaveBeenCalledTimes(1);
   expect(recognize.mock.calls[0][5]).toHaveLength(2);
   vi.useRealTimers();
@@ -1172,7 +1172,7 @@ it.each(["calculation", "function", "text"] as const)(
     vi.useFakeTimers();
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     const { ink } = classroomCommands.read("document") as {
       ink: import("./documents").InkStroke[];
@@ -1238,7 +1238,7 @@ it("discards recognition after its source is erased", async () => {
   vi.useFakeTimers();
   draw();
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(1200);
   });
   const source = (
     classroomCommands.read("document") as {
@@ -1874,7 +1874,7 @@ it.each(["pointerup", "pointercancel"])(
   },
 );
 
-it("erases the circled courseware object and restores its original trajectory with undo and redo", async () => {
+it("clips only the circled courseware stroke fragment and restores its original trajectory with undo and redo", async () => {
   const { pointer, draw, unmount } = await setup(undefined, {
     eraserMode: "region",
   });
@@ -1893,7 +1893,17 @@ it("erases the circled courseware object and restores its original trajectory wi
     expect(currentInk()).toEqual(before);
     pointer("pointerup", 145, 70);
     const cut = currentInk();
-    expect(cut).toEqual([before[1]]);
+    expect(cut).toHaveLength(3);
+    expect(cut[2]).toEqual(before[1]);
+    expect(cut[0].points.at(-1)![0]).toBeCloseTo(145);
+    expect(cut[1].points[0][0]).toBeCloseTo(165);
+    expect(cut[0].points.every(([x]) => x <= 145 + 1e-6)).toBe(true);
+    expect(cut[1].points.every(([x]) => x >= 165 - 1e-6)).toBe(true);
+    expect(
+      cut
+        .slice(0, 2)
+        .every((stroke) => stroke.pressures?.length === stroke.points.length),
+    ).toBe(true);
     expect(before[0].points.length).toBeGreaterThan(1);
     await act(async () => {
       await classroomCommands.execute({ name: "document.undo" });

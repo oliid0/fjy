@@ -16,7 +16,7 @@ import searchIcon from "./factory-search-icons/search.svg";
 import wordIcon from "./factory-search-icons/word.svg";
 import photoIcon from "./factory-search-icons/photo.svg";
 import videoIcon from "./factory-search-icons/video.svg";
-import loadingIcon from "./factory-search-icons/loading.png";
+import loadingIcon from "./factory-search-icons/loading.svg";
 import "./IntegratedSearch.scss";
 
 import type { SearchKind, SearchMedia } from "./searchService";

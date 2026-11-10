@@ -116,6 +116,8 @@ it("keeps the expanded palette, applies gradients to the pen and restores solid 
       .getByRole("img", { name: t("fcboard.current_pen_preview") })
       .querySelectorAll("stop"),
   ).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.thick_pen") }));
+  expect(h.state.currentItemInkGradient).toBe("mint");
   fireEvent.click(buttons[12]);
   expect(h.state.currentItemInkGradient).toBe("spectrum");
   act(() =>
@@ -179,3 +181,24 @@ it("uses fine 2 and thick 4, retains each adjusted width and writes the selected
   expect(stroke.strokeWidth).toBe(6);
   expect(stroke.customData?.fcInk?.tip).toBe("fine");
 });
+
+it.each([
+  ["#ffffff", "light", "#010101"],
+  ["#123d32", "light", "#fcfcfe"],
+  ["#ffffff", "dark", "#fcfcfe"],
+] as const)(
+  "keeps bare toolbar icons contrasting on %s in %s mode",
+  async (background, theme, color) => {
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    act(() =>
+      h.app.api.updateScene({
+        appState: { viewBackgroundColor: background, theme },
+      }),
+    );
+    const toolbar = screen.getByRole("toolbar", {
+      name: t("fcboard.whiteboard_toolbar"),
+    });
+    expect(toolbar.style.getPropertyValue("--fc-toolbar-ink")).toBe(color);
+    expect(toolbar.querySelectorAll("svg path").length).toBeGreaterThan(0);
+  },
+);

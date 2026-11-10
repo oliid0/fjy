@@ -29,13 +29,19 @@ type Channel = {
   more: boolean;
   error: string;
 };
-const empty = (): Record<SearchKind, Channel> =>
-  Object.fromEntries(
-    ["word", "photo", "video"].map((kind) => [
-      kind,
-      { text: "", items: [], page: 0, loading: false, more: true, error: "" },
-    ]),
-  ) as Record<SearchKind, Channel>;
+const emptyChannel = (): Channel => ({
+  text: "",
+  items: [],
+  page: 0,
+  loading: false,
+  more: true,
+  error: "",
+});
+const empty = (): Record<SearchKind, Channel> => ({
+  word: emptyChannel(),
+  photo: emptyChannel(),
+  video: emptyChannel(),
+});
 const SearchWindow = ({
   api,
   keyword,

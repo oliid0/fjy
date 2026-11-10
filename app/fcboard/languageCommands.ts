@@ -290,11 +290,13 @@ export const registerLanguageCommands = (api: FcboardImperativeAPI) => {
             t("fcboard.circle_the_word_or_sentence_to_study_first"),
           );
         }
+        const studyOptions: [image?: string, requireAI?: boolean] =
+          args.study === true ? [image, true] : [];
         const study = await explainLanguage(
           text?.trim() || "",
           request.signal,
           targetLanguage,
-          ...(args.study === true ? ([image, true] as const) : []),
+          ...studyOptions,
         );
         assertCurrent();
         const before = new Set(

@@ -3748,6 +3748,7 @@ describe("selection-driven classroom controls", () => {
       vi.spyOn(ai, "boardContext").mockResolvedValue({
         elements: [],
         text: "",
+        image: undefined,
       });
       const chart = spoken.includes("HTML")
         ? interactiveResource
@@ -3810,7 +3811,7 @@ describe("selection-driven classroom controls", () => {
             ? "A (0.62, 1.62)"
             : "人口增长示意",
         );
-        expect(chat).toHaveBeenCalledOnce();
+        expect(chat).toHaveBeenCalledTimes(1);
         expect(chat.mock.calls[0][0][0].content).toContain(
           spoken.includes("HTML") ? "self-contained HTML" : "Vega-Lite",
         );

@@ -1,9 +1,11 @@
 import { pointFrom } from "@fcboard/math";
 
+import type { GlobalPoint } from "@fcboard/math";
+
 import { createEraseRegion } from "./region";
 
 const loop = (points: [number, number][]) =>
-  points.map(([x, y]) => pointFrom(x, y));
+  points.map(([x, y]) => pointFrom<GlobalPoint>(x, y));
 const concave = loop([
   [20, -20],
   [40, -20],

@@ -4,6 +4,7 @@ import {
   getElementBounds,
   getElementLineSegments,
   getElementShape,
+  isLineElement,
   isPathALoop,
 } from "@fcboard/element";
 import {
@@ -98,7 +99,7 @@ export const factoryCircleObject = (
     paths.push({
       closed:
         !["line", "arrow"].includes(element.type) ||
-        (element.type === "line" && !!element.polygon),
+        (isLineElement(element) && !!element.polygon),
       points:
         shape.type === "polygon"
           ? shape.data

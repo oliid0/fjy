@@ -39,7 +39,7 @@ export const calculateLatex = (input: string): string => {
       const json = value.json;
       return Array.isArray(json) && json[0] === "List"
         ? json.length > 1 &&
-            json.slice(1).every((cell) => finite(engine.box(cell)))
+            [...json].slice(1).every((cell) => finite(engine.box(cell)))
         : value.isFinite === true;
     };
     // Unknown functions can parse successfully. They must produce a finite

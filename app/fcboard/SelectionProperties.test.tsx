@@ -65,7 +65,11 @@ const select = (elements: FcboardElement[]) =>
         selectedElementIds: Object.fromEntries(
           elements.map((element) => [element.id, true]),
         ),
-        activeTool: { type: "selection", customType: null },
+        activeTool: {
+          ...api.getAppState().activeTool,
+          type: "selection",
+          customType: null,
+        },
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     }),

@@ -1,7 +1,7 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ToolbarExtras } from "@fcboard/fcboard";
-import { undo } from "@fcboard/fcboard/components/icons";
+import { UndoIcon } from "@fcboard/fcboard/components/icons";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
@@ -66,17 +66,20 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   const [order, setOrder] = useState<string[]>([]);
   const [chosen, setChosen] = useState<string[]>([]);
   const [dragging, setDragging] = useState<string>();
-  const drag = useRef<{
-    id: string;
-    pointer: number;
-    before: string[];
-    order: string[];
-    x: number;
-    y: number;
-  }>();
+  const drag = useRef<
+    | {
+        id: string;
+        pointer: number;
+        before: string[];
+        order: string[];
+        x: number;
+        y: number;
+      }
+    | undefined
+  >(undefined);
   const list = useRef<HTMLDivElement>(null);
-  const dragFrame = useRef<number>();
-  const operation = useRef<AbortController>();
+  const dragFrame = useRef<number | undefined>(undefined);
+  const operation = useRef<AbortController | undefined>(undefined);
   const running = useRef(false);
   const panel = useRef<HTMLElement>(null);
   const panelStyle = useAnchoredPanel(
@@ -856,7 +859,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
                   void run((source) => book.current!.restoreDiscarded(source))
                 }
               >
-                {undo}
+                {UndoIcon}
                 <span>{t("buttons.undo")}</span>
               </button>
             )}

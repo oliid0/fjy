@@ -96,6 +96,7 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
       const response = await fetch(site.background, {
         signal: controller.signal,
       });
+      controller.signal.throwIfAborted();
       if (!response.ok) {
         throw new Error(t("fcboard.this_teaching_tool_is_unavailable"));
       }
@@ -208,15 +209,26 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
         }
         api.setActiveTool({ type: "freedraw" });
       }
+      controller.signal.throwIfAborted();
       setArea(false);
     } catch (failure) {
       if (!controller.signal.aborted) {
         setError(String(failure));
       }
     } finally {
-      pending.current = false;
-      setBusy(false);
+      if (operation.current === controller) {
+        operation.current = undefined;
+        pending.current = false;
+        setBusy(false);
+      }
     }
+  };
+  const closeSite = () => {
+    operation.current?.abort();
+    operation.current = undefined;
+    pending.current = false;
+    setBusy(false);
+    setArea(false);
   };
   const open = async (id: typeof controls[number]) => {
     setError("");
@@ -308,20 +320,14 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
           role="dialog"
           className="fc-native-area"
           aria-label={t("fcboard.area_background")}
-          onDismiss={() => {
-            operation.current?.abort();
-            setArea(false);
-          }}
+          onDismiss={closeSite}
         >
           <header>
             <h2>{t("fcboard.area_background")}</h2>
             <button
               type="button"
               aria-label={t("buttons.close")}
-              onClick={() => {
-                operation.current?.abort();
-                setArea(false);
-              }}
+              onClick={closeSite}
             >
               <img src={dialogClose} alt="" draggable={false} />
             </button>

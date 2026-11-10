@@ -93,7 +93,10 @@ it("preserves the real shape type through courseware and hides unsupported text/
   });
 });
 it("lets explicit solid/dashed/dotted styles override the original dashed pen on display and snapshots", () => {
-  const stroke = { ...ink("d"), fcInk: { version: 2, pen: "dashed", unit: 1 } };
+  const stroke: InkStroke = {
+    ...ink("d"),
+    fcInk: { version: 2, pen: "dashed", unit: 1 },
+  };
   expect(documentStrokeGeometry(stroke).dashes).toBeDefined();
   expect(
     documentStrokeGeometry({ ...stroke, strokeStyle: "solid" }).dashes,

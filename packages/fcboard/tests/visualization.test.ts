@@ -72,7 +72,7 @@ it("supports non-function bar charts and releases the real embed view", async ()
   expect(target.querySelectorAll(".role-mark path").length).toBeGreaterThan(1);
   const finalize = vi.spyOn(result.view, "finalize");
   result.finalize();
-  expect(finalize).toHaveBeenCalledOnce();
+  expect(finalize).toHaveBeenCalledTimes(1);
 });
 
 it("assembles the three built-in runtimes inside the isolated no-eval resource", async () => {

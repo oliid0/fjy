@@ -797,12 +797,12 @@ it("uses Vega from the visible AI teaching-resource button and reuses the saved 
         name: t("fcboard.generate_teaching_resource_with_ai"),
       }),
     );
-    await waitFor(() => expect(insert).toHaveBeenCalledOnce());
+    await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
     const resource = insert.mock.calls[0][0].resource;
     id = resource.id;
     expect(resource.visualization).toEqual(comparisonVisualization);
     expect(resource.html).toContain("A (0.62, 1.62)");
-    expect(chat).toHaveBeenCalledOnce();
+    expect(chat).toHaveBeenCalledTimes(1);
     const guidance = chat.mock.calls[0][0][0].content;
     expect(guidance).toContain("branch_id");
     expect(guidance).toContain("(-1+sqrt(5))/2");
@@ -811,7 +811,7 @@ it("uses Vega from the visible AI teaching-resource button and reuses the saved 
     });
     expect(insert).toHaveBeenCalledTimes(2);
     expect(insert.mock.calls[1][0].resource).toEqual(resource);
-    expect(chat).toHaveBeenCalledOnce();
+    expect(chat).toHaveBeenCalledTimes(1);
   } finally {
     view.unmount();
     release();

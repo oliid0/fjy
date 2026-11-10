@@ -15,6 +15,7 @@ import { compileExpression, functionView, sampleFunctionCurve } from "./math";
 import type { Plot } from "./math";
 
 export const plotSize = { width: 500, height: 440 };
+const plotScope = ({ x, y, z, a, b, c }: Plot) => ({ x, y, z, a, b, c });
 export const releaseFunctionGraph = (view: VisualizationView) => {
   view.finalize();
 };
@@ -37,7 +38,11 @@ export const renderFunctionGraph = (
     throw new Error("Invalid two-dimensional function graph");
   }
   const domain = functionView(plot);
-  const segments = sampleFunctionCurve(plot.expression, domain, plot);
+  const segments = sampleFunctionCurve(
+    plot.expression,
+    domain,
+    plotScope(plot),
+  );
   if (!segments.length && !plot.view) {
     throw new Error("No real-valued plot in this range");
   }
@@ -49,14 +54,13 @@ export const renderFunctionGraph = (
     titleColor: color,
     labelFont: "Arial",
     titleFont: "Arial",
-    titleFontWeight: "normal",
+    titleFontWeight: "normal" as const,
   };
   const spec: Spec = {
     width: size.width - 60,
     height: size.height - 40,
     padding: { left: 40, right: 20, top: 20, bottom: 20 },
     autosize: "none",
-    background: null,
     data: segments.map((points, index) => ({
       name: `curve${index}`,
       values: points.map(([x, y]) => ({ x, y })),
@@ -125,7 +129,10 @@ export const renderFunctionGraph = (
     view.run();
     const svg = new vega.SVGStringRenderer(loader)
       .initialize(null, size.width, size.height, [40, 20])
-      .render(view.scenegraph().root)
+      .render(
+        // vega-view6 returns Scenegraph; vega-typings incorrectly declares Scene.
+        (view.scenegraph() as unknown as { root: unknown }).root,
+      )
       .svg();
     if (!svg) {
       throw new Error("The function graph could not be rendered");
@@ -211,7 +218,11 @@ export const pickFunctionPoint = (
   ];
   const target = [location.x * width, location.y * height];
   let best: { x: number; distance: number } | undefined;
-  for (const segment of sampleFunctionCurve(plot.expression, view, plot)) {
+  for (const segment of sampleFunctionCurve(
+    plot.expression,
+    view,
+    plotScope(plot),
+  )) {
     for (let index = 1; index < segment.length; index++) {
       const a = pixel(segment[index - 1]);
       const b = pixel(segment[index]);

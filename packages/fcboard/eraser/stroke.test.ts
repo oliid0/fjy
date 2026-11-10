@@ -131,9 +131,12 @@ describe("factory circle erasure", () => {
     expect(
       eraseSceneRegion([ink, locked], loop([[50, 0]]), [locked.id]),
     ).toEqual([ink, locked]);
-    expect(
-      eraseSceneRegion([ink], loop([[50, 0]]), [ink.id])[0].points,
-    ).toEqual(ink.points);
+    const retained = eraseSceneRegion([ink], loop([[50, 0]]), [ink.id])[0];
+    expect(retained.type).toBe("freedraw");
+    if (retained.type !== "freedraw") {
+      throw new Error("Expected the original ink stroke");
+    }
+    expect(retained.points).toEqual(ink.points);
   });
 });
 

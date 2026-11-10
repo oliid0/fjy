@@ -1,4 +1,4 @@
-import { isPathALoop } from "@fcboard/element";
+import { isLineElement, isPathALoop } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
 import type { FcboardElement } from "@fcboard/element/types";
@@ -86,7 +86,7 @@ export const boardSelectionProperties = (elements: readonly FcboardElement[]) =>
         locked: element.locked,
         fillable:
           ["rectangle", "ellipse", "diamond"].includes(element.type) ||
-          (element.type === "line" &&
+          (isLineElement(element) &&
             (element.polygon || isPathALoop(element.points))),
       }),
     ),

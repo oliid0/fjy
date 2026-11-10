@@ -92,7 +92,7 @@ it("shows x/y on a curve tap, leaves empty-space drags with the editor and adds 
     pointerType: "mouse",
     button: 0,
   });
-  expect(delegate).toHaveBeenCalledOnce();
+  expect(delegate).toHaveBeenCalledTimes(1);
   fireEvent.pointerCancel(canvas, { pointerId: 2, pointerType: "mouse" });
   expect(graph().customData?.fcPlot.plot.view).toBeUndefined();
   canvas.removeEventListener("pointerdown", delegate);

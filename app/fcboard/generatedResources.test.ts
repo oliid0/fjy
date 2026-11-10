@@ -218,7 +218,7 @@ it.each([
     );
     expect(item.visualization).toBeUndefined();
     expect(item.html).toContain("force.addEventListener");
-    expect(chat).toHaveBeenCalledOnce();
+    expect(chat).toHaveBeenCalledTimes(1);
     const frame = resourceFrame({
       id: item.id,
       surface: "whiteboard",

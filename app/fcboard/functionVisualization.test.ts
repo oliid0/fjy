@@ -51,7 +51,7 @@ it("keeps reciprocal branches separate and finalizes the real Vega view", () => 
   expect(target.querySelectorAll(".mark-line path")).toHaveLength(2);
   const finalize = vi.spyOn(chart, "finalize");
   releaseFunctionGraph(chart);
-  expect(finalize).toHaveBeenCalledOnce();
+  expect(finalize).toHaveBeenCalledTimes(1);
 });
 
 it.each(["sqrt(-1)", "window.alert(1)"])(

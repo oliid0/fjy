@@ -47,18 +47,14 @@ const setup = async () => {
   await render(<Harness />);
   act(() => api.updateScene({ appState: { width: 1600, height: 900 } }));
   const open = async () => {
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.toolbox"), exact: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
     fireEvent.click(
       screen.getByRole("button", {
         name: t("fcboard.area_background"),
-        exact: true,
       }),
     );
     return screen.findByRole("dialog", {
       name: t("fcboard.area_background"),
-      exact: true,
     });
   };
   return { api, open };
@@ -69,14 +65,13 @@ it("inserts one native-size site, replaces its bitmap at the existing scale and 
   const fetcher = vi.spyOn(window, "fetch").mockResolvedValue({
     ok: true,
     blob: async () => svgBlob(badminton),
-  } as Response);
+  } as unknown as Response);
   const { api, open } = await setup();
   let picker = await open();
   expect(within(picker).getAllByRole("button")).toHaveLength(11);
   fireEvent.click(
     within(picker).getByRole("button", {
       name: t("fcboard.native_sites.area_badminton"),
-      exact: true,
     }),
   );
   await waitFor(() => expect(area()).toBeDefined());
@@ -89,11 +84,10 @@ it("inserts one native-size site, replaces its bitmap at the existing scale and 
   fetcher.mockResolvedValue({
     ok: true,
     blob: async () => svgBlob(go),
-  } as Response);
+  } as unknown as Response);
   fireEvent.click(
     within(picker).getByRole("button", {
       name: t("fcboard.native_sites.area_weiqi"),
-      exact: true,
     }),
   );
   await waitFor(() => expect(area()?.version).toBeGreaterThan(initial.version));
@@ -130,30 +124,30 @@ it("does not insert a site after its picker closes while the resource loads and 
   fireEvent.click(
     within(picker).getByRole("button", {
       name: t("fcboard.native_sites.area_badminton"),
-      exact: true,
     }),
   );
   fireEvent.click(
     within(picker).getByRole("button", {
       name: t("buttons.close"),
-      exact: true,
     }),
   );
-  await act(async () =>
-    finish({ ok: true, blob: async () => svgBlob(badminton) } as Response),
-  );
-  expect(area()).toBeUndefined();
-  expect(Object.values(api.getFiles())).toHaveLength(0);
   fetcher.mockRejectedValue(new Error("site unavailable"));
   picker = await open();
   fireEvent.click(
     within(picker).getByRole("button", {
       name: t("fcboard.native_sites.area_badminton"),
-      exact: true,
     }),
   );
   await waitFor(() =>
     expect(screen.getByRole("alert")).toHaveTextContent("site unavailable"),
   );
+  await act(async () =>
+    finish({
+      ok: true,
+      blob: async () => svgBlob(badminton),
+    } as unknown as Response),
+  );
   expect(area()).toBeUndefined();
+  expect(Object.values(api.getFiles())).toHaveLength(0);
+  expect(screen.getByRole("alert")).toHaveTextContent("site unavailable");
 });

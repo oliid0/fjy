@@ -103,8 +103,10 @@ it("toggles the original anchored split launcher on every real toolbar tap and e
           name: t("fcboard.split_count", { count }),
         }),
       );
-      await waitFor(() => expect(panes()).toHaveLength(count));
-      expect(document.querySelector(".fc-split-launcher")).toBeNull();
+      await waitFor(() => {
+        expect(panes()).toHaveLength(count);
+        expect(document.querySelector(".fc-split-launcher")).toBeNull();
+      });
       await command({ open: false });
     }
   } finally {

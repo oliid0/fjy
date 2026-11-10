@@ -18,45 +18,70 @@ import type { Ref } from "react";
 import type { ResourceSurface } from "../interactiveResourceControls";
 import type { ComponentProps } from "react";
 
+export type ResourceLiveUpdate = {
+  key: string;
+  message: Record<string, unknown>;
+};
+
 export const InteractiveResourceFrame = ({
   resource,
   iframeRef,
   objectId,
   surface,
   window,
+  live,
 }: {
   resource: InteractiveResource;
   objectId: string;
   surface: ResourceSurface;
   iframeRef?: Ref<HTMLIFrameElement>;
+  live?: ResourceLiveUpdate;
   window?: Omit<
     ComponentProps<typeof ResourceWindow>,
     "title" | "children" | "onReload"
   >;
 }) => {
   const [revision, setRevision] = useState(0);
+  const identity = live ? `${resource.id}:${live.key}` : resource;
+  const [documentSnapshot, setDocumentSnapshot] = useState({
+    identity,
+    resource,
+  });
+  const loaded = useRef(false);
+  if (documentSnapshot.identity !== identity) {
+    loaded.current = false;
+    setDocumentSnapshot({ identity, resource });
+  }
+  const documentResource =
+    documentSnapshot.identity === identity
+      ? documentSnapshot.resource
+      : resource;
+  const liveMessage = useRef(live?.message);
+  liveMessage.current = live?.message;
+  const liveSignature = JSON.stringify(live?.message);
+
   const [visualizationDocument, setVisualizationDocument] = useState<{
     source: InteractiveResource;
     html?: string;
     error?: string;
   }>();
   useEffect(() => {
-    if (!resource.visualization) {
+    if (!documentResource.visualization) {
       return;
     }
     let active = true;
     void import("../visualizationHtml")
-      .then(({ visualizationHtml }) => visualizationHtml(resource))
+      .then(({ visualizationHtml }) => visualizationHtml(documentResource))
       .then(
         (html) => {
           if (active) {
-            setVisualizationDocument({ source: resource, html });
+            setVisualizationDocument({ source: documentResource, html });
           }
         },
         (error) => {
           if (active) {
             setVisualizationDocument({
-              source: resource,
+              source: documentResource,
               error: error instanceof Error ? error.message : String(error),
             });
           }
@@ -65,7 +90,7 @@ export const InteractiveResourceFrame = ({
     return () => {
       active = false;
     };
-  }, [resource, revision]);
+  }, [documentResource, revision]);
   const controls = useRef<ReturnType<typeof attachResourceControls> | null>(
     null,
   );
@@ -80,9 +105,18 @@ export const InteractiveResourceFrame = ({
             node,
           )
         : null;
+      if (node && loaded.current) {
+        controls.current?.loaded();
+      }
     },
     [surface, objectId, resource.html],
   );
+  const sendLive = useCallback(() => {
+    if (liveMessage.current) {
+      frame.current?.contentWindow?.postMessage(liveMessage.current, "*");
+    }
+  }, []);
+  useEffect(sendLive, [sendLive, liveSignature, revision]);
   useLayoutEffect(() => {
     if (typeof iframeRef === "function") {
       iframeRef(frame.current);
@@ -99,30 +133,31 @@ export const InteractiveResourceFrame = ({
   }, [iframeRef, resource.html, revision, visualizationDocument]);
   const html = useMemo(() => {
     try {
-      return interactiveHtml(resource.html);
+      return interactiveHtml(documentResource.html);
     } catch {
       return undefined;
     }
-  }, [resource.html]);
+  }, [documentResource.html]);
   const visual =
-    visualizationDocument?.source === resource
+    visualizationDocument?.source === documentResource
       ? visualizationDocument
       : undefined;
-  if (resource.visualization && visual?.error) {
-    return <p role="alert">{visual.error}</p>;
-  }
-  if (!html) {
-    return (
-      <p role="alert">
-        {t("fcboard.the_generated_teaching_resource_is_invalid")}
-      </p>
-    );
-  }
-  const content = (
+  const error =
+    visual?.error ||
+    (!html
+      ? t("fcboard.the_generated_teaching_resource_is_invalid")
+      : undefined);
+  const content = error ? (
+    <p role="alert">{error}</p>
+  ) : (
     <iframe
       key={revision}
       ref={ref}
-      onLoad={() => controls.current?.loaded()}
+      onLoad={() => {
+        loaded.current = true;
+        controls.current?.loaded();
+        sendLive();
+      }}
       className="fcboard__embeddable"
       title={resource.title}
       data-resource-object-id={objectId}
@@ -139,7 +174,10 @@ export const InteractiveResourceFrame = ({
       {...window}
       title={resource.title}
       embeddedHeader={resource.id === "builtin-calculator"}
-      onReload={() => setRevision((value) => value + 1)}
+      onReload={() => {
+        loaded.current = false;
+        setRevision((value) => value + 1);
+      }}
     >
       {content}
     </ResourceWindow>

@@ -2,6 +2,7 @@ import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
 
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
+import { functionGraphFrameState } from "@fcboard/fcboard/functionGraphFrameState";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 import { newIframeElement } from "@fcboard/element";
 import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
@@ -3607,6 +3608,15 @@ export const FilePreview = ({
                 >
                   <InteractiveResourceFrame
                     resource={stroke.resource}
+                    live={
+                      stroke.plot?.renderer === "iframe"
+                        ? functionGraphFrameState(
+                            stroke.resource.id,
+                            stroke.plot.plot,
+                            stroke.color,
+                          )
+                        : undefined
+                    }
                     objectId={stroke.id}
                     surface="document"
                     window={{

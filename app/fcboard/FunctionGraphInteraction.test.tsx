@@ -58,6 +58,7 @@ const setup = async () => {
       `iframe[data-resource-object-id="${ids[0]}"]`,
     )!;
     expect(frame).not.toBeNull();
+    expect(frame).toHaveAttribute("aria-busy", "false");
   });
   const reply = vi
     .spyOn(frame.contentWindow!, "postMessage")
@@ -131,8 +132,9 @@ it("queries exact curve values and resamples another range without rewriting can
 });
 
 it("persists a completed range on the same movable/resizable object and undoes the whole gesture once", async () => {
-  const { api, graph, send } = await setup();
+  const { api, graph, frame, reply, send } = await setup();
   const before = graph();
+  const documentBefore = frame.srcdoc;
   const bounds = { left: -2, right: 4, bottom: -3, top: 5 };
   send("commit", { view: bounds });
   await waitFor(() =>
@@ -146,10 +148,29 @@ it("persists a completed range on the same movable/resizable object and undoes t
     height: before.height,
     groupIds: before.groupIds,
   });
+  expect(
+    document.querySelector(`iframe[data-resource-object-id="${before.id}"]`),
+  ).toBe(frame);
+  expect(frame.srcdoc).toBe(documentBefore);
+  expect(graph().customData!.fcInteractiveResource.html).not.toBe(
+    before.customData!.fcInteractiveResource.html,
+  );
+  expect(reply).toHaveBeenLastCalledWith(
+    expect.objectContaining({ type: "restore", view: bounds }),
+    "*",
+  );
   expect(Object.keys(api.getFiles())).toHaveLength(0);
   fireEvent.click(screen.getByTestId("button-undo"));
   await waitFor(() =>
     expect(graph().customData!.fcPlot.plot.view).toBeUndefined(),
+  );
+  expect(frame.srcdoc).toBe(documentBefore);
+  expect(reply).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      type: "restore",
+      view: { left: -10, right: 10, bottom: -10, top: 10 },
+    }),
+    "*",
   );
 });
 

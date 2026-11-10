@@ -10,6 +10,7 @@
   let revision = 0;
   let timer;
   let saved;
+  let restored;
   const domain = () => {
     const x = view.signal("xdom");
     const y = view.signal("ydom");
@@ -57,6 +58,12 @@
     "fc-visualization-ready",
     (event) => {
       view = event.detail;
+      if (restored) {
+        view
+          .signal("xdom", [restored.left, restored.right])
+          .signal("ydom", [restored.bottom, restored.top])
+          .run();
+      }
       saved = JSON.stringify(domain());
       view.addSignalListener("xdom", refresh);
       view.addSignalListener("ydom", refresh);
@@ -75,9 +82,38 @@
       event.source !== parent ||
       !message ||
       message.channel !== "fc-function-graph" ||
-      message.id !== id ||
-      message.request !== revision
+      message.id !== id
     ) {
+      return;
+    }
+    if (message.type === "restore") {
+      const bounds = message.view;
+      if (
+        !bounds ||
+        ![bounds.left, bounds.right, bounds.bottom, bounds.top].every(
+          (value) => Number.isFinite(value) && Math.abs(value) <= 1e6,
+        ) ||
+        bounds.right - bounds.left < 0.0001 ||
+        bounds.right - bounds.left > 2000 ||
+        bounds.top - bounds.bottom < 0.0001 ||
+        bounds.top - bounds.bottom > 2000
+      ) {
+        return;
+      }
+      restored = bounds;
+      saved = JSON.stringify(bounds);
+      if (view && JSON.stringify(domain()) !== saved) {
+        view
+          .signal("xdom", [bounds.left, bounds.right])
+          .signal("ydom", [bounds.bottom, bounds.top])
+          .runAsync()
+          .catch((error) => {
+            output.textContent = error.message;
+          });
+      }
+      return;
+    }
+    if (message.request !== revision) {
       return;
     }
     if (message.error) {

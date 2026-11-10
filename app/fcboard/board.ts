@@ -864,7 +864,7 @@ const insertPlot = (
         ...(resource
           ? {
               fcInteractiveResource: resource,
-              generationData: { status: "done", html: resource.html },
+              generationData: { status: "done" as const, html: resource.html },
             }
           : {}),
         fcPlot: {
@@ -920,6 +920,7 @@ export const selectedPlot = (
     }
     return {
       plot: stroke.plot.plot,
+      resourceId: stroke.resource?.id || stroke.plot.id,
       image:
         stroke.resource || (stroke.image && stroke.plot.renderer === "vega")
           ? {
@@ -974,6 +975,7 @@ export const selectedPlot = (
   }
   return {
     plot: metadata.plot as Plot,
+    resourceId: selected.customData?.fcInteractiveResource?.id || metadata.id,
     image:
       selected.type === "iframe" ||
       (selected.type === "image" && metadata.renderer === "vega")
@@ -1016,7 +1018,7 @@ export const updateFunctionGraph = (
   const resource = functionGraphResource(
     plot,
     graph.image.color,
-    graph.ids[0],
+    graph.resourceId,
     image,
   );
   if (classroomCommands.has("document.plot.update")) {

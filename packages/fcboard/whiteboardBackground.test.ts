@@ -1,6 +1,8 @@
 import rough from "roughjs";
 
-import { arrayToMap } from "@fcboard/common";
+import { toBrandedType } from "@fcboard/common";
+
+import type { NonDeletedSceneElementsMap } from "@fcboard/element/types";
 
 import { renderStaticScene } from "./renderer/staticScene";
 
@@ -14,7 +16,10 @@ import {
   validWhiteboardBackground,
 } from "./whiteboardBackground";
 
-import type { StaticSceneRenderConfig } from "./scene/types";
+import type {
+  RenderableElementsMap,
+  StaticSceneRenderConfig,
+} from "./scene/types";
 import type { Zoom } from "./types";
 
 import type { DataURL } from "./types";
@@ -122,13 +127,15 @@ it.each([
       canvas,
       rc: rough.canvas(canvas),
       scale,
-      elementsMap: arrayToMap([]),
-      allElementsMap: arrayToMap([]),
+      elementsMap: toBrandedType<RenderableElementsMap>(new Map()),
+      allElementsMap: toBrandedType<NonDeletedSceneElementsMap>(new Map()),
       visibleElements: [],
       appState: {
         ...getDefaultAppState(),
         width,
         height,
+        offsetLeft: 0,
+        offsetTop: 0,
         zoom: { value: zoom } as Zoom,
         scrollX: 123,
         scrollY: -456,

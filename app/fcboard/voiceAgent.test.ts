@@ -79,6 +79,7 @@ it("accepts a natural Ark Responses answer without forcing a fake board mutation
   );
   vi.spyOn(transport, "postAI").mockResolvedValue({
     status: 200,
+    stream: false,
     data: JSON.stringify({
       id: "natural",
       status: "completed",

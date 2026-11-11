@@ -89,7 +89,11 @@
   touch-action: manipulation;
   opacity: 1;
 }
-.app .fcboard .fc-unified-toolbar button.ToolIcon--selected {
+.app .fcboard .fc-unified-toolbar button.ToolIcon--selected,
+.app
+  .fcboard
+  .fc-unified-toolbar
+  button.fc-board-tool.ToolIcon--selected:not(.fc-board-mode) {
   background: #0368ff;
   color: #fcfcfe;
   --icon-fill-color: #fcfcfe;

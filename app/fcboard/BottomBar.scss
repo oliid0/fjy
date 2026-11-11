@@ -212,7 +212,7 @@
 .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 10 * var(--fc-unit));
+  bottom: 100%;
   transform: translateX(-50%);
   width: calc(40 * var(--fc-unit));
   min-width: calc(40 * var(--fc-unit));
@@ -230,6 +230,10 @@
 .app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-drawing-tools,
 .app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-trailing {
   display: none;
+}
+.app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed {
+  height: calc(20 * var(--fc-unit));
+  bottom: env(safe-area-inset-bottom, 0px);
 }
 .app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-visibility {
   bottom: 0;
@@ -621,6 +625,38 @@
   width: calc(14 * var(--fc-unit));
   height: calc(14 * var(--fc-unit));
 }
+.app .fcboard .fc-native-eraser-row .fc-clear-slider::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #0368ff;
+  clip-path: inset(0 calc((100 - var(--fc-clear-progress, 0)) * 1%) 0 0);
+}
+.app .fcboard .fc-native-eraser-row .fc-clear-slider > span {
+  position: relative;
+  background: linear-gradient(110deg, #010101 35%, #fcfcfe 50%, #010101 65%);
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: fc-eraser-hint 3300ms linear infinite;
+}
+@keyframes fc-eraser-hint {
+  0% {
+    background-position: 100% 0;
+  }
+  9.1%,
+  100% {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app .fcboard .fc-native-eraser-row .fc-clear-slider > span {
+    animation: none;
+    color: #010101;
+  }
+}
 .app .fcboard .fc-native-eraser-row .fc-clear-slider input {
   height: 100%;
 }
@@ -636,10 +672,12 @@
   .fc-native-eraser-row
   .fc-clear-slider
   input::-webkit-slider-thumb {
-  width: calc(32 * var(--fc-unit));
-  height: calc(48 * var(--fc-unit));
+  // Keep the existing square SVG undistorted and centered in the48-unit track.
+  width: calc(38 * var(--fc-unit));
+  height: calc(38 * var(--fc-unit));
+  margin-top: calc(5 * var(--fc-unit));
   border-radius: 0;
-  background: var(--fc-cleaning-icon) center / 100% 100% no-repeat;
+  background: var(--fc-cleaning-icon) center / contain no-repeat;
 }
 .app .fcboard .fc-eraser-size-panel {
   width: calc(324 * var(--fc-unit));
@@ -895,11 +933,16 @@
     bottom: auto;
   }
   .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
-    bottom: calc(100% + 10 * var(--fc-unit));
+    bottom: 100%;
   }
 }
 @media (max-width: 360px) {
   .app .fcboard .fc-unified-toolbar {
     --fc-unit: 0.54px;
   }
+}
+
+// Collapsed handle occupies only itself, including in the phone layout.
+.app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed {
+  height: calc(20 * var(--fc-unit));
 }

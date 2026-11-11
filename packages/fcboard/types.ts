@@ -611,6 +611,8 @@ export type OnExportProgress = {
 };
 
 export interface FcboardProps {
+  /** Clear the active host surface, preserving the underlying document/other boards. */
+  onClearCanvas?: () => void | Promise<void>;
   onChange?: (
     elements: readonly OrderedFcboardElement[],
     appState: AppState,
@@ -1005,6 +1007,7 @@ export interface FcboardImperativeAPI {
   editTextElement: InstanceType<typeof App>["editTextElement"];
   nativeInk?: InstanceType<typeof App>["nativeInk"];
   nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
+  nativeEraserGesture?: InstanceType<typeof App>["nativeEraserGesture"];
   updateScene: InstanceType<typeof App>["updateScene"];
   applyDeltas: InstanceType<typeof App>["applyDeltas"];
   mutateElement: InstanceType<typeof App>["mutateElement"];

@@ -35,5 +35,5 @@
     }
   },
   "include": ["packages", "app"],
-  "exclude": ["examples", "dist", "types", "tests", "**/dist/**", "**/build/**", "**/node_modules/**"]
+  "exclude": ["examples", "dist", "types", "tests", "**/dist/**", "**/build/**", "**/build-android/**", "**/node_modules/**"]
 }

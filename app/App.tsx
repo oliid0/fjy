@@ -857,6 +857,9 @@ const FcboardWrapper = () => {
       })}
     >
       <Fcboard
+        onClearCanvas={async () => {
+          await classroomCommands.execute({ name: "canvas.clear" });
+        }}
         onImagePick={nativeImagePicker}
         onChange={onChange}
         onExport={onExport}

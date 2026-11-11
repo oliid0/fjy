@@ -72,6 +72,7 @@ jobs:
           node scripts/fetch-local-models.mjs
           python3 scripts/fetch-dictionary.py
       - name: Package whiteboard web assets
+        timeout-minutes: 8
         run: pnpm --dir app exec vite build
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
@@ -90,6 +91,7 @@ jobs:
             app/build
           if-no-files-found: error
       - name: Package Android visual interaction assets without browser inference
+        timeout-minutes: 8
         run: pnpm --dir app exec vite build
         env:
           VITE_NATIVE_INFERENCE: "true"

@@ -6,6 +6,74 @@ import { Fcboard } from "../index";
 import { render } from "./test-utils";
 import { API } from "./helpers/api";
 
+it("applies native object erasure while dragging, records one undo, and restores cancellation", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  const first = API.createElement({
+    type: "rectangle",
+    x: 100,
+    y: 100,
+    width: 20,
+    height: 20,
+  });
+  const second = API.createElement({
+    type: "rectangle",
+    x: 200,
+    y: 100,
+    width: 20,
+    height: 20,
+  });
+  API.updateScene({
+    elements: [first, second],
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+  act(() => {
+    api.setActiveTool({ type: "eraser" });
+    api.updateScene({ appState: { eraserMode: "object" } });
+  });
+  const input = {
+    id: "native-object",
+    width: 10,
+    height: 10,
+    pointerType: "pen",
+    points: [[100, 110, 0.5]] as [number, number, number][],
+  };
+  await act(async () => {
+    api.nativeEraserGesture!({ ...input, phase: "start" });
+  });
+  expect(api.getSceneElements().map((element) => element.id)).toEqual([
+    second.id,
+  ]);
+  await act(async () => {
+    api.nativeEraserGesture!({
+      ...input,
+      phase: "move",
+      points: [[200, 110, 0.5]],
+    });
+  });
+  expect(api.getSceneElements()).toHaveLength(0);
+  await act(async () => {
+    api.nativeEraserGesture!({
+      ...input,
+      phase: "end",
+      points: [[200, 110, 0.5]],
+    });
+  });
+  act(() => api.executeAction("undo"));
+  expect(api.getSceneElements().map((element) => element.id)).toEqual([
+    first.id,
+    second.id,
+  ]);
+  act(() => {
+    api.nativeEraserGesture!({ ...input, id: "cancel", phase: "start" });
+    api.nativeEraserGesture!({ ...input, id: "cancel", phase: "cancel" });
+  });
+  expect(api.getSceneElements().map((element) => element.id)).toEqual([
+    first.id,
+    second.id,
+  ]);
+});
+
 it("commits a completed native contact once with real pen metadata, composition events and reversible history", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;

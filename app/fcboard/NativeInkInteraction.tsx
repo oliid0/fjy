@@ -12,11 +12,12 @@ type Contact = {
   owner: string;
   id: string;
   token: string;
-  phase: "start" | "end" | "cancel";
-  mode?: "pen" | "select" | "regionErase";
+  phase: "start" | "move" | "end" | "cancel";
+  mode?: "pen" | "select" | "regionErase" | "erase";
   points: [number, number, number][];
   width: number;
   height: number;
+  palm?: boolean;
   pointerType: string;
 };
 const ink = registerPlugin<{
@@ -24,7 +25,7 @@ const ink = registerPlugin<{
     owner: string;
     token: string;
     enabled: boolean;
-    mode: "pen" | "select" | "regionErase";
+    mode: "pen" | "select" | "regionErase" | "erase";
     x: number;
     y: number;
     width: number;
@@ -44,6 +45,8 @@ const ink = registerPlugin<{
     color: string;
     dashed: boolean;
     palm: number;
+    palmEnabled: boolean;
+    eraserSize: number;
     blocked: number[][];
   }): Promise<void>;
   acknowledge(options: { owner: string; id: string }): Promise<void>;
@@ -100,12 +103,22 @@ export const NativeInkInteraction = ({
     let token = "";
     let configuredSurface = "";
     let previous = "";
+    let uiDirty = true;
+    let uiViewport = "";
+    let uiBounds: number[][] = [];
     const contacts = new Map<string, NonNullable<Contact["mode"]>>();
     const apply = (
       contact: Contact,
       phase = contact.phase,
       restoreSelection = true,
     ) => {
+      if (contact.mode === "erase") {
+        api.nativeEraserGesture!({ ...contact, phase, restoreSelection });
+        return;
+      }
+      if (phase === "move") {
+        throw new Error("Unexpected native pen movement");
+      }
       if (contact.mode && contact.mode !== "pen") {
         api.nativeRegionGesture!({
           ...contact,
@@ -172,6 +185,8 @@ export const NativeInkInteraction = ({
             state.eraserMode === "region" &&
             api.nativeRegionGesture
           ? "regionErase"
+          : state.activeTool.type === "eraser" && api.nativeEraserGesture
+          ? "erase"
           : "pen";
       const enabled =
         (mode !== "pen" ||
@@ -201,29 +216,47 @@ export const NativeInkInteraction = ({
         state.currentItemStrokeWidth,
         state.currentItemOpacity,
         state.whiteboardPenTip,
+        state.eraserMode,
+        state.eraserSize,
+        state.palmEraser,
+        state.palmEraserThreshold,
         state.width,
         state.height,
         state.offsetLeft,
         state.offsetTop,
       ]);
-      const blocked: number[][] = [];
-      for (const node of document.querySelectorAll<HTMLElement>(
-        'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]',
-      )) {
-        const box = node.getBoundingClientRect();
-        if (
-          box.width > 0 &&
-          box.height > 0 &&
-          box.right >= state.offsetLeft &&
-          box.left <= state.offsetLeft + state.width &&
-          box.bottom >= state.offsetTop &&
-          box.top <= state.offsetTop + state.height
-        ) {
-          blocked.push([box.left, box.top, box.right, box.bottom]);
+      const viewport = JSON.stringify([
+        state.offsetLeft,
+        state.offsetTop,
+        state.width,
+        state.height,
+      ]);
+      if (viewport !== uiViewport) {
+        uiViewport = viewport;
+        uiDirty = true;
+      }
+      if (enabled && uiDirty) {
+        uiDirty = false;
+        uiBounds = [];
+        for (const node of document.querySelectorAll<HTMLElement>(
+          'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]',
+        )) {
+          const box = node.getBoundingClientRect();
+          if (
+            box.width > 0 &&
+            box.height > 0 &&
+            box.right >= state.offsetLeft &&
+            box.left <= state.offsetLeft + state.width &&
+            box.bottom >= state.offsetTop &&
+            box.top <= state.offsetTop + state.height
+          ) {
+            uiBounds.push([box.left, box.top, box.right, box.bottom]);
+          }
         }
       }
+      const blocked: number[][] = enabled ? [...uiBounds] : [];
       // Table/label/question surfaces keep their existing live composition path.
-      for (const element of api.getSceneElements()) {
+      for (const element of enabled ? api.getSceneElements() : []) {
         if (
           mode !== "select" &&
           !element.customData?.fcInsertion &&
@@ -295,6 +328,11 @@ export const NativeInkInteraction = ({
         color: nativeColor(style.strokeColor),
         dashed: style.strokeStyle === "dashed",
         palm: state.palmEraserThreshold ?? inkProfile?.palmThreshold ?? 36,
+        palmEnabled: state.palmEraser !== false && !!api.nativeEraserGesture,
+        eraserSize: Math.max(
+          12,
+          Math.min(240, state.eraserSize ?? inkProfile?.eraserSize ?? 60),
+        ),
         blocked: blocked.slice(0, 512),
       };
       const signature = JSON.stringify(options);
@@ -313,7 +351,10 @@ export const NativeInkInteraction = ({
       if (!active || contact.owner !== api.id) {
         return;
       }
-      if (contact.phase === "end" && !contacts.has(contact.id)) {
+      if (
+        (contact.phase === "end" || contact.phase === "move") &&
+        !contacts.has(contact.id)
+      ) {
         void ink.acknowledge({ owner: api.id, id: contact.id }).catch(() => {});
         return;
       }
@@ -329,7 +370,7 @@ export const NativeInkInteraction = ({
           apply(contact);
           if (contact.phase === "start") {
             contacts.set(contact.id, contact.mode || "pen");
-          } else {
+          } else if (contact.phase !== "move") {
             contacts.delete(contact.id);
           }
         }
@@ -337,7 +378,9 @@ export const NativeInkInteraction = ({
         apply(contact, "cancel");
         fail(error);
       }
-      if (contact.phase === "end") {
+      if (contact.mode === "erase" && contact.phase !== "end") {
+        void ink.acknowledge({ owner: api.id, id: contact.id }).catch(() => {});
+      } else if (contact.phase === "end") {
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             void ink
@@ -347,7 +390,11 @@ export const NativeInkInteraction = ({
         );
       }
     });
-    const observer = new MutationObserver(schedule);
+    const scheduleUi = () => {
+      uiDirty = true;
+      schedule();
+    };
+    const observer = new MutationObserver(scheduleUi);
     observer.observe(document.documentElement, {
       attributes: true,
       childList: true,
@@ -382,16 +429,16 @@ export const NativeInkInteraction = ({
         schedule();
       }),
     ];
-    addEventListener("resize", schedule);
-    addEventListener("scroll", schedule, true);
+    addEventListener("resize", scheduleUi);
+    addEventListener("scroll", scheduleUi, true);
     schedule();
     return () => {
       active = false;
       cancelAnimationFrame(frame);
       observer.disconnect();
       stops.forEach((stop) => stop());
-      removeEventListener("resize", schedule);
-      removeEventListener("scroll", schedule, true);
+      removeEventListener("resize", scheduleUi);
+      removeEventListener("scroll", scheduleUi, true);
       for (const [id, mode] of contacts) {
         apply(
           {

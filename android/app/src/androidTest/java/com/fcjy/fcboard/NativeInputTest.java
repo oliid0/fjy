@@ -65,7 +65,7 @@ public class NativeInputTest {
         NativeInkView view = new NativeInkView(context, events::add);
         parent.addView(view, new FrameLayout.LayoutParams(200, 200));
         view.layout(0, 0, 200, 200);
-        view.configure(mode, true, 0, 0, 1, 4, 1, 1, "#ff0000", false, 36, Collections.emptyList(), null, 0, mode);
+        view.configure(mode, true, 0, 0, 1, 4, 1, 1, "#ff0000", false, 36, Collections.emptyList(), null, 0, mode, true, 60);
         return view;
     }
     private static void touch(NativeInkView view, int action, float x, float y) {

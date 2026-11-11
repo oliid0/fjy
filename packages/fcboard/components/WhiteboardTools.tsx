@@ -16,7 +16,7 @@ import { useFcboardContainer } from "./App";
 import { ToolButton } from "./ToolButton";
 import { FactoryIcon } from "./FactoryIcon";
 import { WhiteboardAerialView } from "./WhiteboardAerialView";
-import cleaningIcon from "./xbh-toolbar-assets/eraser-thumb.svg";
+import { SlideToClear } from "./SlideToClear";
 import { SHAPES } from "./shapes";
 
 import type { ShapesSwitcher } from "./Actions";
@@ -35,7 +35,6 @@ export const WhiteboardTools = ({
   const [open, setOpen] = React.useState(false);
   const toolbarItems = useToolbarItems();
   const [eraserOpen, setEraserOpen] = React.useState(false);
-  const [clearProgress, setClearProgress] = React.useState(0);
   const [eraserExpanded, setEraserExpanded] = React.useState(false);
   const [popupGap, setPopupGap] = React.useState(6.7);
   const [eraserAnchor, setEraserAnchor] = React.useState<HTMLElement | null>(
@@ -60,18 +59,30 @@ export const WhiteboardTools = ({
   >("line");
   const openingShape = React.useRef(false);
   const { container } = useFcboardContainer();
-  const finishClear = (value: number) => {
-    setClearProgress(0);
-    if (value < 90) {
-      return;
+  const finishClear = async () => {
+    try {
+      if (app.props.onClearCanvas) {
+        await app.props.onClearCanvas();
+      } else {
+        app.api.updateScene({
+          elements: [],
+          appState: {
+            selectedElementIds: {},
+            selectedGroupIds: {},
+            whiteboardSelection: undefined,
+          },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+      }
+      app.setActiveTool({ type: "freedraw" });
+      setEraserOpen(false);
+    } catch (error) {
+      app.api.updateScene({
+        appState: {
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
-    app.api.updateScene({
-      elements: [],
-      appState: { selectedElementIds: {} },
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-    });
-    app.setActiveTool({ type: "freedraw" });
-    setEraserOpen(false);
   };
   React.useEffect(
     () =>
@@ -223,7 +234,6 @@ export const WhiteboardTools = ({
           setEraserAnchor(event.currentTarget as HTMLElement);
           app.setActiveTool({ type: "eraser" });
           setEraserExpanded(false);
-          setClearProgress(0);
           setEraserOpen((visible) => !visible);
         }}
       />
@@ -328,34 +338,7 @@ export const WhiteboardTools = ({
                 >
                   <FactoryIcon name="eraseChoose" />
                 </button>
-                <label className="fc-clear-slider">
-                  <FactoryIcon name="eraseDirection" />
-                  <span>{t("fcboard.slide_to_erase")}</span>
-                  <input
-                    type="range"
-                    aria-label={t("fcboard.slide_to_clear_this_board")}
-                    style={
-                      {
-                        "--fc-cleaning-icon": `url("${cleaningIcon}")`,
-                      } as React.CSSProperties
-                    }
-                    min="0"
-                    max="100"
-                    value={clearProgress}
-                    onChange={(event) =>
-                      setClearProgress(Number(event.target.value))
-                    }
-                    onPointerUp={(event) =>
-                      finishClear(Number(event.currentTarget.value))
-                    }
-                    onKeyUp={(event) => {
-                      if (["ArrowRight", "End", "Enter"].includes(event.key)) {
-                        finishClear(Number(event.currentTarget.value));
-                      }
-                    }}
-                    onPointerCancel={() => setClearProgress(0)}
-                  />
-                </label>
+                <SlideToClear onClear={() => void finishClear()} />
               </div>
             </Paper>
           </Popper>

@@ -17,6 +17,7 @@ import org.json.JSONArray;
 @CapacitorPlugin(name = "FcboardNativeInk")
 public class NativeInkPlugin extends Plugin {
     private FrameLayout layer;
+    private final java.util.concurrent.ExecutorService publisher = java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "native-ink-events"));
     private final Map<String, NativeInkView> surfaces = new HashMap<>();
     private void layer() {
         if (layer != null) return;
@@ -33,7 +34,7 @@ public class NativeInkPlugin extends Plugin {
                 layer(); NativeInkView view = surfaces.get(owner);
                 if (view == null) {
                     if (surfaces.size() >= 4) throw new IllegalStateException("Too many native pen surfaces");
-                    view = new NativeInkView(getActivity(), event -> { event.put("owner", owner); notifyListeners("contact", event); });
+                    view = new NativeInkView(getActivity(), event -> { event.put("owner", owner); notifyListeners("contact", event); }, publisher);
                     surfaces.put(owner, view); layer.addView(view);
                 }
                 float scale = getBridge().getWebView().getWidth() / (float)viewport;
@@ -45,10 +46,13 @@ public class NativeInkPlugin extends Plugin {
                         JSONArray box = boxes.getJSONArray(i); blocked.add(new RectF((float)box.getDouble(0), (float)box.getDouble(1), (float)box.getDouble(2), (float)box.getDouble(3)));
                     }
                 }
-                view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"));
+                view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f));
                 int[] web = new int[2], overlay = new int[2]; getBridge().getWebView().getLocationInWindow(web); layer.getLocationInWindow(overlay);
                 FrameLayout.LayoutParams bounds = new FrameLayout.LayoutParams(Math.max(1, Math.round((float)width * scale)), Math.max(1, Math.round((float)height * scale)));
-                bounds.leftMargin = Math.round(web[0] - overlay[0] + (float)x * scale); bounds.topMargin = Math.round(web[1] - overlay[1] + (float)y * scale); view.setLayoutParams(bounds); call.resolve();
+                bounds.leftMargin = Math.round(web[0] - overlay[0] + (float)x * scale); bounds.topMargin = Math.round(web[1] - overlay[1] + (float)y * scale);
+                ViewGroup.LayoutParams old = view.getLayoutParams();
+                if (!(old instanceof FrameLayout.LayoutParams) || old.width != bounds.width || old.height != bounds.height || ((FrameLayout.LayoutParams)old).leftMargin != bounds.leftMargin || ((FrameLayout.LayoutParams)old).topMargin != bounds.topMargin) view.setLayoutParams(bounds);
+                call.resolve();
             } catch (Exception error) { call.reject(error.getMessage(), error); }
         });
     }
@@ -60,6 +64,6 @@ public class NativeInkPlugin extends Plugin {
     }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); }); }
     @Override protected void handleOnDestroy() {
-        getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
+        getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
     }
 }

@@ -444,8 +444,8 @@ import {
 import { EraserTrail } from "../eraser";
 import { FactoryCircleTrail } from "../eraser/FactoryCircleTrail";
 import {
-  eraseStroke,
   eraseSceneObjects,
+  eraseSceneStrokes,
   eraseSceneRegion,
   isPalmContact,
   pointerSamples,
@@ -859,6 +859,7 @@ class App extends React.Component<AppProps, AppState> {
       editTextElement: this.editTextElement,
       nativeInk: this.nativeInk,
       nativeRegionGesture: this.nativeRegionGesture,
+      nativeEraserGesture: this.nativeEraserGesture,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -7997,30 +7998,14 @@ class App extends React.Component<AppProps, AppState> {
           previous = next;
           continue;
         }
-        const nextElements: FcboardElement[] = [];
-        for (const element of elements) {
-          if (element.type !== "freedraw") {
-            nextElements.push(element);
-            continue;
-          }
-          const survivors = eraseStroke(
-            element,
-            previous,
-            next,
-            width / zoom,
-            height / zoom,
-          );
-          if (!survivors) {
-            nextElements.push(element);
-            continue;
-          }
-          update = true;
-          nextElements.push(
-            ...(survivors.length
-              ? survivors
-              : [newElementWith(element, { isDeleted: true })]),
-          );
-        }
+        const nextElements = eraseSceneStrokes(
+          elements,
+          previous,
+          next,
+          width / zoom,
+          height / zoom,
+        );
+        update ||= nextElements !== elements;
         elements = nextElements;
         previous = next;
       }
@@ -9812,6 +9797,111 @@ class App extends React.Component<AppProps, AppState> {
           type: this.state.preferredSelectionTool.type,
         }),
       });
+    }
+  };
+
+  private nativeEraserDraft: {
+    id: string;
+    before: readonly FcboardElement[];
+    previous: { x: number; y: number };
+    width: number;
+    height: number;
+    objectMode: boolean;
+    changed: boolean;
+  } | null = null;
+
+  /** Semantic, frame-batched native sweeps use the same clipping as web input.
+   * One transaction owns undo; cancellation never restores a previous board. */
+  public nativeEraserGesture = (input: {
+    id: string;
+    phase: "start" | "move" | "end" | "cancel";
+    points: readonly (readonly [number, number, number])[];
+    width: number;
+    height: number;
+    palm?: boolean;
+    pointerType?: string;
+    restoreSelection?: boolean;
+  }) => {
+    const draft = this.nativeEraserDraft;
+    if (input.phase === "cancel") {
+      if (draft?.id === input.id) {
+        this.nativeEraserDraft = null;
+        if (draft.changed && input.restoreSelection !== false) {
+          this.scene.replaceAllElements(draft.before);
+        }
+        this.setState({ cursorButton: "up" });
+      }
+      return;
+    }
+    if (
+      this.state.viewModeEnabled ||
+      !input.points.length ||
+      input.points.length > 120000 ||
+      input.points.some(
+        (point) => point.length !== 3 || !point.every(Number.isFinite),
+      ) ||
+      !Number.isFinite(input.width + input.height) ||
+      input.width <= 0 ||
+      input.height <= 0 ||
+      (this.state.activeTool.type !== "eraser" &&
+        (!input.palm ||
+          (this.state.palmEraser === false && input.pointerType !== "pen")))
+    ) {
+      throw new Error("Invalid native eraser gesture");
+    }
+    if (input.phase === "start") {
+      if (draft) {
+        throw new Error("A native eraser gesture is already active");
+      }
+      const first = input.points[0];
+      this.nativeEraserDraft = {
+        id: input.id,
+        before: this.scene.getElementsIncludingDeleted(),
+        previous: viewportCoordsToSceneCoords(
+          { clientX: first[0], clientY: first[1] },
+          this.state,
+        ),
+        width: input.width / this.state.zoom.value,
+        height: input.height / this.state.zoom.value,
+        objectMode:
+          this.state.eraserMode === "object" &&
+          !(input.palm && input.pointerType === "pen"),
+        changed: false,
+      };
+      this.setState({
+        selectedElementIds: {},
+        selectedGroupIds: {},
+        whiteboardSelection: undefined,
+        cursorButton: "down",
+      });
+    }
+    const current = this.nativeEraserDraft;
+    if (!current || current.id !== input.id) {
+      throw new Error("Native eraser gesture is no longer active");
+    }
+    let elements: readonly FcboardElement[] =
+      this.scene.getElementsIncludingDeleted();
+    for (const [clientX, clientY] of input.points) {
+      const next = viewportCoordsToSceneCoords(
+        { clientX, clientY },
+        this.state,
+      );
+      const erased = (
+        current.objectMode ? eraseSceneObjects : eraseSceneStrokes
+      )(elements, current.previous, next, current.width, current.height);
+      current.changed ||= erased !== elements;
+      elements = erased;
+      current.previous = next;
+    }
+    if (elements !== this.scene.getElementsIncludingDeleted()) {
+      this.scene.replaceAllElements(elements);
+    }
+    if (input.phase === "end") {
+      this.nativeEraserDraft = null;
+      if (current.changed) {
+        this.store.scheduleCapture();
+      }
+      this.setState({ cursorButton: "up" });
     }
   };
 

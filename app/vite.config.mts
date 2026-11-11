@@ -15,7 +15,7 @@ import { assertClientRuntimeBoundary } from "../config/clientRuntimeBoundary";
 import { assertNativeInferenceBoundary } from "../config/nativeInferenceBoundary";
 
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const nativeInference = process.env.VITE_NATIVE_INFERENCE === "true";
   // To load .env variables
   const envDir = path.resolve(__dirname, "../config");
@@ -180,17 +180,19 @@ export default defineConfig(({ mode }) => {
       }),
       woff2BrowserPlugin(),
       react(),
-      checker({
-        typescript: true,
-        eslint:
-          envVars.VITE_APP_ENABLE_ESLINT === "false"
-            ? undefined
-            : { lintCommand: 'eslint "./**/*.{js,ts,tsx}"' },
-        overlay: {
-          initialIsOpen: envVars.VITE_APP_COLLAPSE_OVERLAY === "false",
-          badgeStyle: "margin-bottom: 4rem; margin-left: 1rem",
-        },
-      }),
+      // CI checks types/lint separately; packaging must not spawn duplicate checkers.
+      command === "serve" &&
+        checker({
+          typescript: true,
+          eslint:
+            envVars.VITE_APP_ENABLE_ESLINT === "false"
+              ? undefined
+              : { lintCommand: 'eslint "./**/*.{js,ts,tsx}"' },
+          overlay: {
+            initialIsOpen: envVars.VITE_APP_COLLAPSE_OVERLAY === "false",
+            badgeStyle: "margin-bottom: 4rem; margin-left: 1rem",
+          },
+        }),
       svgrPlugin(),
       ViteEjsPlugin(),
       VitePWA({

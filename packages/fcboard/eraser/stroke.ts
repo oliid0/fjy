@@ -347,6 +347,35 @@ export const pointerSamples = (event: PointerEvent) => {
   return samples.length ? [...samples, event] : [event];
 };
 
+/** Shared partial-stroke sweep for browser and native input transactions. */
+export const eraseSceneStrokes = (
+  elements: readonly FcboardElement[],
+  from: Point,
+  to: Point,
+  width: number,
+  height: number,
+): readonly FcboardElement[] => {
+  let changed = false;
+  const next: FcboardElement[] = [];
+  for (const element of elements) {
+    const survivors =
+      element.type === "freedraw"
+        ? eraseStroke(element, from, to, width, height)
+        : null;
+    if (survivors === null) {
+      next.push(element);
+    } else {
+      changed = true;
+      next.push(
+        ...(survivors.length
+          ? survivors
+          : [newElementWith(element, { isDeleted: true })]),
+      );
+    }
+  }
+  return changed ? next : elements;
+};
+
 /** The visible rectangular footprint sweeps whole objects, including fast moves. */
 export const eraseSceneObjects = (
   elements: readonly FcboardElement[],

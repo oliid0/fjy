@@ -134,7 +134,13 @@ public class GeneratedResourceTest {
                 onActivity(scenario, activity -> activity.getBridge().getWebView().reload());
                 until(scenario, "!window.__fcBeforeReload && !!document.querySelector('iframe[title=\"" + title + "\"]')");
             } finally {
-                evaluate(scenario, "localStorage.removeItem('fcboard-settings');sessionStorage.removeItem('fcboard-keys');true");
+                try {
+                    evaluate(scenario, "localStorage.removeItem('fcboard-settings');sessionStorage.removeItem('fcboard-keys');true");
+                } finally {
+                    // CI121 reached all animation/persistence assertions, then
+                    // close() waited for global idle with the animation alive.
+                    onActivity(scenario, MainActivity::finish);
+                }
             }
         } finally { server.stop(); }
     }

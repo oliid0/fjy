@@ -262,6 +262,10 @@ public class OfflineInkTest {
             } finally {
                 plugin.firstRecognition.trySetException(new IllegalStateException("test cleanup"));
                 plugin.handleOnDestroy();
+                // CI121 completed the timeout/client-lifetime assertions before
+                // Scenario.close blocked on the live board's idle barrier.
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                    () -> scenario.onActivity(MainActivity::finish));
             }
         }
     }

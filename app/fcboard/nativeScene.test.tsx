@@ -245,15 +245,17 @@ it("waits for canonical render maps before acknowledging an erase that introduce
   const register = api.registerNativeSceneRenderer!.bind(api);
   let paused = false;
   let release!: () => boolean;
-  vi.spyOn(api, "registerNativeSceneRenderer").mockImplementation((renderer) =>
-    register((config) => {
-      release = () => renderer(config);
-      return paused ? true : renderer(config);
-    }),
-  );
+  const nativeApi = {
+    ...api,
+    registerNativeSceneRenderer: (renderer: Parameters<typeof register>[0]) =>
+      register((config) => {
+        release = () => renderer(config);
+        return paused ? true : renderer(config);
+      }),
+  };
   let controller!: NonNullable<ReturnType<typeof createNativeSceneRenderer>>;
   act(() => {
-    controller = createNativeSceneRenderer(api, vi.fn())!;
+    controller = createNativeSceneRenderer(nativeApi, vi.fn())!;
   });
   try {
     await waitFor(() =>

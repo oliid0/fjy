@@ -94,6 +94,9 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       .locator(".fc-drawing-tools")
       .getByRole("button", { name: labels.pen, exact: true });
     await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeVisible();
+    await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeHidden();
     await pen.click();
     const properties = page.locator(".fc-editor-properties");
     for (const viewport of rotations) {

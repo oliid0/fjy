@@ -520,3 +520,27 @@ it("does not reopen a share destination after the originating list request was c
     stop();
   }
 });
+
+it("closes share UI immediately while native cleanup is pending and preserves a newer reopened panel", async () => {
+  const cleanup = await setup("board.share");
+  let finish!: () => void;
+  vi.mocked(Classroom.stopShare).mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  try {
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.close_sharing") }),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      await classroomCommands.execute({ name: "board.share" });
+    });
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await act(async () => finish());
+    expect(screen.getByRole("dialog")).toBeVisible();
+  } finally {
+    cleanup();
+  }
+});

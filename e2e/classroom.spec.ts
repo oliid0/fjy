@@ -194,6 +194,9 @@ for (const viewport of [
     });
     const pen = toolbar.getByRole("button", { name: "笔", exact: true });
     await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeVisible();
+    await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeHidden();
     await pen.click();
     await expect(
       page.getByRole("dialog", { name: "画笔与对象属性" }),

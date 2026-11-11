@@ -44,7 +44,7 @@ const cross = (a: Point, b: Point, c: Point) =>
   (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 
 /** Minkowski sum of a motion segment and the APK's rectangular eraser footprint. */
-const sweptRectangle = (
+export const sweptRectangle = (
   from: Point,
   to: Point,
   width: number,

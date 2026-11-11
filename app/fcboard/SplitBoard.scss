@@ -52,6 +52,28 @@
       outline-offset: calc(-1 * var(--fc-split-unit, 0.67px));
     }
   }
+  .fc-split-erasers {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0;
+    button {
+      width: calc(38 * var(--fc-split-unit, 0.67px));
+      height: calc(38 * var(--fc-split-unit, 0.67px));
+      padding: calc(3 * var(--fc-split-unit, 0.67px));
+    }
+  }
+  .fc-split-colors,
+  .fc-split-erasers {
+    button > svg {
+      width: calc(26 * var(--fc-split-unit, 0.67px));
+      height: calc(26 * var(--fc-split-unit, 0.67px));
+    }
+    button[aria-pressed="true"] {
+      background: #e0e0e0;
+      border-radius: 50%;
+      outline: 1px solid #7b7b7b;
+    }
+  }
   .fc-split-colors {
     flex: 0 0 auto;
     gap: 0;

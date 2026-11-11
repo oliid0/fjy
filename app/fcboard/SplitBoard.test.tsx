@@ -155,7 +155,7 @@ it("retains each hidden pane's independent color, width and ink through 4/2/3/4 
   render(<SplitBoard />);
   await command({ count: 4 });
   fireEvent.click(
-    pane(3).getByRole("button", { name: t("fcboard.split_orange") }),
+    pane(3).getByRole("button", { name: t("fcboard.split_red") }),
   );
   fireEvent.click(
     pane(3).getByRole("button", {
@@ -170,7 +170,7 @@ it("retains each hidden pane's independent color, width and ink through 4/2/3/4 
   expect(hiddenCanvas.height).toBe(1);
   await command({ count: 3 });
   expect(
-    pane(3).getByRole("button", { name: t("fcboard.split_orange") }),
+    pane(3).getByRole("button", { name: t("fcboard.split_red") }),
   ).toHaveAttribute("aria-pressed", "true");
   expect(
     pane(3).getByRole("button", {
@@ -178,7 +178,7 @@ it("retains each hidden pane's independent color, width and ink through 4/2/3/4 
     }),
   ).toHaveAttribute("aria-pressed", "true");
   expect(
-    pane(1).getByRole("button", { name: t("fcboard.split_white") }),
+    pane(1).getByRole("button", { name: t("fcboard.split_black") }),
   ).toHaveAttribute("aria-pressed", "true");
   await command({ open: false });
   expect(await command({ count: 4 })).toMatchObject({
@@ -186,7 +186,7 @@ it("retains each hidden pane's independent color, width and ink through 4/2/3/4 
   });
   pointer(panes()[2], "pointerdown", 4, 20);
   pointer(panes()[2], "pointerup", 4, 140);
-  expect(panes()[2].getContext("2d")!.strokeStyle).toBe("#e95504");
+  expect(panes()[2].getContext("2d")!.strokeStyle).toBe("#ff0000");
   expect(panes()[2].getContext("2d")!.lineWidth).toBe(
     2.68 * (window.devicePixelRatio || 1),
   );
@@ -302,4 +302,30 @@ it("ignores obsolete exports after switching layouts and keeps a newer split ses
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   expect(screen.getByRole("button", { name: t("buttons.save") })).toBeEnabled();
   expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("dismisses split save progress by an outside touch and cancels late encoding without losing ink", async () => {
+  let encode!: BlobCallback;
+  const save = vi.spyOn(boardFile, "savePageFiles").mockResolvedValue(true);
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(
+    (callback) => {
+      encode = callback;
+    },
+  );
+  render(<SplitBoard />);
+  await command();
+  pointer(panes()[0], "pointerdown", 1, 20);
+  pointer(panes()[0], "pointerup", 1, 120);
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.save") }));
+  fireEvent.pointerDown(document.body);
+  expect(
+    screen.queryByRole("dialog", { name: t("fcboard.split_exit_prompt") }),
+  ).toBeNull();
+  expect(panes()[0]).toHaveAttribute("aria-disabled", "false");
+  await act(async () => encode(new Blob(["jpeg"], { type: "image/jpeg" })));
+  expect(save).not.toHaveBeenCalled();
+  expect(await command({ count: 2 })).toMatchObject({
+    panes: [{ strokes: 1 }, { strokes: 0 }, { strokes: 0 }, { strokes: 0 }],
+  });
 });

@@ -2934,18 +2934,21 @@ export const Classroom = ({
       {exitOpen && (
         <ExitDialog
           onClose={() => setExitOpen(false)}
-          onExit={async (save) => {
+          onExit={async (save, signal) => {
+            signal.throwIfAborted();
             if (recorder.current) {
               await stopRecording();
             }
             if (save) {
               const result = (await classroomCommands.execute({
                 name: "board.export",
+                args: { signal },
               })) as { saved?: boolean };
               if (!result.saved) {
                 return false;
               }
             }
+            signal.throwIfAborted();
             await NativeClassroom.exitApp();
             return true;
           }}

@@ -229,23 +229,24 @@ export const BoardShare = () => {
   }, [urls]);
   const close = async () => {
     exportRequest.current?.abort();
-    generation.current++;
+    const closing = ++generation.current;
+    const session = cloud.current;
+    cloud.current = undefined;
+    setOpen(false);
+    setUrls([]);
+    setTransfer(undefined);
+    document
+      .querySelector<HTMLButtonElement>("[data-testid='main-menu-trigger']")
+      ?.focus();
     try {
-      if (cloud.current) {
-        await cloud.current.end();
-        cloud.current = undefined;
-      }
-      if (native) {
-        await Classroom.stopShare();
-      }
-      setUrls([]);
-      setOpen(false);
-      document
-        .querySelector<HTMLButtonElement>("[data-testid='main-menu-trigger']")
-        ?.focus();
+      await Promise.all([
+        session?.end(),
+        native ? Classroom.stopShare() : undefined,
+      ]);
     } catch (failure) {
-      setTransfer(undefined);
-      setError(String(failure));
+      if (generation.current === closing) {
+        setError(String(failure));
+      }
     }
   };
   const exportEditable = async (

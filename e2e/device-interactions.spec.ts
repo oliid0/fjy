@@ -298,8 +298,12 @@ for (const width of [390, 1920]) {
     await expect(page.locator("[data-insertion-placement=table]")).toHaveCount(
       0,
     );
-    await toolbar.getByRole("button", { name: "板擦", exact: true }).click();
-    await toolbar.getByRole("button", { name: "板擦", exact: true }).click();
+    const eraser = toolbar.getByRole("button", { name: "板擦", exact: true });
+    await eraser.click();
+    await expect(page.locator(".fc-native-eraser-row")).toBeVisible();
+    await eraser.click();
+    await expect(page.locator(".fc-native-eraser-row")).toBeHidden();
+    await eraser.click();
     await page
       .locator(".fc-native-eraser-row")
       .getByRole("button", { name: "框选擦除", exact: true })

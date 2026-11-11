@@ -49,6 +49,13 @@ final class NativeInkView extends View {
     private int thickColor;
     private java.util.function.Supplier<NativeSceneView> retainedScene=()->null;
     private boolean strokeErase=true;
+    private NativeSplitInk splitInk;
+    void setPersistent(boolean enabled){if(enabled&&splitInk==null)splitInk=new NativeSplitInk();else if(!enabled)splitInk=null;}
+    void restorePersistent(android.graphics.Bitmap bitmap,String expected){
+        if(splitInk==null||!token.equals(expected))throw new IllegalStateException("Split surface changed before restore");
+        cancel();android.view.ViewGroup.LayoutParams size=getLayoutParams();
+        splitInk.restore(bitmap,Math.max(1,size.width),Math.max(1,size.height));invalidate();
+    }
     void setRetainedScene(java.util.function.Supplier<NativeSceneView> scene,boolean strokeErase){retainedScene=scene;this.strokeErase=strokeErase;}
     private org.json.JSONObject appearance, thickAppearance;
     private static final class Contact {
@@ -56,6 +63,7 @@ final class NativeInkView extends View {
         long nativeSequence;
         final List<float[]> points = new ArrayList<>();
         final Map<String,Path> erasures = new HashMap<>();
+        final RectF bounds=new RectF();
         final Path path = new Path(), fillPath = new Path(), renderPath = new Path();
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         float major, minor, lastX, lastY, rasterX, rasterY;
@@ -95,6 +103,9 @@ final class NativeInkView extends View {
     }
     void setMultiStroke(boolean value) { multiStroke = value; }
     private boolean blocked(float cssX, float cssY) { for (RectF rect : blocked) if (rect.contains(cssX, cssY)) return true; return false; }
+    boolean accepts(MotionEvent event,int index,float offsetX,float offsetY){
+        return enabled&&(event.getButtonState()&(MotionEvent.BUTTON_SECONDARY|MotionEvent.BUTTON_TERTIARY))==0&&!blocked(x+(event.getX(index)-offsetX)/scale,y+(event.getY(index)-offsetY)/scale);
+    }
     private boolean palm(MotionEvent event, int index) {
         int tool = event.getToolType(index);
         return tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_MOUSE && tool != MotionEvent.TOOL_TYPE_ERASER
@@ -169,7 +180,17 @@ final class NativeInkView extends View {
     private void finish(Contact contact) {
         if (contact.brush != null) contact.brush.finish();
         if (contact.brush == null) contact.path.lineTo(contact.lastX, contact.lastY);
-        pending.put(contact.id, contact); emit(contact, "end", true);
+        if(splitInk!=null){
+            splitInk.size(getWidth(),getHeight());
+            if(contact.mode.equals("pen")){
+                // Preserve raster operation order for export/undo when a writer
+                // finishes during another contact's ongoing eraser gesture.
+                for(Contact eraser:active.values())if(eraser.mode.equals("erase")&&eraser.points.size()>eraser.sent)emit(eraser,"move",false);
+                splitInk.commit(contact.bounds,target->draw(target,contact));
+            }
+            else if(contact.mode.equals("erase"))splitInk.finish(contact.id);
+        }else pending.put(contact.id, contact);
+        emit(contact, "end", true);
     }
     void setRoutedInput() { routedInput = true; }
     @Override public boolean onTouchEvent(MotionEvent event) { return !routedInput && handleTouchEvent(event, 0, 0); }
@@ -227,8 +248,11 @@ final class NativeInkView extends View {
             float fromX=first?px:contact.lastX,fromY=first?py:contact.lastY;
             if(scene!=null)contact.nativeSequence=scene.erase(contact.id,fromX,fromY,px,py,contact.major*scale,contact.minor*scale);
             Path cut=NativeSceneView.sweep(fromX,fromY,px,py,contact.major*scale,contact.minor*scale);
+            if(splitInk!=null){splitInk.size(getWidth(),getHeight());splitInk.erase(contact.id,cut);}
             for(Contact preview:pending.values())if(preview.mode.equals("pen"))preview.erasures.computeIfAbsent(contact.id,k->new Path()).addPath(cut);
         }
+        float pad=contact.paint.getStrokeWidth()*4+12*scale;
+        if(first)contact.bounds.set(px-pad,py-pad,px+pad,py+pad);else contact.bounds.union(px-pad,py-pad,px+pad,py+pad);
         contact.points.add(new float[]{x + px / scale, y + py / scale, pressure});
         if (contact.raster != null) {
             contact.delta.rewind();
@@ -286,7 +310,10 @@ final class NativeInkView extends View {
         postInvalidateOnAnimation();
     }
     void sceneCommitted(){NativeSceneView scene=retainedScene.get();if(scene==null)return;pending.values().removeIf(contact->contact.elementId!=null&&scene.contains(contact.elementId));postInvalidateOnAnimation();}
-    private void restorePreview(String gesture){for(Contact preview:pending.values())preview.erasures.remove(gesture);}
+    private void restorePreview(String gesture){
+        if(splitInk!=null)splitInk.cancel(gesture);
+        for(Contact preview:pending.values())preview.erasures.remove(gesture);
+    }
     void cancel() {
         for (Contact contact : active.values()) if (!contact.mode.equals("palm")) { NativeSceneView scene=retainedScene.get();if(contact.mode.equals("erase")){if(scene!=null)scene.cancelErase(contact.id);restorePreview(contact.id);}emit(contact, "cancel", false); }
         active.clear(); pending.clear(); ownedDevices.clear(); invalidate();
@@ -301,6 +328,9 @@ final class NativeInkView extends View {
     }
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        int scope=canvas.save();
+        for(RectF box:blocked)canvas.clipOutRect((box.left-x)*scale,(box.top-y)*scale,(box.right-x)*scale,(box.bottom-y)*scale);
+        if(splitInk!=null)splitInk.draw(canvas);
         for (Contact contact : pending.values()) {
             int saved=canvas.save();
             for(Path cut:contact.erasures.values())canvas.clipOutPath(cut);
@@ -312,6 +342,7 @@ final class NativeInkView extends View {
                 contact.awaitingFrame = true; emit(contact, "move", false);
             }
         }
+        canvas.restoreToCount(scope);
     }
     private void draw(Canvas canvas, Contact contact) {
         if (contact.mode.equals("palm")) return;

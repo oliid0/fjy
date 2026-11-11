@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { sweptRectangle } from "@fcboard/fcboard/eraser/stroke";
+
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import { MaterialPanel } from "./MaterialPanel";
+import { createNativeSplitInk } from "./nativeSplitInk";
 
 import { classroomCommands } from "./commands";
 import { savePageFiles } from "./boardFile";
@@ -18,10 +21,16 @@ type Stroke = {
   width: number;
   erase: boolean;
   complete: boolean;
+  gesture?: string;
 };
-type Pane = { strokes: Stroke[]; color: number; penSize: number };
-// MultiScreenView.f12491g and the first three PenUtil.PenSize resources.
-const colors = ["#f3f3f3", "#000000", "#e95504", "#0079c2"];
+type Pane = {
+  strokes: Stroke[];
+  color: number;
+  penSize: number;
+  eraser?: number;
+};
+// BSD HDataSet.getSplitColor, with independent explicit120/180-size erasers.
+const colors = ["#000000", "#0000ff", "#ff0000"];
 const penWidths = [1.34, 2.01, 2.68];
 const backgrounds = [
   { color: "#ffffff", label: "split_background_0" },
@@ -49,24 +58,31 @@ const drawSegment = (
   context.lineCap = stroke.erase ? "square" : "round";
   context.lineJoin = "round";
   context.beginPath();
+  if (stroke.erase) {
+    const polygon = sweptRectangle(
+      { x: from[0] * canvas.width, y: from[1] * canvas.height },
+      { x: to[0] * canvas.width, y: to[1] * canvas.height },
+      context.lineWidth,
+      context.lineWidth * 1.2,
+    );
+    polygon.forEach((point, index) =>
+      index
+        ? context.lineTo(point.x, point.y)
+        : context.moveTo(point.x, point.y),
+    );
+    context.closePath();
+    context.fill();
+    return;
+  }
   if (!previous && from[0] === to[0] && from[1] === to[1]) {
-    if (stroke.erase) {
-      context.fillRect(
-        to[0] * canvas.width - context.lineWidth / 2,
-        to[1] * canvas.height - context.lineWidth / 2,
-        context.lineWidth,
-        context.lineWidth,
-      );
-    } else {
-      context.arc(
-        to[0] * canvas.width,
-        to[1] * canvas.height,
-        context.lineWidth / 2,
-        0,
-        2 * Math.PI,
-      );
-      context.fill();
-    }
+    context.arc(
+      to[0] * canvas.width,
+      to[1] * canvas.height,
+      context.lineWidth / 2,
+      0,
+      2 * Math.PI,
+    );
+    context.fill();
   } else {
     // HCurveObject joins midpoint quadratic segments for smooth live ink.
     const start = previous
@@ -104,26 +120,47 @@ const SplitPane = ({
 }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   const active = useRef(new Map<number, Stroke>());
+  const native = useRef<ReturnType<typeof createNativeSplitInk>>(undefined);
+  const nativeContacts = useRef(new Map<string, Stroke>());
   const [tool, setTool] = useState(model.color);
+  const [eraser, setEraser] = useState(model.eraser || 0);
   const [penSize, setPenSize] = useState(model.penSize);
-  const redraw = useCallback(() => {
-    const node = canvas.current!;
-    node.getContext("2d")?.clearRect(0, 0, node.width, node.height);
-    for (const stroke of model.strokes) {
-      stroke.points.forEach((point, i) =>
-        drawSegment(
-          node,
-          stroke,
-          stroke.points[Math.max(0, i - 1)],
-          point,
-          stroke.points[i - 2],
-        ),
-      );
-      if (stroke.complete) {
-        finishStroke(node, stroke);
+  const nativeStyle = useRef({
+    color: colors[tool],
+    width: penWidths[penSize],
+    eraser,
+    disabled,
+  });
+  nativeStyle.current = {
+    color: colors[tool],
+    width: penWidths[penSize],
+    eraser,
+    disabled,
+  };
+  const redraw = useCallback(
+    (restoreNative = true) => {
+      const node = canvas.current!;
+      node.getContext("2d")?.clearRect(0, 0, node.width, node.height);
+      for (const stroke of model.strokes) {
+        stroke.points.forEach((point, i) =>
+          drawSegment(
+            node,
+            stroke,
+            stroke.points[Math.max(0, i - 1)],
+            point,
+            stroke.points[i - 2],
+          ),
+        );
+        if (stroke.complete) {
+          finishStroke(node, stroke);
+        }
       }
-    }
-  }, [model]);
+      if (restoreNative) {
+        native.current?.restore();
+      }
+    },
+    [model],
+  );
   useEffect(() => {
     const node = canvas.current!;
     const pointers = active.current;
@@ -158,6 +195,112 @@ const SplitPane = ({
       node.width = node.height = 1;
     };
   }, [redraw]);
+  useEffect(() => {
+    const node = canvas.current!;
+    const contacts = nativeContacts.current;
+    const eraseParts = new Map<string, Stroke[]>();
+    native.current = createNativeSplitInk(
+      node,
+      () => nativeStyle.current,
+      (event, style, bounds) => {
+        let stroke = contacts.get(event.id);
+        if (event.phase === "cancel") {
+          if (stroke) {
+            const owned = eraseParts.get(event.id) || [stroke];
+            for (const part of owned) {
+              const index = model.strokes.indexOf(part);
+              if (index >= 0) {
+                model.strokes.splice(index, 1);
+              }
+            }
+            eraseParts.delete(event.id);
+            contacts.delete(event.id);
+            // Native already restored this gesture's tiles. A new snapshot
+            // would cancel a different writer still active in the same pane.
+            redraw(false);
+          }
+          return;
+        }
+        if (event.phase === "start") {
+          stroke = {
+            color: style.color,
+            width: event.mode === "erase" ? event.width : style.width,
+            erase: event.mode === "erase",
+            complete: false,
+            points: [],
+            gesture: event.id,
+          };
+          if (stroke.erase) {
+            eraseParts.set(event.id, [stroke]);
+          }
+          contacts.set(event.id, stroke);
+          model.strokes.push(stroke);
+        }
+        if (!stroke) {
+          return;
+        }
+        const points = event.points.map(
+          ([x, y]): Point => [
+            Math.max(0, Math.min(1, (x - bounds.left) / bounds.width)),
+            Math.max(0, Math.min(1, (y - bounds.top) / bounds.height)),
+          ],
+        );
+        const fresh =
+          event.mode === "pen" && event.phase === "end"
+            ? points.slice(stroke.points.length)
+            : points;
+        for (const point of fresh) {
+          const previous = stroke.points.at(-1) || point;
+          drawSegment(node, stroke, previous, point, stroke.points.at(-2));
+          stroke.points.push(point);
+        }
+        if (event.phase === "end") {
+          finishStroke(node, stroke);
+          contacts.delete(event.id);
+          if (stroke.erase) {
+            eraseParts.delete(event.id);
+          } else {
+            // Native installs the completed pen above earlier erasure. Keep
+            // later erase packets above that pen in resize/export replay too.
+            const index = model.strokes.indexOf(stroke);
+            if (index >= 0) {
+              model.strokes.splice(index, 1);
+            }
+            model.strokes.push(stroke);
+            for (const [id, erasing] of contacts) {
+              if (!erasing.erase || !erasing.points.length) {
+                continue;
+              }
+              erasing.complete = true;
+              const continuation: Stroke = {
+                ...erasing,
+                complete: false,
+                points: [erasing.points.at(-1)!],
+              };
+              eraseParts.get(id)?.push(continuation);
+              contacts.set(id, continuation);
+              model.strokes.push(continuation);
+            }
+          }
+        }
+      },
+    );
+    return () => {
+      native.current?.dispose();
+      native.current = undefined;
+      for (const [id, stroke] of contacts) {
+        for (const owned of eraseParts.get(id) || [stroke]) {
+          const index = model.strokes.indexOf(owned);
+          if (index >= 0) {
+            model.strokes.splice(index, 1);
+          }
+        }
+      }
+      contacts.clear();
+      eraseParts.clear();
+    };
+  }, [model, redraw]);
+  useEffect(() => native.current?.update(), [disabled, tool, penSize, eraser]);
   const point = (x: number, y: number): Point => {
     const rect = canvas.current!.getBoundingClientRect();
     return [
@@ -168,9 +311,10 @@ const SplitPane = ({
   return (
     <section
       className="fc-split-pane"
+      style={{ background }}
       aria-label={t("fcboard.split_pane", { number: index + 1 })}
       onKeyDown={(event) => {
-        if (disabled || active.current.size) {
+        if (disabled || active.current.size || nativeContacts.current.size) {
           return;
         }
         if (
@@ -178,7 +322,12 @@ const SplitPane = ({
           event.key.toLowerCase() === "z"
         ) {
           event.preventDefault();
-          model.strokes.pop();
+          const undone = model.strokes.pop();
+          if (undone?.gesture) {
+            model.strokes = model.strokes.filter(
+              (stroke) => stroke.gesture !== undone.gesture,
+            );
+          }
           redraw();
         }
         if (event.key === "Delete") {
@@ -210,10 +359,11 @@ const SplitPane = ({
             // WebViews may retire a pointer before capture reaches the DOM.
           }
           const contact = Math.max(event.width || 0, event.height || 0);
-          const erase = event.pointerType === "touch" && contact >= 36;
+          const erase =
+            !!eraser || (event.pointerType === "touch" && contact >= 36);
           const stroke: Stroke = {
             color: colors[tool],
-            width: erase ? Math.max(36, contact) : penWidths[penSize],
+            width: erase ? eraser || Math.max(60, contact) : penWidths[penSize],
             erase,
             complete: false,
             points: [point(event.clientX, event.clientY)],
@@ -288,28 +438,63 @@ const SplitPane = ({
             role="group"
             aria-label={t("fcboard.split_pen_colors")}
           >
-            {(
-              [
-                "split_white",
-                "split_black",
-                "split_orange",
-                "split_blue",
-              ] as const
-            ).map((label, value) => (
-              <button
-                type="button"
-                key={label}
-                aria-label={t(`fcboard.${label}`)}
-                aria-pressed={tool === value}
-                disabled={disabled}
-                onClick={() => {
-                  model.color = value;
-                  setTool(value);
-                }}
-              >
-                <span style={{ background: colors[value] }} />
-              </button>
-            ))}
+            {(["split_black", "split_blue", "split_red"] as const).map(
+              (label, value) => (
+                <button
+                  type="button"
+                  key={label}
+                  aria-label={t(`fcboard.${label}`)}
+                  aria-pressed={!eraser && tool === value}
+                  disabled={disabled}
+                  onClick={() => {
+                    model.color = value;
+                    model.eraser = 0;
+                    setTool(value);
+                    setEraser(0);
+                  }}
+                >
+                  <FactoryIcon
+                    name={
+                      (
+                        [
+                          "splitBlackPen",
+                          "splitBluePen",
+                          "splitRedPen",
+                        ] as const
+                      )[value]
+                    }
+                  />
+                </button>
+              ),
+            )}
+          </div>
+          <div
+            className="fc-split-erasers"
+            role="group"
+            aria-label={t("toolBar.eraser")}
+          >
+            {(["split_small_eraser", "split_large_eraser"] as const).map(
+              (label, index) => {
+                const size = index ? 90 : 60;
+                return (
+                  <button
+                    type="button"
+                    key={label}
+                    aria-label={t(`fcboard.${label}`)}
+                    aria-pressed={eraser === size}
+                    disabled={disabled}
+                    onClick={() => {
+                      model.eraser = size;
+                      setEraser(size);
+                    }}
+                  >
+                    <FactoryIcon
+                      name={index ? "splitLargeEraser" : "splitSmallEraser"}
+                    />
+                  </button>
+                );
+              },
+            )}
           </div>
           <span className="fc-split-divider" />
           <div
@@ -541,7 +726,12 @@ export const SplitBoard = () => {
       if (event.key === "Escape" && !event.defaultPrevented) {
         if (draft) {
           setDraft(null);
-        } else if (!saving) {
+        } else {
+          if (exiting) {
+            saveRequest.current?.abort();
+            saveRequest.current = undefined;
+            setSaving(false);
+          }
           setError("");
           setExiting((value) => !value);
         }
@@ -550,10 +740,12 @@ export const SplitBoard = () => {
     const dismiss = (event: globalThis.PointerEvent) => {
       if (
         exiting &&
-        !saving &&
         !exitPanel.current?.contains(event.target as Node) &&
         !(event.target as Element).closest?.("[data-split-exit]")
       ) {
+        saveRequest.current?.abort();
+        saveRequest.current = undefined;
+        setSaving(false);
         setExiting(false);
       }
     };
@@ -651,10 +843,14 @@ export const SplitBoard = () => {
             className="fc-split-exit"
             data-split-exit
             aria-expanded={exiting}
-            disabled={saving}
             type="button"
             aria-label={t("buttons.close")}
             onClick={() => {
+              if (exiting) {
+                saveRequest.current?.abort();
+                saveRequest.current = undefined;
+                setSaving(false);
+              }
               setError("");
               setExiting((value) => !value);
             }}

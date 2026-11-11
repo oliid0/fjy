@@ -1,5 +1,6 @@
 import { act, waitFor } from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
+import { newElementWith } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 import { render } from "@fcboard/fcboard/tests/test-utils";
@@ -17,18 +18,22 @@ afterEach(() => {
   document.documentElement.classList.remove("fc-native-scene");
 });
 const ink = (x: number) =>
-  API.createElement({
-    type: "freedraw",
-    x,
-    y: 120,
-    width: 100,
-    height: 20,
-    points: [pointFrom(0, 0), pointFrom(100, 20)],
-    strokeWidth: 4,
-    customData: {
-      fcInk: { version: 2, pen: "hard", centerline: true, finished: true },
+  newElementWith(
+    API.createElement({
+      type: "freedraw",
+      x,
+      y: 120,
+      width: 100,
+      height: 20,
+      points: [pointFrom(0, 0), pointFrom(100, 20)],
+      strokeWidth: 4,
+    }),
+    {
+      customData: {
+        fcInk: { version: 2, pen: "hard", centerline: true, finished: true },
+      },
     },
-  });
+  );
 const setup = async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;

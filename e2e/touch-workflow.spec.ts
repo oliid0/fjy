@@ -425,6 +425,9 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await expect(toolbar.getByRole("button", { name: "AI 教师" })).toHaveCount(0);
   const pen = toolbar.getByRole("button", { name: "笔", exact: true });
   await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeVisible();
+  await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeHidden();
   await pen.click();
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),
@@ -505,6 +508,9 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     page.getByRole("dialog", { name: "工具箱", exact: true }),
   ).toHaveCount(0);
   await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeVisible();
+  await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeHidden();
   await pen.click();
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),

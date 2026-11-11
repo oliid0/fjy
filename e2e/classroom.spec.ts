@@ -137,7 +137,9 @@ for (const viewport of [
     await expect(
       settings.getByRole("slider", { name: "笔锋变化率", exact: true }),
     ).toBeVisible();
-    await settings.getByRole("button", { name: "语言", exact: true }).click();
+    await settings
+      .getByRole("button", { name: "语言", exact: true })
+      .click({ position: { x: 8, y: 12 } });
     await expect(
       settings.getByRole("combobox", { name: "选择语言", exact: true }),
     ).toBeVisible();
@@ -170,6 +172,55 @@ for (const viewport of [
     await page.getByRole("listbox").press("Escape");
     await expect(page.getByRole("listbox")).toBeHidden();
     await expect(settings).toBeVisible();
+    for (const [key, label, options] of [
+      [
+        "ocr",
+        "手写识别",
+        [
+          ["local", "本地轨迹（Android）/ 截图识别（Web）"],
+          ["cloud", "云端视觉识别"],
+          ["auto", "本地优先 · 本地失败才使用云端"],
+        ],
+      ],
+      ...[
+        ["mathTranscription", "数学转录回退"],
+        ["translationProvider", "翻译方式"],
+        ["handwritingGeneration", "文字转手写体"],
+      ].map(
+        ([key, label]) =>
+          [
+            key,
+            label,
+            [
+              ["cloud", "云端 · 需要配置密钥"],
+              ["local", "本地 · 离线，无需密钥"],
+            ],
+          ] as const,
+      ),
+    ] as const) {
+      const select = settings.getByRole("combobox", {
+        name: label,
+        exact: true,
+      });
+      for (const [value, name] of options) {
+        await select.click();
+        await page.getByRole("option", { name, exact: true }).click();
+        await expect(page.getByRole("listbox")).toBeHidden();
+        await expect(settings).toBeVisible();
+        await expect(select).toHaveText(name);
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (field) =>
+                JSON.parse(localStorage.getItem("fcboard-settings") || "{}")[
+                  field
+                ],
+              key,
+            ),
+          )
+          .toBe(value);
+      }
+    }
     await recognition.click();
     await page
       .locator(".MuiMenu-root .MuiBackdrop-root")

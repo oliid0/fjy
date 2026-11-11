@@ -140,6 +140,7 @@ it("preserves the two dots of division instead of accepting a minus transcriptio
   expect(preservesMathInkStructure(strokes, "12+3")).toBe(false);
   for (const value of [
     "12÷3",
+    "12➗3",
     "12/3",
     String.raw`12\div3`,
     String.raw`\frac{12}{3}`,

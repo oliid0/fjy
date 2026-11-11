@@ -16,7 +16,7 @@ export const normalizeExpression = (text: string) =>
     .trim()
     .replace(/＝/g, "=")
     .replace(/[×·]/g, "*")
-    .replace(/÷/g, "/")
+    .replace(/[÷➗]\uFE0F?/g, "/")
     .replace(/[−–]/g, "-")
     .replace(/π/g, "pi")
     .replace(/²/g, "^2")

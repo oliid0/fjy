@@ -90,6 +90,7 @@ it.each([
   ["12\n×3\n---", "36"],
   ["12\nx3\n---", "36"],
   ["12\n÷3\n---", "4"],
+  ["12\n➗3\n---", "4"],
 ])(
   "calculates explicit vertical %s with a separate below-bar result layout",
   (text, answer) => {

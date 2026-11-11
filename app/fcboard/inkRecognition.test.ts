@@ -1,3 +1,5 @@
+import * as i18n from "@fcboard/fcboard/i18n";
+
 import * as ai from "./ai";
 import { recognizeInkContent } from "./inkRecognition";
 import { defaults, saveSettings } from "./settings";
@@ -224,3 +226,48 @@ it("discards local language output if the selected handwriting language changes 
     recognizeInkContent("language", vi.fn(), [], new AbortController().signal),
   ).rejects.toMatchObject({ name: "AbortError" });
 });
+
+it.each([
+  ["zh-CN", "zh", "今天是晴天。", "It is sunny today.", "en"],
+  ["en", "en", "It is sunny today.", "今天是晴天。", "zh"],
+])(
+  "translates a same-language sentence in one cloud image call from %s",
+  async (code, language, term, translation, targetLanguage) => {
+    vi.spyOn(i18n, "getLanguage").mockReturnValue({
+      ...i18n.getLanguage(),
+      code,
+    });
+    saveSettings(
+      { ...defaults, apiKey: "configured", translationProvider: "cloud" },
+      false,
+    );
+    const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+    const model = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValue(JSON.stringify({ language, term, translation }));
+    const result = await recognizeInkContent(
+      "language",
+      async () => "data:image/png;base64,sentence",
+      [],
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({
+      kind: "language",
+      text: term,
+      targetLanguage,
+      study: { translation },
+    });
+    expect(model).toHaveBeenCalledTimes(1);
+    expect(recognize).not.toHaveBeenCalled();
+    expect(model.mock.calls[0][0][1].content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining(
+            `"sameLanguageTarget":"${targetLanguage}"`,
+          ),
+        }),
+      ]),
+    );
+  },
+);

@@ -6,7 +6,11 @@ import { localMathResult, recognizeMath } from "./mathRecognition";
 import { prepareCalculation } from "./math";
 import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
-import { explainLanguage, translateLanguageImage } from "./languageStudy";
+import {
+  explainLanguage,
+  translateLanguageImage,
+  translationTargetLanguage,
+} from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
 import { calculationInk } from "./calculationInk";
 import { calculateAsync } from "./mathComputation";
@@ -152,7 +156,15 @@ export async function recognizeInkContent(
       assertLanguageCurrent();
       const study = await translateLanguageImage(image, signal, targetLanguage);
       assertLanguageCurrent();
-      return { kind: "language", text: study.term, study, targetLanguage };
+      return {
+        kind: "language",
+        text: study.term,
+        study,
+        targetLanguage: translationTargetLanguage(
+          study.language,
+          targetLanguage,
+        ),
+      };
     }
     const calculations = new Map<
       string,
@@ -218,18 +230,15 @@ export async function recognizeInkContent(
     }
     if (mode === "language") {
       assertLanguageCurrent();
-      const target = targetLanguage.toLowerCase().split("-")[0];
       const source = /[\u3400-\u9fff]/.test(text)
         ? "zh"
         : /^\p{ASCII}+$/u.test(text)
         ? "en"
         : undefined;
-      const translationTarget =
-        source && source === target
-          ? source === "zh"
-            ? "en"
-            : "zh"
-          : targetLanguage;
+      const translationTarget = translationTargetLanguage(
+        source,
+        targetLanguage,
+      );
       const study = await explainLanguage(text, signal, translationTarget);
       assertLanguageCurrent();
       return {

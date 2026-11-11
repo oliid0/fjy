@@ -40,6 +40,42 @@ afterEach(() => {
   cleanup();
   backend.listeners.clear();
 });
+it("keeps brush and gradient previews native with the calibrated style", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => {
+    api.setActiveTool({ type: "freedraw" });
+    api.updateScene({
+      appState: {
+        currentItemPenMode: "brush",
+        currentItemInkGradient: "mint",
+        whiteboardBrushVariation: 25,
+      },
+    });
+  });
+  render(
+    <NativeInkInteraction
+      api={api}
+      inkProfile={{
+        hardPenWidth: 4,
+        brushPenWidth: 15,
+        palmThreshold: 36,
+        eraserSize: 60,
+      }}
+    />,
+  );
+  await waitFor(() => expect(backend.configure).toHaveBeenCalled());
+  const options = backend.configure.mock.calls.at(-1)![0];
+  expect(options.enabled).toBe(true);
+  expect(options.penWidth).toBe(15);
+  expect(options.appearance).toMatchObject({
+    pen: "brush",
+    variation: 25,
+    gradient: { colors: ["#4dd7af", "#3b52c8"] },
+  });
+});
 it("uses calibrated dual-tip native styles and rejects a late completed contact after surface invalidation", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;

@@ -2,6 +2,7 @@ package com.fcjy.fcboard;
 
 import android.graphics.RectF;
 import android.view.ViewGroup;
+import android.view.MotionEvent;
 import android.widget.FrameLayout;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -19,6 +20,31 @@ public class NativeInkPlugin extends Plugin {
     private FrameLayout layer;
     private final java.util.concurrent.ExecutorService publisher = java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "native-ink-events"));
     private final Map<String, NativeInkView> surfaces = new HashMap<>();
+    private final Map<NativeInkView, RectF> inputBounds = new HashMap<>();
+    private final Map<Integer, NativeInkView> capturedDevices = new HashMap<>();
+    @Override public void load() { ((MainActivity)getActivity()).setInkInput(this); }
+    /** Route the real event before ViewGroup can cancel another device's stream. */
+    boolean dispatchInput(MotionEvent event) {
+        int device = event.getDeviceId(), action = event.getActionMasked();
+        NativeInkView captured = capturedDevices.get(device);
+        if (captured != null && action == MotionEvent.ACTION_DOWN) {
+            captured.cancelDevice(device); capturedDevices.remove(device); captured = null;
+        }
+        if (captured != null) {
+            RectF bounds = inputBounds.get(captured);
+            if (bounds != null) captured.handleTouchEvent(event, bounds.left, bounds.top);
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) capturedDevices.remove(device);
+            return true;
+        }
+        if (action != MotionEvent.ACTION_DOWN) return false;
+        for (Map.Entry<NativeInkView, RectF> entry : inputBounds.entrySet()) {
+            RectF bounds = entry.getValue();
+            if (bounds.contains(event.getX(), event.getY()) && entry.getKey().handleTouchEvent(event, bounds.left, bounds.top)) {
+                capturedDevices.put(device, entry.getKey()); return true;
+            }
+        }
+        return false;
+    }
     private void layer() {
         if (layer != null) return;
         layer = new FrameLayout(getActivity());
@@ -35,6 +61,7 @@ public class NativeInkPlugin extends Plugin {
                 if (view == null) {
                     if (surfaces.size() >= 4) throw new IllegalStateException("Too many native pen surfaces");
                     view = new NativeInkView(getActivity(), event -> { event.put("owner", owner); notifyListeners("contact", event); }, publisher);
+                    view.setRoutedInput();
                     surfaces.put(owner, view); layer.addView(view);
                 }
                 float scale = getBridge().getWebView().getWidth() / (float)viewport;
@@ -46,10 +73,12 @@ public class NativeInkPlugin extends Plugin {
                         JSONArray box = boxes.getJSONArray(i); blocked.add(new RectF((float)box.getDouble(0), (float)box.getDouble(1), (float)box.getDouble(2), (float)box.getDouble(3)));
                     }
                 }
-                view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f));
+                view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
                 int[] web = new int[2], overlay = new int[2]; getBridge().getWebView().getLocationInWindow(web); layer.getLocationInWindow(overlay);
                 FrameLayout.LayoutParams bounds = new FrameLayout.LayoutParams(Math.max(1, Math.round((float)width * scale)), Math.max(1, Math.round((float)height * scale)));
                 bounds.leftMargin = Math.round(web[0] - overlay[0] + (float)x * scale); bounds.topMargin = Math.round(web[1] - overlay[1] + (float)y * scale);
+                inputBounds.put(view, new RectF(web[0] + (float)x * scale, web[1] + (float)y * scale,
+                    web[0] + ((float)x + (float)width) * scale, web[1] + ((float)y + (float)height) * scale));
                 ViewGroup.LayoutParams old = view.getLayoutParams();
                 if (!(old instanceof FrameLayout.LayoutParams) || old.width != bounds.width || old.height != bounds.height || ((FrameLayout.LayoutParams)old).leftMargin != bounds.leftMargin || ((FrameLayout.LayoutParams)old).topMargin != bounds.topMargin) view.setLayoutParams(bounds);
                 call.resolve();
@@ -60,10 +89,10 @@ public class NativeInkPlugin extends Plugin {
         getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", "")); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
-        getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.remove(call.getString("owner", "")); if (view != null) { view.cancel(); layer.removeView(view); } call.resolve(); });
+        getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.remove(call.getString("owner", "")); if (view != null) { view.cancel(); inputBounds.remove(view); layer.removeView(view); } call.resolve(); });
     }
-    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); }); }
+    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); capturedDevices.clear(); }); }
     @Override protected void handleOnDestroy() {
-        getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
+        getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); capturedDevices.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
     }
 }

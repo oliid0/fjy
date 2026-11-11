@@ -8,14 +8,19 @@ import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
@@ -27,11 +32,13 @@ final class NativeInkView extends View {
     private final Executor publisher;
     private final Picture eraserPicture;
     private final RectF eraserRect = new RectF();
-    private final Map<Integer, Contact> active = new HashMap<>();
+    private final Map<Long, Contact> active = new HashMap<>();
+    private final Set<Integer> ownedDevices = new HashSet<>();
     private final Map<String, Contact> pending = new HashMap<>();
     private final List<RectF> blocked = new ArrayList<>();
     private final Paint regionFill = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private boolean enabled, palmEnabled = true, ownsGesture;
+    private boolean enabled, palmEnabled = true, routedInput;
+    private final float touchSlop;
     private float eraserSize = 60;
     private String token = "", mode = "pen";
     private float x, y, scale = 1, width = 4, unit = 1, opacity = 1, palm = 36;
@@ -39,26 +46,32 @@ final class NativeInkView extends View {
     private boolean dashed, thickDashed;
     private float thickWidth, thickUnit, thickOpacity, thickThreshold;
     private int thickColor;
+    private org.json.JSONObject appearance, thickAppearance;
     private static final class Contact {
         String id = UUID.randomUUID().toString(), token, pointerType, mode;
         final List<float[]> points = new ArrayList<>();
-        final Path path = new Path(), fillPath = new Path();
+        final Path path = new Path(), fillPath = new Path(), renderPath = new Path();
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         float major, minor, lastX, lastY;
-        boolean palm, awaitingFrame;
+        boolean palm, awaitingFrame, rejected;
+        int deviceId;
+        NativeBrush brush;
         int sent;
     }
     NativeInkView(Context context, Events events) { this(context, events, Runnable::run); }
     NativeInkView(Context context, Events events, Executor publisher) {
         super(context); this.events = events; this.publisher = publisher;
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         try { eraserPicture = com.caverock.androidsvg.SVG.getFromResource(context, R.raw.factory_eraser).renderToPicture(); }
         catch (com.caverock.androidsvg.SVGParseException error) { throw new IllegalStateException("Native eraser vector cannot be loaded", error); }
         regionFill.setColor(Color.argb(48, 255, 0, 0)); setWillNotDraw(false); setFocusable(false);
     }
-    void configure(String token, boolean enabled, float x, float y, float scale, float width, float unit, float opacity, String color, boolean dashed, float palm, List<RectF> blocked, org.json.JSONObject thick, float threshold, String mode, boolean palmEnabled, float eraserSize) {
+    void configure(String token, boolean enabled, float x, float y, float scale, float width, float unit, float opacity, String color, boolean dashed, float palm, List<RectF> blocked, org.json.JSONObject thick, float threshold, String mode, boolean palmEnabled, float eraserSize, org.json.JSONObject appearance) {
         if (!token.equals(this.token) || !enabled) cancel();
         if (!mode.equals("pen") && !mode.equals("select") && !mode.equals("regionErase") && !mode.equals("erase")) throw new IllegalArgumentException("Invalid native gesture mode");
         this.palmEnabled = palmEnabled; this.eraserSize = eraserSize;
+        this.appearance = appearance;
+        this.thickAppearance = thick == null ? null : thick.optJSONObject("appearance");
         this.token = token; this.mode = mode; this.enabled = enabled; this.x = x; this.y = y; this.scale = scale; this.width = width; this.unit = unit; this.opacity = opacity;
         this.color = Color.parseColor(color); this.dashed = dashed; this.palm = palm; this.blocked.clear(); this.blocked.addAll(blocked);
         thickThreshold = thick == null ? 0 : threshold;
@@ -72,11 +85,15 @@ final class NativeInkView extends View {
     private boolean blocked(float cssX, float cssY) { for (RectF rect : blocked) if (rect.contains(cssX, cssY)) return true; return false; }
     private boolean palm(MotionEvent event, int index) {
         int tool = event.getToolType(index);
-        return palmEnabled && tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_MOUSE && tool != MotionEvent.TOOL_TYPE_ERASER
+        return tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_MOUSE && tool != MotionEvent.TOOL_TYPE_ERASER
             && Math.max(event.getTouchMajor(index), event.getTouchMinor(index)) / scale >= palm;
     }
-    private Contact start(MotionEvent event, int index, boolean erase, boolean temporary) {
-        Contact contact = new Contact(); contact.token = token; contact.mode = erase ? "erase" : mode; contact.palm = temporary;
+    private static long key(MotionEvent event, int index) { return ((long)event.getDeviceId() << 32) | (event.getPointerId(index) & 0xffffffffL); }
+    private boolean writing() { for (Contact contact : active.values()) if (contact.mode.equals("pen")) return true; return false; }
+    private boolean erasing() { for (Contact contact : active.values()) if (contact.mode.equals("erase")) return true; return false; }
+    private Contact start(MotionEvent event, int index, boolean erase, boolean temporary, boolean candidate, float offsetX, float offsetY) {
+        Contact contact = new Contact(); contact.token = token; contact.mode = candidate ? "palm" : erase ? "erase" : mode; contact.palm = temporary;
+        contact.deviceId = event.getDeviceId(); contact.rejected = candidate && (!palmEnabled || writing());
         int tool = event.getToolType(index);
         contact.pointerType = tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER ? "pen" : tool == MotionEvent.TOOL_TYPE_MOUSE ? "mouse" : "touch";
         contact.major = event.getTouchMajor(index) / scale; contact.minor = event.getTouchMinor(index) / scale;
@@ -96,64 +113,99 @@ final class NativeInkView extends View {
             contact.paint.setAlpha(255); contact.paint.setStrokeWidth((contact.mode.equals("select") ? 1.5f : 2f) * scale);
             contact.paint.setPathEffect(new DashPathEffect(contact.mode.equals("select") ? new float[]{7 * scale, 7 * scale} : new float[]{8 * scale, 16 * scale}, 0));
         }
-        active.put(event.getPointerId(index), contact);
-        sample(contact, event.getX(index), event.getY(index), event.getPressure(index), true);
-        emit(contact, "start", false); contact.sent = 1;
-        contact.awaitingFrame = erase;
+        if (contact.mode.equals("pen")) {
+            org.json.JSONObject profile = useThick && thickAppearance != null ? thickAppearance : appearance;
+            if (profile != null) {
+                if ("brush".equals(profile.optString("pen"))) {
+                    contact.brush = new NativeBrush(penWidth * scale, penUnit * scale, (float)profile.optDouble("variation", 45),
+                        !contact.pointerType.equals("pen") && !profile.optBoolean("touchPressure", false));
+                    contact.paint.setStyle(Paint.Style.FILL); contact.paint.setPathEffect(null);
+                }
+                org.json.JSONObject gradient = profile.optJSONObject("gradient");
+                if (gradient != null) {
+                    org.json.JSONArray colors = gradient.optJSONArray("colors");
+                    if (colors != null && colors.length() >= 2 && colors.length() <= 16) {
+                        int[] stops = new int[colors.length()];
+                        for (int i = 0; i < stops.length; i++) stops[i] = Color.parseColor(colors.optString(i));
+                        float startX = (float)gradient.optDouble("x", 0) * scale, startY = (float)gradient.optDouble("y", 0) * scale;
+                        float size = (float)gradient.optDouble("size", 320) * scale;
+                        if (Float.isFinite(startX + startY + size) && size > 0) contact.paint.setShader(new LinearGradient(startX, startY, startX + size, startY + size, stops, null, Shader.TileMode.MIRROR));
+                    }
+                }
+            }
+        }
+        active.put(key(event, index), contact);
+        sample(contact, event.getX(index)-offsetX, event.getY(index)-offsetY, event.getPressure(index), true);
+        if (!candidate) { emit(contact, "start", false); contact.sent = 1; }
+        contact.awaitingFrame = erase && !candidate;
         return contact;
     }
     private void finish(Contact contact) {
-        contact.path.lineTo(contact.lastX, contact.lastY);
+        if (contact.brush != null) contact.brush.finish();
+        if (contact.brush == null) contact.path.lineTo(contact.lastX, contact.lastY);
         pending.put(contact.id, contact); emit(contact, "end", true);
     }
-    private void settlePens() {
-        // Match HTool: complete other pens before a temporary palm tool starts.
-        for (Contact contact : active.values()) finish(contact);
-        active.clear();
+    private void rejectRestingHands() {
+        for (Contact contact : active.values()) {
+            if (contact.mode.equals("palm")) contact.rejected = true;
+            else if (contact.mode.equals("erase") && contact.palm && !contact.pointerType.equals("pen")) {
+                emit(contact, "cancel", false); contact.mode = "palm"; contact.rejected = true;
+            }
+        }
     }
-    @Override public boolean onTouchEvent(MotionEvent event) {
-        int action = event.getActionMasked(), index = event.getActionIndex(), pointer = event.getPointerId(index);
+    void setRoutedInput() { routedInput = true; }
+    @Override public boolean onTouchEvent(MotionEvent event) { return !routedInput && handleTouchEvent(event, 0, 0); }
+    boolean handleTouchEvent(MotionEvent event, float offsetX, float offsetY) {
+        int action = event.getActionMasked(), index = event.getActionIndex(), device = event.getDeviceId();
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            float cssX = x + event.getX(index) / scale, cssY = y + event.getY(index) / scale;
-            if (!enabled || (event.getButtonState() & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY)) != 0 || blocked(cssX, cssY)) return ownsGesture;
-            for (Contact contact : active.values()) if (contact.mode.equals("erase")) return true;
-            boolean temporary = palm(event, index) || event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER;
+            if (action == MotionEvent.ACTION_DOWN) cancelDevice(device);
+            float cssX = x + (event.getX(index)-offsetX) / scale, cssY = y + (event.getY(index)-offsetY) / scale;
+            if (!enabled || (event.getButtonState() & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY)) != 0 || blocked(cssX, cssY)) return ownedDevices.contains(device);
+            boolean candidate = palm(event, index), temporary = candidate || event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER;
             boolean erase = temporary || mode.equals("erase");
             if (!erase && !mode.equals("pen") && !active.isEmpty()) return true;
-            if (active.size() >= 10 || pending.size() >= 16) return ownsGesture;
-            if (erase) settlePens();
-            ownsGesture = true;
-            start(event, index, erase, temporary);
-            getParent().requestDisallowInterceptTouchEvent(true); postInvalidateOnAnimation(); return true;
+            if (erase && !candidate && erasing()) return ownedDevices.contains(device);
+            if (!erase && mode.equals("pen")) rejectRestingHands();
+            ownedDevices.add(device);
+            start(event, index, erase, temporary, candidate, offsetX, offsetY);
+            getParent().requestDisallowInterceptTouchEvent(true); invalidate(); return true;
         }
         if (action == MotionEvent.ACTION_MOVE) {
             for (int i = 0; i < event.getPointerCount(); i++) {
-                Contact contact = active.get(event.getPointerId(i)); if (contact == null) continue;
-                if (!contact.mode.equals("erase") && palm(event, i)) {
-                    active.remove(event.getPointerId(i)); emit(contact, "cancel", false);
-                    settlePens(); start(event, i, true, true); continue;
+                Contact contact = active.get(key(event, i)); if (contact == null) continue;
+                if (!contact.mode.equals("erase") && !contact.mode.equals("palm") && palm(event, i)) {
+                    active.remove(key(event, i)); emit(contact, "cancel", false);
+                    start(event, i, true, true, true, offsetX, offsetY); continue;
                 }
-                for (int h = 0; h < event.getHistorySize(); h++) sample(contact, event.getHistoricalX(i, h), event.getHistoricalY(i, h), event.getHistoricalPressure(i, h), false);
-                sample(contact, event.getX(i), event.getY(i), event.getPressure(i), false);
+                if (contact.mode.equals("palm")) {
+                    if (contact.rejected) continue;
+                    if (writing() || erasing()) { contact.rejected = true; continue; }
+                    if (Math.hypot(event.getX(i)-offsetX-contact.lastX, event.getY(i)-offsetY-contact.lastY) < touchSlop) continue;
+                    contact.mode = "erase"; emit(contact, "start", false); contact.sent = 1; contact.awaitingFrame = true;
+                }
+                for (int h = 0; h < event.getHistorySize(); h++) sample(contact, event.getHistoricalX(i, h)-offsetX, event.getHistoricalY(i, h)-offsetY, event.getHistoricalPressure(i, h), false);
+                sample(contact, event.getX(i)-offsetX, event.getY(i)-offsetY, event.getPressure(i), false);
             }
-            postInvalidateOnAnimation(); return ownsGesture;
+            invalidate(); return ownedDevices.contains(device);
         }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
-            Contact contact = active.remove(pointer);
-            if (contact != null) {
-                sample(contact, event.getX(index), event.getY(index), event.getPressure(index), false); finish(contact);
+            Contact contact = active.remove(key(event, index));
+            if (contact != null && !contact.mode.equals("palm")) {
+                sample(contact, event.getX(index)-offsetX, event.getY(index)-offsetY, event.getPressure(index), false); finish(contact);
             }
-            if (action == MotionEvent.ACTION_UP) ownsGesture = false;
-            postInvalidateOnAnimation(); return true;
+            boolean handled = ownedDevices.contains(device);
+            if (action == MotionEvent.ACTION_UP) ownedDevices.remove(device);
+            invalidate(); return handled;
         }
-        if (action == MotionEvent.ACTION_CANCEL) { cancel(); return true; }
-        return ownsGesture;
+        if (action == MotionEvent.ACTION_CANCEL) { boolean handled = ownedDevices.contains(device); cancelDevice(device); return handled; }
+        return ownedDevices.contains(device);
     }
     private void sample(Contact contact, float px, float py, float pressure, boolean first) {
         if (contact.points.size() >= 120000) return;
         if (!first && Math.hypot(px - contact.lastX, py - contact.lastY) < .15f * scale) return;
         contact.points.add(new float[]{x + px / scale, y + py / scale, pressure});
-        if (first) contact.path.moveTo(px, py);
+        if (contact.brush != null) contact.brush.add(px, py, pressure);
+        else if (first) contact.path.moveTo(px, py);
         else if (!contact.mode.equals("pen")) contact.path.lineTo(px, py);
         else contact.path.quadTo(contact.lastX, contact.lastY, (contact.lastX + px) / 2, (contact.lastY + py) / 2);
         contact.lastX = px; contact.lastY = py;
@@ -164,12 +216,15 @@ final class NativeInkView extends View {
         List<float[]> values = new ArrayList<>(contact.points.subList(Math.min(from, to), to));
         if (values.isEmpty()) values.add(contact.points.get(contact.points.size() - 1));
         if (contact.mode.equals("erase")) contact.sent = to;
+        String id = contact.id, stamp = contact.token, kind = contact.mode, pointerType = contact.pointerType;
+        boolean temporary = contact.palm;
+        float major = contact.major, minor = contact.minor;
         // JSON encoding of a long lifted stroke must never occupy the input/UI thread.
         publisher.execute(() -> {
             JSArray points = new JSArray();
             for (float[] point : values) points.put(new JSArray(java.util.Arrays.asList(point[0], point[1], point[2])));
-            events.contact(new JSObject().put("id", contact.id).put("token", contact.token).put("phase", phase).put("points", points)
-                .put("mode", contact.mode).put("palm", contact.palm).put("width", contact.major).put("height", contact.minor).put("pointerType", contact.pointerType));
+            events.contact(new JSObject().put("id", id).put("token", stamp).put("phase", phase).put("points", points)
+                .put("mode", kind).put("palm", temporary).put("width", major).put("height", minor).put("pointerType", pointerType));
         });
     }
     void acknowledge(String id) {
@@ -178,8 +233,16 @@ final class NativeInkView extends View {
         postInvalidateOnAnimation();
     }
     void cancel() {
-        for (Contact contact : active.values()) emit(contact, "cancel", false);
-        active.clear(); pending.clear(); ownsGesture = false; postInvalidateOnAnimation();
+        for (Contact contact : active.values()) if (!contact.mode.equals("palm")) emit(contact, "cancel", false);
+        active.clear(); pending.clear(); ownedDevices.clear(); invalidate();
+    }
+    void cancelDevice(int device) {
+        java.util.Iterator<Contact> contacts = active.values().iterator();
+        while (contacts.hasNext()) {
+            Contact contact = contacts.next();
+            if (contact.deviceId == device) { if (!contact.mode.equals("palm")) emit(contact, "cancel", false); contacts.remove(); }
+        }
+        ownedDevices.remove(device); invalidate();
     }
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -192,6 +255,7 @@ final class NativeInkView extends View {
         }
     }
     private void draw(Canvas canvas, Contact contact) {
+        if (contact.mode.equals("palm")) return;
         if (contact.mode.equals("erase")) {
             float halfWidth = contact.major * scale / 2, halfHeight = contact.minor * scale / 2;
             eraserRect.set(contact.lastX - halfWidth, contact.lastY - halfHeight, contact.lastX + halfWidth, contact.lastY + halfHeight);
@@ -201,7 +265,11 @@ final class NativeInkView extends View {
             contact.fillPath.set(contact.path); contact.fillPath.close();
             canvas.drawPath(contact.fillPath, regionFill);
         }
+        if (contact.brush != null) { contact.brush.draw(canvas, contact.paint); return; }
         if (contact.points.size() == 1) canvas.drawPoint(contact.lastX, contact.lastY, contact.paint);
-        else canvas.drawPath(contact.path, contact.paint);
+        else {
+            contact.renderPath.set(contact.path); contact.renderPath.lineTo(contact.lastX, contact.lastY);
+            canvas.drawPath(contact.renderPath, contact.paint);
+        }
     }
 }

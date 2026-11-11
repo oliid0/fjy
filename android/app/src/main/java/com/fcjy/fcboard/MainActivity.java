@@ -2,9 +2,17 @@ package com.fcjy.fcboard;
 
 import android.os.Bundle;
 import android.view.WindowManager;
+import android.view.MotionEvent;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private volatile NativeInkPlugin inkInput;
+    void setInkInput(NativeInkPlugin plugin) { inkInput = plugin; }
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        NativeInkPlugin input = inkInput;
+        if (input != null && input.dispatchInput(event)) return true;
+        return super.dispatchTouchEvent(event);
+    }
     private static volatile boolean foreground;
     static boolean isForeground() { return foreground; }
     @Override public void onResume() { super.onResume(); foreground = true; }

@@ -3,6 +3,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { getCommonBounds } from "@fcboard/element";
 import { colorToHex } from "@fcboard/common";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
+import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
@@ -20,6 +21,12 @@ type Contact = {
   palm?: boolean;
   pointerType: string;
 };
+type PenAppearance = {
+  pen: string;
+  variation: number;
+  touchPressure: boolean;
+  gradient?: { colors: readonly string[]; size: number; x: number; y: number };
+};
 const ink = registerPlugin<{
   configure(options: {
     owner: string;
@@ -33,12 +40,14 @@ const ink = registerPlugin<{
     viewportWidth: number;
     penWidth: number;
     unit: number;
+    appearance: PenAppearance;
     thick?: {
       penWidth: number;
       unit: number;
       opacity: number;
       color: string;
       dashed: boolean;
+      appearance: PenAppearance;
     };
     thickThreshold: number;
     opacity: number;
@@ -106,6 +115,7 @@ export const NativeInkInteraction = ({
     let uiDirty = true;
     let uiViewport = "";
     let uiBounds: number[][] = [];
+    let uiBlocksInk = false;
     const contacts = new Map<string, NonNullable<Contact["mode"]>>();
     const apply = (
       contact: Contact,
@@ -172,8 +182,27 @@ export const NativeInkInteraction = ({
           )
         : style;
       const nativeStyle = (value: typeof style) =>
-        !value.customData.fcInk.gradient &&
-        ["hard", "dashed", "highlighter"].includes(value.customData.fcInk.pen);
+        ["hard", "dashed", "highlighter", "brush"].includes(
+          value.customData.fcInk.pen,
+        );
+      const appearance = (value: typeof style): PenAppearance => {
+        const data = value.customData.fcInk;
+        return {
+          pen: data.pen,
+          variation: data.variation ?? 45,
+          touchPressure: inkProfile?.touchPressure === true,
+          ...(data.gradient
+            ? {
+                gradient: {
+                  colors: nativeInkPalettes[data.gradient.palette],
+                  size: data.gradient.size,
+                  x: state.scrollX * state.zoom.value,
+                  y: state.scrollY * state.zoom.value,
+                },
+              }
+            : {}),
+        };
+      };
       const board = (
         classroomCommands.read("boards") as { active?: string } | undefined
       )?.active;
@@ -215,6 +244,7 @@ export const NativeInkInteraction = ({
         state.currentItemStrokeColor,
         state.currentItemStrokeWidth,
         state.currentItemOpacity,
+        state.whiteboardBrushVariation,
         state.whiteboardPenTip,
         state.eraserMode,
         state.eraserSize,
@@ -238,8 +268,9 @@ export const NativeInkInteraction = ({
       if (enabled && uiDirty) {
         uiDirty = false;
         uiBounds = [];
+        uiBlocksInk = false;
         for (const node of document.querySelectorAll<HTMLElement>(
-          'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]',
+          'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.MuiPopper-root,.fc-editor-properties,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]',
         )) {
           const box = node.getBoundingClientRect();
           if (
@@ -251,6 +282,13 @@ export const NativeInkInteraction = ({
             box.top <= state.offsetTop + state.height
           ) {
             uiBounds.push([box.left, box.top, box.right, box.bottom]);
+            if (
+              node.matches(
+                '.MuiModal-root,.MuiPopper-root,.fc-editor-properties,[role="menu"]',
+              )
+            ) {
+              uiBlocksInk = true;
+            }
           }
         }
       }
@@ -303,7 +341,7 @@ export const NativeInkInteraction = ({
       const options: Parameters<typeof ink.configure>[0] = {
         owner: api.id,
         token,
-        enabled: enabled && blocked.length <= 512,
+        enabled: enabled && !uiBlocksInk && blocked.length <= 512,
         mode,
         x: state.offsetLeft,
         y: state.offsetTop,
@@ -312,6 +350,7 @@ export const NativeInkInteraction = ({
         viewportWidth: innerWidth,
         penWidth: style.strokeWidth,
         unit: style.customData.fcInk.unit || 1,
+        appearance: appearance(style),
         thickThreshold: dual ? threshold : 0,
         ...(dual
           ? {
@@ -321,6 +360,7 @@ export const NativeInkInteraction = ({
                 opacity: thickStyle.opacity / 100,
                 color: nativeColor(thickStyle.strokeColor),
                 dashed: thickStyle.strokeStyle === "dashed",
+                appearance: appearance(thickStyle),
               },
             }
           : {}),

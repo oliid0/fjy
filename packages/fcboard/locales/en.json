@@ -872,7 +872,7 @@
     "collab_code": "Collaboration code or sharing link",
     "collab_code_invalid": "Enter the 32-character collaboration code or a valid board sharing link.",
     "collab_join_action": "Join",
-    "collab_join_hint": "On the same local network, enter the host's four-character code (letters and digits, case-sensitive), or paste its sharing link. Join to write together; your current board is kept.",
+    "collab_join_hint": "On the same local network, enter the host's four-digit code, or paste its sharing link. Join to write together; your current board is kept.",
     "collab_room": "Collaboration code: {{code}}",
     "toolbar_text": "Toolbar text",
     "swap_toolbar_sides": "Swap toolbar sides",

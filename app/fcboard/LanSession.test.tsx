@@ -25,6 +25,7 @@ import type { AddressInfo } from "node:net";
 vi.mock("./network", () => ({
   Network: {
     startCollaboration: vi.fn(),
+    collaborationInfo: vi.fn().mockResolvedValue({ sharing: false, urls: [] }),
     stopCollaboration: vi.fn(),
     setCollaborationPassword: vi.fn(),
     sendScene: vi.fn(),
@@ -44,6 +45,13 @@ const board = () =>
     addFiles: vi.fn(),
     updateScene: vi.fn(),
   } as unknown as FcboardImperativeAPI);
+
+beforeEach(() => {
+  vi.mocked(Network.collaborationInfo).mockResolvedValue({
+    sharing: false,
+    urls: [],
+  });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -196,6 +204,11 @@ it("keeps the host's password switch and code when closing and reopening the liv
     screen.getByRole("button", { name: t("fcboard.close_network_panel") }),
   );
   expect(screen.queryByRole("dialog")).toBeNull();
+  vi.mocked(Network.collaborationInfo).mockResolvedValueOnce({
+    sharing: true,
+    urls: ["http://192.168.0.48:37359/#lan=0123456789abcdef0123456789abcdef"],
+    code: "aB09",
+  });
   await act(async () => {
     await classroomCommands.execute({ name: "network.panel" });
   });
@@ -207,6 +220,7 @@ it("keeps the host's password switch and code when closing and reopening the liv
   expect(screen.getByRole("switch")).toBeChecked();
   expect(screen.getByRole("textbox")).toHaveValue(code);
   expect(Network.startCollaboration).toHaveBeenCalledTimes(1);
+  expect(Network.collaborationInfo).toHaveBeenCalled();
   view.unmount();
 });
 

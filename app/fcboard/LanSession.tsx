@@ -81,6 +81,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   const [authentication, setAuthentication] = useState(false);
   const [guestPassword, setGuestPassword] = useState("");
   const guestCode = useRef("");
+  const guestRoomCode = useRef("");
   const awaitingPassword = useRef(false);
   const sync = useRef<LiveSceneSync | null>(null);
   const socket = useRef<LanSocket | null>(null);
@@ -312,6 +313,14 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
       if (cloud.current) {
         cloud.current.snapshot();
       } else if (native && hosted.current) {
+        void Network.collaborationInfo()
+          .then((info) => {
+            if (alive.current && hosted.current && info.sharing) {
+              setUrls(info.urls);
+              setRoomCode(info.code || "");
+            }
+          })
+          .catch((error) => setError(failureMessage(error)));
         void Network.getScene()
           .then((packet) => sync.current?.receive(packet))
           .catch((error) => setError(failureMessage(error)));
@@ -360,7 +369,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   }, [api, native, leave]);
 
   useEffect(() => {
-    const destination = new URL(joinAddress || location.href);
+    let destination = new URL(joinAddress || location.href);
     const token = /^#lan=([a-f0-9]{32})$/.exec(destination.hash)?.[1];
     if (!token || (native && !joinAddress)) {
       return;
@@ -507,8 +516,45 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
               return;
             }
             setConnection("connection_interrupted_reconnecting");
+            const reconnect = async () => {
+              if (native && guestRoomCode.current) {
+                const id = crypto.randomUUID();
+                const cancel = () => {
+                  void Network.cancelCollaborationLookup({ id }).catch(
+                    () => {},
+                  );
+                };
+                request.signal.addEventListener("abort", cancel, {
+                  once: true,
+                });
+                try {
+                  const resolved = await Network.resolveCollaborationCode({
+                    id,
+                    code: guestRoomCode.current,
+                  });
+                  if (cancelled || request.signal.aborted) {
+                    return;
+                  }
+                  const next = new URL(
+                    collaborationAddress(resolved.url, destination.href),
+                  );
+                  if (next.hash !== destination.hash) {
+                    throw new Error(t("fcboard.collab_code_invalid"));
+                  }
+                  destination = next;
+                } catch (error) {
+                  if (cancelled || request.signal.aborted) {
+                    return;
+                  }
+                  setError(failureMessage(error));
+                } finally {
+                  request.signal.removeEventListener("abort", cancel);
+                }
+              }
+              connect();
+            };
             retry.current = setTimeout(
-              connect,
+              () => void reconnect(),
               Math.min(10000, 500 * 2 ** Math.min(attempts++, 5)),
             );
           };
@@ -572,6 +618,16 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
           }
           setPanel("collab");
           setError("");
+          if (native && hosted.current) {
+            void Network.collaborationInfo()
+              .then((info) => {
+                if (alive.current && hosted.current && info.sharing) {
+                  setUrls(info.urls);
+                  setRoomCode(info.code || "");
+                }
+              })
+              .catch((failure) => setError(failureMessage(failure)));
+          }
         },
       ),
       classroomCommands.register(
@@ -776,6 +832,11 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
                     if (joinCandidate && !busy && !sharing) {
                       setError("");
                       setConnection("joining");
+                      guestRoomCode.current = isLocalCollaborationCode(
+                        joinCandidate,
+                      )
+                        ? joinCandidate
+                        : "";
                       if (!isLocalCollaborationCode(joinCandidate)) {
                         setJoinAddress(joinCandidate);
                       } else {

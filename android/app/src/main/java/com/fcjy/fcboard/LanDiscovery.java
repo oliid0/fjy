@@ -5,6 +5,11 @@ import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
+import android.os.Build;
+import java.net.InetAddress;
+import java.net.Inet4Address;
+import java.util.List;
+import java.util.Collections;
 import android.os.Looper;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
@@ -14,7 +19,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/** DNS-SD resolves a case-sensitive human code without scanning LAN addresses. */
+/** DNS-SD resolves a human code on the current network, not a saved TXT IP. */
 final class LanDiscovery implements AutoCloseable {
     private static final String TYPE = "_fcboard._tcp.";
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -29,7 +34,7 @@ final class LanDiscovery implements AutoCloseable {
         if (multicast != null) multicast.setReferenceCounted(true);
     }
     static String createCode() {
-        String alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        String alphabet = "0123456789";
         SecureRandom random = new SecureRandom(); StringBuilder code = new StringBuilder(4);
         for (int i = 0; i < 4; i++) code.append(alphabet.charAt(random.nextInt(alphabet.length())));
         return code.toString();
@@ -76,7 +81,7 @@ final class LanDiscovery implements AutoCloseable {
     void resolve(String id, String code, Consumer<String> success, Consumer<String> failure) {
         main.post(() -> {
             if (id == null || id.isEmpty() || id.length() > 200 || !code.matches("[0-9A-Za-z]{4}") || lookups.containsKey(id)) {
-                failure.accept("请输入四位英数协同码，注意区分大小写"); return;
+                failure.accept("请输入四位协同码"); return;
             }
             Lookup lookup = new Lookup(id, code, success, failure); lookups.put(id, lookup); lookup.start();
         });
@@ -86,7 +91,7 @@ final class LanDiscovery implements AutoCloseable {
         final String id, code; final Consumer<String> success, failure;
         final ArrayDeque<NsdServiceInfo> queue = new ArrayDeque<>();
         final HashSet<String> seen = new HashSet<>();
-        final Runnable timeout = () -> finish(null, "找不到该协同码，请确认大小写及同一局域网");
+        final Runnable timeout = () -> finish(null, "找不到该协同码，请确认设备位于同一局域网");
         boolean finished, started, resolving, locked;
         Lookup(String id, String code, Consumer<String> success, Consumer<String> failure) {
             this.id = id; this.code = code; this.success = success; this.failure = failure;
@@ -114,8 +119,10 @@ final class LanDiscovery implements AutoCloseable {
                     resolving = false;
                     if (finished) return;
                     Map<String, byte[]> attributes = info.getAttributes();
-                    String found = attribute(attributes, "code"), token = attribute(attributes, "token"), address = attribute(attributes, "address");
-                    if (code.equals(found) && token.matches("[a-f0-9]{32}") && validAddress(address) && info.getPort() > 0 && info.getPort() <= 65535) {
+                    String found = attribute(attributes, "code"), token = attribute(attributes, "token");
+                    List<InetAddress> hosts = Build.VERSION.SDK_INT >= 34 ? info.getHostAddresses() : info.getHost() == null ? Collections.emptyList() : Collections.singletonList(info.getHost());
+                    String address = resolvedAddress(hosts);
+                    if (code.equals(found) && token.matches("[a-f0-9]{32}") && address != null && info.getPort() > 0 && info.getPort() <= 65535) {
                         finish("http://" + address + ":" + info.getPort() + "/#lan=" + token, null);
                     } else next();
                 }); }
@@ -133,10 +140,11 @@ final class LanDiscovery implements AutoCloseable {
     private static String attribute(Map<String, byte[]> values, String key) {
         byte[] value = values.get(key); return value == null ? "" : new String(value, StandardCharsets.UTF_8);
     }
-    private static boolean validAddress(String value) {
-        if (!value.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}")) return false;
-        for (String part : value.split("\\.")) if (Integer.parseInt(part) > 255) return false;
-        return !value.equals("0.0.0.0");
+    static String resolvedAddress(List<InetAddress> addresses) {
+        for (InetAddress address : addresses) {
+            if (address instanceof Inet4Address && !address.isLoopbackAddress() && !address.isLinkLocalAddress() && !address.isAnyLocalAddress()) return address.getHostAddress();
+        }
+        return null;
     }
     @Override public void close() { main.post(() -> {
         stopAdvertisement();

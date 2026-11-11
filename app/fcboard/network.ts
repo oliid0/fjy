@@ -7,6 +7,11 @@ export const Network = registerPlugin<{
   startCollaboration(options: {
     scene: ScenePacket;
   }): Promise<{ urls: string[]; code?: string }>;
+  collaborationInfo(): Promise<{
+    sharing: boolean;
+    urls: string[];
+    code?: string;
+  }>;
   resolveCollaborationCode(options: {
     id: string;
     code: string;

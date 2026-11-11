@@ -183,13 +183,14 @@ it("uses fine 2 and thick 4, retains each adjusted width and writes the selected
 });
 
 it.each([
-  ["#ffffff", "light", "#010101"],
-  ["#123d32", "light", "#fcfcfe"],
-  ["#ffffff", "dark", "#fcfcfe"],
+  ["#ffffff", "light"],
+  ["#123d32", "light"],
+  ["#ffffff", "dark"],
 ] as const)(
-  "keeps bare toolbar icons contrasting on %s in %s mode",
-  async (background, theme, color) => {
+  "keeps the selected drawing tool when the board is %s in %s mode",
+  async (background, theme) => {
     await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
     act(() =>
       h.app.api.updateScene({
         appState: { viewBackgroundColor: background, theme },
@@ -198,7 +199,9 @@ it.each([
     const toolbar = screen.getByRole("toolbar", {
       name: t("fcboard.whiteboard_toolbar"),
     });
-    expect(toolbar.style.getPropertyValue("--fc-toolbar-ink")).toBe(color);
+    expect(toolbar.querySelector("[data-toolbar-pen]")).toHaveClass(
+      "ToolIcon--selected",
+    );
     expect(toolbar.querySelectorAll("svg path").length).toBeGreaterThan(0);
   },
 );

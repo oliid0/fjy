@@ -8,7 +8,6 @@ import {
   arrayToMap,
   capitalizeString,
   isShallowEqual,
-  isColorDark,
 } from "@fcboard/common";
 
 import { mutateElement } from "@fcboard/element";
@@ -707,20 +706,6 @@ const LayerUI = ({
           "fc-toolbar-collapsed": toolbarHidden,
           "fc-toolbar-reversed": appState.toolbarReversed,
         })}
-        style={
-          {
-            "--fc-toolbar-ink":
-              isColorDark(appState.viewBackgroundColor) !==
-              (appState.theme === "dark")
-                ? "#fcfcfe"
-                : "#010101",
-            "--fc-toolbar-contrast":
-              isColorDark(appState.viewBackgroundColor) !==
-              (appState.theme === "dark")
-                ? "#010101"
-                : "#fcfcfe",
-          } as React.CSSProperties
-        }
         role="toolbar"
         aria-label={t("fcboard.whiteboard_toolbar")}
         onContextMenu={(event) => event.preventDefault()}

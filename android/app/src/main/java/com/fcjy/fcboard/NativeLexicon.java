@@ -11,7 +11,15 @@ import org.json.JSONObject;
 final class NativeLexicon {
     private final JSONObject entries;
     NativeLexicon(Context context) throws Exception {
-        try (InputStream input = context.getAssets().open("dictionary/en-zh.json"); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+        InputStream source;
+        try { source = context.getAssets().open("dictionary/en-zh.json"); }
+        catch (java.io.FileNotFoundException missing) {
+            // The dictionary is an optional fast path. A missing asset must
+            // behave like a lookup miss so the service still runs native OPUS.
+            entries = new JSONObject();
+            return;
+        }
+        try (InputStream input = source; ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[16384]; int count;
             while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
             JSONObject data = new JSONObject(bytes.toString("UTF-8"));

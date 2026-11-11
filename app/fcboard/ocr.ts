@@ -20,11 +20,15 @@ export const warmHandwriting = async () => {
   if (currentSettings().ocr === "cloud") {
     return;
   }
-  if (import.meta.env.VITE_NATIVE_INFERENCE === "true" || hasDigitalInk()) {
-    return prepareDigitalInk();
+  // Gate the imports themselves: Vite discovers worker assets before Rollup
+  // removes code following an unconditional native return.
+  if (import.meta.env.VITE_NATIVE_INFERENCE !== "true") {
+    if (!hasDigitalInk()) {
+      const { warmHandwriting } = await import("./localOcr");
+      return warmHandwriting();
+    }
   }
-  const { warmHandwriting } = await import("./localOcr");
-  return warmHandwriting();
+  return prepareDigitalInk();
 };
 
 /** A caller action owns recognition; the two backends never read or mutate the board. */
@@ -78,19 +82,23 @@ export const recognizeHandwriting = async (
     return text;
   };
   const local = async (request: AbortSignal) => {
-    if (import.meta.env.VITE_NATIVE_INFERENCE === "true" || hasDigitalInk()) {
-      throw new Error("Native handwriting could not recognize this ink");
+    if (import.meta.env.VITE_NATIVE_INFERENCE !== "true") {
+      if (!hasDigitalInk()) {
+        const { recognizeLocalHandwriting } = await import("./localOcr");
+        const text = await recognizeLocalHandwriting(
+          await capture(),
+          request,
+          progress,
+        );
+        if (!(await accepted(text))) {
+          throw new Error(
+            t("fcboard.no_content_recognized_select_the_area_again"),
+          );
+        }
+        return text;
+      }
     }
-    const { recognizeLocalHandwriting } = await import("./localOcr");
-    const text = await recognizeLocalHandwriting(
-      await capture(),
-      request,
-      progress,
-    );
-    if (!(await accepted(text))) {
-      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
-    }
-    return text;
+    throw new Error("Native handwriting could not recognize this ink");
   };
   const useCloud =
     !localOnly && settings.ocr !== "local" && !!settings.apiKey.trim();

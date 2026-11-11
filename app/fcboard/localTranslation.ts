@@ -28,67 +28,67 @@ export const translateLocally = async (
   if (source === target) {
     return { language: source, translation: text };
   }
+  // A compile-time branch around imports keeps browser workers out of APKs.
+  if (import.meta.env.VITE_NATIVE_INFERENCE !== "true") {
+    if (!hasNativeTranslation()) {
+      if (source === "en" && target === "zh") {
+        const { lookupLocalWord } = await import("./localDictionary");
+        const translation = await lookupLocalWord(text, signal);
+        if (translation) {
+          return { language: source, translation };
+        }
+      }
+      const { offlineInference } = await import("./offlineInference");
+      // Keep every character while bounding encoder/decoder memory per inference.
+      const chunks =
+        text.match(/[^。！？.!?\n]{1,80}[。！？.!?\n]?|[。！？.!?\n]/gu) || [];
+      if (chunks.join("") !== text) {
+        throw new Error(t("fcboard.text_is_empty_or_too_long"));
+      }
+      const translated: string[] = [];
+      for (const chunk of chunks) {
+        signal.throwIfAborted();
+        if (!chunk.trim()) {
+          translated.push(chunk);
+          continue;
+        }
+        const result = await offlineInference(
+          { kind: "translation", text: chunk, source, target },
+          signal,
+        );
+        if (
+          !Array.isArray(result) ||
+          result.length !== 1 ||
+          typeof result[0]?.translation_text !== "string" ||
+          !result[0].translation_text.trim() ||
+          result[0].translation_text.length > 1800
+        ) {
+          throw new Error(
+            t("fcboard.the_language_explanation_is_incomplete_please_retry"),
+          );
+        }
+        translated.push(result[0].translation_text.trim());
+      }
+      signal.throwIfAborted();
+      return {
+        language: source,
+        translation: translated.join(target === "en" ? " " : ""),
+      };
+    }
+  }
+  const result = await inferNatively(
+    { kind: "translation", text, source, target },
+    signal,
+  );
   if (
-    import.meta.env.VITE_NATIVE_INFERENCE === "true" ||
-    hasNativeTranslation()
+    result.language !== source ||
+    typeof result.translation !== "string" ||
+    !result.translation.trim() ||
+    result.translation.length > 10000
   ) {
-    const result = await inferNatively(
-      { kind: "translation", text, source, target },
-      signal,
+    throw new Error(
+      t("fcboard.the_language_explanation_is_incomplete_please_retry"),
     );
-    if (
-      result.language !== source ||
-      typeof result.translation !== "string" ||
-      !result.translation.trim() ||
-      result.translation.length > 10000
-    ) {
-      throw new Error(
-        t("fcboard.the_language_explanation_is_incomplete_please_retry"),
-      );
-    }
-    return { language: source, translation: result.translation };
   }
-  if (source === "en" && target === "zh") {
-    const { lookupLocalWord } = await import("./localDictionary");
-    const translation = await lookupLocalWord(text, signal);
-    if (translation) {
-      return { language: source, translation };
-    }
-  }
-  const { offlineInference } = await import("./offlineInference");
-  // Keep every character while bounding encoder/decoder memory per inference.
-  const chunks =
-    text.match(/[^。！？.!?\n]{1,80}[。！？.!?\n]?|[。！？.!?\n]/gu) || [];
-  if (chunks.join("") !== text) {
-    throw new Error(t("fcboard.text_is_empty_or_too_long"));
-  }
-  const translated: string[] = [];
-  for (const chunk of chunks) {
-    signal.throwIfAborted();
-    if (!chunk.trim()) {
-      translated.push(chunk);
-      continue;
-    }
-    const result = await offlineInference(
-      { kind: "translation", text: chunk, source, target },
-      signal,
-    );
-    if (
-      !Array.isArray(result) ||
-      result.length !== 1 ||
-      typeof result[0]?.translation_text !== "string" ||
-      !result[0].translation_text.trim() ||
-      result[0].translation_text.length > 1800
-    ) {
-      throw new Error(
-        t("fcboard.the_language_explanation_is_incomplete_please_retry"),
-      );
-    }
-    translated.push(result[0].translation_text.trim());
-  }
-  signal.throwIfAborted();
-  return {
-    language: source,
-    translation: translated.join(target === "en" ? " " : ""),
-  };
+  return { language: source, translation: result.translation };
 };

@@ -2,7 +2,9 @@
 // Plain CSS also permits measuring this stylesheet in the installed WebView.
 .app .fcboard .fc-unified-toolbar {
   --fc-unit: 0.67px;
-  --icon-fill-color: var(--fc-toolbar-ink, #010101);
+  --icon-fill-color: #010101;
+  --default-icon-size: calc(28 * var(--fc-unit));
+  --lg-icon-size: calc(28 * var(--fc-unit));
   --default-button-size: calc(58 * var(--fc-unit));
   --lg-button-size: calc(58 * var(--fc-unit));
   position: absolute;
@@ -28,7 +30,7 @@
   padding: calc(8 * var(--fc-unit));
   border: 0;
   border-radius: calc(12 * var(--fc-unit));
-  background: var(--fc-toolbar-contrast, #fcfcfe);
+  background: #fcfcfe;
   gap: 0;
   box-shadow: none;
   overflow: visible;
@@ -43,7 +45,7 @@
 }
 .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
   right: 0;
-  padding-left: calc(8 * var(--fc-unit));
+  padding-left: calc(14 * var(--fc-unit));
 }
 .app .fcboard .fc-unified-toolbar.fc-toolbar-reversed .fc-toolbar-leading {
   left: auto;
@@ -80,7 +82,7 @@
   border: 0;
   border-radius: calc(12 * var(--fc-unit));
   background: transparent;
-  color: var(--fc-toolbar-ink, #010101);
+  color: #010101;
   box-shadow: none;
   font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit)) system-ui,
     sans-serif;
@@ -88,16 +90,16 @@
   opacity: 1;
 }
 .app .fcboard .fc-unified-toolbar button.ToolIcon--selected {
-  background: transparent;
-  color: #0368ff;
-  --icon-fill-color: #0368ff;
+  background: #0368ff;
+  color: #fcfcfe;
+  --icon-fill-color: #fcfcfe;
 }
 .app
   .fcboard
   .fc-unified-toolbar
   button:active:not(:disabled):not(.ToolIcon--selected) {
-  background: transparent;
-  color: #0368ff;
+  background: #ebebeb;
+  color: #010101;
   opacity: 1;
 }
 .app .fcboard .fc-unified-toolbar button:disabled {
@@ -137,9 +139,7 @@
   box-shadow: none;
 }
 .app .fcboard .fc-unified-toolbar svg {
-  filter: drop-shadow(
-    0 0 calc(0.75 * var(--fc-unit)) var(--fc-toolbar-contrast, #fcfcfe)
-  );
+  filter: none;
 }
 .app .fcboard .fc-unified-toolbar .fc-pen-icon {
   position: relative;
@@ -176,8 +176,8 @@
   height: calc(58 * var(--fc-unit));
   margin-inline: calc(6 * var(--fc-unit));
   padding: calc(15 * var(--fc-unit)) calc(8 * var(--fc-unit));
-  border-radius: 0;
-  background: transparent;
+  border-radius: calc(12 * var(--fc-unit));
+  background: #f2f2f2;
   gap: 0;
 }
 .app .fcboard .fc-unified-toolbar .fc-board-controls button,
@@ -212,7 +212,7 @@
 .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
   position: absolute;
   left: 50%;
-  bottom: 100%;
+  bottom: calc(100% + 10 * var(--fc-unit));
   transform: translateX(-50%);
   width: calc(40 * var(--fc-unit));
   min-width: calc(40 * var(--fc-unit));
@@ -887,7 +887,7 @@
 /* Preserve the app's existing phone support; tablet/VM uses the native row. */
 @media (max-width: 1000px) {
   .app .fcboard .fc-unified-toolbar {
-    height: calc(122 * var(--fc-unit));
+    height: calc(154 * var(--fc-unit));
   }
   .app .fcboard .fc-unified-toolbar .fc-toolbar-leading,
   .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
@@ -895,7 +895,7 @@
     bottom: auto;
   }
   .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
-    bottom: 100%;
+    bottom: calc(100% + 10 * var(--fc-unit));
   }
 }
 @media (max-width: 360px) {

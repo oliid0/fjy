@@ -112,9 +112,10 @@ export default defineConfig(({ mode }) => {
           // or fallback hence not clubbing with locales so first load followed by offline mode works fine. This is how CRA used to work too.
           manualChunks(id) {
             if (
-              id.includes("@paddleocr/paddleocr-js") ||
-              id.includes("@techstark/opencv-js") ||
-              id.includes("onnxruntime-web")
+              !nativeInference &&
+              (id.includes("@paddleocr/paddleocr-js") ||
+                id.includes("@techstark/opencv-js") ||
+                id.includes("onnxruntime-web"))
             ) {
               return "fcboard-ocr.chunk";
             }

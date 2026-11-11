@@ -8,6 +8,10 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private volatile NativeInkPlugin inkInput;
+    private NativeScenePlugin nativeScene;
+    void setNativeScene(NativeScenePlugin scene) { nativeScene=scene; }
+    NativeSceneView nativeScene(String owner) { return nativeScene==null?null:nativeScene.scene(owner); }
+    void nativeSceneCommitted(String owner) { if(inkInput!=null)inkInput.sceneCommitted(owner); }
     void setInkInput(NativeInkPlugin plugin) { inkInput = plugin; }
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         NativeInkPlugin input = inkInput;
@@ -35,6 +39,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(LocalInferencePlugin.class);
         registerPlugin(NativeWidgetsPlugin.class);
         registerPlugin(NativeInkPlugin.class);
+        registerPlugin(NativeScenePlugin.class);
         registerPlugin(NativeEraserPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);
         registerPlugin(NetworkPlugin.class);

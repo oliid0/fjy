@@ -863,6 +863,8 @@ class App extends React.Component<AppProps, AppState> {
       nativeRegionGesture: this.nativeRegionGesture,
       nativeEraserGesture: this.nativeEraserGesture,
       registerNativeEraserBackend: this.registerNativeEraserBackend,
+      onSceneMutation: (callback) => this.scene.onMutation(callback),
+      registerNativeSceneRenderer: this.registerNativeSceneRenderer,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -2406,6 +2408,7 @@ class App extends React.Component<AppProps, AppState> {
                             />
                           )}
                           <StaticCanvas
+                            nativeRenderer={this.nativeSceneRenderer}
                             synchronous={
                               !!this.props.UIOptions.unifiedToolbar &&
                               this.state.shouldCacheIgnoreZoom
@@ -9810,6 +9813,32 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private nativeEraserBackend: NativeEraserBackend | null = null;
+  private nativeSceneRenderer?: (
+    config: import("../scene/types").StaticSceneRenderConfig,
+  ) => boolean;
+  public registerNativeSceneRenderer = (
+    renderer: (
+      config: import("../scene/types").StaticSceneRenderConfig,
+    ) => boolean,
+  ) => {
+    this.nativeSceneRenderer = renderer;
+    this.triggerRender(true);
+    return Object.assign(
+      () => {
+        if (this.nativeSceneRenderer === renderer) {
+          this.nativeSceneRenderer = undefined;
+          this.triggerRender(true);
+        }
+      },
+      {
+        invalidate: () => {
+          if (this.nativeSceneRenderer === renderer) {
+            this.triggerRender(true);
+          }
+        },
+      },
+    );
+  };
   public registerNativeEraserBackend = (
     backend: NativeEraserBackend,
     synchronize?: Parameters<Scene["onMutation"]>[0],
@@ -9847,6 +9876,7 @@ class App extends React.Component<AppProps, AppState> {
     palm?: boolean;
     pointerType?: string;
     restoreSelection?: boolean;
+    nativeSequence?: number;
   }) => {
     const draft = this.nativeEraserDraft;
     if (input.phase === "cancel") {
@@ -9940,7 +9970,9 @@ class App extends React.Component<AppProps, AppState> {
           }
         }
         current.changed = true;
-        this.scene.replaceAllElements(elements);
+        this.scene.replaceAllElements(elements, {
+          nativeEraseThrough: input.nativeSequence,
+        });
       }
       if (input.phase === "end") {
         this.nativeEraserDraft = null;

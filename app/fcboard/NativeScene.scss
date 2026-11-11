@@ -1,0 +1,8 @@
+// The scene is behind WebView; HTML UI and selection handles remain above it.
+html.fc-native-scene,
+html.fc-native-scene body,
+html.fc-native-scene #root,
+html.fc-native-scene .app,
+html.fc-native-scene .app .fcboard {
+  background-color: transparent !important;
+}

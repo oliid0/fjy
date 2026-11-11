@@ -225,7 +225,11 @@ export const boardContext = async (
   if (!elements.length || !captureImage) {
     return { elements, text, image: undefined };
   }
-  if (region && background) {
+  if (
+    region &&
+    background &&
+    !document.documentElement.classList.contains("fc-native-scene")
+  ) {
     const state = api.getAppState();
     const canvas = document.querySelector<HTMLCanvasElement>(
       `.fcboard[data-fcboard-id="${api.id}"] canvas.fcboard__canvas.static`,

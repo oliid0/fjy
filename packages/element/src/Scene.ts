@@ -43,6 +43,7 @@ type SceneStateCallbackRemover = () => void;
 type SceneMutationCallback = (
   updated: readonly FcboardElement[],
   removed: readonly string[],
+  nativeEraseThrough?: number,
 ) => void;
 
 type SelectionHash = string & { __brand: "selectionHash" };
@@ -271,6 +272,7 @@ export class Scene {
     nextElements: ElementsMapOrArray,
     options?: {
       skipValidation?: true;
+      nativeEraseThrough?: number;
     },
   ) {
     // we do trust the insertion order on the map, though maybe we shouldn't and should prefer order defined by fractional indices
@@ -304,7 +306,11 @@ export class Scene {
     this.frames = nextFrameLikes;
     this.nonDeletedFramesLikes = getNonDeletedElements(this.frames).elements;
 
-    this.triggerUpdate({ updated, removed: [...removed] });
+    this.triggerUpdate({
+      updated,
+      removed: [...removed],
+      nativeEraseThrough: options?.nativeEraseThrough,
+    });
   }
 
   private trackMutation(element: FcboardElement) {
@@ -342,6 +348,7 @@ export class Scene {
   triggerUpdate(delta?: {
     updated: readonly FcboardElement[];
     removed: readonly string[];
+    nativeEraseThrough?: number;
   }) {
     this.sceneNonce = randomInteger();
     if (this.mutationCallbacks.size) {
@@ -352,9 +359,13 @@ export class Scene {
       const removed = delta?.removed ?? [];
       removed.forEach((id) => this.mutationVersions.delete(id));
       if (updated.length || removed.length) {
-        this.mutationCallbacks.forEach((callback) =>
-          callback(updated, removed),
-        );
+        this.mutationCallbacks.forEach((callback) => {
+          if (delta?.nativeEraseThrough !== undefined) {
+            callback(updated, removed, delta.nativeEraseThrough);
+          } else {
+            callback(updated, removed);
+          }
+        });
       }
     }
 

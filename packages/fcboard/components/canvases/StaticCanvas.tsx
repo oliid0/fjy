@@ -8,17 +8,22 @@ import type {
 } from "@fcboard/element/types";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
-import { renderStaticScene } from "../../renderer/staticScene";
+import {
+  renderStaticScene,
+  renderStaticSceneThrottled,
+} from "../../renderer/staticScene";
 import { loadBackground, backgroundImage } from "../../whiteboardBackground";
 
 import type {
   RenderableElementsMap,
   StaticCanvasRenderConfig,
+  StaticSceneRenderConfig,
 } from "../../scene/types";
 import type { AppState, StaticCanvasAppState } from "../../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 
 type StaticCanvasProps = {
+  nativeRenderer?: (config: StaticSceneRenderConfig) => boolean;
   canvas: HTMLCanvasElement;
   /** The upstream whiteboard gesture already coalesces to animation frames. */
   synchronous?: boolean;
@@ -59,20 +64,27 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       canvas.classList.add("fcboard__canvas", "static");
     }
 
-    const paint = () =>
-      renderStaticScene(
-        {
-          canvas,
-          rc: props.rc,
-          scale: props.scale,
-          elementsMap: props.elementsMap,
-          allElementsMap: props.allElementsMap,
-          visibleElements: props.visibleElements,
-          appState: props.appState,
-          renderConfig: props.renderConfig,
-        },
-        !props.synchronous && isRenderThrottlingEnabled(),
-      );
+    const paint = () => {
+      const config = {
+        canvas,
+        rc: props.rc,
+        scale: props.scale,
+        elementsMap: props.elementsMap,
+        allElementsMap: props.allElementsMap,
+        visibleElements: props.visibleElements,
+        appState: props.appState,
+        renderConfig: props.renderConfig,
+      };
+      if (props.nativeRenderer?.(config)) {
+        renderStaticSceneThrottled.cancel();
+        canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+      } else {
+        renderStaticScene(
+          config,
+          !props.synchronous && isRenderThrottlingEnabled(),
+        );
+      }
+    };
     paint();
     let cancelled = false;
     const background = props.appState.whiteboardBackground;
@@ -131,6 +143,7 @@ const areEqual = (
 ) => {
   if (
     prevProps.synchronous !== nextProps.synchronous ||
+    prevProps.nativeRenderer !== nextProps.nativeRenderer ||
     prevProps.sceneNonce !== nextProps.sceneNonce ||
     prevProps.scale !== nextProps.scale ||
     // we need to memoize on elementsMap because they may have renewed

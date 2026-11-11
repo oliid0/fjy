@@ -560,8 +560,11 @@ it("replaces ink at its exact original origin and line-box height beside nearby 
     simulatePressure: true,
   });
   const neighbor = newFreeDrawElement({
-    ...source,
-    id: "neighbor",
+    type: "freedraw",
+    simulatePressure: source.simulatePressure,
+    points: source.points,
+    strokeColor: source.strokeColor,
+    strokeWidth: source.strokeWidth,
     x: 200,
     y: 225,
   });

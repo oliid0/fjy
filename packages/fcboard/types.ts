@@ -1006,6 +1006,12 @@ export interface FcboardImperativeAPI {
   ) => void;
   editTextElement: InstanceType<typeof App>["editTextElement"];
   nativeInk?: InstanceType<typeof App>["nativeInk"];
+  onSceneMutation?: (
+    callback: Parameters<import("@fcboard/element").Scene["onMutation"]>[0],
+  ) => () => void;
+  registerNativeSceneRenderer?: InstanceType<
+    typeof App
+  >["registerNativeSceneRenderer"];
   nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
   nativeEraserGesture?: InstanceType<typeof App>["nativeEraserGesture"];
   registerNativeEraserBackend?: InstanceType<

@@ -13,6 +13,7 @@ const backend = vi.hoisted(() => ({
   remove: vi.fn(),
   acknowledge: vi.fn(),
   release: vi.fn(),
+  synchronize: vi.fn(),
   listeners: new Set<(event: Record<string, unknown>) => void>(),
 }));
 vi.mock("@capacitor/core", () => ({
@@ -37,6 +38,7 @@ beforeEach(() => {
   backend.remove.mockReset().mockResolvedValue(undefined);
   backend.acknowledge.mockReset().mockResolvedValue(undefined);
   backend.release.mockReset().mockResolvedValue(undefined);
+  backend.synchronize.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
   cleanup();
@@ -94,39 +96,43 @@ it("routes sideboard semantic buttons and leaves focused text input out of nativ
     stop();
   }
 });
-it("ignores kept-mounted hidden dialogs and restores native input after a visible popup closes", async () => {
-  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
-  const api = window.h.app.api;
-  window.h.state.width = 1000;
-  window.h.state.height = 700;
-  act(() => api.setActiveTool({ type: "freedraw" }));
-  const modal = document.createElement("div");
-  modal.className = "MuiModal-root MuiModal-hidden";
-  modal.style.visibility = "hidden";
-  vi.spyOn(modal, "getBoundingClientRect").mockReturnValue(
-    new DOMRect(0, 0, 1000, 700),
-  );
-  document.body.append(modal);
-  try {
-    render(<NativeInkInteraction api={api} />);
-    await waitFor(() =>
-      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
-    );
-    expect(backend.configure.mock.calls.at(-1)![0].blocked).not.toContainEqual([
-      0, 0, 1000, 700,
-    ]);
-    modal.style.visibility = "visible";
-    await waitFor(() =>
-      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(false),
-    );
+it.each(["MuiModal-root MuiModal-hidden", "MuiPaper-root"])(
+  "ignores hidden %s and lets outside touches dismiss visible dialogs",
+  async (className) => {
+    await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    const api = window.h.app.api;
+    window.h.state.width = 1000;
+    window.h.state.height = 700;
+    act(() => api.setActiveTool({ type: "freedraw" }));
+    const modal = document.createElement("div");
+    modal.className = className;
+    modal.setAttribute("role", "dialog");
     modal.style.visibility = "hidden";
-    await waitFor(() =>
-      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
+    vi.spyOn(modal, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 1000, 700),
     );
-  } finally {
-    modal.remove();
-  }
-});
+    document.body.append(modal);
+    try {
+      render(<NativeInkInteraction api={api} />);
+      await waitFor(() =>
+        expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
+      );
+      expect(
+        backend.configure.mock.calls.at(-1)![0].blocked,
+      ).not.toContainEqual([0, 0, 1000, 700]);
+      modal.style.visibility = "visible";
+      await waitFor(() =>
+        expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(false),
+      );
+      modal.style.visibility = "hidden";
+      await waitFor(() =>
+        expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
+      );
+    } finally {
+      modal.remove();
+    }
+  },
+);
 it("keeps brush and gradient previews native with the calibrated style", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;
@@ -322,3 +328,46 @@ it.each(["select", "regionErase"] as const)(
     expect(api.getAppState().errorMessage).toBeNull();
   },
 );
+
+it("binds completed native preview to the real canonical element before delayed raster installation", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  backend.synchronize.mockReturnValue(new Promise(() => {}));
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() => expect(backend.configure).toHaveBeenCalled());
+  const options = backend.configure.mock.calls.at(-1)![0];
+  const contact = {
+    owner: api.id,
+    id: "handoff",
+    token: options.token,
+    mode: "pen",
+    phase: "start",
+    width: 2,
+    height: 2,
+    pointerType: "pen",
+    points: [[100, 100, 0.5]],
+  };
+  act(() => backend.listeners.forEach((listener) => listener(contact)));
+  act(() =>
+    backend.listeners.forEach((listener) =>
+      listener({
+        ...contact,
+        phase: "end",
+        points: [
+          [100, 100, 0.5],
+          [200, 150, 0.5],
+        ],
+      }),
+    ),
+  );
+  expect(api.getSceneElements()).toHaveLength(1);
+  expect(backend.acknowledge).toHaveBeenCalledWith({
+    owner: api.id,
+    id: "handoff",
+    elementId: api.getSceneElements()[0].id,
+    complete: true,
+  });
+});

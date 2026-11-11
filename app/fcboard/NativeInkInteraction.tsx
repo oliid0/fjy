@@ -11,6 +11,9 @@ import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { classroomCommands, executeBoardCommand } from "./commands";
 import { createNativeEraserBackend } from "./nativeEraser";
+import { createNativeSceneRenderer } from "./nativeScene";
+
+import "./NativeScene.scss";
 
 type Contact = {
   owner: string;
@@ -23,6 +26,7 @@ type Contact = {
   height: number;
   palm?: boolean;
   pointerType: string;
+  nativeSequence?: number;
 };
 type PenAppearance = {
   pen: string;
@@ -38,6 +42,7 @@ const ink = registerPlugin<{
     enabled: boolean;
     multiStroke: boolean;
     shortcutsEnabled: boolean;
+    eraserMode: string;
     mode: "pen" | "select" | "regionErase" | "erase";
     x: number;
     y: number;
@@ -64,7 +69,12 @@ const ink = registerPlugin<{
     eraserSize: number;
     blocked: number[][];
   }): Promise<void>;
-  acknowledge(options: { owner: string; id: string }): Promise<void>;
+  acknowledge(options: {
+    owner: string;
+    id: string;
+    elementId?: string;
+    complete?: boolean;
+  }): Promise<void>;
   remove(options: { owner: string }): Promise<void>;
   addListener(
     event: "contact",
@@ -182,7 +192,7 @@ export const NativeInkInteraction = ({
           restoreSelection,
         });
       } else {
-        api.nativeInk!({ ...contact, phase });
+        return api.nativeInk!({ ...contact, phase });
       }
     };
     const fail = (error: unknown) => {
@@ -197,6 +207,7 @@ export const NativeInkInteraction = ({
         },
       });
     };
+    const scene = createNativeSceneRenderer(api, fail);
     const sync = () => {
       frame = 0;
       if (!active || failed) {
@@ -346,7 +357,7 @@ export const NativeInkInteraction = ({
             uiBounds.push([box.left, box.top, box.right, box.bottom]);
             if (
               node.matches(
-                '.MuiModal-root,.MuiPopper-root,.fc-editor-properties,[role="menu"]',
+                '.MuiModal-root,.MuiPopper-root,.fc-editor-properties,[role="menu"],[role="dialog"]',
               )
             ) {
               uiBlocksInk = true;
@@ -406,6 +417,7 @@ export const NativeInkInteraction = ({
             'input,textarea,select,[contenteditable="true"],[role="combobox"]',
           ),
         mode,
+        eraserMode: state.eraserMode || "stroke",
         x: state.offsetLeft,
         y: state.offsetTop,
         width: state.width,
@@ -461,6 +473,7 @@ export const NativeInkInteraction = ({
         void ink.acknowledge({ owner: api.id, id: contact.id }).catch(() => {});
         return;
       }
+      let elementId: string | undefined;
       try {
         if (
           contact.phase === "cancel" ||
@@ -475,7 +488,9 @@ export const NativeInkInteraction = ({
           contacts.delete(contact.id);
         } else {
           const result = apply(contact);
-          if (result) {
+          if (typeof result === "string") {
+            elementId = result;
+          } else if (result) {
             await result;
           }
           if (contact.phase === "start") {
@@ -491,13 +506,25 @@ export const NativeInkInteraction = ({
       if (contact.mode === "erase" && contact.phase !== "end") {
         void ink.acknowledge({ owner: api.id, id: contact.id }).catch(() => {});
       } else if (contact.phase === "end") {
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            void ink
-              .acknowledge({ owner: api.id, id: contact.id })
-              .catch(() => {});
-          }),
-        );
+        if (contact.mode === "erase" && contact.nativeSequence) {
+          scene?.acknowledgeErase(contact.nativeSequence);
+        }
+        const acknowledge = () => {
+          void ink
+            .acknowledge({
+              owner: api.id,
+              id: contact.id,
+              elementId,
+              complete: true,
+            })
+            .catch(() => {});
+        };
+        if (elementId && scene) {
+          // Native holds the preview until this exact canonical object is installed.
+          acknowledge();
+        } else {
+          requestAnimationFrame(() => requestAnimationFrame(acknowledge));
+        }
       }
     };
     const listener = ink.addListener("contact", (contact) => {
@@ -620,6 +647,7 @@ export const NativeInkInteraction = ({
         }
         contacts.clear();
         void eraser.reset().catch(fail);
+        scene?.reset();
         void ink.remove({ owner: api.id }).catch(() => {});
         schedule();
       }),
@@ -656,6 +684,7 @@ export const NativeInkInteraction = ({
         );
       }
       unregisterEraser?.();
+      scene?.dispose();
       void eraser.reset().catch(() => {});
       void listener.then((handle) => handle.remove()).catch(() => {});
       void shortcutListener.then((handle) => handle.remove()).catch(() => {});

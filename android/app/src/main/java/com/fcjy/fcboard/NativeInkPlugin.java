@@ -28,6 +28,7 @@ public class NativeInkPlugin extends Plugin {
     private final NativeBoardKeys keys = new NativeBoardKeys();
     private boolean touchLocked;
     @Override public void load() { ((MainActivity)getActivity()).setInkInput(this); }
+    void sceneCommitted(String owner) { NativeInkView view=surfaces.get(owner);if(view!=null)view.sceneCommitted(); }
     /** Route the real event before ViewGroup can cancel another device's stream. */
     boolean dispatchInput(MotionEvent event) {
         if (touchLocked && event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) return true;
@@ -113,6 +114,7 @@ public class NativeInkPlugin extends Plugin {
                     }
                 }
                 view.setMultiStroke(call.getBoolean("multiStroke", true));
+                view.setRetainedScene(() -> ((MainActivity)getActivity()).nativeScene(owner), !"object".equals(call.getString("eraserMode", "stroke")));
                 shortcutSurfaces.put(owner, call.getBoolean("shortcutsEnabled", false));
                 view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
                 int[] web = new int[2], overlay = new int[2]; getBridge().getWebView().getLocationInWindow(web); layer.getLocationInWindow(overlay);
@@ -127,7 +129,7 @@ public class NativeInkPlugin extends Plugin {
         });
     }
     @PluginMethod public void acknowledge(PluginCall call) {
-        getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", "")); call.resolve(); });
+        getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", ""),call.getString("elementId", ""),call.getBoolean("complete",false)); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
         getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });

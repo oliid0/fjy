@@ -1027,10 +1027,10 @@ it("measures three triangle corners from one batch without serial OCR work or lo
       x: 100,
       y: 100,
       points: [
-        [0, 0],
-        [200, 0],
-        [0, 200],
-        [0, 0],
+        pointFrom(0, 0),
+        pointFrom(200, 0),
+        pointFrom(0, 200),
+        pointFrom(0, 0),
       ],
       customData: { fcRecognizedSource: ["source-triangle"] },
     },
@@ -1041,10 +1041,13 @@ it("measures three triangle corners from one batch without serial OCR work or lo
     [300, 100, Math.PI, -Math.PI / 4],
     [100, 300, -Math.PI / 4, -Math.PI / 4],
   ];
-  const marks = vertices.map(([x, y, start, sweep], index) =>
+  const marks = vertices.map(([x, y, start, sweep]) =>
     newFreeDrawElement({
-      ...ink,
-      id: `corner-${index}`,
+      type: "freedraw",
+      simulatePressure: ink.simulatePressure,
+      strokeColor: ink.strokeColor,
+      strokeWidth: ink.strokeWidth,
+      customData: ink.customData,
       x,
       y,
       points: Array.from({ length: 20 }, (_, i) =>

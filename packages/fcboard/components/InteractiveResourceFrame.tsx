@@ -11,6 +11,8 @@ import { interactiveHtml } from "../interactiveHtml";
 import { t } from "../i18n";
 import { attachResourceControls } from "../interactiveResourceControls";
 
+import { nativeResourceFrame } from "../nativeResourceRenderer";
+
 import { ResourceWindow } from "./ResourceWindow";
 
 import type { InteractiveResource } from "../interactiveHtml";
@@ -18,19 +20,7 @@ import type { Ref } from "react";
 import type { ResourceSurface } from "../interactiveResourceControls";
 import type { ComponentProps } from "react";
 
-export type ResourceLiveUpdate = {
-  key: string;
-  message: Record<string, unknown>;
-};
-
-export const InteractiveResourceFrame = ({
-  resource,
-  iframeRef,
-  objectId,
-  surface,
-  window,
-  live,
-}: {
+export type InteractiveResourceFrameProps = {
   resource: InteractiveResource;
   objectId: string;
   surface: ResourceSurface;
@@ -40,7 +30,21 @@ export const InteractiveResourceFrame = ({
     ComponentProps<typeof ResourceWindow>,
     "title" | "children" | "onReload"
   >;
-}) => {
+};
+
+export type ResourceLiveUpdate = {
+  key: string;
+  message: Record<string, unknown>;
+};
+
+const WebInteractiveResourceFrame = ({
+  resource,
+  iframeRef,
+  objectId,
+  surface,
+  window,
+  live,
+}: InteractiveResourceFrameProps) => {
   const [revision, setRevision] = useState(0);
   const identity = live ? `${resource.id}:${live.key}` : resource;
   const [documentSnapshot, setDocumentSnapshot] = useState({
@@ -173,7 +177,9 @@ export const InteractiveResourceFrame = ({
     <ResourceWindow
       {...window}
       title={resource.title}
-      embeddedHeader={resource.id === "builtin-calculator"}
+      embeddedHeader={
+        resource.id === "builtin-calculator" || !!resource.visualization
+      }
       onReload={() => {
         loaded.current = false;
         setRevision((value) => value + 1);
@@ -185,3 +191,8 @@ export const InteractiveResourceFrame = ({
     content
   );
 };
+
+/** Platform adapters can supply a real native object surface before any iframe loads. */
+export const InteractiveResourceFrame = (
+  props: InteractiveResourceFrameProps,
+) => nativeResourceFrame(props) ?? <WebInteractiveResourceFrame {...props} />;

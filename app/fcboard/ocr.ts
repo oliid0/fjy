@@ -1,7 +1,6 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import { chat, visualMessage } from "./ai";
-import { recognizeLocalHandwriting } from "./localOcr";
 import { recognizeLocalMath } from "./localMathOcr";
 import { currentSettings } from "./settings";
 import {
@@ -21,7 +20,7 @@ export const warmHandwriting = async () => {
   if (currentSettings().ocr === "cloud") {
     return;
   }
-  if (hasDigitalInk()) {
+  if (import.meta.env.VITE_NATIVE_INFERENCE === "true" || hasDigitalInk()) {
     return prepareDigitalInk();
   }
   const { warmHandwriting } = await import("./localOcr");
@@ -79,6 +78,10 @@ export const recognizeHandwriting = async (
     return text;
   };
   const local = async (request: AbortSignal) => {
+    if (import.meta.env.VITE_NATIVE_INFERENCE === "true" || hasDigitalInk()) {
+      throw new Error("Native handwriting could not recognize this ink");
+    }
+    const { recognizeLocalHandwriting } = await import("./localOcr");
     const text = await recognizeLocalHandwriting(
       await capture(),
       request,
@@ -148,21 +151,35 @@ export const recognizeHandwriting = async (
       // failures can use the separately bundled local raster model.
     }
   }
+  let mathFailure: unknown;
   if (kind === "math" && strokes?.length) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
-      const value = await recognizeLocalMath(recognitionStrokes!, signal);
+      const value = await recognizeLocalMath(
+        hasDigitalInk() ? strokes : recognitionStrokes!,
+        signal,
+      );
       signal.throwIfAborted();
       if (await accepted(value)) {
         return chooseCandidate ? chooseCandidate([value]) : value;
       }
-    } catch {
+      mathFailure = new Error(
+        t("fcboard.no_content_recognized_select_the_area_again"),
+      );
+    } catch (error) {
       signal.throwIfAborted();
+      mathFailure = error;
     }
   }
   try {
+    if (
+      (import.meta.env.VITE_NATIVE_INFERENCE === "true" || hasDigitalInk()) &&
+      mathFailure
+    ) {
+      throw mathFailure;
+    }
     if (structured) {
-      throw new Error("Structured mathematics requires a math recognizer");
+      throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     }
     const value = await local(signal);
     signal.throwIfAborted();

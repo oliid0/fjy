@@ -857,6 +857,8 @@ class App extends React.Component<AppProps, AppState> {
         }
       },
       editTextElement: this.editTextElement,
+      nativeInk: this.nativeInk,
+      nativeRegionGesture: this.nativeRegionGesture,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -9813,8 +9815,245 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
+  private nativeRegionDrafts = new Map<
+    string,
+    {
+      mode: "select" | "regionErase";
+      selection: Pick<
+        AppState,
+        | "whiteboardSelection"
+        | "selectedElementIds"
+        | "selectedGroupIds"
+        | "selectedLinearElement"
+      >;
+    }
+  >();
+
+  /** Native Canvas previews the path. Apply the same final selection/erasure
+   * geometry once, retaining scene groups, locking and normal undo history. */
+  public nativeRegionGesture = (input: {
+    id: string;
+    mode: "select" | "regionErase";
+    restoreSelection?: boolean;
+    phase: "start" | "end" | "cancel";
+    points: readonly (readonly [number, number, number])[];
+  }) => {
+    const draft = this.nativeRegionDrafts.get(input.id);
+    if (input.phase === "cancel") {
+      this.nativeRegionDrafts.delete(input.id);
+      if (draft) {
+        this.setState({
+          ...(input.restoreSelection === false ? {} : draft.selection),
+          cursorButton: "up",
+        });
+      }
+      return;
+    }
+    if (
+      this.state.viewModeEnabled ||
+      !input.points.length ||
+      input.points.length > 120000 ||
+      input.points.some(
+        (point) => point.length !== 3 || !point.every(Number.isFinite),
+      ) ||
+      (input.mode === "select"
+        ? !this.isRegionSelectionTool()
+        : this.state.activeTool.type !== "eraser" ||
+          this.state.eraserMode !== "region")
+    ) {
+      throw new Error("Invalid native region gesture");
+    }
+    if (input.phase === "start") {
+      if (this.nativeRegionDrafts.size) {
+        throw new Error("A native region gesture is already active");
+      }
+      const {
+        whiteboardSelection,
+        selectedElementIds,
+        selectedGroupIds,
+        selectedLinearElement,
+      } = this.state;
+      this.nativeRegionDrafts.set(input.id, {
+        mode: input.mode,
+        selection: {
+          whiteboardSelection,
+          selectedElementIds,
+          selectedGroupIds,
+          selectedLinearElement,
+        },
+      });
+      this.setState({
+        cursorButton: "down",
+        whiteboardSelection: undefined,
+        selectedElementIds: {},
+        selectedGroupIds: {},
+        selectedLinearElement: null,
+      });
+      return;
+    }
+    if (!draft || draft.mode !== input.mode) {
+      throw new Error("Native region gesture is no longer active");
+    }
+    this.nativeRegionDrafts.delete(input.id);
+    const path = input.points.map(([clientX, clientY]) => {
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX, clientY },
+        this.state,
+      );
+      return pointFrom<GlobalPoint>(x, y);
+    });
+    if (input.mode === "select") {
+      this.lassoTrail.selectPath(path);
+    } else {
+      const before = this.scene.getElementsIncludingDeleted();
+      const first = path[0];
+      const tapped =
+        path.length === 1
+          ? this.getElementsAtPosition(first[0], first[1])
+              .slice(-1)
+              .map((element) => element.id)
+          : [];
+      const next = eraseSceneRegion(
+        before,
+        path,
+        tapped,
+        0.125 / this.state.zoom.value,
+      );
+      if (next !== before) {
+        this.scene.replaceAllElements(next);
+        this.store.scheduleCapture();
+      }
+    }
+    this.setState({ cursorButton: "up" });
+  };
+
+  private nativeInkDrafts = new Map<string, FcboardFreeDrawElement>();
+
+  /** Android previews contacts in Canvas and commits one complete stroke here.
+   * Reuse the normal style, composition emitters and durable undo mechanism. */
+  public nativeInk = (input: {
+    id: string;
+    phase: "start" | "end" | "cancel";
+    points: readonly (readonly [number, number, number])[];
+    width: number;
+    height: number;
+    pointerType: string;
+  }) => {
+    if (input.phase === "cancel") {
+      const draft = this.nativeInkDrafts.get(input.id);
+      if (draft) {
+        this.onInkProgressEmitter.trigger(draft, "cancel");
+      }
+      this.nativeInkDrafts.delete(input.id);
+      if (!this.nativeInkDrafts.size) {
+        this.setState({ cursorButton: "up" });
+      }
+      return;
+    }
+    if (
+      this.state.activeTool.type !== "freedraw" ||
+      this.state.viewModeEnabled ||
+      !input.points.length ||
+      input.points.length > 120000 ||
+      input.points.some(
+        (point) => point.length !== 3 || !point.every(Number.isFinite),
+      )
+    ) {
+      throw new Error("Invalid native ink contact");
+    }
+    const first = input.points[0];
+    if (input.phase === "start") {
+      const origin = viewportCoordsToSceneCoords(
+        { clientX: first[0], clientY: first[1] },
+        this.state,
+      );
+      const element = this.createInkElement(
+        { ...input, pressure: first[2] },
+        origin.x,
+        origin.y,
+      );
+      this.nativeInkDrafts.set(input.id, element);
+      this.setState({ cursorButton: "down" });
+      this.onInkProgressEmitter.trigger(element, "start");
+      return;
+    }
+    const draft = this.nativeInkDrafts.get(input.id);
+    if (!draft) {
+      throw new Error("Native ink contact is no longer active");
+    }
+    this.nativeInkDrafts.delete(input.id);
+    const points: LocalPoint[] = [];
+    const pressures: number[] = [];
+    let left = 0;
+    let top = 0;
+    let right = 0;
+    let bottom = 0;
+    for (const point of input.points) {
+      const scene = viewportCoordsToSceneCoords(
+        { clientX: point[0], clientY: point[1] },
+        this.state,
+      );
+      const x = scene.x - draft.x;
+      const y = scene.y - draft.y;
+      points.push(pointFrom<LocalPoint>(x, y));
+      if (!draft.simulatePressure) {
+        pressures.push(Math.max(0, Math.min(1, point[2])));
+      }
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+    if (points.length === 1) {
+      points.push(pointFrom<LocalPoint>(0.0001, 0.0001));
+      if (pressures.length) {
+        pressures.push(pressures[0]);
+      }
+    }
+    const element = newElementWith(draft, {
+      points,
+      pressures,
+      width: right - left,
+      height: bottom - top,
+      customData: {
+        ...draft.customData,
+        fcInk: finishFactoryInk(draft.customData!.fcInk),
+      },
+    });
+    const previous = this.store.snapshot;
+    this.scene.replaceAllElements([
+      ...this.scene.getElementsIncludingDeleted(),
+      element,
+    ]);
+    this.onInkCommitEmitter.trigger(element);
+    const completed = new Map(
+      this.scene.getElementsIncludingDeleted().map((item) => [item.id, item]),
+    ) as SceneElementsMap;
+    const next = previous.maybeClone(
+      CaptureUpdateAction.IMMEDIATELY,
+      completed,
+      undefined,
+    );
+    this.store.scheduleMicroAction({
+      action: CaptureUpdateAction.IMMEDIATELY,
+      change: StoreChange.create(previous, next),
+      delta: StoreDelta.calculate(previous, next),
+    });
+    this.onInkProgressEmitter.trigger(element, "settled");
+    this.scene.triggerUpdate();
+    if (!this.nativeInkDrafts.size) {
+      this.setState({ cursorButton: "up" });
+    }
+    return element.id;
+  };
+
   private createInkElement = (
-    event: React.PointerEvent<HTMLElement>,
+    event: {
+      width: number;
+      height: number;
+      pointerType: string;
+      pressure: number;
+    },
     gridX: number,
     gridY: number,
   ) => {

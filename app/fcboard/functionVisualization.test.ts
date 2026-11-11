@@ -29,7 +29,7 @@ it("saves the supplied renderer's transparent SVG with the pen colour on axes an
       ...svg.querySelectorAll(".role-axis-domain path, .role-axis-tick line"),
     ].every((path) => path.getAttribute("stroke") === "#d32941"),
   ).toBe(true);
-  expect(svg.querySelectorAll(".role-axis-grid")).toHaveLength(0);
+  expect(svg.querySelectorAll(".role-axis-grid")).toHaveLength(2);
   expect(
     [...svg.querySelectorAll("rect")].every(
       (rect) =>
@@ -136,4 +136,20 @@ it("allows zooming across an empty domain and rejects corrupt or unbounded saved
   ]) {
     expect(() => validatedPlot({ ...defaultPlot, view })).toThrow();
   }
+});
+
+it("gives same-region comparison curves distinct colors and a top-left expression legend even with a blue pen", () => {
+  const plot = { ...defaultPlot, expression: "x", compare: ["x^2"] };
+  const svg = new DOMParser().parseFromString(
+    dataURLToString(functionGraphImage(plot, "#2563eb")),
+    "image/svg+xml",
+  );
+  const colors = new Set(
+    [...svg.querySelectorAll(".mark-line path")].map((path) =>
+      path.getAttribute("stroke"),
+    ),
+  );
+  expect(colors.size).toBe(2);
+  expect(svg.querySelector(".role-legend")).not.toBeNull();
+  expect(svg.querySelector(".role-legend")?.textContent).toContain("x^2");
 });

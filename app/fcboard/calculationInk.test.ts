@@ -100,7 +100,7 @@ it("requires mathematical structure in the transcription of fractions or scripts
   expect(preservesMathInkStructure(power, "23")).toBe(false);
   expect(preservesMathInkStructure(power, "2^{3}")).toBe(true);
   expect(hasStructuredMathInk(equals)).toBe(false);
-  expect(hasStructuredMathInk(vertical)).toBe(false);
+  expect(hasStructuredMathInk(vertical)).toBe(true);
 });
 
 it("still waits for a complete expression without an ending, with cancellation", async () => {
@@ -116,4 +116,39 @@ it("still waits for a complete expression without an ending, with cancellation",
   controller.abort();
   await failure;
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it("preserves the two dots of division instead of accepting a minus transcription", () => {
+  const strokes: InkInput = [
+    [
+      [10, 10],
+      [25, 50],
+    ],
+    [
+      [45, 30],
+      [65, 30],
+    ],
+    [[55, 22]],
+    [[55, 38]],
+    [
+      [85, 10],
+      [100, 50],
+    ],
+  ];
+  expect(hasStructuredMathInk(strokes)).toBe(true);
+  expect(preservesMathInkStructure(strokes, "12-3")).toBe(false);
+  expect(preservesMathInkStructure(strokes, "12+3")).toBe(false);
+  for (const value of [
+    "12÷3",
+    "12/3",
+    String.raw`12\div3`,
+    String.raw`\frac{12}{3}`,
+  ]) {
+    expect(preservesMathInkStructure(strokes, value)).toBe(true);
+  }
+  expect(
+    hasStructuredMathInk(
+      strokes.filter((_, index) => index !== 2 && index !== 3),
+    ),
+  ).toBe(false);
 });

@@ -544,7 +544,7 @@ const icons = {
     ],
   },
   spotlight: {
-    viewBox: "0 0 36.0 36.0",
+    viewBox: "0.206 -0.735 36 36",
     paths: [
       {
         fill: "none",

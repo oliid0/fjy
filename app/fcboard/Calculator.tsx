@@ -9,6 +9,11 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
 import { classroomCommands } from "./commands";
+import {
+  hasNativeCalculator,
+  nativeCalculatorControl,
+  setNativeCalculatorTheme,
+} from "./nativeResources";
 import calculator from "./calculator/calculator.html?raw";
 
 import type { InkStroke } from "./documents";
@@ -93,6 +98,20 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
       ) {
         throw new Error(t("fcboard.invalid_style_parameters"));
       }
+      if (hasNativeCalculator()) {
+        return nativeCalculatorControl(
+          object.id,
+          click
+            ? {
+                type: "click",
+                version: args.version as string,
+                control: args.control as string,
+              }
+            : { type: "inspect" },
+          args.signal instanceof AbortSignal ? args.signal : undefined,
+          () => current()?.id === object.id,
+        );
+      }
       return requestResourceControl(
         { id: object.id, surface: object.surface, html: object.resource.html },
         click
@@ -120,6 +139,9 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
       const object = current();
       if (!object) {
         return;
+      }
+      if (hasNativeCalculator()) {
+        setNativeCalculatorTheme(object.id, dark);
       }
       document
         .querySelector<HTMLIFrameElement>(

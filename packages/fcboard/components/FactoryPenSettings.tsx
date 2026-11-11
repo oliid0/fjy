@@ -201,9 +201,6 @@ export const FactoryPenSettings = ({
           </button>
         ))}
       </div>
-      <div className="fc-pen-heading">
-        <span>{t("fcboard.pen")}</span>
-      </div>
       <div
         role="group"
         aria-label={t("fcboard.pen_type")}

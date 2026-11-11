@@ -26,6 +26,8 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
+        <service android:name=".LocalInferenceService" android:process=":ml_engine" android:exported="false" />
+
         <service android:name=".NetworkSessionService" android:foregroundServiceType="connectedDevice" android:exported="false" />
         <service android:name=".SkizzePenService" android:foregroundServiceType="connectedDevice" android:exported="false" />
 

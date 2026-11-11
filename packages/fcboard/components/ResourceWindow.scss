@@ -85,7 +85,10 @@
 }
 
 .fc-resource-window[data-embedded-header="true"] {
-  border-radius: calc(6 * var(--resource-unit, 1px));
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   .fc-resource-window-content {
     overflow: hidden;
   }

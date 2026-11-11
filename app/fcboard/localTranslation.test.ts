@@ -1,6 +1,10 @@
 import { translateLocally } from "./localTranslation";
 import { offlineInference } from "./offlineInference";
+import { lookupLocalWord } from "./localDictionary";
 vi.mock("./offlineInference", () => ({ offlineInference: vi.fn() }));
+vi.mock("./localDictionary", () => ({
+  lookupLocalWord: vi.fn().mockResolvedValue(undefined),
+}));
 afterEach(() => vi.clearAllMocks());
 it("uses only the local English/Chinese model with no API settings", async () => {
   vi.mocked(offlineInference).mockResolvedValue([
@@ -49,5 +53,13 @@ it("reports missing language pairs and aborts without a remote fallback", async 
   await expect(
     translateLocally("hello", "zh", controller.signal),
   ).rejects.toThrow();
+  expect(offlineInference).not.toHaveBeenCalled();
+});
+
+it("returns one sourced dictionary translation for a known word without starting a model", async () => {
+  vi.mocked(lookupLocalWord).mockResolvedValueOnce("喂");
+  await expect(
+    translateLocally("hello", "zh-CN", new AbortController().signal),
+  ).resolves.toEqual({ language: "en", translation: "喂" });
   expect(offlineInference).not.toHaveBeenCalled();
 });

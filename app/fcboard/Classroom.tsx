@@ -41,6 +41,7 @@ import {
 import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
 import { BottomBarActions } from "./BottomBarActions";
+import { NativeInkInteraction } from "./NativeInkInteraction";
 import { SkizzePen } from "./SkizzePen";
 import { BoardShare } from "./BoardShare";
 import { InsertMenu } from "./InsertMenu";
@@ -2901,6 +2902,7 @@ export const Classroom = ({
       <BoardSwitcher api={api} />
       <FunctionGraphInteraction api={api} />
       <BottomBarActions />
+      <NativeInkInteraction api={api} inkProfile={inkProfile} />
       <SkizzePen api={api} />
       <BoardShare />
       <InsertMenu api={api} />

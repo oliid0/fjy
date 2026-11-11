@@ -54,6 +54,7 @@ import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { validatedPlot } from "./mathRecognition";
+import { restoreDocumentFunctionGraphs } from "./functionGraphResource";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -433,7 +434,7 @@ export const FilePreview = ({
     void (async () => {
       try {
         const fingerprint = await documentKey(file);
-        const saved = await loadInk(fingerprint);
+        const saved = restoreDocumentFunctionGraphs(await loadInk(fingerprint));
         if (!active) {
           return;
         }
@@ -2285,6 +2286,13 @@ export const FilePreview = ({
                       plot: {
                         ...stroke.plot!,
                         plot,
+                        ...(Array.isArray(args.sourceRegions)
+                          ? {
+                              sourceRegions: args.sourceRegions as NonNullable<
+                                InkStroke["plot"]
+                              >["sourceRegions"],
+                            }
+                          : {}),
                         ...(resource ? { renderer: "iframe" as const } : {}),
                       },
                     }

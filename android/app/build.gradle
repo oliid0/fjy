@@ -57,6 +57,8 @@ dependencies {
     implementation 'com.caverock:androidsvg-aar:1.4'
     implementation 'com.google.mlkit:digital-ink-recognition:18.1.0'
     implementation 'com.google.mlkit:translate:17.0.3'
+    implementation files('libs/onnxruntime-android-1.22.0.aar')
+    implementation 'net.objecthunter:exp4j:0.4.8'
     implementation 'com.google.mlkit:language-id:17.0.6'
     implementation 'ai.moonshine:moonshine-voice:0.1.5'
     implementation files('libs/sherpa-onnx-1.13.8.aar')

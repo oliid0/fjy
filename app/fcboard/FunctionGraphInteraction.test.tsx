@@ -6,6 +6,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
+import { convertToFcboardElements } from "@fcboard/fcboard";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 import {
   EditorJotaiProvider,
@@ -19,7 +22,15 @@ import { drawPlot, objectSelection } from "./board";
 import { defaultPlot } from "./math";
 import { localMathResult } from "./mathRecognition";
 import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
-import { functionGraphResource } from "./functionGraphResource";
+import {
+  functionGraphResource,
+  restoreDocumentFunctionGraphs,
+} from "./functionGraphResource";
+import { functionGraphImage } from "./functionVisualization";
+import { documentStrokeBounds } from "./documents";
+import * as ocr from "./ocr";
+
+import type { DocumentInk, InkStroke } from "./documents";
 
 afterEach(() => {
   cleanup();
@@ -237,4 +248,190 @@ it("keeps comparison curves in one coordinate system and preserves them through 
       (signal: { name: string }) => signal.name === "dist2",
     ),
   ).toBe(true);
+});
+it("automatically compares two selected expressions in function mode without deleting their source", async () => {
+  const { api } = await setup();
+  const source = convertToFcboardElements([
+    { type: "text", text: "y=x", x: 100, y: 100 },
+    { type: "text", text: "y=x^2", x: 100, y: 250 },
+  ]);
+  act(() =>
+    api.updateScene({
+      elements: source,
+      appState: {
+        currentItemInkAssist: "function",
+        ...objectSelection(source),
+      },
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      api
+        .getSceneElements()
+        .filter((element) => element.customData?.fcPlot?.plot.compare),
+    ).toHaveLength(1),
+  );
+  expect(
+    api
+      .getSceneElements()
+      .find((element) => element.customData?.fcPlot?.plot.compare),
+  ).toMatchObject({
+    type: "iframe",
+    customData: { fcPlot: { plot: { expression: "x", compare: ["x^2"] } } },
+  });
+  expect(api.getSceneElements().slice(0, 2)).toEqual(source);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  expect(
+    api.getSceneElements().filter((element) => element.type === "iframe"),
+  ).toHaveLength(1);
+});
+it.each([false, true])(
+  "recognizes selected handwritten expressions concurrently and discards stale sources=%s",
+  async (erase) => {
+    const { api } = await setup();
+    const pending: ((text: string) => void)[] = [];
+    const recognize = vi
+      .spyOn(ocr, "recognizeHandwriting")
+      .mockImplementation(
+        () => new Promise((resolve) => pending.push(resolve)),
+      );
+    const source = [100, 320].map((y) =>
+      newFreeDrawElement({
+        type: "freedraw",
+        x: 100,
+        y,
+        points: [pointFrom(0, 0), pointFrom(100, 50)],
+        simulatePressure: true,
+        customData: { fcInk: { version: 2, pen: "hard", assist: "function" } },
+      }),
+    );
+    act(() =>
+      api.updateScene({
+        elements: source,
+        appState: {
+          currentItemInkAssist: "function",
+          ...objectSelection(source),
+        },
+      }),
+    );
+    await waitFor(() => expect(recognize).toHaveBeenCalledTimes(2));
+    expect(api.getSceneElements()).toEqual(source);
+    if (erase) {
+      act(() => api.updateScene({ elements: [] }));
+    }
+    await act(async () => {
+      pending[1]("y=x^2");
+      pending[0]("y=x");
+    });
+    if (erase) {
+      expect(api.getSceneElements()).toEqual([]);
+    } else {
+      await waitFor(() =>
+        expect(
+          api.getSceneElements().filter((element) => element.type === "iframe"),
+        ).toHaveLength(1),
+      );
+      expect(
+        api.getSceneElements().find((element) => element.type === "iframe")
+          ?.customData?.fcPlot.plot.compare,
+      ).toEqual(["x^2"]);
+    }
+  },
+);
+it("restores saved courseware SVG graphs as interactive objects without moving them or changing unrelated ink", () => {
+  const legacy: InkStroke = {
+    id: "old-graph",
+    color: "#123456",
+    width: 0,
+    points: [[240, 180]],
+    anchor: { x: 240, y: 180 },
+    image: functionGraphImage(defaultPlot, "#123456"),
+    imageWidth: 490,
+    imageHeight: 440,
+    plot: {
+      id: "plot-group",
+      renderer: "vega",
+      plot: defaultPlot,
+      origin: { x: 100, y: 100 },
+      position: { x: 345, y: 320 },
+    },
+  };
+  const note: InkStroke = {
+    id: "note",
+    color: "#000000",
+    width: 2,
+    points: [
+      [10, 10],
+      [30, 30],
+    ],
+  };
+  const original: DocumentInk = { 0: [legacy, note] };
+  const restored = restoreDocumentFunctionGraphs(original);
+  expect(restored[0][0]).toMatchObject({
+    id: legacy.id,
+    shapeType: "iframe",
+    resource: { id: "plot-group", width: 490, height: 440 },
+    plot: { renderer: "iframe" },
+  });
+  expect(documentStrokeBounds(restored[0][0])).toEqual(
+    documentStrokeBounds(legacy),
+  );
+  expect(restored[0][1]).toBe(note);
+  expect(original[0][0]).toBe(legacy);
+  expect(restoreDocumentFunctionGraphs(restored)).toBe(restored);
+  const invalid = {
+    ...legacy,
+    plot: {
+      ...legacy.plot!,
+      plot: { ...defaultPlot, expression: "unknown(x)" },
+    },
+  };
+  expect(restoreDocumentFunctionGraphs({ 0: [invalid] })[0][0]).toBe(invalid);
+});
+
+it("automatically adds a nearby function-pen expression to the same axes without a selection", async () => {
+  const { api } = await setup();
+  act(() => api.updateScene({ elements: [] }));
+  const first = localMathResult("y=x", "function");
+  const second = localMathResult("y=x^2", "function");
+  if (first.kind !== "function" || second.kind !== "function") {
+    throw new Error("Invalid fixture");
+  }
+  const bounds = { left: 100, top: 100, right: 220, bottom: 140 };
+  act(() => {
+    drawPlot(api, first.plot, { x: 450, y: 300 }, [], "first", true, bounds);
+  });
+  const original = api
+    .getSceneElements()
+    .find((element) => element.type === "iframe")!;
+  act(() => {
+    drawPlot(api, second.plot, { x: 450, y: 380 }, [], "second", true, {
+      ...bounds,
+      top: 180,
+      bottom: 220,
+    });
+  });
+  const graphs = api
+    .getSceneElements()
+    .filter((element) => element.type === "iframe");
+  expect(graphs).toHaveLength(1);
+  expect(graphs[0]).toMatchObject({
+    id: original.id,
+    x: original.x,
+    y: original.y,
+    width: original.width,
+    height: original.height,
+    customData: { fcPlot: { plot: { expression: "x", compare: ["x^2"] } } },
+  });
+  act(() => {
+    drawPlot(api, second.plot, { x: 750, y: 380 }, [], "far", true, {
+      left: 800,
+      top: 100,
+      right: 900,
+      bottom: 140,
+    });
+  });
+  expect(
+    api.getSceneElements().filter((element) => element.type === "iframe"),
+  ).toHaveLength(2);
 });

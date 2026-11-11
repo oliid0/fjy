@@ -1,9 +1,9 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import { hasNativeTranslation, translateNatively } from "./nativeTranslation";
+import { inferNatively } from "./nativeInference";
 
-/** The packaged zh/en OPUS pair works offline on every platform. Other pairs
- * use the native translator and its explicit model download lifecycle. */
+/** Android uses the isolated native engine; only browsers load WASM. */
 export const translateLocally = async (
   text: string,
   targetLanguage: string,
@@ -27,6 +27,33 @@ export const translateLocally = async (
   }
   if (source === target) {
     return { language: source, translation: text };
+  }
+  if (
+    import.meta.env.VITE_NATIVE_INFERENCE === "true" ||
+    hasNativeTranslation()
+  ) {
+    const result = await inferNatively(
+      { kind: "translation", text, source, target },
+      signal,
+    );
+    if (
+      result.language !== source ||
+      typeof result.translation !== "string" ||
+      !result.translation.trim() ||
+      result.translation.length > 10000
+    ) {
+      throw new Error(
+        t("fcboard.the_language_explanation_is_incomplete_please_retry"),
+      );
+    }
+    return { language: source, translation: result.translation };
+  }
+  if (source === "en" && target === "zh") {
+    const { lookupLocalWord } = await import("./localDictionary");
+    const translation = await lookupLocalWord(text, signal);
+    if (translation) {
+      return { language: source, translation };
+    }
   }
   const { offlineInference } = await import("./offlineInference");
   // Keep every character while bounding encoder/decoder memory per inference.

@@ -111,9 +111,46 @@ describe("explicit handwriting actions", () => {
     expect(prompt).toContain("without solving");
     expect(prompt).toContain("fraction bars");
   });
-  it("excludes only a confirmed final column bar from native recognition", async () => {
+  it("keeps division dots out of the text recognizer's plausible minus shortcut", async () => {
     backend.nativeAvailable = true;
-    backend.native.mockResolvedValue(["12\n+3"]);
+    backend.native.mockResolvedValue(["12-3"]);
+    backend.math.mockResolvedValue(String.raw`12\div3`);
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [10, 10],
+        [25, 50],
+      ],
+      [
+        [45, 30],
+        [65, 30],
+      ],
+      [[55, 22]],
+      [[55, 38]],
+      [
+        [85, 10],
+        [100, 50],
+      ],
+    ];
+    const capture = vi.fn();
+    await expect(
+      recognizeHandwriting(
+        capture,
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        strokes,
+      ),
+    ).resolves.toBe(String.raw`12\div3`);
+    expect(backend.native).not.toHaveBeenCalled();
+    expect(backend.math).toHaveBeenCalledWith(strokes, expect.any(AbortSignal));
+    expect(backend.local).not.toHaveBeenCalled();
+    expect(backend.cloud).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+  });
+  it("routes a vertical column to native math with its rule intact, without flattening operands", async () => {
+    backend.nativeAvailable = true;
+    backend.math.mockResolvedValue("11\n+11\n----");
     const strokes: import("./digitalInk").InkInput = [
       [
         [20, 10],
@@ -128,18 +165,21 @@ describe("explicit handwriting actions", () => {
         [70, 105],
       ],
     ];
-    expect(
-      await recognizeHandwriting(
-        vi.fn(),
+    const capture = vi.fn();
+    await expect(
+      recognizeHandwriting(
+        capture,
         new AbortController().signal,
         vi.fn(),
         "math",
         undefined,
         strokes,
       ),
-    ).toBe("12\n+3");
-    expect(backend.native.mock.calls[0][0]).toEqual(strokes.slice(0, 2));
-    expect(strokes).toHaveLength(3);
+    ).resolves.toBe("11\n+11\n----");
+    expect(backend.math).toHaveBeenCalledWith(strokes, expect.any(AbortSignal));
+    expect(backend.native).not.toHaveBeenCalled();
+    expect(backend.local).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
   });
   it("passes the alphabet surface's English context to bundled Digital Ink without rasterizing", async () => {
     backend.nativeAvailable = true;
@@ -296,22 +336,21 @@ describe("explicit handwriting actions", () => {
     expect(choose).toHaveBeenCalledWith(["你好", "你号"]);
     expect(capture).not.toHaveBeenCalled();
   });
-  it("recovers from a native failure using bundled raster OCR without a cloud request", async () => {
+  it("reports native text failure without starting the browser raster model", async () => {
     backend.nativeAvailable = true;
-    backend.native.mockRejectedValue(new Error("Native backend unavailable"));
-    backend.local.mockResolvedValue("hello");
-    saveSettings({ ...defaults, ocr: "local", apiKey: "test" }, false);
-    expect(
-      await recognizeHandwriting(
-        "image",
+    backend.native.mockRejectedValue(new Error("native failure"));
+    saveSettings({ ...defaults, ocr: "local", apiKey: "" }, false);
+    await expect(
+      recognizeHandwriting(
+        vi.fn(),
         new AbortController().signal,
         vi.fn(),
         "text",
         undefined,
         [[[0, 0]]],
       ),
-    ).toBe("hello");
-    expect(backend.local).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow("Native handwriting");
+    expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
   it("falls back to structured math when the native first candidate fails validation", async () => {
@@ -376,4 +415,28 @@ describe("explicit handwriting actions", () => {
     ).resolves.toBe("11+11=");
     expect(backend.cloud).not.toHaveBeenCalled();
   });
+});
+
+it("never loads PaddleOCR after an Android handwriting failure", async () => {
+  vi.clearAllMocks();
+  backend.nativeAvailable = true;
+  backend.native.mockRejectedValue(new Error("native unavailable"));
+  saveSettings({ ...defaults, ocr: "local", apiKey: "" }, false);
+  await expect(
+    recognizeHandwriting(
+      vi.fn(),
+      new AbortController().signal,
+      vi.fn(),
+      "text",
+      undefined,
+      [
+        [
+          [0, 0],
+          [10, 20],
+        ],
+      ],
+    ),
+  ).rejects.toThrow("Native handwriting");
+  expect(backend.local).not.toHaveBeenCalled();
+  expect(backend.cloud).not.toHaveBeenCalled();
 });

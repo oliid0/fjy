@@ -18,6 +18,81 @@
   let timer;
   let saved;
   let restored;
+  // Plot interior owns Vega navigation. Its transparent margins move the object.
+  let moving;
+  const windowMessage = (type, event) =>
+    parent.postMessage(
+      {
+        channel: "fc-resource-window",
+        type,
+        x: event.screenX,
+        y: event.screenY,
+      },
+      "*",
+    );
+  root.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (!view || event.isPrimary === false || event.button > 0) {
+        return;
+      }
+      const svg = root.querySelector("svg");
+      if (!svg) {
+        return;
+      }
+      const box = svg.getBoundingClientRect();
+      const pad = view.padding();
+      const x =
+        ((event.clientX - box.left) * (view.width() + pad.left + pad.right)) /
+        box.width;
+      const y =
+        ((event.clientY - box.top) * (view.height() + pad.top + pad.bottom)) /
+        box.height;
+      if (
+        x >= pad.left &&
+        x <= pad.left + view.width() &&
+        y >= pad.top &&
+        y <= pad.top + view.height()
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      moving = event.pointerId;
+      root.setPointerCapture(event.pointerId);
+      windowMessage("move-start", event);
+    },
+    true,
+  );
+  root.addEventListener(
+    "pointermove",
+    (event) => {
+      if (moving === event.pointerId) {
+        event.stopImmediatePropagation();
+        windowMessage("move", event);
+      }
+    },
+    true,
+  );
+  root.addEventListener(
+    "pointerup",
+    (event) => {
+      if (moving === event.pointerId) {
+        moving = undefined;
+        event.stopImmediatePropagation();
+        windowMessage("move-end", event);
+      }
+    },
+    true,
+  );
+  const cancelMove = (event) => {
+    if (moving === event.pointerId) {
+      moving = undefined;
+      windowMessage("move-cancel", event);
+    }
+  };
+  root.addEventListener("pointercancel", cancelMove);
+  root.addEventListener("lostpointercapture", cancelMove);
   const domain = () => {
     const x = view.signal("xdom");
     const y = view.signal("ydom");

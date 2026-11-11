@@ -1,4 +1,5 @@
 import path from "path";
+import { rm } from "node:fs/promises";
 
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
@@ -11,14 +12,21 @@ import Sitemap from "vite-plugin-sitemap";
 
 import { vegaAssetAliases } from "../config/vegaAssets";
 import { assertClientRuntimeBoundary } from "../config/clientRuntimeBoundary";
+import { assertNativeInferenceBoundary } from "../config/nativeInferenceBoundary";
 
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
+  const nativeInference = process.env.VITE_NATIVE_INFERENCE === "true";
   // To load .env variables
   const envDir = path.resolve(__dirname, "../config");
   const envVars = loadEnv(mode, envDir);
   // https://vitejs.dev/config/
   return {
+    define: {
+      "import.meta.env.VITE_NATIVE_INFERENCE": JSON.stringify(
+        nativeInference ? "true" : "false",
+      ),
+    },
     server: {
       port: Number(envVars.VITE_APP_PORT || 3000),
       // open the browser
@@ -81,7 +89,7 @@ export default defineConfig(({ mode }) => {
       ],
     },
     build: {
-      outDir: "build",
+      outDir: nativeInference ? "build-android" : "build",
       rollupOptions: {
         input: {
           app: path.resolve(__dirname, "index.html"),
@@ -143,13 +151,28 @@ export default defineConfig(({ mode }) => {
       {
         name: "fcboard-client-runtime-boundary",
         apply: "build",
+        async writeBundle(options) {
+          if (nativeInference && options.dir) {
+            await Promise.all(
+              ["ocr", "local-models", "dictionary"].map((name) =>
+                rm(path.join(options.dir!, name), {
+                  recursive: true,
+                  force: true,
+                }),
+              ),
+            );
+          }
+        },
         generateBundle(_options, bundle) {
           assertClientRuntimeBoundary(bundle);
+          if (nativeInference) {
+            assertNativeInferenceBoundary(bundle);
+          }
         },
       },
       Sitemap({
         hostname: "http://www.fcjyboard.com",
-        outDir: "build",
+        outDir: nativeInference ? "build-android" : "build",
         changefreq: "monthly",
         // its static in public folder
         generateRobotsTxt: false,

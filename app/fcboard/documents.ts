@@ -90,6 +90,12 @@ export type InkStroke = {
     id: string;
     plot: Plot;
     renderer?: "vega" | "iframe";
+    sourceRegions?: {
+      left: number;
+      top: number;
+      right: number;
+      bottom: number;
+    }[];
     position: { x: number; y: number };
     origin: { x: number; y: number };
   };

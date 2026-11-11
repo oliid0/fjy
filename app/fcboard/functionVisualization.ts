@@ -15,6 +15,13 @@ import { compileExpression, functionView, sampleFunctionCurve } from "./math";
 import type { Plot } from "./math";
 
 export const plotSize = { width: 500, height: 440 };
+const curveColors = (color: string) =>
+  [
+    color,
+    ...["#2563eb", "#ef4444", "#16a34a", "#9333ea"].filter(
+      (item) => item.toLowerCase() !== color.toLowerCase(),
+    ),
+  ].slice(0, 4);
 const plotScope = ({ x, y, z, a, b, c }: Plot) => ({ x, y, z, a, b, c });
 export const releaseFunctionGraph = (view: VisualizationView) => {
   view.finalize();
@@ -32,7 +39,7 @@ export const functionGraphData = (plot: Plot, color: string) =>
         y,
         segment: `${curve}:${segment}`,
         expression,
-        color: [color, "#2563eb", "#ef4444", "#16a34a"][curve],
+        color: curveColors(color)[curve],
       })),
     ),
   );
@@ -58,7 +65,9 @@ export const functionGraphSpec = (
     throw new Error("No real-valued plot in this range");
   }
   const axis = {
-    grid: false,
+    grid: true,
+    gridColor: color,
+    gridOpacity: 0.16,
     domainColor: color,
     tickColor: color,
     labelColor: color,
@@ -90,6 +99,12 @@ export const functionGraphSpec = (
         zero: false,
         nice: false,
       },
+      {
+        name: "curveColor",
+        type: "ordinal",
+        domain: [plot.expression, ...(plot.compare || [])],
+        range: curveColors(color),
+      },
     ],
     axes: [
       {
@@ -112,6 +127,19 @@ export const functionGraphSpec = (
         tickCount: 8,
       },
     ],
+    legends: plot.compare?.length
+      ? [
+          {
+            stroke: "curveColor",
+            orient: "top-left",
+            labelColor: color,
+            labelFont: "Arial",
+            symbolType: "stroke",
+            symbolStrokeWidth: 2,
+            padding: 4,
+          },
+        ]
+      : [],
     marks: [
       {
         type: "group",

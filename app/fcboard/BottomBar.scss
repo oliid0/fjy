@@ -6,10 +6,11 @@
   --default-button-size: calc(58 * var(--fc-unit));
   --lg-button-size: calc(58 * var(--fc-unit));
   position: absolute;
-  inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right)) 0
+  inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right))
+    max(calc(20 * var(--fc-unit)), env(safe-area-inset-bottom))
     max(calc(20 * var(--fc-unit)), env(safe-area-inset-left));
   display: block;
-  height: calc(58 * var(--fc-unit));
+  height: calc(74 * var(--fc-unit));
   gap: 0;
   overflow: visible;
 }
@@ -22,11 +23,12 @@
   flex-wrap: nowrap;
   width: max-content;
   max-width: none;
-  height: calc(58 * var(--fc-unit));
-  padding: 0;
+  height: calc(74 * var(--fc-unit));
+  box-sizing: border-box;
+  padding: calc(8 * var(--fc-unit));
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: calc(12 * var(--fc-unit));
+  background: var(--fc-toolbar-contrast, #fcfcfe);
   gap: 0;
   box-shadow: none;
   overflow: visible;
@@ -41,7 +43,7 @@
 }
 .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
   right: 0;
-  padding-left: calc(6 * var(--fc-unit));
+  padding-left: calc(8 * var(--fc-unit));
 }
 .app .fcboard .fc-unified-toolbar.fc-toolbar-reversed .fc-toolbar-leading {
   left: auto;

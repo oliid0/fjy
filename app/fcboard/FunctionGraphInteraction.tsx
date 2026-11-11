@@ -12,6 +12,7 @@ import {
   plotSize,
 } from "./functionVisualization";
 import { functionGraphResource } from "./functionGraphResource";
+import { observeFunctionComparison } from "./functionComparison";
 
 import type { InkStroke } from "./documents";
 import type { Plot } from "./math";
@@ -40,6 +41,7 @@ export const FunctionGraphInteraction = ({
 }: {
   api: FcboardImperativeAPI;
 }) => {
+  useEffect(() => observeFunctionComparison(api), [api]);
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       const message = event.data;

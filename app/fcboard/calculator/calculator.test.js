@@ -57,3 +57,17 @@ it("runs the copied offline calculator's actual buttons, keyboard and scientific
     dom.window.close();
   }
 });
+
+it("fills independently resized object bounds without scaling a fixed calculator", () => {
+  const dom = new JSDOM(calculator);
+  try {
+    expect(calculator).not.toContain("fitCalculator");
+    expect(calculator).not.toContain("width: 180px !important");
+    const styles = dom.window.document.querySelector("style").textContent;
+    expect(styles).toContain("grid-template-rows: repeat(5, minmax(0, 1fr))");
+    expect(styles).toContain("width: 100% !important");
+    expect(styles).toContain("height: 100% !important");
+  } finally {
+    dom.window.close();
+  }
+});

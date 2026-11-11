@@ -31,6 +31,7 @@ import { answerFontSize, layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
 import { functionGraphImage, plotSize } from "./functionVisualization";
 import { functionGraphResource } from "./functionGraphResource";
+import { functionRegionMatch, compareFunctionRegion } from "./functionRegion";
 
 import type { TextPlacement } from "./textLayout";
 
@@ -630,6 +631,46 @@ export const drawPlot = (
   keepTool = false,
   sourceBounds?: ContentRect,
 ) => {
+  if (keepTool && sourceBounds && !plot.surface && !plot.relation) {
+    const doc = classroomCommands.read("document") as
+      | { ink: InkStroke[] }
+      | undefined;
+    const candidates = doc
+      ? doc.ink
+          .filter((stroke) => stroke.plot?.sourceRegions?.length)
+          .map((stroke) => ({ id: stroke.id, metadata: stroke.plot! }))
+      : api
+          .getSceneElements()
+          .filter(
+            (element) =>
+              !element.isDeleted &&
+              element.customData?.fcPlot?.sourceRegions?.length,
+          )
+          .map((element) => ({
+            id: element.id,
+            metadata: element.customData!.fcPlot as NonNullable<
+              InkStroke["plot"]
+            >,
+          }));
+    for (const candidate of candidates.reverse()) {
+      const regions = candidate.metadata.sourceRegions!;
+      if (!functionRegionMatch(regions, sourceBounds)) {
+        continue;
+      }
+      const comparison = compareFunctionRegion(candidate.metadata.plot, plot);
+      if (!comparison) {
+        continue;
+      }
+      if (
+        updateFunctionGraph(api, comparison, {
+          ids: [candidate.id],
+          sourceRegions: [...regions, sourceBounds].slice(-4),
+        })
+      ) {
+        return [candidate.id];
+      }
+    }
+  }
   if (!plot.surface && !plot.relation) {
     const color = api.getAppState().currentItemStrokeColor || "#1e1e1e";
     const image = functionGraphImage(plot, color);
@@ -870,6 +911,7 @@ const insertPlot = (
         fcPlot: {
           id: plotId,
           plot,
+          ...(sourceBounds ? { sourceRegions: [sourceBounds] } : {}),
           ...(image
             ? { renderer: shape.type === "iframe" ? "iframe" : "vega" }
             : {}),
@@ -1008,6 +1050,7 @@ export const updateFunctionGraph = (
     fileId?: FileId;
     before?: InkStroke[];
     onError?: (error: unknown) => void;
+    sourceRegions?: ContentRect[];
   } = {},
 ) => {
   const graph = selectedPlot(api, options.ids);
@@ -1032,6 +1075,7 @@ export const updateFunctionGraph = (
           resource,
           remember: !options.preview,
           before: options.before,
+          sourceRegions: options.sourceRegions,
         },
       })
       .catch((failure) => {
@@ -1064,7 +1108,13 @@ export const updateFunctionGraph = (
                 customData: {
                   ...element.customData,
                   fcInteractiveResource: resource,
-                  fcPlot: { ...element.customData!.fcPlot, plot },
+                  fcPlot: {
+                    ...element.customData!.fcPlot,
+                    plot,
+                    ...(options.sourceRegions
+                      ? { sourceRegions: options.sourceRegions }
+                      : {}),
+                  },
                 },
               })
             : element,
@@ -1093,7 +1143,13 @@ export const updateFunctionGraph = (
               fileId,
               customData: {
                 ...element.customData,
-                fcPlot: { ...element.customData!.fcPlot, plot },
+                fcPlot: {
+                  ...element.customData!.fcPlot,
+                  plot,
+                  ...(options.sourceRegions
+                    ? { sourceRegions: options.sourceRegions }
+                    : {}),
+                },
               },
             })
           : element,

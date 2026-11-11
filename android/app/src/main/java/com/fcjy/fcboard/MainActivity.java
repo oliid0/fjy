@@ -19,6 +19,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(OfflineTtsPlugin.class);
         registerPlugin(DigitalInkPlugin.class);
         registerPlugin(TranslationPlugin.class);
+        registerPlugin(LocalInferencePlugin.class);
+        registerPlugin(NativeWidgetsPlugin.class);
+        registerPlugin(NativeInkPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);
         registerPlugin(NetworkPlugin.class);
         registerPlugin(VotingPlugin.class);

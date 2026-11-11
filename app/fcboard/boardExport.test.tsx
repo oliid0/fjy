@@ -9,6 +9,9 @@ import { render, act } from "@fcboard/fcboard/tests/test-utils";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { boardCanvasSize, boardPageExportOptions } from "./boardExport";
+import { drawPlot } from "./board";
+import { defaultPlot } from "./math";
+import { sceneAPI } from "./test/scene";
 
 import type { Board } from "./boards";
 
@@ -128,4 +131,41 @@ it("uses one proportional size limit for high resolution output and thumbnails",
     boardPageExportOptions(board, size, 280),
   );
   expect([thumbnail.width, thumbnail.height]).toEqual([280, 158]);
+});
+it("exports actual function curves for thumbnails and cloud PNG shares while retaining the editable iframe in the board", () => {
+  const api = sceneAPI();
+  api.updateScene({ elements: [] });
+  drawPlot(
+    api,
+    { ...defaultPlot, expression: "x^2", compare: ["x"] },
+    { x: 400, y: 300 },
+  );
+  const original = api.getSceneElements()[0];
+  const board = { ...page(), elements: api.getSceneElements() };
+  const before = JSON.stringify(board);
+  const result = boardPageExportOptions(board, {
+    width: 1600,
+    height: 900,
+    pixelRatio: 1,
+  });
+  const image = result.elements[0];
+  expect(image).toMatchObject({
+    id: original.id,
+    type: "image",
+    x: original.x,
+    y: original.y,
+    width: original.width,
+    height: original.height,
+    angle: original.angle,
+  });
+  if (image.type !== "image" || !image.fileId) {
+    throw new Error("Expected function preview image");
+  }
+  const file = result.files[image.fileId];
+  expect(file.mimeType).toBe("image/svg+xml");
+  expect(file.dataURL).toMatch(/^data:image\/svg\+xml/);
+  expect(file.dataURL).toContain("base64");
+  expect(JSON.stringify(board)).toBe(before);
+  expect(original.type).toBe("iframe");
+  expect(board.files).toEqual({});
 });

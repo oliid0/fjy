@@ -704,7 +704,7 @@
         }
       }
 
-      /* One compact 3:1 object; the copied calculator controls stay inside it. */
+      /* The object supplies both dimensions; controls reflow in its full viewport. */
       html,
       body {
         width: 100%;
@@ -714,25 +714,34 @@
       #calculator-wrapper,
       #calculator-wrapper.scientific-open {
         position: absolute;
-        width: 180px !important;
-        height: 540px !important;
+        inset: 0;
+        width: 100% !important;
+        height: 100% !important;
         max-width: none !important;
-        transform-origin: top left;
+        margin: 0;
+        transform: none;
       }
       #calculator-wrapper > .glass-panel {
+        width: 100%;
         height: 100% !important;
         max-height: none !important;
+        box-sizing: border-box;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
         overflow: hidden;
       }
       #calculator-wrapper > .glass-panel > .flex-1 {
         flex: 1;
-        min-height: 260px;
-        padding: 6px !important;
-        gap: 4px;
+        min-width: 0;
+        min-height: 0;
+        box-sizing: border-box;
+        padding: clamp(3px, 2vmin, 14px) !important;
+        gap: clamp(2px, 1vmin, 8px);
       }
       #calculator-wrapper #calculator-header {
         display: flex;
-        flex: 0 0 24px;
+        flex: 0 0 clamp(22px, 5vh, 36px);
         align-items: center;
         gap: 2px;
         margin: 0;
@@ -741,7 +750,7 @@
       #calculator-title {
         flex: 1;
         min-width: 12px;
-        font: 10px system-ui;
+        font: clamp(9px, 3.5vw, 16px) system-ui;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -755,7 +764,7 @@
         min-height: 20px;
         height: 20px;
         padding: 2px 3px;
-        font: 9px system-ui;
+        font: clamp(9px, 3vw, 14px) system-ui;
         border: 0;
         border-radius: 4px;
         background: transparent;
@@ -775,48 +784,54 @@
         background: #8882;
       }
       #calculator-wrapper #result_display_container {
-        flex: 0 0 72px;
+        flex: 0 1 23%;
         min-height: 0 !important;
-        padding: 2px;
+        margin: 0;
+        padding: 0;
         overflow: hidden;
       }
       #calculator-wrapper #result-display {
-        font-size: 24px !important;
-        line-height: 28px;
-        min-height: 28px;
-        height: 28px;
+        font-size: clamp(16px, min(12vw, 8vh), 64px) !important;
+        line-height: 1.15;
+        min-height: 0;
+        height: auto;
         white-space: nowrap;
       }
       #input-display,
       #history-display {
-        min-height: 12px;
-        height: 12px;
-        font: 10px/12px monospace;
+        min-height: 0;
+        height: auto;
+        flex-shrink: 1;
+        font: clamp(9px, min(4vw, 3vh), 22px) / 1.15 monospace;
       }
       #calculator-wrapper .grid.grid-cols-4.gap-3 {
         flex: 1;
-        gap: 4px !important;
-        grid-auto-rows: minmax(20px, 1fr);
+        min-height: 0;
+        gap: clamp(2px, 1.4vmin, 10px) !important;
+        grid-template-rows: repeat(5, minmax(0, 1fr));
+        grid-auto-rows: minmax(0, 1fr);
+        align-content: stretch;
       }
       #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
         height: 100% !important;
         min-height: 0 !important;
         min-width: 0;
         padding: 2px !important;
-        font-size: 17px !important;
-        border-radius: 12px !important;
+        font-size: clamp(11px, min(8vw, 5vh), 40px) !important;
+        border-radius: clamp(4px, 4vmin, 22px) !important;
       }
       #mobile-scientific-drawer {
-        flex: 0 1 205px;
+        flex: 1 1 43%;
         min-height: 0;
         overflow: auto;
-        padding: 4px 6px 8px;
-        gap: 3px;
+        padding: clamp(3px, 1.5vmin, 10px);
+        gap: clamp(2px, 1vmin, 6px);
+        grid-auto-rows: minmax(0, 1fr);
       }
       #mobile-scientific-drawer button {
-        min-height: 25px;
-        font-size: 11px;
-        padding: 3px;
+        min-height: 20px;
+        font-size: clamp(9px, min(4vw, 3vh), 20px);
+        padding: 2px;
       }
       #calculator-wrapper * {
         transition-property: background-color, color, transform;
@@ -1592,15 +1607,6 @@
           windowMessage("move-cancel");
         }
       });
-      function fitCalculator() {
-        const scale = Math.min(innerWidth / 180, innerHeight / 540);
-        calculatorWrapper.style.transform = `scale(${scale})`;
-        calculatorWrapper.style.left = `${(innerWidth - 180 * scale) / 2}px`;
-        calculatorWrapper.style.top = `${(innerHeight - 540 * scale) / 2}px`;
-      }
-      addEventListener("resize", fitCalculator);
-      fitCalculator();
-
       function getExpression() {
         return expression + currentInput;
       }

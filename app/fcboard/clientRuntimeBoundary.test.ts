@@ -1,4 +1,5 @@
 import { assertClientRuntimeBoundary } from "../../config/clientRuntimeBoundary";
+import { assertNativeInferenceBoundary } from "../../config/nativeInferenceBoundary";
 
 import type { OutputChunk } from "rollup";
 
@@ -73,4 +74,47 @@ it("handles shared import cycles without skipping a forbidden dependency", () =>
 
 it("fails visibly when the app entry is missing", () => {
   expect(() => assertClientRuntimeBoundary({})).toThrow(/app entry is missing/);
+});
+
+it.each([
+  "@paddleocr/paddleocr-js",
+  "@huggingface/transformers",
+  "onnxruntime-web",
+  "ink-on/core",
+])("Android rejects %s even in an unrelated lazy chunk", (name) => {
+  expect(() =>
+    assertNativeInferenceBoundary({
+      "app.js": chunk("app"),
+      "unused-lazy.js": chunk(
+        "unused-lazy",
+        [],
+        [`/node_modules/${name}/index.js`],
+      ),
+    }),
+  ).toThrow(/Android contains web inference/);
+});
+it("Android permits native bridges, geometry and plotting without any web model runtime", () => {
+  expect(() =>
+    assertNativeInferenceBoundary({
+      "app.js": chunk(
+        "app",
+        [],
+        [
+          "/app/fcboard/nativeInference.ts",
+          "/node_modules/clipper-lib/index.js",
+          "/node_modules/vega/index.js",
+        ],
+      ),
+    }),
+  ).not.toThrow();
+});
+
+it.each([
+  "assets/ort-wasm-simd-threaded.wasm",
+  "assets/localInference.worker-123.js",
+  "model.onnx",
+])("rejects orphan web inference asset %s in Android", (name) => {
+  expect(() =>
+    assertNativeInferenceBoundary({ [name]: { type: "asset" } }),
+  ).toThrow(/web inference asset/);
 });

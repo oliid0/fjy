@@ -11,7 +11,7 @@ export const resourcePlacement = (
     ? (viewport.bottom - viewport.top) / 3
     : Math.min(460 / scale, (viewport.bottom - viewport.top) * 0.8);
   const width = compact
-    ? Math.min(height / 3, viewport.right - viewport.left)
+    ? Math.min(height / 2, viewport.right - viewport.left)
     : Math.min(720 / scale, (viewport.right - viewport.left) * 0.8);
   return {
     x: (viewport.left + viewport.right - width) / 2,

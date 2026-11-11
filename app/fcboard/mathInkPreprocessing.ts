@@ -338,7 +338,20 @@ function renderStrokes(strokes: Stroke[]): HTMLCanvasElement {
     const first = pts[0]!;
     ctx.moveTo(first.x - bbox.minX + PAD, first.y - bbox.minY + PAD);
 
-    if (pts.length === 2) {
+    if (
+      pts.length === 1 ||
+      pts.every((point) => point.x === first.x && point.y === first.y)
+    ) {
+      ctx.arc(
+        first.x - bbox.minX + PAD,
+        first.y - bbox.minY + PAD,
+        ctx.lineWidth / 2,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+    } else if (pts.length === 2) {
       ctx.lineTo(pts[1]!.x - bbox.minX + PAD, pts[1]!.y - bbox.minY + PAD);
     } else if (pts.length > 2) {
       for (let i = 1; i < pts.length - 1; i++) {

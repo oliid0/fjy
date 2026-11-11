@@ -1,3 +1,5 @@
+import "../../packages/fcboard/vendor/vega/compatibility.js";
+
 import type { OfflineTask } from "./offlineInference";
 
 let math: import("ink-on/core").InferenceEngine | undefined;
@@ -54,8 +56,15 @@ self.onmessage = async (
         max_new_tokens: 256,
         num_beams: 1,
         do_sample: false,
+        repetition_penalty: 1.15,
+        no_repeat_ngram_size: 3,
       } as NonNullable<Parameters<NonNullable<typeof translator>>[1]>;
-      const result = await translator(task.text, generation);
+      // The upstream multilingual Chinese model requires this target token.
+      const input =
+        task.source === "en" && task.target === "zh"
+          ? `>>cmn_Hans<< ${task.text}`
+          : task.text;
+      const result = await translator(input, generation);
       self.postMessage({ id, ok: true, result });
     }
   } catch (error) {

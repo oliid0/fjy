@@ -3,7 +3,11 @@ import { translateNatively } from "./nativeTranslation";
 import { defaults, saveSettings } from "./settings";
 import { offlineInference } from "./offlineInference";
 
-const native = vi.hoisted(() => ({ translate: vi.fn(), cancel: vi.fn() }));
+const native = vi.hoisted(() => ({
+  translate: vi.fn(),
+  infer: vi.fn(),
+  cancel: vi.fn(),
+}));
 vi.mock("@capacitor/core", () => ({
   Capacitor: { getPlatform: () => "android", isNativePlatform: () => true },
   registerPlugin: () => native,
@@ -75,5 +79,32 @@ it("rejects native failures and invalid outputs without a hidden WASM or cloud r
   await expect(
     translateLocally("¿Hola?", "zh-CN", new AbortController().signal),
   ).rejects.toThrow("Invalid local translation result");
+  expect(offlineInference).not.toHaveBeenCalled();
+});
+
+it.each(["hello", "hi", "yes", "thank"])(
+  "sends short English %s to native OPUS exactly once without a browser model",
+  async (text) => {
+    native.infer.mockResolvedValue({ language: "en", translation: "译文" });
+    await expect(
+      translateLocally(text, "zh-CN", new AbortController().signal),
+    ).resolves.toEqual({ language: "en", translation: "译文" });
+    expect(native.infer).toHaveBeenCalledTimes(1);
+    expect(native.infer).toHaveBeenCalledWith({
+      id: expect.any(String),
+      kind: "translation",
+      text,
+      source: "en",
+      target: "zh",
+    });
+    expect(native.translate).not.toHaveBeenCalled();
+    expect(offlineInference).not.toHaveBeenCalled();
+  },
+);
+it("does not fall back into WebView when the OPUS process dies", async () => {
+  native.infer.mockRejectedValue(new Error("Native model process stopped"));
+  await expect(
+    translateLocally("你好", "en", new AbortController().signal),
+  ).rejects.toThrow("Native model process stopped");
   expect(offlineInference).not.toHaveBeenCalled();
 });

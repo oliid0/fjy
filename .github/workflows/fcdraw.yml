@@ -70,6 +70,7 @@ jobs:
         run: |
           node scripts/fetch-ocr-models.mjs
           node scripts/fetch-local-models.mjs
+          python3 scripts/fetch-dictionary.py
       - name: Package whiteboard web assets
         run: pnpm --dir app exec vite build
         env:
@@ -88,7 +89,18 @@ jobs:
             services/board-share/deploy
             app/build
           if-no-files-found: error
+      - name: Package Android visual interaction assets without browser inference
+        run: pnpm --dir app exec vite build
+        env:
+          VITE_NATIVE_INFERENCE: "true"
+          NODE_OPTIONS: "--max-old-space-size=6144"
+          VITE_APP_ENABLE_TRACKING: "false"
+          VITE_APP_DISABLE_SENTRY: "true"
       - run: pnpm --dir app exec cap sync android
+        env:
+          VITE_NATIVE_INFERENCE: "true"
+      - name: Bundle native inference models outside WebView
+        run: node scripts/prepare-native-inference.mjs
       - uses: actions/cache@v4
         with:
           path: android/app/src/main/assets/speech
@@ -103,6 +115,8 @@ jobs:
           key: fcboard-tts-${{ hashFiles('scripts/tts-models.json') }}
       - name: Bundle verified offline Chinese and English narration
         run: python3 scripts/fetch-tts-models.py
+      - name: Prepare verified native ONNX runtime without duplicate x86 libraries
+        run: python3 scripts/prepare-android-ort.py
       - name: Bundle verified offline Digital Ink models
         run: python3 scripts/fetch-ink-models.py
       - name: Package Android

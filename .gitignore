@@ -43,3 +43,12 @@ docs/*
 docs
 
 public/local-models/
+
+android/app/src/main/assets/inference/
+app/build-android/
+
+android/app/libs/onnxruntime-android-*.aar
+
+.cache/fcboard-dictionary/
+public/dictionary/
+android/app/src/main/assets/dictionary/

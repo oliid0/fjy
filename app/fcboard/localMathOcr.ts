@@ -1,6 +1,5 @@
-import { preprocessStrokes } from "./mathInkPreprocessing";
-
-import { offlineInference } from "./offlineInference";
+import { hasDigitalInk } from "./digitalInk";
+import { inferNatively } from "./nativeInference";
 
 import type { InkInput } from "./digitalInk";
 
@@ -20,28 +19,35 @@ export const recognizeLocalMath = async (
   ) {
     throw new Error("Invalid math ink");
   }
-  let left = Infinity;
-  let top = Infinity;
-  let right = -Infinity;
-  let bottom = -Infinity;
-  for (const [x, y] of points) {
-    left = Math.min(left, x);
-    top = Math.min(top, y);
-    right = Math.max(right, x);
-    bottom = Math.max(bottom, y);
-  }
-  const scale = 480 / Math.max(1, right - left, bottom - top);
-  signal.throwIfAborted();
-  const input = preprocessStrokes(
-    ink.map((stroke) => ({
-      lineWidth: 3,
-      points: stroke.map(([x, y]) => ({
-        x: (x - left) * scale + 8,
-        y: (y - top) * scale + 8,
+  let result: unknown;
+  if (import.meta.env.VITE_NATIVE_INFERENCE === "true" || hasDigitalInk()) {
+    result = await inferNatively({ kind: "math", strokes: ink }, signal);
+  } else {
+    const { preprocessStrokes } = await import("./mathInkPreprocessing");
+    const { offlineInference } = await import("./offlineInference");
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const [x, y] of points) {
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x);
+      bottom = Math.max(bottom, y);
+    }
+    const scale = 480 / Math.max(1, right - left, bottom - top);
+    signal.throwIfAborted();
+    const input = preprocessStrokes(
+      ink.map((stroke) => ({
+        lineWidth: 3,
+        points: stroke.map(([x, y]) => ({
+          x: (x - left) * scale + 8,
+          y: (y - top) * scale + 8,
+        })),
       })),
-    })),
-  );
-  const result = await offlineInference({ kind: "math", ...input }, signal);
+    );
+    result = await offlineInference({ kind: "math", ...input }, signal);
+  }
   if (
     !result ||
     typeof result !== "object" ||

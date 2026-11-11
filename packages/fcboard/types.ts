@@ -1003,6 +1003,8 @@ export interface FcboardImperativeAPI {
     value?: unknown,
   ) => void;
   editTextElement: InstanceType<typeof App>["editTextElement"];
+  nativeInk?: InstanceType<typeof App>["nativeInk"];
+  nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
   updateScene: InstanceType<typeof App>["updateScene"];
   applyDeltas: InstanceType<typeof App>["applyDeltas"];
   mutateElement: InstanceType<typeof App>["mutateElement"];

@@ -272,6 +272,15 @@ export const NativeInkInteraction = ({
         for (const node of document.querySelectorAll<HTMLElement>(
           'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.MuiPopper-root,.fc-editor-properties,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]',
         )) {
+          // Kept-mounted MUI dialogs retain viewport bounds while hidden.
+          // They must neither disable native input nor exclude the whole board.
+          const visibility = getComputedStyle(node);
+          if (
+            visibility.display === "none" ||
+            visibility.visibility !== "visible"
+          ) {
+            continue;
+          }
           const box = node.getBoundingClientRect();
           if (
             box.width > 0 &&

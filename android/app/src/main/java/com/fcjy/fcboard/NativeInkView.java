@@ -148,9 +148,6 @@ final class NativeInkView extends View {
     private void rejectRestingHands() {
         for (Contact contact : active.values()) {
             if (contact.mode.equals("palm")) contact.rejected = true;
-            else if (contact.mode.equals("erase") && contact.palm && !contact.pointerType.equals("pen")) {
-                emit(contact, "cancel", false); contact.mode = "palm"; contact.rejected = true;
-            }
         }
     }
     void setRoutedInput() { routedInput = true; }

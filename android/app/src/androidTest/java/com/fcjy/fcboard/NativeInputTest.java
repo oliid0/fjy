@@ -62,6 +62,20 @@ public class NativeInputTest {
             assertEquals("end", events.get(3).optString("phase"));
         });
     }
+    @Test public void confirmedPalmErasureDoesNotRollBackWhenAnotherWriterStarts() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
+            motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
+            motion(view, MotionEvent.ACTION_MOVE, 11, 1, 70, 100, 100);
+            assertEquals(1,events.size()); assertEquals("erase",events.get(0).optString("mode"));
+            motion(view, MotionEvent.ACTION_DOWN, 22, 1, 2, 150, 50);
+            motion(view, MotionEvent.ACTION_UP, 22, 1, 2, 180, 50);
+            motion(view, MotionEvent.ACTION_UP, 11, 1, 70, 120, 100);
+            assertEquals(4,events.size());
+            for(JSObject event:events) assertNotEquals("A second writer must not restore erased ink", "cancel",event.optString("phase"));
+            assertEquals("erase",events.get(3).optString("mode")); assertEquals("end",events.get(3).optString("phase"));
+        });
+    }
     @Test public void nativeBrushKeepsFactoryFootprintAndLatestSampleVisible() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             NativeBrush brush = new NativeBrush(15, 1, 45, true);

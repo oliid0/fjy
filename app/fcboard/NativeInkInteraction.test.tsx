@@ -40,6 +40,39 @@ afterEach(() => {
   cleanup();
   backend.listeners.clear();
 });
+it("ignores kept-mounted hidden dialogs and restores native input after a visible popup closes", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  const modal = document.createElement("div");
+  modal.className = "MuiModal-root MuiModal-hidden";
+  modal.style.visibility = "hidden";
+  vi.spyOn(modal, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 0, 1000, 700),
+  );
+  document.body.append(modal);
+  try {
+    render(<NativeInkInteraction api={api} />);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
+    );
+    expect(backend.configure.mock.calls.at(-1)![0].blocked).not.toContainEqual([
+      0, 0, 1000, 700,
+    ]);
+    modal.style.visibility = "visible";
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(false),
+    );
+    modal.style.visibility = "hidden";
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
+    );
+  } finally {
+    modal.remove();
+  }
+});
 it("keeps brush and gradient previews native with the calibrated style", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;

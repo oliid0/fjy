@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
     send: vi.fn(),
     pushAudio: vi.fn(),
     stop: vi.fn(),
+    audioCapabilities: vi.fn(),
+    interruptAudio: vi.fn(),
+    captureMode: vi.fn(),
   },
   player: { enqueue: vi.fn(), interrupt: vi.fn(), close: vi.fn() },
 }));
@@ -62,6 +65,9 @@ beforeEach(() => {
   mocks.engine.send.mockResolvedValue(undefined);
   mocks.engine.pushAudio.mockResolvedValue(undefined);
   mocks.engine.stop.mockResolvedValue(undefined);
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: false });
+  mocks.engine.interruptAudio.mockResolvedValue(undefined);
+  mocks.engine.captureMode.mockResolvedValue(undefined);
   mocks.engine.addListener.mockImplementation(async (_name, callback) => {
     receive = callback;
     return { remove: removed };
@@ -76,6 +82,208 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.restoreAllMocks());
+
+it("uses native microphone/socket/speaker without any WebView capture or playback loop", async () => {
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    expect(mocks.engine.start).toHaveBeenCalledWith(
+      expect.objectContaining({ capture: true, playback: true }),
+    );
+    expect(startPCMSpeech).not.toHaveBeenCalled();
+    emit({ type: "response.output_audio.delta", audio: "AAAA" });
+    emit({ type: "audio.playing", playing: true });
+    expect(mocks.player.enqueue).not.toHaveBeenCalled();
+    expect(view.state).toHaveBeenLastCalledWith("speaking");
+    await handle.interrupt();
+    expect(mocks.engine.interruptAudio).toHaveBeenCalledWith({ session });
+    await handle.prepareRecording!();
+    expect(mocks.engine.captureMode).toHaveBeenLastCalledWith({
+      session,
+      mode: "muted",
+    });
+    await handle.useRecordingStream!({} as MediaStream);
+    expect(startPCMSpeech).toHaveBeenCalledTimes(1);
+    await handle.restoreCapture!();
+    expect(mocks.engine.captureMode).toHaveBeenLastCalledWith({
+      session,
+      mode: "native",
+    });
+    expect(mocks.engine.start).toHaveBeenCalledTimes(1);
+  } finally {
+    await handle.cancel();
+  }
+});
+
+it("cancels the actual native startup before accepting a handle and can reopen", async () => {
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
+  let finish!: () => void;
+  mocks.engine.start.mockImplementationOnce((options) => {
+    session = options.session;
+    return new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  });
+  const abort = new AbortController();
+  const opening = startDuplexSpeech({ ...callbacks(), signal: abort.signal });
+  const rejected = expect(opening).rejects.toMatchObject({
+    name: "AbortError",
+  });
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  abort.abort();
+  await vi.waitFor(() =>
+    expect(mocks.engine.stop).toHaveBeenCalledWith({ session }),
+  );
+  finish();
+  await rejected;
+  expect(startPCMSpeech).not.toHaveBeenCalled();
+  const next = await startDuplexSpeech(callbacks());
+  expect(mocks.engine.start).toHaveBeenCalledTimes(2);
+  await next.cancel();
+});
+
+it("keeps receiving microphone input and output after malformed or failed tool calls", async () => {
+  const release = classroomCommands.register(
+    "canvas.erase",
+    "Erase",
+    async () => {
+      throw new Error("Agent unavailable");
+    },
+  );
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [{ name: "board_command" }],
+    });
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("failed", "canvas.erase")],
+    });
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+    const id = "one-turn";
+    emit({
+      type: "conversation.item.input_audio_transcription.started",
+      event_id: id,
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.delta",
+      transcript: "继续对话",
+      event_id: id,
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "继续对话",
+      event_id: id,
+    });
+    emit({ type: "response.output_text.delta", text: "可以", event_id: id });
+    emit({ type: "response.output_audio.delta", audio: "AAAA", event_id: id });
+    await vi
+      .mocked(startPCMSpeech)
+      .mock.calls[0][0].push({ session, pcm: "AAAA", sampleRate: 16000 });
+    expect(view.line).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "继续对话" }),
+    );
+    expect(view.caption).toHaveBeenLastCalledWith("可以");
+    expect(mocks.player.enqueue).toHaveBeenCalledWith("AAAA");
+    expect(mocks.engine.pushAudio).toHaveBeenCalled();
+    expect(view.error).not.toHaveBeenCalled();
+    expect(view.status).not.toHaveBeenCalled();
+    expect(capture.cancel).not.toHaveBeenCalled();
+  } finally {
+    await handle.cancel();
+    release();
+  }
+});
+
+it("waits for actual capture readiness before accepting the duplex session", async () => {
+  let ready!: () => void;
+  vi.mocked(startPCMSpeech).mockImplementationOnce(async (transport) => {
+    await transport.start();
+    return {
+      ...capture,
+      stop: capture.cancel,
+      ready: new Promise<void>((resolve) => {
+        ready = resolve;
+      }),
+    };
+  });
+  const opened = vi.fn();
+  const opening = startDuplexSpeech(callbacks()).then((handle) => {
+    opened();
+    return handle;
+  });
+  await vi.waitFor(() => expect(ready).toBeDefined());
+  expect(opened).not.toHaveBeenCalled();
+  ready();
+  const handle = await opening;
+  expect(opened).toHaveBeenCalledTimes(1);
+  await handle.cancel();
+});
+
+it("acknowledges long board work immediately and speaks explicit task text while that work continues", async () => {
+  const agents = registerBoardAgents();
+  let finish!: () => void;
+  let owner!: AbortSignal;
+  const release = classroomCommands.register(
+    "experiment.run",
+    "Run an experiment",
+    (args) => {
+      owner = args.signal as AbortSignal;
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    },
+  );
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("experiment", "experiment.run")],
+    });
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+    expect(
+      JSON.parse(toolReplies()[0].items[0].content[0].text).result.state,
+    ).toBe("running");
+    expect(finish).toBeDefined();
+    await classroomCommands.execute({
+      name: "agent.say",
+      args: { text: "这段文字需要朗读", signal: owner },
+    });
+    await vi.waitFor(() =>
+      expect(mocks.engine.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: {
+            type: "speech_text_buffer.replacement.append",
+            text: "这段文字需要朗读",
+          },
+        }),
+      ),
+    );
+    expect(
+      (classroomCommands.read("agents") as { state: string }[])[0].state,
+    ).toBe("running");
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "再补充一点信息",
+    });
+    expect(view.line).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "再补充一点信息" }),
+    );
+    expect(view.status).not.toHaveBeenCalled();
+    expect(view.error).not.toHaveBeenCalled();
+    expect(capture.cancel).not.toHaveBeenCalled();
+    finish();
+  } finally {
+    await handle.cancel();
+    release();
+    agents();
+  }
+});
 
 it("uses the documented duplex configuration and batches bridge transfers for native 20 ms pacing", async () => {
   const handle = await startDuplexSpeech(callbacks());
@@ -302,7 +510,7 @@ it("runs explicit interruption immediately instead of waiting behind unfinished 
       items: [call("stop", "voice.interrupt")],
     });
     await vi.waitFor(() => expect(stopped).toHaveBeenCalledTimes(1));
-    expect(signal.aborted).toBe(true);
+    expect(signal.aborted).toBe(false);
     expect(capture.cancel).not.toHaveBeenCalled();
   } finally {
     await handle.cancel();
@@ -355,20 +563,19 @@ it("executes an independent later tool while an earlier call is unfinished, pres
   }
 });
 
-it("acknowledges long lesson preparation immediately and keeps typed drawing and conversation live", async () => {
+it("acknowledges long resource work immediately and keeps typed drawing and conversation live", async () => {
   let finish!: () => void;
+  const draw = vi.fn((args) => ({ strokes: args.strokes }));
   const releases = [
     classroomCommands.register(
-      "lesson.ask",
-      "Teach",
+      "resources.generate",
+      "Generate resource",
       () =>
         new Promise<void>((resolve) => {
           finish = resolve;
         }),
     ),
-    classroomCommands.register("canvas.ink", "Draw", (args) => ({
-      strokes: args.strokes,
-    })),
+    classroomCommands.register("canvas.ink", "Draw", draw),
     registerBoardAgents(),
   ];
   const view = callbacks();
@@ -376,7 +583,7 @@ it("acknowledges long lesson preparation immediately and keeps typed drawing and
   try {
     emit({
       type: "response.function_call_arguments.done",
-      items: [call("lesson", "lesson.ask", { prompt: "讲解电流" })],
+      items: [call("resource", "resources.generate", { prompt: "交互电路" })],
     });
     await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
     const result = JSON.parse(toolReplies()[0].items[0].content[0].text);
@@ -411,15 +618,21 @@ it("acknowledges long lesson preparation immediately and keeps typed drawing and
     expect(JSON.parse(toolReplies()[1].items[0].content[0].text)).toMatchObject(
       {
         ok: true,
-        result: {
+        result: { state: "running", command: "canvas.ink" },
+      },
+    );
+    await vi.waitFor(() =>
+      expect(draw).toHaveBeenCalledWith(
+        expect.objectContaining({
           strokes: [
             [
               [20, 30],
               [40, 50],
             ],
           ],
-        },
-      },
+          select: false,
+        }),
+      ),
     );
     expect(view.line).toHaveBeenCalledWith(
       expect.objectContaining({ text: "再画苹果" }),
@@ -432,9 +645,11 @@ it("acknowledges long lesson preparation immediately and keeps typed drawing and
   }
 });
 
-it("yields only lesson audio during a conversation and restores it after the response", async () => {
+it("keeps live dialogue independent of the removed lesson audio controller", async () => {
   const pause = vi.fn();
-  const audio = vi.fn();
+  const audio = vi
+    .fn()
+    .mockRejectedValue(new Error("Legacy lesson controller unavailable"));
   const releases = [
     classroomCommands.register("lesson.pause", "Pause", pause),
     classroomCommands.register("lesson.audio", "@internal", audio),
@@ -443,16 +658,16 @@ it("yields only lesson audio during a conversation and restores it after the res
   const handle = await startDuplexSpeech(callbacks());
   try {
     emit({ type: "conversation.item.input_audio_transcription.started" });
-    expect(audio).toHaveBeenCalledWith({ conversation: true });
+    expect(audio).not.toHaveBeenCalled();
     expect(pause).not.toHaveBeenCalled();
     emit({ type: "response.canceled" });
-    expect(audio).toHaveBeenLastCalledWith({ conversation: true });
+    expect(audio).not.toHaveBeenCalled();
     emit({
       type: "conversation.item.input_audio_transcription.completed",
       text: "继续画图",
     });
     emit({ type: "response.done" });
-    expect(audio).toHaveBeenLastCalledWith({ conversation: false });
+    expect(audio).not.toHaveBeenCalled();
     expect(capture.cancel).not.toHaveBeenCalled();
   } finally {
     await handle.cancel();
@@ -567,7 +782,7 @@ it("commits one final transcript per utterance while retaining a repeated senten
   }
 });
 
-it("deduplicates replayed events without removing incremental words", async () => {
+it("preserves repeated fragments when event_id is reused as correlation metadata", async () => {
   const view = callbacks();
   const handle = await startDuplexSpeech(view);
   try {
@@ -586,7 +801,7 @@ it("deduplicates replayed events without removing incremental words", async () =
       text: "板书",
       event_id: "text-2",
     });
-    expect(view.caption).toHaveBeenLastCalledWith("正在板书");
+    expect(view.caption).toHaveBeenLastCalledWith("正在板书板书");
     emit({ type: "response.output_text.done", text: "正在板书" });
     emit({
       type: "response.output_text.delta",
@@ -603,84 +818,91 @@ it("deduplicates replayed events without removing incremental words", async () =
       delta: "哈",
       event_id: "word-2",
     });
-    expect(view.caption).toHaveBeenLastCalledWith("哈哈");
+    expect(view.caption).toHaveBeenLastCalledWith("哈哈哈");
   } finally {
     await handle.cancel();
   }
 });
 
-it("recovers a temporary disconnect using the server dialog id without cancelling capture or unfinished tools", async () => {
-  const view = callbacks();
-  let finish!: () => void;
-  let request!: AbortSignal;
-  const release = classroomCommands.register("canvas.text", "Write", (args) => {
-    request = args.signal as AbortSignal;
-    return new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-  });
-  const handle = await startDuplexSpeech(view);
-  const oldSession = session;
-  let restore!: () => void;
-  try {
-    emit({ type: "session.created", session: { id: "provider-dialog" } });
-    emit({
-      type: "response.function_call_arguments.done",
-      items: [call("unfinished", "canvas.text")],
-    });
-    await vi.waitFor(() => expect(finish).toBeDefined());
-    mocks.engine.start.mockImplementationOnce((options) => {
-      session = options.session;
-      return new Promise((resolve) => {
-        restore = () => resolve({ session });
-      });
-    });
-    emit({ type: "error", message: "实时语音连接中断" });
-    const transport = vi.mocked(startPCMSpeech).mock.calls[0][0];
-    const pushes = mocks.engine.pushAudio.mock.calls.length;
-    await transport.push({
-      session: oldSession,
-      pcm: "AAAA",
-      sampleRate: 16000,
-    });
-    expect(mocks.engine.pushAudio).toHaveBeenCalledTimes(pushes);
-    await vi.waitFor(() => expect(restore).toBeDefined());
-    expect(session).not.toBe(oldSession);
-    expect(mocks.engine.start).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        configuration: expect.objectContaining({
-          session: expect.objectContaining({ id: "provider-dialog" }),
-        }),
-      }),
+it.each(["实时语音连接中断", "AudioQueryError [50000000]"])(
+  "recovers %s using the server dialog id without cancelling capture or unfinished tools",
+  async (failure) => {
+    const view = callbacks();
+    let finish!: () => void;
+    let request!: AbortSignal;
+    const release = classroomCommands.register(
+      "canvas.text",
+      "Write",
+      (args) => {
+        request = args.signal as AbortSignal;
+        return new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      },
     );
-    expect(request.aborted).toBe(false);
-    expect(capture.cancel).not.toHaveBeenCalled();
-    finish();
-    restore();
-    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
-    await transport.push({
-      session: oldSession,
-      pcm: "AAAA",
-      sampleRate: 16000,
-    });
-    expect(mocks.engine.pushAudio).toHaveBeenLastCalledWith({
-      session,
-      pcm: "AAAA",
-      sampleRate: 16000,
-    });
-    expect(view.error).not.toHaveBeenCalled();
-    const captions = view.caption.mock.calls.length;
-    receive({
-      session: oldSession,
-      event: { type: "response.output_text.delta", delta: "stale" },
-    });
-    expect(view.caption).toHaveBeenCalledTimes(captions);
-  } finally {
-    restore?.();
-    await handle.cancel();
-    release();
-  }
-});
+    const handle = await startDuplexSpeech(view);
+    const oldSession = session;
+    let restore!: () => void;
+    try {
+      emit({ type: "session.created", session: { id: "provider-dialog" } });
+      emit({
+        type: "response.function_call_arguments.done",
+        items: [call("unfinished", "canvas.text")],
+      });
+      await vi.waitFor(() => expect(finish).toBeDefined());
+      mocks.engine.start.mockImplementationOnce((options) => {
+        session = options.session;
+        return new Promise((resolve) => {
+          restore = () => resolve({ session });
+        });
+      });
+      emit({ type: "error", message: failure });
+      const transport = vi.mocked(startPCMSpeech).mock.calls[0][0];
+      const pushes = mocks.engine.pushAudio.mock.calls.length;
+      await transport.push({
+        session: oldSession,
+        pcm: "AAAA",
+        sampleRate: 16000,
+      });
+      expect(mocks.engine.pushAudio).toHaveBeenCalledTimes(pushes);
+      await vi.waitFor(() => expect(restore).toBeDefined());
+      expect(session).not.toBe(oldSession);
+      expect(mocks.engine.start).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          configuration: expect.objectContaining({
+            session: expect.objectContaining({ id: "provider-dialog" }),
+          }),
+        }),
+      );
+      expect(request.aborted).toBe(false);
+      expect(capture.cancel).not.toHaveBeenCalled();
+      finish();
+      restore();
+      await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+      await transport.push({
+        session: oldSession,
+        pcm: "AAAA",
+        sampleRate: 16000,
+      });
+      expect(mocks.engine.pushAudio).toHaveBeenLastCalledWith({
+        session,
+        pcm: "AAAA",
+        sampleRate: 16000,
+      });
+      expect(view.error).not.toHaveBeenCalled();
+      const captions = view.caption.mock.calls.length;
+      receive({
+        session: oldSession,
+        event: { type: "response.output_text.delta", delta: "stale" },
+      });
+      expect(view.caption).toHaveBeenCalledTimes(captions);
+    } finally {
+      restore?.();
+      await handle.cancel();
+      release();
+    }
+  },
+);
 
 it("recovers a failed PCM transfer without rejecting the shared microphone capture", async () => {
   const view = callbacks();

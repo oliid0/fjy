@@ -66,8 +66,7 @@ import {
 import { Teacher, LearningSettings } from "./Teacher";
 import { TeachingTools } from "./TeachingTools";
 import { registerCanvasCommands } from "./canvasCommands";
-import { backgroundCommands, registerBoardAgents } from "./boardAgents";
-import { BoardAgentStatus } from "./BoardAgentStatus";
+import { registerBoardAgents } from "./boardAgents";
 import { registerUICommands } from "./uiControls";
 import {
   localMathIntent,
@@ -120,6 +119,7 @@ import {
 import { placePanel, useAnchoredPanel } from "./floating";
 import { startSystemSpeech, transcribe } from "./speech";
 import { createVoiceTurns } from "./voiceTurns";
+import { runVoiceAgent } from "./voiceAgent";
 
 import "./classroom.scss";
 
@@ -225,7 +225,9 @@ export const Classroom = ({
   const stopSpeech = useRef<(() => void) | null>(null);
   const localSpeech = useRef<LocalSpeechHandle | null>(null);
   const duplexSpeech = useRef<DuplexSpeechHandle | null>(null);
+  const agentSpeaker = useRef<((text: string) => Promise<void>) | null>(null);
   const duplexOpening = useRef<Promise<void> | null>(null);
+  const duplexOpeningAbort = useRef<AbortController | null>(null);
   const duplexTranscript = useRef<{
     line: (line: TranscriptLine) => void;
     interim: (line: TranscriptLine | null) => void;
@@ -276,19 +278,6 @@ export const Classroom = ({
   const transcript = useRef<TranscriptLine[]>([]);
   const [voiceCaption, setVoiceCaption] = useState("");
   const [voiceJob, setVoiceJob] = useState("");
-  useEffect(() => {
-    if (
-      voiceJob !== t("fcboard.assistant_completed") ||
-      voiceState !== "listening"
-    ) {
-      return;
-    }
-    const timeout = setTimeout(() => {
-      setVoiceJob("");
-      setVoiceCaption("");
-    }, 2500);
-    return () => clearTimeout(timeout);
-  }, [voiceJob, voiceCaption, voiceState]);
   const [interimTranscript, setInterimTranscript] =
     useState<TranscriptLine | null>(null);
   const [, refreshTranscript] = useState(0);
@@ -345,6 +334,40 @@ export const Classroom = ({
   );
   useEffect(() => registerUICommands(api), [api]);
   useEffect(() => registerBoardAgents(), [api]);
+  useEffect(() => {
+    const spoken = new Map<string, number>();
+    let narration = Promise.resolve();
+    return classroomCommands.watch("agents", () => {
+      const tasks =
+        (classroomCommands.read("agents") as
+          | import("./boardAgents").BoardTask[]
+          | undefined) || [];
+      for (const task of tasks) {
+        if (
+          !task.speech ||
+          task.state === "cancelled" ||
+          task.speech.sequence <= (spoken.get(task.id) || 0)
+        ) {
+          continue;
+        }
+        spoken.set(task.id, task.speech.sequence);
+        if (duplexSpeech.current || !voiceTurns.current) {
+          continue;
+        }
+        const text = task.speech.text;
+        const generation = voiceGeneration.current;
+        narration = narration
+          .then(async () => {
+            if (generation === voiceGeneration.current && voiceTurns.current) {
+              await agentSpeaker.current?.(text);
+            }
+          })
+          .catch((failure) =>
+            console.error("[voice-agent-narration]", failure),
+          );
+      }
+    });
+  }, [api]);
   const showPreview = useCallback((file: File, signal?: AbortSignal) => {
     signal?.throwIfAborted();
     recentFiles.current.set(file.name, file);
@@ -617,6 +640,7 @@ export const Classroom = ({
     return () => {
       alive = false;
       invalidateVoice();
+      duplexOpeningAbort.current?.abort();
       narrator.current?.stop();
       stopSpeech.current?.();
       void localSpeech.current?.cancel().catch(() => {});
@@ -1421,6 +1445,11 @@ export const Classroom = ({
 
   const speakVoice = async (text: string, signal?: AbortSignal) => {
     signal?.throwIfAborted();
+    if (duplexSpeech.current) {
+      await duplexSpeech.current.speak(text);
+      return;
+    }
+    setVoiceCaption(text);
     const playback = ++voicePlayback.current;
     const stop = () => {
       if (playback === voicePlayback.current) {
@@ -1448,6 +1477,7 @@ export const Classroom = ({
       }
     }
   };
+  agentSpeaker.current = speakVoice;
   const interruptVoice = async () => {
     await duplexSpeech.current?.interrupt();
     assistantGeneration.current++;
@@ -1462,55 +1492,20 @@ export const Classroom = ({
     return { listening: !!voiceTurns.current, interrupted: true };
   };
   voiceExecute.current = async (text, signal) => {
+    setVoiceCaption(text);
     const direct = directCommand(text);
-    const lesson =
-      /^(?:请|帮我|麻烦)?(?:讲解|解释|引导|教我|辅导|为什么|怎么理解|没听懂|不理解|换.*例子)/.test(
-        text,
-      );
-    const drawing = /^(?:请|帮我|麻烦)?(?:用.*笔.*(?:画|写)|画|绘制)/.test(
-      text,
-    );
-    const resource = /(?:教学动画|交互|演示.*动画)/.test(text);
-    if (
-      classroomCommands.isPublic("agent.start") &&
-      (backgroundCommands.has(direct?.name || "") ||
-        (!direct &&
-          !localMathIntent(text) &&
-          (lesson ||
-            drawing ||
-            resource ||
-            /插入|字号|放大.*内容|内容.*放大/.test(text))))
-    ) {
-      setVoiceCaption(text);
-      await executeBoardCommand(
-        {
-          name: "agent.start",
-          args: {
-            prompt: text,
-            role: resource ? "resource" : drawing ? "draw" : "board",
-            ...(direct && backgroundCommands.has(direct.name)
-              ? { command: { ...direct, args: direct.args || {} } }
-              : lesson
-              ? { command: { name: "lesson.ask", args: { prompt: text } } }
-              : {}),
-          },
-        },
-        signal,
-      );
-      setVoiceJob(t("fcboard.assistant_executing"));
-      return;
-    }
     if (direct) {
       await executeBoardCommand(direct, signal);
-      setVoiceJob(t("fcboard.assistant_completed"));
+      return;
+    }
+    if (localMathIntent(text)) {
+      await execute(text, false, { signal });
       return;
     }
     activeVoice.current = signal;
     setVoiceState("thinking");
     setVoiceCaption(text);
-    setVoiceJob(t("fcboard.assistant_executing"));
-    setStatus(t("fcboard.understanding_your_request"));
-    const result = execute(text, false, { signal });
+    const result = runVoiceAgent(text, voiceConversation.current, signal);
     const generation = assistantGeneration.current;
     try {
       const reply = await result;
@@ -1535,13 +1530,7 @@ export const Classroom = ({
       ) {
         await speakVoice(reply, signal);
       }
-      if (!signal.aborted && generation === assistantGeneration.current) {
-        setVoiceJob(t("fcboard.assistant_completed"));
-      }
     } catch (failure) {
-      if (!signal.aborted) {
-        setVoiceJob(errorMessage(failure));
-      }
       throw failure;
     } finally {
       if (activeVoice.current === signal) {
@@ -1561,7 +1550,7 @@ export const Classroom = ({
         narrator.current?.stop();
         await voiceExecute.current?.(text, signal);
       },
-      (failure) => setError(errorMessage(failure)),
+      (failure) => console.error("[voice-agent]", failure),
       450,
       {
         interrupt: false,
@@ -1587,12 +1576,15 @@ export const Classroom = ({
   };
 
   const openDuplexVoice = async (generation: number, stream?: MediaStream) => {
+    const opening = new AbortController();
+    duplexOpeningAbort.current = opening;
     setListening(true);
-    setVoiceState("listening");
+    setVoiceState("thinking");
     setStatus("");
     try {
       const handle = await startDuplexSpeech({
         stream,
+        signal: opening.signal,
         line: (line) => {
           if (generation === voiceGeneration.current) {
             duplexTranscript.current?.line(line);
@@ -1649,11 +1641,16 @@ export const Classroom = ({
       }
       duplexSpeech.current = handle;
       localSpeech.current = handle;
+      setVoiceState("listening");
       setStatus("");
     } catch (failure) {
       if (generation === voiceGeneration.current) {
         setListening(false);
         throw failure;
+      }
+    } finally {
+      if (duplexOpeningAbort.current === opening) {
+        duplexOpeningAbort.current = null;
       }
     }
   };
@@ -1666,6 +1663,7 @@ export const Classroom = ({
       const session = duplexSpeech.current;
       const opening = duplexOpening.current;
       voiceGeneration.current++;
+      duplexOpeningAbort.current?.abort();
       duplexSpeech.current = null;
       localSpeech.current = null;
       duplexTranscript.current = null;
@@ -1864,7 +1862,6 @@ export const Classroom = ({
             if (generation === voiceGeneration.current) {
               if (!isNarrationEcho(line.text)) {
                 setVoiceCaption(line.text);
-                setVoiceJob(t("fcboard.assistant_queued"));
                 turns.push(line.text);
               }
             }
@@ -2219,6 +2216,7 @@ export const Classroom = ({
       throw new Error(t("fcboard.a_recording_is_running_or_being_saved"));
     }
     narrator.current?.stop();
+    const liveDuplex = duplexSpeech.current;
     const duplexInput = duplexSpeech.current?.stream;
     const handoff =
       !duplexInput &&
@@ -2229,6 +2227,7 @@ export const Classroom = ({
       listening &&
       !handoff &&
       !duplexInput &&
+      !liveDuplex?.prepareRecording &&
       (localSpeech.current ||
         stopSpeech.current ||
         voiceRecorder.current?.state === "recording")
@@ -2252,6 +2251,7 @@ export const Classroom = ({
     recorder.current = instance;
     setRecordPhase("starting");
     try {
+      await liveDuplex?.prepareRecording?.();
       await instance.start(
         selectedMode,
         () => {
@@ -2264,12 +2264,22 @@ export const Classroom = ({
         },
         duplexInput,
       );
-      if (duplexInput) {
+      if (
+        liveDuplex &&
+        duplexSpeech.current === liveDuplex &&
+        liveDuplex.useRecordingStream
+      ) {
+        await liveDuplex.useRecordingStream(instance.audioStream);
+      }
+      if (duplexInput || (liveDuplex && duplexSpeech.current === liveDuplex)) {
         recordingVoiceCommand.current = true;
       }
       source?.throwIfAborted();
     } catch (failure) {
       instance.dispose();
+      await liveDuplex
+        ?.restoreCapture?.()
+        .catch((error) => console.error("[native-voice-recording]", error));
       recorder.current = null;
       setRecordPhase("idle");
       if (handoff) {
@@ -2346,6 +2356,7 @@ export const Classroom = ({
       stopSpeech.current?.();
       stopSpeech.current = null;
       const result = await stopped;
+      await duplexSpeech.current?.restoreCapture?.();
       recorder.current = null;
       setRecording(false);
       let item: Recording = {
@@ -2916,7 +2927,6 @@ export const Classroom = ({
   return (
     <div className="fc-classroom">
       <InsertionCandidates />
-      <BoardAgentStatus />
       <MindMapControls api={api} inkProfile={inkProfile} />
       <LanguagePanel api={api} />
       <SelectionActions
@@ -2957,7 +2967,6 @@ export const Classroom = ({
       />
       <Teacher
         api={api}
-        voiceActive={listening}
         onCommand={async (text, signal, sourceIds, whole = false) => {
           await execute(text, whole, { signal, sourceIds });
         }}

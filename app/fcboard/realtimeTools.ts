@@ -11,10 +11,23 @@ const point = {
 const ids = { type: "array", items: { type: "string" }, minItems: 1 };
 const bindings = [
   {
+    name: "board_tools",
+    command: "agent.tools",
+    description:
+      "Discover actual currently available operations by query or exact names. Returns purpose, declared parameter schemas/requirements, result contract and callable function name. Use before an unfamiliar action; for visible controls then use ui.inspect and real control ids. New component tools appear here automatically.",
+    properties: {
+      query: { type: "string" },
+      names: { type: "array", items: { type: "string" } },
+      offset: { type: "integer", minimum: 0 },
+      limit: { type: "integer", minimum: 1, maximum: 50 },
+    },
+    required: [],
+  },
+  {
     name: "board_teach",
     command: "lesson.ask",
     description:
-      "Start a continuous spoken lesson with synchronized writing and drawings on the actual board. Preparation runs in the background and immediately returns its task id. Keep listening and responding while it runs. Do not open a separate question input or microphone.",
+      "Use only for an explicitly requested board demonstration, animation or writing. Concept questions are answered directly in voice without any task. Start independent board/pen/resource agents while explaining immediately in voice; do not wait for generation. Only explicit explanation text returns for speech on this live connection. No extra player or panel.",
     properties: { prompt: { type: "string" } },
     required: ["prompt"],
   },
@@ -210,12 +223,24 @@ const bindings = [
     name: "board_task",
     command: "agent.start",
     description:
-      "Start an independent background agent immediately. Use role=draw for complex pen drawings, resource for interactive teaching demonstrations, research for verified web information, board for multi-step writing/editing and real classroom controls. Independent tasks run concurrently while conversation continues. Returns running, never claim completed until board_tasks reports completed. Keep dependent steps in one task.",
+      "Start an independent background agent immediately for work chosen from the live tool catalog. Role is an optional descriptive responsibility, not a capability restriction. Tasks can discover and invoke public operations, run concurrently, receive updates and return explicit narration while conversation continues. Returns running; use actual task results before claiming completion. Keep dependent steps in the same task.",
     properties: {
       prompt: { type: "string" },
-      role: { type: "string", enum: ["draw", "resource", "board", "research"] },
+      role: {
+        type: "string",
+        description:
+          "Responsibility chosen for this task; descriptive metadata, not a capability restriction.",
+      },
     },
-    required: ["prompt", "role"],
+    required: ["prompt"],
+  },
+  {
+    name: "agent_narrate",
+    command: "agent.say",
+    description:
+      "Submit only the short explanation that needs speaking, without waiting for playback. Continue visible board actions immediately. Never submit progress, completion or error announcements.",
+    properties: { text: { type: "string" } },
+    required: ["text"],
   },
   {
     name: "board_tasks",
@@ -224,6 +249,14 @@ const bindings = [
       "Read real background task status, results and errors. Omit id to read all tasks.",
     properties: { id: { type: "string" } },
     required: [],
+  },
+  {
+    name: "board_update_task",
+    command: "agent.update",
+    description:
+      "Pass the user's latest correction or additional information to an observed running task id. Speech continues and completed board actions are preserved.",
+    properties: { id: { type: "string" }, prompt: { type: "string" } },
+    required: ["id", "prompt"],
   },
   {
     name: "board_cancel_task",
@@ -242,8 +275,70 @@ type FunctionTool = {
   parameters: Record<string, unknown>;
 };
 
+/** Use the registered handler contract or an existing typed adapter, never infer
+ * parameters from a tool name. Undeclared contracts retain their full docs. */
+export const describeBoardTools = (
+  options: {
+    query?: string;
+    names?: string[];
+    offset?: number;
+    limit?: number;
+  },
+  allowed: (name: string) => boolean,
+) => {
+  const terms = (options.query || "")
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const definitions = classroomCommands
+    .definitions()
+    .filter(
+      (tool) =>
+        allowed(tool.name) &&
+        (!options.names?.length || options.names.includes(tool.name)) &&
+        terms.every((term) =>
+          `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(term),
+        ),
+    );
+  const offset = options.offset || 0;
+  const limit = options.limit || 20;
+  return {
+    total: definitions.length,
+    nextOffset: offset + limit < definitions.length ? offset + limit : null,
+    tools: definitions.slice(offset, offset + limit).map((tool) => {
+      const binding = bindings.find((entry) => entry.command === tool.name);
+      return {
+        ...tool,
+        function: binding?.name || "board_command",
+        parameters:
+          tool.parameters ||
+          (binding
+            ? {
+                type: "object",
+                properties: binding.properties,
+                required: binding.required,
+                additionalProperties: false,
+              }
+            : undefined),
+        invocation: binding
+          ? { function: binding.name, arguments: "Use the parameters schema" }
+          : {
+              function: "board_command",
+              arguments: {
+                name: tool.name,
+                args: "Use the registered description and parameter contract",
+              },
+            },
+      };
+    }),
+  };
+};
+
 export const realtimeTools = (
-  allowed: (name: string) => boolean = () => true,
+  allowed: (name: string) => boolean = (name) =>
+    !["agent.say", "agent.wait", "lesson.resume", "lesson.audio"].includes(
+      name,
+    ),
 ): FunctionTool[] => [
   ...bindings
     .filter(

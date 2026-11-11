@@ -1,19 +1,13 @@
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { t, useI18n, getLanguage } from "@fcboard/fcboard/i18n";
 import { useEffect, useRef, useState } from "react";
-import CircularProgress from "@mui/material/CircularProgress";
-
-import { CloseIcon, playerPlayIcon } from "@fcboard/fcboard/components/icons";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { TransientMessage } from "./TransientMessage";
 import { InkQuestion } from "./InkQuestion";
 import { QuizPanel } from "./QuizPanel";
 import { selectionMathIntent, selectionRequest } from "./intent";
 import { generateQuiz } from "./quiz";
-
-import { useAnchoredPanel } from "./floating";
 
 import {
   boardContext,
@@ -107,10 +101,8 @@ export const LearningSettings = () => {
 export const Teacher = ({
   api,
   onCommand,
-  voiceActive = false,
 }: {
   api: FcboardImperativeAPI;
-  voiceActive?: boolean;
   onCommand: (
     text: string,
     signal: AbortSignal,
@@ -134,7 +126,6 @@ export const Teacher = ({
   const [error, setError] = useState("");
   const request = useRef<AbortController | null>(null);
   const session = useRef<string>("");
-  const active = state.mode !== "idle";
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const quizValue = useRef<Quiz | null>(null);
   const [quizOpen, setQuizOpen] = useState(false);
@@ -230,12 +221,6 @@ export const Teacher = ({
       }
     }
   };
-  const surface = useRef<HTMLElement>(null);
-  const floatingStyle = useAnchoredPanel(
-    surface,
-    "[data-testid='main-menu-trigger']",
-    !voiceActive && (active || !!error),
-  );
 
   useEffect(() => {
     const configure = () => {
@@ -881,128 +866,6 @@ export const Teacher = ({
             setQuizOpen(false);
           }}
         />
-      )}
-      {(active || error) && (
-        <section
-          ref={surface}
-          style={
-            voiceActive
-              ? {
-                  position: "fixed",
-                  top: 12,
-                  left: 12,
-                  bottom: "auto",
-                  transform: "none",
-                  width: 360,
-                  maxWidth: "calc(62vw - 36px)",
-                  maxHeight: "28vh",
-                }
-              : floatingStyle
-          }
-          className={`fc-teacher fc-surface fc-lens-${state.lens}`}
-          aria-label={t("fcboard.ai_teacher")}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === "Escape") {
-              setAsking(false);
-            }
-          }}
-        >
-          {active && (
-            <div className="fc-teacher-heading">
-              {(state.tool || state.observing) &&
-                ["teaching", "question"].includes(state.mode) && (
-                  <CircularProgress
-                    size={14}
-                    aria-label={t("fcboard.processing")}
-                  />
-                )}
-              <small>
-                {state.lesson?.title || t("fcboard.preparing_lesson")}
-                {state.lesson &&
-                  ` · ${state.step + 1}/${state.lesson.steps.length}`}
-              </small>
-              <button
-                aria-label={
-                  state.mode === "complete"
-                    ? t("fcboard.replay_lesson")
-                    : ["teaching", "question"].includes(state.mode)
-                    ? t("fcboard.pause_lesson")
-                    : t("fcboard.resume_lesson")
-                }
-                disabled={state.mode === "generating" || state.mode === "quiz"}
-                onClick={() =>
-                  state.mode === "complete"
-                    ? void controller
-                        .start(state.lesson!, 0, controller.canvas)
-                        .catch(fail)
-                    : ["teaching", "question"].includes(state.mode)
-                    ? controller.pause()
-                    : controller.resume()
-                }
-              >
-                {["teaching", "question"].includes(state.mode)
-                  ? "Ⅱ"
-                  : playerPlayIcon}
-              </button>
-              <button
-                aria-label={t("fcboard.end_lesson")}
-                onClick={() => {
-                  request.current?.abort();
-                  controller.cancel();
-                }}
-              >
-                {CloseIcon}
-              </button>
-            </div>
-          )}
-          <TransientMessage message={error || state.toolError} role="alert" />
-          {active && (
-            <div className="fc-live-caption" role="status" aria-live="polite">
-              {state.lens === "reading" && state.spoken > 0 ? (
-                <>
-                  <mark>{state.caption.slice(0, state.spoken)}</mark>
-                  {state.caption.slice(state.spoken)}
-                </>
-              ) : state.mode === "generating" ? (
-                t("fcboard.reading_the_board_and_preparing_your_lesson")
-              ) : (
-                state.caption
-              )}
-            </div>
-          )}
-          {state.question && (
-            <div
-              className="fc-quiz"
-              role="group"
-              aria-label={state.question.question}
-            >
-              {state.question.choices.map((choice, index) => (
-                <button
-                  key={index}
-                  disabled={state.mode !== "quiz"}
-                  onClick={() => {
-                    try {
-                      controller.answer(index);
-                    } catch (failure) {
-                      fail(failure);
-                    }
-                  }}
-                >
-                  {String.fromCharCode(65 + index)} · {choice}
-                </button>
-              ))}
-            </div>
-          )}
-          {state.feedback && <p role="status">{state.feedback}</p>}
-          {state.audioError && (
-            <small title={state.audioError}>
-              {t(
-                "fcboard.teaching_with_captions_voice_playback_is_unavailable",
-              )}
-            </small>
-          )}
-        </section>
       )}
     </>
   );

@@ -183,12 +183,12 @@ it("reports a provider failure as a failed task and rejects a textual success wi
   }
 });
 
-it("returns preparation immediately and keeps its actual parent ownership across lesson navigation", async () => {
+it("returns immediately and keeps actual parent ownership across background navigation", async () => {
   const host = setup();
   let finish!: () => void;
   let signal!: AbortSignal;
   const parent = new AbortController();
-  const lesson = classroomCommands.register("lesson.ask", "Teach", (args) => {
+  const lesson = classroomCommands.register("board.open", "Open", (args) => {
     signal = args.signal as AbortSignal;
     return new Promise<void>((resolve) => {
       finish = resolve;
@@ -197,7 +197,7 @@ it("returns preparation immediately and keeps its actual parent ownership across
   try {
     const task = await start("讲解", {
       signal: parent.signal,
-      command: { name: "lesson.ask", args: { prompt: "讲解" } },
+      command: { name: "board.open", args: { name: "related" } },
     });
     expect(task.state).toBe("running");
     expect(classroomCommands.isOwnedBy(signal, parent.signal)).toBe(true);
@@ -334,6 +334,131 @@ const waitSubscriptions = () => {
   });
   return releases;
 };
+
+it("lets a model-selected role write real board text, narrate the same text and launch an independent resource", async () => {
+  const host = setup();
+  const spoken: string[] = [];
+  const text = "物体的运动状态取决于合外力。";
+  let complete!: () => void;
+  const resource = classroomCommands.register(
+    "resources.generate",
+    "Generate a real experiment",
+    () =>
+      new Promise<void>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const watch = classroomCommands.watch("agents", () => {
+    for (const task of (classroomCommands.read("agents") as BoardTask[]) ||
+      []) {
+      if (task.speech && !spoken.includes(task.speech.text)) {
+        spoken.push(task.speech.text);
+      }
+    }
+  });
+  const model = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        action: "commands",
+        commands: [
+          {
+            name: "agent.start",
+            args: {
+              prompt: "生成可操作实验",
+              role: "实验协调",
+              command: {
+                name: "resources.generate",
+                args: { prompt: "可操作实验" },
+              },
+            },
+          },
+          {
+            name: "canvas.text",
+            args: { text, sourceIds: [], presentation: "text" },
+          },
+          { name: "agent.say", args: { text } },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(JSON.stringify({ action: "done" }));
+  try {
+    const task = await start("按当前问题选择合适的方式演示", {
+      role: "学科协调",
+    });
+    await waitFor(async () =>
+      expect((await inspect(task.id)).state).toBe("completed"),
+    );
+    expect(model).toHaveBeenCalledTimes(2);
+    expect(
+      host.api
+        .getSceneElements()
+        .some((element) => element.type === "text" && element.text === text),
+    ).toBe(true);
+    expect(spoken).toEqual([text]);
+    const child = (classroomCommands.read("agents") as BoardTask[]).find(
+      (value) => value.id !== task.id,
+    )!;
+    expect(child.state).toBe("running");
+    complete();
+    await waitFor(async () =>
+      expect((await inspect(child.id)).state).toBe("completed"),
+    );
+  } finally {
+    resource();
+    watch();
+    host.stop();
+  }
+});
+
+it("applies a new user correction before committing stale proposed board actions", async () => {
+  const host = setup();
+  let answer!: (text: string) => void;
+  vi.spyOn(ai, "chat")
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        action: "commands",
+        commands: [
+          {
+            name: "canvas.text",
+            args: { text: "修订后的内容", sourceIds: [], presentation: "text" },
+          },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(JSON.stringify({ action: "done" }));
+  try {
+    const task = await start("先写原始内容", { role: "自由分工" });
+    await waitFor(() => expect(answer).toBeDefined());
+    await classroomCommands.execute({
+      name: "agent.update",
+      args: { id: task.id, prompt: "改写修订后的内容" },
+    });
+    answer(
+      JSON.stringify({
+        action: "commands",
+        commands: [{ name: "canvas.text", args: { text: "过时内容" } }],
+      }),
+    );
+    await waitFor(async () =>
+      expect((await inspect(task.id)).state).toBe("completed"),
+    );
+    const texts = host.api
+      .getSceneElements()
+      .filter((element) => element.type === "text")
+      .map((element) => element.text);
+    expect(texts).toContain("修订后的内容");
+    expect(texts).not.toContain("过时内容");
+  } finally {
+    host.stop();
+  }
+});
 
 it("waits for background resource preparation and returns its complete real result, releasing subscriptions", async () => {
   const host = setup();

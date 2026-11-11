@@ -68,6 +68,7 @@ export const runBoardCommands = async (
     verify?: boolean;
     observe?: () => unknown | Promise<unknown>;
     settings?: Settings;
+    updates?: () => string[];
   } = {},
 ): Promise<BoardAgentAction> => {
   let action = initial;
@@ -77,6 +78,17 @@ export const runBoardCommands = async (
   for (let round = 0; round < 6 && action.action === "commands"; round++) {
     if (signal?.aborted || !current()) {
       return { action: "done" };
+    }
+    const updates = options.updates?.();
+    if (updates?.length) {
+      conversation.push({ role: "user", content: updates.join("\n") });
+      action = parseJSON(
+        await chat(conversation, signal, options.settings, {
+          maxTokens: options.maxTokens || 4096,
+        }),
+      ) as BoardAgentAction;
+      signal?.throwIfAborted();
+      continue;
     }
     const commands = action.commands;
     if (

@@ -30,6 +30,7 @@ export const prepareLocalSpeech = () => {
 export type LocalSpeechHandle = {
   stop(): Promise<void>;
   cancel(): Promise<void>;
+  readonly ready?: Promise<void>;
   readonly stream?: MediaStream;
 };
 
@@ -82,7 +83,7 @@ export const startPCMSpeech = async (
       ),
     );
   }
-  if (!window.AudioContext || !window.AudioWorkletNode) {
+  if (!window.AudioContext) {
     throw new Error(
       t(
         "fcboard.this_webview_cannot_capture_offline_speech_update_android_system_webview",
@@ -90,34 +91,46 @@ export const startPCMSpeech = async (
     );
   }
   // Resume in the initiating click, before model loading can consume activation.
-  let context: AudioContext;
-  try {
-    context = new AudioContext(cloud ? { sampleRate: 16000 } : undefined);
-  } catch (failure) {
-    if (
-      !cloud ||
-      !(failure instanceof Error) ||
-      failure.name !== "NotSupportedError"
-    ) {
-      throw failure;
-    }
-    context = new AudioContext();
-  }
+  // Capture at the device's working rate; both capture backends resample cloud
+  // frames to 16 kHz, as in the official duplex demo.
+  const context = new AudioContext();
   const resumed = context.resume();
   void resumed.catch(() => {});
   let session: string;
+  let media = stream;
   try {
+    media ||= await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+
     if (!cloud) {
       await prepareLocalSpeech();
     }
     session = (await transport.start()).session;
   } catch (error) {
+    if (!stream) {
+      media?.getTracks().forEach((track) => track.stop());
+    }
     await context.close().catch(() => {});
     throw error;
   }
-  let media = stream;
   let source: MediaStreamAudioSourceNode | undefined;
-  let node: AudioWorkletNode | undefined;
+  let node: AudioWorkletNode | ScriptProcessorNode | undefined;
+  let flushCapture: (() => void) | undefined;
+  let fallbackTimeout: ReturnType<typeof setTimeout> | undefined;
+  let receivedAudio = false;
+  let resolveReady!: () => void;
+  let rejectReady!: (error: Error) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  void ready.catch(() => {});
   let cancelled = false;
   let ended = false;
   let queued = 0;
@@ -134,10 +147,14 @@ export const startPCMSpeech = async (
   const cleanup = () =>
     (cleanupPromise ||= (async () => {
       clearTimeout(captureTimeout);
+      clearTimeout(fallbackTimeout);
       source?.disconnect();
       node?.disconnect();
-      if (node) {
+      if (node && "port" in node) {
         node.port.onmessage = null;
+        node.onprocessorerror = null;
+      } else if (node) {
+        node.onaudioprocess = null;
       }
       if (!stream) {
         media?.getTracks().forEach((track) => track.stop());
@@ -148,6 +165,7 @@ export const startPCMSpeech = async (
     cancelled ||= discard;
     clearTimeout(captureTimeout);
     if (cancelled) {
+      rejectReady(new DOMException("Audio capture cancelled", "AbortError"));
       ended = true;
       flushDone?.();
       // Native inference may still be pending; release microphone capture now.
@@ -165,7 +183,7 @@ export const startPCMSpeech = async (
             clearTimeout(timeout);
             resolve();
           };
-          node!.port.postMessage("flush");
+          flushCapture?.();
         });
       }
       ended = true;
@@ -188,42 +206,31 @@ export const startPCMSpeech = async (
   const watchCapture = () => {
     clearTimeout(captureTimeout);
     captureTimeout = setTimeout(() => {
-      onError(
-        t(
-          "fcboard.the_microphone_did_not_provide_audio_check_permissions_and_the_input_device_then_start_again",
-        ),
+      const message = t(
+        "fcboard.the_microphone_did_not_provide_audio_check_permissions_and_the_input_device_then_start_again",
       );
+      rejectReady(new Error(message));
+      onError(message);
       void finish(true).catch(() => {});
     }, 12000);
   };
   try {
-    media ||= await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-    });
-    await context.audioWorklet.addModule(
-      `${import.meta.env.BASE_URL}fc-pcm-worklet.js`,
-    );
-    node = new AudioWorkletNode(context, "fcboard-pcm", {
-      processorOptions: {
-        blockDuration: capture?.blockDuration ?? (cloud ? 0.1 : 0.5),
-        ...(cloud ? { targetSampleRate: 16000 } : {}),
-      },
-    });
     source = context.createMediaStreamSource(media);
-    node.port.onmessage = ({
-      data,
-    }: MessageEvent<{
+    const receive = (data: {
       pcm?: Float32Array;
       sampleRate: number;
       flushed?: boolean;
-    }>) => {
+    }) => {
       if (data.flushed) {
         flushDone?.();
         return;
       }
-      if (ended || cancelled || !data.pcm) {
+      if (ended || cancelled || !data.pcm?.length) {
         return;
       }
+      receivedAudio = true;
+      clearTimeout(fallbackTimeout);
+      resolveReady();
       watchCapture();
       if (++queued > 20) {
         onError(
@@ -262,8 +269,99 @@ export const startPCMSpeech = async (
           queued--;
         });
     };
-    source.connect(node);
-    node.connect(context.destination);
+    const fallback = () => {
+      if (ended || cancelled || (node && "onaudioprocess" in node)) {
+        return;
+      }
+      source!.disconnect();
+      node?.disconnect();
+      if (node && "port" in node) {
+        node.port.onmessage = null;
+        node.onprocessorerror = null;
+      }
+      // The supplied official duplex demo uses ScriptProcessor capture. Keep it
+      // as a working fallback when this WebView cannot run its AudioWorklet.
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      node = processor;
+      const rate = cloud ? 16000 : context.sampleRate;
+      const size = Math.round(
+        rate * (capture?.blockDuration ?? (cloud ? 0.1 : 0.5)),
+      );
+      let samples = new Float32Array(size);
+      let offset = 0;
+      let phase = 0;
+      let sum = 0;
+      let count = 0;
+      const flush = () => {
+        if (offset) {
+          receive({ pcm: samples.slice(0, offset), sampleRate: rate });
+        }
+        offset = 0;
+      };
+      processor.onaudioprocess = ({ inputBuffer }) => {
+        const input = inputBuffer.getChannelData(0);
+        for (const value of input) {
+          sum += value;
+          count++;
+          phase += rate;
+          if (phase >= context.sampleRate) {
+            const value = sum / count;
+            while (phase >= context.sampleRate) {
+              samples[offset++] = value;
+              phase -= context.sampleRate;
+              if (offset === size) {
+                flush();
+                samples = new Float32Array(size);
+              }
+            }
+            sum = 0;
+            count = 0;
+          }
+        }
+      };
+      flushCapture = () => {
+        flush();
+        flushDone?.();
+      };
+      source!.connect(processor);
+      processor.connect(context.destination);
+    };
+    const useFallback = () => {
+      try {
+        fallback();
+      } catch (error) {
+        rejectReady(error instanceof Error ? error : new Error(String(error)));
+        onError(error instanceof Error ? error.message : String(error));
+        void finish(true).catch(() => {});
+      }
+    };
+    try {
+      if (!context.audioWorklet || !window.AudioWorkletNode) {
+        throw new Error("AudioWorklet unavailable");
+      }
+      await context.audioWorklet.addModule(
+        `${import.meta.env.BASE_URL}fc-pcm-worklet.js`,
+      );
+      const worklet = new AudioWorkletNode(context, "fcboard-pcm", {
+        processorOptions: {
+          blockDuration: capture?.blockDuration ?? (cloud ? 0.1 : 0.5),
+          ...(cloud ? { targetSampleRate: 16000 } : {}),
+        },
+      });
+      node = worklet;
+      worklet.port.onmessage = ({ data }) => receive(data);
+      worklet.onprocessorerror = useFallback;
+      flushCapture = () => worklet.port.postMessage("flush");
+      source.connect(worklet);
+      worklet.connect(context.destination);
+      fallbackTimeout = setTimeout(() => {
+        if (!receivedAudio) {
+          useFallback();
+        }
+      }, 1500);
+    } catch {
+      fallback();
+    }
     watchCapture();
     let resumeTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -287,6 +385,7 @@ export const startPCMSpeech = async (
       clearTimeout(resumeTimeout);
     }
     return {
+      ready,
       stop: () => finish(false),
       cancel: () => finish(true),
       get stream() {

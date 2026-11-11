@@ -35,7 +35,11 @@ import * as duplex from "./duplexSpeech";
 import * as lessonObserver from "./lessonObserver";
 import { classroomCommands } from "./commands";
 import { BoardRecorder, loadRecordings, saveRecordings } from "./recording";
-import { currentSettings, defaults, saveSettings } from "./settings";
+import {
+  currentSettings,
+  defaults as applicationDefaults,
+  saveSettings,
+} from "./settings";
 import { handwritingText } from "./handwriting";
 import { insertionDefaults, renderInsertion } from "./insertObjects";
 import { documentSourceSignature } from "./documents";
@@ -62,6 +66,12 @@ vi.mock("@fcboard/fcboard", async (importOriginal) => ({
   }) => (toolId ? null : <>{children}</>),
 }));
 vi.mock("./BoardSwitcher", () => ({ BoardSwitcher: () => null }));
+
+// These fixtures mock Chat JSON; native/Ark Responses contracts have dedicated suites.
+const defaults = {
+  ...applicationDefaults,
+  endpoint: "https://example.com/v1/chat/completions",
+};
 
 const render = (component: React.ReactElement) =>
   renderWithProvider(
@@ -134,6 +144,7 @@ describe("selection-driven classroom controls", () => {
       }),
       getFiles: () => ({}),
       addFiles: vi.fn(),
+      setActiveTool: vi.fn(),
       onPointerDown: () => () => {},
       onPointerUp: () => () => {},
       updateScene: vi.fn((update) => {
@@ -701,11 +712,13 @@ describe("selection-driven classroom controls", () => {
         expect(handwritingText(scene)).toContain("1+1=2");
         expect(
           view.container.querySelector(".fc-voice-caption"),
-        ).toHaveTextContent(t("fcboard.assistant_completed"));
+        ).toHaveTextContent("1+1=2");
         await act(async () => {
           await vi.advanceTimersByTimeAsync(2500);
         });
-        expect(view.container.querySelector(".fc-voice-caption")).toBeNull();
+        expect(
+          view.container.querySelector(".fc-voice-caption"),
+        ).toHaveTextContent("1+1=2");
         expect(view.container.querySelector(".fc-voice-orb")).not.toBeNull();
         expect(scene.every((element) => element.type === "freedraw")).toBe(
           true,
@@ -930,8 +943,10 @@ describe("selection-driven classroom controls", () => {
       const finish: ((value: string) => void)[] = [];
       const chat = vi
         .spyOn(ai, "chat")
-        .mockImplementation(
-          () => new Promise((resolve) => finish.push(resolve)),
+        .mockImplementation((messages) =>
+          messages.length > 2
+            ? Promise.resolve(JSON.stringify({ action: "done" }))
+            : new Promise((resolve) => finish.push(resolve)),
         );
       const view = render(<Classroom api={api} />);
       vi.useFakeTimers();
@@ -957,8 +972,17 @@ describe("selection-driven classroom controls", () => {
         }
         const response = (x: number) =>
           JSON.stringify({
-            action: "shapes",
-            shapes: [{ type: "rectangle", x, y: 150, width: 50, height: 50 }],
+            action: "commands",
+            commands: [
+              {
+                name: "canvas.shapes",
+                args: {
+                  shapes: [
+                    { type: "rectangle", x, y: 150, width: 50, height: 50 },
+                  ],
+                },
+              },
+            ],
           });
         await act(async () => {
           finish[1](response(400));
@@ -3735,7 +3759,7 @@ describe("selection-driven classroom controls", () => {
     "可视化比较 y=x+1 和 y=1/x",
     "生成力与加速度交互HTML可视化",
   ])(
-    "generates %s directly from speech without a planning call",
+    "plans %s through available tools and inserts the actual generated resource",
     async (spoken) => {
       saveSettings(
         { ...defaults, speech: "local", apiKey: "test", autoSummary: false },
@@ -3786,9 +3810,30 @@ describe("selection-driven classroom controls", () => {
               ],
             },
           };
-      const chat = vi
-        .spyOn(ai, "chat")
-        .mockResolvedValue(JSON.stringify(chart));
+      const chat = vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+        if (String(messages[0]?.content).includes("你是持续对话的白板助教")) {
+          return JSON.stringify(
+            messages.length > 2
+              ? { action: "done" }
+              : {
+                  action: "commands",
+                  commands: [
+                    {
+                      name: "agent.start",
+                      args: {
+                        prompt: spoken,
+                        command: {
+                          name: "resources.generate",
+                          args: { prompt: spoken },
+                        },
+                      },
+                    },
+                  ],
+                },
+          );
+        }
+        return JSON.stringify(chart);
+      });
       const view = render(<Classroom api={api} />);
       try {
         await act(async () => {
@@ -3817,10 +3862,14 @@ describe("selection-driven classroom controls", () => {
             ? "A (0.62, 1.62)"
             : "人口增长示意",
         );
-        expect(chat).toHaveBeenCalledTimes(1);
-        expect(chat.mock.calls[0][0][0].content).toContain(
-          spoken.includes("HTML") ? "self-contained HTML" : "Vega-Lite",
-        );
+        expect(chat).toHaveBeenCalledTimes(spoken.includes("HTML") ? 1 : 3);
+        expect(
+          chat.mock.calls.some(([messages]) =>
+            String(messages[0]?.content).includes(
+              spoken.includes("HTML") ? "self-contained HTML" : "Vega-Lite",
+            ),
+          ),
+        ).toBe(true);
       } finally {
         view.unmount();
         for (const item of await generatedResources()) {
@@ -3927,6 +3976,7 @@ describe("selection-driven classroom controls", () => {
     const session = {
       stream,
       startedAt: Date.now(),
+      speak: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
       cancel: vi.fn().mockResolvedValue(undefined),
       interrupt: vi.fn().mockResolvedValue(undefined),
@@ -4009,6 +4059,7 @@ describe("selection-driven classroom controls", () => {
     );
     const session = {
       startedAt: Date.now(),
+      speak: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn(),
       cancel: vi.fn().mockResolvedValue(undefined),
       interrupt: vi.fn(),
@@ -4036,6 +4087,7 @@ describe("selection-driven classroom controls", () => {
         stopping = classroomCommands.execute({ name: "voice.toggle" });
       });
       expect(start).toHaveBeenCalledTimes(1);
+      expect(start.mock.calls[0][0].signal?.aborted).toBe(true);
       await act(async () => {
         ready(session);
         await Promise.all([opening, stopping]);
@@ -4054,6 +4106,59 @@ describe("selection-driven classroom controls", () => {
     }
   });
 
+  it("shows only the voice orb/caption and board actions when an independent agent fails", async () => {
+    saveSettings(
+      {
+        ...defaults,
+        assistantVoice: "duplex",
+        speechKey: "speech-key",
+        apiKey: "",
+      },
+      false,
+    );
+    const session = {
+      startedAt: Date.now(),
+      stop: vi.fn(),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      interrupt: vi.fn(),
+      flush: vi.fn(),
+      speak: vi.fn(),
+    };
+    vi.spyOn(duplex, "startDuplexSpeech").mockResolvedValue(session);
+    const view = render(<Classroom api={api} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
+      let id = "";
+      await act(async () => {
+        const task = (await classroomCommands.execute({
+          name: "agent.start",
+          args: { prompt: "执行任意白板任务", role: "自由分工" },
+        })) as { id: string };
+        id = task.id;
+      });
+      await waitFor(async () =>
+        expect(
+          await classroomCommands.execute({
+            name: "agent.inspect",
+            args: { id },
+          }),
+        ).toMatchObject({ state: "failed" }),
+      );
+      expect(
+        view.container.querySelector(".fc-agent-tasks,.fc-teacher"),
+      ).toBeNull();
+      expect(view.container.querySelector(".fc-voice-orb")).not.toBeNull();
+      expect(session.cancel).not.toHaveBeenCalled();
+      expect(
+        view.container.querySelector(".fc-voice-caption")?.textContent || "",
+      ).not.toContain("API");
+    } finally {
+      view.unmount();
+    }
+  });
+
   it("interrupts actual duplex playback through the shared assistant command", async () => {
     saveSettings(
       { ...defaults, assistantVoice: "duplex", speechKey: "speech-key" },
@@ -4061,6 +4166,7 @@ describe("selection-driven classroom controls", () => {
     );
     const session = {
       startedAt: Date.now(),
+      speak: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn(),
       cancel: vi.fn().mockResolvedValue(undefined),
       interrupt: vi.fn().mockResolvedValue(undefined),

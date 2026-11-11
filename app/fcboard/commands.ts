@@ -2,12 +2,16 @@ import { t } from "@fcboard/fcboard/i18n";
 
 export type Command = { name: string; args?: Record<string, unknown> };
 type Handler = (args: Record<string, unknown>) => unknown | Promise<unknown>;
+export type CommandContract = {
+  parameters?: Record<string, unknown>;
+  returns?: string;
+};
 
 /** One route for touch controls, voice and model tools. Components own their actions. */
 export class CommandRouter {
   private commands = new Map<
     string,
-    { description: string; handler: Handler }
+    { description: string; handler: Handler; contract?: CommandContract }
   >();
   private contexts = new Map<string, () => unknown>();
   private contextListeners = new Map<string, Set<() => void>>();
@@ -71,8 +75,13 @@ export class CommandRouter {
     }
   }
 
-  register(name: string, description: string, handler: Handler) {
-    const entry = { description, handler };
+  register(
+    name: string,
+    description: string,
+    handler: Handler,
+    contract?: CommandContract,
+  ) {
+    const entry = { description, handler, contract };
     this.commands.set(name, entry);
     return () => {
       if (this.commands.get(name) === entry) {
@@ -110,6 +119,15 @@ export class CommandRouter {
       ),
       ([name, value]) => `${name}: ${value.description}`,
     ).join("\n");
+  }
+  definitions() {
+    return Array.from(this.commands)
+      .filter(([, value]) => value.description !== "@internal")
+      .map(([name, value]) => ({
+        name,
+        description: value.description,
+        ...value.contract,
+      }));
   }
   touch(source?: AbortSignal) {
     source?.throwIfAborted();
@@ -184,6 +202,8 @@ export const classroomCommands = new CommandRouter();
 
 const cancellable = new Set([
   "agent.start",
+  "agent.say",
+  "agent.update",
   "agent.wait",
   "quiz.generate",
   "canvas.snapshot",
@@ -240,10 +260,21 @@ export const isCancellableBoardCommand = (name: string) =>
 /** Voice and lesson tools share cancellation and the same component-owned handlers. */
 export const executeBoardCommand = (command: Command, signal?: AbortSignal) => {
   signal?.throwIfAborted();
-  const routed =
+  let routed =
     signal && isCancellableBoardCommand(command.name)
       ? { ...command, args: { ...command.args, signal } }
       : command;
+  if (signal && routed === command) {
+    // New public tools receive task ownership without adding a name to a list.
+    // Keep metadata out of argument enumeration used by existing validators.
+    routed = {
+      ...command,
+      args: Object.defineProperty({ ...command.args }, "signal", {
+        value: signal,
+        enumerable: false,
+      }),
+    };
+  }
   if (!signal) {
     return classroomCommands.execute(routed);
   }

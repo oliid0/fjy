@@ -110,6 +110,31 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public void cancelAIStream(PluginCall call) { aiTransport.cancel(call.getString("id")); call.resolve(); }
 
+    @PluginMethod public void agentCapabilities(PluginCall call) { call.resolve(new JSObject().put("nativeStep", true)); }
+
+    @PluginMethod public void postAgentStep(PluginCall call) {
+        try {
+            JSObject inputHeaders = call.getObject("headers", new JSObject());
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            headers.put("Content-Type", "application/json");
+            headers.put("Authorization", inputHeaders.getString("Authorization", ""));
+            NativeAgentResponse response = new NativeAgentResponse();
+            aiTransport.start(call.getString("id"), call.getString("url"), headers, call.getString("body"), new AIStreamTransport.Callback() {
+                public void chunk(String text) {
+                    try { response.accept(text); }
+                    catch (Exception error) { throw new IllegalStateException(error.getMessage(), error); }
+                }
+                public void complete(int status, String data, boolean stream) {
+                    try {
+                        String result = stream ? response.finish().toString() : data;
+                        call.resolve(new JSObject().put("status", status).put("data", result).put("stream", false));
+                    } catch (Exception error) { call.reject("Agent response failed", error); }
+                }
+                public void failed(Exception error) { call.reject("Agent request failed", error); }
+            });
+        } catch (Exception error) { call.reject("Agent request unavailable", error); }
+    }
+
     private WebResourceDialog webResource;
 
     @PluginMethod

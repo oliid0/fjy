@@ -1,7 +1,59 @@
 import { classroomCommands, executeBoardCommand } from "./commands";
 import { registerCanvasCommands } from "./canvasCommands";
-import { realtimeCommand, realtimeTools } from "./realtimeTools";
+import {
+  describeBoardTools,
+  realtimeCommand,
+  realtimeTools,
+} from "./realtimeTools";
 import { sceneAPI } from "./test/scene";
+
+it("discovers live operations with real parameter/result contracts and removes closed or private tools", async () => {
+  const action = vi.fn().mockReturnValue({ mode: "orbit" });
+  const parameters = {
+    type: "object",
+    properties: { mode: { type: "string", enum: ["orbit"] } },
+    required: ["mode"],
+    additionalProperties: false,
+  };
+  const stop = classroomCommands.register(
+    "experiment.change",
+    "Change the current experiment mode",
+    action,
+    { parameters, returns: "{mode:string}" },
+  );
+  const hidden = classroomCommands.register(
+    "experiment.private",
+    "@internal",
+    vi.fn(),
+  );
+  try {
+    const catalog = describeBoardTools(
+      { query: "experiment", limit: 1 },
+      () => true,
+    );
+    expect(catalog.total).toBe(1);
+    expect(catalog.tools[0]).toMatchObject({
+      name: "experiment.change",
+      parameters,
+      returns: "{mode:string}",
+      function: "board_command",
+    });
+    await executeBoardCommand(
+      realtimeCommand({
+        name: "board_command",
+        arguments: JSON.stringify({
+          name: "experiment.change",
+          args: { mode: "orbit" },
+        }),
+      }),
+    );
+    expect(action).toHaveBeenCalledWith({ mode: "orbit" });
+  } finally {
+    stop();
+    hidden();
+  }
+  expect(describeBoardTools({ query: "experiment" }, () => true).total).toBe(0);
+});
 
 it("routes typed writing and pen paths to actual editable scene elements with no model or image generation", async () => {
   const api = sceneAPI();

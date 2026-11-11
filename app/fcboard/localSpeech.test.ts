@@ -17,6 +17,7 @@ describe("built-in speech audio lifecycle", () => {
   let stream: MediaStream;
   let close: ReturnType<typeof vi.fn>;
   let resume: ReturnType<typeof vi.fn>;
+  let fallbackInput: (samples: Float32Array) => void;
   beforeEach(() => {
     engine.prepare.mockResolvedValue(undefined);
     engine.start.mockResolvedValue({ session: "session-1" });
@@ -31,6 +32,7 @@ describe("built-in speech audio lifecycle", () => {
     close = vi.fn().mockResolvedValue(undefined);
     resume = vi.fn().mockResolvedValue(undefined);
     class Context {
+      sampleRate = 48000;
       audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) };
       destination = {};
       createMediaStreamSource = () => ({
@@ -39,6 +41,22 @@ describe("built-in speech audio lifecycle", () => {
       });
       resume = resume;
       close = close;
+      createScriptProcessor = () => {
+        const processor = {
+          onaudioprocess: null as
+            | ((event: {
+                inputBuffer: { getChannelData: () => Float32Array };
+              }) => void)
+            | null,
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+        };
+        fallbackInput = (samples) =>
+          processor.onaudioprocess?.({
+            inputBuffer: { getChannelData: () => samples },
+          });
+        return processor;
+      };
     }
     class Worklet {
       port = {
@@ -65,6 +83,42 @@ describe("built-in speech audio lifecycle", () => {
       engine.start.mock.invocationCallOrder.at(-1)!,
     );
     await handle.cancel();
+  });
+
+  it("does not declare microphone readiness until actual nonempty PCM arrives", async () => {
+    const handle = await startLocalSpeech(vi.fn(), vi.fn(), stream);
+    const ready = vi.fn();
+    void handle.ready!.then(ready);
+    await Promise.resolve();
+    expect(ready).not.toHaveBeenCalled();
+    emit({ pcm: new Float32Array(), sampleRate: 16000 });
+    await Promise.resolve();
+    expect(ready).not.toHaveBeenCalled();
+    emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
+    await handle.ready;
+    expect(ready).toHaveBeenCalledTimes(1);
+    await handle.cancel();
+  });
+
+  it("recovers a worklet with no samples using real fallback PCM and exact 16k cloud resampling", async () => {
+    vi.useFakeTimers();
+    const error = vi.fn();
+    const handle = await startPCMSpeech(engine, vi.fn(), error, stream, true);
+    await vi.advanceTimersByTimeAsync(1500);
+    fallbackInput(new Float32Array(4800).fill(0.5));
+    await handle.ready;
+    await vi.advanceTimersByTimeAsync(0);
+    const options = engine.push.mock.calls.at(-1)![0];
+    expect(options.sampleRate).toBe(16000);
+    const bytes = Uint8Array.from(atob(options.pcm), (value) =>
+      value.charCodeAt(0),
+    );
+    expect(bytes).toHaveLength(3200);
+    expect(new DataView(bytes.buffer).getInt16(0, true)).toBe(16384);
+    expect(error).not.toHaveBeenCalled();
+    await handle.cancel();
+    expect(trackStop).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it("reports a microphone that never delivers samples and releases its audio context", async () => {

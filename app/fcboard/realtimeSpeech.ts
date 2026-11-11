@@ -125,7 +125,9 @@ export const startRealtimeSpeech = async (
         },
       );
     });
-    return attempt.opening.then(() => {});
+    return attempt.opening.then(async (handle) => {
+      await handle.ready;
+    });
   };
   const cloud =
     currentSettings().speech === "cloud" && navigator.onLine !== false;

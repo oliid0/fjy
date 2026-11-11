@@ -1,7 +1,7 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import { agentContext } from "./agent";
-import { postAI } from "./aiTransport";
+import { postAI, postNativeAgentStep } from "./aiTransport";
 import { classroomCommands, executeBoardCommand } from "./commands";
 import { realtimeCommand, realtimeTools } from "./realtimeTools";
 import { validateEndpoint } from "./settings";
@@ -135,6 +135,8 @@ export const runResponsesAgent = async (options: {
   signal: AbortSignal;
   current: () => boolean;
   allowed: (name: string) => boolean;
+  updates?: () => string[];
+  requireActions?: boolean;
 }) => {
   const { settings, signal, current, allowed } = options;
   if (!settings.apiKey || !settings.model.trim()) {
@@ -219,21 +221,29 @@ export const runResponsesAgent = async (options: {
     let response: Response;
     try {
       const stream = new FunctionStream();
-      const result = await postAI(
-        options.endpoint,
-        settings.apiKey,
-        {
-          model: settings.model,
-          input,
-          tools: tools(),
-          stream: true,
-          store: true,
-          max_output_tokens: 4096,
-          ...(previous ? { previous_response_id: previous } : {}),
-        },
-        request.signal,
-        (chunk) => stream.push(chunk),
-      );
+      const body = {
+        model: settings.model,
+        input,
+        tools: tools(),
+        stream: true,
+        store: true,
+        max_output_tokens: 4096,
+        ...(previous ? { previous_response_id: previous } : {}),
+      };
+      const result =
+        (await postNativeAgentStep(
+          options.endpoint,
+          settings.apiKey,
+          body,
+          request.signal,
+        )) ||
+        (await postAI(
+          options.endpoint,
+          settings.apiKey,
+          body,
+          request.signal,
+          (chunk) => stream.push(chunk),
+        ));
       request.signal.throwIfAborted();
       check();
       if (result.status < 200 || result.status >= 300) {
@@ -267,6 +277,25 @@ export const runResponsesAgent = async (options: {
     const functions = response.output!.filter(
       (item) => item.type === "function_call",
     );
+    const updates = options.updates?.();
+    if (updates?.length) {
+      if (!response.id) {
+        throw new Error("Missing response id for task update");
+      }
+      previous = response.id;
+      input = [
+        ...functions.map((item) => ({
+          type: "function_call_output",
+          call_id: item.call_id,
+          output: JSON.stringify({
+            skipped: true,
+            reason: "User updated this task before execution",
+          }),
+        })),
+        { role: "user", content: updates.join("\n") },
+      ];
+      continue;
+    }
     if (!functions.length) {
       const text = response
         .output!.filter((item) => item.type === "message")
@@ -277,7 +306,11 @@ export const runResponsesAgent = async (options: {
         )
         .map((part) => part.text)
         .join("\n");
-      if (mutations && !errors.size && text.trim()) {
+      if (
+        (mutations || options.requireActions === false) &&
+        !errors.size &&
+        text.trim()
+      ) {
         return { summary: text, canvas: classroomCommands.read("canvas") };
       }
       if (!response.id || ++idle >= 2) {

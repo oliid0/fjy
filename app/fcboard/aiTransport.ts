@@ -3,6 +3,48 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { Classroom } from "./native";
 
+let nativeAgentCapability: Promise<boolean> | undefined;
+export const postNativeAgentStep = async (
+  url: string,
+  key: string,
+  body: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<{ status: number; data: string; stream: false } | undefined> => {
+  if (
+    !Capacitor.isNativePlatform() ||
+    !Capacitor.isPluginAvailable?.("FcboardClassroom")
+  ) {
+    return;
+  }
+  nativeAgentCapability ||= Classroom.agentCapabilities()
+    .then((value) => value.nativeStep)
+    .catch(() => false);
+  if (!(await nativeAgentCapability)) {
+    return;
+  }
+  signal.throwIfAborted();
+  const id = crypto.randomUUID();
+  const cancel = () => {
+    void Classroom.cancelAIStream({ id }).catch(() => {});
+  };
+  signal.addEventListener("abort", cancel, { once: true });
+  try {
+    const response = await Classroom.postAgentStep({
+      id,
+      url,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+    });
+    signal.throwIfAborted();
+    return response;
+  } finally {
+    signal.removeEventListener("abort", cancel);
+  }
+};
+
 const textContent = (content: unknown): string => {
   if (typeof content === "string") {
     return content;

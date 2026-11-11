@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
 import { chat } from "./ai";
-import { AIStream, postAI } from "./aiTransport";
+import { AIStream, postAI, postNativeAgentStep } from "./aiTransport";
 import { defaults } from "./settings";
 import { Classroom } from "./native";
 
@@ -9,6 +9,8 @@ vi.mock("./native", () => ({
   Classroom: {
     addListener: vi.fn(),
     postAIStream: vi.fn(),
+    agentCapabilities: vi.fn().mockResolvedValue({ nativeStep: true }),
+    postAgentStep: vi.fn(),
     cancelAIStream: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -23,6 +25,58 @@ describe("incremental AI transport", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+  it("runs native model steps without stream bridge listeners and cancels only their own HTTP request", async () => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+    vi.spyOn(Capacitor, "isPluginAvailable").mockReturnValue(true);
+    const abort = new AbortController();
+    let finish!: (result: {
+      status: number;
+      data: string;
+      stream: false;
+    }) => void;
+    const request = vi.mocked(Classroom.postAgentStep).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = postNativeAgentStep(
+      "https://example.com/v1/responses",
+      "key",
+      { stream: true, input: [] },
+      abort.signal,
+    );
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    const id = request.mock.calls[0][0].id;
+    abort.abort();
+    expect(Classroom.cancelAIStream).toHaveBeenCalledWith({ id });
+    finish({
+      status: 200,
+      data: '{"status":"completed","output":[]}',
+      stream: false,
+    });
+    await rejected;
+    const completed = {
+      status: 200,
+      data: '{"id":"next","status":"completed","output":[]}',
+      stream: false as const,
+    };
+    request.mockResolvedValueOnce(completed);
+    expect(
+      await postNativeAgentStep(
+        "https://example.com/v1/responses",
+        "key",
+        { stream: true },
+        new AbortController().signal,
+      ),
+    ).toEqual(completed);
+    expect(Classroom.addListener).not.toHaveBeenCalled();
+    expect(Classroom.postAIStream).not.toHaveBeenCalled();
+    expect(request.mock.calls[1][0].id).not.toBe(id);
   });
   it("parses arbitrarily split SSE frames and streams text before completion", () => {
     const onDelta = vi.fn();

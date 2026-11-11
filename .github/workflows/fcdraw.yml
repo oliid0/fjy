@@ -159,12 +159,6 @@ jobs:
       - name: Verify Android unit tests and lint
         working-directory: android
         run: ./gradlew testDebugUnitTest lintDebug --no-daemon
-      - name: Install browser for layout and interaction checks
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Verify production whiteboard interactions
-        run: |
-          node scripts/fetch-courseware-fixtures.mjs
-          pnpm exec playwright test --config config/playwright.config.ts
       - name: Enable emulator acceleration
         if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         run: |
@@ -196,6 +190,14 @@ jobs:
           # Headless runs reported invalid Vulkan color buffers before WebView stopped replying.
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -feature -Vulkan
           script: bash scripts/verify-android-runtime.sh
+      - name: Install browser for layout and interaction checks
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify production whiteboard interactions
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        run: |
+          node scripts/fetch-courseware-fixtures.mjs
+          pnpm exec playwright test --config config/playwright.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

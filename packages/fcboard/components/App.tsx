@@ -487,6 +487,8 @@ import { findShapeByKey } from "./shapes";
 
 import UnlockPopup from "./UnlockPopup";
 
+import type { NativeEraserBackend, NativeEraseUpdate } from "../eraser/stroke";
+
 import type { FcboardLibraryIds } from "../data/types";
 
 import type {
@@ -860,6 +862,7 @@ class App extends React.Component<AppProps, AppState> {
       nativeInk: this.nativeInk,
       nativeRegionGesture: this.nativeRegionGesture,
       nativeEraserGesture: this.nativeEraserGesture,
+      registerNativeEraserBackend: this.registerNativeEraserBackend,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -9800,6 +9803,16 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
+  private nativeEraserBackend: NativeEraserBackend | null = null;
+  public registerNativeEraserBackend = (backend: NativeEraserBackend) => {
+    this.nativeEraserBackend = backend;
+    return () => {
+      if (this.nativeEraserBackend === backend) {
+        this.nativeEraserBackend = null;
+      }
+    };
+  };
+
   private nativeEraserDraft: {
     id: string;
     before: readonly FcboardElement[];
@@ -9808,6 +9821,8 @@ class App extends React.Component<AppProps, AppState> {
     height: number;
     objectMode: boolean;
     changed: boolean;
+    originals: Map<string, FcboardElement>;
+    applied: Map<string, FcboardElement>;
   } | null = null;
 
   /** Semantic, frame-batched native sweeps use the same clipping as web input.
@@ -9827,7 +9842,15 @@ class App extends React.Component<AppProps, AppState> {
       if (draft?.id === input.id) {
         this.nativeEraserDraft = null;
         if (draft.changed && input.restoreSelection !== false) {
-          this.scene.replaceAllElements(draft.before);
+          const latest = this.scene.getElementsIncludingDeleted();
+          const restored = latest.flatMap((element) => {
+            if (draft.applied.get(element.id) !== element) {
+              return [element];
+            }
+            const original = draft.originals.get(element.id);
+            return original ? [original] : [];
+          });
+          this.scene.replaceAllElements(restored);
         }
         this.setState({ cursorButton: "up" });
       }
@@ -9867,6 +9890,8 @@ class App extends React.Component<AppProps, AppState> {
           this.state.eraserMode === "object" &&
           !(input.palm && input.pointerType === "pen"),
         changed: false,
+        originals: new Map(),
+        applied: new Map(),
       };
       this.setState({
         selectedElementIds: {},
@@ -9879,30 +9904,93 @@ class App extends React.Component<AppProps, AppState> {
     if (!current || current.id !== input.id) {
       throw new Error("Native eraser gesture is no longer active");
     }
-    let elements: readonly FcboardElement[] =
-      this.scene.getElementsIncludingDeleted();
-    for (const [clientX, clientY] of input.points) {
-      const next = viewportCoordsToSceneCoords(
-        { clientX, clientY },
-        this.state,
-      );
-      const erased = (
-        current.objectMode ? eraseSceneObjects : eraseSceneStrokes
-      )(elements, current.previous, next, current.width, current.height);
-      current.changed ||= erased !== elements;
-      elements = erased;
-      current.previous = next;
-    }
-    if (elements !== this.scene.getElementsIncludingDeleted()) {
-      this.scene.replaceAllElements(elements);
-    }
-    if (input.phase === "end") {
-      this.nativeEraserDraft = null;
-      if (current.changed) {
-        this.store.scheduleCapture();
+    const before = this.scene.getElementsIncludingDeleted();
+    const apply = (elements: readonly FcboardElement[]) => {
+      if (this.nativeEraserDraft !== current) {
+        return;
       }
-      this.setState({ cursorButton: "up" });
+      if (elements !== this.scene.getElementsIncludingDeleted()) {
+        const previous = new Map(
+          this.scene
+            .getElementsIncludingDeleted()
+            .map((element) => [element.id, element]),
+        );
+        for (const element of elements) {
+          if (previous.get(element.id) !== element) {
+            const original = previous.get(element.id);
+            if (
+              original &&
+              !current.originals.has(element.id) &&
+              !current.applied.has(element.id)
+            ) {
+              current.originals.set(element.id, original);
+            }
+            current.applied.set(element.id, element);
+          }
+        }
+        current.changed = true;
+        this.scene.replaceAllElements(elements);
+      }
+      if (input.phase === "end") {
+        this.nativeEraserDraft = null;
+        if (current.changed) {
+          this.store.scheduleCapture();
+        }
+        this.setState({ cursorButton: "up" });
+      }
+    };
+    const path = [
+      current.previous,
+      ...input.points.map(([clientX, clientY]) =>
+        viewportCoordsToSceneCoords({ clientX, clientY }, this.state),
+      ),
+    ];
+    current.previous = path.at(-1)!;
+    if (this.nativeEraserBackend && !current.objectMode) {
+      return this.nativeEraserBackend(
+        before,
+        path,
+        current.width,
+        current.height,
+      ).then((updates: readonly NativeEraseUpdate[]) => {
+        if (this.nativeEraserDraft !== current) {
+          return;
+        }
+        const patches = new Map(
+          updates.map((update) => [update.source.id, update]),
+        );
+        let changed = false;
+        const latest = this.scene.getElementsIncludingDeleted();
+        const next = latest.flatMap((element) => {
+          const patch = patches.get(element.id);
+          // A collaborative edit/move/delete wins over a stale native result.
+          if (
+            !patch ||
+            patch.source !== element ||
+            patch.version !== element.version ||
+            patch.nonce !== element.versionNonce
+          ) {
+            return [element];
+          }
+          changed = true;
+          return patch.survivors.length
+            ? patch.survivors
+            : [newElementWith(element, { isDeleted: true })];
+        });
+        apply(changed ? next : latest);
+      });
     }
+    let elements = before;
+    for (let i = 1; i < path.length; i++) {
+      elements = (current.objectMode ? eraseSceneObjects : eraseSceneStrokes)(
+        elements,
+        path[i - 1],
+        path[i],
+        current.width,
+        current.height,
+      );
+    }
+    apply(elements);
   };
 
   private nativeRegionDrafts = new Map<

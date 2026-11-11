@@ -3,12 +3,8 @@ package com.fcjy.fcboard;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.RectF;
-import java.util.ArrayList;
-import java.util.List;
 
-/** Incremental port of factoryBrushWidths/Samples/traceFactoryBrush.
- * Sealed path chunks retain their GPU geometry; only the live tail is rebuilt. */
+/** Factory brush geometry with retained native coverage; no growing path replay. */
 final class NativeBrush {
     private static final class Node {
         final float x, y, width;
@@ -16,21 +12,27 @@ final class NativeBrush {
     }
     private final float unit, base, variation;
     private final boolean simulatePressure;
-    private final List<Path> sealed = new ArrayList<>();
+    private final NativeInkRaster raster;
+    private final Paint geometry = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path tail = new Path();
-    private final RectF bounds = new RectF();
-    private Path body = new Path();
+    private final Path body = new Path();
+    private long revision;
     private Node previous, current, source;
     private float lastWidth, lastVelocity;
-    private int nodes, stamps;
+    private int nodes;
     private boolean finished;
     NativeBrush(float width, float unit, float variation, boolean simulatePressure) {
+        this(width, unit, variation, simulatePressure, 8192, 8192);
+    }
+    NativeBrush(float width, float unit, float variation, boolean simulatePressure, int viewportWidth, int viewportHeight) {
+        raster = new NativeInkRaster(viewportWidth, viewportHeight); geometry.setStyle(Paint.Style.FILL);
         this.unit = unit; this.base = width * 4 / 3 + 3 * unit;
         this.variation = Math.max(0, Math.min(50, variation)) / 50;
         this.simulatePressure = simulatePressure;
     }
     private static Node mid(Node a, Node b) { return new Node((a.x+b.x)/2, (a.y+b.y)/2, (a.width+b.width)/2); }
     void add(float x, float y, float pressure) {
+        body.rewind(); revision++;
         // Commit the preceding quadratic once, keeping the last one provisional
         // so pointer-up can taper its width to zero without replaying the prefix.
         if (nodes > 1) { Node end = mid(previous, current); curve(null, source, previous, current, nodes == 2); source = end; }
@@ -45,8 +47,9 @@ final class NativeBrush {
         }
         previous = current; current = new Node(x, y, Math.max(unit, Math.max(base*.08f, lastWidth))); nodes++;
         if (nodes == 1) { source = current; stamp(null, current); }
+        raster.commit(body, geometry);
     }
-    void finish() { finished = true; }
+    void finish() { finished = true; revision++; }
     private void stamp(Path target, Node node) {
         stamp(target, node.x, node.y, node.width);
     }
@@ -54,11 +57,9 @@ final class NativeBrush {
         if (width <= 0) return;
         float rx = width/2, ry = width/4;
         if (target == null) {
-            if (stamps == 256) { sealed.add(body); body = new Path(); stamps = 0; }
-            target = body; stamps++;
+            target = body;
         }
         target.addOval(x-rx, y-ry, x+rx, y+ry, Path.Direction.CW);
-        bounds.union(x-rx, y-ry, x+rx, y+ry);
     }
     private void line(Path target, Node a, Node b) {
         int steps = Math.min(4096, (int)Math.floor(Math.hypot(b.x-a.x,b.y-a.y)/(2*unit))+1);
@@ -85,10 +86,6 @@ final class NativeBrush {
             Node tip=finished ? new Node(current.x,current.y,0) : current;
             Node end=curve(tail,source,previous,tip,nodes==2); line(tail,end,tip);
         }
-        int alpha=paint.getAlpha(), saved=0;
-        if(alpha<255) { saved=canvas.saveLayerAlpha(bounds,alpha); paint.setAlpha(255); }
-        for(Path path:sealed) canvas.drawPath(path,paint);
-        canvas.drawPath(body,paint); canvas.drawPath(tail,paint);
-        if(alpha<255) { canvas.restoreToCount(saved); paint.setAlpha(alpha); }
+        raster.draw(canvas, paint, tail, revision);
     }
 }

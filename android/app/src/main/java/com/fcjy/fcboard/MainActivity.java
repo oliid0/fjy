@@ -30,6 +30,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(LocalInferencePlugin.class);
         registerPlugin(NativeWidgetsPlugin.class);
         registerPlugin(NativeInkPlugin.class);
+        registerPlugin(NativeEraserPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);
         registerPlugin(NetworkPlugin.class);
         registerPlugin(VotingPlugin.class);

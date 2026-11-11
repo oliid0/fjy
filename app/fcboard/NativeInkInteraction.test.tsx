@@ -12,6 +12,7 @@ const backend = vi.hoisted(() => ({
   configure: vi.fn(),
   remove: vi.fn(),
   acknowledge: vi.fn(),
+  release: vi.fn(),
   listeners: new Set<(event: Record<string, unknown>) => void>(),
 }));
 vi.mock("@capacitor/core", () => ({
@@ -35,6 +36,7 @@ beforeEach(() => {
   backend.configure.mockReset().mockResolvedValue(undefined);
   backend.remove.mockReset().mockResolvedValue(undefined);
   backend.acknowledge.mockReset().mockResolvedValue(undefined);
+  backend.release.mockReset().mockResolvedValue(undefined);
 });
 afterEach(() => {
   cleanup();

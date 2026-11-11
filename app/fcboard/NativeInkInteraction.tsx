@@ -4,10 +4,12 @@ import { getCommonBounds } from "@fcboard/element";
 import { colorToHex } from "@fcboard/common";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
 import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
+import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { classroomCommands } from "./commands";
+import { createNativeEraserBackend } from "./nativeEraser";
 
 type Contact = {
   owner: string;
@@ -25,6 +27,7 @@ type PenAppearance = {
   pen: string;
   variation: number;
   touchPressure: boolean;
+  rainbow?: { colors: string[]; positions: number[] };
   gradient?: { colors: readonly string[]; size: number; x: number; y: number };
 };
 const ink = registerPlugin<{
@@ -32,6 +35,7 @@ const ink = registerPlugin<{
     owner: string;
     token: string;
     enabled: boolean;
+    multiStroke: boolean;
     mode: "pen" | "select" | "regionErase" | "erase";
     x: number;
     y: number;
@@ -117,14 +121,20 @@ export const NativeInkInteraction = ({
     let uiBounds: number[][] = [];
     let uiBlocksInk = false;
     const contacts = new Map<string, NonNullable<Contact["mode"]>>();
+    const eraser = createNativeEraserBackend(api.id);
+    const unregisterEraser = api.registerNativeEraserBackend?.(eraser.erase);
+    let eraserQueue = Promise.resolve();
     const apply = (
       contact: Contact,
       phase = contact.phase,
       restoreSelection = true,
     ) => {
       if (contact.mode === "erase") {
-        api.nativeEraserGesture!({ ...contact, phase, restoreSelection });
-        return;
+        return api.nativeEraserGesture!({
+          ...contact,
+          phase,
+          restoreSelection,
+        });
       }
       if (phase === "move") {
         throw new Error("Unexpected native pen movement");
@@ -182,7 +192,7 @@ export const NativeInkInteraction = ({
           )
         : style;
       const nativeStyle = (value: typeof style) =>
-        ["hard", "dashed", "highlighter", "brush"].includes(
+        ["hard", "dashed", "highlighter", "brush", "rainbow"].includes(
           value.customData.fcInk.pen,
         );
       const appearance = (value: typeof style): PenAppearance => {
@@ -191,6 +201,14 @@ export const NativeInkInteraction = ({
           pen: data.pen,
           variation: data.variation ?? 45,
           touchPressure: inkProfile?.touchPressure === true,
+          ...(data.pen === "rainbow" && !data.gradient
+            ? {
+                rainbow: {
+                  colors: rainbowInkStops.map((stop) => stop[1]),
+                  positions: rainbowInkStops.map((stop) => stop[0]),
+                },
+              }
+            : {}),
           ...(data.gradient
             ? {
                 gradient: {
@@ -220,7 +238,6 @@ export const NativeInkInteraction = ({
       const enabled =
         (mode !== "pen" ||
           (state.activeTool.type === "freedraw" &&
-            state.multiStroke !== false &&
             nativeStyle(style) &&
             nativeStyle(thickStyle))) &&
         !state.viewModeEnabled &&
@@ -236,6 +253,7 @@ export const NativeInkInteraction = ({
         state.scrollY,
         state.zoom.value,
         state.currentItemPenMode,
+        state.multiStroke,
         state.whiteboardPenTips,
         state.whiteboardPenWidths,
         state.whiteboardDualPen,
@@ -351,6 +369,7 @@ export const NativeInkInteraction = ({
         owner: api.id,
         token,
         enabled: enabled && !uiBlocksInk && blocked.length <= 512,
+        multiStroke: state.multiStroke !== false,
         mode,
         x: state.offsetLeft,
         y: state.offsetTop,
@@ -396,7 +415,7 @@ export const NativeInkInteraction = ({
         frame = requestAnimationFrame(sync);
       }
     };
-    const listener = ink.addListener("contact", (contact) => {
+    const handleContact = async (contact: Contact) => {
       if (!active || contact.owner !== api.id) {
         return;
       }
@@ -413,10 +432,17 @@ export const NativeInkInteraction = ({
           contact.token !== token ||
           configuredSurface !== surfaceStamp(api)
         ) {
-          apply(contact, "cancel", configuredSurface === surfaceStamp(api));
+          await apply(
+            contact,
+            "cancel",
+            configuredSurface === surfaceStamp(api),
+          );
           contacts.delete(contact.id);
         } else {
-          apply(contact);
+          const result = apply(contact);
+          if (result) {
+            await result;
+          }
           if (contact.phase === "start") {
             contacts.set(contact.id, contact.mode || "pen");
           } else if (contact.phase !== "move") {
@@ -437,6 +463,17 @@ export const NativeInkInteraction = ({
               .catch(() => {});
           }),
         );
+      }
+    };
+    const listener = ink.addListener("contact", (contact) => {
+      // Native eraser start/move/end share one ordered transaction, while other
+      // writers continue committing independently of the geometry worker.
+      if (contact.mode === "erase") {
+        eraserQueue = eraserQueue
+          .then(() => handleContact(contact))
+          .catch(fail);
+      } else {
+        void handleContact(contact).catch(fail);
       }
     });
     const scheduleUi = () => {
@@ -474,6 +511,7 @@ export const NativeInkInteraction = ({
           );
         }
         contacts.clear();
+        void eraser.reset().catch(fail);
         void ink.remove({ owner: api.id }).catch(() => {});
         schedule();
       }),
@@ -505,6 +543,8 @@ export const NativeInkInteraction = ({
           false,
         );
       }
+      unregisterEraser?.();
+      void eraser.reset().catch(() => {});
       void listener.then((handle) => handle.remove()).catch(() => {});
       void ink.remove({ owner: api.id }).catch(() => {});
     };

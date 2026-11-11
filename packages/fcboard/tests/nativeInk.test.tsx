@@ -1,5 +1,8 @@
 import { act } from "@testing-library/react";
 import { CaptureUpdateAction } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
+
+import type { LocalPoint } from "@fcboard/math";
 
 import { Fcboard } from "../index";
 
@@ -253,4 +256,109 @@ it("erases the native region once through normal geometry and supports undo and 
   expect(api.getSceneElements().map((element) => element.id)).toEqual([
     outside.id,
   ]);
+});
+
+it("applies native eraser patches to the latest scene and preserves another writer on cancellation", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  const ink = API.createElement({
+    type: "freedraw",
+    x: 100,
+    y: 100,
+    points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 0)],
+  });
+  API.updateScene({ elements: [ink] });
+  act(() => api.setActiveTool({ type: "eraser" }));
+  let finish!: (
+    updates: import("../eraser/stroke").NativeEraseUpdate[],
+  ) => void;
+  const backend = vi.fn(
+    () =>
+      new Promise<import("../eraser/stroke").NativeEraseUpdate[]>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const unregister = api.registerNativeEraserBackend!(backend);
+  const input = {
+    id: "worker",
+    width: 10,
+    height: 12,
+    points: [[150, 100, 0.5]] as [number, number, number][],
+  };
+  let pending: void | Promise<void>;
+  act(() => {
+    pending = api.nativeEraserGesture!({ ...input, phase: "start" });
+  });
+  expect(api.getSceneElements()).toHaveLength(1);
+  const other = API.createElement({
+    type: "freedraw",
+    x: 400,
+    y: 300,
+    points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(50, 50)],
+  });
+  API.updateScene({ elements: [ink, other] });
+  await act(async () => {
+    finish([
+      {
+        source: ink,
+        version: ink.version,
+        nonce: ink.versionNonce,
+        survivors: [],
+      },
+    ]);
+    await pending;
+  });
+  expect(api.getSceneElements().map((e) => e.id)).toEqual([other.id]);
+  act(() => api.nativeEraserGesture!({ ...input, phase: "cancel" }));
+  expect(api.getSceneElements().map((e) => e.id)).toEqual([ink.id, other.id]);
+  unregister();
+});
+
+it("rejects a native cut if the source was moved while the worker was running", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  const ink = API.createElement({
+    type: "freedraw",
+    x: 100,
+    y: 100,
+    points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(100, 0)],
+  });
+  API.updateScene({ elements: [ink] });
+  act(() => api.setActiveTool({ type: "eraser" }));
+  let finish!: (
+    updates: import("../eraser/stroke").NativeEraseUpdate[],
+  ) => void;
+  const unregister = api.registerNativeEraserBackend!(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const input = {
+    id: "stale",
+    width: 10,
+    height: 12,
+    points: [[150, 100, 0.5]] as [number, number, number][],
+  };
+  let pending: void | Promise<void>;
+  act(() => {
+    pending = api.nativeEraserGesture!({ ...input, phase: "start" });
+  });
+  const moved = { ...ink, x: 600, version: ink.version + 1 };
+  API.updateScene({ elements: [moved] });
+  await act(async () => {
+    finish([
+      {
+        source: ink,
+        version: ink.version,
+        nonce: ink.versionNonce,
+        survivors: [],
+      },
+    ]);
+    await pending;
+  });
+  expect(api.getSceneElements()).toHaveLength(1);
+  expect(api.getSceneElements()[0].x).toBe(600);
+  act(() => api.nativeEraserGesture!({ ...input, phase: "cancel" }));
+  unregister();
 });

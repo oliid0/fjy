@@ -1008,6 +1008,9 @@ export interface FcboardImperativeAPI {
   nativeInk?: InstanceType<typeof App>["nativeInk"];
   nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
   nativeEraserGesture?: InstanceType<typeof App>["nativeEraserGesture"];
+  registerNativeEraserBackend?: InstanceType<
+    typeof App
+  >["registerNativeEraserBackend"];
   updateScene: InstanceType<typeof App>["updateScene"];
   applyDeltas: InstanceType<typeof App>["applyDeltas"];
   mutateElement: InstanceType<typeof App>["mutateElement"];

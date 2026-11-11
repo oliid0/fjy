@@ -271,6 +271,97 @@ export const eraseStroke = (
   if (!touched) {
     return null;
   }
+  return restoreEraseFragments(element, result, {
+    brush: !!brush,
+    factory: !!factory,
+    nib,
+    nibHit,
+    brushAngle,
+    endDistance: samples.at(-1)!.distance,
+  });
+};
+
+/** Canonical scene-space geometry is serialized once per element version. Native
+ * erasure retains/indexes it and performs all continuous sweep intersections. */
+export const prepareNativeEraseStroke = (element: FcboardFreeDrawElement) => {
+  const brush = isFactoryBrush(element);
+  const factory = isFactoryStroke(element);
+  const factorySamples = factory ? factoryInkSamples(element) : null;
+  const input = brush
+    ? factoryBrushSamples(element)
+    : factorySamples
+    ? factorySamples.map((p) => ({ ...p, width: 0 }))
+    : element.points.map(([x, y]) => ({ x, y, width: 0 }));
+  const [, , , , cx, cy] = getElementAbsoluteCoords(element, new Map());
+  const cos = Math.cos(element.angle);
+  const sin = Math.sin(element.angle);
+  const global = ([x, y]: readonly [number, number]) => ({
+    x: cx + (element.x + x - cx) * cos - (element.y + y - cy) * sin,
+    y: cy + (element.x + x - cx) * sin + (element.y + y - cy) * cos,
+  });
+  let distance = element.customData?.fcInk?.dashOffset || 0;
+  const samples = input.map((p, i): Sample => {
+    if (i) {
+      distance += Math.hypot(p.x - input[i - 1].x, p.y - input[i - 1].y);
+    }
+    return {
+      ...global([p.x, p.y]),
+      pressure: factorySamples?.[i].pressure ?? element.pressures[i] ?? 0.5,
+      distance,
+      brushWidth: p.width,
+    };
+  });
+  const nib = factoryNibControls(element)?.map(global);
+  const nibOutline = factoryNibSamples(element).map(global);
+  const brushAngle =
+    (element.customData?.fcInk?.brushAngle || 0) + element.angle;
+  const cap = brush
+    ? 0
+    : element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25);
+  return {
+    samples,
+    nib,
+    nibOutline,
+    brush,
+    factory,
+    brushAngle,
+    cap,
+    endDistance: distance,
+  };
+};
+
+export type NativeEraseUpdate = {
+  source: FcboardFreeDrawElement;
+  version: number;
+  nonce: number;
+  survivors: FcboardFreeDrawElement[];
+};
+export type NativeEraserBackend = (
+  elements: readonly FcboardElement[],
+  path: readonly Point[],
+  width: number,
+  height: number,
+) => Promise<readonly NativeEraseUpdate[]>;
+
+export const restoreEraseFragments = (
+  element: FcboardFreeDrawElement,
+  result: Sample[][],
+  {
+    brush,
+    factory,
+    nib,
+    nibHit,
+    brushAngle,
+    endDistance,
+  }: {
+    brush: boolean;
+    factory: boolean;
+    nib?: Point[];
+    nibHit: boolean;
+    brushAngle: number;
+    endDistance: number;
+  },
+) => {
   return result.map((fragment, i) => {
     const first = fragment[0];
     const points = fragment.map((p) =>
@@ -295,12 +386,9 @@ export const eraseStroke = (
                 ...(factory ? { centerline: true } : {}),
                 ...(nib
                   ? {
-                      nib:
-                        !nibHit &&
-                        fragment.at(-1)!.distance === samples.at(-1)!.distance,
+                      nib: !nibHit && fragment.at(-1)!.distance === endDistance,
                       nibPath:
-                        !nibHit &&
-                        fragment.at(-1)!.distance === samples.at(-1)!.distance
+                        !nibHit && fragment.at(-1)!.distance === endDistance
                           ? nib.map(({ x, y }) => [
                               (x - first.x) / element.strokeWidth,
                               (y - first.y) / element.strokeWidth,

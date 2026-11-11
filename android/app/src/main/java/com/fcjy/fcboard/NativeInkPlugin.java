@@ -21,14 +21,15 @@ public class NativeInkPlugin extends Plugin {
     private final java.util.concurrent.ExecutorService publisher = java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "native-ink-events"));
     private final Map<String, NativeInkView> surfaces = new HashMap<>();
     private final Map<NativeInkView, RectF> inputBounds = new HashMap<>();
-    private final Map<Integer, NativeInkView> capturedDevices = new HashMap<>();
+    private final Map<NativeInputStream, NativeInkView> capturedDevices = new HashMap<>();
     @Override public void load() { ((MainActivity)getActivity()).setInkInput(this); }
     /** Route the real event before ViewGroup can cancel another device's stream. */
     boolean dispatchInput(MotionEvent event) {
-        int device = event.getDeviceId(), action = event.getActionMasked();
+        NativeInputStream device = new NativeInputStream(event);
+        int action = event.getActionMasked();
         NativeInkView captured = capturedDevices.get(device);
         if (captured != null && action == MotionEvent.ACTION_DOWN) {
-            captured.cancelDevice(device); capturedDevices.remove(device); captured = null;
+            captured.cancelStream(device); capturedDevices.remove(device); captured = null;
         }
         if (captured != null) {
             RectF bounds = inputBounds.get(captured);
@@ -73,6 +74,7 @@ public class NativeInkPlugin extends Plugin {
                         JSONArray box = boxes.getJSONArray(i); blocked.add(new RectF((float)box.getDouble(0), (float)box.getDouble(1), (float)box.getDouble(2), (float)box.getDouble(3)));
                     }
                 }
+                view.setMultiStroke(call.getBoolean("multiStroke", true));
                 view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
                 int[] web = new int[2], overlay = new int[2]; getBridge().getWebView().getLocationInWindow(web); layer.getLocationInWindow(overlay);
                 FrameLayout.LayoutParams bounds = new FrameLayout.LayoutParams(Math.max(1, Math.round((float)width * scale)), Math.max(1, Math.round((float)height * scale)));

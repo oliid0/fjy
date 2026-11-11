@@ -110,30 +110,6 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-arm64-v8a
-          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-armeabi-v7a
-          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-x86
-          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-x86_64
-          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
-          if-no-files-found: error
       - name: Package whiteboard web assets
         timeout-minutes: 8
         run: pnpm --dir app exec vite build
@@ -141,18 +117,6 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=6144"
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
-      - name: Upload deployable live-share service and matching viewer
-        uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Live-Share
-          path: |
-            services/board-share/server.mjs
-            services/board-share/transfers.mjs
-            services/board-share/package.json
-            services/board-share/README.md
-            services/board-share/deploy
-            app/build
-          if-no-files-found: error
       - name: Report packaged models and native library sizes
         if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         run: python3 scripts/apk-size-report.py >> "$GITHUB_STEP_SUMMARY"
@@ -199,12 +163,14 @@ jobs:
           node scripts/fetch-courseware-fixtures.mjs
           pnpm exec playwright test --config config/playwright.config.ts
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
         if: always()
         with:
           name: Fcboard-UI-verification
           path: test-results
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
         if: always()
         with:
           name: Fcboard-Android-verification
@@ -214,7 +180,49 @@ jobs:
             android/app/build/outputs/connected_android_test_additional_output
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
         with:
           name: Fcboard-Web
           path: app/build
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-arm64-v8a
+          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-armeabi-v7a
+          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86
+          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86_64
+          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
+          if-no-files-found: error
+      - name: Upload deployable live-share service and matching viewer
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Live-Share
+          path: |
+            services/board-share/server.mjs
+            services/board-share/transfers.mjs
+            services/board-share/package.json
+            services/board-share/README.md
+            services/board-share/deploy
+            app/build
           if-no-files-found: error

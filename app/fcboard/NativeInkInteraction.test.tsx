@@ -384,6 +384,7 @@ it("acknowledges empty native eraser batches before lift and falls back visibly 
   await waitFor(() =>
     expect(document.documentElement).toHaveClass("fc-native-scene"),
   );
+  await waitFor(() => expect(backend.configure).toHaveBeenCalled());
   const options = backend.configure.mock.calls.at(-1)![0];
   const contact = {
     owner: api.id,

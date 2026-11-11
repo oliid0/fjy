@@ -124,32 +124,41 @@ export const startPCMSpeech = async (
   let pending = Promise.resolve();
   let flushDone: (() => void) | undefined;
   let finishPromise: Promise<void> | undefined;
+  let cleanupPromise: Promise<void> | undefined;
   let captureTimeout: ReturnType<typeof setTimeout> | undefined;
   const deliver = (lines: TranscriptLine[]) => {
     if (!cancelled) {
       lines.forEach(onLine);
     }
   };
-  const cleanup = async () => {
-    clearTimeout(captureTimeout);
-    source?.disconnect();
-    node?.disconnect();
-    if (node) {
-      node.port.onmessage = null;
-    }
-    if (!stream) {
-      media?.getTracks().forEach((track) => track.stop());
-    }
-    await context.close().catch(() => {});
-  };
+  const cleanup = () =>
+    (cleanupPromise ||= (async () => {
+      clearTimeout(captureTimeout);
+      source?.disconnect();
+      node?.disconnect();
+      if (node) {
+        node.port.onmessage = null;
+      }
+      if (!stream) {
+        media?.getTracks().forEach((track) => track.stop());
+      }
+      await context.close().catch(() => {});
+    })());
   const finish = (discard: boolean): Promise<void> => {
     cancelled ||= discard;
+    clearTimeout(captureTimeout);
+    if (cancelled) {
+      ended = true;
+      flushDone?.();
+      // Native inference may still be pending; release microphone capture now.
+      void cleanup().catch(() => {});
+    }
     if (finishPromise) {
       return finishPromise;
     }
     finishPromise = (async () => {
       source?.disconnect();
-      if (node && !discard) {
+      if (node && !cancelled) {
         await new Promise<void>((resolve) => {
           const timeout = setTimeout(resolve, 1000);
           flushDone = () => {
@@ -163,14 +172,29 @@ export const startPCMSpeech = async (
       await pending;
       try {
         deliver(
-          (await transport.stop({ session, ...(cloud ? { discard } : {}) }))
-            .lines,
+          (
+            await transport.stop({
+              session,
+              ...(cloud ? { discard: cancelled } : {}),
+            })
+          ).lines,
         );
       } finally {
         await cleanup();
       }
     })();
     return finishPromise;
+  };
+  const watchCapture = () => {
+    clearTimeout(captureTimeout);
+    captureTimeout = setTimeout(() => {
+      onError(
+        t(
+          "fcboard.the_microphone_did_not_provide_audio_check_permissions_and_the_input_device_then_start_again",
+        ),
+      );
+      void finish(true).catch(() => {});
+    }, 12000);
   };
   try {
     media ||= await navigator.mediaDevices.getUserMedia({
@@ -200,7 +224,7 @@ export const startPCMSpeech = async (
       if (ended || cancelled || !data.pcm) {
         return;
       }
-      clearTimeout(captureTimeout);
+      watchCapture();
       if (++queued > 20) {
         onError(
           t(
@@ -229,8 +253,10 @@ export const startPCMSpeech = async (
           }
         })
         .catch((error) => {
-          onError(error instanceof Error ? error.message : String(error));
-          void finish(true).catch(() => {});
+          if (!cancelled) {
+            onError(error instanceof Error ? error.message : String(error));
+            void finish(true).catch(() => {});
+          }
         })
         .finally(() => {
           queued--;
@@ -238,14 +264,7 @@ export const startPCMSpeech = async (
     };
     source.connect(node);
     node.connect(context.destination);
-    captureTimeout = setTimeout(() => {
-      onError(
-        t(
-          "fcboard.the_microphone_did_not_provide_audio_check_permissions_and_the_input_device_then_start_again",
-        ),
-      );
-      void finish(true).catch(() => {});
-    }, 12000);
+    watchCapture();
     let resumeTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([

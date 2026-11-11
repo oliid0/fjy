@@ -225,6 +225,7 @@ export const Classroom = ({
   const stopSpeech = useRef<(() => void) | null>(null);
   const localSpeech = useRef<LocalSpeechHandle | null>(null);
   const duplexSpeech = useRef<DuplexSpeechHandle | null>(null);
+  const duplexOpening = useRef<Promise<void> | null>(null);
   const duplexTranscript = useRef<{
     line: (line: TranscriptLine) => void;
     interim: (line: TranscriptLine | null) => void;
@@ -1585,8 +1586,7 @@ export const Classroom = ({
     return turns;
   };
 
-  const openDuplexVoice = async (stream?: MediaStream) => {
-    const generation = ++voiceGeneration.current;
+  const openDuplexVoice = async (generation: number, stream?: MediaStream) => {
     setListening(true);
     setVoiceState("listening");
     setStatus("");
@@ -1622,6 +1622,7 @@ export const Classroom = ({
           if (generation !== voiceGeneration.current) {
             return;
           }
+          voiceGeneration.current++;
           setError(message);
           setListening(false);
           recordingVoiceCommand.current = false;
@@ -1658,42 +1659,79 @@ export const Classroom = ({
   };
 
   const toggleVoice = async (resumeExisting: unknown = false) => {
-    if (duplexSpeech.current && resumeExisting !== true) {
+    if (
+      (duplexSpeech.current || duplexOpening.current) &&
+      resumeExisting !== true
+    ) {
       const session = duplexSpeech.current;
+      const opening = duplexOpening.current;
       voiceGeneration.current++;
       duplexSpeech.current = null;
       localSpeech.current = null;
       duplexTranscript.current = null;
       recordingVoiceCommand.current = false;
       setListening(false);
-      await session.cancel();
-      if (recorder.current && !stoppingRecording.current) {
-        await (recordSpeechTask.current = startRecordingSpeech(
-          recorder.current,
-        ));
-      }
+      voiceRelease.current = (async () => {
+        await session?.cancel();
+        await opening;
+        if (recorder.current && !stoppingRecording.current) {
+          await (recordSpeechTask.current = startRecordingSpeech(
+            recorder.current,
+          ));
+        }
+      })();
+      await voiceRelease.current;
       return;
     }
     if (
       currentSettings().assistantVoice === "duplex" &&
       !duplexSpeech.current
     ) {
-      narrator.current?.stop();
-      if (recorder.current) {
-        recordSpeechGeneration.current++;
-        await recordSpeechTask.current;
-        stopSpeech.current?.();
-        stopSpeech.current = null;
-        const previous = localSpeech.current;
-        localSpeech.current = null;
-        await previous?.cancel();
-        recordingVoiceCommand.current = true;
+      if (duplexOpening.current) {
+        await duplexOpening.current;
+        return;
       }
-      await openDuplexVoice(recorder.current?.audioStream);
-      if (recorder.current && duplexSpeech.current) {
-        await (recordSpeechTask.current = startRecordingSpeech(
-          recorder.current,
-        ));
+      const generation = ++voiceGeneration.current;
+      const opening = (async () => {
+        await voiceRelease.current;
+        if (generation !== voiceGeneration.current) {
+          return;
+        }
+        narrator.current?.stop();
+        if (recorder.current) {
+          recordSpeechGeneration.current++;
+          await recordSpeechTask.current;
+          if (generation !== voiceGeneration.current) {
+            return;
+          }
+          stopSpeech.current?.();
+          stopSpeech.current = null;
+          const previous = localSpeech.current;
+          localSpeech.current = null;
+          await previous?.cancel();
+          if (generation !== voiceGeneration.current) {
+            return;
+          }
+          recordingVoiceCommand.current = true;
+        }
+        await openDuplexVoice(generation, recorder.current?.audioStream);
+        if (
+          generation === voiceGeneration.current &&
+          recorder.current &&
+          duplexSpeech.current
+        ) {
+          await (recordSpeechTask.current = startRecordingSpeech(
+            recorder.current,
+          ));
+        }
+      })();
+      duplexOpening.current = opening;
+      try {
+        await opening;
+      } finally {
+        if (duplexOpening.current === opening) {
+          duplexOpening.current = null;
+        }
       }
       return;
     }

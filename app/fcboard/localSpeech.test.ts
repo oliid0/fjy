@@ -96,7 +96,12 @@ describe("built-in speech audio lifecycle", () => {
 
   it("releases capture immediately when cancelling a still-running inference", async () => {
     let resolve!: (value: { lines: [] }) => void;
-    engine.push.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    engine.push.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
     const handle = await startLocalSpeech(vi.fn(), vi.fn(), stream);
     emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
     await vi.waitFor(() => expect(resolve).toBeDefined());

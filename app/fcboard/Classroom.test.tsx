@@ -4003,7 +4003,10 @@ describe("selection-driven classroom controls", () => {
   });
 
   it("cancels a pending duplex start without opening competing sessions and can start again", async () => {
-    saveSettings({ ...defaults, assistantVoice: "duplex", speechKey: "speech-key" }, false);
+    saveSettings(
+      { ...defaults, assistantVoice: "duplex", speechKey: "speech-key" },
+      false,
+    );
     const session = {
       startedAt: Date.now(),
       stop: vi.fn(),
@@ -4012,16 +4015,26 @@ describe("selection-driven classroom controls", () => {
       flush: vi.fn(),
     };
     let ready!: (value: typeof session) => void;
-    const start = vi.spyOn(duplex, "startDuplexSpeech")
-      .mockImplementationOnce(() => new Promise((resolve) => { ready = resolve; }))
+    const start = vi
+      .spyOn(duplex, "startDuplexSpeech")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            ready = resolve;
+          }),
+      )
       .mockResolvedValue(session);
     const view = render(<Classroom api={api} />);
     let opening!: Promise<unknown>;
     let stopping: Promise<unknown> | undefined;
     try {
-      act(() => { opening = classroomCommands.execute({ name: "voice.toggle" }); });
+      act(() => {
+        opening = classroomCommands.execute({ name: "voice.toggle" });
+      });
       await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
-      await act(async () => { stopping = classroomCommands.execute({ name: "voice.toggle" }); });
+      await act(async () => {
+        stopping = classroomCommands.execute({ name: "voice.toggle" });
+      });
       expect(start).toHaveBeenCalledTimes(1);
       await act(async () => {
         ready(session);
@@ -4029,7 +4042,9 @@ describe("selection-driven classroom controls", () => {
       });
       expect(session.cancel).toHaveBeenCalledTimes(1);
       expect(view.container.querySelector(".fc-voice-orb")).toBeNull();
-      await act(async () => { await classroomCommands.execute({ name: "voice.toggle" }); });
+      await act(async () => {
+        await classroomCommands.execute({ name: "voice.toggle" });
+      });
       expect(start).toHaveBeenCalledTimes(2);
       expect(view.container.querySelector(".fc-voice-orb")).not.toBeNull();
     } finally {

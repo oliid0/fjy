@@ -857,13 +857,27 @@ it("replaces revised live snapshots before finalization while retaining explicit
   const handle = await startDuplexSpeech(view);
   try {
     emit({ type: "conversation.item.input_audio_transcription.started" });
-    emit({ type: "conversation.item.input_audio_transcription.delta", transcript: "今天是晴天" });
-    emit({ type: "conversation.item.input_audio_transcription.delta", transcript: "今天是雨天" });
+    emit({
+      type: "conversation.item.input_audio_transcription.delta",
+      transcript: "今天是晴天",
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.delta",
+      transcript: "今天是雨天",
+    });
     expect(view.caption).toHaveBeenLastCalledWith("今天是雨天");
-    expect(view.interim).toHaveBeenLastCalledWith(expect.objectContaining({ text: "今天是雨天" }));
+    expect(view.interim).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: "今天是雨天" }),
+    );
     expect(view.line).not.toHaveBeenCalled();
-    emit({ type: "conversation.item.input_audio_transcription.delta", delta: "先画一个圆" });
-    emit({ type: "conversation.item.input_audio_transcription.delta", delta: "先画一个方形" });
+    emit({
+      type: "conversation.item.input_audio_transcription.delta",
+      delta: "先画一个圆",
+    });
+    emit({
+      type: "conversation.item.input_audio_transcription.delta",
+      delta: "先画一个方形",
+    });
     expect(view.caption).toHaveBeenLastCalledWith("先画一个方形");
     emit({ type: "response.output_text.delta", text: "哈" });
     emit({ type: "response.output_text.delta", text: "哈" });

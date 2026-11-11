@@ -490,8 +490,8 @@ export const startDuplexSpeech = async (options: {
         player.interrupt();
         break;
       case "conversation.item.input_audio_transcription.delta":
-        input =
-          typeof event.text === "string" ? event.text : input + text(event);
+        // Seeduplex sends the revised utterance, including in its delta field.
+        input = text(event);
         options.caption(input);
         options.interim({ time: inputAt, text: input });
         break;
@@ -520,13 +520,7 @@ export const startDuplexSpeech = async (options: {
           reply = "";
           replyCommitted = false;
         }
-        const fragment = text(event);
-        // Explicit deltas may legitimately repeat words. A cumulative text snapshot
-        // replaces its prefix instead of appending the entire transcript again.
-        reply =
-          typeof event.delta !== "string" && fragment.startsWith(reply)
-            ? fragment
-            : reply + fragment;
+        reply += text(event);
         options.caption(reply);
         break;
       }

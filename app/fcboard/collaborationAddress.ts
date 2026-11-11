@@ -1,5 +1,8 @@
 import { t } from "@fcboard/fcboard/i18n";
 
+export const isLocalCollaborationCode = (input: string) =>
+  /^[0-9A-Za-z]{4}$/.test(input.trim());
+
 /** Existing local/cloud transports use a real 32-hex room ID in #lan=. */
 export const collaborationAddress = (input: string, endpoint: string) => {
   try {

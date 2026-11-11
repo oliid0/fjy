@@ -868,7 +868,7 @@
     "collab_code": "协同码或分享链接",
     "collab_code_invalid": "请输入32位协同码或有效的白板分享链接。",
     "collab_join_action": "加入白板",
-    "collab_join_hint": "输入主持人的协同码或粘贴分享链接，加入时会新建独立白板并保留当前内容。",
+    "collab_join_hint": "同一局域网内输入主持人的四位英数协同码，区分大小写；也可粘贴分享链接。加入后即可共同书写，当前白板会保留。",
     "collab_room": "协同码：{{code}}",
     "toolbar_text": "工具栏文字",
     "swap_toolbar_sides": "左右切换底栏",

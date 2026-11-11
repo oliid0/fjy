@@ -29,6 +29,8 @@ vi.mock("./network", () => ({
     setCollaborationPassword: vi.fn(),
     sendScene: vi.fn(),
     addListener: vi.fn(),
+    resolveCollaborationCode: vi.fn(),
+    cancelCollaborationLookup: vi.fn(),
   },
 }));
 
@@ -48,6 +50,57 @@ afterEach(() => {
   vi.unstubAllGlobals();
   history.replaceState(null, "", "/");
 });
+
+it.each(["aB09", "Ab09"])(
+  "resolves visible code %s without changing its case",
+  async (code) => {
+    vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+    vi.mocked(Network.addListener).mockResolvedValue({ remove: vi.fn() });
+    vi.mocked(Network.resolveCollaborationCode).mockClear();
+    vi.mocked(Network.resolveCollaborationCode).mockResolvedValue({
+      url: "http://192.168.0.48:1234/#lan=0123456789abcdef0123456789abcdef",
+    });
+    const stopBoards = classroomCommands.context("boards", () => ({
+      active: "existing",
+      boards: [{ id: "existing" }],
+    }));
+    const create = vi.fn().mockRejectedValue(new Error("disk full"));
+    const stopCreate = classroomCommands.register(
+      "board.new",
+      "@internal",
+      create,
+    );
+    const view = render(<LanSession api={board()} />);
+    try {
+      await act(async () => {
+        await classroomCommands.execute({ name: "network.panel" });
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.collab_join") }),
+      );
+      fireEvent.change(screen.getByLabelText(t("fcboard.collab_code")), {
+        target: { value: code },
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.collab_join_action") }),
+      );
+      await waitFor(() =>
+        expect(Network.resolveCollaborationCode).toHaveBeenCalledWith({
+          id: expect.any(String),
+          code,
+        }),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole("alert")).toHaveTextContent("disk full"),
+      );
+      expect(create).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      stopCreate();
+      stopBoards();
+    }
+  },
+);
 
 it("joins from the visible code form, preserves the existing board on failure, and allows retrying the same code", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
@@ -107,7 +160,7 @@ it("keeps the host's password switch and code when closing and reopening the liv
   vi.mocked(Network.addListener).mockResolvedValue({ remove: vi.fn() });
   vi.mocked(Network.startCollaboration)
     .mockClear()
-    .mockResolvedValue({ urls: ["http://board.test/#lan=123"] });
+    .mockResolvedValue({ urls: ["http://board.test/#lan=123"], code: "aB09" });
   vi.mocked(Network.setCollaborationPassword)
     .mockClear()
     .mockResolvedValue(undefined);
@@ -127,6 +180,9 @@ it("keeps the host's password switch and code when closing and reopening the liv
   );
   const toggle = await screen.findByRole("switch");
   expect(toggle).not.toBeChecked();
+  expect(
+    screen.getByText(t("fcboard.collab_room", { code: "aB09" })),
+  ).toBeVisible();
   expect(Network.startCollaboration).toHaveBeenCalledWith({
     scene: expect.objectContaining({ kind: "scene" }),
   });

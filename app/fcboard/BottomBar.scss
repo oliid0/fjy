@@ -9,7 +9,7 @@
   --lg-button-size: calc(58 * var(--fc-unit));
   position: absolute;
   inset: auto max(calc(20 * var(--fc-unit)), env(safe-area-inset-right))
-    max(calc(20 * var(--fc-unit)), env(safe-area-inset-bottom))
+    env(safe-area-inset-bottom)
     max(calc(20 * var(--fc-unit)), env(safe-area-inset-left));
   display: block;
   height: calc(74 * var(--fc-unit));
@@ -41,7 +41,7 @@
 .app .fcboard .fc-unified-toolbar .fc-drawing-tools {
   left: 50%;
   transform: translateX(-50%);
-  gap: calc(6 * var(--fc-unit));
+  gap: 0;
 }
 .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
   right: 0;

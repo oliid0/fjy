@@ -121,13 +121,26 @@
     }
   }
   &.fc-share-qr-dialog > header > button {
-    padding: 0;
-    min-height: 24px;
-    width: 24px;
-    height: 24px;
+    position: absolute;
+    right: 0;
+    top: 0;
+    padding: calc(5 * 0.67px);
+    min-height: 0;
+    min-width: 0;
+    width: calc(28 * 0.67px);
+    height: calc(28 * 0.67px);
+    border: 0;
+    border-radius: calc(4 * 0.67px);
+    background: #fcfcfe;
+    display: grid;
+    place-items: center;
     > img {
-      width: 24px;
-      height: 24px;
+      width: calc(18 * 0.67px);
+      height: calc(18 * 0.67px);
+    }
+    &:active,
+    &:focus-visible {
+      background: #ebebeb;
     }
   }
 }

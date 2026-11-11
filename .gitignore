@@ -52,3 +52,5 @@ android/app/libs/onnxruntime-android-*.aar
 .cache/fcboard-dictionary/
 public/dictionary/
 android/app/src/main/assets/dictionary/
+
+android/app/libs/moonshine-voice-*.aar

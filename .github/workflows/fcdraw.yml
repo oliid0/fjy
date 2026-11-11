@@ -71,25 +71,6 @@ jobs:
           node scripts/fetch-ocr-models.mjs
           node scripts/fetch-local-models.mjs
           python3 scripts/fetch-dictionary.py
-      - name: Package whiteboard web assets
-        timeout-minutes: 8
-        run: pnpm --dir app exec vite build
-        env:
-          NODE_OPTIONS: "--max-old-space-size=6144"
-          VITE_APP_ENABLE_TRACKING: "false"
-          VITE_APP_DISABLE_SENTRY: "true"
-      - name: Upload deployable live-share service and matching viewer
-        uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Live-Share
-          path: |
-            services/board-share/server.mjs
-            services/board-share/transfers.mjs
-            services/board-share/package.json
-            services/board-share/README.md
-            services/board-share/deploy
-            app/build
-          if-no-files-found: error
       - name: Package Android visual interaction assets without browser inference
         timeout-minutes: 8
         run: pnpm --dir app exec vite build
@@ -117,8 +98,10 @@ jobs:
           key: fcboard-tts-${{ hashFiles('scripts/tts-models.json') }}
       - name: Bundle verified offline Chinese and English narration
         run: python3 scripts/fetch-tts-models.py
-      - name: Prepare verified native ONNX runtime without duplicate x86 libraries
-        run: python3 scripts/prepare-android-ort.py
+      - name: Prepare verified native ONNX runtimes without duplicate libraries
+        run: |
+          python3 -m unittest discover -s scripts -p test_android_ort.py
+          python3 scripts/prepare-android-ort.py
       - name: Bundle verified offline Digital Ink models
         run: python3 scripts/fetch-ink-models.py
       - name: Package Android
@@ -150,6 +133,25 @@ jobs:
         with:
           name: Fcboard-Android-APK-x86_64
           path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
+          if-no-files-found: error
+      - name: Package whiteboard web assets
+        timeout-minutes: 8
+        run: pnpm --dir app exec vite build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
+          VITE_APP_ENABLE_TRACKING: "false"
+          VITE_APP_DISABLE_SENTRY: "true"
+      - name: Upload deployable live-share service and matching viewer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Live-Share
+          path: |
+            services/board-share/server.mjs
+            services/board-share/transfers.mjs
+            services/board-share/package.json
+            services/board-share/README.md
+            services/board-share/deploy
+            app/build
           if-no-files-found: error
       - name: Report packaged models and native library sizes
         if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}

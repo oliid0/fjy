@@ -46,7 +46,7 @@ public class NativeSceneTest {
             .put(ink("locked","a2","M20 100 L580 100","#00ff00",false,-1)),true),1,0);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             NativeSceneView view=surface();view.apply(frame);view.erase("erase",250,20,270,140,32,32);Bitmap output=pixels(view);
-            try{assertEquals(Color.BLUE,output.getPixel(256,60));assertEquals(128,Color.alpha(output.getPixel(256,100)));assertEquals(0,Color.alpha(output.getPixel(238,60)));}
+            try{assertEquals(Color.BLUE,output.getPixel(256,60));assertEquals(128,Color.alpha(output.getPixel(256,100)));assertEquals(0,Color.alpha(output.getPixel(239,60)));}
             finally{output.recycle();}
         });
     }

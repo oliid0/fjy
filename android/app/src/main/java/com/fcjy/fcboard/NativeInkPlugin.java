@@ -27,7 +27,17 @@ public class NativeInkPlugin extends Plugin {
     private final Map<String, Boolean> shortcutSurfaces = new HashMap<>();
     private final NativeBoardKeys keys = new NativeBoardKeys();
     private boolean touchLocked;
-    @Override public void load() { ((MainActivity)getActivity()).setInkInput(this); }
+    private android.hardware.input.InputManager inputManager;
+    private final android.hardware.input.InputManager.InputDeviceListener devices=new android.hardware.input.InputManager.InputDeviceListener(){
+        @Override public void onInputDeviceAdded(int id){}
+        @Override public void onInputDeviceChanged(int id){}
+        @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);}
+    };
+    @Override public void load() {
+        ((MainActivity)getActivity()).setInkInput(this);
+        inputManager=(android.hardware.input.InputManager)getContext().getSystemService(android.content.Context.INPUT_SERVICE);
+        if(inputManager!=null)inputManager.registerInputDeviceListener(devices,new android.os.Handler(android.os.Looper.getMainLooper()));
+    }
     void sceneCommitted(String owner) { NativeInkView view=surfaces.get(owner);if(view!=null)view.sceneCommitted(); }
     /** Route the real event before ViewGroup can cancel another device's stream. */
     boolean dispatchInput(MotionEvent event) {
@@ -132,6 +142,7 @@ public class NativeInkPlugin extends Plugin {
     }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
     @Override protected void handleOnDestroy() {
+        if(inputManager!=null)inputManager.unregisterInputDeviceListener(devices);
         getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
     }
 }

@@ -14,6 +14,7 @@ const backend = vi.hoisted(() => ({
   acknowledge: vi.fn(),
   release: vi.fn(),
   synchronize: vi.fn(),
+  erase: vi.fn(),
   listeners: new Set<(event: Record<string, unknown>) => void>(),
 }));
 vi.mock("@capacitor/core", () => ({
@@ -39,6 +40,7 @@ beforeEach(() => {
   backend.acknowledge.mockReset().mockResolvedValue(undefined);
   backend.release.mockReset().mockResolvedValue(undefined);
   backend.synchronize.mockReset().mockResolvedValue(undefined);
+  backend.erase.mockReset().mockResolvedValue({ patches: [] });
 });
 afterEach(() => {
   cleanup();
@@ -370,4 +372,65 @@ it("binds completed native preview to the real canonical element before delayed 
     elementId: api.getSceneElements()[0].id,
     complete: true,
   });
+});
+
+it("acknowledges empty native eraser batches before lift and falls back visibly on geometry failure", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => api.setActiveTool({ type: "eraser" }));
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() =>
+    expect(document.documentElement).toHaveClass("fc-native-scene"),
+  );
+  const options = backend.configure.mock.calls.at(-1)![0];
+  const contact = {
+    owner: api.id,
+    id: "empty",
+    token: options.token,
+    mode: "erase",
+    phase: "start",
+    width: 60,
+    height: 72,
+    pointerType: "touch",
+    nativeSequence: 1,
+    points: [[100, 100, 0.5]],
+  };
+  await act(async () =>
+    backend.listeners.forEach((listener) => listener(contact)),
+  );
+  await waitFor(() =>
+    expect(backend.synchronize.mock.calls.at(-1)![0].eraseThrough).toBe(1),
+  );
+  expect(api.getSceneElements()).toHaveLength(0);
+  await act(async () =>
+    backend.listeners.forEach((listener) =>
+      listener({
+        ...contact,
+        phase: "move",
+        nativeSequence: 2,
+        points: [[200, 100, 0.5]],
+      }),
+    ),
+  );
+  await waitFor(() =>
+    expect(backend.synchronize.mock.calls.at(-1)![0].eraseThrough).toBe(2),
+  );
+  expect(backend.synchronize.mock.calls.at(-1)![0].nodes).toEqual([]);
+  backend.erase.mockRejectedValueOnce(new Error("native geometry unavailable"));
+  await act(async () =>
+    backend.listeners.forEach((listener) =>
+      listener({
+        ...contact,
+        phase: "move",
+        nativeSequence: 3,
+        points: [[300, 100, 0.5]],
+      }),
+    ),
+  );
+  await waitFor(() =>
+    expect(document.documentElement).not.toHaveClass("fc-native-scene"),
+  );
+  expect(api.getAppState().errorMessage).toBe("native geometry unavailable");
 });

@@ -11,6 +11,15 @@ final class NativeInputRouter {
     private final Map<NativeInputStream,Map<Integer,NativeInkView>> captured=new HashMap<>();
     NativeInputRouter(Map<NativeInkView,RectF> surfaces){this.surfaces=surfaces;}
     void clear(){captured.clear();}
+    void cancelDevice(int id){
+        Iterator<Map.Entry<NativeInputStream,Map<Integer,NativeInkView>>> entries=captured.entrySet().iterator();
+        while(entries.hasNext()){
+            Map.Entry<NativeInputStream,Map<Integer,NativeInkView>> entry=entries.next();
+            if(entry.getKey().device!=id)continue;
+            for(NativeInkView view:new HashSet<>(entry.getValue().values()))view.cancelStream(entry.getKey());
+            entries.remove();
+        }
+    }
     void remove(NativeInkView view){for(Map<Integer,NativeInkView> pointers:captured.values())pointers.values().removeIf(owner->owner==view);}
     boolean dispatch(MotionEvent event){
         NativeInputStream stream=new NativeInputStream(event);

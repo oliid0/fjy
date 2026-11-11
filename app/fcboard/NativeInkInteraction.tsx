@@ -200,6 +200,7 @@ export const NativeInkInteraction = ({
         return;
       }
       failed = true;
+      scene?.dispose();
       void ink.remove({ owner: api.id }).catch(() => {});
       api.updateScene({
         appState: {
@@ -493,6 +494,11 @@ export const NativeInkInteraction = ({
           } else if (result) {
             await result;
           }
+          if (contact.mode === "erase" && contact.nativeSequence) {
+            // Empty hits also complete vector reconciliation. Do not retain an
+            // unbounded history of cuts during a long sweep over empty space.
+            scene?.acknowledgeErase(contact.nativeSequence);
+          }
           if (contact.phase === "start") {
             contacts.set(contact.id, contact.mode || "pen");
           } else if (contact.phase !== "move") {
@@ -506,9 +512,6 @@ export const NativeInkInteraction = ({
       if (contact.mode === "erase" && contact.phase !== "end") {
         void ink.acknowledge({ owner: api.id, id: contact.id }).catch(() => {});
       } else if (contact.phase === "end") {
-        if (contact.mode === "erase" && contact.nativeSequence) {
-          scene?.acknowledgeErase(contact.nativeSequence);
-        }
         const acknowledge = () => {
           void ink
             .acknowledge({

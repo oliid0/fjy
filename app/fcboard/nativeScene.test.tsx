@@ -200,3 +200,85 @@ it("restores retained ownership after temporary document drawing with no canonic
     act(() => controller.dispose());
   }
 });
+
+it("gives an immediate remount a newer epoch than disposal even within one clock tick", async () => {
+  const api = await setup();
+  vi.spyOn(Date, "now").mockReturnValue(1000);
+  let first!: NonNullable<ReturnType<typeof createNativeSceneRenderer>>;
+  let second: typeof first | undefined;
+  try {
+    act(() => {
+      first = createNativeSceneRenderer(api, vi.fn())!;
+    });
+    await waitFor(() =>
+      expect(document.documentElement).toHaveClass("fc-native-scene"),
+    );
+    act(() => first.dispose());
+    const removed = native.remove.mock.calls.at(-1)![0].epoch;
+    act(() => {
+      first.dispose();
+      second = createNativeSceneRenderer(api, vi.fn())!;
+    });
+    await waitFor(() =>
+      expect(native.synchronize.mock.calls.at(-1)![0].epoch).toBeGreaterThan(
+        removed,
+      ),
+    );
+    await waitFor(() =>
+      expect(document.documentElement).toHaveClass("fc-native-scene"),
+    );
+    expect(native.remove).toHaveBeenCalledTimes(1);
+  } finally {
+    act(() => {
+      first.dispose();
+      second?.dispose();
+    });
+    vi.restoreAllMocks();
+  }
+});
+
+it("waits for canonical render maps before acknowledging an erase that introduces new objects", async () => {
+  const api = await setup();
+  const original = ink(100);
+  const replacement = ink(400);
+  act(() => api.updateScene({ elements: [original] }));
+  const register = api.registerNativeSceneRenderer!.bind(api);
+  let paused = false;
+  let release!: () => boolean;
+  vi.spyOn(api, "registerNativeSceneRenderer").mockImplementation((renderer) =>
+    register((config) => {
+      release = () => renderer(config);
+      return paused ? true : renderer(config);
+    }),
+  );
+  let controller!: NonNullable<ReturnType<typeof createNativeSceneRenderer>>;
+  act(() => {
+    controller = createNativeSceneRenderer(api, vi.fn())!;
+  });
+  try {
+    await waitFor(() =>
+      expect(document.documentElement).toHaveClass("fc-native-scene"),
+    );
+    native.synchronize.mockClear();
+    paused = true;
+    await act(async () => {
+      api.updateScene({ elements: [replacement] });
+      controller.acknowledgeErase(1);
+    });
+    expect(native.synchronize).not.toHaveBeenCalled();
+    act(() => {
+      paused = false;
+      release();
+    });
+    await waitFor(() => expect(native.synchronize).toHaveBeenCalledTimes(1));
+    expect(
+      native.synchronize.mock.calls[0][0].nodes.map(
+        (node: { id: string }) => node.id,
+      ),
+    ).toEqual([replacement.id]);
+    expect(native.synchronize.mock.calls[0][0].eraseThrough).toBe(1);
+  } finally {
+    act(() => controller.dispose());
+    vi.restoreAllMocks();
+  }
+});

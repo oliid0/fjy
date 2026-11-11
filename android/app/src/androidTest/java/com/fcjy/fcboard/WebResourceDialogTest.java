@@ -136,7 +136,10 @@ public class WebResourceDialogTest {
                 android.graphics.Bitmap image=android.graphics.BitmapFactory.decodeByteArray(decoded,0,decoded.length);
                 assertNotNull(image);assertEquals(20,image.getWidth());assertEquals(10,image.getHeight());assertEquals(android.graphics.Color.RED,image.getPixel(10,5));image.recycle();
             } finally {
-                onActivity(scenario, activity->{if(dialog.get()!=null)dialog.get().dismiss();});
+                // CI120 passed image/drop assertions, then waited90s in
+                // ActivityScenario.close's global-idle barrier. Finish the live
+                // WebView owner first so its animation loop cannot block teardown.
+                onActivity(scenario, activity->{if(dialog.get()!=null)dialog.get().dismiss();activity.finish();});
             }
         }
     }

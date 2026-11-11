@@ -273,6 +273,10 @@ const background = (config: StaticSceneRenderConfig) => {
   }
 };
 
+let epochSequence = Date.now();
+const nextEpoch = () =>
+  (epochSequence = Math.max(Date.now(), epochSequence + 1));
+
 /** The display bridge consumes committed object deltas, never eraser MOVE points.
  * Android keeps its bitmap tiles through acknowledgements and editor idle time. */
 export const createNativeSceneRenderer = (
@@ -285,9 +289,10 @@ export const createNativeSceneRenderer = (
   let alive = true;
   let failed = false;
   let ready = false;
+  let awaitingRender = false;
   let busy = false;
   let scheduled = false;
-  let epoch = Date.now();
+  let epoch = nextEpoch();
   let revision = 0;
   let reset = true;
   let view = "";
@@ -310,6 +315,9 @@ export const createNativeSceneRenderer = (
     }
   };
   const stopMutations = api.onSceneMutation((updated, removed, through) => {
+    if (updated.length || removed.length) {
+      awaitingRender = true;
+    }
     for (const id of removed) {
       sources.delete(id);
       dirty.delete(id);
@@ -349,6 +357,7 @@ export const createNativeSceneRenderer = (
       !alive ||
       failed ||
       busy ||
+      awaitingRender ||
       !config ||
       !config.appState.width ||
       !config.appState.height ||
@@ -497,6 +506,7 @@ export const createNativeSceneRenderer = (
   };
   const stopRenderer = api.registerNativeSceneRenderer((config) => {
     latest = config;
+    awaitingRender = false;
     if (classroomCommands.has("document.draw")) {
       deactivate();
       return false;
@@ -523,7 +533,10 @@ export const createNativeSceneRenderer = (
       queue();
     },
     reset() {
-      epoch++;
+      if (!alive) {
+        return;
+      }
+      epoch = nextEpoch();
       reset = true;
       view = paint = bg = "";
       latest = undefined;
@@ -535,13 +548,17 @@ export const createNativeSceneRenderer = (
       void native.remove({ owner: api.id, epoch }).catch(onError);
     },
     dispose() {
+      if (!alive) {
+        return;
+      }
       alive = false;
       deactivate();
       stopMutations();
       stopDocument();
       stopRenderer();
       document.fonts?.removeEventListener?.("loadingdone", fonts);
-      void native.remove({ owner: api.id, epoch: ++epoch }).catch(() => {});
+      epoch = nextEpoch();
+      void native.remove({ owner: api.id, epoch }).catch(() => {});
     },
   };
 };

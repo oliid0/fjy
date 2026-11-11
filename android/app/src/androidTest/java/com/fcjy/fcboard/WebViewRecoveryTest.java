@@ -6,6 +6,7 @@ import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 
 import android.os.SystemClock;
 import android.webkit.RenderProcessGoneDetail;
@@ -50,18 +51,18 @@ public class WebViewRecoveryTest {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             AtomicReference<MainActivity> first = new AtomicReference<>();
             onActivity(scenario, activity -> { first.set(activity); stopRenderer(activity); });
-            onView(withText(R.string.webview_recovery_message)).check(matches(isDisplayed()));
+            onView(withText(R.string.webview_recovery_message)).inRoot(isDialog()).check(matches(isDisplayed()));
             onActivity(scenario, activity -> assertSame("A failed renderer must never silently restart the board", first.get(), activity));
-            onView(withText(R.string.web_reload)).perform(click());
+            onView(withText(R.string.web_reload)).inRoot(isDialog()).perform(click());
             MainActivity recovered = awaitReplacement(scenario, first.get());
             onActivity(scenario, activity -> {
                 assertSame(recovered, activity);
                 assertNotNull(activity.getBridge().getWebView().getParent());
                 stopRenderer(activity);
             });
-            onView(withText(R.string.webview_recovery_message)).check(matches(isDisplayed()));
+            onView(withText(R.string.webview_recovery_message)).inRoot(isDialog()).check(matches(isDisplayed()));
             onActivity(scenario, activity -> assertSame("Repeated failure must not loop through Activities", recovered, activity));
-            onView(withText(R.string.web_reload)).perform(click());
+            onView(withText(R.string.web_reload)).inRoot(isDialog()).perform(click());
             MainActivity retried = awaitReplacement(scenario, recovered);
             onActivity(scenario, activity -> {
                 assertSame(retried, activity);

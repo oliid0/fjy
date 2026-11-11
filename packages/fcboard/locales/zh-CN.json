@@ -722,6 +722,8 @@
     "mmb": "鼠标滚轮"
   },
   "fcboard": {
+    "touch_locked": "触控已锁定，按副板解锁键恢复。",
+    "touch_unlocked": "触控已解锁。",
     "factorySettings": {
       "dual_pen": "双色笔模式",
       "nib": "笔尖",
@@ -906,6 +908,7 @@
     "split_count": "{{count}}分屏",
     "save": "保存",
     "split_screen": "分屏",
+    "split_resize": "调整左右分屏宽度",
     "vote": "投票",
     "calculator": "计算器",
     "spotlight": "聚光灯",

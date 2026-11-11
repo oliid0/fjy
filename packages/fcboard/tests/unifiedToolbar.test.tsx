@@ -222,7 +222,7 @@ describe("unified bottom toolbar", () => {
       vi.restoreAllMocks();
     }
   });
-  it.each(["eraser", "toolbox", "shape"] as const)(
+  it.each(["eraser", "toolbox", "shape", "aerial_view"] as const)(
     "toggles %s on every rapid repeated tap",
     async (tool) => {
       await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
@@ -248,4 +248,12 @@ describe("unified bottom toolbar", () => {
       expect(screen.getByRole("dialog", { name: label })).toBeVisible();
     },
   );
+  it("opens, closes and reopens the main menu on repeated trigger clicks", async () => {
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    const trigger = screen.getByTestId("main-menu-trigger");
+    for (const open of [true, false, true, false]) {
+      fireEvent.click(trigger);
+      expect(trigger).toHaveAttribute("aria-expanded", String(open));
+    }
+  });
 });

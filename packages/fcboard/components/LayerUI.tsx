@@ -278,7 +278,7 @@ const LayerUI = ({
       if (
         !propertiesTrigger.current?.contains(event.target as Node) &&
         !(event.target as Element).closest?.(
-          ".fc-editor-properties, [data-radix-popper-content-wrapper], [data-prevent-outside-click]",
+          ".fc-editor-properties, [data-radix-popper-content-wrapper], [data-prevent-outside-click], .fc-material-select-menu",
         )
       ) {
         close();

@@ -129,3 +129,47 @@ it("drops an in-flight old-board response after native index reset", async () =>
   await backend.erase([ink], path, 10, 12);
   expect(native.erase.mock.calls[1][0].updates).toHaveLength(1);
 });
+
+it("consumes scene deltas without enumerating the board on each erase sweep", async () => {
+  const ink = stroke();
+  const backend = createNativeEraserBackend("board");
+  backend.synchronize([ink], []);
+  const unreadableScene = new Proxy([ink], {
+    get() {
+      throw new Error("A sweep must not inspect the whole scene");
+    },
+  });
+  await backend.erase(unreadableScene, path, 10, 12);
+  expect(native.erase.mock.calls.at(-1)![0].updates).toHaveLength(1);
+  await backend.erase(unreadableScene, path, 10, 12);
+  expect(native.erase.mock.calls.at(-1)![0].updates).toEqual([]);
+  const moved = newElementWith(ink, { x: 200 });
+  backend.synchronize([moved], []);
+  await backend.erase(unreadableScene, path, 10, 12);
+  expect(native.erase.mock.calls.at(-1)![0].updates[0].samples[0][0]).toBe(200);
+  backend.synchronize([], [ink.id]);
+  await backend.erase(unreadableScene, path, 10, 12);
+  expect(native.erase.mock.calls.at(-1)![0].removals).toEqual([ink.id]);
+});
+
+it("preserves a new object version received while a native cut is in flight", async () => {
+  const ink = stroke();
+  const backend = createNativeEraserBackend("board");
+  backend.synchronize([ink], []);
+  let finish!: (value: {
+    patches: { id: string; pieces: number[][][]; nibHit: boolean }[];
+  }) => void;
+  native.erase.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const pending = backend.erase([], path, 10, 12);
+  const moved = newElementWith(ink, { x: 300 });
+  backend.synchronize([moved], []);
+  finish({ patches: [{ id: ink.id, pieces: [], nibHit: true }] });
+  const [stale] = await pending;
+  expect(stale.source).toBe(ink);
+  await backend.erase([], path, 10, 12);
+  expect(native.erase.mock.calls.at(-1)![0].updates[0].samples[0][0]).toBe(300);
+});

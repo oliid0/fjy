@@ -54,7 +54,7 @@ final class NativeInkView extends View {
         final Path path = new Path(), fillPath = new Path(), renderPath = new Path();
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         float major, minor, lastX, lastY, rasterX, rasterY;
-        boolean palm, awaitingFrame, rejected;
+        boolean palm, awaitingFrame;
         NativeInputStream stream;
         NativeBrush brush;
         NativeInkRaster raster;
@@ -100,7 +100,7 @@ final class NativeInkView extends View {
     private boolean erasing() { for (Contact contact : active.values()) if (contact.mode.equals("erase")) return true; return false; }
     private Contact start(MotionEvent event, int index, boolean erase, boolean temporary, boolean candidate, float offsetX, float offsetY) {
         Contact contact = new Contact(); contact.token = token; contact.mode = candidate ? "palm" : erase ? "erase" : mode; contact.palm = temporary;
-        contact.stream = new NativeInputStream(event); contact.rejected = candidate && (!palmEnabled || writing());
+        contact.stream = new NativeInputStream(event);
         int tool = event.getToolType(index);
         contact.pointerType = tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER ? "pen" : tool == MotionEvent.TOOL_TYPE_MOUSE ? "mouse" : "touch";
         contact.major = event.getTouchMajor(index) / scale; contact.minor = event.getTouchMinor(index) / scale;
@@ -166,11 +166,6 @@ final class NativeInkView extends View {
         if (contact.brush == null) contact.path.lineTo(contact.lastX, contact.lastY);
         pending.put(contact.id, contact); emit(contact, "end", true);
     }
-    private void rejectRestingHands() {
-        for (Contact contact : active.values()) {
-            if (contact.mode.equals("palm")) contact.rejected = true;
-        }
-    }
     void setRoutedInput() { routedInput = true; }
     @Override public boolean onTouchEvent(MotionEvent event) { return !routedInput && handleTouchEvent(event, 0, 0); }
     boolean handleTouchEvent(MotionEvent event, float offsetX, float offsetY) {
@@ -180,12 +175,12 @@ final class NativeInkView extends View {
             if (action == MotionEvent.ACTION_DOWN) cancelStream(device);
             float cssX = x + (event.getX(index)-offsetX) / scale, cssY = y + (event.getY(index)-offsetY) / scale;
             if (!enabled || (event.getButtonState() & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY)) != 0 || blocked(cssX, cssY)) return ownedDevices.contains(device);
-            boolean candidate = palm(event, index), temporary = candidate || event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER;
+            boolean candidate = mode.equals("pen") && !multiStroke && palmEnabled && palm(event, index);
+            boolean temporary = candidate || event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER;
             boolean erase = temporary || mode.equals("erase");
             if (!erase && !mode.equals("pen") && !active.isEmpty()) return true;
             if (erase && !candidate && erasing()) return ownedDevices.contains(device);
             if (!erase && mode.equals("pen") && !multiStroke && writing()) { ownedDevices.add(device); return true; }
-            if (!erase && mode.equals("pen")) rejectRestingHands();
             ownedDevices.add(device);
             start(event, index, erase, temporary, candidate, offsetX, offsetY);
             getParent().requestDisallowInterceptTouchEvent(true); invalidate(); return true;
@@ -193,13 +188,12 @@ final class NativeInkView extends View {
         if (action == MotionEvent.ACTION_MOVE) {
             for (int i = 0; i < event.getPointerCount(); i++) {
                 Contact contact = active.get(key(event, i)); if (contact == null) continue;
-                if (!contact.mode.equals("erase") && !contact.mode.equals("palm") && palm(event, i)) {
+                if (contact.mode.equals("pen") && !multiStroke && palmEnabled && palm(event, i)) {
                     active.remove(key(event, i)); emit(contact, "cancel", false);
                     start(event, i, true, true, true, offsetX, offsetY); continue;
                 }
                 if (contact.mode.equals("palm")) {
-                    if (contact.rejected) continue;
-                    if (writing() || erasing()) { contact.rejected = true; continue; }
+                    if (erasing()) continue;
                     if (Math.hypot(event.getX(i)-offsetX-contact.lastX, event.getY(i)-offsetY-contact.lastY) < touchSlop) continue;
                     contact.mode = "erase"; emit(contact, "start", false); contact.sent = 1; contact.awaitingFrame = true;
                 }

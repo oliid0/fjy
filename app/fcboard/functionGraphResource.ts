@@ -4,7 +4,6 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import type { DataURL } from "@fcboard/fcboard/types";
 
-import { functionView } from "./math";
 import { functionGraphImage, functionGraphSpec } from "./functionVisualization";
 import { functionGraphNavigation } from "./functionGraphNavigation";
 import { validatedPlot } from "./mathRecognition";
@@ -75,30 +74,13 @@ export const functionGraphResource = (
   );
   const style = page.createElement("style");
   style.textContent =
-    "html,body{height:100%;margin:0;overflow:hidden}body{display:flex;flex-direction:column;background:transparent}#fc-vega{flex:1;min-height:0;width:100%;touch-action:none}#fc-vega svg{display:block}nav{display:flex;flex-wrap:wrap;gap:4px;padding:4px;font:11px system-ui}label{display:flex;align-items:center;gap:2px}input{width:54px;min-width:0;padding:1px;border:1px solid #aaa;border-radius:3px;font:inherit}output{display:block;min-height:20px;padding:2px 6px;font:12px system-ui}h1{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}";
+    "html,body{height:100%;margin:0;overflow:hidden;background:transparent}body{position:relative}#fc-vega{height:100%;width:100%;touch-action:none}#fc-vega svg{display:block}nav{position:absolute;bottom:24px;left:40px;display:flex;flex-wrap:wrap;gap:6px;font:11px system-ui}nav:empty,output:empty{display:none}label{display:flex;align-items:center;gap:2px}input{width:72px;min-width:0;font:inherit}output{position:absolute;bottom:2px;left:40px;max-width:calc(100% - 60px);font:12px system-ui;pointer-events:none}h1{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}";
   page.head.append(style);
   const title = page.createElement("h1");
   title.textContent = [plot.expression, ...(plot.compare || [])]
     .map((expression) => `y = ${expression}`)
     .join("; ");
   const nav = page.createElement("nav");
-  const bounds = functionView(plot);
-  for (const [key, label] of [
-    ["left", "x min"],
-    ["right", "x max"],
-    ["bottom", "y min"],
-    ["top", "y max"],
-  ] as const) {
-    const control = page.createElement("label");
-    control.textContent = label;
-    const input = page.createElement("input");
-    input.type = "number";
-    input.step = "any";
-    input.dataset.bound = key;
-    input.value = String(bounds[key]);
-    control.append(input);
-    nav.append(control);
-  }
   for (const key of ["a", "b", "c"] as const) {
     if (
       ![plot.expression, ...(plot.compare || [])].some((expression) =>

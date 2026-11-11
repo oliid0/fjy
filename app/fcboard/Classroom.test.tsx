@@ -2731,7 +2731,7 @@ describe("selection-driven classroom controls", () => {
       expect(scene).toEqual([source]);
       expect(api.addFiles).not.toHaveBeenCalled();
       expect(generate).toHaveBeenCalledWith(
-        expect.stringContaining("保留用户要求的背景"),
+        expect.stringContaining("自由创作"),
         expect.any(AbortSignal),
         {
           referenceImage: "data:image/png;base64,selected",

@@ -8,7 +8,10 @@ import type {
   NativeEraserBackend,
   NativeEraseUpdate,
 } from "@fcboard/fcboard/eraser/stroke";
-import type { FcboardFreeDrawElement } from "@fcboard/element/types";
+import type {
+  FcboardElement,
+  FcboardFreeDrawElement,
+} from "@fcboard/element/types";
 
 const plugin = registerPlugin<{
   erase(options: {
@@ -35,12 +38,21 @@ type Cached = {
  * Send only version deltas; canonical rendered geometry is prepared once when
  * a stroke first enters the index, never for every eraser motion sample. */
 export const createNativeEraserBackend = (owner: string) => {
-  let cache = new Map<string, Cached>();
+  const cache = new Map<string, Cached>();
+  const indexed = new Map<string, Cached>();
+  const dirty = new Map<string, Cached>();
+  const removed = new Set<string>();
+  let streamed = false;
   let epoch = 0;
-  const erase: NativeEraserBackend = async (elements, path, width, height) => {
-    const stamp = epoch;
-    const next = new Map<string, Cached>();
-    const updates = [];
+  const update = (
+    elements: readonly FcboardElement[],
+    removals: readonly string[],
+  ) => {
+    for (const id of removals) {
+      cache.delete(id);
+      dirty.delete(id);
+      removed.add(id);
+    }
     for (const source of elements) {
       if (
         source.type !== "freedraw" ||
@@ -48,43 +60,74 @@ export const createNativeEraserBackend = (owner: string) => {
         source.locked ||
         !source.points.length
       ) {
+        if (cache.delete(source.id) || indexed.has(source.id)) {
+          dirty.delete(source.id);
+          removed.add(source.id);
+        }
         continue;
       }
       const previous = cache.get(source.id);
-      const entry =
+      if (
         previous?.source === source &&
         previous.version === source.version &&
         previous.nonce === source.versionNonce
-          ? previous
-          : {
-              source,
-              version: source.version,
-              nonce: source.versionNonce,
-              geometry: prepareNativeEraseStroke(source),
-            };
-      next.set(source.id, entry);
-      if (entry !== previous) {
-        const { geometry } = entry;
-        updates.push({
-          id: source.id,
-          cap: geometry.cap,
-          brush: geometry.brush,
-          brushAngle: geometry.brushAngle,
-          samples: geometry.samples.map((p) => [
-            p.x,
-            p.y,
-            p.pressure,
-            p.distance,
-            p.brushWidth,
-          ]),
-          nibOutline: geometry.nibOutline.map((p) => [p.x, p.y]),
-        });
+      ) {
+        continue;
       }
+      const entry = {
+        source,
+        version: source.version,
+        nonce: source.versionNonce,
+        geometry: prepareNativeEraseStroke(source),
+      };
+      cache.set(source.id, entry);
+      dirty.set(source.id, entry);
+      removed.delete(source.id);
     }
+  };
+  const synchronize = (
+    elements: readonly FcboardElement[],
+    removals: readonly string[],
+  ) => {
+    streamed = true;
+    update(elements, removals);
+  };
+  const erase: NativeEraserBackend = async (elements, path, width, height) => {
+    const stamp = epoch;
+    if (!streamed) {
+      // Compatibility for standalone callers; the editor uses onMutation deltas.
+      const ids = new Set(elements.map((element) => element.id));
+      update(
+        elements,
+        [...cache.keys()].filter((id) => !ids.has(id)),
+      );
+    }
+    const updates = [...dirty.values()].map((entry) => {
+      const { source, geometry } = entry;
+      indexed.set(source.id, entry);
+      return {
+        id: source.id,
+        cap: geometry.cap,
+        brush: geometry.brush,
+        brushAngle: geometry.brushAngle,
+        samples: geometry.samples.map((p) => [
+          p.x,
+          p.y,
+          p.pressure,
+          p.distance,
+          p.brushWidth,
+        ]),
+        nibOutline: geometry.nibOutline.map((p) => [p.x, p.y]),
+      };
+    });
+    const removals = [...removed];
+    removals.forEach((id) => indexed.delete(id));
+    dirty.clear();
+    removed.clear();
     const result = await plugin.erase({
       owner,
       updates,
-      removals: [...cache.keys()].filter((id) => !next.has(id)),
+      removals,
       path: path.map((p) => [p.x, p.y]),
       width,
       height,
@@ -92,16 +135,17 @@ export const createNativeEraserBackend = (owner: string) => {
     if (epoch !== stamp) {
       return [];
     }
-    cache = next;
     const patches: NativeEraseUpdate[] = [];
     for (const patch of result.patches) {
-      const entry = next.get(patch.id);
+      const entry = indexed.get(patch.id);
       if (!entry) {
         throw new Error("Native eraser returned an unknown stroke");
       }
       // The editor can reject a stale result after a concurrent edit/cancel.
       // Force the next synchronization to restore authoritative scene geometry.
-      cache.delete(patch.id);
+      if (cache.get(patch.id) === entry) {
+        dirty.set(patch.id, entry);
+      }
       const pieces = patch.pieces.map((piece) =>
         piece.map((p) => {
           if (p.length !== 5 || !p.every(Number.isFinite) || p[4] < 0) {
@@ -131,7 +175,11 @@ export const createNativeEraserBackend = (owner: string) => {
   const reset = () => {
     epoch++;
     cache.clear();
+    indexed.clear();
+    dirty.clear();
+    removed.clear();
+    streamed = false;
     return plugin.release({ owner });
   };
-  return { erase, reset };
+  return { erase, synchronize, reset };
 };

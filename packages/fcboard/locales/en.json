@@ -726,6 +726,8 @@
     "mmb": "Scroll wheel"
   },
   "fcboard": {
+    "touch_locked": "Touch locked. Use the sideboard unlock button to resume.",
+    "touch_unlocked": "Touch unlocked.",
     "factorySettings": {
       "dual_pen": "Two-color pen mode",
       "nib": "Nib",
@@ -910,6 +912,7 @@
     "split_count": "{{count}} panes",
     "save": "Save",
     "split_screen": "Split screen",
+    "split_resize": "Adjust pane widths",
     "vote": "Vote",
     "calculator": "Calculator",
     "spotlight": "Spotlight",

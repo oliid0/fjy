@@ -548,3 +548,45 @@ it("retains the original equation and its actual residual in the saved function 
   });
   expect(validatedPlot({ ...plot, equation: "x=9" }).equation).toBeUndefined();
 });
+
+it("replaces ink at its exact original origin and line-box height beside nearby objects", () => {
+  const api = sceneAPI();
+  const source = newFreeDrawElement({
+    type: "freedraw",
+    x: 200,
+    y: 180,
+    points: [pointFrom(0, 0), pointFrom(100, 40)],
+    strokeColor: "#dc2626",
+    simulatePressure: true,
+  });
+  const neighbor = newFreeDrawElement({
+    ...source,
+    id: "neighbor",
+    x: 200,
+    y: 225,
+  });
+  api.updateScene({ elements: [source, neighbor] });
+  const ids = insertText(
+    api,
+    "hello",
+    { x: source.x, y: source.y },
+    undefined,
+    [source],
+    "text",
+    { mode: "replace", sourceLines: 1 },
+  );
+  const result = api
+    .getSceneElements()
+    .find((element) => ids.includes(element.id))!;
+  expect(result).toMatchObject({
+    type: "text",
+    x: 200,
+    y: 180,
+    height: 40,
+    text: "hello",
+    strokeColor: "#dc2626",
+  });
+  expect(
+    api.getSceneElements().find((element) => element.id === neighbor.id),
+  ).toBe(neighbor);
+});

@@ -147,6 +147,9 @@ export const canvasConfigurationPatch = (
       patch[field] = input[key];
     }
   }
+  if (patch.multiStroke === true) {
+    patch.currentItemInkAssist = undefined;
+  }
   const threshold =
     patch.whiteboardThickThreshold ??
     state.whiteboardThickThreshold ??

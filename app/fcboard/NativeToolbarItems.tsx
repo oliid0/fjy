@@ -309,7 +309,14 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
           aria-pressed={pointMode.multi}
           disabled={pointMode.document}
           onClick={() =>
-            api.updateScene({ appState: { multiStroke: !pointMode.multi } })
+            api.updateScene({
+              appState: {
+                multiStroke: !pointMode.multi,
+                ...(!pointMode.multi
+                  ? { currentItemInkAssist: undefined }
+                  : {}),
+              },
+            })
           }
         >
           <FactoryIcon name={pointMode.multi ? "multi" : "single"} />

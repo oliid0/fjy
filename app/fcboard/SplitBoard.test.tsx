@@ -29,7 +29,7 @@ const panes = () =>
 const pane = (number: number) =>
   within(screen.getByLabelText(t("fcboard.split_pane", { number })));
 const pointer = (
-  node: Element,
+  node: Element | Window,
   type: string,
   id: number,
   x: number,
@@ -112,6 +112,43 @@ it("toggles the original anchored split launcher on every real toolbar tap and e
   } finally {
     release();
   }
+});
+
+it("enters writing directly and resizes two panes without losing independent ink", async () => {
+  render(<SplitBoard />);
+  expect(await command()).toMatchObject({
+    open: true,
+    count: 2,
+    configuring: false,
+  });
+  expect(
+    screen.queryByRole("button", { name: t("buttons.confirm") }),
+  ).toBeNull();
+  pointer(panes()[0], "pointerdown", 1, 20);
+  pointer(panes()[0], "pointerup", 1, 120);
+  const board = screen.getByRole("dialog", { name: t("fcboard.split_screen") });
+  vi.spyOn(board, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(100, 0, 1000, 600),
+  );
+  const divider = screen.getByRole("separator", {
+    name: t("fcboard.split_resize"),
+  });
+  pointer(divider, "pointerdown", 3, 600);
+  pointer(window, "pointermove", 3, 800);
+  expect(divider).toHaveAttribute("aria-valuenow", "70");
+  pointer(window, "pointerup", 3, 850);
+  expect(divider).toHaveAttribute("aria-valuenow", "75");
+  pointer(divider, "pointerdown", 4, 850);
+  pointer(window, "pointermove", 4, 1100);
+  expect(divider).toHaveAttribute("aria-valuenow", "85");
+  pointer(window, "pointercancel", 4, 1100);
+  expect(divider).toHaveAttribute("aria-valuenow", "75");
+  fireEvent.keyDown(divider, { key: "Home" });
+  expect(divider).toHaveAttribute("aria-valuenow", "50");
+  expect(await command({ count: 3 })).toMatchObject({
+    panes: [{ strokes: 1 }, { strokes: 0 }, { strokes: 0 }, { strokes: 0 }],
+  });
+  expect(screen.queryByRole("separator")).toBeNull();
 });
 
 it("retains each hidden pane's independent color, width and ink through 4/2/3/4 layout and close/reopen", async () => {

@@ -8,7 +8,11 @@ import {
   newElementWith,
   newIframeElement,
 } from "@fcboard/element";
-import { DEFAULT_ELEMENT_PROPS, FONT_FAMILY } from "@fcboard/common";
+import {
+  DEFAULT_ELEMENT_PROPS,
+  FONT_FAMILY,
+  getLineHeight,
+} from "@fcboard/common";
 import { pointFrom } from "@fcboard/math";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
@@ -337,12 +341,6 @@ export const insertText = (
             : Infinity,
         ) / (inkOutput ? 1.25 : 1)
       : (state.currentItemFontSize || 24) / state.zoom.value;
-  const size = answerFontSize(
-    sourceSize * (inkSource ? 0.9 : 1),
-    state.zoom.value,
-    placement.mode,
-    placement.role,
-  );
   const fontFamily =
     presentation === "handwritten"
       ? FONT_FAMILY.Excalifont
@@ -353,6 +351,16 @@ export const insertText = (
       : inkSource
       ? FONT_FAMILY.Excalifont
       : state.currentItemFontFamily || FONT_FAMILY.Helvetica;
+  const size =
+    placement.mode === "replace" && inkSource && bounds
+      ? Math.max(1, bounds.bottom - bounds.top) /
+        (Math.max(1, text.split("\n").length) * getLineHeight(fontFamily))
+      : answerFontSize(
+          sourceSize * (inkSource ? 0.9 : 1),
+          state.zoom.value,
+          placement.mode,
+          placement.role,
+        );
   const excluded = new Set(
     placement.mode === "replace"
       ? styleSource?.map((element) => element.id)

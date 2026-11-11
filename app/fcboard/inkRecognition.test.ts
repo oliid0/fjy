@@ -129,8 +129,8 @@ it.each([defaults.imageModel, "custom-illustrator"])(
     if (result.kind !== "magic") {
       throw new Error("Expected magic screenshot");
     }
-    expect(result.prompt).toContain("若没有文字要求，仅按图生图");
-    expect(result.prompt).toContain("结合图中的草图一同创作");
+    expect(result.prompt).toContain("立体3D风格");
+    expect(result.prompt).toContain("用户指定的风格优先");
     expect(result.prompt).toContain("Alpha透明通道的PNG");
     expect(capture).toHaveBeenCalledTimes(1);
     expect(chat).not.toHaveBeenCalled();

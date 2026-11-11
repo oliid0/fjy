@@ -95,9 +95,7 @@ export const FactoryMenu = ({
         onClick={(event) => {
           setAnchor(event.currentTarget);
           setPages([]);
-          if (!open) {
-            toggle();
-          }
+          toggle();
         }}
       >
         <FactoryIcon name="menu" />

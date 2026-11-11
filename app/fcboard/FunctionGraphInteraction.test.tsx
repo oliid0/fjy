@@ -95,13 +95,20 @@ const setup = async (expression = "x") => {
   return { api, graph, frame, reply, send };
 };
 
-it("inserts a selectable iframe object with real range controls and Vega pan/pinch signals", async () => {
+it("inserts transparent axes without range chrome and preserves Vega pan/pinch signals", async () => {
   const { graph, frame } = await setup();
   expect(graph().type).toBe("iframe");
   expect(frame).toHaveAttribute("sandbox", "allow-scripts");
   const resource = graph().customData!.fcInteractiveResource;
   const html = new DOMParser().parseFromString(resource.html, "text/html");
-  expect(html.querySelectorAll("input[data-bound]")).toHaveLength(4);
+  expect(html.querySelectorAll("input[data-bound]")).toHaveLength(0);
+  expect(html.querySelector("nav")?.childElementCount).toBe(0);
+  expect(html.querySelector("output")?.textContent).toBe("");
+  expect(
+    [...html.querySelectorAll("style")].some((style) =>
+      style.textContent?.includes("nav:empty,output:empty{display:none}"),
+    ),
+  ).toBe(true);
   expect(html.querySelector("output")).not.toBeNull();
   expect(html.querySelector("svg .mark-line path")).not.toBeNull();
   const view = createInlineVegaView(resource.visualization.spec as Spec);

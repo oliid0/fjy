@@ -3,6 +3,8 @@ package com.fcjy.fcboard;
 import android.graphics.RectF;
 import android.view.ViewGroup;
 import android.view.MotionEvent;
+import android.view.KeyEvent;
+import android.view.InputDevice;
 import android.widget.FrameLayout;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -22,9 +24,13 @@ public class NativeInkPlugin extends Plugin {
     private final Map<String, NativeInkView> surfaces = new HashMap<>();
     private final Map<NativeInkView, RectF> inputBounds = new HashMap<>();
     private final Map<NativeInputStream, NativeInkView> capturedDevices = new HashMap<>();
+    private final Map<String, Boolean> shortcutSurfaces = new HashMap<>();
+    private final NativeBoardKeys keys = new NativeBoardKeys();
+    private boolean touchLocked;
     @Override public void load() { ((MainActivity)getActivity()).setInkInput(this); }
     /** Route the real event before ViewGroup can cancel another device's stream. */
     boolean dispatchInput(MotionEvent event) {
+        if (touchLocked && event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) return true;
         NativeInputStream device = new NativeInputStream(event);
         int action = event.getActionMasked();
         NativeInkView captured = capturedDevices.get(device);
@@ -45,6 +51,38 @@ public class NativeInkPlugin extends Plugin {
             }
         }
         return false;
+    }
+    boolean dispatchKey(KeyEvent event) {
+        InputDevice device = event.getDevice();
+        if (device == null) return false;
+        boolean bsd = NativeBoardKeys.bsd(device.getName(), device.getVendorId(), device.getProductId());
+        boolean hid = NativeBoardKeys.touchPlanet(device.getName(), device.getVendorId(), device.getProductId());
+        if (!bsd && !hid) return false;
+        String owner = null;
+        for (Map.Entry<String, Boolean> surface : shortcutSurfaces.entrySet()) {
+            if (surface.getValue() || touchLocked) { owner = surface.getKey(); break; }
+        }
+        if (owner == null) return false;
+        int key = event.getKeyCode();
+        String action = bsd ? NativeBoardKeys.vendorAction(key) : null;
+        if (hid) {
+            if (key == KeyEvent.KEYCODE_PAGE_UP) action = "previous";
+            else if (key == KeyEvent.KEYCODE_PAGE_DOWN) action = "next";
+            else if (event.isCtrlPressed() && event.isAltPressed() && event.isMetaPressed()) {
+                if (key == KeyEvent.KEYCODE_B) action = "red";
+                else if (key == KeyEvent.KEYCODE_C) action = "new";
+            }
+        }
+        if (action == null) return false;
+        if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() != 0) return true;
+        if (!keys.accept(action, bsd, event.getEventTime())) return true;
+        if (action.equals("lock")) {
+            touchLocked = true;
+            for (NativeInkView view : surfaces.values()) view.cancel();
+            capturedDevices.clear();
+        } else if (action.equals("unlock")) touchLocked = false;
+        notifyListeners("shortcut", new JSObject().put("owner", owner).put("action", action));
+        return true;
     }
     private void layer() {
         if (layer != null) return;
@@ -75,6 +113,7 @@ public class NativeInkPlugin extends Plugin {
                     }
                 }
                 view.setMultiStroke(call.getBoolean("multiStroke", true));
+                shortcutSurfaces.put(owner, call.getBoolean("shortcutsEnabled", false));
                 view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
                 int[] web = new int[2], overlay = new int[2]; getBridge().getWebView().getLocationInWindow(web); layer.getLocationInWindow(overlay);
                 FrameLayout.LayoutParams bounds = new FrameLayout.LayoutParams(Math.max(1, Math.round((float)width * scale)), Math.max(1, Math.round((float)height * scale)));
@@ -91,9 +130,9 @@ public class NativeInkPlugin extends Plugin {
         getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", "")); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
-        getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.remove(call.getString("owner", "")); if (view != null) { view.cancel(); inputBounds.remove(view); layer.removeView(view); } call.resolve(); });
+        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
     }
-    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); capturedDevices.clear(); }); }
+    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); capturedDevices.clear(); touchLocked = false; keys.reset(); }); }
     @Override protected void handleOnDestroy() {
         getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); capturedDevices.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
     }

@@ -1,4 +1,4 @@
-import { act, cleanup, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
 import { render as editor } from "@fcboard/fcboard/tests/test-utils";
 
@@ -41,6 +41,58 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   backend.listeners.clear();
+});
+it("routes sideboard semantic buttons and leaves focused text input out of native shortcuts", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  const create = vi.fn();
+  const stop = classroomCommands.register("board.new", "@internal", create);
+  const input = document.createElement("input");
+  document.body.append(input);
+  try {
+    render(<NativeInkInteraction api={api} />);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].shortcutsEnabled).toBe(
+        true,
+      ),
+    );
+    await act(async () => {
+      backend.listeners.forEach((listener) =>
+        listener({ owner: api.id, action: "red" }),
+      );
+    });
+    expect(api.getAppState().currentItemStrokeColor).toBe("#ff0000");
+    await act(async () => {
+      backend.listeners.forEach((listener) =>
+        listener({ owner: api.id, action: "new" }),
+      );
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+    act(() => {
+      input.focus();
+      fireEvent.focusIn(input);
+    });
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].shortcutsEnabled).toBe(
+        false,
+      ),
+    );
+    act(() => {
+      input.blur();
+      fireEvent.focusOut(input);
+    });
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].shortcutsEnabled).toBe(
+        true,
+      ),
+    );
+  } finally {
+    input.remove();
+    stop();
+  }
 });
 it("ignores kept-mounted hidden dialogs and restores native input after a visible popup closes", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
@@ -110,6 +162,47 @@ it("keeps brush and gradient previews native with the calibrated style", async (
     variation: 25,
     gradient: { colors: ["#4dd7af", "#3b52c8"] },
   });
+});
+
+it("updates input exclusions from object mutations without scanning scene elements during configure", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  const shape = API.createElement({
+    type: "rectangle",
+    x: 100,
+    y: 100,
+    width: 20,
+    height: 20,
+  });
+  act(() => {
+    api.updateScene({ elements: [shape] });
+    api.setActiveTool({ type: "lasso" });
+  });
+  const scan = vi.spyOn(api, "getSceneElements").mockImplementation(() => {
+    throw new Error("Native configure must use mutation bounds");
+  });
+  try {
+    render(<NativeInkInteraction api={api} />);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
+        88, 88, 132, 132,
+      ]),
+    );
+    act(() => api.mutateElement(shape, { x: 160 }));
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
+        148, 88, 192, 132,
+      ]),
+    );
+    expect(backend.configure.mock.calls.at(-1)![0].blocked).not.toContainEqual([
+      88, 88, 132, 132,
+    ]);
+    expect(scan).not.toHaveBeenCalled();
+  } finally {
+    scan.mockRestore();
+  }
 });
 it("uses calibrated dual-tip native styles and rejects a late completed contact after surface invalidation", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);

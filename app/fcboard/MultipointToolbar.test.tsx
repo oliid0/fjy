@@ -97,6 +97,31 @@ it("pins a real multi/single toggle and changes actual two-contact writing on ea
   expect(
     api.getSceneElements().filter((item) => item.type === "freedraw"),
   ).toHaveLength(3);
+  const currentApi = api;
+  for (const mode of [
+    "text",
+    "shape",
+    "magic",
+    "function",
+    "calculation",
+    "language",
+  ] as const) {
+    act(() =>
+      currentApi.updateScene({
+        appState: { currentItemInkAssist: mode, multiStroke: true },
+      }),
+    );
+    expect(api.getAppState().multiStroke).toBe(false);
+  }
+  fireEvent.click(
+    row().getByRole("button", { name: t("fcboard.single_touch_writing") }),
+  );
+  expect(api.getAppState().multiStroke).toBe(true);
+  expect(api.getAppState().currentItemInkAssist).toBeUndefined();
+  draw();
+  expect(
+    api.getSceneElements().filter((item) => item.type === "freedraw"),
+  ).toHaveLength(5);
   act(() => saveToolbarItems([]));
   expect(
     row().queryByRole("button", { name: t("fcboard.multi_touch_writing") }),

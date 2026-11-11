@@ -2,6 +2,30 @@
 // A stronger scope replaces legacy fixed-pixel split styles without changing other tools.
 .app .fc-classroom .fc-split-board {
   color: #010101;
+  .fc-split-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    transform: translateX(-50%);
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 9px;
+      width: 2px;
+      background: #fcfcfe;
+    }
+    &:focus-visible::after {
+      background: #0368ff;
+      width: 4px;
+    }
+    &[aria-disabled="true"] {
+      pointer-events: none;
+    }
+  }
   .fc-split-pane {
     border-inline-end-width: calc(2 * var(--fc-split-unit, 0.67px));
   }

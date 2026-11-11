@@ -25,8 +25,8 @@ const AerialMap = ({ app }: { app: AppClassProperties }) => {
     const content = elements.length ? getCommonBounds(elements) : undefined;
     const x = -initial.scrollX;
     const y = -initial.scrollY;
-    const width = initial.width / initial.zoom.value;
-    const height = initial.height / initial.zoom.value;
+    const width = Math.max(1, initial.width) / initial.zoom.value;
+    const height = Math.max(1, initial.height) / initial.zoom.value;
     // Preserve the screen aspect ratio while including every offscreen mark.
     const left = Math.min(x, content?.[0] ?? x);
     const top = Math.min(y, content?.[1] ?? y);
@@ -107,6 +107,9 @@ const AerialMap = ({ app }: { app: AppClassProperties }) => {
           }
           event.preventDefault();
           const rect = event.currentTarget.getBoundingClientRect();
+          if (!rect.width || !rect.height) {
+            return;
+          }
           const x =
             bounds.x +
             ((event.clientX - rect.left) / rect.width) * bounds.width;
@@ -142,6 +145,9 @@ const AerialMap = ({ app }: { app: AppClassProperties }) => {
             return;
           }
           const rect = event.currentTarget.getBoundingClientRect();
+          if (!rect.width || !rect.height) {
+            return;
+          }
           move(
             start.scrollX -
               ((event.clientX - start.x) / rect.width) * bounds.width,
@@ -236,6 +242,7 @@ export const WhiteboardAerialView = ({ app }: { app: AppClassProperties }) => {
     <>
       <ToolButton
         type="button"
+        data-menu-toggle
         icon={<FactoryIcon name="aerial" />}
         aria-label={t("fcboard.aerial_view")}
         showAriaLabel
@@ -243,11 +250,17 @@ export const WhiteboardAerialView = ({ app }: { app: AppClassProperties }) => {
         onClick={(event) => {
           setAnchor(event.currentTarget as HTMLElement);
           setRevision((value) => value + 1);
-          setOpen(true);
+          setOpen((visible) => !visible);
         }}
       />
       {open && (
-        <ClickAwayListener onClickAway={() => setOpen(false)}>
+        <ClickAwayListener
+          onClickAway={(event) => {
+            if (!anchor?.contains(event.target as Node)) {
+              setOpen(false);
+            }
+          }}
+        >
           <Popper
             open
             anchorEl={anchor}

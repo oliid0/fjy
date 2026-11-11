@@ -1,4 +1,5 @@
 import { act } from "@testing-library/react";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
@@ -733,7 +734,7 @@ it.each([true, false])(
       expect(request.model).toBe(layers ? defaults.imageModel : "illustrator");
       expect(request.image).toMatch(/^data:image\//);
       expect(ai.chat).not.toHaveBeenCalled();
-      expect(request.prompt).toContain("若没有文字要求，仅按图生图");
+      expect(request.prompt).toContain("立体3D风格");
       expect(request).toMatchObject({
         background: "transparent",
         output_format: "png",
@@ -977,3 +978,106 @@ it.each([1700, 400])(
     }
   },
 );
+
+it("starts every independent region in one native batch before any recognition finishes", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("text");
+  const complete: ((value: string) => void)[] = [];
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete.push(resolve);
+      }),
+  );
+  const errors = vi.fn();
+  const release = observeInkAssistance(api, vi.fn(), errors);
+  const sources = [100, 500, 900].map((x, index) => ({
+    ...ink,
+    id: `parallel-${index}`,
+    x,
+  }));
+  try {
+    draw(sources);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(recognize).toHaveBeenCalledTimes(3);
+    expect(recognize.mock.calls.map((call) => call[5]?.length)).toEqual([
+      1, 1, 1,
+    ]);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    await act(async () => {
+      complete.forEach((finish, index) => finish(`word${index}`));
+    });
+    expect(
+      api.getSceneElements().filter((element) => element.type === "text"),
+    ).toHaveLength(3);
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});
+
+it("measures three triangle corners from one batch without serial OCR work or losing earlier marks", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("shape");
+  const triangle = convertToFcboardElements([
+    {
+      type: "line",
+      x: 100,
+      y: 100,
+      points: [
+        [0, 0],
+        [200, 0],
+        [0, 200],
+        [0, 0],
+      ],
+      customData: { fcRecognizedSource: ["source-triangle"] },
+    },
+  ])[0];
+  draw([triangle]);
+  const vertices = [
+    [100, 100, 0, Math.PI / 2],
+    [300, 100, Math.PI, -Math.PI / 4],
+    [100, 300, -Math.PI / 4, -Math.PI / 4],
+  ];
+  const marks = vertices.map(([x, y, start, sweep], index) =>
+    newFreeDrawElement({
+      ...ink,
+      id: `corner-${index}`,
+      x,
+      y,
+      points: Array.from({ length: 20 }, (_, i) =>
+        pointFrom(
+          20 * Math.cos(start + (sweep * i) / 19),
+          20 * Math.sin(start + (sweep * i) / 19),
+        ),
+      ),
+    }),
+  );
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const errors = vi.fn();
+  const release = observeInkAssistance(api, vi.fn(), errors);
+  try {
+    draw([triangle, ...marks]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    const labels = api
+      .getSceneElements()
+      .filter(
+        (element) =>
+          element.type === "text" &&
+          element.customData?.fcAngleTarget === triangle.id,
+      );
+    expect(
+      labels
+        .map((element) => (element.type === "text" ? element.text : ""))
+        .sort(),
+    ).toEqual(["45°", "45°", "90°"]);
+    expect(recognize).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});

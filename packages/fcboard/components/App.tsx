@@ -3544,6 +3544,9 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    if (this.state.currentItemInkAssist && this.state.multiStroke !== false) {
+      this.setState({ multiStroke: false });
+    }
     // must be updated *before* state change listeners are triggered below
     if (!this._initialized && !this.state.isLoading) {
       this._initialized = true;
@@ -4913,6 +4916,9 @@ class App extends React.Component<AppProps, AppState> {
         };
         this.setState((previous) => {
           const next = { ...previous, ...update };
+          if (next.currentItemInkAssist) {
+            update.multiStroke = false;
+          }
           if (
             this.props.UIOptions.unifiedToolbar &&
             update.selectedElementIds
@@ -9804,9 +9810,14 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private nativeEraserBackend: NativeEraserBackend | null = null;
-  public registerNativeEraserBackend = (backend: NativeEraserBackend) => {
+  public registerNativeEraserBackend = (
+    backend: NativeEraserBackend,
+    synchronize?: Parameters<Scene["onMutation"]>[0],
+  ) => {
     this.nativeEraserBackend = backend;
+    const stop = synchronize && this.scene.onMutation(synchronize);
     return () => {
+      stop?.();
       if (this.nativeEraserBackend === backend) {
         this.nativeEraserBackend = null;
       }
@@ -9905,27 +9916,27 @@ class App extends React.Component<AppProps, AppState> {
       throw new Error("Native eraser gesture is no longer active");
     }
     const before = this.scene.getElementsIncludingDeleted();
-    const apply = (elements: readonly FcboardElement[]) => {
+    const remember = (element: FcboardElement, original?: FcboardElement) => {
+      if (
+        original &&
+        !current.originals.has(element.id) &&
+        !current.applied.has(element.id)
+      ) {
+        current.originals.set(element.id, original);
+      }
+      current.applied.set(element.id, element);
+    };
+    const apply = (elements: readonly FcboardElement[], tracked = false) => {
       if (this.nativeEraserDraft !== current) {
         return;
       }
       if (elements !== this.scene.getElementsIncludingDeleted()) {
-        const previous = new Map(
-          this.scene
-            .getElementsIncludingDeleted()
-            .map((element) => [element.id, element]),
-        );
-        for (const element of elements) {
-          if (previous.get(element.id) !== element) {
-            const original = previous.get(element.id);
-            if (
-              original &&
-              !current.originals.has(element.id) &&
-              !current.applied.has(element.id)
-            ) {
-              current.originals.set(element.id, original);
+        if (!tracked) {
+          const previous = this.scene.getElementsMapIncludingDeleted();
+          for (const element of elements) {
+            if (previous.get(element.id) !== element) {
+              remember(element, previous.get(element.id));
             }
-            current.applied.set(element.id, element);
           }
         }
         current.changed = true;
@@ -9956,28 +9967,37 @@ class App extends React.Component<AppProps, AppState> {
         if (this.nativeEraserDraft !== current) {
           return;
         }
-        const patches = new Map(
-          updates.map((update) => [update.source.id, update]),
-        );
-        let changed = false;
+        const patches = new Map<string, FcboardElement[]>();
         const latest = this.scene.getElementsIncludingDeleted();
-        const next = latest.flatMap<FcboardElement>((element) => {
-          const patch = patches.get(element.id);
+        const latestMap = this.scene.getElementsMapIncludingDeleted();
+        for (const patch of updates) {
+          const element = latestMap.get(patch.source.id);
           // A collaborative edit/move/delete wins over a stale native result.
           if (
-            !patch ||
+            !element ||
             patch.source !== element ||
             patch.version !== element.version ||
             patch.nonce !== element.versionNonce
           ) {
-            return [element];
+            continue;
           }
-          changed = true;
-          return patch.survivors.length
+          const survivors = patch.survivors.length
             ? patch.survivors
             : [newElementWith(element, { isDeleted: true })];
-        });
-        apply(changed ? next : latest);
+          patches.set(element.id, survivors);
+          for (const survivor of survivors) {
+            remember(
+              survivor,
+              survivor.id === element.id ? element : undefined,
+            );
+          }
+        }
+        apply(
+          patches.size
+            ? latest.flatMap((element) => patches.get(element.id) ?? [element])
+            : latest,
+          true,
+        );
       });
     }
     let elements: readonly FcboardElement[] = before;

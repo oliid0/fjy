@@ -350,6 +350,8 @@ const SplitPane = ({
 export const SplitBoard = () => {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(2);
+  const [ratio, setRatio] = useState(50);
+  const resizing = useRef<{ pointer: number; original: number } | null>(null);
   const [background, setBackground] = useState(1);
   const [draft, setDraft] = useState<{
     count: number;
@@ -447,7 +449,7 @@ export const SplitBoard = () => {
     () =>
       classroomCommands.register(
         "tools.split",
-        "Open independent 2/3/4 column writing canvases (not Android system split). No args opens the original layout/background settings for confirmation. args.open=false closes; args.open=true or args.count=2|3|4 opens immediately; args.background=0..3. args.configure=true reopens settings. Ink is retained per pane when switching layout or closing.",
+        "Open independent 2/3/4 column writing canvases immediately. args.open=false closes; args.count=2|3|4; args.background=0..3. args.configure=true opens optional settings. Ink is retained per pane when switching layout or closing.",
         (args) => {
           if (
             (args.open !== undefined && typeof args.open !== "boolean") ||
@@ -460,12 +462,7 @@ export const SplitBoard = () => {
           ) {
             throw new Error(t("fcboard.invalid_style_parameters"));
           }
-          const configure =
-            args.open !== false &&
-            (args.configure === true ||
-              (args.open !== true &&
-                args.count === undefined &&
-                args.background === undefined));
+          const configure = args.open !== false && args.configure === true;
           const next = {
             open: configure ? current.current.open : args.open !== false,
             count: Number(args.count ?? current.current.count),
@@ -494,6 +491,48 @@ export const SplitBoard = () => {
       ),
     [],
   );
+  useEffect(() => {
+    if (!open || count !== 2 || exiting || saving || draft) {
+      resizing.current = null;
+      return;
+    }
+    const move = (event: PointerEvent) => {
+      if (resizing.current?.pointer !== event.pointerId) {
+        return;
+      }
+      const rect = section.current?.getBoundingClientRect();
+      if (rect && rect.width > 0) {
+        event.preventDefault();
+        setRatio(
+          Math.max(
+            15,
+            Math.min(85, ((event.clientX - rect.left) / rect.width) * 100),
+          ),
+        );
+      }
+    };
+    const end = (event: PointerEvent) => {
+      if (resizing.current?.pointer === event.pointerId) {
+        move(event);
+        resizing.current = null;
+      }
+    };
+    const cancel = (event: PointerEvent) => {
+      if (resizing.current?.pointer === event.pointerId) {
+        setRatio(resizing.current.original);
+        resizing.current = null;
+      }
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+      resizing.current = null;
+    };
+  }, [open, count, exiting, saving, draft]);
   useEffect(() => {
     if (!open && !draft) {
       return;
@@ -534,7 +573,16 @@ export const SplitBoard = () => {
           role="dialog"
           aria-label={t("fcboard.split_screen")}
         >
-          <div className="fc-split-panes">
+          <div
+            className="fc-split-panes"
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                count === 2
+                  ? `minmax(0, ${ratio}fr) minmax(0, ${100 - ratio}fr)`
+                  : `repeat(${count}, minmax(0, 1fr))`,
+            }}
+          >
             {models.current.slice(0, count).map((model, i) => (
               <SplitPane
                 key={i}
@@ -545,6 +593,60 @@ export const SplitBoard = () => {
               />
             ))}
           </div>
+          {count === 2 && (
+            <div
+              role="separator"
+              aria-label={t("fcboard.split_resize")}
+              aria-orientation="vertical"
+              aria-valuemin={15}
+              aria-valuemax={85}
+              aria-valuenow={Math.round(ratio)}
+              tabIndex={exiting || saving || draft ? -1 : 0}
+              aria-disabled={exiting || saving || !!draft}
+              className="fc-split-resize"
+              style={{ left: `${ratio}%` }}
+              onPointerDown={(event) => {
+                if (exiting || saving || draft || event.button !== 0) {
+                  return;
+                }
+                event.preventDefault();
+                resizing.current = {
+                  pointer: event.pointerId,
+                  original: ratio,
+                };
+                try {
+                  event.currentTarget.setPointerCapture?.(event.pointerId);
+                } catch {
+                  /* Window handlers retain the drag when WebView retires capture. */
+                }
+              }}
+              onLostPointerCapture={() => {
+                if (resizing.current) {
+                  setRatio(resizing.current.original);
+                }
+                resizing.current = null;
+              }}
+              onKeyDown={(event) => {
+                if (exiting || saving || draft) {
+                  return;
+                }
+                if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) {
+                  event.preventDefault();
+                  setRatio((value) =>
+                    event.key === "Home"
+                      ? 50
+                      : Math.max(
+                          15,
+                          Math.min(
+                            85,
+                            value + (event.key === "ArrowRight" ? 2 : -2),
+                          ),
+                        ),
+                  );
+                }
+              }}
+            />
+          )}
           <button
             className="fc-split-exit"
             data-split-exit
@@ -567,6 +669,7 @@ export const SplitBoard = () => {
           role="dialog"
           aria-label={`${t("fcboard.split_screen")} · ${t("fcboard.settings")}`}
           className="fc-split-settings"
+          onDismiss={() => setDraft(null)}
         >
           <h2>
             {t("fcboard.split_screen")} · {t("fcboard.settings")}

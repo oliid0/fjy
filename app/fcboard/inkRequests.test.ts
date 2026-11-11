@@ -123,3 +123,18 @@ it("releases relocated ink IDs for a new request while an independent region kee
   expect(staleWork).not.toHaveBeenCalled();
   expect(otherWork).toHaveBeenCalledTimes(1);
 });
+
+it.each(["text", "language"])(
+  "keeps nearby words together but separates adjacent writers in %s",
+  (mode) => {
+    const requests = new InkRequests();
+    const a = { id: "a", points: ink(100)[0] };
+    const b = { id: "b", points: ink(240)[0] };
+    const other = { id: "other", points: ink(650)[0] };
+    const id = (item: typeof a) => item.id;
+    const strokes = (items: readonly typeof a[]) =>
+      items.map((item) => item.points);
+    expect(requests.source([a, b], mode, id, strokes)).toEqual([a, b]);
+    expect(requests.source([a, b, other], mode, id, strokes)).toEqual([other]);
+  },
+);

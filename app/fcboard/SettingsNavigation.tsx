@@ -91,6 +91,9 @@ export const SettingsNavigation = ({
               {rows.map((id) => (
                 <ListItemButton
                   key={id}
+                  component="button"
+                  type="button"
+                  sx={{ width: "100%", textAlign: "start" }}
                   onClick={() => setSection(id as SettingsPage)}
                 >
                   <ListItemText

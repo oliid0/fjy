@@ -31,6 +31,7 @@ const region = (ink: InkInput, mode: string) => {
       ink,
       0.8,
       Math.max(8, (sizes[Math.floor(sizes.length / 2)] || 0) / 2),
+      2,
     );
   }
   return latestFunctionInk(ink, mode === "calculation" ? 1.1 : 0.35);

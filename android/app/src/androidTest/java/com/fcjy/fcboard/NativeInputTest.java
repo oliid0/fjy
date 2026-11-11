@@ -35,13 +35,14 @@ public class NativeInputTest {
     @Test public void aRestingHandDoesNotEraseOrEndTheOtherDevicesPen() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
+            view.setMultiStroke(false);
             motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
             assertEquals(0, events.size());
             motion(view, MotionEvent.ACTION_DOWN, 22, 1, 2, 70, 70);
-            motion(view, MotionEvent.ACTION_MOVE, 11, 1, 70, 100, 100);
+            motion(view, MotionEvent.ACTION_MOVE, 11, 1, 70, 21, 20);
             motion(view, MotionEvent.ACTION_MOVE, 22, 1, 2, 130, 70);
             motion(view, MotionEvent.ACTION_UP, 22, 1, 2, 150, 70);
-            motion(view, MotionEvent.ACTION_UP, 11, 1, 70, 100, 100);
+            motion(view, MotionEvent.ACTION_UP, 11, 1, 70, 21, 20);
             assertEquals(2, events.size());
             assertEquals("pen", events.get(0).optString("mode"));
             assertEquals("end", events.get(1).optString("phase"));
@@ -65,6 +66,7 @@ public class NativeInputTest {
     @Test public void confirmedPalmErasureDoesNotRollBackWhenAnotherWriterStarts() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
+            view.setMultiStroke(false);
             motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
             motion(view, MotionEvent.ACTION_MOVE, 11, 1, 70, 100, 100);
             assertEquals(1,events.size()); assertEquals("erase",events.get(0).optString("mode"));
@@ -74,6 +76,46 @@ public class NativeInputTest {
             assertEquals(4,events.size());
             for(JSObject event:events) assertNotEquals("A second writer must not restore erased ink", "cancel",event.optString("phase"));
             assertEquals("erase",events.get(3).optString("mode")); assertEquals("end",events.get(3).optString("phase"));
+        });
+    }
+    @Test public void movingPalmCanBeginErasingWhileAnotherContactWrites() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
+            view.setMultiStroke(false);
+            motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
+            motion(view, MotionEvent.ACTION_DOWN, 22, 1, 2, 150, 50);
+            motion(view, MotionEvent.ACTION_MOVE, 11, 1, 70, 80, 80);
+            motion(view, MotionEvent.ACTION_UP, 22, 1, 2, 180, 50);
+            motion(view, MotionEvent.ACTION_UP, 11, 1, 70, 100, 80);
+            assertEquals(4, events.size());
+            assertEquals("pen", events.get(0).optString("mode"));
+            assertEquals("erase", events.get(1).optString("mode"));
+            for (JSObject event : events) assertNotEquals("cancel", event.optString("phase"));
+        });
+    }
+    @Test public void explicitEraserStartsImmediatelyForLargeAndSmallContacts() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            for (int size : new int[]{2, 70}) {
+                List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "erase");
+                view.setMultiStroke(false);
+                motion(view, MotionEvent.ACTION_DOWN, 11, 1, size, 20, 20);
+                assertEquals(1, events.size());
+                assertEquals("erase", events.get(0).optString("mode"));
+                motion(view, MotionEvent.ACTION_UP, 11, 1, size, 80, 80);
+                assertEquals("end", events.get(1).optString("phase"));
+            }
+        });
+    }
+    @Test public void multiContactWritingDoesNotReclassifyBroadFingersAsErasers() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
+            motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
+            motion(view, MotionEvent.ACTION_POINTER_DOWN | (1 << 8), 11, 2, 70, 40, 40);
+            motion(view, MotionEvent.ACTION_MOVE, 11, 2, 80, 80, 80);
+            motion(view, MotionEvent.ACTION_POINTER_UP | (1 << 8), 11, 2, 80, 100, 100);
+            motion(view, MotionEvent.ACTION_UP, 11, 1, 80, 120, 120);
+            assertEquals(4, events.size());
+            for (JSObject event : events) assertEquals("pen", event.optString("mode"));
         });
     }
     @Test public void nativeBrushKeepsFactoryFootprintAndLatestSampleVisible() {

@@ -55,7 +55,7 @@ export const inkRecognitionDelay = (mode: InkAssistMode, strokes: InkInput) =>
     ? 1600
     : mode === "shape"
     ? 450
-    : 1200;
+    : 700;
 
 /** An explicit completion mark needs no additional whole-expression pause. */
 export const settleInkRecognition = async (

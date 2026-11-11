@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { getCommonBounds } from "@fcboard/element";
 import { colorToHex } from "@fcboard/common";
+import { t } from "@fcboard/fcboard/i18n";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
 import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
-import { classroomCommands } from "./commands";
+import { classroomCommands, executeBoardCommand } from "./commands";
 import { createNativeEraserBackend } from "./nativeEraser";
 
 type Contact = {
@@ -36,6 +37,7 @@ const ink = registerPlugin<{
     token: string;
     enabled: boolean;
     multiStroke: boolean;
+    shortcutsEnabled: boolean;
     mode: "pen" | "select" | "regionErase" | "erase";
     x: number;
     y: number;
@@ -67,6 +69,10 @@ const ink = registerPlugin<{
   addListener(
     event: "contact",
     listener: (contact: Contact) => void,
+  ): Promise<{ remove(): Promise<void> }>;
+  addListener(
+    event: "shortcut",
+    listener: (event: { owner: string; action: string }) => void,
   ): Promise<{ remove(): Promise<void> }>;
 }>("FcboardNativeInk");
 
@@ -122,7 +128,36 @@ export const NativeInkInteraction = ({
     let uiBlocksInk = false;
     const contacts = new Map<string, NonNullable<Contact["mode"]>>();
     const eraser = createNativeEraserBackend(api.id);
-    const unregisterEraser = api.registerNativeEraserBackend?.(eraser.erase);
+    const objectBounds = new Map<string, readonly number[]>();
+    const compositionBounds = new Map<string, readonly number[]>();
+    const unregisterEraser = api.registerNativeEraserBackend?.(
+      eraser.erase,
+      (updated, removed) => {
+        eraser.synchronize(updated, removed);
+        for (const id of removed) {
+          objectBounds.delete(id);
+          compositionBounds.delete(id);
+        }
+        for (const element of updated) {
+          if (element.isDeleted) {
+            objectBounds.delete(element.id);
+            compositionBounds.delete(element.id);
+            continue;
+          }
+          const bounds = getCommonBounds([element]);
+          objectBounds.set(element.id, bounds);
+          if (
+            element.customData?.fcInsertion ||
+            element.customData?.fcQuestionInput ||
+            element.customData?.fcQuestion
+          ) {
+            compositionBounds.set(element.id, bounds);
+          } else {
+            compositionBounds.delete(element.id);
+          }
+        }
+      },
+    );
     let eraserQueue = Promise.resolve();
     const apply = (
       contact: Contact,
@@ -321,16 +356,10 @@ export const NativeInkInteraction = ({
       }
       const blocked: number[][] = enabled ? [...uiBounds] : [];
       // Table/label/question surfaces keep their existing live composition path.
-      for (const element of enabled ? api.getSceneElements() : []) {
-        if (
-          mode !== "select" &&
-          !element.customData?.fcInsertion &&
-          !element.customData?.fcQuestionInput &&
-          !element.customData?.fcQuestion
-        ) {
-          continue;
-        }
-        const [left, top, right, bottom] = getCommonBounds([element]);
+      const exclusions = mode === "select" ? objectBounds : compositionBounds;
+      for (const [left, top, right, bottom] of enabled
+        ? exclusions.values()
+        : []) {
         const padding = mode === "select" ? 12 : 0;
         blocked.push([
           (left + state.scrollX) * state.zoom.value +
@@ -369,7 +398,13 @@ export const NativeInkInteraction = ({
         owner: api.id,
         token,
         enabled: enabled && !uiBlocksInk && blocked.length <= 512,
-        multiStroke: state.multiStroke !== false,
+        multiStroke: !state.currentItemInkAssist && state.multiStroke !== false,
+        shortcutsEnabled:
+          !uiBlocksInk &&
+          !state.editingTextElement &&
+          !document.activeElement?.closest(
+            'input,textarea,select,[contenteditable="true"],[role="combobox"]',
+          ),
         mode,
         x: state.offsetLeft,
         y: state.offsetTop,
@@ -416,7 +451,7 @@ export const NativeInkInteraction = ({
       }
     };
     const handleContact = async (contact: Contact) => {
-      if (!active || contact.owner !== api.id) {
+      if (!active || contact.owner !== api.id || !contact.id) {
         return;
       }
       if (
@@ -476,6 +511,79 @@ export const NativeInkInteraction = ({
         void handleContact(contact).catch(fail);
       }
     });
+    let shortcutQueue = Promise.resolve();
+    const shortcutListener = ink.addListener("shortcut", (event) => {
+      if (!event.action || event.owner !== api.id) {
+        return;
+      }
+      shortcutQueue = shortcutQueue
+        .then(async () => {
+          if (!active || failed) {
+            return;
+          }
+          const colors: Record<string, string> = {
+            red: "#ff0000",
+            blue: "#0000ff",
+            green: "#00ff00",
+            black: "#000000",
+            white: "#ffffff",
+          };
+          if (colors[event.action]) {
+            api.updateScene({
+              appState: {
+                currentItemStrokeColor: colors[event.action],
+                currentItemInkAssist: undefined,
+              },
+            });
+            api.setActiveTool({ type: "freedraw" });
+          } else if (event.action === "lock" || event.action === "unlock") {
+            api.setToast({
+              message: t(
+                event.action === "lock"
+                  ? "fcboard.touch_locked"
+                  : "fcboard.touch_unlocked",
+              ),
+            });
+          } else if (event.action === "next" || event.action === "previous") {
+            // Reuse the existing page navigation, including document pages,
+            // first/last-page notices and the smart pointer's resize behavior.
+            window.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: event.action === "next" ? "PageDown" : "PageUp",
+                bubbles: true,
+                cancelable: true,
+              }),
+            );
+          } else {
+            const name = (
+              {
+                new: "board.new",
+                pages: "board.list",
+                clear: "canvas.clear",
+                split: "tools.split",
+              } as Record<string, string>
+            )[event.action];
+            if (name) {
+              await executeBoardCommand({
+                name,
+                ...(event.action === "split"
+                  ? {
+                      args: {
+                        open: !document.querySelector(".fc-split-board"),
+                        count: 2,
+                      },
+                    }
+                  : {}),
+              });
+            }
+          }
+        })
+        .catch((error) => {
+          if (active) {
+            api.updateScene({ appState: { errorMessage: String(error) } });
+          }
+        });
+    });
     const scheduleUi = () => {
       uiDirty = true;
       schedule();
@@ -518,6 +626,8 @@ export const NativeInkInteraction = ({
     ];
     addEventListener("resize", scheduleUi);
     addEventListener("scroll", scheduleUi, true);
+    addEventListener("focusin", scheduleUi);
+    addEventListener("focusout", scheduleUi);
     schedule();
     return () => {
       active = false;
@@ -526,6 +636,8 @@ export const NativeInkInteraction = ({
       stops.forEach((stop) => stop());
       removeEventListener("resize", scheduleUi);
       removeEventListener("scroll", scheduleUi, true);
+      removeEventListener("focusin", scheduleUi);
+      removeEventListener("focusout", scheduleUi);
       for (const [id, mode] of contacts) {
         apply(
           {
@@ -546,6 +658,7 @@ export const NativeInkInteraction = ({
       unregisterEraser?.();
       void eraser.reset().catch(() => {});
       void listener.then((handle) => handle.remove()).catch(() => {});
+      void shortcutListener.then((handle) => handle.remove()).catch(() => {});
       void ink.remove({ owner: api.id }).catch(() => {});
     };
   }, [api, inkProfile]);

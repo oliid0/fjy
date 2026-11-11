@@ -312,7 +312,7 @@ for (const viewport of [
   });
 }
 
-test("selecting a formula creates an interactive iframe and parameter/range edits keep its document", async ({
+test("selecting a formula creates pure interactive axes and parameter/zoom edits keep its document", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
@@ -337,10 +337,7 @@ test("selecting a formula creates an interactive iframe and parameter/range edit
   await graph.locator("#fc-vega").hover();
   await page.mouse.wheel(0, -150);
   await expect.poll(() => curve.getAttribute("d")).not.toBe(beforeZoom);
-  const minimum = graph.getByRole("spinbutton", { name: "x min", exact: true });
-  await minimum.fill("-5");
-  await minimum.press("Tab");
-  await expect(minimum).toHaveValue("-5");
+  await expect(graph.getByRole("spinbutton")).toHaveCount(0);
   await expect(graph.locator("html")).toHaveAttribute("data-mount", "original");
   await expect(slider).toHaveValue("2");
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });

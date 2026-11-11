@@ -3,11 +3,16 @@ package com.fcjy.fcboard;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.view.MotionEvent;
+import android.view.KeyEvent;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private volatile NativeInkPlugin inkInput;
     void setInkInput(NativeInkPlugin plugin) { inkInput = plugin; }
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        NativeInkPlugin input = inkInput;
+        return input != null && input.dispatchKey(event) || super.dispatchKeyEvent(event);
+    }
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
         NativeInkPlugin input = inkInput;
         if (input != null && input.dispatchInput(event)) return true;

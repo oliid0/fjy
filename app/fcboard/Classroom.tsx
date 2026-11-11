@@ -561,7 +561,9 @@ export const Classroom = ({
     const dismiss = (event: PointerEvent) => {
       if (
         !panelRef.current?.contains(event.target as Node) &&
-        !(event.target as Element).closest?.("[aria-controls='fc-panel']")
+        !(event.target as Element).closest?.(
+          "[aria-controls='fc-panel'], [data-prevent-outside-click], .fc-material-select-menu",
+        )
       ) {
         assistantGeneration.current++;
         setPanel(null);

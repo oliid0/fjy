@@ -56,6 +56,7 @@ export const observeInkAssistance = (
   const failed = new Set<string>();
   const requests = new InkRequests();
   let previous = "";
+  let disposed = false;
   let observedScene:
     | readonly import("@fcboard/element/types").FcboardElement[]
     | undefined;
@@ -72,12 +73,16 @@ export const observeInkAssistance = (
     ]);
   };
   let penConfiguration = configuration();
-  const refresh = () => {
+  const refresh = (rescan = false) => {
+    if (disposed) {
+      return;
+    }
     const state = api.getAppState();
     const nextConfiguration = configuration();
     const currentScene = api.getSceneElements();
     requests.prune(currentScene.map((element) => element.id));
     if (
+      !rescan &&
       currentScene === observedScene &&
       state.cursorButton === observedButton &&
       penConfiguration === nextConfiguration
@@ -190,6 +195,7 @@ export const observeInkAssistance = (
     }
     previous = requestKey;
     const request = new AbortController();
+    const sourceIds = new Set(source.map((element) => element.id));
     const current = () =>
       !request.signal.aborted &&
       !classroomCommands.has("document.draw") &&
@@ -198,9 +204,7 @@ export const observeInkAssistance = (
           (item) => item.key === target.key && item.stamp === target.stamp,
         )) &&
       selectionSignature(
-        api
-          .getSceneElements()
-          .filter((element) => source.some((input) => input.id === element.id)),
+        api.getSceneElements().filter((element) => sourceIds.has(element.id)),
       ) === signature;
     requests.reserve(
       request,
@@ -218,6 +222,7 @@ export const observeInkAssistance = (
         void (async () => {
           if (mode === "shape") {
             const scene = api.getSceneElements();
+            const elementsMap = new Map(scene.map((item) => [item.id, item]));
             const angle = recognizeAngleMark(
               boardInk(source),
               scene.flatMap((element) =>
@@ -228,7 +233,7 @@ export const observeInkAssistance = (
                         id: element.id,
                         points: LinearElementEditor.getPointsGlobalCoordinates(
                           element,
-                          new Map(scene.map((item) => [item.id, item])),
+                          elementsMap,
                         ).map(([x, y]): [number, number] => [x, y]),
                       },
                     ]
@@ -512,8 +517,13 @@ export const observeInkAssistance = (
       },
       inkRecognitionDelay(mode, boardInk(source)),
     );
+    // A batched native/multi-writer scene can contain several completed regions.
+    // Reserve all independent work now; no region waits for another model to end.
+    if (pending.some((element) => requests.available(element.id))) {
+      queueMicrotask(() => refresh(true));
+    }
   };
-  const stop = api.onChange(refresh);
+  const stop = api.onChange(() => refresh());
   const tables = new LiveTableWriting(api);
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
     if (phase === "start" || phase === "update") {
@@ -594,12 +604,18 @@ export const observeInkAssistance = (
   });
   const command = classroomCommands.register(
     "canvas.inkAssist",
-    "选择文字/图形/魔术/函数/算式笔，args.mode=text|shape|magic|function|calculation|off；停笔后识别，失败保留原笔迹",
+    "选择文字/图形/魔术/函数/算式/语言笔，args.mode=text|shape|magic|function|calculation|language|off；停笔后识别，失败保留原笔迹",
     (args) => {
       if (
-        !["text", "shape", "magic", "function", "calculation", "off"].includes(
-          String(args.mode),
-        )
+        ![
+          "text",
+          "shape",
+          "magic",
+          "function",
+          "calculation",
+          "language",
+          "off",
+        ].includes(String(args.mode))
       ) {
         throw new Error(t("fcboard.unknown_smart_pen_type"));
       }
@@ -613,8 +629,10 @@ export const observeInkAssistance = (
                   | "shape"
                   | "magic"
                   | "function"
-                  | "calculation"),
+                  | "calculation"
+                  | "language"),
           currentItemPenMode: "hard",
+          multiStroke: false,
         },
       });
       if (classroomCommands.has("document.tool")) {
@@ -628,6 +646,7 @@ export const observeInkAssistance = (
     },
   );
   return () => {
+    disposed = true;
     requests.cancelAll();
     stop();
     inkCommit?.();

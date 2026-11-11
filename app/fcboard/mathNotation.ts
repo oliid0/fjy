@@ -13,7 +13,7 @@ export const mathNotation = (input: string): string => {
     .replace(/＋/g, "+")
     .replace(/[＝]/g, "=")
     .replace(/[×·]/g, "*")
-    .replace(/[÷➗]\uFE0F?/g, "/")
+    .replace(/÷/g, "/")
     .replace(/[－−–]/g, "-")
     .replace(/π/g, "pi")
     .replace(

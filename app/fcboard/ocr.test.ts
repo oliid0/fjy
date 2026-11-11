@@ -110,7 +110,7 @@ describe("explicit handwriting actions", () => {
     expect(prompt).toContain("standard LaTeX");
     expect(prompt).toContain("without solving");
     expect(prompt).toContain("fraction bars");
-    expect(prompt).toContain("÷ or ➗ is division");
+    expect(prompt).toContain("÷ is division");
     expect(prompt).toContain("never as minus");
   });
   it("keeps division dots out of the text recognizer's plausible minus shortcut", async () => {

@@ -78,6 +78,38 @@ describe("built-in speech audio lifecycle", () => {
     expect(trackStop).not.toHaveBeenCalled();
   });
 
+  it("keeps watching an established audio stream and detects a later stalled microphone", async () => {
+    vi.useFakeTimers();
+    const error = vi.fn();
+    const handle = await startLocalSpeech(vi.fn(), error, stream);
+    emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
+    await vi.advanceTimersByTimeAsync(11000);
+    expect(error).not.toHaveBeenCalled();
+    emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
+    await vi.advanceTimersByTimeAsync(11000);
+    expect(error).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(error).toHaveBeenCalledTimes(1);
+    await handle.cancel();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases capture immediately when cancelling a still-running inference", async () => {
+    let resolve!: (value: { lines: [] }) => void;
+    engine.push.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const handle = await startLocalSpeech(vi.fn(), vi.fn(), stream);
+    emit({ pcm: new Float32Array([0.5]), sampleRate: 16000 });
+    await vi.waitFor(() => expect(resolve).toBeDefined());
+    const ending = handle.cancel();
+    try {
+      await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+    } finally {
+      resolve({ lines: [] });
+      await ending;
+    }
+    expect(trackStop).not.toHaveBeenCalled();
+  });
+
   it("reports live words and speech activity without executing a partial sentence", async () => {
     const final = vi.fn();
     const interim = vi.fn();

@@ -164,7 +164,7 @@ export const preservesMathInkStructure = (input: InkInput, text: string) => {
   const { fraction, script, division } = mathStructure(input);
   return (
     (!fraction || /\\(?:d?frac|over)\b|\//.test(text)) &&
-    (!division || /[÷➗]|\/|\\(?:div|d?frac|over)(?![A-Za-z])/.test(text)) &&
+    (!division || /÷|\/|\\(?:div|d?frac|over)(?![A-Za-z])/.test(text)) &&
     (!script || /[_^⁰¹²³⁴⁵⁶⁷⁸⁹₀-₉°]|\\sqrt\b/.test(text))
   );
 };

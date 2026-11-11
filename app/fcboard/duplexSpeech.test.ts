@@ -567,7 +567,7 @@ it("commits one final transcript per utterance while retaining a repeated senten
   }
 });
 
-it("deduplicates replayed events and cumulative captions without removing genuine repeated delta words", async () => {
+it("deduplicates replayed events without removing incremental words", async () => {
   const view = callbacks();
   const handle = await startDuplexSpeech(view);
   try {
@@ -578,12 +578,12 @@ it("deduplicates replayed events and cumulative captions without removing genuin
     });
     emit({
       type: "response.output_text.delta",
-      text: "正在板书",
+      text: "板书",
       event_id: "text-2",
     });
     emit({
       type: "response.output_text.delta",
-      text: "正在板书",
+      text: "板书",
       event_id: "text-2",
     });
     expect(view.caption).toHaveBeenLastCalledWith("正在板书");
@@ -850,4 +850,27 @@ it("does not reopen capture or deliver late events when closed during a reconnec
   expect(view.state).toHaveBeenCalledTimes(states);
   expect(startPCMSpeech).toHaveBeenCalledTimes(1);
   expect(capture.cancel).toHaveBeenCalledTimes(1);
+});
+
+it("replaces revised live snapshots before finalization while retaining explicit repeated deltas", async () => {
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({ type: "conversation.item.input_audio_transcription.delta", transcript: "今天是晴天" });
+    emit({ type: "conversation.item.input_audio_transcription.delta", transcript: "今天是雨天" });
+    expect(view.caption).toHaveBeenLastCalledWith("今天是雨天");
+    expect(view.interim).toHaveBeenLastCalledWith(expect.objectContaining({ text: "今天是雨天" }));
+    expect(view.line).not.toHaveBeenCalled();
+    emit({ type: "conversation.item.input_audio_transcription.delta", delta: "先画一个圆" });
+    emit({ type: "conversation.item.input_audio_transcription.delta", delta: "先画一个方形" });
+    expect(view.caption).toHaveBeenLastCalledWith("先画一个方形");
+    emit({ type: "response.output_text.delta", text: "哈" });
+    emit({ type: "response.output_text.delta", text: "哈" });
+    expect(view.caption).toHaveBeenLastCalledWith("哈哈");
+    emit({ type: "response.output_text.delta", delta: "哈" });
+    expect(view.caption).toHaveBeenLastCalledWith("哈哈哈");
+  } finally {
+    await handle.cancel();
+  }
 });

@@ -93,7 +93,7 @@ final class NativeMathLayout {
             String chosen = null;
             for (RecognitionCandidate candidate : result.getCandidates()) {
                 String value = candidate.getText().trim();
-                if (value.matches(rowIndex == 0 ? "[+-]?\\d+(?:\\.\\d+)?" : "[+−－×xX÷➗*/-]\\s*\\d+(?:\\.\\d+)?")) { chosen = value; break; }
+                if (value.matches(rowIndex == 0 ? "[+-]?\\d+(?:\\.\\d+)?" : "[+−－×xX÷*/-]\\s*\\d+(?:\\.\\d+)?")) { chosen = value; break; }
             }
             // Nested fractions can also have multiple rows above a bar. Only
             // confirmed numeric/operator rows establish column arithmetic.

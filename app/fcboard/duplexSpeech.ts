@@ -98,6 +98,7 @@ export const startDuplexSpeech = async (options: {
     /* Older installed shells retain their existing shared capture path. */
   }
   let nativeCaptureRequested = !options.stream;
+  let nativeReady = false;
   let dialogId: string | undefined;
   const startedAt = Date.now();
   let closed = false;
@@ -319,7 +320,7 @@ export const startDuplexSpeech = async (options: {
     try {
       await engine.send({ session, event });
     } catch (failure) {
-      if (!capture || closing || !recoverable(failure)) {
+      if ((!nativeReady && !capture) || closing || !recoverable(failure)) {
         throw failure;
       }
       await reconnect();
@@ -352,7 +353,7 @@ export const startDuplexSpeech = async (options: {
     if (closed || closing || recovering) {
       return;
     }
-    if (capture && recoverable(error)) {
+    if ((nativeReady || capture) && recoverable(error)) {
       void reconnect().catch(fatal);
     } else {
       fatal(error);
@@ -890,6 +891,7 @@ export const startDuplexSpeech = async (options: {
         capture: true,
         playback: true,
       });
+      nativeReady = true;
     } else {
       capture = await sharedCapture(options.stream, true);
     }

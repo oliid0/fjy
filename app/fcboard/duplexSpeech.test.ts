@@ -116,6 +116,65 @@ it("uses native microphone/socket/speaker without any WebView capture or playbac
   }
 });
 
+it("recovers native-only input and tool-result sending without a WebView capture handle", async () => {
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
+  const view = callbacks();
+  let finish!: () => void;
+  let owner!: AbortSignal;
+  const release = classroomCommands.register("canvas.text", "Write", (args) => {
+    owner = args.signal as AbortSignal;
+    return new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  });
+  const handle = await startDuplexSpeech(view);
+  try {
+    emit({ type: "session.created", session: { id: "native-dialog" } });
+    emit({
+      type: "response.function_call_arguments.done",
+      items: [call("write", "canvas.text")],
+    });
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    emit({ type: "error", message: "实时语音连接中断" });
+    await vi.waitFor(() => expect(mocks.engine.start).toHaveBeenCalledTimes(2));
+    expect(mocks.engine.start).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        capture: true,
+        playback: true,
+        configuration: expect.objectContaining({
+          session: expect.objectContaining({ id: "native-dialog" }),
+        }),
+      }),
+    );
+    expect(owner.aborted).toBe(false);
+    // An actual control/result send also recovers through the native session.
+    mocks.engine.send.mockRejectedValueOnce(new Error("实时语音网络发送过慢"));
+    await handle.interrupt();
+    expect(mocks.engine.start).toHaveBeenCalledTimes(3);
+    expect(mocks.engine.send).toHaveBeenLastCalledWith({
+      session,
+      event: { type: "response.cancel" },
+    });
+    emit({ type: "conversation.item.input_audio_transcription.started" });
+    emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      text: "原生收音继续",
+    });
+    expect(view.line).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "原生收音继续" }),
+    );
+    expect(startPCMSpeech).not.toHaveBeenCalled();
+    expect(view.error).not.toHaveBeenCalled();
+    expect(owner.aborted).toBe(false);
+    finish();
+    await vi.waitFor(() => expect(toolReplies()).toHaveLength(1));
+  } finally {
+    finish?.();
+    await handle.cancel();
+    release();
+  }
+});
+
 it("cancels the actual native startup before accepting a handle and can reopen", async () => {
   mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
   let finish!: () => void;

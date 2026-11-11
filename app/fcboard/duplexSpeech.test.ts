@@ -175,6 +175,25 @@ it("recovers native-only input and tool-result sending without a WebView capture
   }
 });
 
+it("releases a native session when retries triggered by a failed send are exhausted", async () => {
+  mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
+  const view = callbacks();
+  const handle = await startDuplexSpeech(view);
+  const failure = new Error("实时语音连接失败，请检查网络");
+  mocks.engine.send.mockRejectedValueOnce(failure);
+  mocks.engine.start.mockRejectedValue(failure);
+  try {
+    await expect(handle.interrupt()).rejects.toThrow(failure.message);
+    expect(view.error).toHaveBeenCalledTimes(1);
+    expect(view.error).toHaveBeenCalledWith(failure.message);
+    await vi.waitFor(() => expect(removed).toHaveBeenCalledTimes(1));
+    expect(startPCMSpeech).not.toHaveBeenCalled();
+    expect(mocks.engine.start).toHaveBeenCalledTimes(4);
+  } finally {
+    await handle.cancel();
+  }
+});
+
 it("cancels the actual native startup before accepting a handle and can reopen", async () => {
   mocks.engine.audioCapabilities.mockResolvedValue({ nativeAudio: true });
   let finish!: () => void;

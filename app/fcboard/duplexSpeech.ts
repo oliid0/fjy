@@ -323,7 +323,12 @@ export const startDuplexSpeech = async (options: {
       if ((!nativeReady && !capture) || closing || !recoverable(failure)) {
         throw failure;
       }
-      await reconnect();
+      await reconnect().catch((error) => {
+        // A transport exhausted its retries; task-only error handlers must not
+        // leave the UI accepting a dead microphone/socket as live.
+        fatal(error);
+        throw error;
+      });
       if (!closed && !closing) {
         await engine.send({ session, event });
       }

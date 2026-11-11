@@ -9961,7 +9961,7 @@ class App extends React.Component<AppProps, AppState> {
         );
         let changed = false;
         const latest = this.scene.getElementsIncludingDeleted();
-        const next = latest.flatMap((element) => {
+        const next = latest.flatMap<FcboardElement>((element) => {
           const patch = patches.get(element.id);
           // A collaborative edit/move/delete wins over a stale native result.
           if (
@@ -9980,7 +9980,7 @@ class App extends React.Component<AppProps, AppState> {
         apply(changed ? next : latest);
       });
     }
-    let elements = before;
+    let elements: readonly FcboardElement[] = before;
     for (let i = 1; i < path.length; i++) {
       elements = (current.objectMode ? eraseSceneObjects : eraseSceneStrokes)(
         elements,

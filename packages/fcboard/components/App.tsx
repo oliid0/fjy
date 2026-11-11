@@ -9842,10 +9842,11 @@ class App extends React.Component<AppProps, AppState> {
     if (input.phase === "cancel") {
       this.nativeRegionDrafts.delete(input.id);
       if (draft) {
-        this.setState({
-          ...(input.restoreSelection === false ? {} : draft.selection),
-          cursorButton: "up",
-        });
+        if (input.restoreSelection === false) {
+          this.setState({ cursorButton: "up" });
+        } else {
+          this.setState({ ...draft.selection, cursorButton: "up" });
+        }
       }
       return;
     }

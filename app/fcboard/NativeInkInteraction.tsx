@@ -267,7 +267,7 @@ export const NativeInkInteraction = ({
             padding,
         ]);
       }
-      const options = {
+      const options: Parameters<typeof ink.configure>[0] = {
         owner: api.id,
         token,
         enabled: enabled && blocked.length <= 512,

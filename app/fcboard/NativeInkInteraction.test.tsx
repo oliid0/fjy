@@ -52,6 +52,7 @@ it("uses calibrated dual-tip native styles and rejects a late completed contact 
       inkProfile={{
         hardPenWidth: 4,
         brushPenWidth: 15,
+        palmThreshold: 36,
         eraserSize: 60,
         dualPen: true,
         thickThreshold: 10,

@@ -19,6 +19,8 @@ for (const viewport of [
       localStorage.setItem(
         "fcboard-settings",
         JSON.stringify({
+          endpoint: "https://resource-test.example/v1/chat/completions",
+          assistantVoice: "agent",
           apiKey: "test-only",
           model: "test",
           speech: "system",
@@ -29,11 +31,21 @@ for (const viewport of [
     let observed = false;
     let objectId = "";
     await page.route(
-      "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+      "https://resource-test.example/v1/chat/completions",
       async (route) => {
         const request = route.request().postDataJSON();
         let result: unknown = interactiveResource;
-        if (
+        if (request.messages[0].content.startsWith("你是持续对话的白板助教")) {
+          result = {
+            action: "commands",
+            commands: [
+              {
+                name: "agent.start",
+                args: { prompt: "把实验中的力改为10牛顿，读取加速度" },
+              },
+            ],
+          };
+        } else if (
           !request.messages[0].content.startsWith(
             "Create a scientifically accurate interactive teaching resource",
           )

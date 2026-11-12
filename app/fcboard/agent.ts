@@ -61,6 +61,7 @@ export const runBoardCommands = async (
     completion?: string;
     exclude?: readonly string[];
     maxTokens?: number;
+    maxRounds?: number;
     textSourceIds?: readonly string[];
     allowed?: readonly string[];
     validate?: (command: Command) => boolean;
@@ -76,7 +77,8 @@ export const runBoardCommands = async (
   let calls = 0;
   let textStyleConfigured = false;
   const conversation = [...messages];
-  for (let round = 0; round < 6; round++) {
+  const maxRounds = options.maxRounds ?? 6;
+  for (let round = 0; round < maxRounds; round++) {
     if (signal?.aborted || !current()) {
       return { action: "done" };
     }
@@ -199,7 +201,7 @@ export const runBoardCommands = async (
     ) {
       return { action: "done" };
     }
-    if (round === 5) {
+    if (round === maxRounds - 1) {
       throw new Error(
         t(
           "fcboard.observation_limit_reached_completed_work_is_preserved_describe_the_next_step_to_continue",

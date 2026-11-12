@@ -119,7 +119,6 @@ test("a small eraser cuts the displayed bend rather than the raw handwriting sam
   const left = await pixel(150, 300);
   const eraser = page.getByRole("button", { name: "板擦", exact: true });
   await eraser.click();
-  await eraser.click();
   await page.getByRole("button", { name: "橡皮大小预设", exact: true }).click();
   await page
     .getByRole("slider", { name: "橡皮大小预设", exact: true })

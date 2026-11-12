@@ -414,54 +414,61 @@ it("lets a model-selected role write real board text, narrate the same text and 
   }
 });
 
-it("applies a new user correction before committing stale proposed board actions", async () => {
-  const host = setup();
-  let answer!: (text: string) => void;
-  vi.spyOn(ai, "chat")
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          answer = resolve;
+it.each(["commands", "done"])(
+  "applies a new user correction before accepting stale proposed %s",
+  async (proposal) => {
+    const host = setup();
+    let answer!: (text: string) => void;
+    vi.spyOn(ai, "chat")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          action: "commands",
+          commands: [
+            {
+              name: "canvas.text",
+              args: {
+                text: "修订后的内容",
+                sourceIds: [],
+                presentation: "text",
+              },
+            },
+          ],
         }),
-    )
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        action: "commands",
-        commands: [
-          {
-            name: "canvas.text",
-            args: { text: "修订后的内容", sourceIds: [], presentation: "text" },
-          },
-        ],
-      }),
-    )
-    .mockResolvedValueOnce(JSON.stringify({ action: "done" }));
-  try {
-    const task = await start("先写原始内容", { role: "自由分工" });
-    await waitFor(() => expect(answer).toBeDefined());
-    await classroomCommands.execute({
-      name: "agent.update",
-      args: { id: task.id, prompt: "改写修订后的内容" },
-    });
-    answer(
-      JSON.stringify({
-        action: "commands",
-        commands: [{ name: "canvas.text", args: { text: "过时内容" } }],
-      }),
-    );
-    await waitFor(async () =>
-      expect((await inspect(task.id)).state).toBe("completed"),
-    );
-    const texts = host.api
-      .getSceneElements()
-      .filter((element) => element.type === "text")
-      .map((element) => element.text);
-    expect(texts).toContain("修订后的内容");
-    expect(texts).not.toContain("过时内容");
-  } finally {
-    host.stop();
-  }
-});
+      )
+      .mockResolvedValueOnce(JSON.stringify({ action: "done" }));
+    try {
+      const task = await start("先写原始内容", { role: "自由分工" });
+      await waitFor(() => expect(answer).toBeDefined());
+      await classroomCommands.execute({
+        name: "agent.update",
+        args: { id: task.id, prompt: "改写修订后的内容" },
+      });
+      answer(
+        JSON.stringify({
+          action: proposal,
+          commands: [{ name: "canvas.text", args: { text: "过时内容" } }],
+        }),
+      );
+      await waitFor(async () =>
+        expect((await inspect(task.id)).state).toBe("completed"),
+      );
+      const texts = host.api
+        .getSceneElements()
+        .filter((element) => element.type === "text")
+        .map((element) => element.text);
+      expect(texts).toContain("修订后的内容");
+      expect(texts).not.toContain("过时内容");
+    } finally {
+      host.stop();
+    }
+  },
+);
 
 it("waits for background resource preparation and returns its complete real result, releasing subscriptions", async () => {
   const host = setup();
@@ -776,9 +783,14 @@ it.each(["chat", "responses"])(
   },
 );
 
-it.each([false, true])(
-  "preserves selected-source screenshot privacy for autonomous tasks when selectionImages=%s",
-  async (selectionImages) => {
+it.each([
+  [false, false],
+  [true, false],
+  [false, true],
+  [true, true],
+])(
+  "preserves selected-source screenshot privacy when selectionImages=%s and explicit sourceIds=%s",
+  async (selectionImages, explicit) => {
     saveSettings(
       {
         ...defaults,
@@ -790,6 +802,11 @@ it.each([false, true])(
     );
     const host = setup();
     const source = host.api.getSceneElements()[0];
+    const initialState = host.api.getAppState();
+    vi.spyOn(host.api, "getAppState").mockImplementation(() => ({
+      ...initialState,
+      selectedElementIds: { [source.id]: true },
+    }));
     const capture = vi
       .mocked(ai.boardContext)
       .mockImplementation(async (_api, _whole, _source, _viewport, image) => ({
@@ -802,9 +819,10 @@ it.each([false, true])(
       .mockResolvedValueOnce(draw)
       .mockResolvedValue('{"action":"done"}');
     try {
-      const task = await start("解释圈选并在旁边演示", {
-        sourceIds: [source.id],
-      });
+      const task = await start(
+        "解释圈选并在旁边演示",
+        explicit ? { sourceIds: [source.id] } : {},
+      );
       await waitFor(async () =>
         expect((await inspect(task.id)).state).toBe("completed"),
       );
@@ -825,3 +843,177 @@ it.each([false, true])(
     }
   },
 );
+
+it.each([
+  ["chat", "complete"],
+  ["chat", "fail"],
+  ["responses", "complete"],
+  ["responses", "fail"],
+])(
+  "replans a %s command task after queued corrections and its %s result, retaining actual dependency outputs",
+  async (provider, outcome) => {
+    if (provider === "responses") {
+      saveSettings({ ...defaults, apiKey: "configured" }, false);
+    }
+    const host = setup();
+    let finish!: () => void;
+    const prepare = vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          finish = () =>
+            outcome === "fail"
+              ? reject(new Error("original generation unavailable"))
+              : resolve({ objectId: "actual-object" });
+        }),
+    );
+    const apply = vi
+      .fn()
+      .mockReturnValue({ objectId: "actual-object", updated: true });
+    const operation =
+      outcome === "fail" ? "experiment.replace" : "experiment.change";
+    const args =
+      outcome === "fail"
+        ? { mode: "new goal" }
+        : { id: "actual-object", mode: "new goal" };
+    const releases = [
+      classroomCommands.register(
+        "experiment.prepare",
+        "Prepare the real experiment",
+        prepare,
+      ),
+      classroomCommands.register(
+        operation,
+        "Apply the updated goal to actual experiment data",
+        apply,
+      ),
+    ];
+    const response = (id: string, output: unknown[]) => ({
+      status: 200,
+      stream: false,
+      data: JSON.stringify({ id, status: "completed", output }),
+    });
+    const model =
+      provider === "responses"
+        ? vi
+            .spyOn(transport, "postAI")
+            .mockResolvedValueOnce(
+              response("replan", [
+                {
+                  type: "function_call",
+                  name: "board_command",
+                  call_id: "updated",
+                  arguments: JSON.stringify({ name: operation, args }),
+                },
+              ]),
+            )
+            .mockResolvedValueOnce(
+              response("done", [
+                {
+                  type: "message",
+                  content: [{ type: "output_text", text: "完成" }],
+                },
+              ]),
+            )
+        : vi
+            .spyOn(ai, "chat")
+            .mockResolvedValueOnce(
+              JSON.stringify({
+                action: "commands",
+                commands: [{ name: operation, args }],
+              }),
+            )
+            .mockResolvedValue('{"action":"done"}');
+    try {
+      const task = await start("准备并使用原实验", {
+        command: { name: "experiment.prepare", args: {} },
+      });
+      await waitFor(() => expect(finish).toBeDefined());
+      await classroomCommands.execute({
+        name: "agent.update",
+        args: {
+          id: task.id,
+          prompt: "更新目标为new goal，先读取实际准备结果，保留已完成操作",
+        },
+      });
+      finish();
+      await waitFor(async () =>
+        expect((await inspect(task.id)).state).toBe("completed"),
+      );
+      expect(model).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(model.mock.calls[0])).toContain(
+        "更新目标为new goal",
+      );
+      expect(JSON.stringify(model.mock.calls[0])).toContain(
+        outcome === "fail"
+          ? "original generation unavailable"
+          : "actual-object",
+      );
+      expect(prepare).toHaveBeenCalledTimes(1);
+      expect(apply).toHaveBeenCalledWith(expect.objectContaining(args));
+      expect((await inspect(task.id)).result).toMatchObject({
+        results: [
+          expect.objectContaining({
+            name: "experiment.prepare",
+            ok: outcome === "complete",
+          }),
+          expect.objectContaining({
+            name: operation,
+            ok: true,
+            result: { objectId: "actual-object", updated: true },
+          }),
+        ],
+      });
+      expect((await inspect(task.id)).speech).toBeUndefined();
+    } finally {
+      releases.forEach((release) => release());
+      host.stop();
+    }
+  },
+);
+
+it("finishes seven dependent tool observations within the independent task budget", async () => {
+  const host = setup();
+  let calls = 0;
+  vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
+    if (calls > 0) {
+      const last = String(messages.at(-1)?.content);
+      expect(last).toContain(`步骤${calls}`);
+      expect(
+        host.api
+          .getSceneElements()
+          .filter(
+            (item) =>
+              !item.isDeleted &&
+              item.type === "text" &&
+              item.text.startsWith("步骤"),
+          ),
+      ).toHaveLength(calls);
+    }
+    return ++calls <= 7
+      ? JSON.stringify({
+          action: "commands",
+          commands: [
+            {
+              name: "canvas.text",
+              args: {
+                text: `步骤${calls}`,
+                sourceIds: [],
+                presentation: "text",
+              },
+            },
+          ],
+        })
+      : '{"action":"done"}';
+  });
+  try {
+    const task = await start("完成七个相互依赖的观察与板书步骤");
+    const completed = (await classroomCommands.execute({
+      name: "agent.wait",
+      args: { id: task.id },
+    })) as BoardTask;
+    expect(completed.state).toBe("completed");
+    expect(calls).toBe(8);
+  } finally {
+    host.stop();
+  }
+});

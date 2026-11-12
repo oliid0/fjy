@@ -56,8 +56,7 @@ export const selectMenu = async (page: Page, label: string) => {
 };
 
 export const openTeachingTools = async (page: Page) => {
-  await page
-    .getByRole("toolbar", { name: "白板工具栏", exact: true })
-    .getByRole("button", { name: "工具箱", exact: true })
-    .click();
+  await openSettingsMenu(page);
+  await page.getByRole("button", { name: "工具栏", exact: true }).click();
+  await page.getByRole("button", { name: "教学工具", exact: true }).click();
 };

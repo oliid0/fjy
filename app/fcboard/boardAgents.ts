@@ -80,8 +80,46 @@ export const registerBoardAgents = () => {
     signal: AbortSignal,
     updates: () => string[],
   ) => {
+    const results: {
+      name: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    }[] = [];
+    const dispatch = async (operation: Command, owner?: AbortSignal) => {
+      try {
+        const result = await executeBoardCommand(operation, owner);
+        results.push({ name: operation.name, ok: true, result });
+        return result;
+      } catch (failure) {
+        if (!owner?.aborted) {
+          console.error("[board-agent-tool]", task.id, operation.name, failure);
+        }
+        results.push({
+          name: operation.name,
+          ok: false,
+          error: failure instanceof Error ? failure.message : String(failure),
+        });
+        throw failure;
+      }
+    };
+    let amendments: string[] = [];
     if (command) {
-      return executeBoardCommand(command, signal);
+      let result: unknown;
+      let failure: unknown;
+      try {
+        result = await dispatch(command, signal);
+      } catch (error) {
+        failure = error;
+      }
+      signal.throwIfAborted();
+      amendments = updates();
+      if (!amendments.length) {
+        if (!results[0].ok) {
+          throw failure;
+        }
+        return result;
+      }
     }
     const configured = currentSettings();
     const settings = {
@@ -132,12 +170,16 @@ export const registerBoardAgents = () => {
             : undefined,
           conversation: classroomCommands.read("conversation"),
           tasks: classroomCommands.read("agents"),
+          results: results.length ? results : undefined,
         }),
         visible?.image,
       ),
     ];
+    if (amendments.length) {
+      messages.push({ role: "user", content: amendments.join("\n") });
+    }
     if (endpoint) {
-      return runResponsesAgent({
+      const result = await runResponsesAgent({
         endpoint,
         messages,
         settings,
@@ -145,7 +187,10 @@ export const registerBoardAgents = () => {
         current,
         allowed: permitted,
         updates,
+        dispatch,
+        requireActions: command ? false : undefined,
       });
+      return { ...result, results };
     }
     const action = parseJSON(
       await chat(messages, signal, settings, { maxTokens: 4096 }),
@@ -154,7 +199,7 @@ export const registerBoardAgents = () => {
     if (!current()) {
       throw new DOMException("Task surface changed", "AbortError");
     }
-    if (action?.action !== "commands") {
+    if (!action || typeof action !== "object") {
       throw invalid();
     }
     const result = await runBoardCommands(action, messages, signal, current, {
@@ -162,14 +207,16 @@ export const registerBoardAgents = () => {
       settings,
       verify: true,
       maxTokens: 4096,
+      maxRounds: 12,
       updates,
+      dispatch,
       context: () => ({ canvas: classroomCommands.read("canvas") }),
     });
     signal.throwIfAborted();
-    if (!current() || result.action !== "done") {
+    if (!current() || result.action !== "done" || !results.length) {
       throw invalid();
     }
-    return { canvas: classroomCommands.read("canvas") };
+    return { canvas: classroomCommands.read("canvas"), results };
   };
   const registrations = [
     classroomCommands.register(
@@ -345,7 +392,12 @@ export const registerBoardAgents = () => {
           prompt: args.prompt.trim(),
           role: role as BoardTask["role"],
           command: command?.name,
-          sourceIds: args.sourceIds as string[] | undefined,
+          sourceIds: (args.sourceIds ??
+            (
+              classroomCommands.read("canvas") as
+                | { selection?: string[] }
+                | undefined
+            )?.selection) as string[] | undefined,
           state: "running",
           startedAt: Date.now(),
         };

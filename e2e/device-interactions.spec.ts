@@ -2,8 +2,6 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
-import { openTeachingTools } from "./menu";
-
 import type { Page } from "@playwright/test";
 
 test.use({ hasTouch: true });
@@ -115,8 +113,8 @@ for (const width of [390, 1920]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await openTeachingTools(page);
-    const menu = page.getByRole("dialog", { name: "教学工具", exact: true });
+    await page.getByRole("button", { name: "工具箱", exact: true }).click();
+    const menu = page.getByRole("dialog", { name: "工具箱", exact: true });
     const transfer = await menu
       .getByRole("button", { name: "快传", exact: true })
       .boundingBox();
@@ -350,7 +348,7 @@ for (const width of [390, 1920]) {
     await expect(panes).toHaveCount(3);
     await expect(panes.first()).toHaveCSS(
       "background-color",
-      "rgb(255, 255, 255)",
+      "rgb(38, 55, 49)",
     );
     const first = await panes.first().boundingBox();
     await dragTouch(
@@ -411,7 +409,7 @@ for (const width of [390, 1920]) {
       return {
         width: image.naturalWidth,
         height: image.naturalHeight,
-        hasInk: pixels.some((value, i) => i % 4 < 3 && value < 70),
+        hasInk: pixels.some((value, i) => i % 4 < 3 && value < 20),
       };
     }, bytes.toString("base64"));
     expect(exported).toMatchObject({ ...size, hasInk: true });

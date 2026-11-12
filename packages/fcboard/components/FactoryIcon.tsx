@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId } from "react";
 import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 
 import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
@@ -1517,57 +1517,59 @@ const icons = {
   },
 } as const;
 
-export const FactoryIcon = ({
-  name,
-  className,
-  style,
-  gradient,
-}: {
-  name: keyof typeof icons | keyof typeof xbhToolbarIcons;
-  className?: string;
-  style?: CSSProperties;
-  gradient?: NativeInkPalette;
-}) => {
-  const id = useId().replace(/:/g, "");
-  const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
-  if (original) {
-    const colors = gradient && nativeInkPalettes[gradient];
-    const body = colors
-      ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">${colors
-          .map(
-            (color, index) =>
-              `<stop offset="${
-                index / (colors.length - 1)
-              }" stop-color="${color}"/>`,
-          )
-          .join("")}</linearGradient></defs>${original.body.replace(
-          /currentColor/g,
-          `url(#${id})`,
-        )}`
-      : original.body;
+export const FactoryIcon = memo(
+  ({
+    name,
+    className,
+    style,
+    gradient,
+  }: {
+    name: keyof typeof icons | keyof typeof xbhToolbarIcons;
+    className?: string;
+    style?: CSSProperties;
+    gradient?: NativeInkPalette;
+  }) => {
+    const id = useId().replace(/:/g, "");
+    const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
+    if (original) {
+      const colors = gradient && nativeInkPalettes[gradient];
+      const body = colors
+        ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">${colors
+            .map(
+              (color, index) =>
+                `<stop offset="${
+                  index / (colors.length - 1)
+                }" stop-color="${color}"/>`,
+            )
+            .join("")}</linearGradient></defs>${original.body.replace(
+            /currentColor/g,
+            `url(#${id})`,
+          )}`
+        : original.body;
+      return (
+        <svg
+          className={className}
+          style={style}
+          viewBox={original.viewBox}
+          aria-hidden="true"
+          focusable="false"
+          dangerouslySetInnerHTML={{ __html: body }}
+        />
+      );
+    }
+    const icon = icons[name as keyof typeof icons];
     return (
       <svg
         className={className}
         style={style}
-        viewBox={original.viewBox}
+        viewBox={icon.viewBox}
         aria-hidden="true"
         focusable="false"
-        dangerouslySetInnerHTML={{ __html: body }}
-      />
+      >
+        {icon.paths.map((path, index) => (
+          <path key={index} {...path} />
+        ))}
+      </svg>
     );
-  }
-  const icon = icons[name as keyof typeof icons];
-  return (
-    <svg
-      className={className}
-      style={style}
-      viewBox={icon.viewBox}
-      aria-hidden="true"
-      focusable="false"
-    >
-      {icon.paths.map((path, index) => (
-        <path key={index} {...path} />
-      ))}
-    </svg>
-  );
-};
+  },
+);

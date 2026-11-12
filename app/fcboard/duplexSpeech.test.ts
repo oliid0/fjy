@@ -1198,3 +1198,131 @@ it("replaces revised live snapshots before finalization while retaining explicit
     await handle.cancel();
   }
 });
+
+it("does not replay a completed task's old narration when a fresh voice session observes new task changes", async () => {
+  const agents = registerBoardAgents();
+  let owner!: AbortSignal;
+  let finish!: () => void;
+  const release = classroomCommands.register(
+    "experiment.run",
+    "Run a real experiment",
+    (args) => {
+      owner = args.signal as AbortSignal;
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    },
+  );
+  let handle: Awaited<ReturnType<typeof startDuplexSpeech>> | undefined;
+  try {
+    await classroomCommands.execute({
+      name: "agent.start",
+      args: {
+        prompt: "之前的任务",
+        command: { name: "experiment.run", args: {} },
+      },
+    });
+    await executeBoardCommand(
+      { name: "agent.say", args: { text: "已经结束的旧讲解" } },
+      owner,
+    );
+    finish();
+    await vi.waitFor(() =>
+      expect(
+        (classroomCommands.read("agents") as { state: string }[])[0].state,
+      ).toBe("completed"),
+    );
+    handle = await startDuplexSpeech(callbacks());
+    classroomCommands.changed("agents");
+    await Promise.resolve();
+    expect(
+      mocks.engine.send.mock.calls.some(
+        ([value]) =>
+          value.event.type === "speech_text_buffer.replacement.append",
+      ),
+    ).toBe(false);
+    await handle.speak("当前会话的新正文");
+    expect(mocks.engine.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: {
+          type: "speech_text_buffer.replacement.append",
+          text: "当前会话的新正文",
+        },
+      }),
+    );
+  } finally {
+    await handle?.cancel();
+    release();
+    agents();
+  }
+});
+
+it.each(["cancel", "interrupt"])(
+  "drops queued task narration after %s while keeping live speech input and subsequent narration available",
+  async (operation) => {
+    const agents = registerBoardAgents();
+    let owner!: AbortSignal;
+    const release = classroomCommands.register(
+      "experiment.run",
+      "Run a real experiment",
+      (args) => {
+        owner = args.signal as AbortSignal;
+        return new Promise<void>(() => {});
+      },
+    );
+    const view = callbacks();
+    const handle = await startDuplexSpeech(view);
+    try {
+      emit({ type: "conversation.item.input_audio_transcription.started" });
+      const task = (await classroomCommands.execute({
+        name: "agent.start",
+        args: {
+          prompt: "可取消任务",
+          command: { name: "experiment.run", args: {} },
+        },
+      })) as { id: string };
+      await executeBoardCommand(
+        { name: "agent.say", args: { text: "取消后不能继续读出的正文" } },
+        owner,
+      );
+      if (operation === "cancel") {
+        await classroomCommands.execute({
+          name: "agent.cancel",
+          args: { id: task.id },
+        });
+      } else {
+        await handle.interrupt();
+        expect(owner.aborted).toBe(false);
+      }
+      emit({
+        type: "conversation.item.input_audio_transcription.completed",
+        text: "我还有一个问题",
+      });
+      emit({ type: "response.done" });
+      await Promise.resolve();
+      expect(
+        mocks.engine.send.mock.calls.some(
+          ([value]) =>
+            value.event.type === "speech_text_buffer.replacement.append",
+        ),
+      ).toBe(false);
+      expect(view.line).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "我还有一个问题" }),
+      );
+      expect(capture.cancel).not.toHaveBeenCalled();
+      await handle.speak("新的讲解正文");
+      expect(mocks.engine.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: {
+            type: "speech_text_buffer.replacement.append",
+            text: "新的讲解正文",
+          },
+        }),
+      );
+    } finally {
+      await handle.cancel();
+      release();
+      agents();
+    }
+  },
+);

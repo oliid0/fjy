@@ -375,7 +375,6 @@ test("voice draws into the visible PPT and function controls update its transpar
   await expect
     .poll(() => page.locator(".fc-document-ink path").count())
     .toBeGreaterThan(3);
-  await page.keyboard.press("Escape");
   await page.mouse.click(20, 120);
   await expect(
     page.getByRole("button", { name: "课件语音指令", exact: true }),

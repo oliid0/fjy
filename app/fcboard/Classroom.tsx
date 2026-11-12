@@ -354,9 +354,21 @@ export const Classroom = ({
         }
         const text = task.speech.text;
         const generation = voiceGeneration.current;
+        const interruption = assistantGeneration.current;
         narration = narration
           .then(async () => {
-            if (generation === voiceGeneration.current && voiceTurns.current) {
+            const currentTask = (
+              classroomCommands.read("agents") as
+                | import("./boardAgents").BoardTask[]
+                | undefined
+            )?.find((value) => value.id === task.id);
+            if (
+              generation === voiceGeneration.current &&
+              interruption === assistantGeneration.current &&
+              voiceTurns.current &&
+              currentTask &&
+              currentTask.state !== "cancelled"
+            ) {
               await agentSpeaker.current?.(text);
             }
           })

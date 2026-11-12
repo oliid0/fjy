@@ -155,7 +155,9 @@ export const startDuplexSpeech = async (options: {
     { result: Promise<Event>; request: AbortController }
   >();
   const pending = new Set<AbortController>();
-  const announcements: string[] = [];
+  const announcements: { text: string; taskId?: string }[] = [];
+  const boardTasks = () =>
+    (classroomCommands.read("agents") as BoardTask[] | undefined) || [];
   const taskFailure = (error: unknown) => console.error("[voice-task]", error);
   const state = () => {
     if (!closed) {
@@ -343,7 +345,21 @@ export const startDuplexSpeech = async (options: {
     ) {
       return;
     }
-    const answer = announcements.shift()!;
+    let answer: string | undefined;
+    while (announcements.length) {
+      const next = announcements.shift()!;
+      if (next.taskId) {
+        const task = boardTasks().find((task) => task.id === next.taskId);
+        if (!task || task.state === "cancelled") {
+          continue;
+        }
+      }
+      answer = next.text;
+      break;
+    }
+    if (!answer) {
+      return;
+    }
     responding = true;
 
     // Official replacement events synthesize backend text on the same live connection.
@@ -367,6 +383,7 @@ export const startDuplexSpeech = async (options: {
     pending.clear();
   };
   const interrupt = async () => {
+    announcements.length = 0;
     interruptPlayer();
     await send({ type: "response.cancel" });
   };
@@ -672,18 +689,18 @@ export const startDuplexSpeech = async (options: {
       extension: speechExtension(),
     }).catch(taskFailure);
   });
-  const spoken = new Map<string, number>();
+  const spoken = new Map<string, number>(
+    boardTasks().map((task) => [task.id, task.speech?.sequence || 0]),
+  );
   const unwatchAgents = classroomCommands.watch("agents", () => {
-    const tasks =
-      (classroomCommands.read("agents") as BoardTask[] | undefined) || [];
-    for (const task of tasks) {
+    for (const task of boardTasks()) {
       if (
         task.state !== "cancelled" &&
         task.speech &&
         task.speech.sequence > (spoken.get(task.id) || 0)
       ) {
         spoken.set(task.id, task.speech.sequence);
-        announcements.push(task.speech.text);
+        announcements.push({ text: task.speech.text, taskId: task.id });
         void announce().catch(taskFailure);
       }
     }
@@ -752,7 +769,7 @@ export const startDuplexSpeech = async (options: {
       : {}),
     async speak(text) {
       if (!closed && !closing && text.trim()) {
-        announcements.push(text.trim().slice(0, 6000));
+        announcements.push({ text: text.trim().slice(0, 6000) });
         await announce().catch(taskFailure);
       }
     },

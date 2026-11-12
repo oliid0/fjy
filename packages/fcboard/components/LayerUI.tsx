@@ -662,6 +662,27 @@ const LayerUI = ({
     return () => observer.disconnect();
   }, [toolbarItems, appState.toolbarReversed, toolbarHidden]);
 
+  React.useEffect(() => {
+    if (!showProperties || toolbarHidden) {
+      return;
+    }
+    const dismiss = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"], .MuiPopper-root')
+      ) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setShowProperties(false);
+      }
+    };
+    window.addEventListener("keydown", dismiss, true);
+    return () => window.removeEventListener("keydown", dismiss, true);
+  }, [showProperties, toolbarHidden]);
+
   const renderUnifiedToolbar = () => (
     <>
       <WhiteboardScale app={app} />

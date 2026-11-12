@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { interactiveResource } from "../app/fcboard/test/interactiveResource";
+import { inertiaResource } from "../app/fcboard/test/interactiveResource";
 
 import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
 
@@ -40,7 +40,7 @@ for (const width of [1440, 3080, 390]) {
         await new Promise<void>((resolve) => {
           releaseResource = resolve;
         });
-        result = interactiveResource;
+        result = inertiaResource;
       } else if (system.startsWith("你是持续对话的白板助教")) {
         if (last.startsWith("详细演示")) {
           result = {
@@ -102,7 +102,8 @@ for (const width of [1440, 3080, 390]) {
                   command: {
                     name: "resources.generate",
                     args: {
-                      prompt: "Newton's second law interactive experiment",
+                      prompt:
+                        "Newton's first law coasting cart interactive experiment",
                     },
                   },
                 },
@@ -110,7 +111,7 @@ for (const width of [1440, 3080, 390]) {
               {
                 name: "canvas.text",
                 args: {
-                  text: "牛顿定律",
+                  text: "牛顿第一定律",
                   role: "title",
                   sourceIds: [],
                   presentation: "text",
@@ -156,7 +157,11 @@ for (const width of [1440, 3080, 390]) {
             };
           } else if (workerCalls === 4) {
             const state = data.results[0].result as ResourceControlState;
-            expect(state.outputs).toEqual(["2 m/s²"]);
+            expect(state.outputs).toEqual([
+              "合力：4 N",
+              "速度：1 m/s",
+              "位置：0 m",
+            ]);
             result = {
               action: "commands",
               commands: [
@@ -169,15 +174,42 @@ for (const width of [1440, 3080, 390]) {
                       (control) => control.type === "range",
                     )!.id,
                     action: "set",
-                    value: 10,
+                    value: 0,
                   },
                 },
               ],
             };
           } else if (workerCalls === 5) {
-            expect(data.results[0].result.outputs).toEqual(["5 m/s²"]);
+            const state = data.results[0].result as ResourceControlState;
+            expect(state.outputs).toEqual([
+              "合力：0 N",
+              "速度：1 m/s",
+              "位置：0 m",
+            ]);
+            result = {
+              action: "commands",
+              commands: [
+                {
+                  name: "resources.interact",
+                  args: {
+                    id: objectId,
+                    version: state.version,
+                    control: state.controls.find(
+                      (control) => control.label === "推进1秒",
+                    )!.id,
+                    action: "click",
+                  },
+                },
+              ],
+            };
+          } else if (workerCalls === 6) {
+            expect(data.results[0].result.outputs).toEqual([
+              "合力：0 N",
+              "速度：1 m/s",
+              "位置：1 m",
+            ]);
             const explanation =
-              "质量为两千克，合力十牛顿，加速度为每二次方秒五米。";
+              "小车失去推力后，合外力为零，由于惯性以每秒一米的速度继续做匀速直线运动。";
             result = {
               action: "commands",
               commands: [
@@ -193,7 +225,7 @@ for (const width of [1440, 3080, 390]) {
               ],
             };
           } else {
-            expect(workerCalls).toBe(6);
+            expect(workerCalls).toBe(7);
             result = { action: "done" };
           }
         }
@@ -213,17 +245,20 @@ for (const width of [1440, 3080, 390]) {
     });
     await page.goto("/");
     await startVoice(page);
-    await say(page, "详细演示一下牛顿定律");
+    await say(page, "详细演示一下牛顿第一定律");
     await expect.poll(() => typeof releaseResource).toBe("function");
     await expect
       .poll(() =>
         page.evaluate(() =>
           JSON.parse(localStorage.getItem("fcboard") || "[]").some(
-            (item: { text?: string }) => item.text === "牛顿定律",
+            (item: { text?: string }) => item.text === "牛顿第一定律",
           ),
         ),
       )
       .toBe(true);
+    await expect(page.locator(".fc-voice-caption")).toContainText(
+      "牛顿定律描述力和运动的关系",
+    );
     await say(page, "推力撤去后为什么还能运动？");
     await expect(page.locator(".fc-voice-caption")).toContainText(
       "我们可以继续讨论",
@@ -231,22 +266,26 @@ for (const width of [1440, 3080, 390]) {
     await expect(page.locator(".fc-voice-orb")).toBeVisible();
     releaseResource();
     const experiment = page.frameLocator(
-      `iframe[title="${interactiveResource.title}"]`,
+      `iframe[title="${inertiaResource.title}"]`,
     );
-    await expect(experiment.locator("output")).toHaveText("5 m/s²", {
-      timeout: 20000,
-    });
-    await expect(experiment.locator("#block")).toHaveAttribute("x", "150");
+    await expect(experiment.locator("output")).toHaveText(
+      ["合力：0 N", "速度：1 m/s", "位置：1 m"],
+      { timeout: 20000 },
+    );
+    await expect(experiment.locator("#cart")).toHaveAttribute(
+      "style",
+      /translateX\(40px\)/,
+    );
     await expect
       .poll(() =>
         page.evaluate(() =>
           JSON.parse(localStorage.getItem("fcboard") || "[]").some(
-            (item: { text?: string }) => item.text?.includes("合力十牛顿"),
+            (item: { text?: string }) => item.text?.includes("由于惯性"),
           ),
         ),
       )
       .toBe(true);
-    await expect(page.locator(".fc-voice-caption")).toContainText("合力十牛顿");
+    await expect(page.locator(".fc-voice-caption")).toContainText("由于惯性");
     await say(page, "生成另一个实验");
     await expect.poll(() => failed).toBe(true);
     await say(page, "还能继续对话吗？");

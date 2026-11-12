@@ -462,3 +462,47 @@ it("keeps committed work and discards late calls after the task is cancelled", a
     stop();
   }
 });
+
+it("executes a real start-stop-start lifecycle instead of reusing an obsolete successful tool result", async () => {
+  let recording = false;
+  const start = vi.fn(() => {
+    recording = true;
+    return { recording };
+  });
+  const stop = vi.fn(() => {
+    recording = false;
+    return { recording };
+  });
+  const releases = [
+    classroomCommands.register("record.start", "Start recording", start),
+    classroomCommands.register("record.stop", "Stop recording", stop),
+  ];
+  vi.spyOn(transport, "postAI")
+    .mockResolvedValueOnce(
+      response("started", [
+        call("start-first", "board_command", { name: "record.start" }),
+      ]),
+    )
+    .mockResolvedValueOnce(
+      response("stopped", [
+        call("stop", "board_command", { name: "record.stop" }),
+      ]),
+    )
+    .mockResolvedValueOnce(
+      response("started-again", [
+        call("start-again", "board_command", { name: "record.start" }),
+      ]),
+    )
+    .mockResolvedValueOnce(response("done", [done]));
+  try {
+    await runResponsesAgent({
+      ...options(),
+      allowed: (name) => name.startsWith("record."),
+    });
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(recording).toBe(true);
+  } finally {
+    releases.forEach((release) => release());
+  }
+});

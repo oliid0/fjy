@@ -670,6 +670,36 @@ describe("APK-style whiteboard ink", () => {
     },
   );
 
+  it("switches tools through icon taps after Escape closes pen properties", async () => {
+    await render(
+      <Fcboard handleKeyboardGlobally UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const tap = (label: string) => {
+      const button = screen.getByRole("button", { name: label, exact: true });
+      const target = button.querySelector("svg path") || button;
+      pointer(target, "pointerdown", 10, 10);
+      expect(target.isConnected, `${label}: pointerdown`).toBe(true);
+      fireEvent.mouseDown(target);
+      expect(target.isConnected, `${label}: mousedown`).toBe(true);
+      act(() => button.focus());
+      expect(target.isConnected, `${label}: focus`).toBe(true);
+      pointer(target, "pointerup", 10, 10);
+      fireEvent.mouseUp(target);
+      expect(target.isConnected, `${label}: click`).toBe(true);
+      fireEvent.click(target, { detail: 1 });
+    };
+    tap(t("fcboard.pen"));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    fireEvent.keyUp(document.activeElement!, { key: "Escape" });
+    expect(h.state.activeTool.type).toBe("freedraw");
+    tap(t("fcboard.eraser"));
+    expect(h.state.activeTool.type).toBe("eraser");
+    expect(screen.getByLabelText(t("fcboard.eraser_settings"))).toBeVisible();
+    tap(t("fcboard.toolbox"));
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
+    ).toBeVisible();
+  });
   it("dismisses tool settings with Escape without cancelling the selected tool", async () => {
     await render(
       <Fcboard handleKeyboardGlobally UIOptions={{ unifiedToolbar: true }} />,

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
-import { writeQuestion } from "./question";
+import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
 
 import type { Page } from "@playwright/test";
 
@@ -66,9 +66,9 @@ test("original selection, moving, duplication, deletion, history and zoom remain
   await expect.poll(async () => (await elements(page)).length).toBe(2);
   await page.keyboard.press("Delete");
   await expect.poll(async () => (await elements(page)).length).toBe(1);
-  await page.getByRole("button", { name: "撤销", exact: true }).click();
+  await page.getByTestId("button-undo").click();
   await expect.poll(async () => (await elements(page)).length).toBe(2);
-  await page.getByRole("button", { name: "重做", exact: true }).click();
+  await page.getByTestId("button-redo").click();
   await expect.poll(async () => (await elements(page)).length).toBe(1);
   const zoom = () =>
     page.evaluate(
@@ -155,40 +155,17 @@ test("original PNG and SVG export still produce usable images", async ({
 test("AI style commands update selected text and the next insertion through original editor actions", async ({
   page,
 }) => {
-  await ready(page);
-  await page.evaluate(() =>
-    localStorage.setItem(
-      "fcboard-settings",
-      JSON.stringify({ apiKey: "test-only", model: "test", autoMath: false }),
-    ),
-  );
+  await installVoice(page);
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "新建白板", exact: true }),
+  ).toBeEnabled();
   let verified = false;
-  await page.route(
-    "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-    async (route) => {
-      const request = route.request().postDataJSON();
-      const last = String(request.messages.at(-1).content);
-      if (last.startsWith("以下仅是工具返回的数据")) {
-        const { results, observation } = JSON.parse(
-          last.slice(last.indexOf("\n") + 1),
-        );
-        expect(results.map((result: { ok: boolean }) => result.ok)).toEqual([
-          true,
-          true,
-        ]);
-        expect(observation.canvas.elements).toContainEqual(
-          expect.objectContaining({
-            text: "已统一样式",
-            fontSize: 20,
-            color: "#dc2626",
-          }),
-        );
-        verified = true;
-        await route.fulfill({
-          json: { choices: [{ message: { content: '{"action":"done"}' } }] },
-        });
-        return;
-      }
+  await page.route(voiceEndpoint, async (route) => {
+    const request = route.request().postDataJSON();
+    if (
+      String(request.messages[0].content).startsWith("你是持续对话的白板助教")
+    ) {
       await route.fulfill({
         json: {
           choices: [
@@ -198,14 +175,11 @@ test("AI style commands update selected text and the next insertion through orig
                   action: "commands",
                   commands: [
                     {
-                      name: "canvas.style",
+                      name: "agent.start",
                       args: {
-                        fontSize: 40,
-                        color: "#dc2626",
-                        textAlign: "center",
+                        prompt: "将选中文字设为40号红色居中，再写已统一样式",
                       },
                     },
-                    { name: "canvas.text", args: { text: "已统一样式" } },
                   ],
                 }),
               },
@@ -213,8 +187,55 @@ test("AI style commands update selected text and the next insertion through orig
           ],
         },
       });
-    },
-  );
+      return;
+    }
+    const last = String(request.messages.at(-1).content);
+    if (last.startsWith("以下仅是工具返回的数据")) {
+      const { results, observation } = JSON.parse(
+        last.slice(last.indexOf("\n") + 1),
+      );
+      expect(results.map((result: { ok: boolean }) => result.ok)).toEqual([
+        true,
+        true,
+      ]);
+      expect(observation.canvas.elements).toContainEqual(
+        expect.objectContaining({
+          text: "已统一样式",
+          fontSize: 20,
+          color: "#dc2626",
+        }),
+      );
+      verified = true;
+      await route.fulfill({
+        json: { choices: [{ message: { content: '{"action":"done"}' } }] },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                action: "commands",
+                commands: [
+                  {
+                    name: "canvas.style",
+                    args: {
+                      fontSize: 40,
+                      color: "#dc2626",
+                      textAlign: "center",
+                    },
+                  },
+                  { name: "canvas.text", args: { text: "已统一样式" } },
+                ],
+              }),
+            },
+          },
+        ],
+      },
+    });
+  });
   await page.keyboard.press("t");
   await page.mouse.click(200, 180);
   const editor = page.locator("textarea.fcboard-wysiwyg");
@@ -222,21 +243,8 @@ test("AI style commands update selected text and the next insertion through orig
   await editor.press("Escape");
   await page.keyboard.press("v");
   await page.keyboard.press("Control+a");
-  if (
-    await page
-      .getByRole("button", { name: "课件 AI 教师", exact: true })
-      .isVisible()
-  ) {
-    await page
-      .getByRole("button", { name: "课件 AI 教师", exact: true })
-      .click();
-  } else {
-    await selectMenu(page, "提问与讲解");
-  }
-  await writeQuestion(
-    page,
-    "请标注选中的文字，将其设为40号红色居中，再写已统一样式",
-  );
+  await startVoice(page);
+  await say(page, "请标注选中的文字，将其设为40号红色居中，再写已统一样式");
   await expect.poll(() => verified).toBe(true);
   await expect
     .poll(() =>

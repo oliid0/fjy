@@ -406,7 +406,6 @@ export const runResponsesAgent = async (options: {
             );
           }
           const key = canonical([command.name, command.args || {}, surface()]);
-          const cached = !read && committed.get(key);
           const observedIds = new Set(
             (
               (
@@ -420,6 +419,7 @@ export const runResponsesAgent = async (options: {
             /^(?:canvas\.(?:ink|text|resource)|shapes\.insert|insert\.object|tools\.insert|resources\.(?:generate|use))$/.test(
               command.name,
             ) && !command.args?.id;
+          const cached = insertion && committed.get(key);
           if (
             cached &&
             (cached.state === state() ||
@@ -441,14 +441,16 @@ export const runResponsesAgent = async (options: {
             }
             if (!read) {
               mutations++;
-              const ids = (result as { ids?: unknown } | undefined)?.ids;
-              committed.set(key, {
-                result,
-                state: state(),
-                ids: Array.isArray(ids)
-                  ? ids.filter((id): id is string => typeof id === "string")
-                  : [],
-              });
+              if (insertion) {
+                const ids = (result as { ids?: unknown } | undefined)?.ids;
+                committed.set(key, {
+                  result,
+                  state: state(),
+                  ids: Array.isArray(ids)
+                    ? ids.filter((id): id is string => typeof id === "string")
+                    : [],
+                });
+              }
             }
           }
           errors.delete(errorKey);

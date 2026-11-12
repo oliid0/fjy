@@ -6,12 +6,16 @@ test("real touch input distinguishes a single-mode pinch from committed and mult
   page,
 }, info) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.addInitScript(() =>
+  await page.addInitScript(() => {
     localStorage.setItem(
       "fcboard-settings",
       JSON.stringify({ autoMath: false }),
-    ),
-  );
+    );
+    localStorage.setItem(
+      "fcboard-toolbar-tools-v2",
+      JSON.stringify(["shape", "toolbox", "undo", "redo", "aerial", "multi"]),
+    );
+  });
   await page.goto("/");
   const toolbar = page.locator(".fc-unified-toolbar");
   await expect(toolbar).toBeVisible();

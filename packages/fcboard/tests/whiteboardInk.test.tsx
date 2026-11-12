@@ -675,17 +675,17 @@ describe("APK-style whiteboard ink", () => {
       <Fcboard handleKeyboardGlobally UIOptions={{ unifiedToolbar: true }} />,
     );
     const tap = (label: string) => {
-      const button = screen.getByRole("button", { name: label, exact: true });
+      const button = screen.getByRole("button", { name: label });
       const target = button.querySelector("svg path") || button;
       pointer(target, "pointerdown", 10, 10);
-      expect(target.isConnected, `${label}: pointerdown`).toBe(true);
+      expect(target.isConnected).toBe(true);
       fireEvent.mouseDown(target);
-      expect(target.isConnected, `${label}: mousedown`).toBe(true);
+      expect(target.isConnected).toBe(true);
       act(() => button.focus());
-      expect(target.isConnected, `${label}: focus`).toBe(true);
+      expect(target.isConnected).toBe(true);
       pointer(target, "pointerup", 10, 10);
       fireEvent.mouseUp(target);
-      expect(target.isConnected, `${label}: click`).toBe(true);
+      expect(target.isConnected).toBe(true);
       fireEvent.click(target, { detail: 1 });
     };
     tap(t("fcboard.pen"));

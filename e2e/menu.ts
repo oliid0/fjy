@@ -31,6 +31,10 @@ export const selectMenu = async (page: Page, label: string) => {
     return;
   }
   await page.getByTestId("main-menu-trigger").click();
+  if (label === "实时协作") {
+    await page.getByRole("menuitem", { name: "协同白板", exact: true }).click();
+    return;
+  }
   if (!["白板设置", "AI 与语音设置"].includes(label)) {
     await page.getByRole("menuitem", { name: label, exact: true }).click();
     return;
@@ -52,10 +56,8 @@ export const selectMenu = async (page: Page, label: string) => {
 };
 
 export const openTeachingTools = async (page: Page) => {
-  await openSettingsMenu(page);
   await page
-    .getByRole("button", { name: "AI 与语音设置", exact: true })
+    .getByRole("toolbar", { name: "白板工具栏", exact: true })
+    .getByRole("button", { name: "工具箱", exact: true })
     .click();
-  await page.getByRole("button", { name: "教学偏好", exact: true }).click();
-  await page.getByRole("button", { name: "教学工具", exact: true }).click();
 };

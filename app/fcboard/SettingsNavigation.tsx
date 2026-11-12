@@ -23,12 +23,11 @@ const sections = {
   models: "models_and_connection",
   recognition: "handwriting_and_insertion",
   voice: "speech_and_narration",
-  teaching: "teaching_preferences",
 } as const;
 export type SettingsPage = keyof typeof sections;
 const current = createContext<SettingsPage>("home");
 export const useSettingsPage = () => useContext(current);
-const aiPages: SettingsPage[] = ["models", "recognition", "voice", "teaching"];
+const aiPages: SettingsPage[] = ["models", "recognition", "voice"];
 export const settingsParent = (page: SettingsPage): SettingsPage =>
   page === "languagePacks"
     ? "language"

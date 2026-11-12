@@ -168,8 +168,9 @@ for (const width of [390, 1920]) {
       await toolbar
         .getByRole("button", { name: "工具箱", exact: true })
         .click();
+      await page.getByRole("button", { name: "尺规", exact: true }).click();
       await page
-        .getByRole("dialog", { name: "工具箱", exact: true })
+        .getByRole("dialog", { name: "尺规", exact: true })
         .getByRole("button", { name: `插入${label}`, exact: true })
         .click();
       const current = async () =>
@@ -308,13 +309,18 @@ for (const width of [390, 1920]) {
       .locator(".fc-native-eraser-row")
       .getByRole("button", { name: "框选擦除", exact: true })
       .click();
-    await dragTouch(page, { x: 40, y: 185 }, { x: 65, y: 210 }, 2);
+    await dragTouch(
+      page,
+      { x: 30, y: 175 },
+      { x: Math.min(width - 30, 390), y: 415 },
+      2,
+    );
     await expect.poll(table).toEqual([]);
   });
 }
 
 for (const width of [390, 1920]) {
-  test(`original split and curtain settings apply through actual tool controls at ${width}`, async ({
+  test(`split layout changes preserve ink and curtain settings apply through actual tool controls at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -324,7 +330,15 @@ for (const width of [390, 1920]) {
       Reflect.deleteProperty(window, "showSaveFilePicker");
     });
     await page.goto("/");
-    const openTool = async (name: string) => {
+    const openTool = async (name: string, count = 3) => {
+      if (name === "分屏") {
+        await page.getByRole("button", { name: "分屏", exact: true }).click();
+        await page
+          .locator(".fc-split-launcher")
+          .getByRole("button", { name: `${count}分屏`, exact: true })
+          .click();
+        return;
+      }
       await page.getByRole("button", { name: "工具箱", exact: true }).click();
       await page
         .getByRole("dialog", { name: "工具箱", exact: true })
@@ -332,20 +346,11 @@ for (const width of [390, 1920]) {
         .click();
     };
     await openTool("分屏");
-    const settings = page.getByRole("dialog", {
-      name: "分屏 · 设置",
-      exact: true,
-    });
-    await expect(settings).toBeVisible();
-    await expect(page.locator(".fc-split-pane canvas")).toHaveCount(0);
-    await settings.getByRole("radio", { name: "3", exact: true }).check();
-    await settings.getByRole("radio", { name: "绿色", exact: true }).check();
-    await settings.getByRole("button", { name: "确定", exact: true }).click();
     const panes = page.locator(".fc-split-pane canvas");
     await expect(panes).toHaveCount(3);
     await expect(panes.first()).toHaveCSS(
       "background-color",
-      "rgb(38, 55, 49)",
+      "rgb(255, 255, 255)",
     );
     const first = await panes.first().boundingBox();
     await dragTouch(
@@ -417,12 +422,12 @@ for (const width of [390, 1920]) {
       .last()
       .click();
     await exit.getByRole("button", { name: "不保存", exact: true }).click();
-    await openTool("分屏");
-    await settings.getByRole("radio", { name: "2", exact: true }).check();
-    await settings.getByRole("button", { name: "取消", exact: true }).click();
-    await expect(panes).toHaveCount(0);
-    await openTool("分屏");
-    await settings.getByRole("button", { name: "确定", exact: true }).click();
+    await openTool("分屏", 2);
+    await expect(panes).toHaveCount(2);
+    expect(await hasInk(0)).toBe(true);
+    await board.getByRole("button", { name: "关闭", exact: true }).click();
+    await exit.getByRole("button", { name: "不保存", exact: true }).click();
+    await openTool("分屏", 3);
     await expect(panes).toHaveCount(3);
     expect(await hasInk(0)).toBe(true);
     await board
@@ -522,6 +527,8 @@ test("touch toolbar customization and page sorting persist, cancelled drags rest
     await expect(page.locator(".fc-board-count")).toContainText(
       `${index + 2} / ${index + 2}`,
     );
+    // LayerUI intentionally rejects repeated same-control actions within 400ms.
+    await page.waitForTimeout(450);
   }
   await page.locator("[data-board-switcher]").click();
   const list = page.locator(".fc-board-picker");

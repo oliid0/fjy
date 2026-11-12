@@ -466,12 +466,6 @@ export const FilePreview = ({
           instance.onChange = (index) => {
             if (index !== pageRef.current) {
               classroomCommands.touch(navigationSource.current);
-              if (
-                !navigationSource.current &&
-                classroomCommands.has("lesson.pause")
-              ) {
-                void classroomCommands.execute({ name: "lesson.pause" });
-              }
             }
             pageRef.current = index;
             currentTextRef.current = instance.text(index);
@@ -628,9 +622,6 @@ export const FilePreview = ({
         if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
           throw new Error(t("fcboard.page_number_out_of_range"));
         }
-        if (!source && classroomCommands.has("lesson.pause")) {
-          await classroomCommands.execute({ name: "lesson.pause" });
-        }
         if (classroomCommands.has("mindmap.dismiss")) {
           await classroomCommands.execute({ name: "mindmap.dismiss" });
         }
@@ -702,9 +693,6 @@ export const FilePreview = ({
         throw new Error(t("fcboard.syncing_live"));
       }
       source?.throwIfAborted();
-      if (!source && classroomCommands.has("lesson.pause")) {
-        void classroomCommands.execute({ name: "lesson.pause" });
-      }
       classroomCommands.touch(source);
       if (viewer.current) {
         navigationSource.current = source;
@@ -725,9 +713,6 @@ export const FilePreview = ({
         throw new Error(t("fcboard.syncing_live"));
       }
       source?.throwIfAborted();
-      if (!source && classroomCommands.has("lesson.pause")) {
-        void classroomCommands.execute({ name: "lesson.pause" });
-      }
       classroomCommands.touch(source);
       if (viewer.current) {
         navigationSource.current = source;
@@ -755,9 +740,6 @@ export const FilePreview = ({
         source?.throwIfAborted();
         if (classroomCommands.has("mindmap.dismiss")) {
           await classroomCommands.execute({ name: "mindmap.dismiss" });
-        }
-        if (!source && classroomCommands.has("lesson.pause")) {
-          await classroomCommands.execute({ name: "lesson.pause" });
         }
         await saveQueue.current.catch(() => {});
         if (key && ready) {
@@ -3275,9 +3257,6 @@ export const FilePreview = ({
               }
               if (activePointer.current) {
                 cancelInkGesture();
-              }
-              if (classroomCommands.has("lesson.pause")) {
-                void classroomCommands.execute({ name: "lesson.pause" });
               }
               gestureBefore.current = inkRef.current[page] || [];
               gesturePage.current = page;

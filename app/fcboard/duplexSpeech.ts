@@ -6,7 +6,7 @@ import { classroomCommands, executeBoardCommand } from "./commands";
 import { createDuplexPlayer } from "./duplexPlayer";
 import { startPCMSpeech } from "./localSpeech";
 import { currentSettings } from "./settings";
-import { boardAgentRole } from "./boardAgents";
+import { voiceBoardCommand } from "./boardAgents";
 import { realtimeCommand, realtimeTools } from "./realtimeTools";
 import { speechExtension } from "./speechContext";
 
@@ -60,10 +60,7 @@ const instructions = () =>
   `\n${classroomCommands
     .describe()
     .split("\n")
-    .filter(
-      (line) =>
-        !/^(?:agent\.(?:say|wait)|lesson\.(?:audio|resume)):/.test(line),
-    )
+    .filter((line) => !/^(?:agent\.(?:say|wait)):/.test(line))
     .join("\n")}\n${agentContext(classroomCommands.read("canvas"))}`;
 
 /** Supplied speech PDF pp.125–137, confirmed against official web_duplex_demo:
@@ -159,8 +156,6 @@ export const startDuplexSpeech = async (options: {
   >();
   const pending = new Set<AbortController>();
   const announcements: string[] = [];
-  const announced = new Set<string>();
-  let resultRevision = 0;
   const taskFailure = (error: unknown) => console.error("[voice-task]", error);
   const state = () => {
     if (!closed) {
@@ -208,7 +203,8 @@ export const startDuplexSpeech = async (options: {
       ...(dialogId ? { id: dialogId } : {}),
       model: "1.2.6.1",
       instructions: `${instructions()}\n当前课程与后台任务：${agentContext({
-        teacher: classroomCommands.read("teacher"),
+        classroom: classroomCommands.read("classroom"),
+        scope: classroomCommands.read("classroom.scope"),
         tasks: classroomCommands.read("agents"),
       }).slice(0, 8000)}`,
       audio: {
@@ -365,7 +361,6 @@ export const startDuplexSpeech = async (options: {
     }
   };
   const cancelTasks = () => {
-    resultRevision++;
     announcements.length = 0;
     pending.forEach((request) => request.abort());
     calls.forEach(({ request }) => request.abort());
@@ -382,23 +377,8 @@ export const startDuplexSpeech = async (options: {
     try {
       request.signal.throwIfAborted();
       const command = realtimeCommand(item);
-      const background =
-        !/^(?:agent|voice)\./.test(command.name) &&
-        !/\.(?:inspect|list|snapshot|evaluate|describe)$/.test(command.name) &&
-        !["lesson.pause", "lesson.stop", "lesson.resume"].includes(
-          command.name,
-        );
       const result = await executeBoardCommand(
-        background && classroomCommands.isPublic("agent.start")
-          ? {
-              name: "agent.start",
-              args: {
-                prompt: String(command.args?.prompt || command.name),
-                role: boardAgentRole(command.name),
-                command: { ...command, args: command.args || {} },
-              },
-            }
-          : command,
+        voiceBoardCommand(command),
         request.signal,
       );
       request.signal.throwIfAborted();
@@ -443,9 +423,7 @@ export const startDuplexSpeech = async (options: {
         let urgent = false;
         try {
           const command = realtimeCommand(item);
-          urgent = ["voice.interrupt", "lesson.pause", "lesson.stop"].includes(
-            command.name,
-          );
+          urgent = command.name === "voice.interrupt";
         } catch {
           /* Invalid arguments are returned as a failed tool result below. */
         }
@@ -694,21 +672,6 @@ export const startDuplexSpeech = async (options: {
       extension: speechExtension(),
     }).catch(taskFailure);
   });
-  const deliverResearch = async (id: string) => {
-    const revision = resultRevision;
-    const value = (await classroomCommands.execute({
-      name: "agent.inspect",
-      args: { id },
-    })) as BoardTask;
-    if (closed || revision !== resultRevision || value.state !== "completed") {
-      return;
-    }
-    const result = value.result as { answer?: string } | undefined;
-    if (typeof result?.answer === "string" && result.answer.trim()) {
-      announcements.push(result.answer.slice(0, 6000));
-      await announce();
-    }
-  };
   const spoken = new Map<string, number>();
   const unwatchAgents = classroomCommands.watch("agents", () => {
     const tasks =
@@ -722,18 +685,6 @@ export const startDuplexSpeech = async (options: {
         spoken.set(task.id, task.speech.sequence);
         announcements.push(task.speech.text);
         void announce().catch(taskFailure);
-      }
-      if (task.state === "running" || announced.has(task.id)) {
-        continue;
-      }
-      announced.add(task.id);
-      if (announced.size > 200) {
-        announced.delete(announced.values().next().value!);
-      }
-      if (task.state === "failed") {
-        taskFailure(task.error || "Background task failed");
-      } else if (task.state === "completed" && task.role === "research") {
-        void deliverResearch(task.id).catch(taskFailure);
       }
     }
   });

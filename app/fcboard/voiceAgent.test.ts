@@ -2,6 +2,7 @@ import * as ai from "./ai";
 import * as transport from "./aiTransport";
 import { classroomCommands } from "./commands";
 import { defaults, saveSettings } from "./settings";
+import { registerBoardAgents } from "./boardAgents";
 import { runVoiceAgent } from "./voiceAgent";
 
 beforeEach(() =>
@@ -95,3 +96,201 @@ it("accepts a natural Ark Responses answer without forcing a fake board mutation
     await runVoiceAgent("为什么会这样", [], new AbortController().signal),
   ).toBe("自然回答");
 });
+
+it.each([
+  ["chat", "resources.generate"],
+  ["responses", "resources.generate"],
+  ["chat", "research.search"],
+  ["responses", "research.search"],
+])(
+  "keeps %s conversation available while %s runs or fails",
+  async (provider, commandName) => {
+    saveSettings(
+      {
+        ...defaults,
+        apiKey: "configured",
+        endpoint:
+          provider === "responses"
+            ? "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+            : "https://example.com/v1/chat/completions",
+      },
+      false,
+    );
+    const agents = registerBoardAgents();
+    let reject!: (error: Error) => void;
+    const release = classroomCommands.register(
+      commandName,
+      "Execute the requested model/provider work",
+      () =>
+        new Promise<void>((_resolve, fail) => {
+          reject = fail;
+        }),
+    );
+    const command = {
+      name: commandName,
+      args: { prompt: "按当前目标生成实验" },
+    };
+    if (provider === "chat") {
+      vi.spyOn(ai, "chat")
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "commands", commands: [command] }),
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "text", text: "先解释当前概念" }),
+        )
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "text", text: "继续回答" }),
+        );
+    } else {
+      const response = (id: string, output: unknown[]) => ({
+        status: 200,
+        stream: false,
+        data: JSON.stringify({ id, status: "completed", output }),
+      });
+      const text = (value: string) => [
+        { type: "message", content: [{ type: "output_text", text: value }] },
+      ];
+      vi.spyOn(transport, "postAI")
+        .mockResolvedValueOnce(
+          response("planned", [
+            {
+              type: "function_call",
+              name: "board_command",
+              call_id: "generate",
+              arguments: JSON.stringify(command),
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(response("speaking", text("先解释当前概念")))
+        .mockResolvedValueOnce(response("continue", text("继续回答")));
+    }
+    try {
+      expect(
+        await runVoiceAgent("请结合板书演示", [], new AbortController().signal),
+      ).toBe("先解释当前概念");
+      expect(
+        (classroomCommands.read("agents") as { state: string }[])[0].state,
+      ).toBe("running");
+      expect(reject).toBeDefined();
+      reject(new Error("generation unavailable"));
+      await vi.waitFor(() =>
+        expect(
+          (classroomCommands.read("agents") as { state: string }[])[0].state,
+        ).toBe("failed"),
+      );
+      expect(
+        await runVoiceAgent("继续解释", [], new AbortController().signal),
+      ).toBe("继续回答");
+      expect(classroomCommands.has("lesson.ask")).toBe(false);
+    } finally {
+      release();
+      agents();
+    }
+  },
+);
+
+it.each(["chat", "responses"])(
+  "preserves independent %s work when a spoken reply is interrupted, cancelling it only with its session owner",
+  async (provider) => {
+    saveSettings(
+      {
+        ...defaults,
+        apiKey: "configured",
+        endpoint:
+          provider === "responses"
+            ? defaults.endpoint
+            : "https://example.com/v1/chat/completions",
+      },
+      false,
+    );
+    const agents = registerBoardAgents();
+    const turn = new AbortController();
+    const session = new AbortController();
+    let taskSignal!: AbortSignal;
+    const release = classroomCommands.register(
+      "experiment.generate",
+      "Generate a real experiment",
+      (args) => {
+        taskSignal = args.signal as AbortSignal;
+        return new Promise<void>(() => {});
+      },
+    );
+    const command = { name: "experiment.generate", args: {} };
+    let reply!: () => void;
+    if (provider === "chat") {
+      vi.spyOn(ai, "chat")
+        .mockResolvedValueOnce(
+          JSON.stringify({ action: "commands", commands: [command] }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise<string>((resolve) => {
+              reply = () =>
+                resolve(JSON.stringify({ action: "text", text: "继续对话" }));
+            }),
+        );
+    } else {
+      vi.spyOn(transport, "postAI")
+        .mockResolvedValueOnce({
+          status: 200,
+          stream: false,
+          data: JSON.stringify({
+            id: "start",
+            status: "completed",
+            output: [
+              {
+                type: "function_call",
+                name: "board_command",
+                call_id: "generate",
+                arguments: JSON.stringify(command),
+              },
+            ],
+          }),
+        })
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              reply = () =>
+                resolve({
+                  status: 200,
+                  stream: false,
+                  data: JSON.stringify({
+                    id: "reply",
+                    status: "completed",
+                    output: [],
+                  }),
+                });
+            }),
+        );
+    }
+    try {
+      const pending = runVoiceAgent(
+        "结合白板演示",
+        [],
+        turn.signal,
+        session.signal,
+      );
+      const result = pending.catch((failure) => failure);
+      await vi.waitFor(() => expect(reply).toBeDefined());
+      turn.abort();
+      reply();
+      expect(await result).toMatchObject({ name: "AbortError" });
+      expect(taskSignal.aborted).toBe(false);
+      expect(
+        (classroomCommands.read("agents") as { state: string }[])[0].state,
+      ).toBe("running");
+      session.abort();
+      await vi.waitFor(() =>
+        expect(
+          (classroomCommands.read("agents") as { state: string }[])[0].state,
+        ).toBe("cancelled"),
+      );
+      expect(taskSignal.aborted).toBe(true);
+    } finally {
+      reply?.();
+      session.abort();
+      release();
+      agents();
+    }
+  },
+);

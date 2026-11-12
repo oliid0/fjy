@@ -1,8 +1,9 @@
 import { agentContext, runBoardCommands } from "./agent";
 import { chat, parseJSON } from "./ai";
-import { classroomCommands } from "./commands";
+import { classroomCommands, executeBoardCommand } from "./commands";
 import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
 import { currentSettings } from "./settings";
+import { voiceBoardCommand } from "./boardAgents";
 
 import type { BoardAgentAction } from "./agent";
 import type { Message } from "./ai";
@@ -12,6 +13,7 @@ export const runVoiceAgent = async (
   text: string,
   history: Message[],
   signal: AbortSignal,
+  taskSignal: AbortSignal = signal,
 ): Promise<string | undefined> => {
   const configured = currentSettings();
   const settings = {
@@ -19,10 +21,17 @@ export const runVoiceAgent = async (
     model: configured.textModel || configured.model,
   };
   const endpoint = agentResponsesEndpoint(settings.endpoint);
-  const allowed = (name: string) =>
-    !["agent.say", "agent.wait", "lesson.audio", "lesson.resume"].includes(
-      name,
+  const allowed = (name: string) => !["agent.say", "agent.wait"].includes(name);
+  const dispatch = (
+    command: import("./commands").Command,
+    owner?: AbortSignal,
+  ) => {
+    const routed = voiceBoardCommand(command);
+    return executeBoardCommand(
+      routed,
+      routed.name === "agent.start" ? taskSignal : owner,
     );
+  };
   const messages: Message[] = [
     {
       role: "system",
@@ -54,6 +63,7 @@ export const runVoiceAgent = async (
       current: () => !signal.aborted,
       allowed,
       requireActions: false,
+      dispatch,
     });
     return result.summary;
   }
@@ -73,6 +83,7 @@ export const runVoiceAgent = async (
       () => !signal.aborted,
       {
         settings,
+        dispatch,
         verify: true,
         validate: (command) => allowed(command.name),
         completion:

@@ -20,9 +20,10 @@ for (const width of [390, 800, 1920]) {
     await pen.click();
     await expect(pen).toHaveCSS("background-color", "rgb(3, 104, 255)");
     await expect(pen).toHaveCSS("color", "rgb(252, 252, 254)");
+    await page.keyboard.press("Escape");
     await eraser.click();
     await expect(eraser).toHaveCSS("background-color", "rgb(3, 104, 255)");
-    await expect(eraser.locator("svg")).toHaveCSS(
+    await expect(eraser.locator("img,svg")).toHaveCSS(
       "color",
       "rgb(252, 252, 254)",
     );

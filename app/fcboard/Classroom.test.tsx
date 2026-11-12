@@ -32,7 +32,6 @@ import * as recordingExport from "./recordingExport";
 import * as localSpeech from "./localSpeech";
 import * as cloudSpeech from "./cloudSpeech";
 import * as duplex from "./duplexSpeech";
-import * as lessonObserver from "./lessonObserver";
 import { classroomCommands } from "./commands";
 import { BoardRecorder, loadRecordings, saveRecordings } from "./recording";
 import {
@@ -46,7 +45,6 @@ import { documentSourceSignature } from "./documents";
 import { questionSurface, validateQuestionInk } from "./questionInk";
 
 import { readWidgets } from "./widgets";
-import { lessonSessions } from "./teaching";
 import {
   generatedResources,
   deleteGeneratedResource,
@@ -430,8 +428,8 @@ describe("selection-driven classroom controls", () => {
     ];
     const view = render(<Classroom api={api} />);
     releases.push(
-      classroomCommands.context("teacher", () => ({
-        canvas: { boards: ["prior", "current"] },
+      classroomCommands.context("classroom.scope", () => ({
+        boards: ["prior", "current"],
       })),
     );
     try {
@@ -677,7 +675,7 @@ describe("selection-driven classroom controls", () => {
       const clear = vi.fn();
       const release = classroomCommands.register(
         "canvas.clear",
-        "@internal",
+        "Clear the actual board",
         clear,
       );
       vi.useFakeTimers();
@@ -792,14 +790,18 @@ describe("selection-driven classroom controls", () => {
       expect(scene.some((element) => element.customData?.fcPlot)).toBe(true);
       expect(chat).not.toHaveBeenCalled();
       expect(cancel).not.toHaveBeenCalled();
-      expect(classroomCommands.read("agents")).toEqual([]);
+      expect(
+        (classroomCommands.read("agents") as { state: string }[]).every(
+          (task) => task.state === "completed",
+        ),
+      ).toBe(true);
     } finally {
       view.unmount();
       vi.useRealTimers();
     }
   });
 
-  it("queues natural speech without interrupting tools and revises the same title from conversation context", async () => {
+  it("revises the same existing title from conversation context without duplicating it", async () => {
     vi.spyOn(window, "matchMedia").mockImplementation((media) => ({
       matches: false,
       media,
@@ -885,15 +887,20 @@ describe("selection-driven classroom controls", () => {
         await vi.advanceTimersByTimeAsync(3000);
       });
       expect(chat).toHaveBeenCalledTimes(1);
-      act(() => deliver("搞错了，我今天讲电流电阻"));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3000);
-      });
-      expect(firstSignal?.aborted).toBe(false);
-      expect(chat).toHaveBeenCalledTimes(1);
       await act(async () => {
         releaseFirst(write("牛顿定律"));
         await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(firstSignal?.aborted).toBe(false);
+      expect(
+        scene.some(
+          (element) =>
+            element.type === "text" && element.originalText === "牛顿定律",
+        ),
+      ).toBe(true);
+      act(() => deliver("搞错了，我今天讲电流电阻"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
         await vi.waitFor(() =>
           expect(
             scene.some(
@@ -1096,10 +1103,9 @@ describe("selection-driven classroom controls", () => {
           });
       });
       expect(players).toHaveLength(1);
-      expect(execute).toHaveBeenCalledWith({
-        name: "lesson.audio",
-        args: { conversation: true },
-      });
+      expect(
+        execute.mock.calls.some(([command]) => command.name === "lesson.audio"),
+      ).toBe(false);
       expect(finished).toBe(false);
       expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
         "data-state",
@@ -1110,10 +1116,7 @@ describe("selection-driven classroom controls", () => {
         await task;
       });
       expect(finished).toBe(true);
-      expect(execute).toHaveBeenCalledWith({
-        name: "lesson.audio",
-        args: { conversation: false },
-      });
+      expect(classroomCommands.has("lesson.audio")).toBe(false);
       expect(view.container.querySelector(".fc-voice-orb")).toHaveAttribute(
         "data-state",
         "listening",
@@ -1218,7 +1221,11 @@ describe("selection-driven classroom controls", () => {
     const clear = vi.fn();
     let page = 1;
     const release = [
-      classroomCommands.register("canvas.clear", "@internal", clear),
+      classroomCommands.register(
+        "canvas.clear",
+        "Clear the actual board",
+        clear,
+      ),
       classroomCommands.context("document", () => ({
         id: "course",
         page,
@@ -1326,7 +1333,7 @@ describe("selection-driven classroom controls", () => {
       const clear = vi.fn();
       const release = classroomCommands.register(
         "canvas.clear",
-        "@internal",
+        "Clear the actual board",
         clear,
       );
       await act(async () => {
@@ -1407,32 +1414,42 @@ describe("selection-driven classroom controls", () => {
       const capture = vi
         .spyOn(ai, "boardContext")
         .mockRejectedValue(new Error("hidden board capture"));
-      const chat = vi.spyOn(ai, "chat").mockResolvedValue(
-        operation === "lesson"
-          ? JSON.stringify({
-              title: "visible lesson",
-              steps: [
-                {
-                  say: "",
-                  commands: [
-                    {
-                      type: "draw_rectangle",
-                      id: "visible",
-                      x: 10,
-                      y: 10,
-                      width: 40,
-                      height: 30,
-                      duration: 0,
+      const chat = vi
+        .spyOn(ai, "chat")
+        .mockResolvedValue(
+          operation === "lesson"
+            ? JSON.stringify({ action: "done" })
+            : operation === "question"
+            ? JSON.stringify(generatedQuiz)
+            : "visible summary",
+        )
+        .mockResolvedValueOnce(
+          operation === "lesson"
+            ? JSON.stringify({
+                action: "commands",
+                commands: [
+                  {
+                    name: "canvas.animate",
+                    args: {
+                      commands: [
+                        {
+                          type: "draw_rectangle",
+                          id: "visible",
+                          x: 10,
+                          y: 10,
+                          width: 40,
+                          height: 30,
+                          duration: 0,
+                        },
+                      ],
                     },
-                  ],
-                },
-              ],
-              quiz: [],
-            })
-          : operation === "question"
-          ? JSON.stringify(generatedQuiz)
-          : "visible summary",
-      );
+                  },
+                ],
+              })
+            : operation === "question"
+            ? JSON.stringify(generatedQuiz)
+            : "visible summary",
+        );
       vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
         matches: false,
         media: query,
@@ -1511,7 +1528,7 @@ describe("selection-driven classroom controls", () => {
             await classroomCommands.execute(
               operation === "summary"
                 ? { name: "canvas.summary" }
-                : { name: "lesson.ask", args: { prompt: "讲解这张课件" } },
+                : { name: "agent.start", args: { prompt: "讲解这张课件" } },
             );
           });
           if (operation === "summary") {
@@ -1702,7 +1719,7 @@ describe("selection-driven classroom controls", () => {
     },
   );
 
-  it("prepares a lesson using visible canvas tools and local math before drawing the validated lesson", async () => {
+  it("lets an independent agent inspect courseware, calculate and write through real tools", async () => {
     const capture = vi
       .spyOn(ai, "boardContext")
       .mockRejectedValue(new Error("hidden board"));
@@ -1719,19 +1736,11 @@ describe("selection-driven classroom controls", () => {
       )
       .mockResolvedValueOnce(
         JSON.stringify({
-          action: "lesson",
-          lesson: {
-            title: "小数加法",
-            steps: [
-              {
-                say: "",
-                tools: [
-                  {
-                    name: "math.evaluate",
-                    args: { expression: "0.1+0.2" },
-                    expect: [{ path: "answer", equals: "0.3" }],
-                  },
-                ],
+          action: "commands",
+          commands: [
+            {
+              name: "canvas.animate",
+              args: {
                 commands: [
                   {
                     type: "write_text",
@@ -1743,12 +1752,11 @@ describe("selection-driven classroom controls", () => {
                   },
                 ],
               },
-            ],
-            quiz: [],
-          },
+            },
+          ],
         }),
       )
-      .mockResolvedValue('{"action":"keep"}');
+      .mockResolvedValue('{"action":"done"}');
     vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
       matches: false,
       media: query,
@@ -1784,32 +1792,33 @@ describe("selection-driven classroom controls", () => {
     try {
       await act(async () => {
         await classroomCommands.execute({
-          name: "lesson.ask",
+          name: "agent.start",
           args: { prompt: "讲解小数加法，先核算0.1+0.2" },
         });
       });
       await waitFor(() => expect(draw).toHaveBeenCalled());
       expect(chat).toHaveBeenCalledTimes(3);
-      const observed = String(chat.mock.calls[1][0].at(-1)?.content);
+      const observed = chat.mock.calls[1][0]
+        .map((message) => message.content)
+        .join("\n");
       expect(observed).toContain('"answer":"0.3"');
       expect(observed).toContain('"kind":"document"');
-      expect(observed).toContain("课程JSON");
-      expect(String(chat.mock.calls[2][0].at(-1)?.content)).toContain(
-        '"answer":"0.3"',
-      );
+      expect(
+        chat.mock.calls[2][0].some(
+          (message) =>
+            typeof message.content === "string" &&
+            message.content.includes('"answer":"0.3"'),
+        ),
+      ).toBe(true);
       expect(String(chat.mock.calls[0][0][0].content)).toContain(
-        "Each step may also include tools",
+        "独立白板任务agent",
       );
-      expect(classroomCommands.read("teacher")).toMatchObject({
-        toolResults: [
-          { name: "math.evaluate", ok: true, result: { answer: "0.3" } },
-        ],
-      });
-      const saved = (await lessonSessions()).find(
-        (session) => session.lesson.title === "小数加法",
-      )!;
-      expect(saved.toolIndex).toBe(1);
-      expect(saved.canvas.document).toEqual({ name: "decimals.pdf", page: 2 });
+      await waitFor(() =>
+        expect(
+          (classroomCommands.read("agents") as { state: string }[])[0].state,
+        ).toBe("completed"),
+      );
+      expect(classroomCommands.read("teacher")).toBeUndefined();
       expect(capture).not.toHaveBeenCalled();
       expect(api.updateScene).not.toHaveBeenCalled();
     } finally {
@@ -3319,7 +3328,7 @@ describe("selection-driven classroom controls", () => {
     ).toBe(true);
   });
 
-  it("starts a drawn lesson through the same AI action for selected handwriting", async () => {
+  it("draws a model-selected explanation through actual canvas tools for selected handwriting", async () => {
     vi.spyOn(window, "matchMedia").mockImplementation((query) => ({
       matches: false,
       media: query,
@@ -3348,36 +3357,40 @@ describe("selection-driven classroom controls", () => {
       text: "讲解牛顿定律",
       image: undefined,
     });
-    const chat = vi.spyOn(ai, "chat").mockResolvedValue(
-      JSON.stringify({
-        title: "牛顿定律",
-        quiz: [],
-        steps: [
-          {
-            say: "",
-            commands: [
-              {
-                type: "write_text",
-                id: "law",
-                text: "合外力为零时，保持静止或匀速直线运动。",
-                x: 0,
-                y: 0,
-                duration: 0,
+    const chat = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValue('{"action":"done"}')
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          action: "commands",
+          commands: [
+            {
+              name: "canvas.animate",
+              args: {
+                commands: [
+                  {
+                    type: "write_text",
+                    id: "law",
+                    text: "合外力为零时，保持静止或匀速直线运动。",
+                    x: 0,
+                    y: 0,
+                    duration: 0,
+                  },
+                  {
+                    type: "draw_arrow",
+                    id: "force",
+                    x: 0,
+                    y: 100,
+                    width: 120,
+                    height: 0,
+                    duration: 0,
+                  },
+                ],
               },
-              {
-                type: "draw_arrow",
-                id: "force",
-                x: 0,
-                y: 100,
-                width: 120,
-                height: 0,
-                duration: 0,
-              },
-            ],
-          },
-        ],
-      }),
-    );
+            },
+          ],
+        }),
+      );
     render(<Classroom api={api} />);
     askSelection();
     await waitFor(() =>
@@ -3389,7 +3402,7 @@ describe("selection-driven classroom controls", () => {
       scene.some((el) => el.type === "text" && el.text.includes("合外力")),
     ).toBe(true);
     expect(scene.find((el) => el.id === ink.id)).toBe(ink);
-    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledTimes(2);
     expect(String(chat.mock.calls[0][0].at(-1)?.content)).toContain(ink.id);
     expect(
       screen.queryByRole("textbox", { name: t("fcboard.ask_the_ai_teacher") }),
@@ -3586,7 +3599,7 @@ describe("selection-driven classroom controls", () => {
   );
 
   it.each(["complete", "manual transition", "question cancelled"])(
-    "keeps the real handwritten assistant and teacher owner lineage across dynamic file navigation (%s)",
+    "keeps the real handwritten assistant ownership across dynamic file navigation (%s)",
     async (outcome) => {
       vi.spyOn(window, "matchMedia").mockImplementation((media) => ({
         matches: false,
@@ -3611,7 +3624,6 @@ describe("selection-driven classroom controls", () => {
         text: "question",
         image: undefined,
       });
-      vi.spyOn(lessonObserver, "observeLesson").mockResolvedValue(undefined);
       const chat = vi
         .spyOn(ai, "chat")
         .mockResolvedValueOnce(
@@ -3625,12 +3637,11 @@ describe("selection-driven classroom controls", () => {
         )
         .mockResolvedValueOnce(
           JSON.stringify({
-            action: "lesson",
-            lesson: {
-              title: "dynamic lesson",
-              steps: [
-                {
-                  say: "",
+            action: "commands",
+            commands: [
+              {
+                name: "canvas.animate",
+                args: {
                   commands: [
                     {
                       type: "write_text",
@@ -3651,11 +3662,11 @@ describe("selection-driven classroom controls", () => {
                     },
                   ],
                 },
-              ],
-              quiz: [],
-            },
+              },
+            ],
           }),
-        );
+        )
+        .mockResolvedValue(JSON.stringify({ action: "done" }));
       const view = render(<Classroom api={api} />);
       const stops: (() => void)[] = [];
       let finishOpen!: () => void;
@@ -3715,19 +3726,9 @@ describe("selection-driven classroom controls", () => {
           finishOpen();
         });
         if (outcome === "complete") {
-          await waitFor(() => {
-            const teacher = classroomCommands.read("teacher") as {
-              mode: string;
-              toolError?: string;
-            };
-            expect({
-              mode: teacher.mode,
-              error: teacher.toolError,
-              alerts: screen
-                .queryAllByRole("alert")
-                .map((alert) => alert.textContent),
-            }).toEqual({ mode: "complete", error: undefined, alerts: [] });
-          });
+          await waitFor(() => expect(draw).toHaveBeenCalled());
+          expect(screen.queryAllByRole("alert")).toEqual([]);
+          expect(classroomCommands.read("teacher")).toBeUndefined();
           expect(next).toHaveBeenCalledTimes(1);
           expect(draw).toHaveBeenCalled();
           expect(draw.mock.calls.every(([page]) => page === 2)).toBe(true);
@@ -3739,7 +3740,7 @@ describe("selection-driven classroom controls", () => {
               shapes: expect.any(Array),
             }),
           );
-          expect(chat).toHaveBeenCalledTimes(2);
+          expect(chat).toHaveBeenCalledTimes(3);
         } else {
           await waitFor(() => expect(owner.aborted).toBe(true));
           expect(next).not.toHaveBeenCalled();

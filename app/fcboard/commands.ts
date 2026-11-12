@@ -208,9 +208,6 @@ const cancellable = new Set([
   "quiz.generate",
   "canvas.snapshot",
   "collaboration.start",
-  "lesson.ask",
-  "lesson.teach",
-  "lesson.resume",
   "canvas.text",
   "canvas.configure",
   "canvas.tool",
@@ -563,17 +560,6 @@ export const directCommand = (text: string): Command | null => {
   if (/^(?:帮我)?缩小$/.test(value)) {
     return { name: "canvas.action", args: { action: "zoomOut" } };
   }
-  if (
-    /^(?:选|我选|答案是|第)([A-Fa-f1-6一二三四五六])(?:个|项)?$/.test(value)
-  ) {
-    const choice = value.match(/([A-Fa-f1-6一二三四五六])(?:个|项)?$/)![1];
-    const index = /[A-Fa-f]/.test(choice)
-      ? choice.toUpperCase().charCodeAt(0) - 65
-      : /[1-6]/.test(choice)
-      ? Number(choice) - 1
-      : "一二三四五六".indexOf(choice);
-    return { name: "lesson.answer", args: { index } };
-  }
   if (/^(?:帮我)?(?:新建|创建|新增)(?:一[块张个])?(?:白板|板)$/.test(value)) {
     return { name: "board.new" };
   }
@@ -588,18 +574,6 @@ export const directCommand = (text: string): Command | null => {
   }
   if (/^(?:关闭|结束)板书$/.test(value)) {
     return { name: "document.ink", args: { enabled: false } };
-  }
-  if (/^(?:暂停|停一下|等一下)(?:讲解|讲课|课程)?$/.test(value)) {
-    return { name: "lesson.pause" };
-  }
-  if (/^(?:继续|继续讲|继续讲课|继续讲解)$/.test(value)) {
-    return { name: "lesson.resume" };
-  }
-  if (/^(?:结束|关闭|停止)(?:讲解|讲课|课程)$/.test(value)) {
-    return { name: "lesson.stop" };
-  }
-  if (/^(?:继续|打开)(?:上次|上一节)(?:的)?(?:课|课程|讲解)$/.test(value)) {
-    return { name: "lesson.reopen" };
   }
   if (/^(?:撤销|撤回)$/.test(value)) {
     return { name: "canvas.action", args: { action: "undo" } };

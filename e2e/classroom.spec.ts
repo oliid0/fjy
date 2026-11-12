@@ -266,7 +266,7 @@ for (const viewport of [
     await page.keyboard.press("Escape");
     await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     const insertIconWidth = (await page
-      .locator(".fc-insert-grid button svg")
+      .locator(".fc-insert-grid button img, .fc-insert-grid button svg")
       .first()
       .boundingBox())!.width;
     await page.getByRole("button", { name: "表格", exact: true }).click();
@@ -301,7 +301,7 @@ for (const viewport of [
     const toolsBounds = (await tools.boundingBox())!;
     expect(
       await tools
-        .locator(".fc-insert-grid button svg")
+        .locator(".fc-insert-grid button img, .fc-insert-grid button svg")
         .first()
         .evaluate((element) => element.getBoundingClientRect().width),
     ).toBeCloseTo(insertIconWidth, 1);
@@ -373,6 +373,7 @@ test("selecting a formula creates pure interactive axes and parameter/zoom edits
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "y=a*x+1");
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   const graph = page.frameLocator("iframe[data-resource-object-id]").last();
   const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
@@ -411,6 +412,7 @@ test("typed equations calculate only after tapping the selection action", async 
   await page.reload();
   await enterText(page, "1+1=");
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   await expect
     .poll(
       () =>
@@ -486,6 +488,7 @@ test("selected handwriting sends its PNG only after tapping calculate", async ({
   await expect(page.getByRole("toolbar", { name: "选区操作" })).toBeVisible();
   expect(requests).toBe(0);
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   await expect
     .poll(
       () =>
@@ -690,15 +693,16 @@ for (const background of ["#ffffff", "#123d32"]) {
       };
     });
     expect(
-      style.backgrounds.every((value) => value === "rgba(0, 0, 0, 0)"),
+      style.backgrounds.every((value) => value === "rgb(252, 252, 254)"),
     ).toBe(true);
     expect(
-      style.padding.every((value) => value.every((side) => side === "0px")),
+      style.padding.every((value) =>
+        value.every((side) => Math.abs(parseFloat(side) - 8 * 0.67) < 0.1),
+      ),
     ).toBe(true);
-    expect(style.height).toBeCloseTo(style.buttonHeight, 1);
+    expect(style.height).toBeCloseTo(74 * 0.67, 1);
+    expect(style.buttonHeight).toBeCloseTo(58 * 0.67, 1);
     expect(style.iconWidth).toBeGreaterThan(15);
-    expect(style.color).toBe(
-      background === "#ffffff" ? "rgb(1, 1, 1)" : "rgb(252, 252, 254)",
-    );
+    expect(style.color).toBe("rgb(1, 1, 1)");
   });
 }

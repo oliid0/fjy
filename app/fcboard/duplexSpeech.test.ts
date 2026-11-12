@@ -1,6 +1,6 @@
 import { startDuplexSpeech } from "./duplexSpeech";
 import { startPCMSpeech } from "./localSpeech";
-import { classroomCommands } from "./commands";
+import { classroomCommands, executeBoardCommand } from "./commands";
 import { defaults, saveSettings } from "./settings";
 import { registerBoardAgents } from "./boardAgents";
 import * as ai from "./ai";
@@ -753,7 +753,7 @@ it("keeps live dialogue independent of the removed lesson audio controller", asy
   }
 });
 
-it("delivers a strong backend research answer through the same realtime synthesis connection after the user finishes", async () => {
+it("delivers only explicit task narration through live synthesis after the user finishes", async () => {
   let finish!: (answer: string) => void;
   vi.spyOn(ai, "chat").mockImplementation(
     () =>
@@ -774,12 +774,23 @@ it("delivers a strong backend research answer through the same realtime synthesi
           arguments: JSON.stringify({
             role: "research",
             prompt: "联网核实牛顿第一定律",
+            command: {
+              name: "research.search",
+              args: { prompt: "联网核实牛顿第一定律" },
+            },
           }),
         },
       ],
     });
     await vi.waitFor(() => expect(finish).toBeDefined());
-    finish("依据教材，无外力时物体保持静止或匀速直线运动。");
+    await executeBoardCommand(
+      {
+        name: "agent.say",
+        args: { text: "依据教材，无外力时物体保持静止或匀速直线运动。" },
+      },
+      vi.mocked(ai.chat).mock.calls[0][1],
+    );
+    finish("Internal research result; never automatically read aloud.");
     await vi.waitFor(() =>
       expect(
         (classroomCommands.read("agents") as { state: string }[])[0].state,
@@ -1030,9 +1041,8 @@ it("reports authorization failures immediately and limits repeated network recon
 
 it("keeps listening after an isolated ASR failure and prunes long context using only actual old paired message ids", async () => {
   const view = callbacks();
-  const release = classroomCommands.context("teacher", () => ({
-    title: "牛顿第二定律",
-    step: 6,
+  const release = classroomCommands.context("classroom.scope", () => ({
+    boards: ["牛顿第二定律"],
   }));
   const handle = await startDuplexSpeech(view);
   try {

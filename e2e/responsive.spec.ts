@@ -112,7 +112,7 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
     await page.locator("[data-board-insert]").click();
     await page
       .getByRole("dialog", { name: labels.toolbox, exact: true })
-      .getByRole("button", { name: labels.teaching_resources, exact: true })
+      .getByRole("button", { name: labels.subject_tools, exact: true })
       .click();
     const resources = page.locator(".fc-resource-library");
     for (const viewport of rotations) {

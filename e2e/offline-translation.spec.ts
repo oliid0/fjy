@@ -11,6 +11,10 @@ for (const example of [
     await page.addInitScript(({ language, source }) => {
       localStorage.setItem("fcboard-language", language);
       localStorage.setItem(
+        "fcboard-state",
+        JSON.stringify({ currentItemInkAssist: "language" }),
+      );
+      localStorage.setItem(
         "fcboard-settings",
         JSON.stringify({
           apiKey: "",
@@ -52,6 +56,14 @@ for (const example of [
     await page.route(/^https?:\/\/(?!127\.0\.0\.1:)/, (route) => route.abort());
     await page.goto("/");
     await expect(page.locator(".fc-unified-toolbar")).toBeVisible();
+    await page.locator("[data-toolbar-pen]").click();
+    await page
+      .getByRole("button", {
+        name: example.language === "en" ? "Language pen" : "语言笔",
+        exact: true,
+      })
+      .click();
+    await page.keyboard.press("Escape");
     await page.keyboard.press("v");
     await page.keyboard.press("Control+a");
     const started = Date.now();

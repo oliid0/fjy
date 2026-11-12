@@ -16,6 +16,7 @@ export type BoardTask = {
   prompt: string;
   role: string;
   command?: string;
+  sourceIds?: string[];
   state: "running" | "completed" | "failed" | "cancelled";
   startedAt: number;
   finishedAt?: number;
@@ -29,13 +30,24 @@ export const boardAgentRole = (name: string) => name.split(".")[0] || "board";
 const workerCommand = (name: string) =>
   !/^voice\./.test(name) && !/^lesson\./.test(name) && name !== "ui.invoke";
 
-export const backgroundCommands = new Set([
-  "lesson.ask",
-  "lesson.teach",
-  "resources.generate",
-  "resources.prepare",
-  "quiz.generate",
-]);
+/** Both voice providers acknowledge visible work without waiting for model/tool completion. */
+export const voiceBoardCommand = (command: Command): Command => {
+  if (
+    !classroomCommands.isPublic("agent.start") ||
+    /^(?:agent|voice)\./.test(command.name) ||
+    /\.(?:inspect|list|snapshot|evaluate|describe)$/.test(command.name)
+  ) {
+    return command;
+  }
+  return {
+    name: "agent.start",
+    args: {
+      prompt: String(command.args?.prompt || command.name),
+      role: boardAgentRole(command.name),
+      command: { ...command, args: command.args || {} },
+    },
+  };
+};
 
 /** Each task owns its inference and cancellation; no shared assistant request or FIFO. */
 export const registerBoardAgents = () => {
@@ -48,6 +60,15 @@ export const registerBoardAgents = () => {
       updates: string[];
     }
   >();
+  const boards = new Set<string>();
+  const rememberBoard = () => {
+    const active = (
+      classroomCommands.read("boards") as { active?: string } | undefined
+    )?.active;
+    if (active) {
+      boards.add(active);
+    }
+  };
   const snapshot = () =>
     Array.from(tasks.values(), ({ task }) => ({ ...task, result: undefined }));
   const changed = () => classroomCommands.changed("agents");
@@ -59,7 +80,7 @@ export const registerBoardAgents = () => {
     signal: AbortSignal,
     updates: () => string[],
   ) => {
-    if (command && !["lesson.ask", "lesson.teach"].includes(command.name)) {
+    if (command) {
       return executeBoardCommand(command, signal);
     }
     const configured = currentSettings();
@@ -68,27 +89,19 @@ export const registerBoardAgents = () => {
       model: configured.textModel || configured.model,
     };
     const endpoint = agentResponsesEndpoint(settings.endpoint);
-    if (task.role === "research") {
-      const answer = await chat(
-        [
-          {
-            role: "system",
-            content:
-              "你是教学研究子Agent。根据用户完整目标和当前资料联网核实知识，优先一手来源，返回简洁结论和真实来源链接。区分事实、推导与不确定内容，不执行白板或语音操作，不编造搜索结果。",
-          },
-          { role: "user", content: task.prompt },
-        ],
-        signal,
-        { ...settings, endpoint: endpoint || settings.endpoint },
-        { webSearch: true, maxTokens: 2048 },
-      );
-      signal.throwIfAborted();
-      return { answer };
-    }
     const revision = classroomCommands.revision;
     const current = () => classroomCommands.isCurrent(revision, signal);
     const visible = classroomCommands.has("canvas.snapshot")
-      ? ((await executeBoardCommand({ name: "canvas.snapshot" }, signal)) as {
+      ? ((await executeBoardCommand(
+          {
+            name: "canvas.snapshot",
+            args: {
+              sourceIds: task.sourceIds,
+              capture: !task.sourceIds?.length || configured.selectionImages,
+            },
+          },
+          signal,
+        )) as {
           text?: string;
           image?: string;
           name?: string;
@@ -112,6 +125,7 @@ export const registerBoardAgents = () => {
       visualMessage(
         agentContext({
           prompt: task.prompt,
+          sourceIds: task.sourceIds,
           canvas: classroomCommands.read("canvas"),
           visible: visible
             ? { text: visible.text, name: visible.name, page: visible.page }
@@ -159,6 +173,57 @@ export const registerBoardAgents = () => {
   };
   const registrations = [
     classroomCommands.register(
+      "research.search",
+      "Research args.prompt using the configured AI model and its actual provider web search. Returns verified answer/source links as task data; never automatically speaks or changes the board.",
+      async (args) => {
+        if (
+          typeof args.prompt !== "string" ||
+          !args.prompt.trim() ||
+          args.prompt.length > 10000
+        ) {
+          throw invalid();
+        }
+        const signal =
+          args.signal instanceof AbortSignal
+            ? args.signal
+            : new AbortController().signal;
+        const configured = currentSettings();
+        const settings = {
+          ...configured,
+          model: configured.textModel || configured.model,
+        };
+        const answer = await chat(
+          [
+            {
+              role: "system",
+              content:
+                "根据完整目标联网核实资料，优先一手来源，返回结论和真实来源链接，区分事实、推导与不确定内容；不执行白板和语音操作。",
+            },
+            { role: "user", content: args.prompt },
+          ],
+          signal,
+          {
+            ...settings,
+            endpoint:
+              agentResponsesEndpoint(settings.endpoint) || settings.endpoint,
+          },
+          { webSearch: true, maxTokens: 2048 },
+        );
+        signal.throwIfAborted();
+        return { answer };
+      },
+      {
+        parameters: {
+          type: "object",
+          properties: { prompt: { type: "string" } },
+          required: ["prompt"],
+          additionalProperties: false,
+        },
+        returns:
+          "{answer:string} including actual source links when returned by the provider",
+      },
+    ),
+    classroomCommands.register(
       "agent.tools",
       "查询当前真实工具用途、参数/必填项、返回约定与调用方式；args.query可搜索名字或说明，args.names精确查询，offset/limit分页。陌生操作先查询，界面控件再用ui.inspect获取当前真实id。",
       (args) => {
@@ -191,13 +256,7 @@ export const registerBoardAgents = () => {
           },
           worker
             ? workerCommand
-            : (name) =>
-                ![
-                  "agent.say",
-                  "agent.wait",
-                  "lesson.audio",
-                  "lesson.resume",
-                ].includes(name),
+            : (name) => !["agent.say", "agent.wait"].includes(name),
         );
       },
     ),
@@ -239,16 +298,22 @@ export const registerBoardAgents = () => {
         ) {
           throw invalid();
         }
-        let role = args.role ?? "board";
+        const role = args.role ?? "board";
         if (typeof role !== "string" || !role.trim() || role.length > 80) {
+          throw invalid();
+        }
+        if (
+          args.sourceIds !== undefined &&
+          (!Array.isArray(args.sourceIds) ||
+            !args.sourceIds.every((id) => typeof id === "string"))
+        ) {
           throw invalid();
         }
         const command = args.command as Command | undefined;
         if (
           command !== undefined &&
           (!command ||
-            (!workerCommand(command.name) &&
-              !["lesson.ask", "lesson.teach"].includes(command.name)) ||
+            !workerCommand(command.name) ||
             command.name === "agent.say" ||
             !classroomCommands.isPublic(command.name) ||
             !command.args ||
@@ -256,9 +321,6 @@ export const registerBoardAgents = () => {
             Array.isArray(command.args))
         ) {
           throw invalid();
-        }
-        if (command && ["lesson.ask", "lesson.teach"].includes(command.name)) {
-          role = "teaching";
         }
         if (
           Array.from(tasks.values()).filter(
@@ -283,9 +345,11 @@ export const registerBoardAgents = () => {
           prompt: args.prompt.trim(),
           role: role as BoardTask["role"],
           command: command?.name,
+          sourceIds: args.sourceIds as string[] | undefined,
           state: "running",
           startedAt: Date.now(),
         };
+        rememberBoard();
         tasks.set(task.id, {
           task,
           request,
@@ -439,10 +503,23 @@ export const registerBoardAgents = () => {
       },
     ),
     classroomCommands.context("agents", snapshot),
+    classroomCommands.context("classroom.scope", () => ({
+      boards: [...boards],
+    })),
+    classroomCommands.watch("boards", () => {
+      if (
+        [...tasks.values()].some(
+          ({ task }) =>
+            task.state === "running" && task.command !== "resources.prepare",
+        )
+      ) {
+        rememberBoard();
+      }
+    }),
     classroomCommands.onInvalidate((source) => {
       for (const { task, request } of tasks.values()) {
         // Preparation only saves an asset; it cannot insert into a stale page.
-        // Its owner still cancels it when the lesson or explicit task stops.
+        // Its owner still cancels it when the session or explicit task stops.
         if (task.command === "resources.prepare") {
           continue;
         }

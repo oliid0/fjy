@@ -67,7 +67,7 @@ for (const viewport of [
       14,
     );
     await expect(settings.locator(".fc-background-colors button")).toHaveCount(
-      6,
+      7,
     );
     const box = await settings.boundingBox();
     expect(box!.width).toBeCloseTo(Math.min(520, viewport.width - 24), 0);

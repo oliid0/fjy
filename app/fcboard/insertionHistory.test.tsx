@@ -194,7 +194,8 @@ it("undoes a language translation and its metadata together while preserving the
   const { languageStudy } = await import("./test/language");
   const ai = await import("./ai");
   const { readLanguageCard } = await import("./LanguagePanel");
-  const { getLanguage } = await import("@fcboard/fcboard/i18n");
+  const { defaultLang, setLanguage } = await import("@fcboard/fcboard/i18n");
+  await setLanguage(defaultLang);
   let api!: FcboardImperativeAPI;
   const view = await render(
     <Fcboard
@@ -209,9 +210,7 @@ it("undoes a language translation and its metadata together while preserving the
     .mockResolvedValue(languageStudy.term);
   const chat = vi
     .spyOn(ai, "chat")
-    .mockResolvedValue(
-      JSON.stringify({ ...languageStudy, translation: "Hello." }),
-    );
+    .mockResolvedValue(JSON.stringify(languageStudy));
   let release = () => {};
   try {
     await act(async () => {
@@ -235,7 +234,9 @@ it("undoes a language translation and its metadata together while preserving the
     });
     await waitFor(
       () =>
-        expect(readLanguageCard(api, ink.id)?.study.translation).toBe("Hello."),
+        expect(readLanguageCard(api, ink.id)?.study.translation).toBe(
+          languageStudy.translation,
+        ),
       { timeout: 2500 },
     );
     const translated = api
@@ -246,12 +247,14 @@ it("undoes a language translation and its metadata together while preserving the
     expect(
       api.getSceneElements().find((item) => item.id === ink.id)?.customData
         ?.fcLanguage.targetLanguage,
-    ).toBe(getLanguage().code);
+    ).toBe("zh");
     Keyboard.undo();
     expect(api.getSceneElements().map((item) => item.id)).toEqual([ink.id]);
     expect(api.getSceneElements()[0].customData?.fcLanguage).toBeUndefined();
     Keyboard.redo();
-    expect(readLanguageCard(api, ink.id)?.study.translation).toBe("Hello.");
+    expect(readLanguageCard(api, ink.id)?.study.translation).toBe(
+      languageStudy.translation,
+    );
     expect(
       api
         .getSceneElements()

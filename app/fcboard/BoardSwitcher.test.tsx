@@ -177,11 +177,9 @@ it("shows original edit controls only in selection mode, defaults to all pages a
       screen.getByRole("button", { name: t("fcboard.save_selected") }),
     );
     await waitFor(() =>
-      expect(save).toHaveBeenCalledWith({
-        ids: ["first", "third"],
-        signal: expect.any(AbortSignal),
-      }),
+      expect(save).toHaveBeenCalledWith({ ids: ["first", "third"] }),
     );
+    expect(save.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   } finally {
     view.unmount();

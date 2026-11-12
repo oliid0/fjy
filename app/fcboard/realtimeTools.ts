@@ -24,14 +24,6 @@ const bindings = [
     required: [],
   },
   {
-    name: "board_teach",
-    command: "lesson.ask",
-    description:
-      "Use only for an explicitly requested board demonstration, animation or writing. Concept questions are answered directly in voice without any task. Start independent board/pen/resource agents while explaining immediately in voice; do not wait for generation. Only explicit explanation text returns for speech on this live connection. No extra player or panel.",
-    properties: { prompt: { type: "string" } },
-    required: ["prompt"],
-  },
-  {
     name: "board_animate",
     command: "canvas.animate",
     description:
@@ -231,6 +223,18 @@ const bindings = [
         description:
           "Responsibility chosen for this task; descriptive metadata, not a capability restriction.",
       },
+      sourceIds: { type: "array", items: { type: "string" } },
+      command: {
+        type: "object",
+        description:
+          "Optional single public operation; omit for autonomous multi-step planning.",
+        properties: {
+          name: { type: "string" },
+          args: { type: "object", additionalProperties: true },
+        },
+        required: ["name", "args"],
+        additionalProperties: false,
+      },
     },
     required: ["prompt"],
   },
@@ -336,9 +340,7 @@ export const describeBoardTools = (
 
 export const realtimeTools = (
   allowed: (name: string) => boolean = (name) =>
-    !["agent.say", "agent.wait", "lesson.resume", "lesson.audio"].includes(
-      name,
-    ),
+    !["agent.say", "agent.wait"].includes(name),
 ): FunctionTool[] => [
   ...bindings
     .filter(
@@ -360,7 +362,7 @@ export const realtimeTools = (
     type: "function",
     name: "board_command",
     description:
-      "Execute any actually registered public command using its documented args. Long lesson/resource/quiz preparation runs in a background task; inspect the returned task id for completion. Tools operate on the actual visible board.",
+      "Execute any actually registered public command using its documented args. Visible mutations and long operations run in independent background tasks; inspect the returned task id for completion. Tools operate on the actual visible board.",
     parameters: {
       type: "object",
       properties: {

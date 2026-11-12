@@ -2,234 +2,263 @@ import { expect, test } from "@playwright/test";
 
 import { interactiveResource } from "../app/fcboard/test/interactiveResource";
 
-import { selectMenu } from "./menu";
-import { writeQuestion } from "./question";
+import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
 
 import type { ResourceControlState } from "../packages/fcboard/interactiveResourceControls";
 
-for (const viewport of [
-  { width: 1440, height: 900 },
-  { width: 3080, height: 1240 },
-  { width: 390, height: 844 },
-]) {
-  test(`teacher changes an embedded experiment between narrated steps at ${viewport.width}`, async ({
+for (const width of [1440, 3080, 390]) {
+  test(`voice explains while independent agents generate, write and operate an experiment at ${width}`, async ({
     page,
   }) => {
-    await page.setViewportSize(viewport);
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        "fcboard-settings",
-        JSON.stringify({
-          apiKey: "test-only",
-          model: "test",
-          speech: "system",
-          autoMath: false,
-        }),
-      );
-      localStorage.setItem(
-        "fcboard-teaching",
-        JSON.stringify({ lens: "captions", speed: 1 }),
-      );
-    });
-    let calls = 0;
-    let observations = 0;
+    await page.setViewportSize({ width, height: 900 });
+    await installVoice(page);
+    let releaseResource!: () => void;
+    let workerCalls = 0;
+    let child = "";
     let objectId = "";
-    await page.route(
-      "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-      async (route) => {
-        const request = route.request().postDataJSON();
-        let result: unknown;
-        if (
-          request.messages[0].content.startsWith(
-            "Create a scientifically accurate interactive teaching experiment",
-          )
-        ) {
-          result = interactiveResource;
-        } else if (
-          request.messages[0].content.startsWith(
-            "You are the Fcboard teacher observing a live lesson",
-          )
-        ) {
-          observations++;
-          const context = JSON.parse(String(request.messages.at(-1).content));
-          expect(context.resources[0].state.outputs[0]).toBe(
-            observations === 1 ? "2 m/s²" : "5 m/s²",
-          );
-          if (observations === 2) {
-            // Check the actual graphic before the following writing can create a new page.
-            const experiment = page.frameLocator(
-              `iframe[title="${interactiveResource.title}"]`,
-            );
-            await expect(experiment.locator("output")).toHaveText("5 m/s²");
-            await expect(experiment.locator("#block")).toHaveAttribute(
-              "x",
-              "150",
-            );
-          }
-          result = { action: "keep" };
+    let failed = false;
+    let resourceCalls = 0;
+    await page.route(voiceEndpoint, async (route) => {
+      const request = route.request().postDataJSON();
+      const system = String(request.messages[0].content);
+      const last = String(request.messages.at(-1).content);
+      let result: unknown;
+      if (
+        system.startsWith(
+          "Create a scientifically accurate interactive teaching resource",
+        )
+      ) {
+        resourceCalls++;
+        if (resourceCalls > 1) {
+          failed = true;
+          await route.fulfill({
+            status: 500,
+            json: { error: { message: "test resource failure" } },
+          });
+          return;
+        }
+        await new Promise<void>((resolve) => {
+          releaseResource = resolve;
+        });
+        result = interactiveResource;
+      } else if (system.startsWith("你是持续对话的白板助教")) {
+        if (last.startsWith("详细演示")) {
+          result = {
+            action: "commands",
+            commands: [
+              {
+                name: "agent.tools",
+                args: {
+                  names: [
+                    "canvas.text",
+                    "canvas.animate",
+                    "resources.generate",
+                    "resources.interact",
+                  ],
+                },
+              },
+              {
+                name: "agent.start",
+                args: {
+                  prompt:
+                    "演示牛顿定律：生成真实实验，同时写标题与说明，再操作实验核对结果。需要朗读的说明通过agent.say返回。",
+                  role: "学科协调",
+                },
+              },
+            ],
+          };
+        } else if (last.startsWith("推力撤去")) {
+          result = {
+            action: "text",
+            text: "合外力为零时，物体保持原来的运动状态，我们可以继续讨论。",
+          };
+        } else if (last.startsWith("生成另一个")) {
+          result = {
+            action: "commands",
+            commands: [
+              {
+                name: "resources.generate",
+                args: { prompt: "另一项真实实验" },
+              },
+            ],
+          };
+        } else if (last.startsWith("还能继续")) {
+          result = { action: "text", text: "可以，我们继续解释惯性。" };
         } else {
-          expect(request.messages[0].content).toContain(
-            "Each step may also include tools",
-          );
-          calls++;
-          if (calls === 1) {
-            result = {
-              action: "commands",
-              commands: [{ name: "canvas.inspect" }],
-              continue: true,
-            };
-          } else {
-            const content = String(request.messages.at(-1).content);
-            const { results } = JSON.parse(
-              content.slice(content.indexOf("\n") + 1),
-            );
-            expect(results[0].ok).toBe(true);
-            if (calls === 2) {
-              objectId = results[0].result.elements.find(
-                (element: { interactive?: boolean }) => element.interactive,
-              ).id;
-              result = {
-                action: "commands",
-                commands: [
-                  { name: "resources.inspect", args: { id: objectId } },
-                ],
-                continue: true,
-              };
-            } else {
-              expect(calls).toBe(3);
-              const state = results[0].result as ResourceControlState;
-              const force = state.controls.find(
-                (control) => control.type === "range",
-              )!;
-              result = {
-                action: "lesson",
-                lesson: {
-                  title: "牛顿第二定律",
-                  steps: [
-                    {
-                      say: "先观察，质量保持两千克，四牛顿的力使加速度达到每二次方秒两米。",
-                      commands: [],
-                      tools: [
-                        {
-                          name: "resources.inspect",
-                          args: { id: objectId },
-                          expect: [{ path: "outputs.0", equals: "2 m/s²" }],
-                        },
-                      ],
+          result = { action: "text", text: "牛顿定律描述力和运动的关系。" };
+        }
+      } else {
+        expect(system).toContain("独立白板任务agent");
+        workerCalls++;
+        if (workerCalls === 1) {
+          result = {
+            action: "commands",
+            commands: [
+              {
+                name: "agent.start",
+                args: {
+                  prompt: "生成牛顿定律实验",
+                  role: "实验",
+                  command: {
+                    name: "resources.generate",
+                    args: {
+                      prompt: "Newton's second law interactive experiment",
                     },
+                  },
+                },
+              },
+              {
+                name: "canvas.text",
+                args: {
+                  text: "牛顿定律",
+                  role: "title",
+                  sourceIds: [],
+                  presentation: "text",
+                },
+              },
+              {
+                name: "canvas.animate",
+                args: {
+                  commands: [
                     {
-                      say: "现在把力改为十牛顿，加速度增大到每二次方秒五米。",
-                      commands: [
-                        {
-                          type: "write_text",
-                          id: "acceleration",
-                          text: "F=10 N，a=5 m/s²。质量保持不变，力越大加速度越大。",
-                          x: 0,
-                          y: 0,
-                          duration: 0,
-                        },
-                      ],
-                      tools: [
-                        {
-                          name: "resources.interact",
-                          args: {
-                            id: objectId,
-                            version: state.version,
-                            control: force.id,
-                            action: "set",
-                            value: 10,
-                          },
-                        },
-                        {
-                          name: "resources.inspect",
-                          args: { id: objectId },
-                          expect: [{ path: "outputs.0", equals: "5 m/s²" }],
-                        },
-                      ],
+                      type: "write_text",
+                      id: "inertia",
+                      text: "合外力为零时，物体保持静止或匀速直线运动。",
+                      x: 0,
+                      y: 100,
+                      duration: 0,
                     },
                   ],
-                  quiz: [],
                 },
-              };
-            }
+              },
+              {
+                name: "agent.say",
+                args: { text: "合外力为零时，物体保持静止或匀速直线运动。" },
+              },
+            ],
+          };
+        } else {
+          const data = JSON.parse(last.slice(last.indexOf("\n") + 1));
+          expect(data.results.every((item: { ok: boolean }) => item.ok)).toBe(
+            true,
+          );
+          if (workerCalls === 2) {
+            child = data.results[0].result.id;
+            result = {
+              action: "commands",
+              commands: [{ name: "agent.wait", args: { id: child } }],
+            };
+          } else if (workerCalls === 3) {
+            objectId = data.results[0].result.result.ids[0];
+            result = {
+              action: "commands",
+              commands: [{ name: "resources.inspect", args: { id: objectId } }],
+            };
+          } else if (workerCalls === 4) {
+            const state = data.results[0].result as ResourceControlState;
+            expect(state.outputs).toEqual(["2 m/s²"]);
+            result = {
+              action: "commands",
+              commands: [
+                {
+                  name: "resources.interact",
+                  args: {
+                    id: objectId,
+                    version: state.version,
+                    control: state.controls.find(
+                      (control) => control.type === "range",
+                    )!.id,
+                    action: "set",
+                    value: 10,
+                  },
+                },
+              ],
+            };
+          } else if (workerCalls === 5) {
+            expect(data.results[0].result.outputs).toEqual(["5 m/s²"]);
+            const explanation =
+              "质量为两千克，合力十牛顿，加速度为每二次方秒五米。";
+            result = {
+              action: "commands",
+              commands: [
+                {
+                  name: "canvas.text",
+                  args: {
+                    text: explanation,
+                    sourceIds: [],
+                    presentation: "text",
+                  },
+                },
+                { name: "agent.say", args: { text: explanation } },
+              ],
+            };
+          } else {
+            expect(workerCalls).toBe(6);
+            result = { action: "done" };
           }
         }
-        await route.fulfill({
-          json: { choices: [{ message: { content: JSON.stringify(result) } }] },
-        });
-      },
-    );
+      }
+      await route.fulfill({
+        json: {
+          choices: [
+            {
+              message: {
+                content:
+                  typeof result === "string" ? result : JSON.stringify(result),
+              },
+            },
+          ],
+        },
+      });
+    });
     await page.goto("/");
-    await page
-      .getByRole("toolbar", { name: "白板工具栏" })
-      .getByRole("button", { name: "工具箱", exact: true })
-      .click();
-    await page.getByRole("button", { name: "学科工具", exact: true }).click();
-    const library = page.getByRole("dialog", { name: "教学资源", exact: true });
-    await library
-      .getByRole("textbox", { name: "搜索资源" })
-      .fill("Newton's second law");
-    await library
-      .getByRole("button", { name: "AI 生成教学资源", exact: true })
-      .click();
-    await expect(library).toBeHidden();
-    const experiment = page.frameLocator(
-      `iframe[title="${interactiveResource.title}"]`,
-    );
-    await expect(experiment.locator("output")).toHaveText("2 m/s²");
-    await selectMenu(page, "提问与讲解");
-    await writeQuestion(page, "请讲解牛顿第二定律，比较四牛顿和十牛顿的力");
-    await expect(page.locator(".fc-live-caption")).toContainText("先观察");
-    await page.getByRole("button", { name: "暂停讲解", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "继续讲解", exact: true }),
-    ).toBeVisible();
-    await expect(experiment.locator("input")).toHaveValue("4");
-    await page.getByRole("button", { name: "继续讲解", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "重播讲解", exact: true }),
-    ).toBeVisible({ timeout: 20000 });
-    expect(calls).toBe(3);
-    expect(observations).toBe(2);
+    await startVoice(page);
+    await say(page, "详细演示一下牛顿定律");
+    await expect.poll(() => typeof releaseResource).toBe("function");
     await expect
       .poll(() =>
         page.evaluate(() =>
           JSON.parse(localStorage.getItem("fcboard") || "[]").some(
-            (element: {
-              isDeleted?: boolean;
-              customData?: { fcTutorId?: string };
-            }) =>
-              !element.isDeleted &&
-              element.customData?.fcTutorId === "acceleration",
+            (item: { text?: string }) => item.text === "牛顿定律",
           ),
         ),
       )
       .toBe(true);
-    const writing = await page.evaluate(() => {
-      const elements = JSON.parse(localStorage.getItem("fcboard") || "[]");
-      const element = elements.find(
-        (item: { isDeleted?: boolean; customData?: { fcTutorId?: string } }) =>
-          !item.isDeleted && item.customData?.fcTutorId === "acceleration",
-      );
-      const state = JSON.parse(localStorage.getItem("fcboard-state") || "{}");
-      const zoom = state.zoom?.value || 1;
-      return {
-        type: element.type,
-        font: element.fontFamily,
-        fontSize: element.fontSize * zoom,
-        left: (element.x + (state.scrollX || 0)) * zoom,
-        top: (element.y + (state.scrollY || 0)) * zoom,
-        right: (element.x + element.width + (state.scrollX || 0)) * zoom,
-        bottom: (element.y + element.height + (state.scrollY || 0)) * zoom,
-      };
+    await say(page, "推力撤去后为什么还能运动？");
+    await expect(page.locator(".fc-voice-caption")).toContainText(
+      "我们可以继续讨论",
+    );
+    await expect(page.locator(".fc-voice-orb")).toBeVisible();
+    releaseResource();
+    const experiment = page.frameLocator(
+      `iframe[title="${interactiveResource.title}"]`,
+    );
+    await expect(experiment.locator("output")).toHaveText("5 m/s²", {
+      timeout: 20000,
     });
-    expect(writing.type).toBe("text");
-    expect(writing.font).toBe(5);
-    expect(writing.fontSize).toBeGreaterThanOrEqual(6);
-    expect(writing.fontSize).toBeLessThanOrEqual(44);
-    expect(writing.left).toBeGreaterThanOrEqual(0);
-    expect(writing.top).toBeGreaterThanOrEqual(0);
-    expect(writing.right).toBeLessThanOrEqual(viewport.width);
-    expect(writing.bottom).toBeLessThanOrEqual(viewport.height);
+    await expect(experiment.locator("#block")).toHaveAttribute("x", "150");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          JSON.parse(localStorage.getItem("fcboard") || "[]").some(
+            (item: { text?: string }) => item.text?.includes("合力十牛顿"),
+          ),
+        ),
+      )
+      .toBe(true);
+    await expect(page.locator(".fc-voice-caption")).toContainText("合力十牛顿");
+    await say(page, "生成另一个实验");
+    await expect.poll(() => failed).toBe(true);
+    await say(page, "还能继续对话吗？");
+    await expect(page.locator(".fc-voice-caption")).toContainText(
+      "我们继续解释惯性",
+    );
+    await expect(
+      page.locator(".fc-teacher,.fc-agent-tasks,.fc-error"),
+    ).toHaveCount(0);
+    await expect(page.locator(".fc-voice-orb")).toBeVisible();
+    expect(resourceCalls).toBeGreaterThanOrEqual(2);
+    expect(child).toBeTruthy();
+    expect(objectId).toBeTruthy();
   });
 }

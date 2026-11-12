@@ -140,7 +140,10 @@ it("keeps original ink, translates below it at matching size, opens cached card,
       expect.arrayContaining([
         expect.objectContaining({
           type: "text",
-          text: JSON.stringify({ targetLanguage: "zh-CN" }),
+          text: JSON.stringify({
+            targetLanguage: "zh-CN",
+            sameLanguageTarget: "en",
+          }),
         }),
       ]),
     );

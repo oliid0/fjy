@@ -1,4 +1,5 @@
 import { classroomCommands, executeBoardCommand } from "./commands";
+import { registerBoardAgents } from "./boardAgents";
 import { registerCanvasCommands } from "./canvasCommands";
 import {
   describeBoardTools,
@@ -142,5 +143,59 @@ it("does not expose or execute unregistered, private or malformed realtime comma
     }
   } finally {
     stop();
+  }
+});
+
+it("exposes implemented task selection and command arguments in both provider schemas and the discovered catalog", async () => {
+  const agents = registerBoardAgents();
+  const action = vi.fn().mockReturnValue({ applied: true });
+  const stop = classroomCommands.register(
+    "experiment.configure",
+    "Configure the actual experiment",
+    action,
+  );
+  try {
+    const schema = realtimeTools().find(
+      (tool) => tool.name === "board_task",
+    )!.parameters;
+    expect(schema).toMatchObject({
+      additionalProperties: false,
+      properties: {
+        sourceIds: { type: "array", items: { type: "string" } },
+        command: {
+          required: ["name", "args"],
+          properties: {
+            name: { type: "string" },
+            args: { type: "object", additionalProperties: true },
+          },
+        },
+      },
+    });
+    expect(
+      describeBoardTools({ names: ["agent.start"] }, () => true).tools[0]
+        .parameters,
+    ).toEqual(schema);
+    await executeBoardCommand(
+      realtimeCommand({
+        name: "board_task",
+        arguments: JSON.stringify({
+          prompt: "调整实验",
+          sourceIds: ["observed-source"],
+          command: { name: "experiment.configure", args: { mode: "orbit" } },
+        }),
+      }),
+    );
+    expect(action).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "orbit" }),
+    );
+    expect(classroomCommands.read("agents")).toEqual([
+      expect.objectContaining({
+        sourceIds: ["observed-source"],
+        command: "experiment.configure",
+      }),
+    ]);
+  } finally {
+    stop();
+    agents();
   }
 });

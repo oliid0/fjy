@@ -236,8 +236,16 @@ export const registerCanvasCommands = (
           })
         : await boardContext(
             api,
-            true,
-            undefined,
+            !Array.isArray(args.sourceIds) || !args.sourceIds.length,
+            Array.isArray(args.sourceIds) && args.sourceIds.length
+              ? api
+                  .getSceneElements()
+                  .filter(
+                    (element) =>
+                      args.sourceIds &&
+                      (args.sourceIds as string[]).includes(element.id),
+                  )
+              : undefined,
             contentViewport(api),
             args.capture !== false,
           );

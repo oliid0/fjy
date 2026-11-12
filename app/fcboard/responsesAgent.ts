@@ -137,6 +137,10 @@ export const runResponsesAgent = async (options: {
   allowed: (name: string) => boolean;
   updates?: () => string[];
   requireActions?: boolean;
+  dispatch?: (
+    command: import("./commands").Command,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
 }) => {
   const { settings, signal, current, allowed } = options;
   if (!settings.apiKey || !settings.model.trim()) {
@@ -335,6 +339,7 @@ export const runResponsesAgent = async (options: {
     input = [];
     idle = 0;
     // A single batch may contain dependent edits. Separate tasks own independent loops.
+    const amendments: string[] = [];
     for (const item of functions) {
       check();
       if (
@@ -356,6 +361,20 @@ export const runResponsesAgent = async (options: {
           throw new Error(t("fcboard.invalid_ai_follow_up_action"));
         }
         input.push(prior.output);
+        continue;
+      }
+      amendments.push(...(options.updates?.() || []));
+      if (amendments.length) {
+        const output = {
+          type: "function_call_output",
+          call_id: item.call_id,
+          output: JSON.stringify({
+            skipped: true,
+            reason: "User updated this task before execution",
+          }),
+        };
+        executed.set(item.call_id, { signature, output });
+        input.push(output);
         continue;
       }
       let result: unknown;
@@ -410,7 +429,10 @@ export const runResponsesAgent = async (options: {
           ) {
             result = cached.result;
           } else {
-            result = await executeBoardCommand(command, signal);
+            result = await (options.dispatch || executeBoardCommand)(
+              command,
+              signal,
+            );
             if (
               (result as { cancelled?: boolean } | undefined)?.cancelled ===
               true
@@ -463,6 +485,10 @@ export const runResponsesAgent = async (options: {
           ],
         });
       }
+    }
+    amendments.push(...(options.updates?.() || []));
+    if (amendments.length) {
+      input.push({ role: "user", content: amendments.join("\n") });
     }
     const availableCommands = classroomCommands.describe();
     if (availableCommands !== described) {

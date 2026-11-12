@@ -17,10 +17,10 @@ export const classroomSummaryMessages = async (
   api: FcboardImperativeAPI,
   current: Awaited<ReturnType<typeof boardContext>>,
 ): Promise<Message[]> => {
-  const lesson = classroomCommands.read("teacher") as
-    | { canvas?: { boards?: string[] } }
+  const classroom = classroomCommands.read("classroom.scope") as
+    | { boards?: string[] }
     | undefined;
-  const ids = lesson?.canvas?.boards;
+  const ids = classroom?.boards;
   const revision = classroomCommands.revision;
   const assertCurrent = () => {
     if (classroomCommands.revision !== revision) {

@@ -306,7 +306,10 @@ it("uses the configured stronger model and real provider search for research whi
     .spyOn(ai, "chat")
     .mockResolvedValue("Verified answer with a source link.");
   try {
-    const task = await start("核实资料", { role: "research" });
+    const task = await start("核实资料", {
+      role: "research",
+      command: { name: "research.search", args: { prompt: "核实资料" } },
+    });
     await waitFor(async () =>
       expect((await inspect(task.id)).state).toBe("completed"),
     );
@@ -652,3 +655,173 @@ it("rejects waiters on agent unmount and rejects unknown ids without subscribing
     host.stop();
   }
 });
+
+it("does not restrict a research-labelled task to search or automatically narrate its results", async () => {
+  const host = setup();
+  const model = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce(draw)
+    .mockResolvedValue('{"action":"done"}');
+  try {
+    const task = await start("根据现有信息画出关系", { role: "research" });
+    await waitFor(async () =>
+      expect((await inspect(task.id)).state).toBe("completed"),
+    );
+    expect(
+      host.api
+        .getSceneElements()
+        .some((element) => element.type === "freedraw"),
+    ).toBe(true);
+    expect(model.mock.calls[0][3]).not.toHaveProperty("webSearch");
+    expect((await inspect(task.id)).speech).toBeUndefined();
+  } finally {
+    host.stop();
+  }
+});
+
+it.each(["chat", "responses"])(
+  "applies corrections received during a %s tool batch before its remaining stale edits",
+  async (provider) => {
+    if (provider === "responses") {
+      saveSettings({ ...defaults, apiKey: "configured" }, false);
+    }
+    const host = setup();
+    let finish!: () => void;
+    const prepare = classroomCommands.register(
+      "experiment.prepare",
+      "Prepare the real experiment",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const original = [
+      { name: "experiment.prepare", args: {} },
+      {
+        name: "canvas.text",
+        args: { text: "过时内容", sourceIds: [], presentation: "text" },
+      },
+    ];
+    const revised = [
+      {
+        name: "canvas.text",
+        args: { text: "更正内容", sourceIds: [], presentation: "text" },
+      },
+    ];
+    const response = (id: string, commands?: typeof original) => ({
+      status: 200,
+      stream: false,
+      data: JSON.stringify({
+        id,
+        status: "completed",
+        output: commands
+          ? commands.map((command, i) => ({
+              type: "function_call",
+              name: "board_command",
+              call_id: `${id}-${i}`,
+              arguments: JSON.stringify(command),
+            }))
+          : [
+              {
+                type: "message",
+                content: [{ type: "output_text", text: "完成" }],
+              },
+            ],
+      }),
+    });
+    const model =
+      provider === "responses"
+        ? vi
+            .spyOn(transport, "postAI")
+            .mockResolvedValueOnce(response("original", original))
+            .mockResolvedValueOnce(response("revised", revised))
+            .mockResolvedValueOnce(response("done"))
+        : vi
+            .spyOn(ai, "chat")
+            .mockResolvedValueOnce(
+              JSON.stringify({ action: "commands", commands: original }),
+            )
+            .mockResolvedValueOnce(
+              JSON.stringify({ action: "commands", commands: revised }),
+            )
+            .mockResolvedValueOnce(JSON.stringify({ action: "done" }));
+    try {
+      const task = await start("完成实验并写出结论");
+      await waitFor(() => expect(finish).toBeDefined());
+      await classroomCommands.execute({
+        name: "agent.update",
+        args: { id: task.id, prompt: "结论改为更正内容，保留已经完成的准备" },
+      });
+      finish();
+      await waitFor(async () =>
+        expect((await inspect(task.id)).state).toBe("completed"),
+      );
+      const texts = host.api
+        .getSceneElements()
+        .filter((element) => element.type === "text")
+        .map((element) => element.text);
+      expect(texts).toContain("更正内容");
+      expect(texts).not.toContain("过时内容");
+      const continuation = model.mock.calls[1];
+      expect(JSON.stringify(continuation)).toContain("结论改为更正内容");
+      if (provider === "responses") {
+        expect(JSON.stringify(continuation)).toContain("original-0");
+        expect(JSON.stringify(continuation)).toContain("original-1");
+        expect(JSON.stringify(continuation)).toContain("skipped");
+      }
+    } finally {
+      prepare();
+      host.stop();
+    }
+  },
+);
+
+it.each([false, true])(
+  "preserves selected-source screenshot privacy for autonomous tasks when selectionImages=%s",
+  async (selectionImages) => {
+    saveSettings(
+      {
+        ...defaults,
+        endpoint: "https://example.com/v1/chat/completions",
+        apiKey: "configured",
+        selectionImages,
+      },
+      false,
+    );
+    const host = setup();
+    const source = host.api.getSceneElements()[0];
+    const capture = vi
+      .mocked(ai.boardContext)
+      .mockImplementation(async (_api, _whole, _source, _viewport, image) => ({
+        elements: [source],
+        text: "圈选内容",
+        image: image ? "data:image/png;base64,selected" : undefined,
+      }));
+    const model = vi
+      .spyOn(ai, "chat")
+      .mockResolvedValueOnce(draw)
+      .mockResolvedValue('{"action":"done"}');
+    try {
+      const task = await start("解释圈选并在旁边演示", {
+        sourceIds: [source.id],
+      });
+      await waitFor(async () =>
+        expect((await inspect(task.id)).state).toBe("completed"),
+      );
+      expect(capture).toHaveBeenCalledWith(
+        host.api,
+        false,
+        [source],
+        expect.anything(),
+        selectionImages,
+      );
+      expect(
+        JSON.stringify(model.mock.calls[0][0]).includes(
+          "data:image/png;base64,selected",
+        ),
+      ).toBe(selectionImages);
+    } finally {
+      host.stop();
+    }
+  },
+);

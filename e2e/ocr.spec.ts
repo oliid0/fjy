@@ -74,6 +74,7 @@ test("handwritten selection calculates with bundled OCR and no cloud request", a
   expect(modelRequests).toEqual([]);
   const started = Date.now();
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   await expect
     .poll(
       () =>

@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
-import { writeQuestion } from "./question";
+import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
 
 import type { Page } from "@playwright/test";
 
@@ -18,20 +18,6 @@ const openFile = async (page: Page, name: string) => {
     timeout: 30000,
   });
   await expect(page.locator(".fc-document-status")).toHaveCount(0);
-};
-const ask = async (page: Page, text: string) => {
-  if (
-    await page
-      .getByRole("button", { name: "课件 AI 教师", exact: true })
-      .isVisible()
-  ) {
-    await page
-      .getByRole("button", { name: "课件 AI 教师", exact: true })
-      .click();
-  } else {
-    await selectMenu(page, "提问与讲解");
-  }
-  await writeQuestion(page, text);
 };
 
 for (const name of [
@@ -138,7 +124,12 @@ test("new boards preserve previous work and offer the original teaching tools", 
   await page.getByRole("button", { name: "切换白板", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "切换到 白板 1", exact: true }),
-  ).toContainText("第一块白板");
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("button", { name: "切换到 白板 1", exact: true })
+      .locator("img"),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "切换到 白板 1", exact: true })
     .click();
@@ -164,168 +155,149 @@ test("new boards preserve previous work and offer the original teaching tools", 
   await page.screenshot({ path: info.outputPath("teaching-tools.png") });
 });
 
-test("live teacher writes real math, pauses and completes a quiz on the shared canvas", async ({
+test("continuous voice answers concepts and delegates real math, board writing and a quiz", async ({
   page,
 }, info) => {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      "fcboard-settings",
-      JSON.stringify({
-        apiKey: "test-only",
-        model: "test",
-        autoMath: false,
-        selectionImages: true,
-      }),
-    );
-    localStorage.setItem(
-      "fcboard-teaching",
-      JSON.stringify({ lens: "captions", speed: 1 }),
-    );
-  });
-  let imageSent = false;
-  let requests = 0;
+  await installVoice(page);
   let calculationObserved = false;
-  let observations = 0;
-  await page.route(
-    "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
-    async (route) => {
-      const body = route.request().postDataJSON();
-      if (
-        String(body.messages[0].content).startsWith(
-          "You are the Fcboard teacher observing a live lesson",
-        )
-      ) {
-        observations++;
-        await route.fulfill({
-          json: {
-            choices: [
-              { message: { content: JSON.stringify({ action: "keep" }) } },
-            ],
-          },
-        });
-        return;
-      }
-      imageSent ||= JSON.stringify(body).includes("data:image/png;base64,");
-      requests++;
-      if (requests === 1) {
-        await route.fulfill({
-          json: {
-            choices: [
+  let worker = 0;
+  await page.route(voiceEndpoint, async (route) => {
+    const body = route.request().postDataJSON();
+    const system = String(body.messages[0].content);
+    let result: unknown;
+    if (system.startsWith("你是持续对话")) {
+      result = String(body.messages.at(-1).content).startsWith("用白板")
+        ? {
+            action: "commands",
+            commands: [
               {
-                message: {
-                  content: JSON.stringify({
-                    action: "commands",
-                    commands: [
-                      { name: "canvas.inspect" },
-                      { name: "math.evaluate", args: { expression: "3-1" } },
-                    ],
-                  }),
+                name: "agent.start",
+                args: {
+                  prompt: "核算3-1，演示x+1=3并出一道选择题",
+                  role: "数学演示",
                 },
               },
             ],
+          }
+        : { action: "text", text: "等式两边同时减去相同的数，等式仍然成立。" };
+    } else if (system.includes("学科命题资料研究员")) {
+      result = "依据教材核算：x+1=3，得到x=2。https://www.moe.gov.cn/";
+    } else if (system.includes("跨学科命题Agent")) {
+      result = {
+        title: "一元一次方程练习",
+        questions: [
+          {
+            type: "single",
+            question: "x+1=3，x等于多少？",
+            options: ["1", "2"],
+            answer: ["B"],
+            explanation: "两边减去1，得到x=2。",
           },
-        });
-        return;
-      }
-      calculationObserved =
-        typeof body.messages?.at(-1)?.content === "string" &&
-        body.messages.at(-1).content.includes('"answer":"2"');
-      await route.fulfill({
-        json: {
-          choices: [
+        ],
+        sources: [{ title: "教育部", url: "https://www.moe.gov.cn/" }],
+      };
+    } else {
+      expect(system).toContain("独立白板任务agent");
+      worker++;
+      if (worker === 1) {
+        result = {
+          action: "commands",
+          commands: [{ name: "math.evaluate", args: { expression: "3-1" } }],
+        };
+      } else if (worker === 2) {
+        calculationObserved = JSON.stringify(body.messages).includes(
+          '\\"answer\\":\\"2\\"',
+        );
+        const explanation = "两边同时减去1，得到x=2。";
+        result = {
+          action: "commands",
+          commands: [
             {
-              message: {
-                content: JSON.stringify({
-                  title: "一元一次方程",
-                  steps: [
-                    {
-                      say: "把等式两边同时减去一，再观察未知数。",
-                      commands: [
-                        {
-                          type: "write_math",
-                          id: "equation",
-                          x: 0,
-                          y: 0,
-                          text: "x+1=3",
-                          duration: 1,
-                        },
-                        {
-                          type: "write_text",
-                          id: "answer",
-                          x: 0,
-                          y: 100,
-                          text: "两边同时减去1",
-                          duration: 0.4,
-                        },
-                      ],
-                    },
-                  ],
-                  quiz: [
-                    {
-                      question: "x 等于多少？",
-                      choices: ["1", "2"],
-                      answer: 1,
-                      explanation: "两边减去1，得到x=2。",
-                    },
-                  ],
-                }),
+              name: "canvas.animate",
+              args: {
+                commands: [
+                  {
+                    type: "write_math",
+                    id: "equation",
+                    text: "x+1=3",
+                    x: 0,
+                    y: 0,
+                    duration: 0,
+                  },
+                  {
+                    type: "write_text",
+                    id: "answer",
+                    text: explanation,
+                    x: 0,
+                    y: 100,
+                    duration: 0,
+                  },
+                ],
               },
             },
+            { name: "agent.say", args: { text: explanation } },
+            {
+              name: "quiz.generate",
+              args: { prompt: "出1道关于x+1=3的选择题" },
+            },
           ],
-        },
-      });
-    },
-  );
+        };
+      } else {
+        result = { action: "done" };
+      }
+    }
+    await route.fulfill({
+      json: {
+        choices: [
+          {
+            message: {
+              content:
+                typeof result === "string" ? result : JSON.stringify(result),
+            },
+          },
+        ],
+      },
+    });
+  });
   await page.goto("/");
-  await expect(
-    page.getByRole("button", { name: "新建白板", exact: true }),
-  ).toBeEnabled();
-  await page.keyboard.press("t");
-  await page.mouse.click(180, 160);
-  const editor = page.locator("textarea.fcboard-wysiwyg");
-  await editor.fill("题目：x+1=3");
-  await editor.press("Escape");
-  await ask(page, "请讲解一元一次方程");
-  await expect(
-    page.getByRole("button", { name: "暂停讲解", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "暂停讲解", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "继续讲解", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "继续讲解", exact: true }).click();
-  await page.getByRole("button", { name: "A · 1", exact: true }).click();
-  await expect(page.getByText("再想一想。", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "B · 2", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "重播讲解", exact: true }),
-  ).toBeVisible();
+  await startVoice(page);
+  await say(page, "解释一下等式为什么可以两边减去相同的数");
+  await expect(page.locator(".fc-voice-caption")).toContainText("等式仍然成立");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("fcboard") || "[]").filter(
+            (item: { isDeleted?: boolean }) => !item.isDeleted,
+          ).length,
+      ),
+    )
+    .toBe(0);
+  await say(page, "用白板演示这个方程并出一道题");
+  const quiz = page.frameLocator('iframe[title="一元一次方程练习"]');
+  await expect(quiz.locator("h2")).toContainText("x+1=3");
+  await quiz.locator("input").nth(0).check();
+  await expect(quiz.locator(".verdict")).toHaveAttribute(
+    "data-correct",
+    "false",
+  );
+  await quiz.locator("input").nth(1).check();
+  await expect(quiz.locator(".verdict")).toHaveAttribute(
+    "data-correct",
+    "true",
+  );
   await expect
     .poll(() =>
       page.evaluate(() =>
         JSON.parse(localStorage.getItem("fcboard") || "[]").some(
-          (element: { type: string; text?: string }) =>
-            element.type === "text" && element.text === "两边同时减去1",
+          (item: { text?: string }) => item.text?.includes("两边同时减去1"),
         ),
       ),
     )
     .toBe(true);
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        JSON.parse(localStorage.getItem("fcboard") || "[]").some(
-          (element: { type: string; opacity?: number }) =>
-            element.type === "image" && element.opacity === 100,
-        ),
-      ),
-    )
-    .toBe(true);
-  expect(imageSent).toBe(true);
-  expect(requests).toBe(2);
   expect(calculationObserved).toBe(true);
-  // Ordinary writing/math steps need no extra model round trip between steps.
-  expect(observations).toBe(0);
-  await page.screenshot({ path: info.outputPath("live-teacher-quiz.png") });
+  await expect(page.locator(".fc-teacher,.fc-agent-tasks")).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath("voice-math-quiz.png") });
 });
 
 test("voice uses the same component actions to create a new board without a model", async ({
@@ -394,15 +366,17 @@ test("voice draws into the visible PPT and function controls update its transpar
   await page.goto("/");
   await openFile(page, "testPPT.pptx");
   await page.getByRole("button", { name: "课件语音指令", exact: true }).click();
-  await page.getByRole("button", { name: "旋转图形", exact: true }).click();
   await expect(
-    page.getByRole("slider", { name: "旋转", exact: true }),
+    page.getByRole("toolbar", { name: "选区操作", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "展开图形", exact: true }),
   ).toBeVisible();
   await expect
     .poll(() => page.locator(".fc-document-ink path").count())
     .toBeGreaterThan(3);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "收起工具参数" }).click();
+  await page.mouse.click(20, 120);
   await expect(
     page.getByRole("button", { name: "课件语音指令", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");

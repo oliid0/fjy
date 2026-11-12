@@ -35,7 +35,7 @@ for (const viewport of [
         let result: unknown = interactiveResource;
         if (
           !request.messages[0].content.startsWith(
-            "Create a scientifically accurate interactive teaching experiment",
+            "Create a scientifically accurate interactive teaching resource",
           )
         ) {
           expect(request.messages[0].content).toContain("resources.interact");

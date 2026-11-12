@@ -106,7 +106,7 @@ it("selects a single node without adding ink, then clears, adds and deletes its 
   ).toBe(false);
   expect(api.getAppState().selectedElementIds).toEqual({});
   expect(
-    screen.getByRole("button", { name: t("fcboard.mindmap_move_node") }),
+    await screen.findByRole("button", { name: t("fcboard.mindmap_move_node") }),
   ).toBeVisible();
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.mindmap_clear_node") }),

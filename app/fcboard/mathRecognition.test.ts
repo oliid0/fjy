@@ -20,6 +20,16 @@ afterEach(() => {
 
 it.each([
   ["6+7=", "13"],
+  ["12÷3=", "4"],
+  ["11\n+11\n----", "22"],
+  ["11\n-2\n----", "9"],
+  ["11\n×2\n----", "22"],
+  ["12\n÷3\n----", "4"],
+  ["sin30度=", "0.5"],
+  ["1.2+1.3=", "2.5"],
+  ["1/2+1/2=", "1"],
+  ["log2 4=", "2"],
+  ["2^2=", "4"],
   ["6x3=", "18"],
   ["0.25 x 4", "1"],
   ["12\nx3\n----", "36"],
@@ -180,7 +190,10 @@ it("never calls AI for a supported local formula", async () => {
 });
 
 it("accepts only source-matching JSON, locally draws it and rejects invented values/images/points", async () => {
-  saveSettings({ ...defaults, apiKey: "key", model: "parser" }, false);
+  saveSettings(
+    { ...defaults, apiKey: "key", model: "parser", mathTranscription: "cloud" },
+    false,
+  );
   const text = "y = sine(x) + 2";
   const json = {
     version: 1,
@@ -214,4 +227,13 @@ it("accepts only source-matching JSON, locally draws it and rejects invented val
       recognizeMath(text, "function", new AbortController().signal),
     ).rejects.toThrow();
   }
+});
+
+it("does not turn a configured AI key into an implicit math dependency", async () => {
+  saveSettings({ ...defaults, apiKey: "configured" }, false);
+  const cloud = vi.spyOn(ai, "chat");
+  await expect(
+    recognizeMath("unreadable", "function", new AbortController().signal),
+  ).rejects.toThrow();
+  expect(cloud).not.toHaveBeenCalled();
 });

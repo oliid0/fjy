@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { t } from "@fcboard/fcboard/i18n";
 
@@ -50,7 +51,7 @@ it("shows actual model states, downloads and confirms deletion while protecting 
   );
   expect(
     screen.getByRole("button", {
-      name: `English ${t("fcboard.languagePacks.builtin")}`,
+      name: `English ${t("fcboard.languagePacks.downloaded")}`,
     }),
   ).toBeDisabled();
   let finish!: (value: HandwritingPacks) => void;
@@ -167,4 +168,40 @@ it("does not invent installed packs when the native model backend is unavailable
   );
   expect(backend.listPacks).not.toHaveBeenCalled();
   expect(document.querySelector(".fc-language-pack-row")).toBeNull();
+});
+
+it("opens the real pack manager inside language settings without redundant per-pack selection", async () => {
+  const Harness = () => {
+    const [visible, setVisible] = useState(false);
+    const [container, setContainer] = useState<HTMLDivElement | null>(null);
+    return (
+      <>
+        <LanguagePacks
+          container={container}
+          onNavigate={() => setVisible(true)}
+        />
+        {visible && (
+          <section aria-label="language settings">
+            <div ref={setContainer} />
+          </section>
+        )}
+      </>
+    );
+  };
+  render(<Harness />);
+  act(() => openLanguagePacks());
+  const page = await screen.findByRole("region", { name: "language settings" });
+  await screen.findByRole("button", {
+    name: `German ${t("fcboard.languagePacks.download")}`,
+  });
+  expect(page.querySelector(".fc-language-pack-list")).not.toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: `${t("fcboard.select")} Chinese` }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("button", {
+      name: `Chinese ${t("fcboard.languagePacks.downloaded")}`,
+    }),
+  ).toBeDisabled();
 });

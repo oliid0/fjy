@@ -26,6 +26,8 @@ import { observeInkAssistance } from "./inkAssistance";
 import { classroomCommands } from "./commands";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
+import * as localTranslation from "./localTranslation";
+import { defaults, saveSettings } from "./settings";
 
 const setup = () => {
   let scene: readonly FcboardElement[] = [];
@@ -64,20 +66,39 @@ const setup = () => {
   const recognize = vi
     .spyOn(ocr, "recognizeHandwriting")
     .mockResolvedValue(languageStudy.term);
+  vi.spyOn(ai, "boardContext").mockImplementation(
+    async (_api, _whole, elements) => ({
+      elements: elements || [],
+      text: "",
+      image:
+        "data:image/png;base64,source" as import("@fcboard/fcboard/types").DataURL,
+    }),
+  );
   const chat = vi
     .spyOn(ai, "chat")
     .mockResolvedValue(JSON.stringify(languageStudy));
   const error = vi.fn();
-  const release = observeInkAssistance(api, vi.fn(), error);
+  const stopTranslate = registerLanguageCommands(api);
+  const stopObserve = observeInkAssistance(api, vi.fn(), error);
+  const release = () => {
+    stopObserve();
+    stopTranslate();
+  };
   return { api, source, recognize, chat, error, release };
 };
 
 beforeEach(async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test-only", translationProvider: "cloud" },
+    false,
+  );
   await setLanguage(languages.find((language) => language.code === "zh-CN")!);
 });
 afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
   await setLanguage(defaultLang);
 });
 
@@ -88,7 +109,7 @@ it("keeps original ink, translates below it at matching size, opens cached card,
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     expect(error).not.toHaveBeenCalled();
     const original = api
@@ -112,16 +133,20 @@ it("keeps original ink, translates below it at matching size, opens cached card,
       translation.type === "text" && translation.fontSize,
     ).toBeLessThanOrEqual(40);
     expect(translation.groupIds.at(-1)).toBe(original.groupIds.at(-1));
-    expect(recognize.mock.calls[0][5]).toEqual([
-      [
-        [200, 150],
-        [280, 190],
-        [330, 150],
-      ],
-    ]);
-    expect(recognize.mock.calls[0][6]).toBe("en-US");
-    expect(chat.mock.calls[0][0].at(-1)?.content).toContain(
-      '"explanationLanguage":"zh-CN"',
+    expect(recognize).not.toHaveBeenCalled();
+    expect(JSON.stringify(chat.mock.calls[0][0])).toContain(
+      "data:image/png;base64,source",
+    );
+    expect(chat.mock.calls[0][0].at(-1)?.content).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          text: JSON.stringify({
+            targetLanguage: "zh-CN",
+            sameLanguageTarget: "en",
+          }),
+        }),
+      ]),
     );
     await act(async () => {
       await classroomCommands.execute({
@@ -148,8 +173,8 @@ it("keeps original ink, translates below it at matching size, opens cached card,
       });
     });
     expect(screen.getByRole("dialog")).toBeVisible();
-    expect(chat).toHaveBeenCalledTimes(1);
-    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(recognize).not.toHaveBeenCalled();
     await act(async () => {
       api.updateScene({
         elements: api.getSceneElements().map((element) =>
@@ -178,7 +203,7 @@ it("copies a bilingual object with an independent card and never exposes hidden-
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     const originalGroup =
       api.getSceneElements()[0].customData?.fcLanguage.group;
@@ -191,7 +216,11 @@ it("copies a bilingual object with an independent card and never exposes hidden-
     )!;
     api.updateScene({ elements: copies });
     expect(copy.customData?.fcLanguage.group).not.toBe(originalGroup);
-    expect(readLanguageCard(api, copy.id)?.study).toEqual(languageStudy);
+    expect(readLanguageCard(api, copy.id)?.study).toMatchObject({
+      term: languageStudy.term,
+      translation: languageStudy.translation,
+      backend: "translation",
+    });
     expect(readLanguageCard(api, source.id)).toBeUndefined();
     const stop = classroomCommands.context("document", () => ({
       name: "slides.pdf",
@@ -221,7 +250,7 @@ it("discards a translation when its source is erased while the model is still re
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     expect(chat).toHaveBeenCalledTimes(1);
     api.updateScene({ elements: [] });
@@ -243,7 +272,7 @@ it("hides a loading card on double click and ignores a late translation", async 
   try {
     await act(async () => {
       api.updateScene({ elements: [source] });
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     api.updateScene({
       elements: api.getSceneElements().map((element) =>
@@ -336,6 +365,49 @@ it("opens a language card through the selection tool without drawing a language-
     host.release();
     stopTranslate();
     stopVoice();
+  }
+});
+
+it("translates selected language text locally without an API key or cloud request", async () => {
+  vi.useFakeTimers();
+  saveSettings(
+    { ...defaults, apiKey: "", translationProvider: "local" },
+    false,
+  );
+  const host = setup();
+  const translate = vi
+    .spyOn(localTranslation, "translateLocally")
+    .mockResolvedValue({ language: "en", translation: "你好世界" });
+  const [word] = convertToFcboardElements([
+    {
+      type: "text",
+      text: "Hello world",
+      x: 220,
+      y: 150,
+      customData: { fcInk: { version: 2, pen: "hard", assist: "language" } },
+    },
+  ]);
+  const view = render(<LanguagePanel api={host.api} />);
+  try {
+    Object.assign(host.api.getAppState(), {
+      activeTool: { type: "lasso" },
+      selectedElementIds: { [word.id]: true },
+    });
+    act(() => host.api.updateScene({ elements: [word] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(translate).toHaveBeenCalledWith(
+      "Hello world",
+      "zh-CN",
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByText("你好世界")).toBeVisible();
+    expect(host.chat).not.toHaveBeenCalled();
+    expect(host.api.getSceneElements()).toEqual([word]);
+  } finally {
+    view.unmount();
+    host.release();
   }
 });
 

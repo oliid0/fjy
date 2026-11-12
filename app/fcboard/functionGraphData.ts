@@ -1,3 +1,6 @@
+import { compileExpression, plotExpression, sampleFunctionCurve } from "./math";
+import { mathNotation } from "./mathNotation";
+
 export const functionPresets = [
   { id: 1, key: "linear", expression: "x" },
   { id: 2, key: "quadratic", expression: "x^2" },
@@ -72,122 +75,98 @@ export const nextFunctionColor = (items: FunctionItem[]) => {
 };
 
 type Evaluator = (x: number) => number;
-/** FunctionExpressionEvaluator's grammar, compiled once instead of reparsing per sample. */
+const sourceExpression = (input: string) => {
+  let expression = input
+    .trim()
+    .toLowerCase()
+    .replace(/（/g, "(")
+    .replace(/）/g, ")");
+  // The original function tool documents log as base ten; explicit log(x,base)
+  // and ln(x) retain their distinct meanings with the shared math parser.
+  const replacements: number[] = [];
+  for (const match of expression.matchAll(/\blog\s*\(/g)) {
+    const start = match.index! + match[0].length;
+    let depth = 1;
+    let comma = false;
+    for (let index = start; index < expression.length && depth; index++) {
+      if (expression[index] === "(") {
+        depth++;
+      }
+      if (expression[index] === ")") {
+        depth--;
+      }
+      if (expression[index] === "," && depth === 1) {
+        comma = true;
+      }
+    }
+    if (!comma) {
+      replacements.push(match.index! + 3);
+    }
+  }
+  for (const position of replacements.reverse()) {
+    expression = `${expression.slice(0, position)}10${expression.slice(
+      position,
+    )}`;
+  }
+  expression = plotExpression(mathNotation(expression));
+  if (/\b[yzabc]\b/.test(expression)) {
+    throw new Error("Unsupported independent variable");
+  }
+  return expression;
+};
+/** Shared validated AST fixes power associativity, unary signs and implicit multiplication. */
 export const compileSourceFunction = (input: string): Evaluator => {
-  if (!input || input.length > 500) {
+  try {
+    const compiled = compileExpression(sourceExpression(input));
+    return (x) => {
+      try {
+        const value = compiled.evaluate({ x });
+        return typeof value === "number" && Number.isFinite(value)
+          ? value
+          : NaN;
+      } catch {
+        return NaN;
+      }
+    };
+  } catch {
     return () => NaN;
   }
-  const parse = (source: string): Evaluator => {
-    if (!source) {
-      return () => NaN;
-    }
-    while (source.startsWith("(") && source.endsWith(")")) {
-      let depth = 0;
-      let outer = true;
-      for (let index = 0; index < source.length; index++) {
-        depth += source[index] === "(" ? 1 : source[index] === ")" ? -1 : 0;
-        if (depth === 0 && index < source.length - 1) {
-          outer = false;
-          break;
-        }
-      }
-      if (!outer || depth !== 0) {
-        break;
-      }
-      source = source.slice(1, -1);
-    }
-    for (const operators of ["+-", "*/", "^"]) {
-      let depth = 0;
-      for (let index = source.length - 1; index > 0; index--) {
-        const symbol = source[index];
-        depth += symbol === ")" ? 1 : symbol === "(" ? -1 : 0;
-        if (
-          depth ||
-          !operators.includes(symbol) ||
-          ((symbol === "+" || symbol === "-") &&
-            "+-*/^(".includes(source[index - 1]))
-        ) {
-          continue;
-        }
-        const left = parse(source.slice(0, index));
-        const right = parse(source.slice(index + 1));
-        return (x) => {
-          const a = left(x);
-          const b = right(x);
-          return symbol === "+"
-            ? a + b
-            : symbol === "-"
-            ? a - b
-            : symbol === "*"
-            ? a * b
-            : symbol === "/"
-            ? Math.abs(b) < 1e-7
-              ? NaN
-              : a / b
-            : Math.pow(a, b);
-        };
-      }
-    }
-    const functions: Record<string, Evaluator> = {
-      sin: Math.sin,
-      cos: Math.cos,
-      tan: Math.tan,
-      ln: (x) => (x > 0 ? Math.log(x) : NaN),
-      log: (x) => (x > 0 ? Math.log10(x) : NaN),
-      log10: (x) => (x > 0 ? Math.log10(x) : NaN),
-      sqrt: (x) => (x >= 0 ? Math.sqrt(x) : NaN),
-      abs: Math.abs,
-    };
-    const call = source.match(/^(sin|cos|tan|ln|log10|log|sqrt|abs)\((.*)\)$/);
-    if (call) {
-      const argument = parse(call[2]);
-      return (x) => functions[call[1]](argument(x));
-    }
-    if (source.startsWith("-")) {
-      const value = parse(source.slice(1));
-      return (x) => -value(x);
-    }
-    if (source === "x") {
-      return (x) => x;
-    }
-    const constant =
-      source === "pi"
-        ? Math.PI
-        : source === "e"
-        ? Math.E
-        : /^[+]?((\d+(\.\d*)?)|(\.\d+))(e[+-]?\d+)?$/.test(source)
-        ? Number(source)
-        : NaN;
-    return () => constant;
-  };
-  return parse(
-    input
-      .trim()
-      .toLowerCase()
-      .replace(/y=/g, "")
-      .replace(/ /g, "")
-      .replace(/（/g, "(")
-      .replace(/）/g, ")"),
-  );
 };
 export const validSourceFunction = (expression: string) => {
   const value = compileSourceFunction(expression);
-  return [-2, 0, 2].some((x) => Number.isFinite(value(x)));
+  return Array.from({ length: 201 }, (_, index) => index - 100).some((x) =>
+    Number.isFinite(value(x)),
+  );
 };
 export type SampledFunction = {
   color: string;
   points: ({ x: number; y: number } | null)[];
 };
-export const sampleSourceFunction = (item: FunctionItem): SampledFunction => {
-  const evaluate = compileSourceFunction(item.expression);
-  return {
-    color: item.color,
-    points: Array.from({ length: 1001 }, (_, index) => {
-      const x = -10 + index * 0.02;
-      const y = evaluate(x);
-      return Number.isFinite(y) && Math.abs(y) <= 1000 ? { x, y } : null;
-    }),
-  };
+export const sampleSourceFunction = (
+  item: FunctionItem,
+  view?: FunctionGraphData,
+): SampledFunction => {
+  const unit = view?.unit || 42;
+  const ox = view ? view.width / 2 + view.x : 420;
+  const oy = view ? view.height / 2 + view.y : 420;
+  try {
+    const lines = sampleFunctionCurve(sourceExpression(item.expression), {
+      left: -ox / unit,
+      right: ((view?.width || 840) - ox) / unit,
+      bottom: (oy - (view?.height || 840)) / unit,
+      top: oy / unit,
+      tolerance: 0.5 / unit,
+    });
+    return {
+      color: item.color,
+      points: lines.flatMap((line) => [
+        ...line.map(([x, y]) => ({ x, y })),
+        null,
+      ]),
+    };
+  } catch {
+    return { color: item.color, points: [] };
+  }
 };
 export const clampGraph = (
   view: GraphTransform,
@@ -375,7 +354,7 @@ export const functionGraphSvg = (data: FunctionGraphData) => {
   }
   for (const { tag, attrs, text } of functionGraphNodes(
     data,
-    data.functions.map(sampleSourceFunction),
+    data.functions.map((item) => sampleSourceFunction(item, data)),
   )) {
     const node = xml.createElementNS(root.namespaceURI, tag);
     for (const [key, value] of Object.entries(attrs)) {

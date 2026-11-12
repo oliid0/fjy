@@ -21,27 +21,37 @@ it("stays open when saving is cancelled or fails and closes only after actual su
   expect(close).not.toHaveBeenCalled();
   fireEvent.click(save);
   await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
-  expect(exit).toHaveBeenNthCalledWith(3, true);
+  expect(exit).toHaveBeenNthCalledWith(3, true, expect.any(AbortSignal));
 });
 
-it("passes the explicit discard choice and prevents cancelling while an exit operation is pending", async () => {
-  let finish!: (value: boolean) => void;
-  const exit = vi.fn().mockReturnValue(
-    new Promise<boolean>((resolve) => {
-      finish = resolve;
-    }),
-  );
-  const close = vi.fn();
-  render(<ExitDialog onExit={exit} onClose={close} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.exit_without_saving") }),
-  );
-  expect(exit).toHaveBeenCalledWith(false);
-  expect(
-    screen.getByRole("button", { name: t("buttons.cancel") }),
-  ).toBeDisabled();
-  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
-  expect(close).not.toHaveBeenCalled();
-  await act(async () => finish(true));
-  expect(close).toHaveBeenCalledTimes(1);
-});
+it.each(["escape", "close", "cancel"] as const)(
+  "allows %s while exit is pending and ignores late success",
+  async (method) => {
+    let finish!: (value: boolean) => void;
+    const exit = vi.fn().mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const close = vi.fn();
+    render(<ExitDialog onExit={exit} onClose={close} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.exit_without_saving") }),
+    );
+    expect(exit).toHaveBeenCalledWith(false, expect.any(AbortSignal));
+    const signal = exit.mock.calls[0][1] as AbortSignal;
+    if (method === "escape") {
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    } else {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: t(method === "close" ? "buttons.close" : "buttons.cancel"),
+        }),
+      );
+    }
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(true);
+    await act(async () => finish(true));
+    expect(close).toHaveBeenCalledTimes(1);
+  },
+);

@@ -10,6 +10,8 @@ const dragTouch = async (
   from: { x: number; y: number },
   to: { x: number; y: number },
   radius = 2,
+  cancel = false,
+  via: { x: number; y: number }[] = [],
 ) => {
   const session = await page.context().newCDPSession(page);
   try {
@@ -17,22 +19,26 @@ const dragTouch = async (
       type: "touchStart",
       touchPoints: [{ ...from, id: 1, radiusX: radius, radiusY: radius }],
     });
-    for (let step = 1; step <= 8; step++) {
-      await session.send("Input.dispatchTouchEvent", {
-        type: "touchMove",
-        touchPoints: [
-          {
-            x: from.x + ((to.x - from.x) * step) / 8,
-            y: from.y + ((to.y - from.y) * step) / 8,
-            id: 1,
-            radiusX: radius,
-            radiusY: radius,
-          },
-        ],
-      });
+    let previous = from;
+    for (const end of [...via, to]) {
+      for (let step = 1; step <= 8; step++) {
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [
+            {
+              x: previous.x + ((end.x - previous.x) * step) / 8,
+              y: previous.y + ((end.y - previous.y) * step) / 8,
+              id: 1,
+              radiusX: radius,
+              radiusY: radius,
+            },
+          ],
+        });
+      }
+      previous = end;
     }
     await session.send("Input.dispatchTouchEvent", {
-      type: "touchEnd",
+      type: cancel ? "touchCancel" : "touchEnd",
       touchPoints: [],
     });
   } finally {
@@ -41,20 +47,26 @@ const dragTouch = async (
 };
 
 for (const width of [390, 1920]) {
-  test(`native pen swipes stay inside pen choices and leave lower controls working at ${width}`, async ({
+  test(`native pen swipes retain all twelve choices and leave tip/width controls working at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
     const pen = page
       .getByRole("toolbar", { name: "白板工具栏", exact: true })
-      .getByRole("button", { name: "画笔", exact: true });
+      .getByRole("button", { name: "笔", exact: true });
     await pen.click();
     const settings = page.locator(".fc-factory-pen-settings");
     if (!(await settings.isVisible())) {
       await pen.click();
     }
     const types = settings.locator(".fc-pen-types");
+    await expect(types.getByRole("button")).toHaveCount(12);
+    const slider = settings.getByRole("slider");
+    await settings.getByRole("button", { name: "细笔", exact: true }).tap();
+    await expect(slider).toHaveValue("2");
+    await settings.getByRole("button", { name: "粗笔", exact: true }).tap();
+    await expect(slider).toHaveValue("4");
     const lowerBounds = () =>
       settings.locator(".fc-pen-mode,.fc-pen-colors").evaluateAll((nodes) =>
         nodes.map((node) => {
@@ -69,8 +81,7 @@ for (const width of [390, 1920]) {
       y: first!.y + first!.height / 2,
     };
     await dragTouch(page, from, { x: from.x - 60, y: from.y + 2 });
-    const next = settings.getByRole("button", { name: "下一页", exact: true });
-    await expect(next).toHaveAttribute("aria-pressed", "true");
+    await expect(types.getByRole("button")).toHaveCount(12);
     await expect(
       types.getByRole("button", { name: "函数笔", exact: true }),
     ).toBeVisible();
@@ -81,8 +92,7 @@ for (const width of [390, 1920]) {
       y: preview!.y + preview!.height / 2,
     };
     await dragTouch(page, point, { x: point.x + 50, y: point.y });
-    await expect(next).toHaveAttribute("aria-pressed", "true");
-    const slider = settings.getByRole("slider");
+    await expect(types.getByRole("button")).toHaveCount(12);
     const value = await slider.inputValue();
     const bar = await slider.boundingBox();
     await dragTouch(
@@ -91,7 +101,7 @@ for (const width of [390, 1920]) {
       { x: bar!.x + bar!.width * 0.8, y: bar!.y + bar!.height / 2 },
     );
     await expect(slider).not.toHaveValue(value);
-    await expect(next).toHaveAttribute("aria-pressed", "true");
+    await expect(types.getByRole("button")).toHaveCount(12);
     const changed = await slider.inputValue();
     const back = await types.getByRole("button").first().boundingBox();
     const start = {
@@ -99,9 +109,7 @@ for (const width of [390, 1920]) {
       y: back!.y + back!.height / 2,
     };
     await dragTouch(page, start, { x: start.x + 60, y: start.y + 2 });
-    await expect(
-      settings.getByRole("button", { name: "上一页", exact: true }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expect(types.getByRole("button")).toHaveCount(12);
     await expect(slider).toHaveValue(changed);
   });
 
@@ -133,10 +141,14 @@ for (const width of [390, 1920]) {
     };
     await dragTouch(page, back, { x: back.x + 70, y: back.y + 2 });
     await expect(
-      menu.getByRole("button", { name: "插入直尺", exact: true }),
+      menu.getByRole("button", { name: "尺规", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".fc-recording-dialog")).toHaveCount(0);
-    await menu.getByRole("button", { name: "插入直尺", exact: true }).tap();
+    await menu.getByRole("button", { name: "尺规", exact: true }).tap();
+    await page
+      .getByRole("dialog", { name: "尺规", exact: true })
+      .getByRole("button", { name: "插入直尺", exact: true })
+      .tap();
     await expect(menu).toBeHidden();
     await expect(page.locator("[data-gizmo]")).toHaveCount(1);
   });
@@ -159,8 +171,9 @@ for (const width of [390, 1920]) {
       await toolbar
         .getByRole("button", { name: "工具箱", exact: true })
         .click();
+      await page.getByRole("button", { name: "尺规", exact: true }).click();
       await page
-        .getByRole("dialog", { name: "工具箱", exact: true })
+        .getByRole("dialog", { name: "尺规", exact: true })
         .getByRole("button", { name: `插入${label}`, exact: true })
         .click();
       const current = async () =>
@@ -289,21 +302,27 @@ for (const width of [390, 1920]) {
     await expect(page.locator("[data-insertion-placement=table]")).toHaveCount(
       0,
     );
-    await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
-    await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
+    const eraser = toolbar.getByRole("button", { name: "板擦", exact: true });
+    await eraser.click();
+    await expect(page.locator(".fc-native-eraser-row")).toBeVisible();
+    await eraser.click();
+    await expect(page.locator(".fc-native-eraser-row")).toBeHidden();
+    await eraser.click();
     await page
-      .locator(".fc-eraser-mode")
-      .getByRole("button", { name: "整个对象擦除", exact: true })
+      .locator(".fc-native-eraser-row")
+      .getByRole("button", { name: "框选擦除", exact: true })
       .click();
-    await toolbar.getByRole("button", { name: "橡皮", exact: true }).click();
-    await toolbar.getByRole("button", { name: "画笔", exact: true }).click();
-    await dragTouch(page, { x: 40, y: 185 }, { x: 65, y: 210 }, 40);
+    await dragTouch(page, { x: 30, y: 175 }, { x: 30, y: 175 }, 2, false, [
+      { x: Math.min(width - 30, 390), y: 175 },
+      { x: Math.min(width - 30, 390), y: 415 },
+      { x: 30, y: 415 },
+    ]);
     await expect.poll(table).toEqual([]);
   });
 }
 
 for (const width of [390, 1920]) {
-  test(`original split and curtain settings apply through actual tool controls at ${width}`, async ({
+  test(`split layout changes preserve ink and curtain settings apply through actual tool controls at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -313,7 +332,15 @@ for (const width of [390, 1920]) {
       Reflect.deleteProperty(window, "showSaveFilePicker");
     });
     await page.goto("/");
-    const openTool = async (name: string) => {
+    const openTool = async (name: string, count = 3) => {
+      if (name === "分屏") {
+        await page.getByRole("button", { name: "分屏", exact: true }).click();
+        await page
+          .locator(".fc-split-launcher")
+          .getByRole("button", { name: `${count}分屏`, exact: true })
+          .click();
+        return;
+      }
       await page.getByRole("button", { name: "工具箱", exact: true }).click();
       await page
         .getByRole("dialog", { name: "工具箱", exact: true })
@@ -321,15 +348,6 @@ for (const width of [390, 1920]) {
         .click();
     };
     await openTool("分屏");
-    const settings = page.getByRole("dialog", {
-      name: "分屏 · 设置",
-      exact: true,
-    });
-    await expect(settings).toBeVisible();
-    await expect(page.locator(".fc-split-pane canvas")).toHaveCount(0);
-    await settings.getByRole("radio", { name: "3", exact: true }).check();
-    await settings.getByRole("radio", { name: "绿色", exact: true }).check();
-    await settings.getByRole("button", { name: "确定", exact: true }).click();
     const panes = page.locator(".fc-split-pane canvas");
     await expect(panes).toHaveCount(3);
     await expect(panes.first()).toHaveCSS(
@@ -356,10 +374,13 @@ for (const width of [390, 1920]) {
     await expect(
       board.getByRole("button", { name: "关闭", exact: true }),
     ).toHaveCount(1);
-    await expect(board.locator(".fc-split-bottom").first()).toHaveCSS(
-      "height",
-      "52px",
-    );
+    await expect
+      .poll(
+        async () =>
+          (await board.locator(".fc-split-bottom").first().boundingBox())!
+            .height,
+      )
+      .toBeCloseTo(36.18, 1);
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),
       height: Math.max(...items.map((canvas) => canvas.height)),
@@ -395,7 +416,7 @@ for (const width of [390, 1920]) {
       return {
         width: image.naturalWidth,
         height: image.naturalHeight,
-        hasInk: pixels.some((value, i) => i % 4 < 3 && value < 70),
+        hasInk: pixels.some((value, i) => i % 4 < 3 && value < 20),
       };
     }, bytes.toString("base64"));
     expect(exported).toMatchObject({ ...size, hasInk: true });
@@ -406,12 +427,12 @@ for (const width of [390, 1920]) {
       .last()
       .click();
     await exit.getByRole("button", { name: "不保存", exact: true }).click();
-    await openTool("分屏");
-    await settings.getByRole("radio", { name: "2", exact: true }).check();
-    await settings.getByRole("button", { name: "取消", exact: true }).click();
-    await expect(panes).toHaveCount(0);
-    await openTool("分屏");
-    await settings.getByRole("button", { name: "确定", exact: true }).click();
+    await openTool("分屏", 2);
+    await expect(panes).toHaveCount(2);
+    expect(await hasInk(0)).toBe(true);
+    await board.getByRole("button", { name: "关闭", exact: true }).click();
+    await exit.getByRole("button", { name: "不保存", exact: true }).click();
+    await openTool("分屏", 3);
     await expect(panes).toHaveCount(3);
     expect(await hasInk(0)).toBe(true);
     await board
@@ -480,7 +501,7 @@ for (const width of [390, 1920]) {
   });
 }
 
-test("touch toolbar customization persists and board ordering confirms or cancels before selected-page sharing", async ({
+test("touch toolbar customization and page sorting persist, cancelled drags restore order and edit selection opens sharing", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -491,22 +512,11 @@ test("touch toolbar customization persists and board ordering confirms or cancel
   await page.getByTestId("main-menu-trigger").click();
   await page.getByRole("menuitem", { name: "设置", exact: true }).click();
   const settings = page.locator(".fc-settings-dialog");
-  await settings
-    .getByRole("button", { name: "工具栏设置", exact: true })
-    .click();
+  await settings.getByRole("button", { name: "工具栏", exact: true }).click();
   const tile = settings.locator('[data-tool-id="mindmap"]');
-  const source = (await tile.boundingBox())!;
-  const destination = (await settings
-    .locator('[data-toolbar-zone="selected"]')
-    .boundingBox())!;
-  await dragTouch(
-    page,
-    { x: source.x + source.width / 2, y: source.y + source.height / 2 },
-    {
-      x: destination.x + destination.width - 12,
-      y: destination.y + destination.height - 12,
-    },
-  );
+  await tile
+    .getByRole("button", { name: "将思维导图添加到底部栏", exact: true })
+    .tap();
   await expect(
     page.locator('.fc-drawing-tools [data-toolbar-item="mindmap"]'),
   ).toHaveCount(1);
@@ -522,6 +532,8 @@ test("touch toolbar customization persists and board ordering confirms or cancel
     await expect(page.locator(".fc-board-count")).toContainText(
       `${index + 2} / ${index + 2}`,
     );
+    // LayerUI intentionally rejects repeated same-control actions within 400ms.
+    await page.waitForTimeout(450);
   }
   await page.locator("[data-board-switcher]").click();
   const list = page.locator(".fc-board-picker");
@@ -532,7 +544,7 @@ test("touch toolbar customization persists and board ordering confirms or cancel
         nodes.map((node) => (node as HTMLElement).dataset.boardId),
       );
   const before = await ids();
-  const reorder = async () => {
+  const reorder = async (cancel = false) => {
     const handle = (await list.locator(".fc-board-drag").last().boundingBox())!;
     const target = (await list
       .locator("[data-board-id]")
@@ -542,19 +554,32 @@ test("touch toolbar customization persists and board ordering confirms or cancel
       page,
       { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 },
       { x: target.x + target.width / 2, y: target.y + target.height / 2 },
+      2,
+      cancel,
     );
   };
+  await expect(
+    list.getByRole("button", { name: "分享选中白板", exact: true }),
+  ).toHaveCount(0);
+  await reorder(true);
+  await expect.poll(ids).toEqual(before);
   await reorder();
-  await expect.poll(ids).not.toEqual(before);
-  await list.getByRole("button", { name: "取消", exact: true }).click();
-  expect(await ids()).toEqual(before);
-  await reorder();
-  await list.getByRole("button", { name: "确定", exact: true }).click();
+  const sorted = [before[2], before[0], before[1]];
+  await expect.poll(ids).toEqual(sorted);
   await expect(page.locator(".fc-board-count")).toContainText("1 / 3");
+  await page.reload();
+  await expect(page.locator(".fc-board-count")).toContainText("1 / 3");
+  await page.locator("[data-board-switcher]").click();
+  await expect.poll(ids).toEqual(sorted);
+  await list.getByRole("button", { name: "编辑页面", exact: true }).click();
+  await list.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(list.locator('input[type="checkbox"]')).toHaveCount(0);
+  await list.getByRole("button", { name: "编辑页面", exact: true }).click();
+  await list.getByRole("button", { name: "全部选中", exact: true }).click();
+  await list.getByRole("checkbox", { name: "选择第1页", exact: true }).check();
+  await expect(list.locator('input[type="checkbox"]:checked')).toHaveCount(1);
   await list.getByRole("button", { name: "分享选中白板", exact: true }).click();
-  const sharing = page.locator(".fc-share-dialog");
+  const sharing = page.getByRole("dialog", { name: "扫码分享", exact: true });
   await expect(sharing).toBeVisible();
-  await expect(sharing.locator('input[type="checkbox"]:checked')).toHaveCount(
-    1,
-  );
+  await expect(page.locator(".fc-share-pages")).toHaveCount(0);
 });

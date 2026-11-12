@@ -161,7 +161,11 @@ export const createNarrator = () => {
       const controller = new AbortController();
       request = controller;
       try {
-        if (!settings.ttsEndpoint && Capacitor.getPlatform() === "android") {
+        if (
+          !settings.ttsEndpoint &&
+          Capacitor.getPlatform() === "android" &&
+          /^(zh|en)(-|$)/i.test(getLanguage().code)
+        ) {
           const chunks = narrationChunks(text);
           if (!chunks.length) {
             finish();
@@ -242,7 +246,11 @@ export const createNarrator = () => {
               ? { Authorization: `Bearer ${settings.ttsKey}` }
               : {}),
           },
-          body: JSON.stringify({ input: text, response_format: "wav" }),
+          body: JSON.stringify({
+            input: text,
+            response_format: "wav",
+            language: getLanguage().code,
+          }),
           signal: controller.signal,
         });
         if (!response.ok) {

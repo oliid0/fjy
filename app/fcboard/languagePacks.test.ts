@@ -38,7 +38,7 @@ it.each([
   },
 );
 
-it("uses the current language's actual handwriting model and preserves explicit math and user language choices", async () => {
+it("uses the unified language's handwriting model and preserves explicit math and per-request language hints", async () => {
   const language = i18n.getLanguage();
   vi.spyOn(i18n, "getLanguage").mockReturnValue({ ...language, code: "de-DE" });
   backend.recognize.mockResolvedValue({
@@ -60,11 +60,15 @@ it("uses the current language's actual handwriting model and preserves explicit 
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "de-DE",
+    id: expect.any(String),
+    reuse: true,
   });
   await recognizeDigitalInk(strokes, signal, "math");
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "en-US",
+    id: expect.any(String),
+    reuse: true,
   });
   vi.mocked(currentSettings).mockReturnValue({
     ...currentSettings(),
@@ -73,7 +77,16 @@ it("uses the current language's actual handwriting model and preserves explicit 
   await recognizeDigitalInk(strokes, signal, "text");
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
+    language: "de-DE",
+    id: expect.any(String),
+    reuse: true,
+  });
+  await recognizeDigitalInk(strokes, signal, "text", "zh-Hani-CN");
+  expect(backend.recognize).toHaveBeenLastCalledWith({
+    strokes,
     language: "zh-Hani-CN",
+    id: expect.any(String),
+    reuse: true,
   });
 });
 

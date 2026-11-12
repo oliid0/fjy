@@ -96,13 +96,15 @@ it("shows the four original actions after copy/delete, preserves uneven separato
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label")),
   ).toEqual([
+    t("fcboard.selection_color"),
+    t("labels.opacity"),
     t("labels.copy"),
+    t("fcboard.selection_layers"),
     t("labels.delete"),
     t("fcboard.add_row"),
     t("fcboard.remove_row"),
     t("fcboard.add_column"),
     t("fcboard.remove_column"),
-    "AI",
   ]);
   await click("add_row");
   expect(table()).toMatchObject({
@@ -192,11 +194,21 @@ it("keeps last-cell writing and text on the board after removing an edge, reinde
       },
     });
   });
+  const track = async (action: string) =>
+    act(async () => {
+      await classroomCommands.execute({
+        name: "table.track",
+        args: { id: table().id, action },
+      });
+    });
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.remove_column") }),
+  ).toBeNull();
   const originalInk = api
     .getSceneElements()
     .filter((item) => item.type === "freedraw");
   const front = api.getSceneElements().at(-1)!;
-  await click("remove_column");
+  await track("column.remove");
   expect(table()).toMatchObject({ columns: 2, width: 240 });
   const kept = api
     .getSceneElements()
@@ -233,7 +245,7 @@ it("keeps last-cell writing and text on the board after removing an edge, reinde
       .filter((item) => item.type === "text" && item.text === "last cell"),
   ).toHaveLength(1);
   Keyboard.redo();
-  await click("add_column");
+  await track("column.add");
   expect(table().columns).toBe(3);
   expect(table().cells[8]).toBe("");
   expect(
@@ -256,7 +268,7 @@ it("keeps last-cell writing and text on the board after removing an edge, reinde
     });
   });
   const movedInk = api.getSceneElements().find((item) => item.id === kept.id)!;
-  await click("add_row");
+  await track("row.add");
   expect(table().position).toEqual({ x: 140, y: 130 });
   expect(
     api.getSceneElements().find((item) => item.id === kept.id),

@@ -106,7 +106,7 @@ it("selects a single node without adding ink, then clears, adds and deletes its 
   ).toBe(false);
   expect(api.getAppState().selectedElementIds).toEqual({});
   expect(
-    screen.getByRole("button", { name: t("fcboard.mindmap_move_node") }),
+    await screen.findByRole("button", { name: t("fcboard.mindmap_move_node") }),
   ).toBeVisible();
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.mindmap_clear_node") }),
@@ -136,7 +136,7 @@ it("selects a single node without adding ink, then clears, adds and deletes its 
 it("activates node controls on a real pointer release exactly once", async () => {
   const { api, pointer, select } = await setup();
   select(1);
-  const button = screen.getByRole("button", {
+  const button = await screen.findByRole("button", {
     name: t("fcboard.mindmap_add_child"),
   });
   pointer(button, "pointerdown", 400, 200);
@@ -161,7 +161,7 @@ it.each([1, 2])(
           target.width === 140 * scale && target.height === 48 * scale,
       ),
     ).toBe(true);
-    const button = screen.getByRole("button", {
+    const button = await screen.findByRole("button", {
       name: t("fcboard.mindmap_move_node"),
     });
     pointer(button, "pointerdown", 200, 200);
@@ -269,7 +269,7 @@ it("keeps first-contact raw handwriting attached through move, clear and undo wi
       inkCell: 1,
     });
     expect(ink.groupIds).toContain(node.insertion.id);
-    const button = screen.getByRole("button", {
+    const button = await screen.findByRole("button", {
       name: t("fcboard.mindmap_move_node"),
     });
     pointer(button, "pointerdown", 200, 200);

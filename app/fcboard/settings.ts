@@ -13,7 +13,10 @@ export type Settings = {
   textModel: string;
   imageModel: string;
   ocr: "auto" | "local" | "cloud";
-  inkLanguage: "auto" | "zh-Hani-CN" | "en-US";
+  inkLanguage: "auto" | import("./languagePacks").HandwritingPack["tag"];
+  mathTranscription: "local" | "cloud";
+  translationProvider: "local" | "cloud";
+  handwritingGeneration: "local" | "cloud";
   apiKey: string;
   speechRoutingVersion?: number;
   speech: "cloud" | "local" | "system" | "custom";
@@ -39,6 +42,9 @@ export const defaults: Settings = {
   imageModel: "doubao-seedream-5-0-flash-260915",
   ocr: "auto",
   inkLanguage: "auto",
+  mathTranscription: "local",
+  translationProvider: "local",
+  handwritingGeneration: "local",
   apiKey: "",
   speech: "system",
   assistantVoice: "agent",

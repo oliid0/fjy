@@ -78,6 +78,7 @@ export type WidgetParams = {
   stretchX: number;
   stretchY: number;
   strokeWidth: number;
+  strokeStyle?: "solid" | "dashed" | "dotted";
   opacity: number;
   measurement: number;
   gizmo?: {
@@ -168,6 +169,12 @@ export const configureWidget = (
   }
   if (changes.solid !== undefined) {
     next.solid = configureSolid(params.solid || solidDefaults(), changes.solid);
+  }
+  if (changes.strokeStyle !== undefined) {
+    if (!["solid", "dashed", "dotted"].includes(String(changes.strokeStyle))) {
+      throw new Error(t("fcboard.invalid_style_parameters"));
+    }
+    next.strokeStyle = changes.strokeStyle as WidgetParams["strokeStyle"];
   }
   const limits = {
     duration: [1, 7200],
@@ -443,7 +450,11 @@ export const widgetShapes = (
     (shape) => ({
       ...shape,
       ...(solidWidgetKinds.has(kind)
-        ? { strokeWidth: params.strokeWidth, opacity: params.opacity }
+        ? {
+            strokeWidth: params.strokeWidth,
+            opacity: params.opacity,
+            ...(params.strokeStyle ? { strokeStyle: params.strokeStyle } : {}),
+          }
         : {}),
     }),
   );

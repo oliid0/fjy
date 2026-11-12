@@ -242,6 +242,7 @@ export const newTextElement = (
     originalText?: string;
     fontSize?: number;
     fontFamily?: FontFamilyValues;
+    fontWeight?: FcboardTextElement["fontWeight"];
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
     containerId?: FcboardTextContainer["id"] | null;
@@ -255,7 +256,7 @@ export const newTextElement = (
   const text = normalizeText(opts.text);
   const metrics = measureText(
     text,
-    getFontString({ fontFamily, fontSize }),
+    getFontString({ fontFamily, fontSize, fontWeight: opts.fontWeight }),
     lineHeight,
   );
   const textAlign = opts.textAlign || DEFAULT_TEXT_ALIGN;
@@ -270,6 +271,7 @@ export const newTextElement = (
     text,
     fontSize,
     fontFamily,
+    ...(opts.fontWeight ? { fontWeight: opts.fontWeight } : {}),
     textAlign,
     verticalAlign,
     x: opts.x - offsets.x,

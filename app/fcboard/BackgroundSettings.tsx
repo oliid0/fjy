@@ -18,13 +18,20 @@ import {
   factoryBackgroundColorIcons,
   factoryBackgroundPatternIcons,
 } from "./factoryBackgroundIcons";
-import addCustomIcon from "./factory-background-icons/add_category_module.png?url";
+import addCustomIcon from "./factory-background-icons/add_category_module.svg?url";
 import { classroomCommands } from "./commands";
 import { FactoryColorWheel } from "./FactoryColorWheel";
 import { TransientMessage } from "./TransientMessage";
 import { pickImageFile } from "./boardFile";
 
-const colors = ["#212121", "#576269", "#000000", "#253a35", "#60a96c"];
+const colors = [
+  "#212121",
+  "#fffff9",
+  "#576269",
+  "#000000",
+  "#253a35",
+  "#60a96c",
+];
 
 /** NewSlideBackgroundView: choose an image, tap its preview to reuse it,
  * long-press to replace. Background pixels remain outside erasable objects. */
@@ -146,31 +153,59 @@ export const BackgroundSettings = ({
         role="group"
         aria-label={t("fcboard.background")}
       >
-        {factoryBackgroundColorIcons.map((icons, index) => {
-          const active =
-            index < 5 ? selected === colors[index] : !colors.includes(selected);
+        {[...colors, null].map((color) => {
+          const active = color
+            ? selected === color
+            : !colors.includes(selected);
+          const wheelIcon =
+            factoryBackgroundColorIcons[factoryBackgroundColorIcons.length - 1];
           return (
             <button
-              key={index}
+              key={color || "custom"}
               type="button"
-              ref={index === 5 ? colorButton : undefined}
+              ref={color ? undefined : colorButton}
               aria-label={
-                index < 5
-                  ? `${t("fcboard.background")} ${colors[index]}`
+                color
+                  ? `${t("fcboard.background")} ${color}`
                   : t("fcboard.custom_colour")
               }
               aria-pressed={active}
-              aria-expanded={index === 5 ? wheel : undefined}
+              aria-expanded={color ? undefined : wheel}
               onClick={() => {
-                if (index === 5) {
-                  setWheel(!wheel);
-                } else {
+                if (color) {
                   setWheel(false);
-                  onChange({ backgroundColor: colors[index] });
+                  onChange({ backgroundColor: color });
+                } else {
+                  setWheel(!wheel);
                 }
               }}
             >
-              <img src={active ? icons.selected : icons.normal} alt="" />
+              {color ? (
+                <svg
+                  viewBox="0 0 200 200"
+                  width="34"
+                  height="34"
+                  aria-hidden="true"
+                >
+                  <path
+                    fill={color}
+                    stroke={color === "#fffff9" ? "#9ca3af" : "none"}
+                    strokeWidth="2"
+                    d="M2.5,99.951a97.75,98.011 0,1 0,195.5 0a97.75,98.011 0,1 0,-195.5 0z"
+                  />
+                  {active && (
+                    <path
+                      fill="#047aca"
+                      d="m28.511,93.489l15.526,-14.179l42.535,38.818l70.908,-64.695l15.531,14.167l-86.439,78.882"
+                    />
+                  )}
+                </svg>
+              ) : (
+                <img
+                  src={active ? wheelIcon.selected : wheelIcon.normal}
+                  alt=""
+                />
+              )}
             </button>
           );
         })}

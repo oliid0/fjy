@@ -1,4 +1,5 @@
 import { act } from "@testing-library/react";
+import { convertToFcboardElements } from "@fcboard/fcboard";
 import { getCommonBounds, newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
@@ -20,7 +21,6 @@ import {
   readInsertions,
 } from "./insertObjects";
 import { sceneAPI } from "./test/scene";
-import * as transparent from "./transparentInkImage";
 
 it("grows a table cell around its raw handwriting without invoking recognition", async () => {
   const base = sceneAPI();
@@ -65,6 +65,21 @@ afterEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
+
+// Model the user's explicit choice of the AI cell after its preview is ready.
+const confirmMagicImage = () =>
+  classroomCommands.register("magic.candidates", "@internal", async (args) => {
+    const generate =
+      args.generate as import("./magicPen").MagicCandidateInput["generate"];
+    try {
+      return {
+        kind: "image",
+        image: await generate(args.signal as AbortSignal),
+      };
+    } catch {
+      throw new DOMException("Image choice cancelled", "AbortError");
+    }
+  });
 
 const setup = (
   mode?: "text" | "shape" | "function" | "calculation" | "magic",
@@ -177,7 +192,7 @@ it.each(["mindmap", "fourline"] as const)(
     try {
       draw([...background, note, handwriting]);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(710);
+        await vi.advanceTimersByTimeAsync(1210);
       });
       expect(recognize).toHaveBeenCalledTimes(1);
       expect(recognize.mock.calls[0][5]).toHaveLength(1);
@@ -227,7 +242,7 @@ it("preserves ordinary handwriting when its target is removed during recognition
   try {
     draw([...background, source]);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(710);
+      await vi.advanceTimersByTimeAsync(1210);
     });
     draw([source]);
     await act(async () => finish("Outdated"));
@@ -257,7 +272,7 @@ it.each(["text", "shape"] as const)(
     try {
       draw();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(700);
+        await vi.advanceTimersByTimeAsync(1200);
       });
       expect(api.getSceneElements()).toEqual([ink]);
       expect(recognizer).toHaveBeenCalledTimes(1);
@@ -296,7 +311,7 @@ it("discards a late recognition after the user erases its source", async () => {
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     erase();
     await act(async () => {
@@ -313,9 +328,13 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
   vi.useFakeTimers();
   const { api, ink, draw } = setup("text");
   ink.customData!.fcInk.assist = "calculation";
-  const recognize = vi
-    .spyOn(ocr, "recognizeHandwriting")
-    .mockResolvedValue("1+1=");
+  let finish!: (text: string) => void;
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
+    () =>
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+  );
   const stop = observeInkAssistance(
     api,
     () => {},
@@ -324,7 +343,7 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(349);
+      await vi.advanceTimersByTimeAsync(1199);
     });
     expect(recognize).not.toHaveBeenCalled();
     await act(async () => {
@@ -332,12 +351,12 @@ it("uses the mode saved on the contact's ink rather than the other pen's selecte
     });
     expect(recognize.mock.calls[0][3]).toBe("math");
     const accepts = recognize.mock.calls[0][4]!;
-    expect(accepts("7")).toBe(false);
-    expect(accepts("6+7=")).toBe(true);
-    expect(accepts("65×3+12=")).toBe(true);
+    expect(await accepts("7")).toBe(false);
+    expect(await accepts("6+7=")).toBe(true);
+    expect(await accepts("65×3+12=")).toBe(true);
     expect(api.getSceneElements()).toEqual([ink]);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(350);
+      finish("1+1=");
     });
     expect(
       handwritingText(
@@ -366,7 +385,7 @@ it("never starts automatic conversion on the hidden board while courseware is vi
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     expect(recognize).not.toHaveBeenCalled();
     expect(api.updateScene).not.toHaveBeenCalled();
@@ -376,7 +395,7 @@ it("never starts automatic conversion on the hidden board while courseware is vi
   }
 });
 
-it("prefetches math but does not commit a partial expression when another stroke arrives", async () => {
+it("waits for the complete formula after another stroke instead of recognizing partial ink", async () => {
   vi.useFakeTimers();
   const { api, draw, append } = setup("calculation");
   const recognize = vi
@@ -386,19 +405,20 @@ it("prefetches math but does not commit a partial expression when another stroke
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(350);
+      await vi.advanceTimersByTimeAsync(600);
     });
-    expect(recognize).toHaveBeenCalledTimes(1);
-    expect(api.updateScene).not.toHaveBeenCalled();
+    expect(recognize).not.toHaveBeenCalled();
     append();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(699);
+      await vi.advanceTimersByTimeAsync(1199);
     });
-    expect(recognize).toHaveBeenCalledTimes(2);
+    expect(recognize).not.toHaveBeenCalled();
     expect(api.updateScene).not.toHaveBeenCalled();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(recognize.mock.calls[0][5]).toHaveLength(2);
     expect(api.updateScene).toHaveBeenCalledTimes(1);
     expect(handwritingText(api.getSceneElements())).toEqual(["2"]);
   } finally {
@@ -425,7 +445,7 @@ it.each(["function", "calculation"] as const)(
     try {
       draw();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(700);
+        await vi.advanceTimersByTimeAsync(1200);
       });
       const result = api
         .getSceneElements()
@@ -447,7 +467,7 @@ it.each(["function", "calculation"] as const)(
       }
       append();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(700);
+        await vi.advanceTimersByTimeAsync(1200);
       });
       // Previously handled ink is not submitted again as part of the next formula.
       expect(ocr.recognizeHandwriting).toHaveBeenLastCalledWith(
@@ -503,7 +523,7 @@ it.each(["12\nx3\n----", "12x3"])(
     const release = observeInkAssistance(api, vi.fn(), errors);
     try {
       draw(source);
-      await act(async () => vi.advanceTimersByTimeAsync(700));
+      await act(async () => vi.advanceTimersByTimeAsync(0));
       const result = api
         .getSceneElements()
         .filter((element) => !source.some((input) => input.id === element.id));
@@ -524,7 +544,25 @@ it.each(["12\nx3\n----", "12x3"])(
   },
 );
 
-it("quietly preserves an invalid function and discards late math after erasing", async () => {
+it("keeps the original calculation strokes after an evaluation failure", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("calculation");
+  saveSettings({ ...defaults, apiKey: "", model: "" }, false);
+  vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue("1/0=");
+  const error = vi.fn();
+  const stop = observeInkAssistance(api, vi.fn(), error);
+  try {
+    draw();
+    await act(async () => vi.advanceTimersByTimeAsync(1200));
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    expect(api.getSceneElements()).toEqual([ink]);
+  } finally {
+    stop();
+  }
+});
+
+it("reports an invalid function while preserving its ink and discards late math after erasing", async () => {
   vi.useFakeTimers();
   const { api, ink, draw, erase } = setup("function");
   saveSettings({ ...defaults, apiKey: "", model: "" }, false);
@@ -536,11 +574,12 @@ it("quietly preserves an invalid function and discards late math after erasing",
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     expect(api.getSceneElements()).toEqual([ink]);
     expect(api.updateScene).not.toHaveBeenCalled();
-    expect(error).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).toBeInstanceOf(Error);
     erase();
     let finish!: (value: string) => void;
     recognize.mockImplementation(
@@ -554,7 +593,7 @@ it("quietly preserves an invalid function and discards late math after erasing",
     const fresh = observeInkAssistance(api, () => {}, error);
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     erase();
     await act(async () => {
@@ -562,6 +601,44 @@ it("quietly preserves an invalid function and discards late math after erasing",
     });
     expect(api.updateScene).not.toHaveBeenCalled();
     fresh();
+  } finally {
+    stop();
+  }
+});
+
+it("keeps a normally written multi-stroke character intact until the last pen lift has settled", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("text");
+  const bars = [100, 140, 180].map((y, index) => ({
+    ...newFreeDrawElement({
+      ...ink,
+      type: "freedraw",
+      x: 100,
+      y,
+      points: [pointFrom(0, 0), pointFrom(100, 0)],
+    }),
+    id: `bar-${index}`,
+  }));
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("三");
+  const stop = observeInkAssistance(api, vi.fn(), vi.fn());
+  try {
+    for (let index = 0; index < bars.length; index++) {
+      draw(bars.slice(0, index + 1));
+      await act(async () => vi.advanceTimersByTimeAsync(500));
+      expect(api.getSceneElements()).toEqual(bars.slice(0, index + 1));
+      expect(recognize).not.toHaveBeenCalled();
+    }
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(recognize.mock.calls[0][5]).toHaveLength(3);
+    expect(api.getSceneElements()).toHaveLength(1);
+    expect(api.getSceneElements()[0]).toMatchObject({
+      type: "text",
+      originalText: "三",
+      customData: { fcRecognizedSource: bars.map((stroke) => stroke.id) },
+    });
   } finally {
     stop();
   }
@@ -578,11 +655,11 @@ it("retries the whole unfinished word when new ink cancels a pending text recogn
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     append();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     expect(recognizer).toHaveBeenCalledTimes(2);
     expect(recognizer.mock.calls[0][1].aborted).toBe(true);
@@ -606,7 +683,7 @@ it("retries the whole unfinished word when new ink cancels a pending text recogn
 });
 
 it.each([true, false])(
-  "turns a drawn dog into a generated image at its original location with supported layers=%s",
+  "inserts a drawn dog from a single transparent PNG request after confirmation, default model=%s",
   async (layers) => {
     vi.useFakeTimers();
     const { api, ink, draw } = setup("magic");
@@ -620,11 +697,6 @@ it.each([true, false])(
       false,
     );
     vi.spyOn(ai, "chat").mockResolvedValue('{"version":1,"kind":"drawing"}');
-    vi.spyOn(transparent, "transparentInkImage").mockReturnValue({
-      dataURL: "data:image/png;base64,transparent" as DataURL,
-      width: 100,
-      height: 100,
-    });
     const fetcher = vi.fn().mockResolvedValue({
       status: 200,
       json: async () => ({
@@ -650,27 +722,24 @@ it.each([true, false])(
     );
     const error = vi.fn();
     const stop = observeInkAssistance(api, () => {}, error);
+    const choice = confirmMagicImage();
     try {
       draw();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1600);
       });
-      expect(fetcher).toHaveBeenCalledTimes(layers ? 2 : 1);
+      expect(fetcher).toHaveBeenCalledTimes(1);
       expect(error).not.toHaveBeenCalled();
       const request = JSON.parse(fetcher.mock.calls[0][1].body);
       expect(request.model).toBe(layers ? defaults.imageModel : "illustrator");
       expect(request.image).toMatch(/^data:image\//);
-      expect(ai.chat).toHaveBeenCalledTimes(1);
-      expect(request.prompt).toContain("参考草图");
-      if (layers) {
-        expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
-          layer_decomposition: true,
-          image: expect.stringMatching(/^data:image\/png;base64,/),
-        });
-      } else {
-        expect(request.layer_decomposition).toBeUndefined();
-        expect(request.prompt).not.toContain("透明图层");
-      }
+      expect(ai.chat).not.toHaveBeenCalled();
+      expect(request.prompt).toContain("立体3D风格");
+      expect(request).toMatchObject({
+        background: "transparent",
+        output_format: "png",
+      });
+      expect(request.layer_decomposition).toBeUndefined();
       expect(api.getSceneElements()).toHaveLength(1);
       const generated = api.getSceneElements()[0];
       expect(generated).toMatchObject({
@@ -685,6 +754,7 @@ it.each([true, false])(
       expect(api.updateScene).toHaveBeenCalledTimes(1);
     } finally {
       stop();
+      choice();
     }
   },
 );
@@ -708,16 +778,18 @@ it("keeps a magic sketch and sends no recognition request when its capture is un
   });
   vi.spyOn(ai, "chat").mockResolvedValue('{"description":"猜测的图示"}');
   const stop = observeInkAssistance(api, () => {}, vi.fn());
+  const choice = confirmMagicImage();
   try {
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1700);
     });
     expect(ai.chat).not.toHaveBeenCalled();
     expect(api.getSceneElements()).toEqual([ink]);
     expect(api.addFiles).not.toHaveBeenCalled();
   } finally {
     stop();
+    choice();
   }
 });
 
@@ -744,12 +816,12 @@ it.each(["function", "calculation"] as const)(
     try {
       draw([ink]);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(800);
+        await vi.advanceTimersByTimeAsync(1200);
       });
       const second = { ...ink, id: "independent-region", y: 500 };
       draw([ink, second]);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(1200);
       });
       expect(recognize).toHaveBeenCalledTimes(2);
       expect(firstSignal.aborted).toBe(false);
@@ -794,13 +866,7 @@ it.each([1700, 400])(
       { ...ink, id: "magic-text", x: 500 },
       { ...ink, id: "magic-third", x: 900 },
     ];
-    const model = vi
-      .spyOn(ai, "chat")
-      .mockResolvedValueOnce('{"version":1,"kind":"drawing"}')
-      .mockResolvedValueOnce(
-        '{"version":1,"kind":"text","text":"一个二次元女孩"}',
-      )
-      .mockResolvedValueOnce('{"version":1,"kind":"drawing"}');
+    const model = vi.spyOn(ai, "chat");
     const generations: {
       resolve: (value: object) => void;
       reject: (error: Error) => void;
@@ -831,6 +897,7 @@ it.each([1700, 400])(
     const busy = vi.fn();
     const error = vi.fn();
     const release = observeInkAssistance(api, busy, error);
+    const choice = confirmMagicImage();
     const success = {
       status: 200,
       json: async () => ({
@@ -848,11 +915,18 @@ it.each([1700, 400])(
         await act(async () => vi.advanceTimersByTimeAsync(pause));
       }
       await act(async () => vi.advanceTimersByTimeAsync(1700));
-      expect(model).toHaveBeenCalledTimes(3);
+      expect(model).not.toHaveBeenCalled();
       expect(generations).toHaveLength(3);
       expect(generations[0].body.image).toBeDefined();
-      expect(generations[1].body.image).toBeUndefined();
-      expect(generations[1].body.prompt).toContain("一个二次元女孩");
+      expect(generations[1].body.image).toBeDefined();
+      expect(
+        generations.every(
+          ({ body }) =>
+            body.background === "transparent" &&
+            body.output_format === "png" &&
+            body.layer_decomposition === undefined,
+        ),
+      ).toBe(true);
       expect(generations[2].body.image).toBeDefined();
       expect(
         vi
@@ -890,7 +964,7 @@ it.each([1700, 400])(
       await act(async () => {
         generations[0].reject(new Error("first generation failed"));
       });
-      expect(error).toHaveBeenCalledTimes(1);
+      expect(error).not.toHaveBeenCalled();
       expect(
         api.getSceneElements().filter((element) => element.type === "image"),
       ).toEqual(images);
@@ -900,6 +974,113 @@ it.each([1700, 400])(
       expect(busy).toHaveBeenLastCalledWith(false);
     } finally {
       release();
+      choice();
     }
   },
 );
+
+it("starts every independent region in one native batch before any recognition finishes", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("text");
+  const complete: ((value: string) => void)[] = [];
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete.push(resolve);
+      }),
+  );
+  const errors = vi.fn();
+  const release = observeInkAssistance(api, vi.fn(), errors);
+  const sources = [100, 500, 900].map((x, index) => ({
+    ...ink,
+    id: `parallel-${index}`,
+    x,
+  }));
+  try {
+    draw(sources);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+    expect(recognize).toHaveBeenCalledTimes(3);
+    expect(recognize.mock.calls.map((call) => call[5]?.length)).toEqual([
+      1, 1, 1,
+    ]);
+    expect(api.updateScene).not.toHaveBeenCalled();
+    await act(async () => {
+      complete.forEach((finish, index) => finish(`word${index}`));
+    });
+    expect(
+      api.getSceneElements().filter((element) => element.type === "text"),
+    ).toHaveLength(3);
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});
+
+it("measures three triangle corners from one batch without serial OCR work or losing earlier marks", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("shape");
+  const triangle = convertToFcboardElements([
+    {
+      type: "line",
+      x: 100,
+      y: 100,
+      points: [
+        pointFrom(0, 0),
+        pointFrom(200, 0),
+        pointFrom(0, 200),
+        pointFrom(0, 0),
+      ],
+      customData: { fcRecognizedSource: ["source-triangle"] },
+    },
+  ])[0];
+  draw([triangle]);
+  const vertices = [
+    [100, 100, 0, Math.PI / 2],
+    [300, 100, Math.PI, -Math.PI / 4],
+    [100, 300, -Math.PI / 4, -Math.PI / 4],
+  ];
+  const marks = vertices.map(([x, y, start, sweep]) =>
+    newFreeDrawElement({
+      type: "freedraw",
+      simulatePressure: ink.simulatePressure,
+      strokeColor: ink.strokeColor,
+      strokeWidth: ink.strokeWidth,
+      customData: ink.customData,
+      x,
+      y,
+      points: Array.from({ length: 20 }, (_, i) =>
+        pointFrom(
+          20 * Math.cos(start + (sweep * i) / 19),
+          20 * Math.sin(start + (sweep * i) / 19),
+        ),
+      ),
+    }),
+  );
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const errors = vi.fn();
+  const release = observeInkAssistance(api, vi.fn(), errors);
+  try {
+    draw([triangle, ...marks]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(450);
+    });
+    const labels = api
+      .getSceneElements()
+      .filter(
+        (element) =>
+          element.type === "text" &&
+          element.customData?.fcAngleTarget === triangle.id,
+      );
+    expect(
+      labels
+        .map((element) => (element.type === "text" ? element.text : ""))
+        .sort(),
+    ).toEqual(["45°", "45°", "90°"]);
+    expect(recognize).not.toHaveBeenCalled();
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+});

@@ -110,6 +110,31 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public void cancelAIStream(PluginCall call) { aiTransport.cancel(call.getString("id")); call.resolve(); }
 
+    @PluginMethod public void agentCapabilities(PluginCall call) { call.resolve(new JSObject().put("nativeStep", true)); }
+
+    @PluginMethod public void postAgentStep(PluginCall call) {
+        try {
+            JSObject inputHeaders = call.getObject("headers", new JSObject());
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            headers.put("Content-Type", "application/json");
+            headers.put("Authorization", inputHeaders.getString("Authorization", ""));
+            NativeAgentResponse response = new NativeAgentResponse();
+            aiTransport.start(call.getString("id"), call.getString("url"), headers, call.getString("body"), new AIStreamTransport.Callback() {
+                public void chunk(String text) {
+                    try { response.accept(text); }
+                    catch (Exception error) { throw new IllegalStateException(error.getMessage(), error); }
+                }
+                public void complete(int status, String data, boolean stream) {
+                    try {
+                        String result = stream ? response.finish().toString() : data;
+                        call.resolve(new JSObject().put("status", status).put("data", result).put("stream", false));
+                    } catch (Exception error) { call.reject("Agent response failed", error); }
+                }
+                public void failed(Exception error) { call.reject("Agent request failed", error); }
+            });
+        } catch (Exception error) { call.reject("Agent request unavailable", error); }
+    }
+
     private WebResourceDialog webResource;
 
     @PluginMethod
@@ -117,7 +142,7 @@ public class ClassroomPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 String url = WebResourceDialog.checkedUrl(call.getString("url"));
-                if (webResource != null && webResource.isShowing()) webResource.dismiss();
+                if (webResource != null) webResource.dismiss();
                 webResource = new WebResourceDialog(getActivity(), url, call.getString("language", java.util.Locale.getDefault().toLanguageTag()), selected -> notifyListeners("webSelection", selected), call.getBoolean("teaching", false));
                 webResource.show();
                 call.resolve();
@@ -360,7 +385,7 @@ public class ClassroomPlugin extends Plugin {
                 Rect area = new Rect(location[0] + (int)(x * view.getWidth()), location[1] + (int)(y * view.getHeight()), location[0] + (int)((x + w) * view.getWidth()), location[1] + (int)((y + h) * view.getHeight()));
                 double scale = Math.min(1, 1280.0 / Math.max(area.width(), area.height()));
                 Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int)(area.width() * scale)), Math.max(1, (int)(area.height() * scale)), Bitmap.Config.ARGB_8888);
-                PixelCopy.request(window, area, bitmap, status -> {
+                java.util.function.IntConsumer captured = status -> {
                     if (imageEncoder.isShutdown()) { bitmap.recycle(); return; }
                     if (status != PixelCopy.SUCCESS) { bitmap.recycle(); call.reject("当前画面尚未准备好，请稍后重试"); return; }
                     imageEncoder.execute(() -> {
@@ -372,8 +397,25 @@ public class ClassroomPlugin extends Plugin {
                         } catch (Exception error) { call.reject("画面捕获失败", error); }
                         finally { bitmap.recycle(); }
                     });
-                }, new Handler(Looper.getMainLooper()));
-            } catch (Exception error) { call.reject("画面捕获失败", error); }
+                };
+                if (view.isHardwareAccelerated()) {
+                    PixelCopy.request(window, area, bitmap, captured::accept, new Handler(Looper.getMainLooper()));
+                } else {
+                    // Software WebViews have no GPU surface for PixelCopy. Capture
+                    // the same bounded region through the actual View drawing path.
+                    try {
+                        android.graphics.Canvas frame = new android.graphics.Canvas(bitmap);
+                        frame.scale((float) scale, (float) scale);
+                        frame.translate(-(area.left - location[0]), -(area.top - location[1]));
+                        view.draw(frame);
+                        captured.accept(PixelCopy.SUCCESS);
+                    } catch (RuntimeException | OutOfMemoryError error) {
+                        bitmap.recycle();
+                        call.reject("当前设备无法捕获该画面，请缩小范围后重试");
+                    }
+                }
+            } catch (OutOfMemoryError error) { call.reject("当前设备内存不足，请缩小截图范围后重试"); }
+            catch (Exception error) { call.reject("画面捕获失败", error); }
         });
     }
     private File directory() {
@@ -458,7 +500,7 @@ public class ClassroomPlugin extends Plugin {
         closeSignalResource();
         WebResourceDialog resource = webResource;
         webResource = null;
-        if (resource != null) getActivity().runOnUiThread(() -> { if (resource.isShowing()) resource.dismiss(); });
+        if (resource != null) getActivity().runOnUiThread(resource::dismiss);
         stopBoardShare();
         imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }

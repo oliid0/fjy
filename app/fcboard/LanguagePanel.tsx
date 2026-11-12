@@ -14,11 +14,8 @@ import { classroomCommands } from "./commands";
 import { boardInk } from "./digitalInk";
 import { selectedBoardElements } from "./ai";
 import { selectionSignature } from "./selection";
-import {
-  explainLanguage,
-  languageInkSignature,
-  parseLanguageStudy,
-} from "./languageStudy";
+import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
+import { currentSettings } from "./settings";
 
 import type { InkStroke } from "./documents";
 import type { LanguageInk, LanguageStudy } from "./languageStudy";
@@ -28,6 +25,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
   const doc = classroomCommands.read("document") as
     | { name: string; page: number; ink: InkStroke[] }
     | undefined;
+  let sourceIds: string[] = [];
   let metadata: LanguageInk | undefined;
   let signature = "";
   if (doc) {
@@ -38,6 +36,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
     const source = doc.ink.filter(
       (stroke) => stroke.language?.group === group && stroke.language.source,
     );
+    sourceIds = source.map((stroke) => stroke.id);
     metadata = source.find((stroke) => stroke.language?.study)?.language;
     signature = languageInkSignature(source.map((stroke) => stroke.points));
   } else {
@@ -54,6 +53,7 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
         element.customData?.fcLanguage?.group === group &&
         element.customData?.fcLanguage?.source,
     );
+    sourceIds = source.map((element) => element.id);
     metadata = source.find((element) => element.customData?.fcLanguage?.study)
       ?.customData?.fcLanguage;
     signature = languageInkSignature(boardInk(source));
@@ -63,7 +63,8 @@ export const readLanguageCard = (api: FcboardImperativeAPI, id: string) => {
   }
   try {
     return {
-      study: parseLanguageStudy(JSON.stringify(metadata.study)),
+      sourceIds,
+      study: parseLanguageStudy(JSON.stringify(metadata.study), true),
       targetLanguage: metadata.targetLanguage,
       token: JSON.stringify([
         doc ? [doc.name, doc.page] : api.id,
@@ -142,40 +143,35 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
         request.current = controller;
         const target = getLanguage().code;
         const key = `${token}:${JSON.stringify(args.region || null)}:${target}`;
+        const readySource =
+          source?.targetLanguage === target && !source.study.backend;
         setError("");
         setCard({
           id: ids[0],
           token,
-          study: source?.study,
+          study: readySource ? source.study : undefined,
           ids: source ? undefined : ids,
         });
-        setBusy(
-          source?.targetLanguage !== target && !translations.current.has(key),
-        );
+        setBusy(!readySource && !translations.current.has(key));
         try {
           let study: LanguageStudy;
-          if (source?.targetLanguage === target) {
+          if (readySource) {
             study = source.study;
           } else if (translations.current.has(key)) {
             study = translations.current.get(key)!;
-          } else if (source) {
-            study = await explainLanguage(
-              source.study.term,
-              controller.signal,
-              target,
-            );
           } else {
             const result = (await classroomCommands.execute({
               name: "language.translate",
               args: {
-                sourceIds: ids,
+                sourceIds: source?.sourceIds || ids,
+                study: !!currentSettings().apiKey.trim(),
                 region: args.region,
                 insert: false,
                 signal: controller.signal,
                 targetLanguage: target,
               },
             })) as { study: LanguageStudy };
-            study = parseLanguageStudy(JSON.stringify(result.study));
+            study = parseLanguageStudy(JSON.stringify(result.study), true);
           }
           controller.signal.throwIfAborted();
           if (
@@ -362,76 +358,80 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
                 >
                   {card.study.translation}
                 </p>
-                <Tabs
-                  value={tab}
-                  onChange={(_, value) => setTab(value)}
-                  variant="scrollable"
-                  allowScrollButtonsMobile
-                >
-                  <Tab label={t("fcboard.language_study")} />
-                  <Tab label={t("fcboard.word_and_sentence_structure")} />
-                  <Tab label={t("fcboard.example")} />
-                </Tabs>
-                <Box
-                  role="tabpanel"
-                  sx={{ py: 2, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
-                >
-                  {tab === 0 && (
-                    <>
-                      {card.study.pronunciation && (
-                        <p>
-                          {t("fcboard.pronunciation")}:{" "}
-                          {card.study.pronunciation}
-                          <Button
-                            disabled={
-                              !classroomCommands.isPublic("voice.speak")
-                            }
-                            onClick={() =>
-                              void classroomCommands
-                                .execute({
-                                  name: "voice.speak",
-                                  args: { text: card.study!.term },
-                                })
-                                .catch((failure) => setError(String(failure)))
-                            }
-                          >
-                            {t("fcboard.pronunciation")}
-                          </Button>
-                        </p>
-                      )}
-                      {card.study.syllables && (
-                        <p>
-                          {t("fcboard.syllables")}: {card.study.syllables}
-                        </p>
-                      )}
-                      {card.study.meanings.map((meaning, index) => (
+                {!card.study.backend && (
+                  <Tabs
+                    value={tab}
+                    onChange={(_, value) => setTab(value)}
+                    variant="scrollable"
+                    allowScrollButtonsMobile
+                  >
+                    <Tab label={t("fcboard.language_study")} />
+                    <Tab label={t("fcboard.word_and_sentence_structure")} />
+                    <Tab label={t("fcboard.example")} />
+                  </Tabs>
+                )}
+                {!card.study.backend && (
+                  <Box
+                    role="tabpanel"
+                    sx={{ py: 2, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
+                  >
+                    {tab === 0 && (
+                      <>
+                        {card.study.pronunciation && (
+                          <p>
+                            {t("fcboard.pronunciation")}:{" "}
+                            {card.study.pronunciation}
+                            <Button
+                              disabled={
+                                !classroomCommands.isPublic("voice.speak")
+                              }
+                              onClick={() =>
+                                void classroomCommands
+                                  .execute({
+                                    name: "voice.speak",
+                                    args: { text: card.study!.term },
+                                  })
+                                  .catch((failure) => setError(String(failure)))
+                              }
+                            >
+                              {t("fcboard.pronunciation")}
+                            </Button>
+                          </p>
+                        )}
+                        {card.study.syllables && (
+                          <p>
+                            {t("fcboard.syllables")}: {card.study.syllables}
+                          </p>
+                        )}
+                        {card.study.meanings.map((meaning, index) => (
+                          <p key={index}>
+                            <b>{meaning.partOfSpeech}</b> {meaning.definition}
+                          </p>
+                        ))}
+                        {!!card.study.synonyms?.length && (
+                          <p>
+                            {t("fcboard.synonyms")}:{" "}
+                            {card.study.synonyms.join(" · ")}
+                          </p>
+                        )}
+                      </>
+                    )}
+                    {tab === 1 && (
+                      <>
+                        <p>{card.study.grammar}</p>
+                        <p>{card.study.usage}</p>
+                      </>
+                    )}
+                    {tab === 2 &&
+                      card.study.examples.map((example, index) => (
                         <p key={index}>
-                          <b>{meaning.partOfSpeech}</b> {meaning.definition}
+                          {example.text}
+                          <br />
+                          {example.translation}
                         </p>
                       ))}
-                      {!!card.study.synonyms?.length && (
-                        <p>
-                          {t("fcboard.synonyms")}:{" "}
-                          {card.study.synonyms.join(" · ")}
-                        </p>
-                      )}
-                    </>
-                  )}
-                  {tab === 1 && (
-                    <>
-                      <p>{card.study.grammar}</p>
-                      <p>{card.study.usage}</p>
-                    </>
-                  )}
-                  {tab === 2 &&
-                    card.study.examples.map((example, index) => (
-                      <p key={index}>
-                        {example.text}
-                        <br />
-                        {example.translation}
-                      </p>
-                    ))}
-                </Box>
+                  </Box>
+                )}
               </>
             )}
           </Box>

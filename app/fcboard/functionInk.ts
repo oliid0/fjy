@@ -1,7 +1,12 @@
 import type { InkInput } from "./digitalInk";
 
 /** Failed ink on an earlier row must not poison the next independent function. */
-export const latestFunctionInk = (input: InkInput, rowGap = 0.35) => {
+export const latestFunctionInk = (
+  input: InkInput,
+  rowGap = 0.35,
+  minimumGap = 8,
+  horizontalGapScale = 6,
+) => {
   const bounds = input.map((points) =>
     points.reduce(
       (box, [x, y]) => ({
@@ -31,10 +36,10 @@ export const latestFunctionInk = (input: InkInput, rowGap = 0.35) => {
         continue;
       }
       const gap = Math.max(
-        8,
+        minimumGap,
         Math.max(bottom - top, box.bottom - box.top) * rowGap,
       );
-      const horizontalGap = Math.max(60, gap * 6);
+      const horizontalGap = Math.max(60, gap * horizontalGapScale);
       if (
         box.top <= bottom + gap &&
         box.bottom >= top - gap &&

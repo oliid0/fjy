@@ -246,6 +246,7 @@ it("applies background and calibrated preferences atomically, reads committed st
       api.updateScene({
         elements: source,
         appState: {
+          whiteboardPenTip: "fine",
           currentItemStrokeColor: "#aa2222",
           currentItemStrokeWidth: 3,
           currentItemPenMode: "brush",
@@ -377,7 +378,11 @@ it("uses device defaults and refuses hidden-board changes while courseware is vi
       configuration: {
         background: { available: false },
         pen: { thickThreshold: 12, dualPen: true },
-        eraser: { size: 75, palmThreshold: 40, modes: ["stroke", "object"] },
+        eraser: {
+          size: 75,
+          palmThreshold: 40,
+          modes: ["stroke", "object", "region"],
+        },
       },
     });
     for (const args of [
@@ -483,6 +488,33 @@ it("returns actual committed settings to the assistant before its next model dec
     expect(chat).toHaveBeenCalledTimes(1);
     expect(api.getAppState().whiteboardBrushVariation).toBe(9);
   } finally {
+    close();
+  }
+});
+
+it("replaces the dual-color UI with a working multipoint switch independent of contact calibration", async () => {
+  const { api, close } = await setup();
+  const panel = renderSettings(
+    <SettingsNavigation initialPage="home">
+      <BoardSettings api={api} />
+    </SettingsNavigation>,
+  );
+  try {
+    expect(
+      screen.queryByText(t("fcboard.factorySettings.dual_pen")),
+    ).toBeNull();
+    const toggle = screen.getByRole("switch", {
+      name: t("fcboard.multi_point_switch"),
+    });
+    expect(toggle).toBeEnabled();
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(api.getAppState().multiStroke).toBe(false);
+    fireEvent.click(toggle);
+    expect(api.getAppState().multiStroke).toBe(true);
+    expect(api.getAppState().whiteboardDualPen).toBeUndefined();
+  } finally {
+    panel.unmount();
     close();
   }
 });

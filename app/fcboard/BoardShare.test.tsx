@@ -68,10 +68,8 @@ it("opens the QR with an optional password switch and changes protection without
   );
   expect(Classroom.startShare).toHaveBeenCalledTimes(1);
   expect(
-    vi
-      .mocked(exportToBlob)
-      .mock.calls.filter(([options]) => !options.exportingFrame),
-  ).toHaveLength(1);
+    vi.mocked(exportToBlob).mock.calls.at(-1)![0].exportingFrame,
+  ).toMatchObject({ width: innerWidth, height: innerHeight });
   close();
 });
 
@@ -125,17 +123,35 @@ it("opens with exactly the pages selected in the board list and rejects stale pa
       { id: "second", name: "second", elements: [], files: {}, view: {} },
     ],
   }));
+  const save = vi.spyOn(boardFiles, "savePageFiles").mockResolvedValue(false);
+  vi.mocked(exportToBlob).mockResolvedValue(
+    new Blob(["page"], { type: "image/jpeg" }),
+  );
   const view = render(<BoardShare />);
   try {
     await act(async () => {
       await classroomCommands.execute({
-        name: "board.share",
+        name: "board.saveFile",
         args: { ids: ["second"] },
       });
     });
-    const boxes = screen.getAllByRole("checkbox");
-    expect(boxes[0]).not.toBeChecked();
-    expect(boxes[1]).toBeChecked();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: t("buttons.confirm") }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: t("fcboard.download_selected_pages"),
+      }),
+    );
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        [{ page: 2, blob: expect.any(Blob) }],
+        "Fcboard",
+        "jpg",
+        expect.any(AbortSignal),
+      ),
+    );
     await act(async () => {
       await classroomCommands.execute({
         name: "board.share",
@@ -437,4 +453,94 @@ it("does not launch the composer when the page chooser closes during export", as
   expect(Mail.send).not.toHaveBeenCalled();
   expect(screen.queryByRole("dialog")).toBeNull();
   close();
+});
+
+it("opens an explicit page selection directly at the actual QR destination without exporting before the user chooses a server", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+  const stop = classroomCommands.register("board.pages", "@internal", () => ({
+    active: "first",
+    boards: [{ id: "first", name: "first", elements: [], files: {}, view: {} }],
+  }));
+  vi.mocked(exportToBlob).mockClear();
+  const view = render(<BoardShare />);
+  try {
+    await act(async () =>
+      classroomCommands.execute({
+        name: "board.share",
+        args: { ids: ["first"] },
+      }),
+    );
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: t("fcboard.live_share.cloud") }),
+    ).toBeVisible();
+    expect(exportToBlob).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    stop();
+  }
+});
+
+it("does not reopen a share destination after the originating list request was cancelled during page persistence", async () => {
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(false);
+  let finish!: (value: unknown) => void;
+  const stop = classroomCommands.register(
+    "board.pages",
+    "@internal",
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const request = new AbortController();
+  const view = render(<BoardShare />);
+  try {
+    let opening!: Promise<unknown>;
+    act(() => {
+      opening = classroomCommands.execute({
+        name: "board.share",
+        args: { ids: ["first"], signal: request.signal },
+      });
+    });
+    await waitFor(() => expect(finish).toBeDefined());
+    act(() => request.abort());
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      finish({
+        active: "first",
+        boards: [
+          { id: "first", name: "first", elements: [], files: {}, view: {} },
+        ],
+      });
+      await opening;
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  } finally {
+    view.unmount();
+    stop();
+  }
+});
+
+it("closes share UI immediately while native cleanup is pending and preserves a newer reopened panel", async () => {
+  const cleanup = await setup("board.share");
+  let finish!: () => void;
+  vi.mocked(Classroom.stopShare).mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  try {
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.close_sharing") }),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      await classroomCommands.execute({ name: "board.share" });
+    });
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await act(async () => finish());
+    expect(screen.getByRole("dialog")).toBeVisible();
+  } finally {
+    cleanup();
+  }
 });

@@ -2,6 +2,10 @@ import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { ToolbarExtras } from "@fcboard/fcboard";
+import {
+  toolbarItems,
+  useToolbarItems,
+} from "@fcboard/fcboard/toolbarPreferences";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
@@ -43,6 +47,7 @@ type MenuKind = keyof typeof names;
 
 export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
+  const pinned = useToolbarItems();
   const [form, setForm] = useState<InsertKind | null>(null);
   const [draft, setDraft] = useState<InsertObject>(() =>
     insertionDefaults("table", { x: 0, y: 0 }),
@@ -519,6 +524,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
   const insertionButton = (kind: MenuKind) => (
     <button
       data-close-insert
+      data-native-tool={kind}
       type="button"
       disabled={
         busy ||
@@ -538,8 +544,8 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
         )
       }
     >
-      <FactoryIcon name={kind} />
-      <span>{t(`fcboard.${names[kind]}`)}</span>
+      <FactoryIcon name={toolbarItems[kind].icon} />
+      <span>{t(`fcboard.${toolbarItems[kind].label}`)}</span>
     </button>
   );
   return (
@@ -553,9 +559,11 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
         />
       )}
       <ToolbarExtras placement="insert">
-        {(Object.keys(names) as MenuKind[]).map((kind) => (
-          <React.Fragment key={kind}>{insertionButton(kind)}</React.Fragment>
-        ))}
+        {(Object.keys(names) as MenuKind[])
+          .filter((kind) => !pinned.includes(kind))
+          .map((kind) => (
+            <React.Fragment key={kind}>{insertionButton(kind)}</React.Fragment>
+          ))}
       </ToolbarExtras>
       {(Object.keys(names) as MenuKind[]).map((kind) => (
         <ToolbarExtras key={kind} toolId={kind}>

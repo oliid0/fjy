@@ -65,7 +65,7 @@ it("counts actual elapsed time across suspension, pauses without drift and reset
     remaining: 0,
     running: false,
   });
-  fireEvent.click(screen.getByRole("button", { name: t("fcboard.reset") }));
+  await command("tools.timer", { action: "reset" });
   expect(screen.getByRole("timer")).toHaveTextContent("00:00:10");
   await command("tools.timer", { action: "close" });
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -90,9 +90,50 @@ it("matches the vendor timer's idle controls and restores them without pausing t
     screen.getByRole("button", { name: t("fcboard.fullscreen") }),
   );
   await act(async () => vi.advanceTimersByTime(8000));
+  expect(screen.getByRole("timer")).toHaveTextContent("00:00:47");
+  expect(screen.queryByRole("button")).toBeNull();
+  fireEvent.click(screen.getByRole("timer"));
   expect(
     screen.getByRole("button", { name: t("fcboard.pause_tool") }),
   ).toBeEnabled();
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    running: true,
+  });
+});
+it("edits the original three wheels without committing until play, wraps values and disables zero time", async () => {
+  render(<ToolTimer />);
+  await command("tools.timer", {
+    action: "configure",
+    seconds: 60,
+    muted: true,
+  });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.fullscreen") }),
+  ).toBeNull();
+  const hours = screen.getByRole("spinbutton", { name: "HH" });
+  const minutes = screen.getByRole("spinbutton", { name: "MM" });
+  const seconds = screen.getByRole("spinbutton", { name: "SS" });
+  fireEvent.keyDown(hours, { key: "End" });
+  fireEvent.keyDown(hours, { key: "ArrowUp" });
+  expect(hours).toHaveAttribute("aria-valuenow", "0");
+  fireEvent.keyDown(minutes, { key: "Home" });
+  fireEvent.wheel(seconds, { deltaY: -1 });
+  expect(seconds).toHaveAttribute("aria-valuenow", "59");
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    duration: 60000,
+    running: false,
+  });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.reset") }));
+  expect(
+    screen.getByRole("button", { name: t("fcboard.play_tool") }),
+  ).toBeDisabled();
+  fireEvent.keyDown(seconds, { key: "ArrowUp" });
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.play_tool") }));
+  expect(await command("tools.timer", { action: "read" })).toMatchObject({
+    duration: 1000,
+    running: true,
+  });
 });
 it("repeats the completed timer alarm every minute and cancels it when muted, reset or closed", async () => {
   vi.useFakeTimers();
@@ -203,7 +244,7 @@ it("moves curtain edges independently, clamps its center and exposes real origin
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   expect(screen.queryByLabelText(t("fcboard.curtain"))).toBeNull();
 });
-it("opens original split settings first, applies a confirmed layout/background, and leaves ink untouched on cancel", async () => {
+it("opens optional split settings explicitly, applies a confirmed layout/background, and leaves ink untouched on cancel", async () => {
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -212,7 +253,7 @@ it("opens original split settings first, applies a confirmed layout/background, 
     },
   );
   render(<SplitBoard />);
-  expect(await command("tools.split")).toMatchObject({
+  expect(await command("tools.split", { configure: true })).toMatchObject({
     open: false,
     configuring: true,
   });
@@ -242,7 +283,7 @@ it("opens original split settings first, applies a confirmed layout/background, 
   );
   expect(document.querySelectorAll(".fc-split-pane canvas")).toHaveLength(3);
   await command("tools.split", { open: false });
-  await command("tools.split");
+  await command("tools.split", { configure: true });
   const initial = screen.getByRole("dialog", { name: title });
   fireEvent.click(
     within(initial).getByRole("button", { name: t("buttons.cancel") }),
@@ -291,12 +332,12 @@ it("keeps independent split-pane ink through layout changes and erases only the 
   const first = screen.getByLabelText(t("fcboard.split_pane", { number: 1 }));
   const context = canvas()[0].getContext("2d")!;
   fireEvent.click(
-    within(first).getByRole("button", { name: t("fcboard.split_orange") }),
+    within(first).getByRole("button", { name: t("fcboard.split_red") }),
   );
   pointer(canvas()[0], "pointerdown", 5, 30);
   pointer(canvas()[0], "pointermove", 5, 100);
   pointer(canvas()[0], "pointerup", 5, 100);
-  expect(context.strokeStyle).toBe("#e95504");
+  expect(context.strokeStyle).toBe("#ff0000");
   expect(context.lineWidth).toBe(2.01 * (window.devicePixelRatio || 1));
   fireEvent(
     canvas()[0],
@@ -334,9 +375,13 @@ it("uses the original edge exit controls and exports all actual panes through th
     "getBoundingClientRect",
   ).mockReturnValue({ width: 300, height: 500, left: 0, top: 0 } as DOMRect);
   const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+  const encodedSizes: { width: number; height: number }[] = [];
   const encode = vi
     .spyOn(HTMLCanvasElement.prototype, "toBlob")
-    .mockImplementation((callback) => callback(blob));
+    .mockImplementation(function (this: HTMLCanvasElement, callback) {
+      encodedSizes.push({ width: this.width, height: this.height });
+      callback(blob);
+    });
   const save = vi
     .spyOn(boardFile, "savePageFiles")
     .mockResolvedValueOnce(false)
@@ -350,10 +395,10 @@ it("uses the original edge exit controls and exports all actual panes through th
     within(board).getAllByRole("button", { name: t("buttons.close") }),
   ).toHaveLength(1);
   expect(
-    within(board).queryByRole("button", {
+    within(board).getAllByRole("button", {
       name: t("fcboard.split_small_eraser"),
     }),
-  ).toBeNull();
+  ).toHaveLength(2);
   const panes = Array.from(board.querySelectorAll("canvas"));
   for (const [type, x] of [
     ["pointerdown", 20],
@@ -388,8 +433,12 @@ it("uses the original edge exit controls and exports all actual panes through th
   );
   expect(encode).toHaveBeenCalledWith(expect.any(Function), "image/jpeg", 1);
   const canvas = encode.mock.contexts[0] as HTMLCanvasElement;
-  expect(canvas.width).toBe(600 * (window.devicePixelRatio || 1));
-  expect(canvas.height).toBe(500 * (window.devicePixelRatio || 1));
+  expect(encodedSizes[0]).toEqual({
+    width: 600 * (window.devicePixelRatio || 1),
+    height: 500 * (window.devicePixelRatio || 1),
+  });
+  expect(canvas.width).toBe(1);
+  expect(canvas.height).toBe(1);
   expect(canvas.getContext("2d")!.drawImage).toHaveBeenCalledWith(
     panes[0],
     0,

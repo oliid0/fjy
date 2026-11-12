@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 import { exportToBlob } from "@fcboard/fcboard";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
-import { getSelectedElements } from "@fcboard/element";
+import { getSelectedElements, getCommonBounds } from "@fcboard/element";
 
 import type { FcboardElement } from "@fcboard/element/types";
 
@@ -210,6 +210,7 @@ export const boardContext = async (
   snapshot?: readonly FcboardElement[],
   region?: { left: number; top: number; right: number; bottom: number },
   captureImage = true,
+  background = true,
 ) => {
   const all = api.getSceneElements();
   const selected = selectedBoardElements(api);
@@ -224,7 +225,11 @@ export const boardContext = async (
   if (!elements.length || !captureImage) {
     return { elements, text, image: undefined };
   }
-  if (region) {
+  if (
+    region &&
+    background &&
+    !document.documentElement.classList.contains("fc-native-scene")
+  ) {
     const state = api.getAppState();
     const canvas = document.querySelector<HTMLCanvasElement>(
       `.fcboard[data-fcboard-id="${api.id}"] canvas.fcboard__canvas.static`,
@@ -273,15 +278,24 @@ export const boardContext = async (
       }
     }
   }
+  const [left, top, right, bottom] = getCommonBounds(elements);
   const blob = await exportToBlob({
     elements,
     files: api.getFiles(),
     appState: {
       ...api.getAppState(),
-      exportBackground: true,
+      exportBackground: background,
       exportWithDarkMode: false,
     },
     mimeType: "image/png",
+    ...(background
+      ? {}
+      : {
+          exportPadding: Math.max(
+            16,
+            Math.ceil(Math.max(right - left, bottom - top) / 30),
+          ),
+        }),
     maxWidthOrHeight: 1600,
   });
   return { elements, text, image: await getDataURL(blob) };

@@ -54,6 +54,18 @@ export const BoardSettings = ({
   return (
     <>
       <SettingsSection id="toolbar">
+        <button
+          type="button"
+          onClick={() =>
+            void classroomCommands
+              .execute({ name: "tools.extended" })
+              .catch((failure) => setError(String(failure)))
+          }
+        >
+          {t("fcboard.teaching_tools")}
+        </button>
+      </SettingsSection>
+      <SettingsSection id="toolbar">
         <ToolbarSettings />
       </SettingsSection>
       <SettingsSection id="background">
@@ -70,13 +82,18 @@ export const BoardSettings = ({
       <SettingsSection id="home">
         <>
           <label>
-            {t("fcboard.factorySettings.dual_pen")}
+            {t("fcboard.multi_point_switch")}
             <Switch
-              checked={state.whiteboardDualPen ?? device?.dualPen ?? false}
-              disabled={
-                !(state.whiteboardThickThreshold ?? device?.thickThreshold)
-              }
-              onChange={(_, value) => update({ dualPen: value })}
+              checked={state.multiStroke !== false}
+              disabled={document}
+              onChange={(_, value) => update({ multiStroke: value })}
+            />
+          </label>
+          <label>
+            {t("fcboard.toolbar_collapse_control")}
+            <Switch
+              checked={!!state.toolbarCollapseEnabled}
+              onChange={(_, checked) => update({ toolbarCollapse: checked })}
             />
           </label>
           <label>
@@ -149,7 +166,7 @@ export const BoardSettings = ({
               }}
               size="small"
               exclusive
-              value={state.whiteboardPenTip || "fine"}
+              value={state.whiteboardPenTip || "thick"}
               aria-label={t("fcboard.pen_tip")}
               onChange={(_, tip) => {
                 if (tip) {

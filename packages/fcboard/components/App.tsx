@@ -1,4 +1,5 @@
 import clsx from "clsx";
+
 import { finishFactoryInk } from "@fcboard/element/factoryInk";
 import throttle from "lodash.throttle";
 import React, { useContext } from "react";
@@ -295,6 +296,8 @@ import type {
 
 import type { Mutable, ValueOf } from "@fcboard/common/utility-types";
 
+import { canvasScale } from "../canvasScale";
+
 import { whiteboardInkStyle } from "../whiteboardPen";
 
 import {
@@ -439,9 +442,11 @@ import {
 } from "../lasso/region";
 
 import { EraserTrail } from "../eraser";
+import { FactoryCircleTrail } from "../eraser/FactoryCircleTrail";
 import {
-  eraseStroke,
   eraseSceneObjects,
+  eraseSceneStrokes,
+  eraseSceneRegion,
   isPalmContact,
   pointerSamples,
 } from "../eraser/stroke";
@@ -450,9 +455,11 @@ import { getShortcutKey } from "../shortcut";
 
 import { tryParseSpreadsheet } from "../charts";
 
+import { functionGraphFrameState } from "../functionGraphFrameState";
+
 import { InteractiveResourceFrame } from "./InteractiveResourceFrame";
 
-import factoryEraser from "./FactoryEraser.png?url";
+import factoryEraser from "./FactoryEraser.svg?url";
 
 import ConvertElementTypePopup, {
   getConversionTypeFromElements,
@@ -479,6 +486,8 @@ import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 import { findShapeByKey } from "./shapes";
 
 import UnlockPopup from "./UnlockPopup";
+
+import type { NativeEraserBackend, NativeEraseUpdate } from "../eraser/stroke";
 
 import type { FcboardLibraryIds } from "../data/types";
 
@@ -733,6 +742,7 @@ class App extends React.Component<AppProps, AppState> {
     y: number;
   } | null = null;
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
+  circleEraserTrail = new FactoryCircleTrail(this.animationFrameHandler, this);
 
   onChangeEmitter = new Emitter<
     [
@@ -848,6 +858,13 @@ class App extends React.Component<AppProps, AppState> {
           );
         }
       },
+      editTextElement: this.editTextElement,
+      nativeInk: this.nativeInk,
+      nativeRegionGesture: this.nativeRegionGesture,
+      nativeEraserGesture: this.nativeEraserGesture,
+      registerNativeEraserBackend: this.registerNativeEraserBackend,
+      onSceneMutation: (callback) => this.scene.onMutation(callback),
+      registerNativeSceneRenderer: this.registerNativeSceneRenderer,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -1822,6 +1839,15 @@ class App extends React.Component<AppProps, AppState> {
                   {(el.customData?.fcInteractiveResource ? (
                     <InteractiveResourceFrame
                       resource={el.customData.fcInteractiveResource}
+                      live={
+                        el.customData.fcPlot?.renderer === "iframe"
+                          ? functionGraphFrameState(
+                              el.customData.fcInteractiveResource.id,
+                              el.customData.fcPlot.plot,
+                              el.strokeColor,
+                            )
+                          : undefined
+                      }
                       objectId={el.id}
                       surface="whiteboard"
                       iframeRef={(ref) => this.cacheEmbeddableRef(el, ref)}
@@ -1996,8 +2022,8 @@ class App extends React.Component<AppProps, AppState> {
       if (
         !isElementInViewport(
           f,
-          this.canvas.width / window.devicePixelRatio,
-          this.canvas.height / window.devicePixelRatio,
+          this.state.width,
+          this.state.height,
           {
             offsetLeft: this.state.offsetLeft,
             offsetTop: this.state.offsetTop,
@@ -2276,6 +2302,7 @@ class App extends React.Component<AppProps, AppState> {
                               this.laserTrails,
                               this.lassoTrail,
                               this.eraserTrail,
+                              this.circleEraserTrail,
                             ]}
                           />
                           {selectedElements.length === 1 &&
@@ -2381,6 +2408,7 @@ class App extends React.Component<AppProps, AppState> {
                             />
                           )}
                           <StaticCanvas
+                            nativeRenderer={this.nativeSceneRenderer}
                             synchronous={
                               !!this.props.UIOptions.unifiedToolbar &&
                               this.state.shouldCacheIgnoreZoom
@@ -2394,7 +2422,10 @@ class App extends React.Component<AppProps, AppState> {
                             selectionNonce={
                               this.state.selectionElement?.versionNonce
                             }
-                            scale={window.devicePixelRatio}
+                            scale={canvasScale(
+                              this.state.width,
+                              this.state.height,
+                            )}
                             appState={canvasAppState}
                             renderConfig={{
                               imageCache: this.imageCache,
@@ -2425,7 +2456,10 @@ class App extends React.Component<AppProps, AppState> {
                                   : undefined
                               }
                               appState={canvasAppState}
-                              scale={window.devicePixelRatio}
+                              scale={canvasScale(
+                                this.state.width,
+                                this.state.height,
+                              )}
                               rc={this.rc}
                               elementsMap={elementsMap}
                               allElementsMap={allElementsMap}
@@ -2456,7 +2490,10 @@ class App extends React.Component<AppProps, AppState> {
                             selectionNonce={
                               this.state.selectionElement?.versionNonce
                             }
-                            scale={window.devicePixelRatio}
+                            scale={canvasScale(
+                              this.state.width,
+                              this.state.height,
+                            )}
                             appState={this.state}
                             renderScrollbars={
                               this.props.renderScrollbars === true
@@ -3092,15 +3129,16 @@ class App extends React.Component<AppProps, AppState> {
       // update the state outside of initialData (e.g. when loading the app
       // with a library install link, which should auto-open the library)
       openSidebar: restoredAppState?.openSidebar || this.state.openSidebar,
-      activeTool:
-        activeTool.type === "image" ||
-        activeTool.type === "lasso" ||
-        activeTool.type === "selection"
-          ? {
-              ...activeTool,
-              type: restoredAppState.preferredSelectionTool.type,
-            }
-          : restoredAppState.activeTool,
+      activeTool: this.props.UIOptions.unifiedToolbar
+        ? { ...activeTool, type: "freedraw", customType: null }
+        : activeTool.type === "image" ||
+          activeTool.type === "lasso" ||
+          activeTool.type === "selection"
+        ? {
+            ...activeTool,
+            type: restoredAppState.preferredSelectionTool.type,
+          }
+        : restoredAppState.activeTool,
       isLoading: false,
       toast: this.state.toast,
     };
@@ -3509,6 +3547,9 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    if (this.state.currentItemInkAssist && this.state.multiStroke !== false) {
+      this.setState({ multiStroke: false });
+    }
     // must be updated *before* state change listeners are triggered below
     if (!this._initialized && !this.state.isLoading) {
       this._initialized = true;
@@ -4768,16 +4809,21 @@ class App extends React.Component<AppProps, AppState> {
 
   /**
    * adds supplied files to existing files in the appState.
-   * NOTE if file already exists in editor state, the file data is not updated
+   * Existing files change only when supplied with an explicit newer version.
+   * Keep previous file ids immutable when their contents belong to undo history.
    * */
   public addFiles: FcboardImperativeAPI["addFiles"] = withBatchedUpdates(
     (files) => {
       const { addedFiles } = this.addMissingFiles(files);
 
-      this.clearImageShapeCache(addedFiles);
+      const images = getInitializedImageElements(
+        this.scene.getNonDeletedElements(),
+      ).filter((element) => addedFiles[element.fileId]);
+      images.forEach((element) => ShapeCache.delete(element));
       this.scene.triggerUpdate();
 
-      this.addNewImagesToImageCache();
+      // Keep the decoded image visible until the newer version is ready.
+      this.addNewImagesToImageCache(images, this.files, true);
     },
   );
 
@@ -4791,7 +4837,14 @@ class App extends React.Component<AppProps, AppState> {
     const _files = Array.isArray(files) ? files : Object.values(files);
 
     for (const fileData of _files) {
-      if (nextFiles[fileData.id]) {
+      const previous = nextFiles[fileData.id];
+      if (
+        previous &&
+        !(
+          Number.isSafeInteger(fileData.version) &&
+          fileData.version! > (previous.version ?? 1)
+        )
+      ) {
         continue;
       }
 
@@ -4857,15 +4910,24 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (appState) {
-        const update = appState as Partial<AppState>;
+        const update: Partial<AppState> = {
+          ...appState,
+          ...("currentItemStrokeColor" in appState &&
+          !("currentItemInkGradient" in appState)
+            ? { currentItemInkGradient: undefined }
+            : {}),
+        };
         this.setState((previous) => {
           const next = { ...previous, ...update };
+          if (next.currentItemInkAssist) {
+            update.multiStroke = false;
+          }
           if (
             this.props.UIOptions.unifiedToolbar &&
             update.selectedElementIds
           ) {
             return {
-              ...appState,
+              ...update,
               whiteboardSelection: isSelectionLikeTool(next.activeTool.type)
                 ? selectedRegion(
                     (elements || this.scene.getNonDeletedElements()).filter(
@@ -4884,7 +4946,7 @@ class App extends React.Component<AppProps, AppState> {
               editingGroupId: null,
             } as Pick<AppState, K>;
           }
-          return appState as Pick<AppState, K>;
+          return update as Pick<AppState, K>;
         });
       }
 
@@ -5142,8 +5204,8 @@ class App extends React.Component<AppProps, AppState> {
             this.flowChartCreator.pendingNodes?.length &&
             !isElementCompletelyInViewport(
               this.flowChartCreator.pendingNodes,
-              this.canvas.width / window.devicePixelRatio,
-              this.canvas.height / window.devicePixelRatio,
+              this.state.width,
+              this.state.height,
               {
                 offsetLeft: this.state.offsetLeft,
                 offsetTop: this.state.offsetTop,
@@ -5199,8 +5261,8 @@ class App extends React.Component<AppProps, AppState> {
                 nextNode &&
                 !isElementCompletelyInViewport(
                   [nextNode],
-                  this.canvas.width / window.devicePixelRatio,
-                  this.canvas.height / window.devicePixelRatio,
+                  this.state.width,
+                  this.state.height,
                   {
                     offsetLeft: this.state.offsetLeft,
                     offsetTop: this.state.offsetTop,
@@ -5775,8 +5837,8 @@ class App extends React.Component<AppProps, AppState> {
           if (
             !isElementCompletelyInViewport(
               [firstNode],
-              this.canvas.width / window.devicePixelRatio,
-              this.canvas.height / window.devicePixelRatio,
+              this.state.width,
+              this.state.height,
               {
                 offsetLeft: this.state.offsetLeft,
                 offsetTop: this.state.offsetTop,
@@ -6357,6 +6419,22 @@ class App extends React.Component<AppProps, AppState> {
 
     return isTextBindableContainer(hitElement, false) ? hitElement : null;
   }
+
+  editTextElement = (id: string) => {
+    const element = this.scene.getNonDeletedElementsMap().get(id);
+    if (
+      !element ||
+      !isTextElement(element) ||
+      element.locked ||
+      this.state.viewModeEnabled ||
+      this.state.editingTextElement
+    ) {
+      return false;
+    }
+    this.setState({ editingTextElement: element });
+    this.handleTextWysiwyg(element, { isExistingElement: true });
+    return true;
+  };
 
   private startTextEditing = ({
     sceneX,
@@ -7853,6 +7931,19 @@ class App extends React.Component<AppProps, AppState> {
         event.pointerType === "pen" &&
         (event.button === 5 || !!(event.buttons & 34))
       );
+    const regionMode =
+      !palm &&
+      this.state.eraserMode === "region" &&
+      !(
+        event.pointerType === "pen" &&
+        (event.button === 5 || !!(event.buttons & 34))
+      );
+    const regionPath = [viewportCoordsToSceneCoords(event, this.state)].map(
+      ({ x, y }) => pointFrom<GlobalPoint>(x, y),
+    );
+    if (regionMode) {
+      this.circleEraserTrail.startPath(regionPath[0][0], regionPath[0][1]);
+    }
     const zoom = this.state.zoom.value;
     const size = Math.max(
       12,
@@ -7877,6 +7968,7 @@ class App extends React.Component<AppProps, AppState> {
     target.setPointerCapture?.(event.pointerId);
     const preview = document.createElement("div");
     preview.className = "fc-eraser-preview";
+    preview.hidden = regionMode;
     preview.setAttribute("aria-hidden", "true");
     Object.assign(preview.style, {
       position: "fixed",
@@ -7894,6 +7986,15 @@ class App extends React.Component<AppProps, AppState> {
       let update = false;
       for (const sample of samples) {
         const next = viewportCoordsToSceneCoords(sample, this.state);
+        if (regionMode) {
+          const last = regionPath[regionPath.length - 1];
+          if (last[0] !== next.x || last[1] !== next.y) {
+            regionPath.push(pointFrom<GlobalPoint>(next.x, next.y));
+            this.circleEraserTrail.addPointToPath(next.x, next.y);
+          }
+          previous = next;
+          continue;
+        }
         preview.style.left = `${sample.clientX}px`;
         preview.style.top = `${sample.clientY}px`;
         if (objectMode) {
@@ -7909,30 +8010,14 @@ class App extends React.Component<AppProps, AppState> {
           previous = next;
           continue;
         }
-        const nextElements: FcboardElement[] = [];
-        for (const element of elements) {
-          if (element.type !== "freedraw") {
-            nextElements.push(element);
-            continue;
-          }
-          const survivors = eraseStroke(
-            element,
-            previous,
-            next,
-            width / zoom,
-            height / zoom,
-          );
-          if (!survivors) {
-            nextElements.push(element);
-            continue;
-          }
-          update = true;
-          nextElements.push(
-            ...(survivors.length
-              ? survivors
-              : [newElementWith(element, { isDeleted: true })]),
-          );
-        }
+        const nextElements = eraseSceneStrokes(
+          elements,
+          previous,
+          next,
+          width / zoom,
+          height / zoom,
+        );
+        update ||= nextElements !== elements;
         elements = nextElements;
         previous = next;
       }
@@ -7961,6 +8046,28 @@ class App extends React.Component<AppProps, AppState> {
       unsubscribe();
       this.stopInkErasure = null;
       preview.remove();
+      if (regionMode) {
+        this.circleEraserTrail.endPath();
+        if (!cancelled) {
+          const point = regionPath[0];
+          const tapped =
+            regionPath.length === 1
+              ? this.getElementsAtPosition(point[0], point[1])
+                  .slice(-1)
+                  .map((element) => element.id)
+              : [];
+          const next = eraseSceneRegion(
+            before,
+            regionPath,
+            tapped,
+            0.125 / zoom,
+          );
+          changed = next !== before;
+          if (changed) {
+            this.scene.replaceAllElements(next);
+          }
+        }
+      }
       if (cancelled && changed) {
         this.scene.replaceAllElements(before);
       } else if (changed) {
@@ -9705,8 +9812,479 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
+  private nativeEraserBackend: NativeEraserBackend | null = null;
+  private nativeSceneRenderer?: (
+    config: import("../scene/types").StaticSceneRenderConfig,
+  ) => boolean;
+  public registerNativeSceneRenderer = (
+    renderer: (
+      config: import("../scene/types").StaticSceneRenderConfig,
+    ) => boolean,
+  ) => {
+    this.nativeSceneRenderer = renderer;
+    this.triggerRender(true);
+    return Object.assign(
+      () => {
+        if (this.nativeSceneRenderer === renderer) {
+          this.nativeSceneRenderer = undefined;
+          this.triggerRender(true);
+        }
+      },
+      {
+        invalidate: () => {
+          if (this.nativeSceneRenderer === renderer) {
+            this.triggerRender(true);
+          }
+        },
+      },
+    );
+  };
+  public registerNativeEraserBackend = (
+    backend: NativeEraserBackend,
+    synchronize?: Parameters<Scene["onMutation"]>[0],
+  ) => {
+    this.nativeEraserBackend = backend;
+    const stop = synchronize && this.scene.onMutation(synchronize);
+    return () => {
+      stop?.();
+      if (this.nativeEraserBackend === backend) {
+        this.nativeEraserBackend = null;
+      }
+    };
+  };
+
+  private nativeEraserDraft: {
+    id: string;
+    before: readonly FcboardElement[];
+    previous: { x: number; y: number };
+    width: number;
+    height: number;
+    objectMode: boolean;
+    changed: boolean;
+    originals: Map<string, FcboardElement>;
+    applied: Map<string, FcboardElement>;
+  } | null = null;
+
+  /** Semantic, frame-batched native sweeps use the same clipping as web input.
+   * One transaction owns undo; cancellation never restores a previous board. */
+  public nativeEraserGesture = (input: {
+    id: string;
+    phase: "start" | "move" | "end" | "cancel";
+    points: readonly (readonly [number, number, number])[];
+    width: number;
+    height: number;
+    palm?: boolean;
+    pointerType?: string;
+    restoreSelection?: boolean;
+    nativeSequence?: number;
+  }) => {
+    const draft = this.nativeEraserDraft;
+    if (input.phase === "cancel") {
+      if (draft?.id === input.id) {
+        this.nativeEraserDraft = null;
+        if (draft.changed && input.restoreSelection !== false) {
+          const latest = this.scene.getElementsIncludingDeleted();
+          const restored = latest.flatMap((element) => {
+            if (draft.applied.get(element.id) !== element) {
+              return [element];
+            }
+            const original = draft.originals.get(element.id);
+            return original ? [original] : [];
+          });
+          this.scene.replaceAllElements(restored);
+        }
+        this.setState({ cursorButton: "up" });
+      }
+      return;
+    }
+    if (
+      this.state.viewModeEnabled ||
+      !input.points.length ||
+      input.points.length > 120000 ||
+      input.points.some(
+        (point) => point.length !== 3 || !point.every(Number.isFinite),
+      ) ||
+      !Number.isFinite(input.width + input.height) ||
+      input.width <= 0 ||
+      input.height <= 0 ||
+      (this.state.activeTool.type !== "eraser" &&
+        (!input.palm ||
+          (this.state.palmEraser === false && input.pointerType !== "pen")))
+    ) {
+      throw new Error("Invalid native eraser gesture");
+    }
+    if (input.phase === "start") {
+      if (draft) {
+        throw new Error("A native eraser gesture is already active");
+      }
+      const first = input.points[0];
+      this.nativeEraserDraft = {
+        id: input.id,
+        before: this.scene.getElementsIncludingDeleted(),
+        previous: viewportCoordsToSceneCoords(
+          { clientX: first[0], clientY: first[1] },
+          this.state,
+        ),
+        width: input.width / this.state.zoom.value,
+        height: input.height / this.state.zoom.value,
+        objectMode:
+          this.state.eraserMode === "object" &&
+          !(input.palm && input.pointerType === "pen"),
+        changed: false,
+        originals: new Map(),
+        applied: new Map(),
+      };
+      this.setState({
+        selectedElementIds: {},
+        selectedGroupIds: {},
+        whiteboardSelection: undefined,
+        cursorButton: "down",
+      });
+    }
+    const current = this.nativeEraserDraft;
+    if (!current || current.id !== input.id) {
+      throw new Error("Native eraser gesture is no longer active");
+    }
+    const before = this.scene.getElementsIncludingDeleted();
+    const remember = (element: FcboardElement, original?: FcboardElement) => {
+      if (
+        original &&
+        !current.originals.has(element.id) &&
+        !current.applied.has(element.id)
+      ) {
+        current.originals.set(element.id, original);
+      }
+      current.applied.set(element.id, element);
+    };
+    const apply = (elements: readonly FcboardElement[], tracked = false) => {
+      if (this.nativeEraserDraft !== current) {
+        return;
+      }
+      if (elements !== this.scene.getElementsIncludingDeleted()) {
+        if (!tracked) {
+          const previous = this.scene.getElementsMapIncludingDeleted();
+          for (const element of elements) {
+            if (previous.get(element.id) !== element) {
+              remember(element, previous.get(element.id));
+            }
+          }
+        }
+        current.changed = true;
+        this.scene.replaceAllElements(elements, {
+          nativeEraseThrough: input.nativeSequence,
+        });
+      }
+      if (input.phase === "end") {
+        this.nativeEraserDraft = null;
+        if (current.changed) {
+          this.store.scheduleCapture();
+        }
+        this.setState({ cursorButton: "up" });
+      }
+    };
+    const path = [
+      current.previous,
+      ...input.points.map(([clientX, clientY]) =>
+        viewportCoordsToSceneCoords({ clientX, clientY }, this.state),
+      ),
+    ];
+    current.previous = path.at(-1)!;
+    if (this.nativeEraserBackend && !current.objectMode) {
+      return this.nativeEraserBackend(
+        before,
+        path,
+        current.width,
+        current.height,
+      ).then((updates: readonly NativeEraseUpdate[]) => {
+        if (this.nativeEraserDraft !== current) {
+          return;
+        }
+        const patches = new Map<string, FcboardElement[]>();
+        const latest = this.scene.getElementsIncludingDeleted();
+        const latestMap = this.scene.getElementsMapIncludingDeleted();
+        for (const patch of updates) {
+          const element = latestMap.get(patch.source.id);
+          // A collaborative edit/move/delete wins over a stale native result.
+          if (
+            !element ||
+            patch.source !== element ||
+            patch.version !== element.version ||
+            patch.nonce !== element.versionNonce
+          ) {
+            continue;
+          }
+          const survivors = patch.survivors.length
+            ? patch.survivors
+            : [newElementWith(element, { isDeleted: true })];
+          patches.set(element.id, survivors);
+          for (const survivor of survivors) {
+            remember(
+              survivor,
+              survivor.id === element.id ? element : undefined,
+            );
+          }
+        }
+        apply(
+          patches.size
+            ? latest.flatMap((element) => patches.get(element.id) ?? [element])
+            : latest,
+          true,
+        );
+      });
+    }
+    let elements: readonly FcboardElement[] = before;
+    for (let i = 1; i < path.length; i++) {
+      elements = (current.objectMode ? eraseSceneObjects : eraseSceneStrokes)(
+        elements,
+        path[i - 1],
+        path[i],
+        current.width,
+        current.height,
+      );
+    }
+    apply(elements);
+  };
+
+  private nativeRegionDrafts = new Map<
+    string,
+    {
+      mode: "select" | "regionErase";
+      selection: Pick<
+        AppState,
+        | "whiteboardSelection"
+        | "selectedElementIds"
+        | "selectedGroupIds"
+        | "selectedLinearElement"
+      >;
+    }
+  >();
+
+  /** Native Canvas previews the path. Apply the same final selection/erasure
+   * geometry once, retaining scene groups, locking and normal undo history. */
+  public nativeRegionGesture = (input: {
+    id: string;
+    mode: "select" | "regionErase";
+    restoreSelection?: boolean;
+    phase: "start" | "end" | "cancel";
+    points: readonly (readonly [number, number, number])[];
+  }) => {
+    const draft = this.nativeRegionDrafts.get(input.id);
+    if (input.phase === "cancel") {
+      this.nativeRegionDrafts.delete(input.id);
+      if (draft) {
+        if (input.restoreSelection === false) {
+          this.setState({ cursorButton: "up" });
+        } else {
+          this.setState({ ...draft.selection, cursorButton: "up" });
+        }
+      }
+      return;
+    }
+    if (
+      this.state.viewModeEnabled ||
+      !input.points.length ||
+      input.points.length > 120000 ||
+      input.points.some(
+        (point) => point.length !== 3 || !point.every(Number.isFinite),
+      ) ||
+      (input.mode === "select"
+        ? !this.isRegionSelectionTool()
+        : this.state.activeTool.type !== "eraser" ||
+          this.state.eraserMode !== "region")
+    ) {
+      throw new Error("Invalid native region gesture");
+    }
+    if (input.phase === "start") {
+      if (this.nativeRegionDrafts.size) {
+        throw new Error("A native region gesture is already active");
+      }
+      const {
+        whiteboardSelection,
+        selectedElementIds,
+        selectedGroupIds,
+        selectedLinearElement,
+      } = this.state;
+      this.nativeRegionDrafts.set(input.id, {
+        mode: input.mode,
+        selection: {
+          whiteboardSelection,
+          selectedElementIds,
+          selectedGroupIds,
+          selectedLinearElement,
+        },
+      });
+      this.setState({
+        cursorButton: "down",
+        whiteboardSelection: undefined,
+        selectedElementIds: {},
+        selectedGroupIds: {},
+        selectedLinearElement: null,
+      });
+      return;
+    }
+    if (!draft || draft.mode !== input.mode) {
+      throw new Error("Native region gesture is no longer active");
+    }
+    this.nativeRegionDrafts.delete(input.id);
+    const path = input.points.map(([clientX, clientY]) => {
+      const { x, y } = viewportCoordsToSceneCoords(
+        { clientX, clientY },
+        this.state,
+      );
+      return pointFrom<GlobalPoint>(x, y);
+    });
+    if (input.mode === "select") {
+      this.lassoTrail.selectPath(path);
+    } else {
+      const before = this.scene.getElementsIncludingDeleted();
+      const first = path[0];
+      const tapped =
+        path.length === 1
+          ? this.getElementsAtPosition(first[0], first[1])
+              .slice(-1)
+              .map((element) => element.id)
+          : [];
+      const next = eraseSceneRegion(
+        before,
+        path,
+        tapped,
+        0.125 / this.state.zoom.value,
+      );
+      if (next !== before) {
+        this.scene.replaceAllElements(next);
+        this.store.scheduleCapture();
+      }
+    }
+    this.setState({ cursorButton: "up" });
+  };
+
+  private nativeInkDrafts = new Map<string, FcboardFreeDrawElement>();
+
+  /** Android previews contacts in Canvas and commits one complete stroke here.
+   * Reuse the normal style, composition emitters and durable undo mechanism. */
+  public nativeInk = (input: {
+    id: string;
+    phase: "start" | "end" | "cancel";
+    points: readonly (readonly [number, number, number])[];
+    width: number;
+    height: number;
+    pointerType: string;
+  }) => {
+    if (input.phase === "cancel") {
+      const draft = this.nativeInkDrafts.get(input.id);
+      if (draft) {
+        this.onInkProgressEmitter.trigger(draft, "cancel");
+      }
+      this.nativeInkDrafts.delete(input.id);
+      if (!this.nativeInkDrafts.size) {
+        this.setState({ cursorButton: "up" });
+      }
+      return;
+    }
+    if (
+      this.state.activeTool.type !== "freedraw" ||
+      this.state.viewModeEnabled ||
+      !input.points.length ||
+      input.points.length > 120000 ||
+      input.points.some(
+        (point) => point.length !== 3 || !point.every(Number.isFinite),
+      )
+    ) {
+      throw new Error("Invalid native ink contact");
+    }
+    const first = input.points[0];
+    if (input.phase === "start") {
+      const origin = viewportCoordsToSceneCoords(
+        { clientX: first[0], clientY: first[1] },
+        this.state,
+      );
+      const element = this.createInkElement(
+        { ...input, pressure: first[2] },
+        origin.x,
+        origin.y,
+      );
+      this.nativeInkDrafts.set(input.id, element);
+      this.setState({ cursorButton: "down" });
+      this.onInkProgressEmitter.trigger(element, "start");
+      return;
+    }
+    const draft = this.nativeInkDrafts.get(input.id);
+    if (!draft) {
+      throw new Error("Native ink contact is no longer active");
+    }
+    this.nativeInkDrafts.delete(input.id);
+    const points: LocalPoint[] = [];
+    const pressures: number[] = [];
+    let left = 0;
+    let top = 0;
+    let right = 0;
+    let bottom = 0;
+    for (const point of input.points) {
+      const scene = viewportCoordsToSceneCoords(
+        { clientX: point[0], clientY: point[1] },
+        this.state,
+      );
+      const x = scene.x - draft.x;
+      const y = scene.y - draft.y;
+      points.push(pointFrom<LocalPoint>(x, y));
+      if (!draft.simulatePressure) {
+        pressures.push(Math.max(0, Math.min(1, point[2])));
+      }
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+    if (points.length === 1) {
+      points.push(pointFrom<LocalPoint>(0.0001, 0.0001));
+      if (pressures.length) {
+        pressures.push(pressures[0]);
+      }
+    }
+    const element = newElementWith(draft, {
+      points,
+      pressures,
+      width: right - left,
+      height: bottom - top,
+      customData: {
+        ...draft.customData,
+        fcInk: finishFactoryInk(draft.customData!.fcInk),
+      },
+    });
+    const previous = this.store.snapshot;
+    this.scene.replaceAllElements([
+      ...this.scene.getElementsIncludingDeleted(),
+      element,
+    ]);
+    this.onInkCommitEmitter.trigger(element);
+    const completed = new Map(
+      this.scene.getElementsIncludingDeleted().map((item) => [item.id, item]),
+    ) as SceneElementsMap;
+    const next = previous.maybeClone(
+      CaptureUpdateAction.IMMEDIATELY,
+      completed,
+      undefined,
+    );
+    this.store.scheduleMicroAction({
+      action: CaptureUpdateAction.IMMEDIATELY,
+      change: StoreChange.create(previous, next),
+      delta: StoreDelta.calculate(previous, next),
+    });
+    this.onInkProgressEmitter.trigger(element, "settled");
+    this.scene.triggerUpdate();
+    if (!this.nativeInkDrafts.size) {
+      this.setState({ cursorButton: "up" });
+    }
+    return element.id;
+  };
+
   private createInkElement = (
-    event: React.PointerEvent<HTMLElement>,
+    event: {
+      width: number;
+      height: number;
+      pointerType: string;
+      pressure: number;
+    },
     gridX: number,
     gridY: number,
   ) => {
@@ -13033,9 +13611,11 @@ class App extends React.Component<AppProps, AppState> {
       this.scene.getNonDeletedElements(),
     ),
     files: BinaryFiles = this.files,
+    reload = false,
   ) => {
     const uncachedImageElements = imageElements.filter(
-      (element) => !element.isDeleted && !this.imageCache.has(element.fileId),
+      (element) =>
+        !element.isDeleted && (reload || !this.imageCache.has(element.fileId)),
     );
 
     if (uncachedImageElements.length) {

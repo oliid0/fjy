@@ -44,6 +44,13 @@ export const Classroom = registerPlugin<{
     body: string;
   }): Promise<{ status: number; data: string; stream: boolean }>;
   cancelAIStream(options: { id: string }): Promise<void>;
+  agentCapabilities(): Promise<{ nativeStep: boolean }>;
+  postAgentStep(options: {
+    id: string;
+    url: string;
+    headers: Record<string, string>;
+    body: string;
+  }): Promise<{ status: number; data: string; stream: false }>;
   addListener(
     event: "aiStream",
     listener: (event: { id: string; chunk: string }) => void,

@@ -45,6 +45,26 @@ export const layoutBoardText = (
   const source = placement.bounds;
   const centered = placement.mode === "center";
   const lineHeight = getLineHeight(fontFamily);
+  if (placement.mode === "replace" && source) {
+    // Replacement owns the ink's original location. Nearby objects and viewport
+    // edges must never relocate it or introduce new wrapping/line breaks.
+    const metrics = measureText(
+      text,
+      getFontString({ fontFamily, fontSize }),
+      lineHeight,
+    );
+    return {
+      x: source.left,
+      y: source.top,
+      text,
+      originalText: text,
+      fontSize,
+      fontFamily,
+      lineHeight,
+      ...metrics,
+      autoResize: false as const,
+    };
+  }
   const fullWidth = viewport.right - viewport.left;
   const fullHeight = viewport.bottom - viewport.top;
   if (fullWidth <= 0 || fullHeight <= 0) {

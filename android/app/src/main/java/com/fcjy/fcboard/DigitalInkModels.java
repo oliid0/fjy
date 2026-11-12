@@ -56,14 +56,19 @@ final class DigitalInkModels {
             }
         }
         // The original archive's registry is package-scoped (zzfx/zzwa/zzwe).
-        // Only model metadata is seeded, once; preserve later SDK state.
+        // Own the manifest's bundled file/group keys during versioned installation.
+        // A prior download may leave a key pointing to a removed directory even
+        // though isModelDownloaded() returns true. Re-register the verified APK
+        // files on upgrade; keys for other downloaded languages remain intact.
         SharedPreferences seed = context.getSharedPreferences("fcboard-digital-ink", 0);
-        if (seed.getInt("version", 0) != 1) {
+        int version = manifest.optInt("version", 1);
+        if (seed.getInt("version", 0) != version) {
             JSONObject preferences = manifest.getJSONObject("preferences");
             Iterator<String> names = preferences.keys();
             while (names.hasNext()) {
                 String name = names.next();
-                SharedPreferences.Editor edit = context.getSharedPreferences(name, 0).edit();
+                SharedPreferences registered = context.getSharedPreferences(name, 0);
+                SharedPreferences.Editor edit = registered.edit();
                 JSONObject values = preferences.getJSONObject(name);
                 Iterator<String> keys = values.keys();
                 while (keys.hasNext()) { String key = keys.next(); edit.putString(key, values.getString(key)); }
@@ -73,7 +78,7 @@ final class DigitalInkModels {
                     .edit().putBoolean("mdd_migrated_to_offroad", true).commit()
                 || !context.getSharedPreferences("gms_icing_mdd_migrations", 0)
                     .edit().putBoolean("migrated_to_new_file_key", true).putInt("mdd_file_key_version", 2).commit()
-                || !seed.edit().putInt("version", 1).commit()) {
+                || !seed.edit().putInt("version", version).commit()) {
                 throw new IllegalStateException("Cannot save handwriting model registration");
             }
         }

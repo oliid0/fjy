@@ -1,58 +1,87 @@
 import { t } from "@fcboard/fcboard/i18n";
 
 import { currentSettings } from "./settings";
+import { queueLocalInference } from "./localInferenceQueue";
 
 type Engine = Awaited<
   ReturnType<typeof import("@paddleocr/paddleocr-js")["PaddleOCR"]["create"]>
 >;
-let engine: Promise<Engine> | undefined;
-let queue: Promise<unknown> = Promise.resolve();
+const createOcr = () => {
+  let engine: Promise<Engine> | undefined;
+  let worker: Worker | undefined;
+  let generation = 0;
+  const dispose = () => {
+    generation++;
+    worker?.terminate();
+    worker = undefined;
+    const previous = engine;
+    engine = undefined;
+    void previous?.then((instance) => instance.dispose()).catch(() => {});
+  };
 
-const getEngine = () => {
-  engine ||= import("@paddleocr/paddleocr-js")
-    .then(({ PaddleOCR }) =>
-      PaddleOCR.create({
-        worker: {
-          createWorker: () =>
-            new Worker(
-              new URL(
-                `${import.meta.env.BASE_URL}ocr/worker.js`,
-                location.href,
-              ),
-              { type: "module" },
-            ),
-        },
-        textDetectionModelName: "PP-OCRv5_mobile_det",
-        textRecognitionModelName: "PP-OCRv5_mobile_rec",
-        textDetectionModelAsset: {
-          url: `${import.meta.env.BASE_URL}ocr/models/PP-OCRv5_mobile_det.tar`,
-        },
-        textRecognitionModelAsset: {
-          url: `${import.meta.env.BASE_URL}ocr/models/PP-OCRv5_mobile_rec.tar`,
-        },
-        ortOptions: {
-          backend: "wasm",
-          numThreads: 1,
-          wasmPaths: new URL(
-            `${import.meta.env.BASE_URL}ocr/ort/`,
-            location.href,
-          ).href,
-        },
-      }),
-    )
-    .catch((error) => {
-      engine = undefined;
-      throw error;
-    });
-  return engine;
+  const getEngine = () => {
+    const version = generation;
+    engine ||= import("@paddleocr/paddleocr-js")
+      .then(({ PaddleOCR }) =>
+        PaddleOCR.create({
+          worker: {
+            createWorker: () => {
+              if (version !== generation) {
+                throw new DOMException("Aborted", "AbortError");
+              }
+              worker = new Worker(
+                new URL(
+                  `${import.meta.env.BASE_URL}ocr/worker.js`,
+                  location.href,
+                ),
+                { type: "module" },
+              );
+              return worker;
+            },
+          },
+          textDetectionModelName: "PP-OCRv5_mobile_det",
+          textRecognitionModelName: "PP-OCRv5_mobile_rec",
+          textDetectionModelAsset: {
+            url: `${
+              import.meta.env.BASE_URL
+            }ocr/models/PP-OCRv5_mobile_det.tar`,
+          },
+          textRecognitionModelAsset: {
+            url: `${
+              import.meta.env.BASE_URL
+            }ocr/models/PP-OCRv5_mobile_rec.tar`,
+          },
+          ortOptions: {
+            backend: "wasm",
+            numThreads: 1,
+            wasmPaths: new URL(
+              `${import.meta.env.BASE_URL}ocr/ort/`,
+              location.href,
+            ).href,
+          },
+        }),
+      )
+      .catch((error) => {
+        if (version === generation) {
+          engine = undefined;
+        }
+        throw error;
+      });
+    return engine;
+  };
+
+  return { getEngine, dispose };
 };
+let pending = 0;
 
-/** Load local assets during idle time; never capture the canvas or run recognition. */
+/** Prepare one reusable bundled OCR model through the same bounded pool. */
 export const warmHandwriting = async () => {
   if (currentSettings().ocr === "cloud" || typeof Worker === "undefined") {
     return;
   }
-  await getEngine();
+  await queueLocalInference("ocr", createOcr, async (model) => {
+    await model.getEngine();
+  });
 };
 
 export const recognizeLocalHandwriting = async (
@@ -60,29 +89,90 @@ export const recognizeLocalHandwriting = async (
   signal: AbortSignal,
   progress: (message: string) => void,
 ) => {
-  progress(t("fcboard.preparing_local_handwriting_recognition"));
-  const task = queue
-    .catch(() => {})
-    .then(async () => {
-      signal.throwIfAborted();
-      const instance = await getEngine();
-      signal.throwIfAborted();
-      progress(t("fcboard.recognizing_handwriting_locally"));
-      const blob = await (await fetch(image, { signal })).blob();
-      const [result] = await instance.predict(blob);
-      signal.throwIfAborted();
-      const items = result.items.filter(
-        (item) => item.score >= 0.55 && item.text.trim(),
-      );
-      if (!items.length) {
-        throw new Error(
-          t(
-            "fcboard.the_selection_could_not_be_read_reliably_select_a_smaller_area_or_choose_cloud_handwriting",
-          ),
-        );
+  signal.throwIfAborted();
+  if (pending >= 8) {
+    throw new Error(t("fcboard.local_queue_full"));
+  }
+  pending++;
+  let frame: string | undefined = image;
+  let settled = false;
+  let model: ReturnType<typeof createOcr> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let resolve!: (value: string) => void;
+  let reject!: (error: unknown) => void;
+  const result = new Promise<string>((accept, fail) => {
+    resolve = accept;
+    reject = fail;
+  });
+  const finish = (value?: string, failure?: unknown) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    frame = undefined;
+    clearTimeout(timer);
+    signal.removeEventListener("abort", abort);
+    if (failure !== undefined) {
+      model?.dispose();
+      reject(failure);
+    } else {
+      resolve(value!);
+    }
+  };
+  const abort = () =>
+    finish(
+      undefined,
+      signal.reason || new DOMException("Aborted", "AbortError"),
+    );
+  signal.addEventListener("abort", abort, { once: true });
+  void queueLocalInference(
+    "ocr",
+    createOcr,
+    async (resident) => {
+      if (settled || !frame) {
+        return;
       }
-      return items.map((item) => item.text).join("\n");
-    });
-  queue = task;
-  return task;
+      model = resident;
+      timer = setTimeout(
+        () =>
+          finish(undefined, new Error(t("fcboard.local_inference_timeout"))),
+        30000,
+      );
+      void (async () => {
+        progress(t("fcboard.preparing_local_handwriting_recognition"));
+        const instance = await resident.getEngine();
+        if (settled) {
+          return;
+        }
+        signal.throwIfAborted();
+        progress(t("fcboard.recognizing_handwriting_locally"));
+        const blob = await (await fetch(frame!, { signal })).blob();
+        if (settled) {
+          return;
+        }
+        const [result] = await instance.predict(blob);
+        if (settled) {
+          return;
+        }
+        signal.throwIfAborted();
+        const items = result.items.filter(
+          (item) => item.score >= 0.55 && item.text.trim(),
+        );
+        if (!items.length) {
+          throw new Error(
+            t(
+              "fcboard.the_selection_could_not_be_read_reliably_select_a_smaller_area_or_choose_cloud_handwriting",
+            ),
+          );
+        }
+        finish(items.map((item) => item.text).join("\n"));
+      })().catch((error) => finish(undefined, error));
+      await result.catch(() => {});
+      model = undefined;
+    },
+    () => !settled,
+  ).catch((error) => finish(undefined, error));
+  return result.finally(() => {
+    pending--;
+  });
 };

@@ -13,7 +13,7 @@
     gap: 12px;
     padding: 10px 8px;
     border-radius: 32px;
-    background: url("./assets/spotlight/dazzle_spotlight_menu_bg.png") center /
+    background: url("./assets/spotlight/dazzle_spotlight_menu_bg.svg") center /
       50px 100% no-repeat;
   }
   button,
@@ -103,39 +103,42 @@
     background-repeat: no-repeat;
   }
   .fc-spotlight-shape-button {
-    background-image: url("./assets/spotlight/dazzle_spotlight_shape_normal.png");
+    background-image: url("./assets/spotlight/dazzle_spotlight_shape_normal.svg");
   }
   .fc-spotlight-shape-button:active,
   .fc-spotlight-shape-button[aria-expanded="true"] {
-    background-image: url("./assets/spotlight/dazzle_spotlight_shape_pressed.png");
+    background-image: url("./assets/spotlight/dazzle_spotlight_shape_pressed.svg");
   }
   .fc-spotlight-settings-button {
-    background-image: url("./assets/spotlight/dazzle_spotlight_picture_normal.png");
+    background-image: url("./assets/spotlight/dazzle_spotlight_picture_normal.svg");
   }
   .fc-spotlight-settings-button:active,
   .fc-spotlight-settings-button[aria-expanded="true"] {
-    background-image: url("./assets/spotlight/dazzle_spotlight_picture_pressed.png");
+    background-image: url("./assets/spotlight/dazzle_spotlight_picture_pressed.svg");
   }
   .fc-spotlight-close-button {
-    background-image: url("./assets/spotlight/dazzle_spotlight_quit_normal.png");
+    background-image: url("./assets/spotlight/dazzle_spotlight_quit_normal.svg");
   }
   .fc-spotlight-close-button:active {
-    background-image: url("./assets/spotlight/dazzle_spotlight_quit_presse.png");
+    background-image: url("./assets/spotlight/dazzle_spotlight_quit_presse.svg");
   }
   .fc-spotlight-resize {
-    background-image: url("./assets/spotlight/zoom_normal.png");
+    background-image: url("./assets/spotlight/zoom_normal.svg");
   }
   .fc-spotlight-resize:active {
-    background-image: url("./assets/spotlight/zoom_pressed.png");
+    background-image: url("./assets/spotlight/zoom_pressed.svg");
   }
   .fc-spotlight-color {
     border: 0;
-    background: url("./assets/spotlight/custom_normal.png") center / 24px auto
-      no-repeat;
+    background: transparent;
+    color: #555;
     svg {
-      visibility: hidden;
+      width: 24px;
+      height: 24px;
+      visibility: visible;
     }
   }
+
   [data-shape] {
     border: 0;
     background-position: center;
@@ -144,32 +147,32 @@
   }
 }
 .fc-classroom .fc-spotlight [data-shape="circle"] {
-  background-image: url("./assets/spotlight/circular_normal.png");
+  background-image: url("./assets/spotlight/circular_normal.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="circle"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/circular_pressed.png");
+  background-image: url("./assets/spotlight/circular_pressed.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="rectangle"] {
-  background-image: url("./assets/spotlight/square_normal.png");
+  background-image: url("./assets/spotlight/square_normal.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="rectangle"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/square_pressed.png");
+  background-image: url("./assets/spotlight/square_pressed.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="triangle"] {
-  background-image: url("./assets/spotlight/triangle_normal.png");
+  background-image: url("./assets/spotlight/triangle_normal.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="triangle"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/triangle_pressed.png");
+  background-image: url("./assets/spotlight/triangle_pressed.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="star"] {
-  background-image: url("./assets/spotlight/star_normal.png");
+  background-image: url("./assets/spotlight/star_normal.svg");
 }
 .fc-classroom .fc-spotlight [data-shape="star"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/star_pressed.png");
+  background-image: url("./assets/spotlight/star_pressed.svg");
 }
 
 .fc-classroom .fc-spotlight .fc-spotlight-color:active {
-  background-image: url("./assets/spotlight/custom_pressed.png");
+  color: #0368ff;
 }
 
 // MarkSizeView.showMenu and the original 208x60 / 218x98 popup layouts.
@@ -202,11 +205,11 @@
     gap: 0;
     border: 0;
     border-radius: 0;
-    background: url("./assets/spotlight/background_pop_bg.png") center / 100%
+    background: url("./assets/spotlight/background_pop_bg.svg") center / 100%
       100% no-repeat;
     box-shadow: none;
     &[data-left="true"] {
-      background-image: url("./assets/spotlight/background_pop_bg_left.png");
+      background-image: url("./assets/spotlight/background_pop_bg_left.svg");
     }
     &[data-shapes="true"] {
       height: 60px;
@@ -231,7 +234,7 @@
         right: 0;
         width: 2px;
         height: 28px;
-        background: url("./assets/spotlight/line.png") center / 100% 100%;
+        background: url("./assets/spotlight/line.svg") center / 100% 100%;
       }
     }
   }
@@ -246,18 +249,18 @@
         content: "";
         width: 22px;
         height: 22px;
-        background: url("./assets/spotlight/selection.png") center / contain
+        background: url("./assets/spotlight/selection.svg") center / contain
           no-repeat;
       }
     }
     [data-color="#000000"] {
-      background-image: url("./assets/spotlight/black.png");
+      background-image: url("./assets/spotlight/black.svg");
     }
     [data-color="#ff0000"] {
-      background-image: url("./assets/spotlight/red.png");
+      background-image: url("./assets/spotlight/red.svg");
     }
     [data-color="#00a1ea"] {
-      background-image: url("./assets/spotlight/blue.png");
+      background-image: url("./assets/spotlight/blue.svg");
     }
   }
   .fc-spotlight-alpha {
@@ -265,7 +268,7 @@
     width: 182px;
     height: 32px;
     border-top: 2px solid transparent;
-    border-image: url("./assets/spotlight/horizontal_line.png") 1 stretch;
+    border-image: url("./assets/spotlight/horizontal_line.svg") 1 stretch;
     font-size: 0;
     input {
       appearance: none;
@@ -279,11 +282,11 @@
         width: 18px;
         height: 18px;
         border: 0;
-        background: url("./assets/spotlight/seekbar_click_normal.png") center /
+        background: url("./assets/spotlight/seekbar_click_normal.svg") center /
           contain no-repeat;
       }
       &:active::-webkit-slider-thumb {
-        background-image: url("./assets/spotlight/seekbar_click_focus.png");
+        background-image: url("./assets/spotlight/seekbar_click_focus.svg");
       }
     }
   }

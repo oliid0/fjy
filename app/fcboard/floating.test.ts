@@ -35,6 +35,42 @@ describe("context panel placement", () => {
   });
 });
 
+it("keeps an insertion picker above both rows of a wrapped toolbar", () => {
+  const parent = document.createElement("div");
+  const toolbar = document.createElement("div");
+  toolbar.setAttribute("role", "toolbar");
+  const anchor = document.createElement("button");
+  anchor.dataset.boardInsert = "";
+  toolbar.append(anchor);
+  const panel = document.createElement("section");
+  parent.append(toolbar, panel);
+  document.body.append(parent);
+  const bounds = (element: HTMLElement, rect: Partial<DOMRect>) =>
+    vi.spyOn(element, "getBoundingClientRect").mockReturnValue(rect as DOMRect);
+  bounds(parent, { left: 0, top: 0, bottom: 600, width: 800, height: 600 });
+  bounds(toolbar, { top: 496, bottom: 600, width: 800, height: 104 });
+  bounds(anchor, {
+    left: 380,
+    right: 420,
+    top: 556,
+    bottom: 596,
+    width: 40,
+    height: 40,
+  });
+  bounds(panel, { width: 400, height: 394 });
+  Object.defineProperty(panel, "offsetParent", { value: parent });
+  Object.defineProperty(panel, "scrollHeight", { value: 394 });
+  const { result, unmount } = renderHook(() =>
+    useAnchoredPanel({ current: panel }, "[data-board-insert]", true),
+  );
+  try {
+    expect(Number(result.current.top) + 394).toBeLessThan(496);
+  } finally {
+    unmount();
+    parent.remove();
+  }
+});
+
 it("centers an unanchored panel instead of leaving it at the DOM's top-left position", () => {
   const parent = document.createElement("div");
   const panel = document.createElement("section");

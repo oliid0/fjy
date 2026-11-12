@@ -1,9 +1,13 @@
 import resourceRuntime from "./interactiveResourceRuntime.js?raw";
+import { validateVisualization } from "./visualizationRuntime";
+
+import type { Visualization } from "./visualizationRuntime";
 
 export type InteractiveResource = {
   id: string;
   title: string;
   html: string;
+  visualization?: Visualization;
 };
 
 /** Self-contained lessons run only in an opaque-origin iframe, never in the host. */
@@ -58,7 +62,8 @@ export const interactiveHtml = (value: unknown): string => {
   style.setAttribute("data-fc-lesson-defaults", "");
   style.textContent =
     "html{height:100%;color-scheme:light}body{box-sizing:border-box;margin:0;min-height:100%;font:16px/1.45 system-ui,sans-serif;overflow-wrap:anywhere;background:#fff;color:#17243c}*,*::before,*::after{box-sizing:border-box}canvas,svg{max-width:100%}button,input,select{font:inherit}button,input,select{touch-action:manipulation}";
-  document.head.append(style);
+  // Defaults fill missing styles; the authored lesson keeps its own theme.
+  charset.after(style);
   const script = document.createElement("script");
   script.setAttribute("data-fc-lesson-controls", "");
   script.textContent = resourceRuntime;
@@ -89,5 +94,8 @@ export const validateInteractiveResource = (
     id: resource.id,
     title: resource.title.trim(),
     html: interactiveHtml(resource.html),
+    ...(resource.visualization
+      ? { visualization: validateVisualization(resource.visualization) }
+      : {}),
   };
 };

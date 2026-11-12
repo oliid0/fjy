@@ -31,7 +31,7 @@ test("displayed handwriting can be dragged and lasso-selected at its visible ben
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.getByRole("button", { name: "笔", exact: true }).click();
   await page.mouse.move(100, 200);
   await page.mouse.down();
   await page.mouse.move(200, 400);
@@ -96,7 +96,7 @@ test("a small eraser cuts the displayed bend rather than the raw handwriting sam
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.getByRole("button", { name: "笔", exact: true }).click();
   await page.mouse.move(100, 200);
   await page.mouse.down();
   await page.mouse.move(200, 400);
@@ -117,10 +117,13 @@ test("a small eraser cuts the displayed bend rather than the raw handwriting sam
     );
   await expect.poll(async () => (await pixel(200, 350))[0]).toBeLessThan(100);
   const left = await pixel(150, 300);
-  const eraser = page.getByRole("button", { name: "橡皮", exact: true });
+  const eraser = page.getByRole("button", { name: "板擦", exact: true });
   await eraser.click();
-  await eraser.click();
-  await page.getByRole("button", { name: "小橡皮", exact: true }).click();
+  await page.getByRole("button", { name: "橡皮大小预设", exact: true }).click();
+  await page
+    .getByRole("slider", { name: "橡皮大小预设", exact: true })
+    .fill("0.24");
+  await page.keyboard.press("Escape");
   await expect(eraser).toHaveClass(/ToolIcon--selected/);
   await page.mouse.click(200, 350);
   await expect.poll(() => pixel(200, 350)).toEqual([255, 255, 255, 255]);
@@ -136,11 +139,9 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   await page.goto("/");
   const pen = page
     .locator(".fc-drawing-tools")
-    .getByRole("button", { name: "画笔", exact: true });
-  await pen.click();
+    .getByRole("button", { name: "笔", exact: true });
   await pen.click();
   await page.getByRole("button", { name: "彩虹笔", exact: true }).click();
-  await pen.click();
   const thickness = page.getByRole("slider", { name: "书写粗细", exact: true });
   await thickness.press("Home");
   for (let i = 0; i < 10; i++) {
@@ -184,7 +185,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   const before = await pixels();
   expect(before[0]).not.toEqual(before[1]);
   expect(before[1]).not.toEqual(before[2]);
-  await page.getByRole("button", { name: "橡皮", exact: true }).click();
+  await page.getByRole("button", { name: "板擦", exact: true }).click();
   await page.mouse.move(640, 160);
   await page.mouse.down();
   await page.mouse.move(640, 240, { steps: 4 });
@@ -258,10 +259,10 @@ test("two touchscreen contacts write and undo independently in multi-point mode"
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.getByRole("button", { name: "笔", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "多点书写", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   const input = await page.context().newCDPSession(page);
   const contacts = (x: number) => [
     { id: 1, x, y: 200, radiusX: 2, radiusY: 2 },
@@ -292,10 +293,12 @@ test("two touchscreen contacts write and undo independently in multi-point mode"
   ).toBe(true);
   await page.getByTestId("button-undo").click();
   await expect.poll(async () => (await strokes()).length).toBe(1);
+  await page.waitForTimeout(400);
   await page.getByTestId("button-undo").click();
   await expect.poll(async () => (await strokes()).length).toBe(0);
   await page.getByTestId("button-redo").click();
   await expect.poll(async () => (await strokes()).length).toBe(1);
+  await page.waitForTimeout(400);
   await page.getByTestId("button-redo").click();
   await expect.poll(async () => (await strokes()).length).toBe(2);
   const geometry = JSON.stringify(await strokes());
@@ -412,15 +415,18 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await page.goto("/");
   const toolbar = page.getByRole("toolbar", { name: "白板工具栏" });
   await expect(toolbar).toBeVisible();
-  for (const name of ["画笔", "橡皮", "选择", "工具箱"]) {
+  for (const name of ["笔", "板擦", "选择", "工具箱"]) {
     await expect(
       toolbar.getByRole("button", { name, exact: true }),
     ).toBeVisible();
   }
   await expect(toolbar.getByTestId("toolbar-rectangle")).toHaveCount(0);
   await expect(toolbar.getByRole("button", { name: "AI 教师" })).toHaveCount(0);
-  const pen = toolbar.getByRole("button", { name: "画笔", exact: true });
+  const pen = toolbar.getByRole("button", { name: "笔", exact: true });
   await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeVisible();
+  await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeHidden();
   await pen.click();
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),
@@ -429,8 +435,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),
   ).toHaveCount(0);
-  await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
-  await page.getByRole("button", { name: "图形", exact: true }).click();
+  await toolbar.getByRole("button", { name: "图形", exact: true }).click();
   const shapes = page.locator(".fc-factory-shape-grid");
   await expect(shapes.getByRole("button")).toHaveCount(20);
   await shapes.getByTestId("factory-shape-rectangle").click();
@@ -456,8 +461,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
       ),
     )
     .toBe(1);
-  const eraser = toolbar.getByRole("button", { name: "橡皮", exact: true });
-  await eraser.click();
+  const eraser = toolbar.getByRole("button", { name: "板擦", exact: true });
   await eraser.click();
   await expect(page.getByRole("dialog", { name: "橡皮设置" })).toBeVisible();
   await page.screenshot({
@@ -465,6 +469,13 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   });
   await page.keyboard.press("Escape");
   const menu = page.getByTestId("main-menu-trigger");
+  await openSettingsMenu(page);
+  await page
+    .getByText("任务栏开关", { exact: true })
+    .locator("..")
+    .getByRole("checkbox")
+    .check();
+  await page.locator(".fc-settings-dialog").press("Escape");
   const initial = (await menu.boundingBox())!;
   await toolbar.getByRole("button", { name: "切换", exact: true }).click();
   expect((await menu.boundingBox())!.x).toBeGreaterThan(initial.x + 500);
@@ -472,6 +483,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     .getByRole("button", { name: "隐藏工具栏", exact: true })
     .click();
   await expect(menu).toBeHidden();
+  await page.waitForTimeout(400);
   await toolbar
     .getByRole("button", { name: "显示工具栏", exact: true })
     .click();
@@ -486,6 +498,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await expect(
     page.getByRole("dialog", { name: "工具箱", exact: true }),
   ).toHaveCount(0);
+  await page.waitForTimeout(400);
   await toolbar
     .getByRole("button", { name: "显示工具栏", exact: true })
     .click();
@@ -493,6 +506,9 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     page.getByRole("dialog", { name: "工具箱", exact: true }),
   ).toHaveCount(0);
   await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeVisible();
+  await pen.click();
+  await expect(page.locator(".fc-editor-properties")).toBeHidden();
   await pen.click();
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),
@@ -503,6 +519,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await expect(
     page.getByRole("dialog", { name: "画笔与对象属性" }),
   ).toHaveCount(0);
+  await page.waitForTimeout(400);
   await toolbar
     .getByRole("button", { name: "显示工具栏", exact: true })
     .click();
@@ -580,7 +597,7 @@ test("circle selection scales its complete object without absorbing nearby ink; 
   page,
 }, info) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "画笔", exact: true }).click();
+  await page.getByRole("button", { name: "笔", exact: true }).click();
   for (const x of [120, 320]) {
     await page.mouse.move(x, 120);
     await page.mouse.down();

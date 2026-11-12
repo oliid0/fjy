@@ -617,202 +617,6 @@
     }
   }
 
-  .fc-unified-toolbar {
-    .ToolIcon,
-    .fc-toolbar-extras button,
-    .main-menu-trigger,
-    .undo-redo-buttons button {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0;
-      box-sizing: border-box;
-      width: max-content;
-      min-width: calc(56 * var(--fc-unit));
-      height: calc(48 * var(--fc-unit));
-      min-height: calc(48 * var(--fc-unit));
-      padding: calc(3 * var(--fc-unit));
-      border: 0;
-      border-radius: calc(6 * var(--fc-unit));
-      background: transparent;
-      color: #333;
-      font: 400 calc(11 * var(--fc-unit)) / calc(14 * var(--fc-unit)) system-ui,
-        "Microsoft YaHei", sans-serif;
-      touch-action: manipulation;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-      &:hover {
-        background: transparent;
-      }
-      &:active:not(:disabled) {
-        opacity: 0.3;
-      }
-      &:disabled {
-        opacity: 0.35;
-        cursor: default;
-      }
-      &.ToolIcon--selected:not(.fc-board-mode) {
-        background: var(--fc-blue);
-        border-radius: calc(8 * var(--fc-unit));
-        color: white;
-        --icon-fill-color: white;
-      }
-      &:focus-visible {
-        outline: 2px solid var(--fc-blue);
-        outline-offset: -2px;
-      }
-    }
-    .ToolIcon__icon {
-      // The factory highlight covers the entire button, including its label.
-      // Fcboard's icon-only hover surface must not sit on top of it.
-      background: transparent;
-      box-shadow: none;
-      color: inherit;
-      width: calc(23 * var(--fc-unit));
-      min-width: 0;
-      height: calc(23 * var(--fc-unit));
-      min-height: 0;
-      flex: 0 0 calc(23 * var(--fc-unit));
-    }
-    .undo-redo-buttons button.ToolIcon {
-      background: transparent;
-    }
-    svg {
-      width: calc(23 * var(--fc-unit));
-      height: calc(23 * var(--fc-unit));
-      padding: calc(2 * var(--fc-unit));
-      box-sizing: border-box;
-      color: inherit;
-    }
-    .ToolIcon__label,
-    .fc-tool-label,
-    button > span:not(.fc-board-count),
-    button::after {
-      font: inherit;
-      line-height: calc(14 * var(--fc-unit));
-      white-space: nowrap;
-      margin: 0;
-    }
-    .main-menu-trigger {
-      width: max-content;
-      min-width: calc(52 * var(--fc-unit));
-      &::after {
-        content: attr(aria-label);
-      }
-    }
-    [data-testid="button-undo"]::after {
-      content: attr(aria-label);
-    }
-    [data-testid="button-redo"]::after {
-      content: attr(aria-label);
-    }
-    .fc-toolbar-extras {
-      border: 0;
-      padding: 0;
-    }
-    .fc-board-controls {
-      gap: 0;
-      button {
-        width: calc(24 * var(--fc-unit));
-        min-width: calc(24 * var(--fc-unit));
-        padding: 0;
-        svg {
-          width: calc(24 * var(--fc-unit));
-          height: calc(24 * var(--fc-unit));
-          padding: calc(5 * var(--fc-unit));
-        }
-        &[data-board-switcher] {
-          width: calc(68 * var(--fc-unit));
-          min-width: calc(68 * var(--fc-unit));
-        }
-        &:last-child {
-          width: calc(38 * var(--fc-unit));
-          min-width: calc(38 * var(--fc-unit));
-          margin-inline-start: calc(2 * var(--fc-unit));
-          svg {
-            width: calc(23 * var(--fc-unit));
-            height: calc(23 * var(--fc-unit));
-            padding: calc(2 * var(--fc-unit));
-          }
-        }
-      }
-      .fc-board-count {
-        font-size: calc(14 * var(--fc-unit));
-      }
-    }
-  }
-  @media (max-width: 1000px) {
-    .fc-unified-toolbar {
-      grid-template-columns: minmax(0, 1fr) max-content;
-      row-gap: calc(2 * var(--fc-unit));
-    }
-    .fc-drawing-tools {
-      grid-column: 1 / -1;
-      grid-row: 1;
-      flex-wrap: wrap;
-      justify-content: center;
-      width: 100%;
-      padding-inline: calc(3 * var(--fc-unit));
-      overflow: visible;
-    }
-    .fc-toolbar-leading,
-    .fc-toolbar-trailing {
-      grid-row: 2;
-    }
-    .fc-toolbar-trailing {
-      grid-column: 2;
-    }
-    .fc-toolbar-reversed {
-      grid-template-columns: max-content minmax(0, 1fr);
-      .fc-toolbar-leading {
-        grid-column: 2;
-      }
-      .fc-toolbar-trailing {
-        grid-column: 1;
-      }
-    }
-    .fc-toolbar-collapsed {
-      grid-template-columns: minmax(0, 1fr) max-content;
-      .fc-toolbar-trailing {
-        grid-row: 1;
-        grid-column: 2;
-      }
-    }
-    .fc-toolbar-collapsed.fc-toolbar-reversed {
-      grid-template-columns: max-content minmax(0, 1fr);
-      .fc-toolbar-trailing {
-        grid-column: 1;
-      }
-    }
-  }
-  @media (max-width: 600px) {
-    .fc-drawing-tools {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: calc(2 * var(--fc-unit));
-      .fc-toolbar-extras,
-      .undo-redo-buttons {
-        display: contents;
-      }
-    }
-    .fc-unified-toolbar .fc-drawing-tools {
-      .ToolIcon,
-      .fc-toolbar-extras button,
-      .undo-redo-buttons button {
-        width: 100%;
-        min-width: 0;
-        height: auto;
-        .ToolIcon__label,
-        .fc-tool-label,
-        > span,
-        &::after {
-          white-space: normal;
-          overflow-wrap: anywhere;
-        }
-      }
-    }
-  }
   .fc-editor-properties {
     position: absolute;
     z-index: 12;
@@ -1572,8 +1376,7 @@
 }
 .fc-board-picker,
 .fc-tools-picker,
-.fc-widget-panel,
-.fc-teacher {
+.fc-widget-panel {
   animation: none;
 }
 .fc-board-picker {
@@ -1888,6 +1691,7 @@
     margin-inline: 0;
   }
   > header {
+    position: relative;
     padding: 0 0 37px;
     justify-content: center;
     strong {
@@ -1907,36 +1711,56 @@
     font-size: 16px;
     line-height: 24px;
   }
-  .fc-qr-protection input {
-    appearance: none;
-    flex: 0 0 44px;
-    width: 44px;
-    height: 22px;
-    min-height: 22px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 11px;
-    background: #dde2eb;
-    cursor: pointer;
-    &::after {
-      content: "";
-      display: block;
-      width: 16px;
-      height: 16px;
-      margin: 3px;
-      border-radius: 50%;
-      background: #fff;
+  // xx layout_qrcode_share/switch_track/switch_thumb: x38/x35/y15/x18.
+  .fc-qr-switch {
+    position: relative;
+    display: grid;
+    align-items: center;
+    flex: 0 0 calc(38 * 0.67px);
+    width: calc(38 * 0.67px);
+    height: calc(18 * 0.67px);
+    input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      opacity: 0;
+      z-index: 1;
+      cursor: pointer;
     }
-    &:checked {
-      background: #0b6ff3;
+    .fc-qr-switch-track {
+      position: relative;
+      width: calc(35 * 0.67px);
+      height: calc(15 * 0.67px);
+      border-radius: calc(10 * 0.67px);
+      background: #979797;
+      pointer-events: none;
+    }
+    .fc-qr-switch-track::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: calc(-1.5 * 0.67px);
+      width: calc(18 * 0.67px);
+      height: calc(18 * 0.67px);
+      border-radius: 50%;
+      background: #fcfcfe;
+    }
+    input:checked + .fc-qr-switch-track {
+      background: #0368ff;
       &::after {
-        transform: translateX(22px);
+        transform: translateX(calc(17 * 0.67px));
       }
     }
-    &:focus-visible {
-      outline: 2px solid #0b6ff3;
+    input:focus-visible + .fc-qr-switch-track {
+      outline: 2px solid #0368ff;
       outline-offset: 3px;
+    }
+    input:disabled + .fc-qr-switch-track {
+      opacity: 0.5;
     }
   }
   .fc-qr-description {
@@ -2155,44 +1979,6 @@
   }
 }
 
-.fc-teacher {
-  position: absolute;
-  z-index: 25;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 88px;
-  width: min(800px, calc(100% - 32px));
-  max-height: calc(100% - 115px);
-  overflow-y: auto;
-  padding: 12px 16px;
-}
-.fc-teacher-heading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.fc-teacher-heading small {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.65;
-}
-.fc-teacher-heading button {
-  border: 0;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 8px;
-}
-.fc-live-caption {
-  font-size: 19px;
-  line-height: 1.7;
-  max-height: 7em;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  padding: 4px 0;
-}
 .fc-ink-question {
   position: fixed;
   z-index: 35;
@@ -2268,31 +2054,6 @@
     padding: clamp(16px, 4vw, 64px);
     font-size: 20px;
   }
-}
-.fc-quiz {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 12px 0;
-}
-.fc-quiz button {
-  justify-content: start;
-  text-align: start;
-  overflow-wrap: anywhere;
-}
-.fc-lens-reading .fc-live-caption {
-  font-family: Verdana, "Microsoft YaHei", sans-serif;
-  font-size: 23px;
-  line-height: 1.9;
-  letter-spacing: 0.06em;
-  word-spacing: 0.16em;
-}
-.fc-lens-reading mark {
-  background: #fff1a8;
-  color: #17243c;
-}
-.fc-lens-audio .fc-live-caption {
-  font-size: 24px;
 }
 .app .fc-tools-picker {
   color: #333;
@@ -3261,90 +3022,93 @@
   .fc-tools-grid {
     grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   }
-  .fc-quiz {
-    grid-template-columns: 1fr;
-  }
-  .fc-teacher {
-    max-height: 50%;
-  }
 }
 .app.fc-has-presentation .fc-panel {
   z-index: 32;
-}
-.app:has(.fc-tools-picker, .fc-board-picker) .fc-teacher {
-  visibility: hidden;
-}
-.app:has(.fc-panel) .fc-teacher {
-  visibility: hidden;
 }
 @media (max-width: 1100px) {
   .fc-preview.fc-presentation > .fc-presentation-toolbar {
     justify-content: flex-start;
   }
-  .fc-teacher {
-    max-height: 40%;
-  }
-  .fc-classroom:has(.fc-teacher) .fc-widget-panel {
-    max-height: 40%;
-  }
 }
 .fc-selection-actions {
-  --fc-unit: 1px;
+  --fc-unit: 0.67px;
   position: fixed;
   z-index: 25;
   width: max-content;
   max-width: calc(100vw - 24px);
   pointer-events: auto;
-  color: #333;
-  font-size: calc(11 * var(--fc-unit, 1px));
+  color: #010101;
+  font-size: calc(11 * var(--fc-unit));
   > [role="toolbar"] {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
-    padding: 0 calc(4 * var(--fc-unit, 1px));
-    background: #c8c8c8;
-    border-radius: calc(6 * var(--fc-unit, 1px));
+    box-sizing: border-box;
+    padding: calc(6 * var(--fc-unit)) calc(12 * var(--fc-unit))
+      calc(6 * var(--fc-unit)) 0;
+    background: #fcfcfe;
+    border-radius: calc(18 * var(--fc-unit));
+    box-shadow: 0 2px 8px #00000026;
     button {
-      width: calc(44 * var(--fc-unit, 1px));
-      height: calc(42 * var(--fc-unit, 1px));
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      width: calc(50 * var(--fc-unit));
+      height: calc(50 * var(--fc-unit));
+      margin-left: calc(6 * var(--fc-unit));
+      padding: calc(4 * var(--fc-unit)) 0;
       min-width: 0;
       flex: 0 0 auto;
-      border-radius: calc(5 * var(--fc-unit, 1px));
+      border-radius: calc(12 * var(--fc-unit));
       color: inherit;
       font: inherit;
-      &:active {
-        background: #0b6ff3;
+      line-height: calc(16 * var(--fc-unit));
+      white-space: nowrap;
+      &:active,
+      &[aria-pressed="true"],
+      &[aria-expanded="true"] {
+        background: #0368ff;
         color: #fff;
+        .fc-selection-icon-normal {
+          display: none;
+        }
+        .fc-selection-icon-focus {
+          display: block;
+        }
       }
       &:disabled {
         opacity: 0.4;
-        cursor: wait;
       }
-      svg {
-        width: calc(18 * var(--fc-unit, 1px));
-        height: calc(18 * var(--fc-unit, 1px));
-      }
+      svg,
       img {
-        width: calc(24 * var(--fc-unit, 1px));
-        height: calc(24 * var(--fc-unit, 1px));
+        width: calc(24 * var(--fc-unit));
+        height: calc(24 * var(--fc-unit));
+        flex: 0 0 auto;
       }
-    }
-    > button[aria-pressed="true"] {
-      background: #0b6ff3;
-      color: #fff;
+      .fc-selection-icon-focus {
+        display: none;
+      }
+      > span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     }
   }
   > [role="status"],
   > [role="alert"] {
-    max-width: calc(260 * var(--fc-unit, 1px));
-    padding: calc(6 * var(--fc-unit, 1px));
+    max-width: 260px;
+    padding: 6px;
     margin-top: 4px;
     background: #fafafa;
     border-radius: 6px;
     white-space: normal;
     line-height: 1.4;
-    max-height: calc(60 * var(--fc-unit, 1px));
+    max-height: 60px;
     overflow: auto;
     overflow-wrap: anywhere;
+    font-size: 11px;
   }
 }
 
@@ -3960,7 +3724,7 @@
     }
     .fc-background-colors {
       display: grid;
-      grid-template-columns: repeat(6, 34px);
+      grid-template-columns: repeat(7, 34px);
       justify-content: space-between;
       max-width: 414px;
       gap: 0;
@@ -4029,72 +3793,6 @@
     padding-inline: 18px;
     .fc-settings-fields .fc-background-settings .fc-background-picker {
       grid-template-columns: repeat(5, 34px);
-    }
-  }
-}
-.fc-factory-color-wheel {
-  width: 160px;
-  min-height: 212px;
-  box-sizing: border-box;
-  padding: 14px;
-  background: #fafafa;
-  border: 1px solid #00000038;
-  border-radius: 22px;
-  box-shadow: 0 4px 12px #0002;
-  .fc-color-disc {
-    width: 126px;
-    height: 126px;
-    position: relative;
-    touch-action: none;
-    border-radius: 50%;
-    background: radial-gradient(circle closest-side, #fff, #fff0),
-      conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red);
-    padding: 5px;
-    background-clip: content-box;
-    background-origin: content-box;
-    box-sizing: border-box;
-    span {
-      position: absolute;
-      width: 4px;
-      height: 4px;
-      border: 1px solid #000;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
-  }
-  .fc-color-shade {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 16px;
-    > span {
-      width: 20px;
-      height: 20px;
-      border: 1px solid #ddd;
-      border-radius: 50%;
-    }
-    input {
-      width: 94px;
-      min-width: 0;
-      height: 8px;
-      appearance: none;
-      border-radius: 5px;
-    }
-    input::-webkit-slider-thumb {
-      appearance: none;
-      width: 12px;
-      height: 12px;
-      border: 1px solid #aaa;
-      background: #fff;
-      border-radius: 50%;
-    }
-    input::-moz-range-thumb {
-      width: 12px;
-      height: 12px;
-      border: 1px solid #aaa;
-      background: #fff;
-      border-radius: 50%;
     }
   }
 }
@@ -4514,45 +4212,62 @@
   }
 }
 
-.fc-agent-tasks {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 36;
-  width: min(280px, 38vw);
-  max-height: 28vh;
-  overflow-y: auto;
-  font-size: 13px;
-  > div {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-    padding: 8px 10px;
-    border-radius: 12px;
-    background: var(--island-bg-color);
-    box-shadow: 0 2px 12px #0002;
-  }
-  span {
-    min-width: 0;
-    flex: 1;
-  }
-  strong {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  small {
-    overflow-wrap: anywhere;
-  }
-  button {
-    border: 0;
-    min-width: 36px;
-    min-height: 36px;
-    background: transparent;
-    color: inherit;
-  }
+@import "./BottomBar.scss";
+
+.fc-classroom .fc-language-pack-inline {
+  width: 100%;
+  height: 374px;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-@import "./BottomBar.scss";
+// layout_select_ai: original nominal dimensions use the APK's 0.67dp unit.
+.fc-selection-ai-menu {
+  display: flex;
+  padding: calc(16px * 0.67) calc(8px * 0.67) calc(10px * 0.67);
+  border-radius: calc(24px * 0.67);
+  background: #fcfcfe;
+  color: #333;
+  box-shadow: 0 2px 8px #00000026;
+  > button {
+    display: flex;
+    flex-direction: column;
+    margin: 0 calc(8px * 0.67);
+    padding: 0;
+    min-width: calc(36px * 0.67);
+    font: 400 calc(11px * 0.67) / 1.5 system-ui, "Microsoft YaHei", sans-serif;
+    img {
+      width: calc(36px * 0.67);
+      height: calc(36px * 0.67);
+    }
+    .fc-selection-ai-focus {
+      display: none;
+    }
+    &:active,
+    &:focus-visible {
+      .fc-selection-ai-normal {
+        display: none;
+      }
+      .fc-selection-ai-focus {
+        display: block;
+      }
+    }
+  }
+}
+.fc-selection-actions > [role="toolbar"] .fc-selection-ai > button {
+  display: flex;
+  flex-direction: column;
+  font-weight: 400;
+  gap: 0;
+  img {
+    width: calc(24px * 0.67);
+    height: calc(24px * 0.67);
+  }
+  span {
+    line-height: calc(16px * 0.67);
+  }
+}

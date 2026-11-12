@@ -1,7 +1,7 @@
 import { all, create } from "mathjs";
 import nerdamer from "nerdamer/all";
 
-import { allowedFunctions } from "./mathFunctions";
+import { scientificFunctions } from "./mathFunctions";
 import { calculationNotation } from "./mathNotation";
 import { solveEquations } from "./equations";
 import { continuousMathRange } from "./mathDomain";
@@ -36,7 +36,7 @@ export const prepareCalculation = (input: string) => {
     expression,
   );
   const functions = new Set([
-    ...allowedFunctions,
+    ...scientificFunctions,
     "det",
     "inv",
     "transpose",
@@ -122,33 +122,48 @@ export const prepareCalculation = (input: string) => {
         );
       }
     }
-    if (child.type === "OperatorNode" || child.type === "FunctionNode") {
-      const operation = child as
-        | import("mathjs").OperatorNode
-        | import("mathjs").FunctionNode;
-      const name =
-        typeof operation.fn === "string" ? operation.fn : operation.fn.name;
-      if (["pow", "factorial", "gamma"].includes(name)) {
-        const argument = operation.args[name === "pow" ? 1 : 0];
-        const notation = argument?.toString() || "";
-        const literal =
-          /^[\d\s.+\-()/]+$/.test(notation) && notation.length < 100
-            ? Number(calculator.evaluate(notation))
-            : NaN;
-        if (symbolic && name === "pow") {
-          return;
-        }
-        if (
-          !Number.isFinite(literal) ||
-          Math.abs(literal) > (name === "pow" ? 1000 : 200)
-        ) {
-          throw new Error(
-            "fcboard.this_expression_contains_unsupported_operations",
-          );
-        }
+  });
+  // Validate every node before evaluating any guard. Check children first so
+  // composed exponents are allowed without evaluating an unchecked huge power.
+  const operations: import("mathjs").MathNode[] = [];
+  node.traverse((child) => operations.push(child));
+  for (const child of operations.reverse()) {
+    if (child.type !== "OperatorNode" && child.type !== "FunctionNode") {
+      continue;
+    }
+    const operation = child as
+      | import("mathjs").OperatorNode
+      | import("mathjs").FunctionNode;
+    const name =
+      typeof operation.fn === "string" ? operation.fn : operation.fn.name;
+    if (
+      ![
+        "pow",
+        "factorial",
+        "gamma",
+        "combinations",
+        "permutations",
+        "combinationsWithRep",
+      ].includes(name) ||
+      (symbolic && name === "pow")
+    ) {
+      continue;
+    }
+    const args = name === "pow" ? operation.args.slice(1, 2) : operation.args;
+    for (const argument of args) {
+      const value = argument.compile().evaluate();
+      const magnitude = Number(calculator.abs(value));
+      if (
+        !Number.isFinite(magnitude) ||
+        magnitude > (name === "pow" ? 1000 : 200)
+      ) {
+        throw new Error(
+          "fcboard.this_expression_contains_unsupported_operations",
+        );
       }
     }
-  });
+  }
+
   if (symbolic && node.type !== "FunctionNode") {
     throw new Error("Unsupported symbolic expression");
   }

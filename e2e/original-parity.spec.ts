@@ -67,7 +67,7 @@ for (const viewport of [
       14,
     );
     await expect(settings.locator(".fc-background-colors button")).toHaveCount(
-      6,
+      7,
     );
     const box = await settings.boundingBox();
     expect(box!.width).toBeCloseTo(Math.min(520, viewport.width - 24), 0);
@@ -110,7 +110,7 @@ for (const viewport of [
       .getByRole("toolbar", { name: "白板工具栏" })
       .getByRole("button", { name: "工具箱", exact: true })
       .click();
-    await page.getByRole("button", { name: "教学资源", exact: true }).click();
+    await page.getByRole("button", { name: "学科工具", exact: true }).click();
     const library = page.getByRole("dialog", { name: "教学资源", exact: true });
     await library.getByRole("button", { name: "化学", exact: true }).click();
     await library
@@ -144,7 +144,7 @@ for (const viewport of [
       .getByRole("toolbar", { name: "白板工具栏" })
       .getByRole("button", { name: "工具箱", exact: true })
       .click();
-    await page.getByRole("button", { name: "教学资源", exact: true }).click();
+    await page.getByRole("button", { name: "学科工具", exact: true }).click();
     const library = page.getByRole("dialog", { name: "教学资源", exact: true });
     await library.getByRole("button", { name: "物理", exact: true }).click();
     await expect(library.getByRole("tab")).toHaveCount(7);
@@ -189,7 +189,7 @@ for (const viewport of [
         .getByRole("toolbar", { name: "白板工具栏" })
         .getByRole("button", { name: "工具箱", exact: true })
         .click();
-      await page.getByRole("button", { name: "教学资源", exact: true }).click();
+      await page.getByRole("button", { name: "学科工具", exact: true }).click();
       return page.getByRole("dialog", { name: "教学资源", exact: true });
     };
     const library = await openLibrary();
@@ -256,7 +256,7 @@ for (const viewport of [
         .getByRole("toolbar", { name: "白板工具栏" })
         .getByRole("button", { name: "工具箱", exact: true })
         .click();
-      await page.getByRole("button", { name: "教学资源", exact: true }).click();
+      await page.getByRole("button", { name: "学科工具", exact: true }).click();
       const library = page.getByRole("dialog", {
         name: "教学资源",
         exact: true,

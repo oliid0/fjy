@@ -76,7 +76,7 @@ for (const viewport of [
     await expect(dialog).toBeHidden();
     const widget = page.getByRole("toolbar", { name: "录制", exact: true });
     await expect(widget).toBeVisible();
-    await page.getByRole("button", { name: "画笔", exact: true }).click();
+    await page.getByRole("button", { name: "笔", exact: true }).click();
     if (await page.locator(".fc-editor-properties").isVisible()) {
       await page.keyboard.press("Escape");
     }

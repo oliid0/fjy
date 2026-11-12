@@ -2,7 +2,6 @@ import { useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 import ButtonBase from "@mui/material/ButtonBase";
 import Popover from "@mui/material/Popover";
-import Slider from "@mui/material/Slider";
 
 import { classroomCommands } from "./commands";
 import { cubeNets, cylinderNets } from "./solidGeometry";
@@ -40,7 +39,7 @@ export const SolidActions = ({
   onError: (message: string) => void;
 }) => {
   const [popup, setPopup] = useState<{
-    mode: "nets" | "colors" | "rotation";
+    mode: "nets" | "colors";
     anchor: HTMLElement;
   }>();
   const [face, setFace] = useState(widget.kind === "cube" ? "front" : "side");
@@ -89,19 +88,13 @@ export const SolidActions = ({
     </ButtonBase>
   );
   const opening =
-    (mode: "nets" | "colors" | "rotation") =>
-    (event: React.MouseEvent<HTMLButtonElement>) =>
+    (mode: "nets" | "colors") => (event: React.MouseEvent<HTMLButtonElement>) =>
       setPopup({ mode, anchor: event.currentTarget });
+  if (!foldable) {
+    return null;
+  }
   return (
     <>
-      {button(
-        t("fcboard.rotate_shape"),
-        <>
-          <path d="M5 8a8 8 0 1 1-1 8M5 3v5H0" />
-          <path d="m10 9 6 3-6 3z" />
-        </>,
-        opening("rotation"),
-      )}
       {foldable &&
         button(
           t(
@@ -132,24 +125,6 @@ export const SolidActions = ({
         </>,
         opening("colors"),
       )}
-      {button(
-        t("fcboard.show_edges"),
-        <>
-          <path d="M4 4h16v16H4z" />
-          <path d="m4 4 16 16" strokeDasharray="2 2" />
-        </>,
-        () => void apply({ solid: { border: !settings.border } }),
-        settings.border,
-      )}
-      {button(
-        t("fcboard.close_tool_controls"),
-        <path d="m6 6 12 12M18 6 6 18" />,
-        () => {
-          void classroomCommands
-            .execute({ name: "canvas.select", args: { ids: [] } })
-            .catch((error) => onError(String(error)));
-        },
-      )}
       <Popover
         open={!!popup}
         anchorEl={popup?.anchor}
@@ -163,11 +138,7 @@ export const SolidActions = ({
           paper: {
             role: "dialog",
             "aria-label":
-              popup?.mode === "nets"
-                ? t("fcboard.unfolding_nets")
-                : popup?.mode === "colors"
-                ? colorLabel
-                : t("fcboard.rotate_shape"),
+              popup?.mode === "nets" ? t("fcboard.unfolding_nets") : colorLabel,
             sx: {
               p: 1.5,
               mt: 1,
@@ -184,22 +155,6 @@ export const SolidActions = ({
           },
         }}
       >
-        {popup?.mode === "rotation" && (
-          <Slider
-            aria-label={t("fcboard.rotation")}
-            min={-180}
-            max={180}
-            step={1}
-            value={widget.params.rotation}
-            valueLabelDisplay="auto"
-            disabled={busy}
-            onChange={(_, value) => {
-              if (typeof value === "number") {
-                void apply({ rotation: value });
-              }
-            }}
-          />
-        )}
         {popup?.mode === "nets" && (
           <div
             style={{

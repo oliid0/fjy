@@ -50,6 +50,10 @@ export class BoardBook {
   private switching = false;
   private pendingActive?: string;
   private disposed = false;
+  private discarded?: { previous: Workspace; replacement?: Board };
+  get canRestoreDiscarded() {
+    return !!this.discarded;
+  }
   get visibleActive() {
     return this.pendingActive ?? this.value.active;
   }
@@ -266,6 +270,7 @@ export class BoardBook {
       },
     });
     this.api.history.clear();
+    this.api.setActiveTool({ type: "freedraw" });
     this.switching = false;
   }
   /** Persist the destination while in-flight edits still belong to the visible source page. */
@@ -408,25 +413,76 @@ export class BoardBook {
     this.emit();
   }
   async discard(id: string, source?: AbortSignal) {
+    await this.discardMany([id], source);
+  }
+  /** Delete the chosen pages in one durable transaction; never expose an empty book. */
+  async discardMany(ids: readonly string[], source?: AbortSignal) {
     source?.throwIfAborted();
-    if (!this.value.boards.some((board) => board.id === id)) {
+    const selected = new Set(ids);
+    if (
+      !selected.size ||
+      selected.size !== ids.length ||
+      ids.some((id) => !this.value.boards.some((board) => board.id === id))
+    ) {
       throw new Error(t("fcboard.board_does_not_exist"));
     }
     await this.flush();
     source?.throwIfAborted();
-    if (this.value.boards.length === 1) {
-      await this.create(undefined, source);
-    }
-    source?.throwIfAborted();
     const previous = this.value;
-    const boards = previous.boards.filter((board) => board.id !== id);
-    if (boards.length === previous.boards.length) {
-      throw new Error(t("fcboard.board_does_not_exist"));
+    const boards = previous.boards.filter((board) => !selected.has(board.id));
+    let replacement: Board | undefined;
+    if (!boards.length) {
+      replacement = {
+        ...this.capture(`${t("fcboard.board")} 1`),
+        elements: [],
+        files: {},
+        view: { ...this.capture("").view, scrollX: 0, scrollY: 0 },
+      };
+      boards.push(replacement);
     }
-    const active = previous.active === id ? boards[0].id : previous.active;
-    const next = { ...previous, active, boards };
-    await this.commitWorkspace(next, source);
+    const oldIndex = previous.boards.findIndex(
+      (board) => board.id === previous.active,
+    );
+    const active = selected.has(previous.active)
+      ? boards[Math.min(oldIndex, boards.length - 1)].id
+      : previous.active;
+    await this.commitWorkspace({ ...previous, active, boards }, source);
+    this.discarded = { previous, replacement };
     if (active !== previous.active) {
+      this.restore(active, source);
+    }
+    this.emit();
+  }
+  /** Restore the last removal without overwriting ink written on surviving pages. */
+  async restoreDiscarded(source?: AbortSignal) {
+    source?.throwIfAborted();
+    const removal = this.discarded;
+    if (!removal) {
+      return;
+    }
+    await this.flush();
+    source?.throwIfAborted();
+    const current = this.value;
+    const boards = removal.previous.boards.map(
+      (previous) =>
+        current.boards.find((board) => board.id === previous.id) ?? previous,
+    );
+    for (const board of current.boards) {
+      const untouchedReplacement =
+        board.id === removal.replacement?.id &&
+        board.updated === removal.replacement.updated &&
+        !board.elements.length;
+      if (
+        !untouchedReplacement &&
+        !boards.some((previous) => previous.id === board.id)
+      ) {
+        boards.push(board);
+      }
+    }
+    const active = removal.previous.active;
+    await this.commitWorkspace({ ...current, active, boards }, source);
+    this.discarded = undefined;
+    if (active !== current.active) {
       this.restore(active, source);
     }
     this.emit();

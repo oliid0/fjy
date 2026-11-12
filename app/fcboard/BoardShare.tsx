@@ -88,9 +88,20 @@ export const BoardShare = () => {
       email: boolean,
       saveFile = false,
       ids?: unknown,
+      source?: AbortSignal,
     ) => {
+      source?.throwIfAborted();
       exportRequest.current?.abort();
       const current = ++generation.current;
+      const abortOpening = () => {
+        if (current === generation.current) {
+          generation.current++;
+          setOpen(false);
+          setTransfer(undefined);
+          setBusy(false);
+        }
+      };
+      source?.addEventListener("abort", abortOpening, { once: true });
       setMail(email);
       setSavingFile(saveFile);
       setChoosing(true);
@@ -137,11 +148,18 @@ export const BoardShare = () => {
             ? workspace.boards.map((board) => board.id).slice(0, 20)
             : [...new Set(ids as string[])],
         );
+        if (ids !== undefined) {
+          setChoosing(false);
+          if (!email && !saveFile) {
+            setTransfer("qr");
+          }
+        }
       } catch (failure) {
         if (current === generation.current) {
           setError(String(failure));
         }
       } finally {
+        source?.removeEventListener("abort", abortOpening);
         if (current === generation.current) {
           setBusy(false);
         }
@@ -150,17 +168,35 @@ export const BoardShare = () => {
     const stopShare = classroomCommands.register(
       "board.share",
       "选择白板页面以导出图片或扫码分享",
-      (args) => openPages(false, false, args.ids),
+      (args) =>
+        openPages(
+          false,
+          false,
+          args.ids,
+          args.signal instanceof AbortSignal ? args.signal : undefined,
+        ),
     );
     const stopSave = classroomCommands.register(
       "board.saveFile",
       "选择白板页面并保存原厂 BZD / JPG / PDF 文件",
-      (args) => openPages(false, true, args.ids),
+      (args) =>
+        openPages(
+          false,
+          true,
+          args.ids,
+          args.signal instanceof AbortSignal ? args.signal : undefined,
+        ),
     );
     const stopMail = classroomCommands.register(
       "board.mail",
       "选择白板页面并打开邮件；Android 使用原版账户 / 提供方 / 写信 / SMTP 配置层级，可由 mail.action 和 mail.configure 操作，发送选中页面 PDF；浏览器打开系统分享",
-      (args) => openPages(true, false, args.ids),
+      (args) =>
+        openPages(
+          true,
+          false,
+          args.ids,
+          args.signal instanceof AbortSignal ? args.signal : undefined,
+        ),
     );
     return () => {
       stopShare();
@@ -193,23 +229,24 @@ export const BoardShare = () => {
   }, [urls]);
   const close = async () => {
     exportRequest.current?.abort();
-    generation.current++;
+    const closing = ++generation.current;
+    const session = cloud.current;
+    cloud.current = undefined;
+    setOpen(false);
+    setUrls([]);
+    setTransfer(undefined);
+    document
+      .querySelector<HTMLButtonElement>("[data-testid='main-menu-trigger']")
+      ?.focus();
     try {
-      if (cloud.current) {
-        await cloud.current.end();
-        cloud.current = undefined;
-      }
-      if (native) {
-        await Classroom.stopShare();
-      }
-      setUrls([]);
-      setOpen(false);
-      document
-        .querySelector<HTMLButtonElement>("[data-testid='main-menu-trigger']")
-        ?.focus();
+      await Promise.all([
+        session?.end(),
+        native ? Classroom.stopShare() : undefined,
+      ]);
     } catch (failure) {
-      setTransfer(undefined);
-      setError(String(failure));
+      if (generation.current === closing) {
+        setError(String(failure));
+      }
     }
   };
   const exportEditable = async (
@@ -286,19 +323,11 @@ export const BoardShare = () => {
       const files: File[] = [];
       const rasterPages: { page: number; blob: Blob }[] = [];
       for (const board of pages.filter((page) => selected.includes(page.id))) {
-        const options =
-          method === "qr"
-            ? {
-                elements: board.elements.filter((el) => !el.isDeleted),
-                files: board.files,
-                appState: {
-                  ...board.view,
-                  exportBackground: true,
-                  exportWithDarkMode: false,
-                },
-                maxWidthOrHeight: 2000,
-              }
-            : boardPageExportOptions(board, canvasSize);
+        const options = boardPageExportOptions(
+          board,
+          canvasSize,
+          method === "qr" ? 2000 : 4096,
+        );
         const blob = await exportToBlob({
           ...options,
           mimeType:

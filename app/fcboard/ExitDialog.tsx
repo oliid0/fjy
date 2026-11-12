@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
@@ -8,25 +8,43 @@ export const ExitDialog = ({
   onExit,
   onClose,
 }: {
-  onExit: (save: boolean) => Promise<boolean>;
+  onExit: (save: boolean, signal: AbortSignal) => Promise<boolean>;
   onClose: () => void;
 }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const request = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => request.current?.abort(), []);
+  const close = () => {
+    request.current?.abort();
+    request.current = undefined;
+    setBusy(false);
+    onClose();
+  };
   const exit = async (save: boolean) => {
-    if (busy) {
+    if (request.current) {
       return;
     }
+    const controller = new AbortController();
+    request.current = controller;
     setBusy(true);
     setError("");
     try {
-      if (await onExit(save)) {
+      if (
+        (await onExit(save, controller.signal)) &&
+        !controller.signal.aborted
+      ) {
         onClose();
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      if (!controller.signal.aborted) {
+        setError(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      setBusy(false);
+      if (request.current === controller) {
+        request.current = undefined;
+        setBusy(false);
+      }
     }
   };
   return (
@@ -35,26 +53,17 @@ export const ExitDialog = ({
       className="fc-exit-dialog fc-surface"
       role="dialog"
       aria-label={t("fcboard.exit_board")}
-      onDismiss={() => {
-        if (!busy) {
-          onClose();
-        }
-      }}
+      onDismiss={close}
       onKeyDown={(event) => {
         event.stopPropagation();
-        if (event.key === "Escape" && !busy) {
-          onClose();
+        if (event.key === "Escape") {
+          close();
         }
       }}
     >
       <header>
         <strong>{t("fcboard.exit_board")}</strong>
-        <button
-          type="button"
-          disabled={busy}
-          aria-label={t("buttons.close")}
-          onClick={onClose}
-        >
+        <button type="button" aria-label={t("buttons.close")} onClick={close}>
           {CloseIcon}
         </button>
       </header>
@@ -63,7 +72,7 @@ export const ExitDialog = ({
       </p>
       <TransientMessage role="alert" message={error} />
       <footer>
-        <button type="button" disabled={busy} onClick={onClose}>
+        <button type="button" onClick={close}>
           {t("buttons.cancel")}
         </button>
         <button type="button" disabled={busy} onClick={() => void exit(false)}>

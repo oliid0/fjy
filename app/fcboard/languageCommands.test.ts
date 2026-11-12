@@ -335,3 +335,57 @@ it("validates all explicit sources and input before making a translation request
     stop();
   }
 });
+
+it("sends a cropped courseware learning card screenshot directly to AI without transcription", async () => {
+  const host = setup();
+  const ink: InkStroke[] = [
+    {
+      id: "sentence",
+      text: "A sentence with inertia",
+      points: [[100, 100]],
+      color: "#000000",
+      width: 2,
+    },
+  ];
+  const unread = classroomCommands.context("document", () => ({
+    id: "lesson",
+    page: 1,
+    ink,
+  }));
+  const snapshot = vi
+    .spyOn(documents, "inkSnapshot")
+    .mockResolvedValue("data:image/png;base64,source" as DataURL);
+  const crop = vi
+    .spyOn(ai, "cropImage")
+    .mockResolvedValue("data:image/png;base64,cropped");
+  try {
+    await classroomCommands.execute({
+      name: "language.translate",
+      args: {
+        sourceIds: ["sentence"],
+        region: { left: 100, top: 100, right: 200, bottom: 140 },
+        insert: false,
+        study: true,
+        targetLanguage: "ja-JP",
+      },
+    });
+    expect(host.recognize).not.toHaveBeenCalled();
+    expect(snapshot).toHaveBeenCalledWith(ink, 40, undefined, 100);
+    expect(crop).toHaveBeenCalledWith(
+      "data:image/png;base64,source",
+      { left: 0.1, top: 0, right: 0.2, bottom: 1 },
+      expect.any(AbortSignal),
+    );
+    expect(host.explain).toHaveBeenCalledWith(
+      "",
+      expect.any(AbortSignal),
+      "ja-JP",
+      "data:image/png;base64,cropped",
+      true,
+    );
+    expect(host.api.updateScene).not.toHaveBeenCalled();
+  } finally {
+    unread();
+    host.stop();
+  }
+});

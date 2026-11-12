@@ -1,118 +1,204 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { useEffect } from "react";
+import { isColorDark } from "@fcboard/common";
+import { CaptureUpdateAction, newElementWith } from "@fcboard/element";
 import { t } from "@fcboard/fcboard/i18n";
-import {
-  attachResourceControls,
-  requestResourceControl,
-} from "@fcboard/fcboard/interactiveResourceControls";
-import resourceRuntime from "@fcboard/fcboard/interactiveResourceRuntime.js?raw";
+import { requestResourceControl } from "@fcboard/fcboard/interactiveResourceControls";
+import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
 import { classroomCommands } from "./commands";
-import { FloatingToolPanel } from "./FloatingToolPanel";
+import {
+  hasNativeCalculator,
+  nativeCalculatorControl,
+  setNativeCalculatorTheme,
+} from "./nativeResources";
 import calculator from "./calculator/calculator.html?raw";
 
-const html = calculator.replace(
-  "</body>",
-  `<script>${resourceRuntime}</script></body>`,
-);
-const target = {
-  id: "builtin-calculator",
-  surface: "whiteboard" as const,
-  html,
-};
+import type { InkStroke } from "./documents";
 
-/** Calculator-app-main's real parser, scientific keys and keyboard, fully offline. */
-export const Calculator = () => {
-  const [open, setOpen] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const visible = useRef(open);
-  visible.current = open;
-  const attached = useRef<
-    ReturnType<typeof attachResourceControls> | undefined
-  >(undefined);
-  const bindFrame = useCallback((node: HTMLIFrameElement | null) => {
-    attached.current?.dispose();
-    attached.current = node ? attachResourceControls(target, node) : undefined;
-  }, []);
+const calculatorId = "builtin-calculator";
+export const calculatorResource = (dark: boolean) =>
+  validateInteractiveResource({
+    id: calculatorId,
+    title: t("fcboard.calculator"),
+    html: calculator.replace(
+      '<html lang="en">',
+      `<html lang="en" data-board-theme="${dark ? "dark" : "light"}">`,
+    ),
+  });
+
+/** The offline reference calculator lives in the same object/frame path as lessons. */
+export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
   useEffect(() => {
+    const current = () => {
+      const document = classroomCommands.read("document") as
+        | { ink: InkStroke[] }
+        | undefined;
+      if (document) {
+        const object = document.ink.find(
+          (stroke) => stroke.resource?.id === calculatorId,
+        );
+        return object?.resource
+          ? {
+              id: object.id,
+              resource: object.resource,
+              surface: "document" as const,
+            }
+          : undefined;
+      }
+      const object = api
+        .getSceneElements()
+        .find(
+          (element) =>
+            !element.isDeleted &&
+            element.customData?.fcInteractiveResource?.id === calculatorId,
+        );
+      return object
+        ? {
+            id: object.id,
+            resource: object.customData!
+              .fcInteractiveResource as InteractiveResource,
+            surface: "whiteboard" as const,
+          }
+        : undefined;
+    };
+    const close = async () => {
+      const object = current();
+      if (!object) {
+        return;
+      }
+      if (object.surface === "document") {
+        await classroomCommands.execute({
+          name: "document.erase",
+          args: { ids: [object.id] },
+        });
+      } else {
+        api.updateScene({
+          elements: api
+            .getSceneElements()
+            .map((element) =>
+              element.id === object.id
+                ? newElementWith(element, { isDeleted: true })
+                : element,
+            ),
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+      }
+    };
+    const operate = (args: Record<string, unknown>, click: boolean) => {
+      const object = current();
+      if (!object) {
+        throw new Error(t("fcboard.this_board_action_is_unavailable"));
+      }
+      if (
+        click &&
+        (typeof args.version !== "string" || typeof args.control !== "string")
+      ) {
+        throw new Error(t("fcboard.invalid_style_parameters"));
+      }
+      if (hasNativeCalculator()) {
+        return nativeCalculatorControl(
+          object.id,
+          click
+            ? {
+                type: "click",
+                version: args.version as string,
+                control: args.control as string,
+              }
+            : { type: "inspect" },
+          args.signal instanceof AbortSignal ? args.signal : undefined,
+          () => current()?.id === object.id,
+        );
+      }
+      return requestResourceControl(
+        { id: object.id, surface: object.surface, html: object.resource.html },
+        click
+          ? {
+              type: "click",
+              version: args.version as string,
+              control: args.control as string,
+            }
+          : { type: "inspect" },
+        {
+          signal: args.signal instanceof AbortSignal ? args.signal : undefined,
+          current: () => current()?.id === object.id,
+        },
+      );
+    };
+    let previousTheme: boolean | undefined;
+    const theme = () => {
+      const dark = isColorDark(
+        api.getAppState().viewBackgroundColor || "#ffffff",
+      );
+      if (dark === previousTheme) {
+        return;
+      }
+      previousTheme = dark;
+      const object = current();
+      if (!object) {
+        return;
+      }
+      if (hasNativeCalculator()) {
+        setNativeCalculatorTheme(object.id, dark);
+      }
+      document
+        .querySelector<HTMLIFrameElement>(
+          `iframe[data-resource-object-id="${object.id}"]`,
+        )
+        ?.contentWindow?.postMessage(
+          { channel: "fc-calculator-theme", dark },
+          "*",
+        );
+    };
     const stops = [
       classroomCommands.register(
         "tools.calculator",
-        "Open the built-in offline scientific calculator. args.open=false closes it. Use calculator.inspect and calculator.press to operate real keys.",
-        (args) => {
+        "Open the offline calculator object on the visible surface; args.open=false closes it. calculator.inspect/press operate its real keys.",
+        async (args) => {
           if (args.open !== undefined && typeof args.open !== "boolean") {
             throw new Error(t("fcboard.invalid_style_parameters"));
           }
-          flushSync(() => {
-            setFailed(false);
-            setOpen(args.open !== false);
+          if (args.open === false) {
+            await close();
+            return { open: false };
+          }
+          const object = current();
+          if (object) {
+            await classroomCommands.execute({
+              name: "canvas.select",
+              args: { ids: [object.id] },
+            });
+            return { open: true, ids: [object.id] };
+          }
+          const resource = calculatorResource(
+            isColorDark(api.getAppState().viewBackgroundColor || "#ffffff"),
+          );
+          const result = await classroomCommands.execute({
+            name: "canvas.resource",
+            args: { resource },
           });
-          return { open: args.open !== false };
+          return { open: true, ...(result as { ids: string[] }) };
         },
       ),
       classroomCommands.register(
         "calculator.inspect",
-        "Read the visible calculator's actual keys, current display and control version. No model request or external app.",
-        (args) =>
-          requestResourceControl(
-            target,
-            { type: "inspect" },
-            {
-              signal:
-                args.signal instanceof AbortSignal ? args.signal : undefined,
-              current: () => visible.current,
-            },
-          ),
+        "Read the calculator object's actual keys, display and version.",
+        (args) => operate(args, false),
       ),
       classroomCommands.register(
         "calculator.press",
-        "Press an actual calculator key from calculator.inspect. args.version and args.control are required; inspect again after changing modes.",
-        (args) => {
-          if (
-            typeof args.version !== "string" ||
-            typeof args.control !== "string"
-          ) {
-            throw new Error(t("fcboard.invalid_style_parameters"));
-          }
-          return requestResourceControl(
-            target,
-            { type: "click", version: args.version, control: args.control },
-            {
-              signal:
-                args.signal instanceof AbortSignal ? args.signal : undefined,
-              current: () => visible.current,
-            },
-          );
-        },
+        "Press an actual key from calculator.inspect; args.version/control required.",
+        (args) => operate(args, true),
       ),
+      api.onChange(theme),
+      classroomCommands.watch("document", () => {
+        previousTheme = undefined;
+        theme();
+      }),
     ];
     return () => stops.forEach((stop) => stop());
-  }, []);
-  return open ? (
-    <FloatingToolPanel
-      title={t("fcboard.calculator")}
-      width={400}
-      onClose={() => setOpen(false)}
-    >
-      {failed ? (
-        <p role="alert">{t("fcboard.builtin_tool_failed")}</p>
-      ) : (
-        <iframe
-          ref={bindFrame}
-          title={t("fcboard.calculator")}
-          srcDoc={html}
-          sandbox="allow-scripts"
-          referrerPolicy="no-referrer"
-          onLoad={() => attached.current?.loaded()}
-          onError={() => setFailed(true)}
-          style={{
-            width: "100%",
-            height: "min(580px, calc(100dvh - 68px))",
-            minHeight: 0,
-            border: 0,
-          }}
-        />
-      )}
-    </FloatingToolPanel>
-  ) : null;
+  }, [api]);
+  return null;
 };

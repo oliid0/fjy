@@ -1,11 +1,75 @@
+import { memo, useId } from "react";
+import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
+
+import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
+
 import { xbhToolbarIcons } from "./xbhToolbarIcons";
-import multiPoint from "./xbh-toolbar-assets/multi.png";
-import singlePoint from "./xbh-toolbar-assets/single.png";
+
+import type { CSSProperties } from "react";
 
 /** HWhiteBoard 5.42 vector drawables, decoded from the intact device APK.
  * Keep viewport/path geometry; Android bottom_bar_icon_tint becomes currentColor.
  * Source and device measurements: docs/apk-alignment.md. */
 const icons = {
+  // Exact BSD MultiScreen vector drawables, converted to SVG paths.
+  splitBlackPen: {
+    viewBox: "0 0 1024 1024",
+    paths: [
+      {
+        fill: "#000000",
+        d: "M581.5,186.48l256.04,256.04 -555.98,555.98 -228.28,25.2C22.72,1027.08 -3.1,1001.24 0.3,970.68l25.4,-228.44 555.8,-555.76zM995.9,148.36l-120.22,-120.22c-37.5,-37.5 -98.32,-37.5 -135.82,0l-113.1,113.1 256.04,256.04 113.1,-113.1c37.5,-37.52 37.5,-98.32 0,-135.82z",
+      },
+    ],
+  },
+  splitBluePen: {
+    viewBox: "0 0 1024 1024",
+    paths: [
+      {
+        fill: "#0000ff",
+        d: "M581.5,186.48l256.04,256.04 -555.98,555.98 -228.28,25.2C22.72,1027.08 -3.1,1001.24 0.3,970.68l25.4,-228.44 555.8,-555.76zM995.9,148.36l-120.22,-120.22c-37.5,-37.5 -98.32,-37.5 -135.82,0l-113.1,113.1 256.04,256.04 113.1,-113.1c37.5,-37.52 37.5,-98.32 0,-135.82z",
+      },
+    ],
+  },
+  splitRedPen: {
+    viewBox: "0 0 1024 1024",
+    paths: [
+      {
+        fill: "#ff0000",
+        d: "M581.5,186.48l256.04,256.04 -555.98,555.98 -228.28,25.2C22.72,1027.08 -3.1,1001.24 0.3,970.68l25.4,-228.44 555.8,-555.76zM995.9,148.36l-120.22,-120.22c-37.5,-37.5 -98.32,-37.5 -135.82,0l-113.1,113.1 256.04,256.04 113.1,-113.1c37.5,-37.52 37.5,-98.32 0,-135.82z",
+      },
+    ],
+  },
+  splitSmallEraser: {
+    viewBox: "0 0 1024 1024",
+    paths: [
+      {
+        fill: "#40b390",
+        d: "M252.97,632.66l181.03,181.03L554.67,693.03 373.63,512 253.01,632.66zM200.15,564.82l407.3,-407.34c37.55,-37.46 92.46,-43.31 122.75,-13.01l192,192c30.29,30.29 24.45,85.25 -13.01,122.75l-407.3,407.3c-37.55,37.46 -92.46,43.31 -122.75,13.01l-192,-192c-30.29,-30.29 -24.45,-85.25 13.01,-122.75z",
+      },
+    ],
+  },
+  splitLargeEraser: {
+    viewBox: "0 0 1024 1024",
+    paths: [
+      {
+        fill: "#50b650",
+        d: "M252.97,632.66l181.03,181.03L554.67,693.03 373.63,512 253.01,632.66zM200.15,564.82l407.3,-407.34c37.55,-37.46 92.46,-43.31 122.75,-13.01l192,192c30.29,30.29 24.45,85.25 -13.01,122.75l-407.3,407.3c-37.55,37.46 -92.46,43.31 -122.75,13.01l-192,-192c-30.29,-30.29 -24.45,-85.25 13.01,-122.75z",
+      },
+    ],
+  },
+  curtain: {
+    viewBox: "0 0 52 52",
+    paths: [
+      {
+        d: "M5 9h42M8 9v34l10-6 8 6 8-6 10 6V9M18 10v25M26 10v31M34 10v25",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "3.25",
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      },
+    ],
+  },
   pen: {
     viewBox: "0 0 52.0 52.0",
     paths: [
@@ -526,7 +590,7 @@ const icons = {
     ],
   },
   spotlight: {
-    viewBox: "0 0 36.0 36.0",
+    viewBox: "0.206 -0.735 36 36",
     paths: [
       {
         fill: "none",
@@ -1453,38 +1517,59 @@ const icons = {
   },
 } as const;
 
-export const FactoryIcon = ({
-  name,
-}: {
-  name: keyof typeof icons | keyof typeof xbhToolbarIcons;
-}) => {
-  if (name === "multi" || name === "single") {
-    return (
-      <img
-        className="fc-toolbar-icon"
-        src={name === "multi" ? multiPoint : singlePoint}
-        alt=""
-        aria-hidden="true"
-      />
-    );
-  }
-  const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
-  if (original) {
+export const FactoryIcon = memo(
+  ({
+    name,
+    className,
+    style,
+    gradient,
+  }: {
+    name: keyof typeof icons | keyof typeof xbhToolbarIcons;
+    className?: string;
+    style?: CSSProperties;
+    gradient?: NativeInkPalette;
+  }) => {
+    const id = useId().replace(/:/g, "");
+    const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
+    if (original) {
+      const colors = gradient && nativeInkPalettes[gradient];
+      const body = colors
+        ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">${colors
+            .map(
+              (color, index) =>
+                `<stop offset="${
+                  index / (colors.length - 1)
+                }" stop-color="${color}"/>`,
+            )
+            .join("")}</linearGradient></defs>${original.body.replace(
+            /currentColor/g,
+            `url(#${id})`,
+          )}`
+        : original.body;
+      return (
+        <svg
+          className={className}
+          style={style}
+          viewBox={original.viewBox}
+          aria-hidden="true"
+          focusable="false"
+          dangerouslySetInnerHTML={{ __html: body }}
+        />
+      );
+    }
+    const icon = icons[name as keyof typeof icons];
     return (
       <svg
-        viewBox={original.viewBox}
+        className={className}
+        style={style}
+        viewBox={icon.viewBox}
         aria-hidden="true"
         focusable="false"
-        dangerouslySetInnerHTML={{ __html: original.body }}
-      />
+      >
+        {icon.paths.map((path, index) => (
+          <path key={index} {...path} />
+        ))}
+      </svg>
     );
-  }
-  const icon = icons[name as keyof typeof icons];
-  return (
-    <svg viewBox={icon.viewBox} aria-hidden="true" focusable="false">
-      {icon.paths.map((path, index) => (
-        <path key={index} {...path} />
-      ))}
-    </svg>
-  );
-};
+  },
+);

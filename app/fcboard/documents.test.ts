@@ -6,6 +6,7 @@ import { selectDocumentLasso } from "./documents";
 
 import {
   eraseDocumentInk,
+  eraseDocumentRegion,
   eraseDocumentObjects,
   hitStroke,
   htmlText,
@@ -25,6 +26,85 @@ import {
 import { insertionDefaults } from "./insertObjects";
 
 import type { InkStroke } from "./documents";
+
+it("matches the factory image occlusion and preserves the covered trajectory and persisted geometry", () => {
+  const stroke: InkStroke = {
+    id: "line",
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+    width: 4,
+    color: "#123456",
+    simulatePressure: false,
+    pressures: [0.2, 0.8],
+    fcInk: {
+      version: 2,
+      pen: "dashed",
+      unit: 1,
+      centerline: true,
+      dashOffset: 10,
+    },
+  };
+  const outside: InkStroke = {
+    ...stroke,
+    id: "outside",
+    points: [
+      [0, 100],
+      [100, 100],
+    ],
+  };
+  const picture: InkStroke = {
+    id: "picture",
+    points: [[30, -30]],
+    color: "#000",
+    width: 1,
+    image: "data:image/png;base64,AA==",
+    imageWidth: 40,
+    imageHeight: 60,
+  };
+  const original = [stroke, outside, picture];
+  const path: [number, number][] = [
+    [40, -20],
+    [60, -20],
+    [60, 20],
+    [40, 20],
+  ];
+  const cut = eraseDocumentRegion(original, path);
+  expect(cut).toEqual([stroke, outside]);
+  expect(eraseDocumentRegion([outside], path)).toEqual([outside]);
+  const persisted = JSON.parse(JSON.stringify(cut)) as InkStroke[];
+  expect(documentStrokeGeometry(persisted[0]).path).toBe(
+    documentStrokeGeometry(stroke).path,
+  );
+  expect(persisted[0].fcInk?.dashOffset).toBe(stroke.fcInk?.dashOffset);
+  expect(original).toEqual([stroke, outside, picture]);
+});
+
+it("treats a filled courseware shape as a closed object while preserving the empty center of handwritten ink", () => {
+  const outline: InkStroke = {
+    id: "outline",
+    points: [
+      [0, 0],
+      [100, 0],
+      [100, 100],
+      [0, 100],
+      [0, 0],
+    ],
+    width: 3,
+    color: "#000",
+  };
+  const path: [number, number][] = [
+    [40, 40],
+    [60, 40],
+    [60, 60],
+    [40, 60],
+  ];
+  expect(eraseDocumentRegion([outline], path)).toEqual([outline]);
+  const filled = { ...outline, id: "filled", fill: "#123456" };
+  expect(eraseDocumentRegion([filled], path)).toEqual([]);
+  expect(outline.points).toHaveLength(5);
+});
 
 it("scales a courseware insertion and its editable geometry together around the fixed opposite corner", () => {
   const original: InkStroke = {
@@ -354,4 +434,51 @@ it("keeps the original courseware nib through erasure, moving and uniform resizi
     expect(y).toBeCloseTo(100 + (original[index][1] + 50 - 100) * 2, 10);
   });
   expect(documentStrokeGeometry(scaled).nib).not.toMatch(/NaN|Infinity/);
+});
+
+it("preserves both exterior parts of connected courseware ink when only its middle is circled", () => {
+  const ink: InkStroke = {
+    id: "connected",
+    color: "#123456",
+    width: 4,
+    points: [
+      [0, 0],
+      [100, 0],
+    ],
+    simulatePressure: false,
+    pressures: [0.2, 0.8],
+  };
+  const outside: InkStroke = {
+    ...ink,
+    id: "outside",
+    points: [
+      [0, 100],
+      [100, 100],
+    ],
+  };
+  const result = eraseDocumentRegion(
+    [ink, outside],
+    [
+      [40, -20],
+      [60, -20],
+      [60, 20],
+      [40, 20],
+    ],
+  );
+  expect(result).toHaveLength(3);
+  expect(result[0].points).toEqual([
+    [0, 0],
+    [40, 0],
+  ]);
+  expect(result[1].points).toEqual([
+    [60, 0],
+    [100, 0],
+  ]);
+  expect(result[0].pressures?.at(-1)).toBeCloseTo(0.44);
+  expect(result[1].pressures?.[0]).toBeCloseTo(0.56);
+  expect(result[2]).toBe(outside);
+  expect(ink.points).toEqual([
+    [0, 0],
+    [100, 0],
+  ]);
 });

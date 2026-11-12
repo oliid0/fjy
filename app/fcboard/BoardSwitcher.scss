@@ -1,0 +1,223 @@
+.app .fc-board-panel.fc-board-preview-list.MuiPaper-root {
+  --fc-board-unit: 0.67px;
+  display: flex;
+  flex-direction: column;
+  width: min(calc(357 * var(--fc-board-unit)), calc(100% - 24px));
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: calc(16 * var(--fc-board-unit)) 0;
+  border: 0;
+  border-radius: calc(24 * var(--fc-board-unit));
+  background: #fcfcfe;
+  color: #010101;
+  backdrop-filter: none;
+  button {
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: calc(16 * var(--fc-board-unit));
+    &:disabled {
+      opacity: 0.4;
+    }
+    &:focus-visible {
+      outline: 2px solid #4fa6ff;
+      outline-offset: -2px;
+    }
+  }
+  .fc-board-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: calc(4.5 * 179 * var(--fc-board-unit));
+    padding: 0;
+    gap: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    touch-action: pan-y;
+  }
+  .fc-board-card {
+    display: grid;
+    grid-template-columns: calc(20 * var(--fc-board-unit)) minmax(0, 1fr) calc(
+        20 * var(--fc-board-unit)
+      );
+    align-items: center;
+    gap: 0;
+    border: 0;
+    border-radius: 0;
+    outline: 0;
+    overflow: visible;
+    &.is-dragging {
+      z-index: 1;
+      background: #ebebeb;
+    }
+  }
+  .fc-board-drag {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: stretch;
+    width: 100%;
+    padding: 0;
+    color: #8d8c90;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+    img {
+      width: calc(9 * var(--fc-board-unit));
+      height: calc(15 * var(--fc-board-unit));
+    }
+    &[aria-pressed="true"] {
+      cursor: grabbing;
+      background: transparent;
+    }
+  }
+  .fc-board-preview {
+    grid-column: 2;
+    position: relative;
+    min-width: 0;
+  }
+  .fc-board-select {
+    display: block;
+    position: relative;
+    width: 100%;
+    min-height: 0 !important;
+    box-sizing: border-box;
+    padding: calc(4 * var(--fc-board-unit));
+    border: calc(2 * var(--fc-board-unit)) solid transparent !important;
+    border-radius: calc(20 * var(--fc-board-unit));
+    text-align: start;
+    small {
+      position: absolute;
+      z-index: 1;
+      top: calc(14 * var(--fc-board-unit));
+      left: calc(14 * var(--fc-board-unit));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      min-width: calc(32 * var(--fc-board-unit));
+      height: calc(32 * var(--fc-board-unit));
+      padding: calc(3 * var(--fc-board-unit));
+      border: 1px solid #ffffff32;
+      border-radius: 50%;
+      background: #ffffff19;
+      color: #ffffff9b;
+      opacity: 1;
+      text-shadow: none;
+      font-size: calc(20 * var(--fc-board-unit));
+      font-weight: 400;
+    }
+    > .fc-board-thumbnail {
+      display: block;
+    }
+  }
+  .fc-board-card.is-active .fc-board-select {
+    border-color: #4fa6ff !important;
+  }
+  .fc-board-thumbnail {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: hidden;
+    border-radius: calc(14 * var(--fc-board-unit));
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+  }
+  .fc-board-preview > .fc-board-delete,
+  .fc-board-preview > .fc-board-check {
+    position: absolute;
+    z-index: 2;
+    top: calc(14 * var(--fc-board-unit));
+    right: calc(14 * var(--fc-board-unit));
+    width: calc(32 * var(--fc-board-unit));
+    height: calc(32 * var(--fc-board-unit));
+    box-sizing: border-box;
+    margin: 0;
+    padding: calc(6 * var(--fc-board-unit));
+    border: 1px solid #ffffff32 !important;
+    border-radius: 50% !important;
+    background-color: #ffffff19;
+  }
+  .fc-board-preview > .fc-board-delete img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .fc-board-preview > .fc-board-check {
+    appearance: none;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: calc(24 * var(--fc-board-unit));
+    cursor: pointer;
+  }
+  footer {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: calc(8 * var(--fc-board-unit));
+    padding: calc(16 * var(--fc-board-unit)) calc(20 * var(--fc-board-unit)) 0;
+    > .fc-board-edit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: calc(5 * var(--fc-board-unit));
+      width: 100%;
+      height: calc(40 * var(--fc-board-unit));
+      border-radius: calc(100 * var(--fc-board-unit));
+      background: #ebebeb;
+      &:active {
+        background: #cac9c9;
+      }
+      img {
+        width: calc(15 * var(--fc-board-unit));
+        height: calc(15 * var(--fc-board-unit));
+      }
+    }
+  }
+  .fc-board-edit-actions {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: calc(40 * var(--fc-board-unit));
+    button {
+      flex: 1;
+      align-self: stretch;
+      border-radius: calc(6 * var(--fc-board-unit));
+      &:active {
+        background: #ebebeb;
+      }
+      img {
+        width: calc(24 * var(--fc-board-unit));
+        height: calc(24 * var(--fc-board-unit));
+      }
+    }
+  }
+  .fc-board-restore {
+    align-self: center;
+    gap: calc(5 * var(--fc-board-unit));
+    padding: calc(4 * var(--fc-board-unit));
+    svg {
+      width: calc(18 * var(--fc-board-unit));
+      height: calc(18 * var(--fc-board-unit));
+    }
+  }
+}
+@media (orientation: portrait) {
+  .app .fc-board-panel.fc-board-preview-list.MuiPaper-root {
+    width: min(calc(239 * var(--fc-board-unit)), calc(100% - 24px));
+    .fc-board-list {
+      max-height: calc(4.5 * 317 * var(--fc-board-unit));
+    }
+  }
+}

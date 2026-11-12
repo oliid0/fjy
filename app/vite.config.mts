@@ -1,4 +1,5 @@
 import path from "path";
+import { rm } from "node:fs/promises";
 
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
@@ -9,13 +10,23 @@ import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
 
+import { vegaAssetAliases } from "../config/vegaAssets";
+import { assertClientRuntimeBoundary } from "../config/clientRuntimeBoundary";
+import { assertNativeInferenceBoundary } from "../config/nativeInferenceBoundary";
+
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const nativeInference = process.env.VITE_NATIVE_INFERENCE === "true";
   // To load .env variables
   const envDir = path.resolve(__dirname, "../config");
   const envVars = loadEnv(mode, envDir);
   // https://vitejs.dev/config/
   return {
+    define: {
+      "import.meta.env.VITE_NATIVE_INFERENCE": JSON.stringify(
+        nativeInference ? "true" : "false",
+      ),
+    },
     server: {
       port: Number(envVars.VITE_APP_PORT || 3000),
       // open the browser
@@ -25,6 +36,7 @@ export default defineConfig(({ mode }) => {
     worker: { format: "es" },
     resolve: {
       alias: [
+        ...vegaAssetAliases,
         {
           find: /^@fcboard\/common$/,
           replacement: path.resolve(
@@ -77,12 +89,15 @@ export default defineConfig(({ mode }) => {
       ],
     },
     build: {
-      outDir: "build",
+      outDir: nativeInference ? "build-android" : "build",
       rollupOptions: {
         input: {
           app: path.resolve(__dirname, "index.html"),
         },
         output: {
+          // Keep shared geometry dependencies out of inference chunks. Otherwise
+          // the UI's clipper-lib import also initializes OpenCV's embedded WASM.
+          onlyExplicitManualChunks: true,
           assetFileNames(chunkInfo) {
             if (chunkInfo?.name?.endsWith(".woff2")) {
               const family = chunkInfo.name.split("-")[0];
@@ -97,10 +112,10 @@ export default defineConfig(({ mode }) => {
           // or fallback hence not clubbing with locales so first load followed by offline mode works fine. This is how CRA used to work too.
           manualChunks(id) {
             if (
-              id.includes("@paddleocr/paddleocr-js") ||
-              id.includes("@techstark/opencv-js") ||
-              id.includes("onnxruntime-web") ||
-              id.includes("clipper-lib")
+              !nativeInference &&
+              (id.includes("@paddleocr/paddleocr-js") ||
+                id.includes("@techstark/opencv-js") ||
+                id.includes("onnxruntime-web"))
             ) {
               return "fcboard-ocr.chunk";
             }
@@ -129,31 +144,55 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
-      sourcemap: true,
-      // don't auto-inline small assets (i.e. fonts hosted on CDN)
-      assetsInlineLimit: 0,
+      sourcemap: envVars.VITE_APP_DISABLE_SENTRY !== "true",
+      // Keep small toolbar vectors/sprites in their owning bundle, ready at first paint.
+      assetsInlineLimit: 8192,
     },
     plugins: [
+      {
+        name: "fcboard-client-runtime-boundary",
+        apply: "build",
+        async writeBundle(options) {
+          if (nativeInference && options.dir) {
+            await Promise.all(
+              ["ocr", "local-models", "dictionary"].map((name) =>
+                rm(path.join(options.dir!, name), {
+                  recursive: true,
+                  force: true,
+                }),
+              ),
+            );
+          }
+        },
+        generateBundle(_options, bundle) {
+          assertClientRuntimeBoundary(bundle);
+          if (nativeInference) {
+            assertNativeInferenceBoundary(bundle);
+          }
+        },
+      },
       Sitemap({
         hostname: "http://www.fcjyboard.com",
-        outDir: "build",
+        outDir: nativeInference ? "build-android" : "build",
         changefreq: "monthly",
         // its static in public folder
         generateRobotsTxt: false,
       }),
       woff2BrowserPlugin(),
       react(),
-      checker({
-        typescript: true,
-        eslint:
-          envVars.VITE_APP_ENABLE_ESLINT === "false"
-            ? undefined
-            : { lintCommand: 'eslint "./**/*.{js,ts,tsx}"' },
-        overlay: {
-          initialIsOpen: envVars.VITE_APP_COLLAPSE_OVERLAY === "false",
-          badgeStyle: "margin-bottom: 4rem; margin-left: 1rem",
-        },
-      }),
+      // CI checks types/lint separately; packaging must not spawn duplicate checkers.
+      command === "serve" &&
+        checker({
+          typescript: true,
+          eslint:
+            envVars.VITE_APP_ENABLE_ESLINT === "false"
+              ? undefined
+              : { lintCommand: 'eslint "./**/*.{js,ts,tsx}"' },
+          overlay: {
+            initialIsOpen: envVars.VITE_APP_COLLAPSE_OVERLAY === "false",
+            badgeStyle: "margin-bottom: 4rem; margin-left: 1rem",
+          },
+        }),
       svgrPlugin(),
       ViteEjsPlugin(),
       VitePWA({
@@ -167,6 +206,7 @@ export default defineConfig(({ mode }) => {
           // don't precache fonts, locales and separate chunks
           globIgnores: [
             "**/ocr/**",
+            "**/local-models/**",
             // The SDK also emits its default worker/runtime, but localOcr uses
             // the checksum-pinned /ocr/ copies. Never download these duplicates
             // during service-worker installation.
@@ -244,8 +284,9 @@ export default defineConfig(({ mode }) => {
               },
             },
           ],
-          // Include the pinned 5.15 MB Office WASM engine for offline document previews.
-          maximumFileSizeToCacheInBytes: 6 * 1024 ** 2,
+          // Precache the measured 6.32 MB UI bundle (including first-paint SVGs)
+          // and the 5.15 MB Office engine. Model/worker exclusions stay above.
+          maximumFileSizeToCacheInBytes: 8 * 1024 ** 2,
         },
         manifest: {
           short_name: "Fcboard",

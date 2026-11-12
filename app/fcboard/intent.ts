@@ -7,6 +7,29 @@ import {
   plotExpression,
 } from "./math";
 
+/** Both resource topics and spoken requests use the same visualization vocabulary. */
+export const visualizationTopic = (text: string) =>
+  /可视化|交互网页|图表|统计图|折线图|柱状图|条形图|散点图|饼图|热力图|箱线图|直方图|地图|人口增长|\b(?:html5?|visuali[sz](?:ation|e)|charts?|plots?|graphs?|maps?|histograms?|scatterplots?|population growth)\b/i.test(
+    text,
+  );
+
+/** Explicit chart requests bypass command planning and the single-function route. */
+export const visualizationRequest = (text: string) => {
+  if (
+    /(?:不要|不用|别|停止|取消).{0,8}(?:生成|绘制|制作|画)|\b(?:don't|do not|stop|cancel)\b/i.test(
+      text,
+    )
+  ) {
+    return null;
+  }
+  return visualizationTopic(text) &&
+    /^(?:(?:请|帮我|麻烦|我想|我要|给我)\s*)*(?:生成|绘制|画|制作|做|展示|演示|对比|比较|可视化)|^(?:please\s+)?(?:generate|create|draw|show|make|visuali[sz]e|compare)\b/i.test(
+      text.trim(),
+    )
+    ? text.trim()
+    : null;
+};
+
 /** A selected heading remains ink; an explicit question or instruction can act on the board. */
 export const selectionRequest = (text: string) =>
   /[?？]\s*$/.test(text.trim()) ||

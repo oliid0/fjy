@@ -1,0 +1,191 @@
+// Verified activity_multi_screen/layout_multi_screen_view and native selectors.
+// A stronger scope replaces legacy fixed-pixel split styles without changing other tools.
+.app .fc-classroom .fc-split-board {
+  color: #010101;
+  .fc-split-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    transform: translateX(-50%);
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 9px;
+      width: 2px;
+      background: #fcfcfe;
+    }
+    &:focus-visible::after {
+      background: #0368ff;
+      width: 4px;
+    }
+    &[aria-disabled="true"] {
+      pointer-events: none;
+    }
+  }
+  .fc-split-pane {
+    border-inline-end-width: calc(2 * var(--fc-split-unit, 0.67px));
+  }
+  .fc-split-pane:first-child .fc-split-bottom {
+    left: calc(64 * var(--fc-split-unit, 0.67px));
+  }
+  .fc-split-bottom {
+    bottom: 0;
+    height: calc(54 * var(--fc-split-unit, 0.67px));
+  }
+  .fc-split-penbar {
+    height: auto;
+    min-height: calc(52 * var(--fc-split-unit, 0.67px));
+    max-width: calc(100% - 12 * var(--fc-split-unit, 0.67px));
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    overscroll-behavior: contain;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    button:focus-visible {
+      outline-width: calc(2 * var(--fc-split-unit, 0.67px));
+      outline-offset: calc(-1 * var(--fc-split-unit, 0.67px));
+    }
+  }
+  .fc-split-erasers {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0;
+    button {
+      width: calc(38 * var(--fc-split-unit, 0.67px));
+      height: calc(38 * var(--fc-split-unit, 0.67px));
+      padding: calc(3 * var(--fc-split-unit, 0.67px));
+    }
+  }
+  .fc-split-colors,
+  .fc-split-erasers {
+    button > svg {
+      width: calc(26 * var(--fc-split-unit, 0.67px));
+      height: calc(26 * var(--fc-split-unit, 0.67px));
+    }
+    button[aria-pressed="true"] {
+      background: #e0e0e0;
+      border-radius: 50%;
+      outline: 1px solid #7b7b7b;
+    }
+  }
+  .fc-split-colors {
+    flex: 0 0 auto;
+    gap: 0;
+    padding-left: calc(4 * var(--fc-split-unit, 0.67px));
+    button {
+      position: relative;
+      width: calc(38 * var(--fc-split-unit, 0.67px));
+      height: calc(38 * var(--fc-split-unit, 0.67px));
+      padding: calc(3 * var(--fc-split-unit, 0.67px));
+      > span {
+        position: relative;
+        width: calc(26 * var(--fc-split-unit, 0.67px));
+        height: calc(26 * var(--fc-split-unit, 0.67px));
+        border: 0;
+      }
+      &:focus-visible {
+        outline: calc(2 * var(--fc-split-unit, 0.67px)) solid #0368ff;
+      }
+    }
+  }
+  .fc-split-divider {
+    flex-basis: calc(1 * var(--fc-split-unit, 0.67px));
+    align-self: stretch;
+    height: auto;
+    margin-inline: calc(8 * var(--fc-split-unit, 0.67px));
+  }
+  .fc-split-widths {
+    flex: 0 0 auto;
+    gap: calc(6 * var(--fc-split-unit, 0.67px));
+    padding-inline: calc(8 * var(--fc-split-unit, 0.67px));
+    button {
+      width: calc(26 * var(--fc-split-unit, 0.67px));
+      height: calc(26 * var(--fc-split-unit, 0.67px));
+    }
+  }
+  > .fc-split-exit {
+    bottom: 0;
+    left: calc(20 * var(--fc-split-unit, 0.67px));
+    width: calc(52 * var(--fc-split-unit, 0.67px));
+    height: calc(52 * var(--fc-split-unit, 0.67px));
+    padding: calc(12 * var(--fc-split-unit, 0.67px));
+    border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+    color: #010101;
+    &[aria-expanded="true"],
+    &:focus-visible {
+      background: #0368ff;
+      color: #fcfcfe;
+    }
+    &:active {
+      background: #ebebeb;
+      color: #010101;
+    }
+  }
+}
+.app .fc-classroom .fc-split-launcher {
+  box-sizing: border-box;
+  width: calc(198 * var(--fc-split-unit, 0.67px));
+  height: calc(72 * var(--fc-split-unit, 0.67px));
+  gap: calc(15 * var(--fc-split-unit, 0.67px));
+  padding: calc(12 * var(--fc-split-unit, 0.67px));
+  border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+  color: #010101;
+  > button {
+    flex: 0 0 calc(48 * var(--fc-split-unit, 0.67px));
+    width: calc(48 * var(--fc-split-unit, 0.67px));
+    height: calc(48 * var(--fc-split-unit, 0.67px));
+    padding: calc(10 * var(--fc-split-unit, 0.67px));
+    border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+    color: #010101;
+    &:focus-visible {
+      outline: 0;
+      color: #fcfcfe;
+      background: #0368ff;
+    }
+    &:active {
+      background: #ebebeb;
+    }
+  }
+}
+.app .fc-classroom .fc-split-exit-dialog {
+  position: absolute;
+  z-index: 72;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  min-height: 0;
+  padding: calc(20 * var(--fc-split-unit, 0.67px))
+    calc(30 * var(--fc-split-unit, 0.67px));
+  border: 0;
+  border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+  background: #fcfcfe;
+  color: #010101;
+  > p {
+    margin: 0;
+    font-size: calc(16 * var(--fc-split-unit, 0.67px));
+  }
+  > p[role="alert"] {
+    margin-top: calc(12 * var(--fc-split-unit, 0.67px));
+    color: #c42d28;
+  }
+  footer {
+    justify-content: space-between;
+    margin-top: calc(20 * var(--fc-split-unit, 0.67px));
+    gap: calc(30 * var(--fc-split-unit, 0.67px));
+  }
+  footer button {
+    min-height: calc(24 * var(--fc-split-unit, 0.67px));
+    padding: 0;
+    color: #0368ff;
+    font-size: calc(16 * var(--fc-split-unit, 0.67px));
+    &:disabled {
+      opacity: 0.45;
+    }
+  }
+}

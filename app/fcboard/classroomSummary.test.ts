@@ -21,8 +21,8 @@ const setup = (count: number) => {
     updated: i,
   }));
   const ids = pages.slice(0, count).map((page) => page.id);
-  const unread = classroomCommands.context("teacher", () => ({
-    canvas: { boards: ids },
+  const unread = classroomCommands.context("classroom.scope", () => ({
+    boards: ids,
   }));
   const unpages = classroomCommands.register(
     "board.pages",

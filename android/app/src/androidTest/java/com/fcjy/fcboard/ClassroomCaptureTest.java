@@ -48,6 +48,14 @@ public class ClassroomCaptureTest {
             assertNotNull(bitmap);
             assertTrue(bitmap.getWidth() > 100 && bitmap.getWidth() <= 1280);
             assertTrue(bitmap.getHeight() > 100);
+            int firstPixel = bitmap.getPixel(0, 0);
+            boolean varied = false;
+            for (int y = 0; y < bitmap.getHeight() && !varied; y += 8) {
+                for (int x = 0; x < bitmap.getWidth(); x += 8) {
+                    if (bitmap.getPixel(x, y) != firstPixel) { varied = true; break; }
+                }
+            }
+            assertTrue("Capture must contain actual app pixels, not an empty software frame", varied);
             bitmap.recycle();
         }
     }

@@ -82,7 +82,10 @@ for (const viewport of [
             available: button.clientHeight,
             content:
               icon.getBoundingClientRect().height +
-              parseFloat(getComputedStyle(button, "::after").lineHeight) +
+              parseFloat(
+                getComputedStyle(button.querySelector(".ToolIcon__label")!)
+                  .lineHeight,
+              ) +
               parseFloat(style.rowGap) +
               parseFloat(style.paddingTop) +
               parseFloat(style.paddingBottom),
@@ -134,7 +137,9 @@ for (const viewport of [
     await expect(
       settings.getByRole("slider", { name: "笔锋变化率", exact: true }),
     ).toBeVisible();
-    await settings.getByRole("button", { name: "语言", exact: true }).click();
+    await settings
+      .getByRole("button", { name: "语言", exact: true })
+      .click({ position: { x: 8, y: 12 } });
     await expect(
       settings.getByRole("combobox", { name: "选择语言", exact: true }),
     ).toBeVisible();
@@ -167,6 +172,55 @@ for (const viewport of [
     await page.getByRole("listbox").press("Escape");
     await expect(page.getByRole("listbox")).toBeHidden();
     await expect(settings).toBeVisible();
+    for (const [key, label, options] of [
+      [
+        "ocr",
+        "手写识别",
+        [
+          ["local", "本地轨迹（Android）/ 截图识别（Web）"],
+          ["cloud", "云端视觉识别"],
+          ["auto", "本地优先 · 本地失败才使用云端"],
+        ],
+      ],
+      ...[
+        ["mathTranscription", "数学转录回退"],
+        ["translationProvider", "翻译方式"],
+        ["handwritingGeneration", "文字转手写体"],
+      ].map(
+        ([key, label]) =>
+          [
+            key,
+            label,
+            [
+              ["cloud", "云端 · 需要配置密钥"],
+              ["local", "本地 · 离线，无需密钥"],
+            ],
+          ] as const,
+      ),
+    ] as const) {
+      const select = settings.getByRole("combobox", {
+        name: label,
+        exact: true,
+      });
+      for (const [value, name] of options) {
+        await select.click();
+        await page.getByRole("option", { name, exact: true }).click();
+        await expect(page.getByRole("listbox")).toBeHidden();
+        await expect(settings).toBeVisible();
+        await expect(select).toHaveText(name);
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (field) =>
+                JSON.parse(localStorage.getItem("fcboard-settings") || "{}")[
+                  field
+                ],
+              key,
+            ),
+          )
+          .toBe(value);
+      }
+    }
     await recognition.click();
     await page
       .locator(".MuiMenu-root .MuiBackdrop-root")
@@ -189,8 +243,11 @@ for (const viewport of [
     await toolbar.evaluate((element) => {
       element.scrollLeft = 0;
     });
-    const pen = toolbar.getByRole("button", { name: "画笔", exact: true });
+    const pen = toolbar.getByRole("button", { name: "笔", exact: true });
     await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeVisible();
+    await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeHidden();
     await pen.click();
     await expect(
       page.getByRole("dialog", { name: "画笔与对象属性" }),
@@ -209,7 +266,7 @@ for (const viewport of [
     await page.keyboard.press("Escape");
     await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     const insertIconWidth = (await page
-      .locator(".fc-insert-grid button svg")
+      .locator(".fc-insert-grid button img, .fc-insert-grid button svg")
       .first()
       .boundingBox())!.width;
     await page.getByRole("button", { name: "表格", exact: true }).click();
@@ -239,12 +296,12 @@ for (const viewport of [
     const tools = page.getByRole("dialog", { name: "工具箱", exact: true });
     await expect(tools.getByText("更多工具", { exact: true })).toHaveCount(0);
     await expect(
-      tools.getByRole("button", { name: "语音指令", exact: true }),
+      tools.getByRole("button", { name: "打开投票", exact: true }),
     ).toBeVisible();
     const toolsBounds = (await tools.boundingBox())!;
     expect(
       await tools
-        .locator(".fc-insert-grid button svg")
+        .locator(".fc-insert-grid button img, .fc-insert-grid button svg")
         .first()
         .evaluate((element) => element.getBoundingClientRect().width),
     ).toBeCloseTo(insertIconWidth, 1);
@@ -258,17 +315,17 @@ for (const viewport of [
         (element) =>
           getComputedStyle(element).gridTemplateColumns.split(" ").length,
       );
-    expect(columns).toBe(viewport.width <= 600 ? 4 : 6);
+    expect(columns).toBe(5);
     await page.screenshot({
       path: testInfo.outputPath(`tools-${viewport.width}.png`),
     });
     await expect(
-      tools.getByRole("button", { name: "语音指令", exact: true }),
+      tools.getByRole("button", { name: "打开投票", exact: true }),
     ).toBeVisible();
     await tools.press("Escape");
     await expect(tools).toBeHidden();
     await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
-    await page.getByRole("button", { name: "教学资源", exact: true }).click();
+    await page.getByRole("button", { name: "学科工具", exact: true }).click();
     const resources = page.getByRole("dialog", {
       name: "教学资源",
       exact: true,
@@ -309,24 +366,34 @@ for (const viewport of [
   });
 }
 
-test("selecting a formula draws an editable graph and changing its parameter updates the same graph", async ({
+test("selecting a formula creates pure interactive axes and parameter/zoom edits keep its document", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("toolbar", { name: "白板工具栏" })).toBeVisible();
   await enterText(page, "y=a*x+1");
   await page.getByRole("button", { name: "AI", exact: true }).click();
-  const slider = page.getByRole("slider", { name: "调节 a", exact: true });
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
+  const graph = page.frameLocator("iframe[data-resource-object-id]").last();
+  const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
+  await graph.locator("html").evaluate((html) => {
+    html.dataset.mount = "original";
+  });
+  const curve = graph.locator("#fc-vega .mark-line path").first();
+  const initial = await curve.getAttribute("d");
   await slider.focus();
   for (let i = 0; i < 10; i++) {
     await slider.press("ArrowRight");
   }
   await expect(slider).toHaveValue("2");
-  await page.getByRole("button", { name: "关闭工具浮层" }).click();
-  await page.mouse.click(80, 400);
-  await page.keyboard.press("v");
-  await page.keyboard.press("Control+a");
+  await expect.poll(() => curve.getAttribute("d")).not.toBe(initial);
+  const beforeZoom = await curve.getAttribute("d");
+  await graph.locator("#fc-vega").hover();
+  await page.mouse.wheel(0, -150);
+  await expect.poll(() => curve.getAttribute("d")).not.toBe(beforeZoom);
+  await expect(graph.getByRole("spinbutton")).toHaveCount(0);
+  await expect(graph.locator("html")).toHaveAttribute("data-mount", "original");
   await expect(slider).toHaveValue("2");
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });
 });
@@ -345,6 +412,7 @@ test("typed equations calculate only after tapping the selection action", async 
   await page.reload();
   await enterText(page, "1+1=");
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   await expect
     .poll(
       () =>
@@ -420,6 +488,7 @@ test("selected handwriting sends its PNG only after tapping calculate", async ({
   await expect(page.getByRole("toolbar", { name: "选区操作" })).toBeVisible();
   expect(requests).toBe(0);
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   await expect
     .poll(
       () =>
@@ -582,3 +651,58 @@ test("inserting four-line writing paper immediately accepts ink on its surface",
     )
     .toBe(1);
 });
+
+for (const background of ["#ffffff", "#123d32"]) {
+  test(`compact bare toolbar remains visible on ${background}`, async ({
+    page,
+  }) => {
+    await page.addInitScript((color) => {
+      localStorage.setItem(
+        "fcboard-state",
+        JSON.stringify({ viewBackgroundColor: color, theme: "light" }),
+      );
+    }, background);
+    await page.goto("/");
+    const toolbar = page.getByRole("toolbar", {
+      name: "白板工具栏",
+      exact: true,
+    });
+    await expect(toolbar).toBeVisible();
+    const style = await toolbar.evaluate((node) => {
+      const groups = [
+        ...node.querySelectorAll<HTMLElement>(
+          ":scope > .fc-toolbar-side, :scope > .fc-drawing-tools",
+        ),
+      ];
+      const pen = node.querySelector<HTMLElement>('button[aria-label="笔"]')!;
+      const other = node.querySelector<HTMLElement>(
+        'button[aria-label="板擦"]',
+      )!;
+      return {
+        backgrounds: groups.map(
+          (group) => getComputedStyle(group).backgroundColor,
+        ),
+        padding: groups.map((group) => [
+          getComputedStyle(group).paddingTop,
+          getComputedStyle(group).paddingBottom,
+        ]),
+        height: node.getBoundingClientRect().height,
+        buttonHeight: pen.getBoundingClientRect().height,
+        color: getComputedStyle(other).color,
+        iconWidth: other.querySelector("svg")!.getBoundingClientRect().width,
+      };
+    });
+    expect(
+      style.backgrounds.every((value) => value === "rgb(252, 252, 254)"),
+    ).toBe(true);
+    expect(
+      style.padding.every((value) =>
+        value.every((side) => Math.abs(parseFloat(side) - 8 * 0.67) < 0.1),
+      ),
+    ).toBe(true);
+    expect(style.height).toBeCloseTo(74 * 0.67, 1);
+    expect(style.buttonHeight).toBeCloseTo(58 * 0.67, 1);
+    expect(style.iconWidth).toBeGreaterThan(15);
+    expect(style.color).toBe("rgb(1, 1, 1)");
+  });
+}

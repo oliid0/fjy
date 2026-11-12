@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Node 22.21+ fetch otherwise ignores the runner's trusted proxy environment.
+env:
+  NODE_USE_ENV_PROXY: "1"
+
 permissions:
   contents: read
 
@@ -16,7 +20,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -40,8 +44,8 @@ jobs:
         run: python -m unittest discover -s services/index-tts -p 'test_*.py'
 
   android:
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -63,26 +67,23 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Package web application
         # Models and runtime are shipped with the app; no first-use CDN download.
-        run: node scripts/fetch-ocr-models.mjs
-      - name: Package whiteboard web assets
+        run: |
+          node scripts/fetch-ocr-models.mjs
+          node scripts/fetch-local-models.mjs
+          python3 scripts/fetch-dictionary.py
+      - name: Package Android visual interaction assets without browser inference
+        timeout-minutes: 8
         run: pnpm --dir app exec vite build
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          VITE_NATIVE_INFERENCE: "true"
+          NODE_OPTIONS: "--max-old-space-size=6144"
           VITE_APP_ENABLE_TRACKING: "false"
           VITE_APP_DISABLE_SENTRY: "true"
-      - name: Upload deployable live-share service and matching viewer
-        uses: actions/upload-artifact@v4
-        with:
-          name: Fcboard-Live-Share
-          path: |
-            services/board-share/server.mjs
-            services/board-share/transfers.mjs
-            services/board-share/package.json
-            services/board-share/README.md
-            services/board-share/deploy
-            app/build
-          if-no-files-found: error
       - run: pnpm --dir app exec cap sync android
+        env:
+          VITE_NATIVE_INFERENCE: "true"
+      - name: Bundle native inference models outside WebView
+        run: node scripts/prepare-native-inference.mjs
       - uses: actions/cache@v4
         with:
           path: android/app/src/main/assets/speech
@@ -97,6 +98,10 @@ jobs:
           key: fcboard-tts-${{ hashFiles('scripts/tts-models.json') }}
       - name: Bundle verified offline Chinese and English narration
         run: python3 scripts/fetch-tts-models.py
+      - name: Prepare verified native ONNX runtimes without duplicate libraries
+        run: |
+          python3 -m unittest discover -s scripts -p test_android_ort.py
+          python3 scripts/prepare-android-ort.py
       - name: Bundle verified offline Digital Ink models
         run: python3 scripts/fetch-ink-models.py
       - name: Package Android
@@ -105,42 +110,19 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-arm64-v8a
-          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-armeabi-v7a
-          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-x86
-          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
-        with:
-          name: Fcboard-Android-APK-x86_64
-          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
-          if-no-files-found: error
+      - name: Package whiteboard web assets
+        timeout-minutes: 8
+        run: pnpm --dir app exec vite build
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
+          VITE_APP_ENABLE_TRACKING: "false"
+          VITE_APP_DISABLE_SENTRY: "true"
       - name: Report packaged models and native library sizes
         if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         run: python3 scripts/apk-size-report.py >> "$GITHUB_STEP_SUMMARY"
       - name: Verify Android unit tests and lint
         working-directory: android
         run: ./gradlew testDebugUnitTest lintDebug --no-daemon
-      - name: Install browser for layout and interaction checks
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Verify production whiteboard interactions
-        run: |
-          node scripts/fetch-courseware-fixtures.mjs
-          pnpm exec playwright test --config config/playwright.config.ts
       - name: Enable emulator acceleration
         if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
         run: |
@@ -172,13 +154,23 @@ jobs:
           # Headless runs reported invalid Vulkan color buffers before WebView stopped replying.
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -feature -Vulkan
           script: bash scripts/verify-android-runtime.sh
+      - name: Install browser for layout and interaction checks
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify production whiteboard interactions
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        run: |
+          node scripts/fetch-courseware-fixtures.mjs
+          pnpm exec playwright test --config config/playwright.config.ts
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
         if: always()
         with:
           name: Fcboard-UI-verification
           path: test-results
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
         if: always()
         with:
           name: Fcboard-Android-verification
@@ -188,7 +180,49 @@ jobs:
             android/app/build/outputs/connected_android_test_additional_output
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
         with:
           name: Fcboard-Web
           path: app/build
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-arm64-v8a
+          path: android/app/build/outputs/apk/debug/*-arm64-v8a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-armeabi-v7a
+          path: android/app/build/outputs/apk/debug/*-armeabi-v7a-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86
+          path: android/app/build/outputs/apk/debug/*-x86-debug.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.android-package.outcome == 'success' }}
+        with:
+          name: Fcboard-Android-APK-x86_64
+          path: android/app/build/outputs/apk/debug/*-x86_64-debug.apk
+          if-no-files-found: error
+      - name: Upload deployable live-share service and matching viewer
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fcboard-Live-Share
+          path: |
+            services/board-share/server.mjs
+            services/board-share/transfers.mjs
+            services/board-share/package.json
+            services/board-share/README.md
+            services/board-share/deploy
+            app/build
           if-no-files-found: error

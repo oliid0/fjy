@@ -1,6 +1,9 @@
-import { newFrameElement } from "@fcboard/element";
+import { newFrameElement, newImageElement } from "@fcboard/element";
 
 import type { AppState } from "@fcboard/fcboard/types";
+import type { FileId } from "@fcboard/element/types";
+
+import { functionGraphImage } from "./functionVisualization";
 
 import type { Board, Workspace } from "./boards";
 
@@ -51,9 +54,37 @@ export const boardPageExportOptions = (
       1,
       maxEdge / (Math.max(size.width, size.height) * size.pixelRatio),
     );
+  let files = board.files;
+  const elements = board.elements
+    .filter((element) => !element.isDeleted)
+    .map((element) => {
+      const graph = element.customData?.fcPlot;
+      if (element.type !== "iframe" || graph?.renderer !== "iframe") {
+        return element;
+      }
+      const dataURL = functionGraphImage(graph.plot, element.strokeColor);
+      const fileId =
+        `function-export-${element.id}-${element.version}` as FileId;
+      if (files === board.files) {
+        files = { ...board.files };
+      }
+      files[fileId] = {
+        id: fileId,
+        dataURL,
+        mimeType: "image/svg+xml",
+        created: element.updated,
+      };
+      return newImageElement({
+        ...element,
+        type: "image",
+        fileId,
+        status: "saved",
+        scale: [1, 1],
+      });
+    });
   return {
-    elements: board.elements.filter((element) => !element.isDeleted),
-    files: board.files,
+    elements,
+    files,
     appState: {
       ...board.view,
       exportBackground: true,

@@ -237,6 +237,7 @@ export type FcboardTextElement = _FcboardElementBase &
     type: "text";
     fontSize: number;
     fontFamily: FontFamilyValues;
+    fontWeight?: 400 | 700;
     text: string;
     textAlign: TextAlign;
     verticalAlign: VerticalAlign;

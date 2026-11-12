@@ -1,3 +1,4 @@
+import { isNativeInkPalette } from "@fcboard/element/nativeInkColor";
 import { isFiniteNumber, pointFrom } from "@fcboard/math";
 
 import {
@@ -392,6 +393,9 @@ export const restoreElement = (
       element = restoreElementWithProperties(element, {
         fontSize,
         fontFamily,
+        ...(element.fontWeight !== undefined
+          ? { fontWeight: element.fontWeight === 700 ? 700 : 400 }
+          : {}),
         text,
         textAlign: element.textAlign || DEFAULT_TEXT_ALIGN,
         verticalAlign: element.verticalAlign || DEFAULT_VERTICAL_ALIGN,
@@ -925,6 +929,35 @@ export const restoreAppState = (
   }
 
   const inkPreferences = { ...localAppState, ...appState };
+  const shapeStyle = inkPreferences.whiteboardShapeStyle;
+  if (
+    shapeStyle &&
+    /^#[\da-f]{6}$/i.test(shapeStyle.color) &&
+    typeof shapeStyle.fill === "boolean"
+  ) {
+    nextAppState.whiteboardShapeStyle = {
+      color: shapeStyle.color,
+      fill: shapeStyle.fill,
+    };
+  }
+  if (inkPreferences.whiteboardPenTipsVersion !== 2) {
+    const tip = inkPreferences.whiteboardPenTip;
+    if (tip === "fine" || tip === "thick") {
+      inkPreferences.whiteboardPenTip = tip === "fine" ? "thick" : "fine";
+    }
+    if (inkPreferences.whiteboardPenTips) {
+      const { fine, thick } = inkPreferences.whiteboardPenTips;
+      inkPreferences.whiteboardPenTips = { fine: thick, thick: fine };
+    }
+  }
+  if (
+    inkPreferences.whiteboardPenTipsVersion === 2 ||
+    inkPreferences.whiteboardPenTips ||
+    inkPreferences.whiteboardPenTip === "fine" ||
+    inkPreferences.whiteboardPenTip === "thick"
+  ) {
+    nextAppState.whiteboardPenTipsVersion = 2;
+  }
   if (["fine", "thick"].includes(String(inkPreferences.whiteboardPenTip))) {
     nextAppState.whiteboardPenTip = inkPreferences.whiteboardPenTip;
   }
@@ -947,6 +980,9 @@ export const restoreAppState = (
     ) {
       nextAppState[key] = threshold;
     }
+  }
+  if (isNativeInkPalette(inkPreferences.currentItemInkGradient)) {
+    nextAppState.currentItemInkGradient = inkPreferences.currentItemInkGradient;
   }
   if (inkPreferences.whiteboardPenTips) {
     nextAppState.whiteboardPenTips = {};
@@ -978,6 +1014,9 @@ export const restoreAppState = (
         nextAppState.whiteboardPenTips[tip] = {
           mode: saved.mode,
           color: saved.color,
+          ...(isNativeInkPalette(saved.gradient)
+            ? { gradient: saved.gradient }
+            : {}),
           width: saved.width,
           widths,
           ...(["text", "shape", "magic", "function", "calculation"].includes(
@@ -1033,7 +1072,9 @@ export const restoreAppState = (
   ) {
     nextAppState.currentItemInkAssist = inkPreferences.currentItemInkAssist;
   }
-  if (["stroke", "object"].includes(String(inkPreferences.eraserMode))) {
+  if (
+    ["stroke", "object", "region"].includes(String(inkPreferences.eraserMode))
+  ) {
     nextAppState.eraserMode = inkPreferences.eraserMode;
   }
   if (typeof inkPreferences.palmEraser === "boolean") {
@@ -1041,6 +1082,9 @@ export const restoreAppState = (
   }
   if (typeof inkPreferences.multiStroke === "boolean") {
     nextAppState.multiStroke = inkPreferences.multiStroke;
+  }
+  if (typeof inkPreferences.toolbarCollapseEnabled === "boolean") {
+    nextAppState.toolbarCollapseEnabled = inkPreferences.toolbarCollapseEnabled;
   }
   if (typeof inkPreferences.toolbarReversed === "boolean") {
     nextAppState.toolbarReversed = inkPreferences.toolbarReversed;

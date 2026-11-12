@@ -5,7 +5,13 @@ import { factoryBrushWidths } from "@fcboard/element/factoryBrush";
 
 import { Fonts } from "@fcboard/fcboard/fonts";
 
-import type { AppState, FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type {
+  AppState,
+  DataURL,
+  FcboardImperativeAPI,
+} from "@fcboard/fcboard/types";
+
+import { defaults, saveSettings } from "./settings";
 
 import { render } from "./test/render";
 import { FilePreview } from "./FilePreview";
@@ -22,9 +28,13 @@ import {
 import * as documentTools from "./documents";
 import * as ocr from "./ocr";
 import * as ai from "./ai";
+import * as digitalInk from "./digitalInk";
 import { languageStudy } from "./test/language";
 import { LanguagePanel, readLanguageCard } from "./LanguagePanel";
 import { registerCanvasCommands } from "./canvasCommands";
+import { SelectionActions } from "./SelectionActions";
+import * as imageGeneration from "./imageGeneration";
+import { registerLanguageCommands } from "./languageCommands";
 import { animateSolid } from "./solidAnimation";
 import { updateQuestionAnswer } from "./questionAnswer";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
@@ -41,6 +51,8 @@ import {
   documentWritingParts,
   insertionWritingTargets,
 } from "./insertionWriting";
+
+import type { InkStroke } from "./documents";
 
 vi.mock("./documents", async (original) => ({
   ...(await original<typeof import("./documents")>()),
@@ -296,13 +308,46 @@ it("applies assistant configuration to the next visible courseware stroke and ex
   }
 });
 
+it("chooses a local magic emoji after AI failure on the visible courseware page and undoes the replacement once", async () => {
+  vi.spyOn(digitalInk, "recognizeEmojiInk").mockResolvedValue(["😊", "🙂"]);
+  saveSettings({ ...defaults, apiKey: "", imageModel: "" }, false);
+  const { api, draw, svg, unmount } = await setup("magic");
+  const host = render(<InsertionCandidates />);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    draw();
+    const source = currentInk();
+    await act(async () => vi.advanceTimersByTimeAsync(1700));
+    expect(currentInk()).toEqual(source);
+    fireEvent.click(screen.getByRole("button", { name: "😊" }));
+    fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+    expect(currentInk()).toHaveLength(1);
+    expect(currentInk()[0]).toMatchObject({ text: "😊", originalText: "😊" });
+    expect(svg.textContent).toContain("😊");
+    expect(api.updateScene).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.undo_annotation") }),
+    );
+    expect(currentInk()).toEqual(source);
+  } finally {
+    host.unmount();
+    unmount();
+  }
+});
+
 it("translates courseware ink on the visible page, opens and hides its card, and undoes the whole conversion", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test-only", translationProvider: "cloud" },
+    false,
+  );
   await setLanguage(languages.find((language) => language.code === "zh-CN")!);
   vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(languageStudy.term);
   const chat = vi
     .spyOn(ai, "chat")
     .mockResolvedValue(JSON.stringify(languageStudy));
   const { api, draw, svg, unmount } = await setup("language");
+  const stopTranslate = registerLanguageCommands(api);
   const panel = render(<LanguagePanel api={api} />);
   const read = () =>
     (
@@ -328,14 +373,19 @@ it("translates courseware ink on the visible page, opens and hides its card, and
     );
     expect(translation.fontSize).toBeLessThanOrEqual(40);
     expect(api.getSceneElements()).toHaveLength(0);
-    expect(readLanguageCard(api, source.id)?.study).toEqual(languageStudy);
+    expect(readLanguageCard(api, source.id)?.study).toMatchObject({
+      term: languageStudy.term,
+      translation: languageStudy.translation,
+      backend: "translation",
+    });
     fireEvent.doubleClick(svg.querySelector(`[data-language="${source.id}"]`)!);
     await screen.findByRole("dialog", { name: t("fcboard.language_study") });
+    await screen.findByRole("tab", { name: t("fcboard.language_study") });
+    expect(chat).toHaveBeenCalledTimes(2);
     fireEvent.doubleClick(screen.getByRole("dialog"));
     expect(
       screen.queryByRole("dialog", { name: t("fcboard.language_study") }),
     ).toBeNull();
-    expect(chat).toHaveBeenCalledTimes(1);
     await act(async () => {
       await classroomCommands.execute({ name: "document.undo" });
     });
@@ -344,9 +394,14 @@ it("translates courseware ink on the visible page, opens and hides its card, and
     await act(async () => {
       await classroomCommands.execute({ name: "document.redo" });
     });
-    expect(readLanguageCard(api, source.id)?.study).toEqual(languageStudy);
+    expect(readLanguageCard(api, source.id)?.study).toMatchObject({
+      term: languageStudy.term,
+      translation: languageStudy.translation,
+      backend: "translation",
+    });
   } finally {
     panel.unmount();
+    stopTranslate();
     unmount();
     await setLanguage(defaultLang);
   }
@@ -724,7 +779,7 @@ it("selects and drags one courseware mind-map node, undoes once, then accepts ha
   pointer("pointerdown", target.x + 25, target.y + 20);
   pointer("pointermove", target.x + 45, target.y + 25);
   pointer("pointerup", target.x + 55, target.y + 25);
-  await act(async () => vi.advanceTimersByTimeAsync(700));
+  await act(async () => vi.advanceTimersByTimeAsync(1200));
   expect(recognize).toHaveBeenCalledTimes(1);
   expect(recognize.mock.calls[0][5]).toHaveLength(2);
   vi.useRealTimers();
@@ -1117,7 +1172,7 @@ it.each(["calculation", "function", "text"] as const)(
     vi.useFakeTimers();
     draw();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(700);
+      await vi.advanceTimersByTimeAsync(1200);
     });
     const { ink } = classroomCommands.read("document") as {
       ink: import("./documents").InkStroke[];
@@ -1148,6 +1203,30 @@ it.each(["calculation", "function", "text"] as const)(
   },
 );
 
+it("writes a completed calculation on courseware without the additional math pause", async () => {
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("11+11=");
+  const { pointer, update } = await setup("calculation");
+  vi.useFakeTimers();
+  pointer("pointerdown", 100, 100);
+  pointer("pointerup", 110, 140);
+  pointer("pointerdown", 140, 100);
+  pointer("pointerup", 150, 140);
+  pointer("pointerdown", 180, 115);
+  pointer("pointerup", 210, 115);
+  pointer("pointerdown", 180, 125);
+  pointer("pointerup", 210, 125);
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  const { ink } = classroomCommands.read("document") as {
+    ink: import("./documents").InkStroke[];
+  };
+  expect(recognize).toHaveBeenCalledTimes(1);
+  expect(ink.find((stroke) => stroke.text)?.text).toBe("22");
+  expect(ink.filter((stroke) => stroke.fcInk)).toHaveLength(4);
+  expect(update).not.toHaveBeenCalled();
+});
+
 it("discards recognition after its source is erased", async () => {
   let finish!: (text: string) => void;
   vi.spyOn(ocr, "recognizeHandwriting").mockReturnValue(
@@ -1159,7 +1238,7 @@ it("discards recognition after its source is erased", async () => {
   vi.useFakeTimers();
   draw();
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(1200);
   });
   const source = (
     classroomCommands.read("document") as {
@@ -1753,6 +1832,92 @@ it.each(["pointercancel", "lostpointercapture", "blur", "pointerup"])(
   },
 );
 
+it.each(["pointerup", "pointercancel"])(
+  "uses the shared region eraser only on release and handles %s without partial deletion",
+  async (end) => {
+    const { draw, pointer, svg, unmount } = await setup(undefined, {
+      eraserMode: "region",
+    });
+    try {
+      draw();
+      pointer("pointerdown", 500, 300);
+      pointer("pointerup", 600, 300);
+      const before = currentInk();
+      fireEvent.click(
+        screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
+      );
+      pointer("pointerdown", 80, 80);
+      pointer("pointermove", 220, 80);
+      pointer("pointermove", 220, 160);
+      pointer("pointermove", 80, 160);
+      expect(currentInk()).toEqual(before);
+      expect(
+        svg.querySelector("polyline[aria-hidden='true']"),
+      ).toBeInTheDocument();
+      pointer(end, 80, 80);
+      if (end === "pointercancel") {
+        expect(currentInk()).toEqual(before);
+      } else {
+        expect(currentInk().map((stroke) => stroke.id)).toEqual([before[1].id]);
+        await act(async () => {
+          await classroomCommands.execute({ name: "document.undo" });
+        });
+        expect(currentInk()).toEqual(before);
+        await act(async () => {
+          await classroomCommands.execute({ name: "document.redo" });
+        });
+        expect(currentInk().map((stroke) => stroke.id)).toEqual([before[1].id]);
+      }
+    } finally {
+      unmount();
+    }
+  },
+);
+
+it("clips only the circled courseware stroke fragment and restores its original trajectory with undo and redo", async () => {
+  const { pointer, draw, unmount } = await setup(undefined, {
+    eraserMode: "region",
+  });
+  try {
+    draw();
+    pointer("pointerdown", 500, 300);
+    pointer("pointerup", 600, 300);
+    const before = currentInk();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.erase_annotations") }),
+    );
+    pointer("pointerdown", 145, 70);
+    pointer("pointermove", 165, 70);
+    pointer("pointermove", 165, 170);
+    pointer("pointermove", 145, 170);
+    expect(currentInk()).toEqual(before);
+    pointer("pointerup", 145, 70);
+    const cut = currentInk();
+    expect(cut).toHaveLength(3);
+    expect(cut[2]).toEqual(before[1]);
+    expect(cut[0].points.at(-1)![0]).toBeCloseTo(145);
+    expect(cut[1].points[0][0]).toBeCloseTo(165);
+    expect(cut[0].points.every(([x]) => x <= 145 + 1e-6)).toBe(true);
+    expect(cut[1].points.every(([x]) => x >= 165 - 1e-6)).toBe(true);
+    expect(
+      cut
+        .slice(0, 2)
+        .every((stroke) => stroke.pressures?.length === stroke.points.length),
+    ).toBe(true);
+    expect(before[0].points.length).toBeGreaterThan(1);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()).toEqual(before);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.redo" });
+    });
+    expect(currentInk()).toEqual(cut);
+  } finally {
+    unmount();
+  }
+});
+
 it("opens compact eraser properties from the existing entry, updates real mode and closes without requiring a selection", async () => {
   const { api, unmount } = await setup();
   try {
@@ -2093,3 +2258,329 @@ it.each(["hard", "brush", "highlighter", "dashed", "rainbow"] as const)(
     }
   },
 );
+
+it("applies courseware border/fill/alpha as one undo, and performs actual hierarchy/lock actions through the common canvas commands", async () => {
+  const rows: InkStroke[] = [
+    {
+      id: "a",
+      color: "#000000",
+      width: 2,
+      points: [
+        [100, 100],
+        [200, 100],
+        [200, 180],
+        [100, 180],
+        [100, 100],
+      ],
+      shapeType: "rectangle",
+    },
+    {
+      id: "b",
+      color: "#000000",
+      width: 2,
+      points: [
+        [250, 100],
+        [350, 100],
+      ],
+    },
+  ];
+  vi.mocked(loadInk).mockResolvedValue({ 0: rows });
+  const { api, unmount } = await setup();
+  const stop = registerCanvasCommands(api);
+  const read = () =>
+    classroomCommands.read("document") as { ink: InkStroke[]; page: number };
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: ["a"] },
+      });
+      await classroomCommands.execute({
+        name: "canvas.style",
+        args: {
+          color: "#ff0000",
+          background: "#7fec50",
+          fillStyle: "solid",
+          strokeStyle: "dashed",
+          width: 4,
+          opacity: 50,
+        },
+      });
+    });
+    expect(read().ink[0]).toMatchObject({
+      color: "#ff0000",
+      fill: "#7fec50",
+      strokeStyle: "dashed",
+      width: 4,
+      opacity: 50,
+    });
+    expect(read().ink[1]).toEqual(rows[1]);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read().ink).toEqual(rows);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: ["a"] },
+      });
+      await classroomCommands.execute({
+        name: "canvas.action",
+        args: { action: "bringToFront" },
+      });
+    });
+    expect(read().ink.map((stroke) => stroke.id)).toEqual(["b", "a"]);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read().ink.map((stroke) => stroke.id)).toEqual(["a", "b"]);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: ["a"] },
+      });
+      await classroomCommands.execute({
+        name: "canvas.action",
+        args: { action: "toggleElementLock" },
+      });
+    });
+    expect(read().ink[0].locked).toBe(true);
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.style",
+        args: { color: "#ffffff" },
+      }),
+    ).rejects.toThrow(t("fcboard.selection_unlock_first"));
+    await expect(
+      classroomCommands.execute({
+        name: "document.erase",
+        args: { ids: ["a"] },
+      }),
+    ).rejects.toThrow(t("fcboard.selection_unlock_first"));
+    await expect(
+      classroomCommands.execute({
+        name: "canvas.align",
+        args: { horizontal: "center" },
+      }),
+    ).rejects.toThrow(t("fcboard.selection_unlock_first"));
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "canvas.action",
+        args: { action: "toggleElementLock" },
+      });
+    });
+    expect(read().ink[0].locked).toBe(false);
+  } finally {
+    stop();
+    unmount();
+  }
+});
+
+it("runs Creative from a real courseware selection and replaces the visible one-based page without another recognition step", async () => {
+  const { api, draw, pointer, unmount } = await setup();
+  const stop = registerCanvasCommands(api);
+  vi.spyOn(documentTools, "inkSnapshot").mockResolvedValue(
+    "data:image/png;base64,viewport" as DataURL,
+  );
+  vi.spyOn(ai, "cropImage").mockResolvedValue(
+    "data:image/png;base64,selected" as DataURL,
+  );
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const generate = vi
+    .spyOn(imageGeneration, "generateImage")
+    .mockResolvedValue({
+      dataURL: "data:image/png;base64,full-result" as DataURL,
+      mimeType: "image/png",
+      width: 300,
+      height: 200,
+    });
+  const controls = render(
+    <SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />,
+  );
+  try {
+    draw();
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.tool",
+        args: { tool: "selection" },
+      });
+    });
+    pointer("pointerdown", 70, 70);
+    pointer("pointermove", 240, 70);
+    pointer("pointermove", 240, 190);
+    pointer("pointermove", 70, 190);
+    pointer("pointerup", 70, 70);
+    fireEvent.click(await screen.findByRole("button", { name: "AI" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: t("fcboard.selection_creative") }),
+    );
+    await waitFor(() =>
+      expect(
+        (classroomCommands.read("document") as { ink: InkStroke[] }).ink.some(
+          (stroke) => stroke.image === "data:image/png;base64,full-result",
+        ),
+      ).toBe(true),
+    );
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(AbortSignal),
+      { referenceImage: "data:image/png;base64,selected", transparent: false },
+    );
+    expect(recognize).not.toHaveBeenCalled();
+  } finally {
+    controls.unmount();
+    stop();
+    unmount();
+  }
+});
+
+it("persists courseware text size/bold, edits inline without a ghost, and restores each transaction with undo", async () => {
+  const original: InkStroke = {
+    id: "editable-text",
+    points: [[120, 100]],
+    color: "#000000",
+    width: 1,
+    text: "Original",
+    fontSize: 24,
+  };
+  vi.mocked(loadInk).mockResolvedValue({ 0: [original] });
+  const { api, svg, unmount } = await setup();
+  const stop = registerCanvasCommands(api);
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [original.id] },
+      });
+      await classroomCommands.execute({
+        name: "canvas.style",
+        args: { fontSize: 48, fontWeight: 700 },
+      });
+    });
+    expect(currentInk()[0]).toMatchObject({
+      text: "Original",
+      fontSize: 48,
+      fontWeight: 700,
+    });
+    expect(svg.querySelector("text")).toHaveAttribute("font-weight", "700");
+    await act(async () => {
+      await classroomCommands.execute({ name: "canvas.editText" });
+    });
+    const editor = screen.getByRole("textbox", { name: t("buttons.edit") });
+    expect(svg.querySelector("text")).toBeNull();
+    fireEvent.change(editor, { target: { value: "Changed\nLine two" } });
+    fireEvent.blur(editor);
+    expect(currentInk()[0]).toMatchObject({
+      text: "Changed\nLine two",
+      fontSize: 48,
+      fontWeight: 700,
+    });
+    expect(svg.querySelector("text")).toHaveTextContent("ChangedLine two");
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()[0]).toMatchObject({
+      text: "Original",
+      fontSize: 48,
+      fontWeight: 700,
+    });
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()).toEqual([original]);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [original.id] },
+      });
+      await classroomCommands.execute({ name: "canvas.editText" });
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: t("buttons.edit") }), {
+      target: { value: "Cancelled" },
+    });
+    fireEvent.keyDown(
+      screen.getByRole("textbox", { name: t("buttons.edit") }),
+      { key: "Escape" },
+    );
+    expect(currentInk()).toEqual([original]);
+  } finally {
+    stop();
+    unmount();
+  }
+});
+
+it("crops courseware images from their original pixels, persists the SVG window, and rejects stale page/source commits", async () => {
+  const original: InkStroke = {
+    id: "crop-courseware",
+    points: [[100, 100]],
+    color: "#000000",
+    width: 1,
+    image: "data:image/png;base64,source",
+    imageWidth: 400,
+    imageHeight: 200,
+  };
+  vi.mocked(loadInk).mockResolvedValue({ 0: [original] });
+  const { svg, unmount } = await setup();
+  try {
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.cropImage",
+        args: {
+          id: original.id,
+          page: 1,
+          sourceSignature: documentSourceSignature([original]),
+          x: 200,
+          y: 100,
+          width: 300,
+          height: 200,
+          crop: {
+            x: 400,
+            y: 0,
+            width: 1200,
+            height: 800,
+            naturalWidth: 1600,
+            naturalHeight: 800,
+          },
+        },
+      });
+    });
+    expect(currentInk()[0]).toMatchObject({
+      image: original.image,
+      points: [[200, 100]],
+      imageWidth: 300,
+      imageHeight: 200,
+      imageCrop: { x: 400, width: 1200, naturalWidth: 1600 },
+    });
+    expect(svg.querySelector('svg[viewBox="400 0 1200 800"]')).not.toBeNull();
+    expect(svg.querySelector("image")).toHaveAttribute("href", original.image);
+    await expect(
+      classroomCommands.execute({
+        name: "document.cropImage",
+        args: {
+          id: original.id,
+          page: 1,
+          sourceSignature: documentSourceSignature([original]),
+          x: 200,
+          y: 100,
+          width: 300,
+          height: 200,
+          crop: {
+            x: 400,
+            y: 0,
+            width: 1200,
+            height: 800,
+            naturalWidth: 1600,
+            naturalHeight: 800,
+          },
+        },
+      }),
+    ).rejects.toThrow();
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(currentInk()).toEqual([original]);
+  } finally {
+    unmount();
+  }
+});

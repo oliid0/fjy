@@ -51,16 +51,31 @@ for (const file of manifest.files) {
   } catch {
     /* First preparation. */
   }
-  const response = await fetch(file.url, {
-    signal: AbortSignal.timeout(180000),
-  });
-  if (!response.ok)
-    throw new Error(
-      `OCR asset download failed: ${file.name} (${response.status})`,
-    );
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length !== file.size || hash(bytes) !== file.sha256)
-    throw new Error(`OCR asset checksum mismatch: ${file.name}`);
+  let bytes;
+  let failure;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(file.url, {
+        signal: AbortSignal.timeout(180000),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length !== file.size || hash(bytes) !== file.sha256) {
+        throw new Error("checksum mismatch");
+      }
+      failure = undefined;
+      break;
+    } catch (error) {
+      failure = error;
+    }
+  }
+  if (failure || !bytes) {
+    throw new Error(`OCR asset download failed: ${file.name}`, {
+      cause: failure,
+    });
+  }
   const pending = `${fileURLToPath(output)}.pending`;
   await writeFile(pending, bytes);
   await rename(pending, output);

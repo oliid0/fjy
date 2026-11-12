@@ -1,5 +1,47 @@
 import { createDuplexPlayer } from "./duplexPlayer";
 
+it("keeps protocol buffers at 24k when hardware requires a default-rate output context", async () => {
+  const rates: (number | undefined)[] = [];
+  const buffer = vi.fn((_channels: number, count: number, rate: number) => ({
+    duration: count / rate,
+    getChannelData: () => new Float32Array(count),
+  }));
+  vi.stubGlobal(
+    "AudioContext",
+    class {
+      currentTime = 0;
+      destination = {};
+      constructor(options?: AudioContextOptions) {
+        rates.push(options?.sampleRate);
+        if (options) {
+          throw new DOMException(
+            "Unsupported output rate",
+            "NotSupportedError",
+          );
+        }
+      }
+      resume = async () => {};
+      close = async () => {};
+      createBuffer = buffer;
+      createBufferSource = () => ({
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+      });
+    },
+  );
+  try {
+    const player = createDuplexPlayer(vi.fn());
+    await player.enqueue("AAAA");
+    expect(rates).toEqual([24000, undefined]);
+    expect(buffer).toHaveBeenCalledWith(1, 1, 24000);
+    await player.close();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 it("schedules PCM16 chunks without gaps, keeps split samples, and stops all queued sound on barge-in", async () => {
   const nodes: {
     buffer: AudioBuffer;

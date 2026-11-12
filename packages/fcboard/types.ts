@@ -7,6 +7,7 @@ import type {
 } from "@fcboard/common";
 
 import type { LinearElementEditor } from "@fcboard/element";
+import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
 
 import type { MaybeTransformHandleType } from "@fcboard/element";
 
@@ -355,13 +356,16 @@ export interface AppState {
   exportScale: number;
   currentItemStrokeColor: string;
   currentItemBackgroundColor: string;
+  whiteboardShapeStyle?: { color: string; fill: boolean };
   currentItemFillStyle: FcboardElement["fillStyle"];
   currentItemStrokeWidth: number;
   currentItemPenMode?: "hard" | "brush" | "highlighter" | "dashed" | "rainbow";
+  currentItemInkGradient?: NativeInkPalette;
   whiteboardPenWidths?: { hard?: number; brush?: number };
   whiteboardBrushVariation?: number;
   whiteboardHardNib?: boolean;
   whiteboardPenTip?: "fine" | "thick";
+  whiteboardPenTipsVersion?: 2;
   whiteboardDualPen?: boolean;
   whiteboardThickThreshold?: number;
   whiteboardFineThreshold?: number;
@@ -371,6 +375,7 @@ export interface AppState {
       {
         mode: NonNullable<AppState["currentItemPenMode"]>;
         color: string;
+        gradient?: NativeInkPalette;
         width: number;
         widths?: AppState["whiteboardPenWidths"];
         assist?: AppState["currentItemInkAssist"];
@@ -393,7 +398,8 @@ export interface AppState {
   toolbarReversed?: boolean;
   whiteboardToolbarText?: boolean;
   toolbarHidden?: boolean;
-  eraserMode?: "stroke" | "object";
+  toolbarCollapseEnabled?: boolean;
+  eraserMode?: "stroke" | "object" | "region";
   eraserSize?: number;
   palmEraser?: boolean;
   palmEraserThreshold?: number;
@@ -605,6 +611,8 @@ export type OnExportProgress = {
 };
 
 export interface FcboardProps {
+  /** Clear the active host surface, preserving the underlying document/other boards. */
+  onClearCanvas?: () => void | Promise<void>;
   onChange?: (
     elements: readonly OrderedFcboardElement[],
     appState: AppState,
@@ -996,6 +1004,19 @@ export interface FcboardImperativeAPI {
     name: import("./actions/types").ActionName,
     value?: unknown,
   ) => void;
+  editTextElement: InstanceType<typeof App>["editTextElement"];
+  nativeInk?: InstanceType<typeof App>["nativeInk"];
+  onSceneMutation?: (
+    callback: Parameters<import("@fcboard/element").Scene["onMutation"]>[0],
+  ) => () => void;
+  registerNativeSceneRenderer?: InstanceType<
+    typeof App
+  >["registerNativeSceneRenderer"];
+  nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
+  nativeEraserGesture?: InstanceType<typeof App>["nativeEraserGesture"];
+  registerNativeEraserBackend?: InstanceType<
+    typeof App
+  >["registerNativeEraserBackend"];
   updateScene: InstanceType<typeof App>["updateScene"];
   applyDeltas: InstanceType<typeof App>["applyDeltas"];
   mutateElement: InstanceType<typeof App>["mutateElement"];

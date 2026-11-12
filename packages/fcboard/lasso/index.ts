@@ -262,22 +262,24 @@ export class LassoTrail extends AnimatedTrail {
     this.selectElementsFromIds(selectedElementIds, bounds, path);
   };
 
+  /** Native input supplies the completed path without replaying move events. */
+  selectPath = (path: GlobalPoint[]) => {
+    const bounds = circleRegion(
+      path,
+      this.getViewport(),
+      this.app.state.zoom.value,
+    );
+    if (bounds) {
+      this.selectRegion(bounds, path);
+    }
+  };
+
   finishPath = () => {
     const path = super.getCurrentTrail()?.originalPoints;
     if (path && this.app.props.UIOptions.unifiedToolbar) {
-      const bounds = circleRegion(
-        path,
-        this.getViewport(),
-        this.app.state.zoom.value,
-      );
-      if (bounds) {
-        // SelectCacheLayer closes the actual gesture on lift. The padded
-        // rectangle is the operation frame, never the selection geometry.
-        this.selectRegion(
-          bounds,
-          path.map(([x, y]) => pointFrom<GlobalPoint>(x, y)),
-        );
-      }
+      // SelectCacheLayer closes the actual gesture on lift. The padded
+      // rectangle is the operation frame, never the selection geometry.
+      this.selectPath(path.map(([x, y]) => pointFrom<GlobalPoint>(x, y)));
     }
     this.endPath();
   };

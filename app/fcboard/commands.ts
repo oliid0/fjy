@@ -2,12 +2,16 @@ import { t } from "@fcboard/fcboard/i18n";
 
 export type Command = { name: string; args?: Record<string, unknown> };
 type Handler = (args: Record<string, unknown>) => unknown | Promise<unknown>;
+export type CommandContract = {
+  parameters?: Record<string, unknown>;
+  returns?: string;
+};
 
 /** One route for touch controls, voice and model tools. Components own their actions. */
 export class CommandRouter {
   private commands = new Map<
     string,
-    { description: string; handler: Handler }
+    { description: string; handler: Handler; contract?: CommandContract }
   >();
   private contexts = new Map<string, () => unknown>();
   private contextListeners = new Map<string, Set<() => void>>();
@@ -71,8 +75,13 @@ export class CommandRouter {
     }
   }
 
-  register(name: string, description: string, handler: Handler) {
-    const entry = { description, handler };
+  register(
+    name: string,
+    description: string,
+    handler: Handler,
+    contract?: CommandContract,
+  ) {
+    const entry = { description, handler, contract };
     this.commands.set(name, entry);
     return () => {
       if (this.commands.get(name) === entry) {
@@ -110,6 +119,15 @@ export class CommandRouter {
       ),
       ([name, value]) => `${name}: ${value.description}`,
     ).join("\n");
+  }
+  definitions() {
+    return Array.from(this.commands)
+      .filter(([, value]) => value.description !== "@internal")
+      .map(([name, value]) => ({
+        name,
+        description: value.description,
+        ...value.contract,
+      }));
   }
   touch(source?: AbortSignal) {
     source?.throwIfAborted();
@@ -184,13 +202,12 @@ export const classroomCommands = new CommandRouter();
 
 const cancellable = new Set([
   "agent.start",
+  "agent.say",
+  "agent.update",
   "agent.wait",
   "quiz.generate",
   "canvas.snapshot",
   "collaboration.start",
-  "lesson.ask",
-  "lesson.teach",
-  "lesson.resume",
   "canvas.text",
   "canvas.configure",
   "canvas.tool",
@@ -240,10 +257,21 @@ export const isCancellableBoardCommand = (name: string) =>
 /** Voice and lesson tools share cancellation and the same component-owned handlers. */
 export const executeBoardCommand = (command: Command, signal?: AbortSignal) => {
   signal?.throwIfAborted();
-  const routed =
+  let routed =
     signal && isCancellableBoardCommand(command.name)
       ? { ...command, args: { ...command.args, signal } }
       : command;
+  if (signal && routed === command) {
+    // New public tools receive task ownership without adding a name to a list.
+    // Keep metadata out of argument enumeration used by existing validators.
+    routed = {
+      ...command,
+      args: Object.defineProperty({ ...command.args }, "signal", {
+        value: signal,
+        enumerable: false,
+      }),
+    };
+  }
   if (!signal) {
     return classroomCommands.execute(routed);
   }
@@ -532,17 +560,6 @@ export const directCommand = (text: string): Command | null => {
   if (/^(?:帮我)?缩小$/.test(value)) {
     return { name: "canvas.action", args: { action: "zoomOut" } };
   }
-  if (
-    /^(?:选|我选|答案是|第)([A-Fa-f1-6一二三四五六])(?:个|项)?$/.test(value)
-  ) {
-    const choice = value.match(/([A-Fa-f1-6一二三四五六])(?:个|项)?$/)![1];
-    const index = /[A-Fa-f]/.test(choice)
-      ? choice.toUpperCase().charCodeAt(0) - 65
-      : /[1-6]/.test(choice)
-      ? Number(choice) - 1
-      : "一二三四五六".indexOf(choice);
-    return { name: "lesson.answer", args: { index } };
-  }
   if (/^(?:帮我)?(?:新建|创建|新增)(?:一[块张个])?(?:白板|板)$/.test(value)) {
     return { name: "board.new" };
   }
@@ -557,18 +574,6 @@ export const directCommand = (text: string): Command | null => {
   }
   if (/^(?:关闭|结束)板书$/.test(value)) {
     return { name: "document.ink", args: { enabled: false } };
-  }
-  if (/^(?:暂停|停一下|等一下)(?:讲解|讲课|课程)?$/.test(value)) {
-    return { name: "lesson.pause" };
-  }
-  if (/^(?:继续|继续讲|继续讲课|继续讲解)$/.test(value)) {
-    return { name: "lesson.resume" };
-  }
-  if (/^(?:结束|关闭|停止)(?:讲解|讲课|课程)$/.test(value)) {
-    return { name: "lesson.stop" };
-  }
-  if (/^(?:继续|打开)(?:上次|上一节)(?:的)?(?:课|课程|讲解)$/.test(value)) {
-    return { name: "lesson.reopen" };
   }
   if (/^(?:撤销|撤回)$/.test(value)) {
     return { name: "canvas.action", args: { action: "undo" } };

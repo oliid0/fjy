@@ -1,4 +1,15 @@
-import { collaborationAddress } from "./collaborationAddress";
+import {
+  collaborationAddress,
+  isLocalCollaborationCode,
+} from "./collaborationAddress";
+
+it("accepts exactly four case-sensitive ASCII letters/digits without converting their case", () => {
+  expect(isLocalCollaborationCode("aB09")).toBe(true);
+  expect(isLocalCollaborationCode("AB09")).toBe(true);
+  for (const value of ["ABC", "ABCDE", "你好12", "ab-1", "ab_1"]) {
+    expect(isLocalCollaborationCode(value)).toBe(false);
+  }
+});
 
 it("resolves a real collaboration code against the configured server and preserves explicit host links", () => {
   const code = "0123456789abcdef0123456789abcdef";

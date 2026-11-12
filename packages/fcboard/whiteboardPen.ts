@@ -11,6 +11,7 @@ export type PenPreferences = Pick<
   | "currentItemPenMode"
   | "whiteboardPenWidths"
   | "currentItemStrokeColor"
+  | "currentItemInkGradient"
   | "currentItemInkAssist"
   | "whiteboardPenTip"
   | "whiteboardPenTips"
@@ -23,11 +24,13 @@ export const switchWhiteboardTip = (
   state: PenPreferences,
   tip: "fine" | "thick",
 ) => {
-  const previous = state.whiteboardPenTip || "fine";
+  const previous = state.whiteboardPenTip || "thick";
   if (tip === previous) {
     return {
       currentItemStrokeColor: state.currentItemStrokeColor,
       currentItemStrokeWidth: state.currentItemStrokeWidth,
+      currentItemInkGradient: state.currentItemInkGradient,
+      whiteboardPenTipsVersion: 2 as const,
     };
   }
   const profiles = {
@@ -35,24 +38,28 @@ export const switchWhiteboardTip = (
     [previous]: {
       mode: state.currentItemPenMode || "hard",
       color: state.currentItemStrokeColor,
+      gradient: state.currentItemInkGradient,
       width: state.currentItemStrokeWidth,
       widths: state.whiteboardPenWidths,
       assist: state.currentItemInkAssist,
     },
   };
-  // BaseApplication.PEN_WIDTH_THICK=2; the fine hard pen defaults to 4.
+  // User-confirmed defaults: fine2, thick4; retain each edited profile.
   const next = profiles[tip] || {
     mode: "hard" as const,
     color: state.currentItemStrokeColor,
-    width: DEFAULT_ELEMENT_PROPS.strokeWidth * (tip === "thick" ? 0.5 : 1),
+    gradient: state.currentItemInkGradient,
+    width: DEFAULT_ELEMENT_PROPS.strokeWidth * (tip === "fine" ? 0.5 : 1),
     widths: undefined,
     assist: undefined,
   };
   return {
     whiteboardPenTip: tip,
+    whiteboardPenTipsVersion: 2 as const,
     whiteboardPenTips: profiles,
     currentItemPenMode: next.mode,
     currentItemStrokeColor: next.color,
+    currentItemInkGradient: next.gradient,
     currentItemStrokeWidth: next.width,
     whiteboardPenWidths: next.widths,
     currentItemInkAssist: next.assist,
@@ -94,14 +101,25 @@ export const whiteboardInkStyle = (
   const fcInk: FactoryInkData = {
     version: mode === "brush" ? 3 : 2,
     pen: mode,
+    subpixel: true,
     assist: pen.currentItemInkAssist,
-    tip: pen.whiteboardPenTip || "fine",
+    tip: pen.whiteboardPenTip || "thick",
     variation: state.whiteboardBrushVariation ?? 45,
     ...(mode === "hard"
       ? {
           nib:
             device?.hardNibAvailable !== false &&
             (state.whiteboardHardNib ?? device?.hardNib ?? false),
+        }
+      : {}),
+    ...(pen.currentItemInkGradient
+      ? {
+          gradient: {
+            palette: pen.currentItemInkGradient,
+            size:
+              (320 / Math.max(1, globalThis.devicePixelRatio || 1)) *
+              sceneUnitsPerCssPixel,
+          },
         }
       : {}),
     unit: ((device?.hardPenWidth ?? 4) / 4) * sceneUnitsPerCssPixel,

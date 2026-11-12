@@ -15,6 +15,7 @@ import {
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { render } from "./test/render";
+import { classroomCommands } from "./commands";
 import { registerCanvasCommands } from "./canvasCommands";
 import { TeachingTools } from "./TeachingTools";
 import { readWidgets, renderWidget, widgetDefaults } from "./widgets";
@@ -333,9 +334,38 @@ it("opens both added native gizmos from the original toolbox page and draws a co
   act(() => api.setActiveTool({ type: "freedraw" }));
   const tools = render(<TeachingTools api={api} />);
   try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "tools.extended" });
+    });
     const toolbar = within(tools.container);
+    const openPicker = () =>
+      fireEvent.click(
+        within(
+          toolbar.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
+        ).getByRole("button", { name: t("fcboard.geometry_tools") }),
+      );
+    openPicker();
+    expect(
+      within(document.body).getByRole("dialog", {
+        name: t("fcboard.geometry_tools"),
+      }),
+    ).toBeVisible();
+    openPicker();
+    expect(
+      within(document.body).queryByRole("dialog", {
+        name: t("fcboard.geometry_tools"),
+      }),
+    ).toBeNull();
+    openPicker();
+    expect(
+      within(
+        within(document.body).getByRole("dialog", {
+          name: t("fcboard.geometry_tools"),
+        }),
+      ).getAllByRole("button"),
+    ).toHaveLength(4);
     fireEvent.click(
-      toolbar.getByRole("button", {
+      within(document.body).getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.compass") }),
       }),
     );
@@ -366,8 +396,12 @@ it("opens both added native gizmos from the original toolbox page and draws a co
     expect(circle.points.length).toBeGreaterThanOrEqual(360);
     expect(circle.points.at(-1)![0]).toBeCloseTo(0);
     expect(circle.points.at(-1)![1]).toBeCloseTo(0);
+    await act(async () => {
+      await classroomCommands.execute({ name: "tools.extended" });
+    });
+    openPicker();
     fireEvent.click(
-      toolbar.getByRole("button", {
+      within(document.body).getByRole("button", {
         name: t("fcboard.insert_name", { name: t("fcboard.set_square") }),
       }),
     );

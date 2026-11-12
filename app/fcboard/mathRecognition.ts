@@ -64,12 +64,56 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
       plot[key] = number;
     }
   }
+  if (value.view !== undefined) {
+    const view = value.view as NonNullable<Plot["view"]> | null;
+    if (
+      surface ||
+      relation ||
+      !view ||
+      ![view.left, view.right, view.bottom, view.top].every(
+        (number) =>
+          typeof number === "number" &&
+          Number.isFinite(number) &&
+          Math.abs(number) <= 1e6,
+      ) ||
+      view.right - view.left < 0.0001 ||
+      view.right - view.left > 2000 ||
+      view.top - view.bottom < 0.0001 ||
+      view.top - view.bottom > 2000
+    ) {
+      throw new Error("Invalid function viewport");
+    }
+    plot.view = {
+      left: view.left,
+      right: view.right,
+      bottom: view.bottom,
+      top: view.top,
+    };
+  }
   if (typeof value.equation === "string" && value.equation.length <= 500) {
     const equation = mathNotation(value.equation);
     const sides = equation.match(/^([^=<>]+)=([^=<>]+)$/);
     if (sides && plotExpression(`(${sides[1]})-(${sides[2]})`) === expression) {
       plot.equation = equation;
     }
+  }
+  if (value.compare !== undefined) {
+    if (
+      !Array.isArray(value.compare) ||
+      !value.compare.length ||
+      value.compare.length > 3 ||
+      surface ||
+      relation
+    ) {
+      throw new Error("Invalid function comparison");
+    }
+    plot.compare = value.compare.map((expression) => {
+      if (typeof expression !== "string") {
+        throw new Error("Invalid comparison expression");
+      }
+      return validatedPlot({ ...plot, compare: undefined, expression })
+        .expression;
+    });
   }
   samplePlot(plot);
   return plot;
@@ -79,6 +123,35 @@ export const localMathResult = (
   text: string,
   mode: MathPenMode,
 ): MathResult => {
+  const definitions = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (
+    mode === "function" &&
+    definitions.length > 1 &&
+    definitions.every((line) => /^(?:y|f\s*\(\s*x\s*\))\s*=/.test(line))
+  ) {
+    if (definitions.length > 4) {
+      throw new Error("Compare at most four functions");
+    }
+    const plots = definitions.map(
+      (line) =>
+        (
+          localMathResult(line, "function") as Extract<
+            MathResult,
+            { kind: "function" }
+          >
+        ).plot,
+    );
+    return {
+      kind: "function",
+      plot: validatedPlot({
+        ...plots[0],
+        compare: plots.slice(1).map((plot) => plot.expression),
+      }),
+    };
+  }
   const input = mathNotation(text);
   if (mode === "calculation") {
     return { kind: mode, expression: input, answer: calculate(input) };
@@ -125,7 +198,11 @@ export const recognizeMath = async (
   signal.throwIfAborted();
   try {
     if (mode === "calculation") {
-      const expression = mathNotation(text);
+      // Keep two-dimensional LaTeX intact for the structural parser. Flattening
+      // before parsing loses limits, fractional bases and nested scripts.
+      const expression = /\\[A-Za-z]+/.test(text)
+        ? text.trim()
+        : mathNotation(text);
       return {
         kind: mode,
         expression,
@@ -136,6 +213,7 @@ export const recognizeMath = async (
   } catch (failure) {
     const settings = currentSettings();
     if (
+      settings.mathTranscription !== "cloud" ||
       !settings.apiKey ||
       !settings.model.trim() ||
       (mode === "function" && !/\bx\b/.test(text))

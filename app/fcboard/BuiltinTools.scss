@@ -285,21 +285,11 @@
     outline: 2px solid #1565c0;
     outline-offset: 2px;
   }
-  @for $number from 2 through 4 {
-    [data-count="#{$number}"] {
-      background-image: url("./assets/multiscreen/split_type_#{$number}.png");
-    }
-    input:checked + [data-count="#{$number}"] {
-      background-image: url("./assets/multiscreen/split_type_#{$number}_click.png");
-    }
+  .fc-split-preview {
+    color: #555;
   }
-  @for $number from 1 through 4 {
-    [data-background="#{$number}"] {
-      background-image: url("./assets/multiscreen/layer_screen_bg#{$number}_normal.png");
-    }
-    input:checked + [data-background="#{$number}"] {
-      background-image: url("./assets/multiscreen/layer_screen_bg#{$number}_select.png");
-    }
+  input:checked + .fc-split-preview {
+    color: #0079c2;
   }
   footer {
     display: flex;
@@ -402,5 +392,163 @@
   .fc-curtain-gallery [aria-pressed="true"] {
     outline: 2px solid #1565c0;
     outline-offset: 2px;
+  }
+}
+
+// Timer timer_pager_layout:420×250, setting320, compact190; buttonSet width200.
+.fc-classroom .fc-native-timer {
+  height: 250px;
+  border: 1px solid #0000001a;
+  border-radius: 8px !important;
+  background: #fff;
+  color: #282828;
+  &.is-editing {
+    height: 320px;
+  }
+  &.is-compact {
+    height: 190px;
+  }
+  > header {
+    flex: 0 0 50px;
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+  > header strong {
+    font: 20px system-ui;
+    font-weight: 400;
+  }
+  > header button {
+    padding: 5px;
+    min-width: 0;
+    min-height: 0;
+  }
+  > header .fc-timer-mute {
+    width: 30px !important;
+    height: 30px !important;
+    margin-left: 15px;
+    color: #1296db !important;
+  }
+  > header .fc-timer-mute[aria-pressed="true"] {
+    color: #282828 !important;
+  }
+  > header button:last-child {
+    position: absolute;
+    right: 5px;
+    top: 5px;
+    width: 20px !important;
+    height: 20px !important;
+    padding: 2px;
+    background: #f5223d !important;
+    color: #fff !important;
+    border-radius: 3px;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .fc-timer-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .fc-timer-digits {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    font: 400 clamp(36px, 7vw, 64px) / 1 monospace;
+    cursor: default;
+  }
+  .fc-timer-actions {
+    flex: 0 0 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 240px;
+    max-width: 90%;
+    margin-bottom: 10px;
+  }
+  .fc-timer-actions button {
+    width: 44px;
+    height: 44px;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    border: 0;
+    background: transparent;
+    color: #1296db;
+    cursor: pointer;
+  }
+  .fc-timer-actions button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .fc-timer-wheels {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .fc-timer-wheels > span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .fc-timer-wheels b {
+    font: 30px monospace;
+  }
+  .fc-timer-wheel {
+    width: 68px;
+    height: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font: 30px/32px monospace;
+    touch-action: none;
+    user-select: none;
+    cursor: ns-resize;
+  }
+  .fc-timer-wheel span {
+    width: 100%;
+    text-align: center;
+    opacity: 0.3;
+  }
+  .fc-timer-wheel [data-selected="true"] {
+    opacity: 1;
+    border-block: 1px solid #1296db;
+  }
+}
+.fc-classroom .fc-timer-full {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: #000;
+  touch-action: none;
+}
+.fc-classroom .fc-timer-full output {
+  font: 400 clamp(40px, 12vw, 180px) / 1 monospace;
+}
+
+.fc-classroom .fc-curtain {
+  button {
+    display: grid;
+    place-items: center;
+  }
+  button svg {
+    width: 26px;
+    height: 26px;
+  }
+  &[data-controls="false"] > button,
+  &[data-controls="false"] > .fc-curtain-actions {
+    visibility: hidden;
+    pointer-events: none;
   }
 }

@@ -1,7 +1,11 @@
+import { getFontString } from "@fcboard/common";
+
 import { getLineHeight } from "@fcboard/common";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 
 import { FONT_FAMILY, TEXT_ALIGN, VERTICAL_ALIGN } from "@fcboard/common";
+
+import { measureText } from "../src/textMeasurements";
 
 import {
   computeContainerDimensionForBoundText,
@@ -376,4 +380,23 @@ describe("Test computeBoundTextPosition", () => {
       expect(result.y).toBeCloseTo(185, 1);
     });
   });
+});
+
+it("measures bold multiline text with finite size and the same line height as normal text", () => {
+  const plain = getFontString({
+    fontSize: 48,
+    fontFamily: FONT_FAMILY.Helvetica,
+  });
+  const bold = getFontString({
+    fontSize: 48,
+    fontFamily: FONT_FAMILY.Helvetica,
+    fontWeight: 700,
+  });
+  const lineHeight = getLineHeight(FONT_FAMILY.Helvetica);
+  expect(measureText("One\nTwo", bold, lineHeight).height).toBe(
+    2 * 48 * lineHeight,
+  );
+  expect(measureText("One\nTwo", bold, lineHeight).height).toBe(
+    measureText("One\nTwo", plain, lineHeight).height,
+  );
 });

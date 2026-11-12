@@ -16,6 +16,11 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    androidResources {
+        // Direct packaged reads: no on-demand ZIP inflation for local UI/code/models.
+        // AndroidResources.noCompress is the public Android Gradle API.
+        noCompress += ["js", "css", "svg", "json", "wasm", "onnx", "bin", "woff2"]
+    }
     packagingOptions {
         resources { pickFirsts += ["META-INF/LICENSE.txt", "META-INF/NOTICE.txt", "META-INF/LICENSE.md", "META-INF/NOTICE.md"] }
     }
@@ -51,7 +56,14 @@ dependencies {
     implementation 'com.sun.mail:android-activation:1.6.8'
     implementation 'com.caverock:androidsvg-aar:1.4'
     implementation 'com.google.mlkit:digital-ink-recognition:18.1.0'
-    implementation 'ai.moonshine:moonshine-voice:0.1.5'
+    implementation 'com.google.mlkit:translate:17.0.3'
+    implementation files('libs/onnxruntime-android-1.23.2.aar')
+    implementation 'net.objecthunter:exp4j:0.4.8'
+    implementation 'com.google.mlkit:language-id:17.0.6'
+    // Keep Moonshine's published transitive dependencies with its verified local AAR.
+    implementation files('libs/moonshine-voice-0.1.5.aar')
+    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'androidx.work:work-runtime:2.9.1'
     implementation files('libs/sherpa-onnx-1.13.8.aar')
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.7.20'
     implementation 'org.nanohttpd:nanohttpd:2.3.1'

@@ -26,6 +26,7 @@ import * as ai from "./ai";
 import { deleteGeneratedResource } from "./generatedResources";
 import * as resourceStorage from "./generatedResources";
 import { interactiveResource } from "./test/interactiveResource";
+import { comparisonVisualization } from "./test/comparisonVisualization";
 import { Classroom } from "./native";
 import { factoryResourceSubjects, resourceMenuTitle } from "./resourceMenus";
 
@@ -763,6 +764,95 @@ it("prepares a reusable resource without drawing and waits for its actual task b
     view.unmount();
     stopAgents();
     releases.forEach((release) => release());
+    if (id) {
+      await deleteGeneratedResource(id);
+    }
+  }
+});
+
+it("uses Vega from the visible AI teaching-resource button and reuses the saved comparison", async () => {
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(
+      JSON.stringify({ ...comparisonVisualization, title: "函数比较" }),
+    );
+  const insert = vi.fn().mockReturnValue({ ids: ["actual-chart-object"] });
+  const release = classroomCommands.register(
+    "canvas.resource",
+    "@internal",
+    insert,
+  );
+  const view = render(<TeachingResources api={api} />);
+  let id = "";
+  try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "resources.open" });
+    });
+    fireEvent.change(
+      screen.getByRole("textbox", { name: t("fcboard.search_resources") }),
+      { target: { value: "可视化比较 y=x+1 和 y=1/x" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: t("fcboard.generate_teaching_resource_with_ai"),
+      }),
+    );
+    await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+    const resource = insert.mock.calls[0][0].resource;
+    id = resource.id;
+    expect(resource.visualization).toEqual(comparisonVisualization);
+    expect(resource.html).toContain("A (0.62, 1.62)");
+    expect(chat).toHaveBeenCalledTimes(1);
+    const guidance = chat.mock.calls[0][0][0].content;
+    expect(guidance).toContain("branch_id");
+    expect(guidance).toContain("(-1+sqrt(5))/2");
+    await act(async () => {
+      await classroomCommands.execute({ name: "resources.use", args: { id } });
+    });
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(insert.mock.calls[1][0].resource).toEqual(resource);
+    expect(chat).toHaveBeenCalledTimes(1);
+  } finally {
+    view.unmount();
+    release();
+    if (id) {
+      await deleteGeneratedResource(id);
+    }
+  }
+});
+
+it("prepares a chart topic through the same generator without inserting it", async () => {
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(
+      JSON.stringify({ ...comparisonVisualization, title: "Function plots" }),
+    );
+  const insert = vi.fn();
+  const release = classroomCommands.register(
+    "canvas.resource",
+    "@internal",
+    insert,
+  );
+  const view = render(<TeachingResources api={api} />);
+  let id = "";
+  try {
+    await act(async () => {
+      const result = (await classroomCommands.execute({
+        name: "resources.prepare",
+        args: { prompt: "Function plots comparing y=x+1 and y=1/x" },
+      })) as { id: string };
+      id = result.id;
+    });
+    expect(insert).not.toHaveBeenCalled();
+    expect(
+      (await resourceStorage.generatedResources()).find(
+        (item) => item.id === id,
+      )?.visualization,
+    ).toEqual(comparisonVisualization);
+    expect(chat.mock.calls[0][0][0].content).toContain("geoshape");
+  } finally {
+    view.unmount();
+    release();
     if (id) {
       await deleteGeneratedResource(id);
     }

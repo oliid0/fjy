@@ -40,6 +40,11 @@ import type { AppState } from "../../fcboard/types";
 
 type SceneStateCallback = () => void;
 type SceneStateCallbackRemover = () => void;
+type SceneMutationCallback = (
+  updated: readonly FcboardElement[],
+  removed: readonly string[],
+  nativeEraseThrough?: number,
+) => void;
 
 type SelectionHash = string & { __brand: "selectionHash" };
 
@@ -104,6 +109,11 @@ export class Scene {
   // ---------------------------------------------------------------------------
 
   private callbacks: Set<SceneStateCallback> = new Set();
+  private mutationCallbacks = new Set<SceneMutationCallback>();
+  private mutationVersions = new Map<
+    string,
+    { element: FcboardElement; version: number; nonce: number }
+  >();
 
   private nonDeletedElements: readonly Ordered<NonDeletedFcboardElement>[] = [];
   private nonDeletedElementsMap = toBrandedType<NonDeletedSceneElementsMap>(
@@ -262,6 +272,7 @@ export class Scene {
     nextElements: ElementsMapOrArray,
     options?: {
       skipValidation?: true;
+      nativeEraseThrough?: number;
     },
   ) {
     // we do trust the insertion order on the map, though maybe we shouldn't and should prefer order defined by fractional indices
@@ -274,11 +285,19 @@ export class Scene {
 
     this.elements = syncInvalidIndices(_nextElements);
     this.elementsMap.clear();
+    const updated: FcboardElement[] = [];
+    const removed = new Set(this.mutationVersions.keys());
     this.elements.forEach((element) => {
       if (isFrameLikeElement(element)) {
         nextFrameLikes.push(element);
       }
       this.elementsMap.set(element.id, element);
+      if (this.mutationCallbacks.size) {
+        removed.delete(element.id);
+        if (this.trackMutation(element)) {
+          updated.push(element);
+        }
+      }
     });
     const nonDeletedElements = getNonDeletedElements(this.elements);
     this.nonDeletedElements = nonDeletedElements.elements;
@@ -287,11 +306,68 @@ export class Scene {
     this.frames = nextFrameLikes;
     this.nonDeletedFramesLikes = getNonDeletedElements(this.frames).elements;
 
-    this.triggerUpdate();
+    this.triggerUpdate({
+      updated,
+      removed: [...removed],
+      nativeEraseThrough: options?.nativeEraseThrough,
+    });
   }
 
-  triggerUpdate() {
+  private trackMutation(element: FcboardElement) {
+    const previous = this.mutationVersions.get(element.id);
+    if (
+      previous?.element === element &&
+      previous.version === element.version &&
+      previous.nonce === element.versionNonce
+    ) {
+      return false;
+    }
+    this.mutationVersions.set(element.id, {
+      element,
+      version: element.version,
+      nonce: element.versionNonce,
+    });
+    return true;
+  }
+
+  /** Initial snapshot once, then versioned edits from the scene's commit path. */
+  onMutation(callback: SceneMutationCallback): SceneStateCallbackRemover {
+    if (!this.mutationCallbacks.size) {
+      this.elements.forEach((element) => this.trackMutation(element));
+    }
+    this.mutationCallbacks.add(callback);
+    callback(this.elements, []);
+    return () => {
+      this.mutationCallbacks.delete(callback);
+      if (!this.mutationCallbacks.size) {
+        this.mutationVersions.clear();
+      }
+    };
+  }
+
+  triggerUpdate(delta?: {
+    updated: readonly FcboardElement[];
+    removed: readonly string[];
+    nativeEraseThrough?: number;
+  }) {
     this.sceneNonce = randomInteger();
+    if (this.mutationCallbacks.size) {
+      // Legacy direct mutations may only call triggerUpdate(). Audit those here;
+      // normal commits/mutateElement supply their known changes without a scan.
+      const updated =
+        delta?.updated ?? this.elements.filter((el) => this.trackMutation(el));
+      const removed = delta?.removed ?? [];
+      removed.forEach((id) => this.mutationVersions.delete(id));
+      if (updated.length || removed.length) {
+        this.mutationCallbacks.forEach((callback) => {
+          if (delta?.nativeEraseThrough !== undefined) {
+            callback(updated, removed, delta.nativeEraseThrough);
+          } else {
+            callback(updated, removed);
+          }
+        });
+      }
+    }
 
     for (const callback of Array.from(this.callbacks)) {
       callback();
@@ -326,6 +402,8 @@ export class Scene {
     // done not for memory leaks, but to guard against possible late fires
     // (I guess?)
     this.callbacks.clear();
+    this.mutationCallbacks.clear();
+    this.mutationVersions.clear();
   }
 
   insertElementAtIndex(element: FcboardElement, index: number) {
@@ -452,7 +530,10 @@ export class Scene {
       prevVersion !== nextVersion &&
       options.informMutation
     ) {
-      this.triggerUpdate();
+      if (this.mutationCallbacks.size) {
+        this.trackMutation(element);
+      }
+      this.triggerUpdate({ updated: [element], removed: [] });
     }
 
     return element;

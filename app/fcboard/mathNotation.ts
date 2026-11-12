@@ -1,17 +1,40 @@
-/** A deliberately small notation grammar: unsupported/ambiguous layouts stay ink. */
+import { scientificNotation } from "./scientificNotation";
+
+/** Unsupported or ambiguous layouts stay ink; numerical work belongs to the engine. */
 export const mathNotation = (input: string): string => {
   if (input.length > 500) {
     throw new Error("Math input is too long");
   }
   let text = input
     .trim()
+    .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10))
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/＋/g, "+")
     .replace(/[＝]/g, "=")
     .replace(/[×·]/g, "*")
     .replace(/÷/g, "/")
-    .replace(/[−–]/g, "-")
+    .replace(/[－−–]/g, "-")
     .replace(/π/g, "pi")
-    .replace(/²/g, "^2")
-    .replace(/³/g, "^3")
+    .replace(
+      /[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g,
+      (power) =>
+        `^(${[...power]
+          .map((digit) => {
+            const index = "⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(digit);
+            return index < 0 ? (digit === "⁺" ? "+" : "-") : String(index);
+          })
+          .join("")})`,
+    )
+    .replace(
+      /log([₀-₉]+)/gi,
+      (_, base: string) =>
+        `log_(${[...base]
+          .map((digit) => "₀₁₂₃₄₅₆₇₈₉".indexOf(digit))
+          .join("")})`,
+    )
+    .replace(/\^\s*(?:\{\s*\\circ\s*\}|\\circ(?![A-Za-z]))/g, "°")
+    .replace(/度|\bdeg(?:rees?)?\b/gi, "°")
     .replace(/\*\*/g, "^")
     .replace(/∞/g, "Infinity")
     .replace(/≥|\\geq?\b/g, ">=")
@@ -28,7 +51,7 @@ export const mathNotation = (input: string): string => {
   // A handwritten unary function need not include parentheses. Its variable's
   // power belongs to the argument: sin x² means sin(x²), not sin(x)².
   text = text.replace(
-    /(^|[^A-Za-z])(arcsin|arccos|arctan|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sqrt|exp|log|ln)\s*([xyz](?:\s*\^\s*\(?[+-]?\d+(?:\.\d+)?\)?)?)(?=$|[^A-Za-z])/gi,
+    /(^|[^A-Za-z])(arcsin|arccos|arctan|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sqrt|exp|log|ln)\s*([xyz](?:\s*\^\s*\(?[+-]?\d+(?:\.\d+)?\)?)?(?:\s*°)?)(?=$|[^A-Za-z])/gi,
     (_, prefix: string, name: string, argument: string) =>
       `${prefix}${name.toLowerCase()}(${argument})`,
   );
@@ -85,6 +108,7 @@ export const mathNotation = (input: string): string => {
       break;
     }
   }
+  text = scientificNotation(text);
   // Only an explicit differential closes an integral; no guessed variable/bounds.
   const integral = text.match(
     /^\\int(?:_\(([^()]+)\)\^\(([^()]+)\)|_([\w.+-]+)\^([\w.+-]+))?\s*(.+?)\s*(?:\\mathrm\{d\}|d)\s*([xyz])\s*=?$/,

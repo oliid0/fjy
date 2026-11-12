@@ -53,6 +53,12 @@ const draw = (canvas: Element) => {
 const live = () => h.elements.filter((element) => !element.isDeleted);
 
 describe("APK-style whiteboard ink", () => {
+  let time = 1000;
+  beforeEach(() => {
+    time = 1000;
+    vi.spyOn(Date, "now").mockImplementation(() => time);
+  });
+  afterEach(() => vi.restoreAllMocks());
   it("keeps a populated board static while live coalesced pressure ink paints in the overlay and stays readable through the API", async () => {
     const staticPaint = vi.spyOn(StaticScene, "renderStaticScene");
     const inkPaint = vi.spyOn(NewElementScene, "renderNewElementScene");
@@ -213,6 +219,7 @@ describe("APK-style whiteboard ink", () => {
       });
       fireEvent.click(screen.getByTestId("button-undo"));
       expect(live().map((element) => element.id)).toEqual([second.id]);
+      time += 400;
       fireEvent.click(screen.getByTestId("button-undo"));
       expect(live()).toEqual([]);
     } finally {
@@ -226,13 +233,14 @@ describe("APK-style whiteboard ink", () => {
       name: t("toolBar.eraser"),
     });
     fireEvent.click(eraser);
-    fireEvent.click(eraser);
     fireEvent.click(
       within(
         screen.getByRole("group", { name: t("fcboard.erase_mode") }),
       ).getByRole("button", { name: t("fcboard.erase_entire_object") }),
     );
-    expect(h.state.eraserMode).toBe("object");
+    expect(h.state.eraserMode).toBe("region");
+    time += 400;
+    fireEvent.click(eraser);
     fireEvent.click(
       screen.getByRole("button", {
         name: t("fcboard.erase_part_of_a_stroke"),
@@ -330,7 +338,9 @@ describe("APK-style whiteboard ink", () => {
       target: { value: "20" },
     });
     fireEvent.click(
-      settings.querySelector(`button[aria-label='${t("fcboard.pen")}']`)!,
+      settings.querySelector(
+        `button[aria-label='${t("fcboard.normal_brush")}']`,
+      )!,
     );
     pointer(canvas, "pointerdown", 100, 300);
     pointer(canvas, "pointermove", 200, 300);
@@ -660,12 +670,41 @@ describe("APK-style whiteboard ink", () => {
     },
   );
 
+  it("switches tools through icon taps after Escape closes pen properties", async () => {
+    await render(
+      <Fcboard handleKeyboardGlobally UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const tap = (label: string) => {
+      const button = screen.getByRole("button", { name: label });
+      const target = button.querySelector("svg path") || button;
+      pointer(target, "pointerdown", 10, 10);
+      expect(target.isConnected).toBe(true);
+      fireEvent.mouseDown(target);
+      expect(target.isConnected).toBe(true);
+      act(() => button.focus());
+      expect(target.isConnected).toBe(true);
+      pointer(target, "pointerup", 10, 10);
+      fireEvent.mouseUp(target);
+      expect(target.isConnected).toBe(true);
+      fireEvent.click(target, { detail: 1 });
+    };
+    tap(t("fcboard.pen"));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    fireEvent.keyUp(document.activeElement!, { key: "Escape" });
+    expect(h.state.activeTool.type).toBe("freedraw");
+    tap(t("fcboard.eraser"));
+    expect(h.state.activeTool.type).toBe("eraser");
+    expect(screen.getByLabelText(t("fcboard.eraser_settings"))).toBeVisible();
+    tap(t("fcboard.toolbox"));
+    expect(
+      screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
+    ).toBeVisible();
+  });
   it("dismisses tool settings with Escape without cancelling the selected tool", async () => {
     await render(
       <Fcboard handleKeyboardGlobally UIOptions={{ unifiedToolbar: true }} />,
     );
     const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
-    fireEvent.click(eraser);
     fireEvent.click(eraser);
     fireEvent.keyDown(screen.getByLabelText(t("fcboard.eraser_settings")), {
       key: "Escape",
@@ -688,6 +727,7 @@ describe("APK-style whiteboard ink", () => {
   });
   it("dismisses anchored tool settings when hiding the toolbar and keeps them dismissed after restoring it", async () => {
     await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    API.setAppState({ toolbarCollapseEnabled: true });
     act(() => h.app.setActiveTool({ type: "freedraw" }));
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     expect(
@@ -703,6 +743,7 @@ describe("APK-style whiteboard ink", () => {
         name: t("fcboard.pen_and_object_properties"),
       }),
     ).not.toBeInTheDocument();
+    time += 400;
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.show_toolbar") }),
     );
@@ -711,7 +752,6 @@ describe("APK-style whiteboard ink", () => {
         name: t("fcboard.pen_and_object_properties"),
       }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.eraser") }));
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.eraser") }));
     expect(
       screen.getByLabelText(t("fcboard.eraser_settings")),
@@ -722,6 +762,7 @@ describe("APK-style whiteboard ink", () => {
     expect(
       screen.queryByLabelText(t("fcboard.eraser_settings")),
     ).not.toBeInTheDocument();
+    time += 400;
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.show_toolbar") }),
     );
@@ -741,7 +782,6 @@ describe("APK-style whiteboard ink", () => {
     draw(canvas);
     const eraser = screen.getByRole("button", { name: t("fcboard.eraser") });
     fireEvent.click(eraser);
-    fireEvent.click(eraser);
     const slider = screen.getByRole("slider", {
       name: t("fcboard.slide_to_clear_this_board"),
     });
@@ -756,64 +796,82 @@ describe("APK-style whiteboard ink", () => {
     fireEvent.click(screen.getByTestId("button-undo"));
     expect(live()).toHaveLength(1);
   });
-  it("swipes only the pen choices while lower thickness, color and preview controls retain their behavior", async () => {
+  it("shows twelve pens together and retains independent quick tip settings", async () => {
     await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     act(() => h.app.setActiveTool({ type: "freedraw" }));
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
-    const settings = document.querySelector(".fc-factory-pen-settings")!;
-    const types = settings.querySelector(".fc-pen-types")!;
-    const next = () =>
-      within(settings as HTMLElement).getByRole("button", {
-        name: t("fcboard.next_page"),
-      });
-    const previous = () =>
-      within(settings as HTMLElement).getByRole("button", {
-        name: t("fcboard.previous_page"),
-      });
-    const selected = () => ({
-      mode: h.state.currentItemPenMode,
-      assist: h.state.currentItemInkAssist,
-      width: h.state.currentItemStrokeWidth,
-      color: h.state.currentItemStrokeColor,
-    });
-    const before = selected();
-    const swipe = (target: Element, from = 200, to = 120) => {
-      pointer(target, "pointerdown", from, 150, { isPrimary: true });
-      pointer(target, "pointermove", to, 152, { isPrimary: true });
-      pointer(target, "pointerup", to, 152, { isPrimary: true });
-    };
-    swipe(types);
-    expect(next()).toHaveAttribute("aria-pressed", "true");
+    const types = screen.getByRole("group", { name: t("fcboard.pen_type") });
+    expect(within(types).getAllByRole("button")).toHaveLength(12);
     expect(
-      within(types as HTMLElement).getByRole("button", {
-        name: t("fcboard.function_pen"),
-      }),
-    ).toBeVisible();
-    expect(selected()).toEqual(before);
+      screen.queryByRole("button", { name: t("fcboard.next_page") }),
+    ).toBeNull();
     const slider = screen.getByRole("slider", {
       name: t("fcboard.pen_thickness"),
     });
-    for (const target of [
-      slider,
-      settings.querySelector(".fc-pen-colors")!,
-      screen.getByRole("img", { name: t("fcboard.current_pen_preview") }),
-    ]) {
-      swipe(target, 120, 200);
-      expect(next()).toHaveAttribute("aria-pressed", "true");
-    }
-    expect(selected()).toEqual(before);
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.fine_pen") }),
+    );
+    const fineWidth = h.state.currentItemStrokeWidth;
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.thick_pen") }),
+    );
     fireEvent.change(slider, { target: { value: "12" } });
-    expect(h.state.currentItemStrokeWidth).not.toBe(before.width);
-    expect(next()).toHaveAttribute("aria-pressed", "true");
-    swipe(types, 120, 200);
-    expect(previous()).toHaveAttribute("aria-pressed", "true");
-    const brush = screen.getByRole("button", { name: t("fcboard.fountain") });
-    pointer(brush, "pointerdown", 180, 150, { isPrimary: true });
-    pointer(brush, "pointerup", 180, 150, { isPrimary: true });
-    fireEvent.click(brush, { detail: 1 });
+    const thickWidth = h.state.currentItemStrokeWidth;
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.fine_pen") }),
+    );
+    expect(h.state.currentItemStrokeWidth).toBe(fineWidth);
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.thick_pen") }),
+    );
+    expect(h.state.currentItemStrokeWidth).toBe(thickWidth);
+    fireEvent.click(
+      within(types).getByRole("button", { name: t("fcboard.function_pen") }),
+    );
+    expect(h.state.currentItemInkAssist).toBe("function");
+    fireEvent.click(
+      within(types).getByRole("button", { name: t("fcboard.fountain") }),
+    );
     expect(h.state.currentItemPenMode).toBe("brush");
-    expect(document.querySelector(".fc-factory-pen-settings")).toBeNull();
+    expect(h.state.currentItemInkAssist).toBeUndefined();
+    expect(document.querySelector(".fc-factory-pen-settings")).not.toBeNull();
     expect(live()).toHaveLength(0);
+  });
+
+  it("uses the shared wheel and opacity bar for real writing without closing the parent menu", async () => {
+    const { container } = await render(
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const canvas = container.querySelector("canvas.interactive")!;
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
+    const custom = screen.getByRole("button", {
+      name: t("fcboard.custom_pen_colour"),
+    });
+    fireEvent.click(custom);
+    const wheel = screen.getByRole("slider", {
+      name: t("fcboard.custom_colour"),
+    });
+    fireEvent.keyDown(wheel, { key: "ArrowRight" });
+    expect(h.state.currentItemStrokeColor).not.toBe("#000000");
+    expect(h.state.currentItemInkGradient).toBeUndefined();
+    fireEvent.change(
+      screen.getByRole("slider", { name: t("labels.opacity") }),
+      { target: { value: "35" } },
+    );
+    expect(h.state.currentItemOpacity).toBe(35);
+    fireEvent.keyDown(wheel, { key: "Escape" });
+    expect(
+      screen.queryByRole("slider", { name: t("labels.opacity") }),
+    ).toBeNull();
+    expect(document.querySelector(".fc-factory-pen-settings")).not.toBeNull();
+    const color = h.state.currentItemStrokeColor;
+    draw(canvas);
+    expect(live().at(-1)).toMatchObject({
+      strokeColor: color,
+      opacity: 35,
+      customData: { fcInk: { subpixel: true } },
+    });
   });
 
   it("offers working fountain, highlighter, dashed and rainbow pens without replacing the canvas", async () => {
@@ -826,7 +884,6 @@ describe("APK-style whiteboard ink", () => {
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.highlighter") }),
     );
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     fireEvent.change(
       screen.getByRole("slider", { name: t("fcboard.pen_thickness") }),
       {
@@ -911,8 +968,10 @@ describe("APK-style whiteboard ink", () => {
       const canvas = container.querySelector("canvas.interactive")!;
       act(() => h.app.setActiveTool({ type: "freedraw" }));
       expect(
-        screen.getByRole("button", { name: t("fcboard.multi_touch_writing") }),
-      ).toBeInTheDocument();
+        screen.queryByRole("button", {
+          name: t("fcboard.multi_touch_writing"),
+        }),
+      ).toBeNull();
       const zoom = h.state.zoom.value;
       pointer(canvas, "pointerdown", 100, 200, {
         pointerType: "touch",
@@ -959,11 +1018,13 @@ describe("APK-style whiteboard ink", () => {
       fireEvent.click(screen.getByTestId("button-undo"));
       expect(live()).toHaveLength(1);
       expect(live()[0].width).toBe(300);
+      time += 400;
       fireEvent.click(screen.getByTestId("button-undo"));
       expect(live()).toHaveLength(0);
       fireEvent.click(screen.getByTestId("button-redo"));
       expect(live()).toHaveLength(1);
       expect(live()[0].width).toBe(300);
+      time += 400;
       fireEvent.click(screen.getByTestId("button-redo"));
       expect(live()).toHaveLength(2);
     },
@@ -1266,4 +1327,111 @@ describe("APK-style whiteboard ink", () => {
     expect(live()).toHaveLength(2);
     expect(h.state.activeTool.type).toBe("freedraw");
   });
+});
+
+it("erases only the circled handwriting segment on lift with one undo and preserves the rest of its group", async () => {
+  const { container } = await render(
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+  );
+  const canvas = container.querySelector("canvas.interactive")!;
+  const source = {
+    ...API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 200,
+      points: [pointFrom(0, 0), pointFrom(400, 0)],
+      strokeWidth: 4,
+      groupIds: ["writing"],
+    }),
+    customData: {
+      fcInk: { version: 2, pen: "hard", unit: 1, centerline: true },
+    },
+  };
+  const neighbor = {
+    ...API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 400,
+      points: [pointFrom(0, 0), pointFrom(400, 0)],
+      groupIds: ["writing"],
+    }),
+  };
+  API.updateScene({
+    elements: [source, neighbor],
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+  act(() => {
+    API.setAppState({ eraserMode: "region" });
+    h.app.setActiveTool({ type: "eraser" });
+  });
+  const circle = () => {
+    pointer(canvas, "pointerdown", 220, 170);
+    pointer(canvas, "pointermove", 280, 170);
+    pointer(canvas, "pointermove", 280, 230);
+    pointer(canvas, "pointermove", 220, 230);
+  };
+  circle();
+  expect(live()).toEqual([source, neighbor]);
+  pointer(canvas, "pointercancel", 220, 170);
+  expect(live()).toEqual([source, neighbor]);
+  circle();
+  pointer(canvas, "pointerup", 220, 170);
+  expect(live()).toHaveLength(3);
+  expect(live()[0]).toMatchObject({
+    id: source.id,
+    x: 100,
+    width: 120,
+    isDeleted: false,
+  });
+  expect(live()[1]).toMatchObject({ x: 280, width: 220, isDeleted: false });
+  expect(live()[2]).toBe(neighbor);
+  expect(source.points).toHaveLength(2);
+  fireEvent.click(screen.getByTestId("button-undo"));
+  expect(live()).toHaveLength(2);
+  expect((live()[0] as FcboardFreeDrawElement).points).toEqual(source.points);
+});
+
+it("erases an enclosed object only on lift, cancels safely and restores it with undo", async () => {
+  const { container } = await render(
+    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+  );
+  const canvas = container.querySelector("canvas.interactive")!;
+  const inside = API.createElement({
+    type: "rectangle",
+    x: 200,
+    y: 200,
+    width: 50,
+    height: 50,
+  });
+  const outside = API.createElement({
+    type: "rectangle",
+    x: 600,
+    y: 200,
+    width: 50,
+    height: 50,
+  });
+  API.updateScene({
+    elements: [inside, outside],
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
+  act(() => {
+    API.setAppState({ eraserMode: "region" });
+    h.app.setActiveTool({ type: "eraser" });
+  });
+  const circle = () => {
+    pointer(canvas, "pointerdown", 150, 150);
+    pointer(canvas, "pointermove", 300, 150);
+    pointer(canvas, "pointermove", 300, 300);
+    pointer(canvas, "pointermove", 150, 300);
+    pointer(canvas, "pointermove", 150, 150);
+  };
+  circle();
+  expect(live().map((element) => element.id)).toEqual([inside.id, outside.id]);
+  pointer(canvas, "pointercancel", 150, 150);
+  expect(live()).toHaveLength(2);
+  circle();
+  pointer(canvas, "pointerup", 150, 150);
+  expect(live().map((element) => element.id)).toEqual([outside.id]);
+  fireEvent.click(screen.getByTestId("button-undo"));
+  expect(live().map((element) => element.id)).toEqual([inside.id, outside.id]);
 });

@@ -146,7 +146,7 @@ for (const viewport of [
     await expect(frame.locator("#page")).toHaveText("1 / 10");
     await expect(first.locator("input").nth(0)).toBeChecked();
     await panel.getByRole("button", { name: "关闭", exact: true }).click();
-    await page.getByRole("button", { name: "展开回答", exact: true }).click();
+    await expect(panel).toBeHidden();
     await expect(first.locator("input").nth(0)).toBeChecked();
     await page.screenshot({
       path: info.outputPath(`physics-quiz-${viewport.width}.png`),

@@ -115,6 +115,7 @@
     "@mui/material": "9.5.0",
     "browser-fs-access": "0.38.0",
     "canvas-roundrect-polyfill": "0.0.1",
+    "clipper-lib": "6.4.2",
     "clsx": "1.1.1",
     "cross-env": "7.0.3",
     "es6-promise-pool": "2.5.0",
@@ -138,13 +139,18 @@
     "roughjs": "4.6.4",
     "sass": "1.51.0",
     "tinycolor2": "1.6.0",
-    "tunnel-rat": "0.1.2"
+    "tunnel-rat": "0.1.2",
+    "vega": "6.4.0",
+    "vega-embed": "7.3.0",
+    "vega-interpreter": "2.3.2",
+    "vega-lite": "6.5.0"
   },
   "devDependencies": {
     "@size-limit/preset-big-lib": "9.0.0",
     "@testing-library/dom": "10.4.0",
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "16.2.0",
+    "@types/clipper-lib": "6.4.0",
     "@types/lodash.debounce": "4.0.8",
     "@types/pako": "2.0.3",
     "@types/pica": "5.1.3",

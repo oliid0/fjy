@@ -274,10 +274,10 @@ const _renderStaticScene = ({
       context.globalAlpha = backgroundOpacity(background);
       context.drawImage(
         image,
-        appState.scrollX,
-        appState.scrollY,
-        background.width,
-        background.height,
+        0,
+        0,
+        normalizedWidth / appState.zoom.value,
+        normalizedHeight / appState.zoom.value,
       );
       context.restore();
     }

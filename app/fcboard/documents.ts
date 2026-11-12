@@ -1,11 +1,23 @@
 import { t } from "@fcboard/fcboard/i18n";
 import { createStore, get, set } from "idb-keyval";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
-import { eraseStroke } from "@fcboard/fcboard/eraser/stroke";
+import {
+  eraseStroke,
+  eraseStrokeInRegion,
+} from "@fcboard/fcboard/eraser/stroke";
+import { createEraseRegion } from "@fcboard/fcboard/eraser/region";
+import {
+  factoryCircleHits,
+  factoryCircleObject,
+} from "@fcboard/fcboard/eraser/factoryRegion";
+
 import { FONT_FAMILY, getFontString } from "@fcboard/common";
 import { convertToFcboardElements } from "@fcboard/fcboard";
 import { getElementLineSegments } from "@fcboard/element";
-import { getLassoSelectedElementIds } from "@fcboard/fcboard/lasso/utils";
+import {
+  getLassoBounds,
+  getLassoSelectedElementIds,
+} from "@fcboard/fcboard/lasso/utils";
 import { regionPath } from "@fcboard/fcboard/lasso/region";
 import { pointFrom, polygonIncludesPointNonZero } from "@fcboard/math";
 import { measureText } from "@fcboard/element/textMeasurements";
@@ -13,8 +25,11 @@ import { measureText } from "@fcboard/element/textMeasurements";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 import { factoryNibControls } from "@fcboard/element/factoryNib";
 
+import type { FactoryCircleObject } from "@fcboard/fcboard/eraser/factoryRegion";
+
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 import type { FontFamilyValues } from "@fcboard/element/types";
+import type { FcboardFreeDrawElement } from "@fcboard/element/types";
 import type { FactoryInkData } from "@fcboard/element/factoryInk";
 import type { RegionBounds } from "@fcboard/fcboard/lasso/region";
 import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
@@ -34,6 +49,8 @@ export const DOCUMENT_ACCEPT =
   ".ppt,.pptx,.pps,.ppsx,.pdf,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.png,.jpg,.jpeg,.webp,.gif";
 export type InkStroke = {
   id: string;
+  locked?: boolean;
+  shapeType?: FcboardElementSkeleton["type"];
   color: string;
   width: number;
   opacity?: number;
@@ -47,11 +64,13 @@ export type InkStroke = {
   text?: string;
   fontSize?: number;
   fontFamily?: FontFamilyValues;
+  fontWeight?: 400 | 700;
   lineHeight?: number;
   originalText?: string;
   image?: string;
   imageWidth?: number;
   imageHeight?: number;
+  imageCrop?: import("@fcboard/element/types").ImageCrop;
   resource?: InteractiveResource & { width: number; height: number };
   lesson?: string;
   commandId?: string;
@@ -70,6 +89,13 @@ export type InkStroke = {
   plot?: {
     id: string;
     plot: Plot;
+    renderer?: "vega" | "iframe";
+    sourceRegions?: {
+      left: number;
+      top: number;
+      right: number;
+      bottom: number;
+    }[];
     position: { x: number; y: number };
     origin: { x: number; y: number };
   };
@@ -92,6 +118,23 @@ export const documentSourceSignature = (strokes: readonly InkStroke[]) =>
   JSON.stringify(strokes);
 
 /** Courseware uses the same swept eraser geometry as the main whiteboard. */
+const documentInkFragments = (
+  stroke: InkStroke,
+  parts: FcboardFreeDrawElement[],
+) =>
+  parts.map((part, index) => ({
+    ...stroke,
+    id: index ? part.id : stroke.id,
+    points: part.points.map(([x, y]): [number, number] => [
+      part.x + x,
+      part.y + y,
+    ]),
+    ...(stroke.fcInk ? { fcInk: part.customData?.fcInk } : {}),
+    ...(stroke.fcInk || stroke.pressures
+      ? { pressures: [...part.pressures] }
+      : {}),
+  }));
+
 export const eraseDocumentInk = (
   strokes: InkStroke[],
   from: [number, number],
@@ -101,7 +144,13 @@ export const eraseDocumentInk = (
 ) => {
   let changed = false;
   const next = strokes.flatMap((stroke) => {
-    if (stroke.text || stroke.image || stroke.widget || stroke.resource) {
+    if (
+      stroke.locked ||
+      stroke.text ||
+      stroke.image ||
+      stroke.widget ||
+      stroke.resource
+    ) {
       return [stroke];
     }
     const element = documentInkElement(stroke);
@@ -116,17 +165,98 @@ export const eraseDocumentInk = (
       return [stroke];
     }
     changed = true;
-    return parts.map((part, index) => ({
-      ...stroke,
-      id: index ? part.id : stroke.id,
-      points: part.points.map(([x, y]): [number, number] => [
-        part.x + x,
-        part.y + y,
-      ]),
-      ...(stroke.fcInk
-        ? { fcInk: part.customData?.fcInk, pressures: [...part.pressures] }
-        : {}),
-    }));
+    return documentInkFragments(stroke, parts);
+  });
+  return changed ? next : strokes;
+};
+
+/** Courseware preserves the same exterior handwriting fragments as the board. */
+export const eraseDocumentRegion = (
+  strokes: InkStroke[],
+  path: [number, number][],
+  precision = 0.125,
+) => {
+  const points = path.map(([x, y]) =>
+    pointFrom<import("@fcboard/math").GlobalPoint>(x, y),
+  );
+  const area = getLassoBounds(points);
+  const candidates = strokes.filter((stroke) => {
+    if (stroke.locked) {
+      return false;
+    }
+    const bounds = documentStrokeBounds(stroke);
+    const padding = stroke.width * 12;
+    return (
+      bounds.right + padding >= area[0] &&
+      bounds.left - padding <= area[2] &&
+      bounds.bottom + padding >= area[1] &&
+      bounds.top - padding <= area[3]
+    );
+  });
+  const objects = candidates.map((stroke): FactoryCircleObject => {
+    if (!stroke.text && !stroke.image && !stroke.resource) {
+      const element = documentInkElement(stroke);
+      return {
+        ...factoryCircleObject(element, new Map([[element.id, element]]), area),
+        parent: documentCompositeGroup(stroke),
+      };
+    }
+    const { left, top, right, bottom } = documentStrokeBounds(stroke);
+    return {
+      id: stroke.id,
+      parent: documentCompositeGroup(stroke),
+      kind: stroke.text ? "text" : "image",
+      bounds: [left, top, right, bottom],
+      paths: [
+        {
+          closed: true,
+          points: [
+            pointFrom(left, top),
+            pointFrom(right, top),
+            pointFrom(right, bottom),
+            pointFrom(left, bottom),
+          ],
+        },
+      ],
+    };
+  });
+  const topmost =
+    path.length === 1
+      ? strokes
+          .filter((stroke) => !stroke.locked && hitStroke(stroke, path[0]))
+          .at(-1)
+      : undefined;
+  const selected = factoryCircleHits(
+    objects,
+    points,
+    topmost ? [topmost.id] : [],
+    precision,
+  );
+  const region = createEraseRegion(points, precision);
+  let changed = false;
+  const next = strokes.flatMap((stroke) => {
+    if (!selected.has(stroke.id) || stroke.locked) {
+      return [stroke];
+    }
+    if (
+      !stroke.text &&
+      !stroke.image &&
+      !stroke.widget &&
+      !stroke.resource &&
+      (!stroke.shapeType || stroke.shapeType === "freedraw") &&
+      (!stroke.fill || stroke.fill === "transparent")
+    ) {
+      const parts = region
+        ? eraseStrokeInRegion(documentInkElement(stroke), region)
+        : null;
+      if (!parts) {
+        return [stroke];
+      }
+      changed = true;
+      return documentInkFragments(stroke, parts);
+    }
+    changed = true;
+    return [];
   });
   return changed ? next : strokes;
 };
@@ -152,6 +282,9 @@ export const eraseDocumentObjects = (
   const hit = new Set<string>();
   const groups = new Set<string>();
   for (const stroke of strokes) {
+    if (stroke.locked) {
+      continue;
+    }
     let element = documentInkElement(stroke);
     let inside = false;
     if (stroke.text || stroke.image || stroke.resource) {
@@ -199,7 +332,9 @@ export const eraseDocumentObjects = (
   }
   return hit.size
     ? strokes.filter(
-        (stroke) => !hit.has(stroke.id) && !groups.has(group(stroke) || ""),
+        (stroke) =>
+          stroke.locked ||
+          (!hit.has(stroke.id) && !groups.has(group(stroke) || "")),
       )
     : strokes;
 };
@@ -305,6 +440,7 @@ export const documentStrokeBounds = (stroke: InkStroke) => {
     const font = getFontString({
       fontSize: stroke.fontSize || 26,
       fontFamily: stroke.fontFamily || FONT_FAMILY.Helvetica,
+      fontWeight: stroke.fontWeight,
     });
     const metrics = measureText(
       stroke.text,
@@ -666,6 +802,8 @@ export const shapeInk = (
   }
   return {
     id: shape.id,
+    locked: shape.locked,
+    shapeType: shape.type,
     anchor: { x, y },
     points,
     width: shape.strokeWidth ?? 2,
@@ -695,11 +833,13 @@ export const shapeInk = (
     text: shape.type === "text" ? shape.text : undefined,
     fontSize: shape.type === "text" ? shape.fontSize : undefined,
     fontFamily: shape.type === "text" ? shape.fontFamily : undefined,
+    fontWeight: shape.type === "text" ? shape.fontWeight : undefined,
     lineHeight: shape.type === "text" ? shape.lineHeight : undefined,
     originalText: shape.type === "text" ? shape.originalText : undefined,
     image: shape.type === "image" ? image : undefined,
     imageWidth: shape.type === "image" ? shape.width : undefined,
     imageHeight: shape.type === "image" ? shape.height : undefined,
+    imageCrop: shape.type === "image" ? shape.crop || undefined : undefined,
     resource: shape.customData?.fcInteractiveResource
       ? {
           ...shape.customData.fcInteractiveResource,
@@ -715,22 +855,44 @@ export const inkSnapshot = async (
   height: number,
   background?: Blob,
   scroll = 0,
+  options?: { transparent?: boolean; left?: number; width?: number },
 ) => {
   const canvas = document.createElement("canvas");
-  canvas.width = 1000;
-  canvas.height = Math.max(1, Math.min(1600, Math.round(height)));
+  const requestedWidth = options?.width ?? 1000;
+  const requestedHeight = Math.max(1, Math.min(1600, Math.round(height)));
+  if (
+    !Number.isFinite(requestedWidth) ||
+    requestedWidth <= 0 ||
+    !Number.isFinite(options?.left ?? 0)
+  ) {
+    throw new Error(t("fcboard.invalid_selection_format"));
+  }
+  const snapshotWidth = options
+    ? Math.max(16, requestedWidth, requestedHeight / 16)
+    : 1000;
+  const snapshotHeight = options
+    ? Math.max(16, requestedHeight, requestedWidth / 16)
+    : requestedHeight;
+  const snapshotScale = options
+    ? Math.min(1, 1600 / Math.max(snapshotWidth, snapshotHeight))
+    : 1;
+  canvas.width = Math.ceil(snapshotWidth * snapshotScale);
+  canvas.height = Math.ceil(snapshotHeight * snapshotScale);
   const context = canvas.getContext("2d");
   if (!context) {
     throw new Error(t("fcboard.this_device_could_not_capture_the_document"));
   }
-  context.fillStyle = "#fff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (!options?.transparent) {
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
   const drawImage = async (
     source: string,
     x: number,
     y: number,
     width: number,
     size: number,
+    crop?: import("@fcboard/element/types").ImageCrop,
   ) => {
     const image = new Image();
     await new Promise<void>((resolve, reject) => {
@@ -739,7 +901,21 @@ export const inkSnapshot = async (
         reject(new Error(t("fcboard.could_not_read_document_image")));
       image.src = source;
     });
-    context.drawImage(image, x, y, width, size);
+    if (crop) {
+      context.drawImage(
+        image,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        x,
+        y,
+        width,
+        size,
+      );
+    } else {
+      context.drawImage(image, x, y, width, size);
+    }
   };
   if (background) {
     const url = URL.createObjectURL(background);
@@ -749,7 +925,8 @@ export const inkSnapshot = async (
       URL.revokeObjectURL(url);
     }
   }
-  context.translate(0, -scroll);
+  context.scale(snapshotScale, snapshotScale);
+  context.translate(-(options?.left ?? 0), -scroll);
   for (const stroke of strokes) {
     context.globalAlpha = (stroke.opacity ?? 100) / 100;
     context.strokeStyle = stroke.color;
@@ -781,11 +958,13 @@ export const inkSnapshot = async (
         stroke.points[0][1],
         stroke.imageWidth || 120,
         stroke.imageHeight || 40,
+        stroke.imageCrop,
       );
     } else if (stroke.text) {
       context.font = getFontString({
         fontSize: stroke.fontSize || 26,
         fontFamily: stroke.fontFamily || FONT_FAMILY.Helvetica,
+        fontWeight: stroke.fontWeight,
       });
       context.textBaseline = "top";
       stroke.text

@@ -136,7 +136,7 @@ it("resolves all whiteboard controls and nested mailbox fields in every availabl
 });
 
 it.each([
-  ["en", "Recording", "Fountain pen", "Partial erasing"],
+  ["en", "Recording", "Stroke pen", "Partial erasing"],
   ["de-DE", "Aufnahme", "Füller", "Teilweise radieren"],
   ["fr-FR", "Enregistrement", "Stylo-plume", "Gommage partiel"],
   ["zh-HK", "錄製", "鋼筆", "局部擦除"],

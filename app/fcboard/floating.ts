@@ -65,8 +65,8 @@ export const useAnchoredPanel = (
             {
               left: rect.left - parent.left,
               right: rect.right - parent.left,
-              top: rect.top - parent.top,
-              bottom: rect.bottom - parent.top,
+              top: (toolbar?.top ?? rect.top) - parent.top,
+              bottom: (toolbar?.bottom ?? rect.bottom) - parent.top,
             },
             { width: parent.width, height: parent.height },
             panel.getBoundingClientRect().width,

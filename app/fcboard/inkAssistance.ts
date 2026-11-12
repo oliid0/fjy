@@ -13,7 +13,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { insertGeneratedImage } from "./imageGeneration";
+import { insertMagicInk } from "./magicPen";
 import { InkRequests } from "./inkRequests";
 
 import { boardContext } from "./ai";
@@ -41,6 +41,7 @@ import {
 import { insertionLabelParts } from "./insertionLabels";
 import {
   inkAssistMode,
+  inkRecognitionDelay,
   recognizeInkContent,
   settleInkRecognition,
 } from "./inkRecognition";
@@ -55,6 +56,7 @@ export const observeInkAssistance = (
   const failed = new Set<string>();
   const requests = new InkRequests();
   let previous = "";
+  let disposed = false;
   let observedScene:
     | readonly import("@fcboard/element/types").FcboardElement[]
     | undefined;
@@ -71,12 +73,16 @@ export const observeInkAssistance = (
     ]);
   };
   let penConfiguration = configuration();
-  const refresh = () => {
+  const refresh = (rescan = false) => {
+    if (disposed) {
+      return;
+    }
     const state = api.getAppState();
     const nextConfiguration = configuration();
     const currentScene = api.getSceneElements();
     requests.prune(currentScene.map((element) => element.id));
     if (
+      !rescan &&
       currentScene === observedScene &&
       state.cursorButton === observedButton &&
       penConfiguration === nextConfiguration
@@ -189,6 +195,7 @@ export const observeInkAssistance = (
     }
     previous = requestKey;
     const request = new AbortController();
+    const sourceIds = new Set(source.map((element) => element.id));
     const current = () =>
       !request.signal.aborted &&
       !classroomCommands.has("document.draw") &&
@@ -197,9 +204,7 @@ export const observeInkAssistance = (
           (item) => item.key === target.key && item.stamp === target.stamp,
         )) &&
       selectionSignature(
-        api
-          .getSceneElements()
-          .filter((element) => source.some((input) => input.id === element.id)),
+        api.getSceneElements().filter((element) => sourceIds.has(element.id)),
       ) === signature;
     requests.reserve(
       request,
@@ -217,6 +222,7 @@ export const observeInkAssistance = (
         void (async () => {
           if (mode === "shape") {
             const scene = api.getSceneElements();
+            const elementsMap = new Map(scene.map((item) => [item.id, item]));
             const angle = recognizeAngleMark(
               boardInk(source),
               scene.flatMap((element) =>
@@ -227,7 +233,7 @@ export const observeInkAssistance = (
                         id: element.id,
                         points: LinearElementEditor.getPointsGlobalCoordinates(
                           element,
-                          new Map(scene.map((item) => [item.id, item])),
+                          elementsMap,
                         ).map(([x, y]): [number, number] => [x, y]),
                       },
                     ]
@@ -265,6 +271,26 @@ export const observeInkAssistance = (
               return;
             }
           }
+          if (mode === "magic") {
+            const [left, top, right, bottom] = getCommonBounds(source);
+            await insertMagicInk(
+              api,
+              async () =>
+                (
+                  await boardContext(api, false, source, undefined, true, false)
+                ).image || "",
+              boardInk(source),
+              request.signal,
+              {
+                bounds: { left, top, right, bottom },
+                replaceIds: source.map((element) => element.id),
+                sourceSignature: signature,
+                opacity: source[0].opacity,
+              },
+              current,
+            );
+            return;
+          }
           const result = await recognizeInkContent(
             mode,
             async () => (await boardContext(api, false, source)).image || "",
@@ -291,7 +317,12 @@ export const observeInkAssistance = (
                 }
               : undefined,
           );
-          await settleInkRecognition(mode, since, request.signal);
+          await settleInkRecognition(
+            mode,
+            since,
+            request.signal,
+            boardInk(source),
+          );
           if (!current()) {
             return;
           }
@@ -311,7 +342,7 @@ export const observeInkAssistance = (
               undefined,
               { fcLanguage: { group, source: false } },
               source,
-              "handwritten",
+              "text",
               {
                 mode: "below",
                 sourceLines: result.text.split("\n").length,
@@ -363,17 +394,7 @@ export const observeInkAssistance = (
             source.forEach((element) => seen.add(element.id));
             return;
           }
-          const [left, top, right, bottom] = getCommonBounds(source);
-          if (result.kind === "magic") {
-            await insertGeneratedImage(api, result.prompt, request.signal, {
-              referenceImage: result.image,
-              transparent: result.transparent,
-              bounds: { left, top, right, bottom },
-              replaceIds: source.map((element) => element.id),
-              sourceSignature: signature,
-            });
-            return;
-          }
+          const [left, top] = getCommonBounds(source);
           const style = {
             strokeColor: source[0].strokeColor,
             strokeWidth: source[0].strokeWidth,
@@ -476,8 +497,10 @@ export const observeInkAssistance = (
               }
               if (
                 !target &&
-                mode !== "function" &&
-                mode !== "calculation" &&
+                !(
+                  failure instanceof DOMException &&
+                  failure.name === "AbortError"
+                ) &&
                 !(
                   failure instanceof Error &&
                   failure.message === "Shape incomplete"
@@ -492,16 +515,15 @@ export const observeInkAssistance = (
             onBusy(requests.busy);
           });
       },
-      mode === "function" || mode === "calculation"
-        ? 350
-        : mode === "magic"
-        ? 1600
-        : mode === "shape"
-        ? 450
-        : 700,
+      inkRecognitionDelay(mode, boardInk(source)),
     );
+    // A batched native/multi-writer scene can contain several completed regions.
+    // Reserve all independent work now; no region waits for another model to end.
+    if (pending.some((element) => requests.available(element.id))) {
+      queueMicrotask(() => refresh(true));
+    }
   };
-  const stop = api.onChange(refresh);
+  const stop = api.onChange(() => refresh());
   const tables = new LiveTableWriting(api);
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
     if (phase === "start" || phase === "update") {
@@ -582,12 +604,18 @@ export const observeInkAssistance = (
   });
   const command = classroomCommands.register(
     "canvas.inkAssist",
-    "选择文字/图形/魔术/函数/算式笔，args.mode=text|shape|magic|function|calculation|off；停笔后识别，失败保留原笔迹",
+    "选择文字/图形/魔术/函数/算式/语言笔，args.mode=text|shape|magic|function|calculation|language|off；停笔后识别，失败保留原笔迹",
     (args) => {
       if (
-        !["text", "shape", "magic", "function", "calculation", "off"].includes(
-          String(args.mode),
-        )
+        ![
+          "text",
+          "shape",
+          "magic",
+          "function",
+          "calculation",
+          "language",
+          "off",
+        ].includes(String(args.mode))
       ) {
         throw new Error(t("fcboard.unknown_smart_pen_type"));
       }
@@ -601,8 +629,10 @@ export const observeInkAssistance = (
                   | "shape"
                   | "magic"
                   | "function"
-                  | "calculation"),
+                  | "calculation"
+                  | "language"),
           currentItemPenMode: "hard",
+          multiStroke: false,
         },
       });
       if (classroomCommands.has("document.tool")) {
@@ -616,6 +646,7 @@ export const observeInkAssistance = (
     },
   );
   return () => {
+    disposed = true;
     requests.cancelAll();
     stop();
     inkCommit?.();

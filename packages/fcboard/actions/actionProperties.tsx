@@ -322,6 +322,20 @@ export const actionChangeStrokeColor = register<
             return hasStrokeColor(el.type)
               ? newElementWith(el, {
                   strokeColor: value.currentItemStrokeColor,
+                  ...(el.customData?.fcInk
+                    ? {
+                        customData: {
+                          ...el.customData,
+                          fcInk: {
+                            ...el.customData.fcInk,
+                            gradient: undefined,
+                            ...(el.customData.fcInk.pen === "rainbow"
+                              ? { pen: "hard" }
+                              : {}),
+                          },
+                        },
+                      }
+                    : {}),
                 })
               : el;
           },
@@ -331,6 +345,9 @@ export const actionChangeStrokeColor = register<
       appState: {
         ...appState,
         ...value,
+        currentItemStrokeColor: isSomeElementSelected(elements, appState)
+          ? appState.currentItemStrokeColor
+          : value?.currentItemStrokeColor ?? appState.currentItemStrokeColor,
       },
       captureUpdate: !!value?.currentItemStrokeColor
         ? CaptureUpdateAction.IMMEDIATELY
@@ -418,6 +435,9 @@ export const actionChangeBackgroundColor = register<
       appState: {
         ...appState,
         ...value,
+        currentItemBackgroundColor: selectedElements.length
+          ? appState.currentItemBackgroundColor
+          : value.currentItemBackgroundColor,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -722,6 +742,46 @@ export const actionChangeOpacity = register<FcboardElement["opacity"]>({
   PanelComponent: ({ app, updateData }) => (
     <Range updateData={updateData} app={app} testId="opacity" />
   ),
+});
+
+export const actionChangeFontWeight = register<400 | 700>({
+  name: "changeFontWeight",
+  label: "labels.bold",
+  trackEvent: false,
+  perform: (elements, appState, value, app) => {
+    if (value !== 400 && value !== 700) {
+      return false;
+    }
+    const updated = changeProperty(
+      elements,
+      appState,
+      (element) => {
+        if (!isTextElement(element)) {
+          return element;
+        }
+        let next = newElementWith(element, { fontWeight: value });
+        redrawTextBoundingBox(
+          next,
+          app.scene.getContainerElement(element),
+          app.scene,
+        );
+        next = offsetElementAfterFontResize(element, next, app.scene);
+        return next;
+      },
+      true,
+    );
+    getSelectedElements(updated, appState, {
+      includeBoundTextElement: true,
+    }).forEach((element) => {
+      if (isTextElement(element)) {
+        updateBoundElements(element, app.scene);
+      }
+    });
+    return {
+      elements: updated,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    };
+  },
 });
 
 export const actionChangeFontSize = register<FcboardTextElement["fontSize"]>({

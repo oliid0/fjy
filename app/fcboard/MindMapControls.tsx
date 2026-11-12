@@ -17,10 +17,10 @@ import {
   insertionWritingAt,
 } from "./insertionWriting";
 import { TransientMessage } from "./TransientMessage";
-import deleteIcon from "./mindmap-assets/g_delete_note.png?url";
-import moveIcon from "./mindmap-assets/note_move.png?url";
-import addIcon from "./mindmap-assets/note_add.png?url";
-import clearIcon from "./mindmap-assets/note_clear_text.png?url";
+import deleteIcon from "./mindmap-assets/g_delete_note.svg?url";
+import moveIcon from "./mindmap-assets/note_move.svg?url";
+import addIcon from "./mindmap-assets/note_add.svg?url";
+import clearIcon from "./mindmap-assets/note_clear_text.svg?url";
 
 import type { InsertObject } from "./insertObjects";
 import type { InkStroke } from "./documents";

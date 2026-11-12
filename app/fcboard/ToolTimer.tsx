@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
+import {
+  playerPlayIcon,
+  playerStopFilledIcon,
+  settingsIcon,
+  fullscreenIcon,
+  resetZoom,
+} from "@fcboard/fcboard/components/icons";
+
+import { TimerWheel } from "./TimerWheel";
 
 import { classroomCommands } from "./commands";
 import { FloatingToolPanel } from "./FloatingToolPanel";
@@ -15,6 +24,8 @@ export const ToolTimer = () => {
   const [open, setOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [compact, setCompact] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState([0, 1, 0]);
   const [interaction, setInteraction] = useState(0);
   const reveal = useCallback(() => {
     setCompact(false);
@@ -31,6 +42,9 @@ export const ToolTimer = () => {
   const [now, setNow] = useState(Date.now);
   const sound = useRef<AudioContext | undefined>(undefined);
   const unlockSound = () => {
+    if (typeof AudioContext === "undefined") {
+      return;
+    }
     sound.current ??= new AudioContext();
     void sound.current.resume().catch(() => {});
   };
@@ -97,7 +111,7 @@ export const ToolTimer = () => {
   }, [open, state.started, state.elapsed, state.duration, state.muted]);
   // TimerFloatingService.vanish: 5s after start, otherwise 7s; tapping restores controls.
   useEffect(() => {
-    if (!open || full) {
+    if (!open || full || editing) {
       return;
     }
     const timer = setTimeout(
@@ -105,7 +119,7 @@ export const ToolTimer = () => {
       state.started === null ? 7000 : 5000,
     );
     return () => clearTimeout(timer);
-  }, [open, full, state.started, interaction]);
+  }, [open, full, editing, state.started, interaction]);
   const act = useCallback(
     (args: Record<string, unknown>) => {
       const action = args.action ?? "open";
@@ -141,6 +155,12 @@ export const ToolTimer = () => {
       }
       if (typeof args.muted === "boolean") {
         next.muted = args.muted;
+      }
+      if (action === "close" || action === "start") {
+        setEditing(false);
+      }
+      if (action === "close") {
+        setFull(false);
       }
       if (action === "start" && next.started === null) {
         next.started = clock;
@@ -190,87 +210,168 @@ export const ToolTimer = () => {
   ]
     .map((part) => String(part).padStart(2, "0"))
     .join(":");
-  return open ? (
-    <FloatingToolPanel
-      title={t("fcboard.timer")}
-      width={420}
-      fullscreen={full}
-      onClose={() => act({ action: "close" })}
-    >
-      <div
-        className="fc-builtin-body"
-        data-compact={compact && !full}
-        onPointerDownCapture={reveal}
-        onKeyDownCapture={reveal}
+  if (!open) {
+    return null;
+  }
+  if (full) {
+    return (
+      <section
+        className="fc-timer-full"
+        role="dialog"
+        aria-label={t("fcboard.timer")}
+        tabIndex={0}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => {
+          setFull(false);
+          reveal();
+        }}
+        onKeyDown={(event) => {
+          if (["Escape", "Enter", " "].includes(event.key)) {
+            event.preventDefault();
+            event.stopPropagation();
+            setFull(false);
+            reveal();
+          }
+        }}
       >
         <output
           role="timer"
-          tabIndex={compact && !full ? 0 : undefined}
-          onClick={reveal}
-          className="fc-timer-digits"
-          style={{
-            color: seconds < 5 ? "#d32f2f" : undefined,
-            fontSize: full ? "clamp(40px, 10vw, 160px)" : undefined,
-          }}
+          style={{ color: seconds < 5 ? "#ff0000" : "#ffffff" }}
         >
           {text}
         </output>
-        {(!compact || full) && (
-          <>
-            <label>
-              {t("fcboard.timer_seconds")}
-              <input
-                type="number"
-                min={1}
-                max={359999}
-                disabled={state.started !== null}
-                value={state.duration / 1000}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  if (value >= 1 && value <= 359999) {
-                    act({ action: "configure", seconds: value });
-                  }
-                }}
-              />
-            </label>
-            <div className="fc-builtin-row">
-              <button
-                type="button"
-                onClick={() => {
-                  unlockSound();
-                  act({ action: state.started === null ? "start" : "pause" });
-                }}
-              >
-                {t(
-                  state.started === null
-                    ? "fcboard.play_tool"
-                    : "fcboard.pause_tool",
-                )}
-              </button>
-              <button type="button" onClick={() => act({ action: "reset" })}>
-                {t("fcboard.reset")}
-              </button>
-              <button
-                type="button"
-                aria-pressed={full}
-                onClick={() => setFull(!full)}
-              >
-                {t("fcboard.fullscreen")}
-              </button>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={state.muted}
-                  onChange={(event) =>
-                    act({ action: "configure", muted: event.target.checked })
+      </section>
+    );
+  }
+  const setTime = () => {
+    const remaining = Math.ceil(
+      Math.max(0, current.current.duration - timerValue(current.current)) /
+        1000,
+    );
+    act({ action: "pause" });
+    setDraft([
+      Math.min(23, Math.floor(remaining / 3600)),
+      Math.floor(remaining / 60) % 60,
+      remaining % 60,
+    ]);
+    setEditing(true);
+  };
+  return (
+    <FloatingToolPanel
+      title={t("fcboard.timer")}
+      width={420}
+      hideHeader={compact && !editing}
+      className={`fc-native-timer ${compact && !editing ? "is-compact" : ""} ${
+        editing ? "is-editing" : ""
+      }`}
+      headerActions={
+        <button
+          type="button"
+          className="fc-timer-mute"
+          aria-label={t("fcboard.timer_mute")}
+          aria-pressed={state.muted}
+          onClick={() => act({ action: "configure", muted: !state.muted })}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M10 5 5 9H2v6h3l5 4z" />
+            {state.muted ? (
+              <path d="m15 9 6 6m0-6-6 6" />
+            ) : (
+              <path d="M14 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" />
+            )}
+          </svg>
+        </button>
+      }
+      onClose={() => act({ action: "close" })}
+    >
+      <div
+        className="fc-timer-body"
+        onPointerDownCapture={reveal}
+        onKeyDownCapture={reveal}
+      >
+        {editing ? (
+          <div
+            className="fc-timer-wheels"
+            role="group"
+            aria-label={t("fcboard.timer_seconds")}
+          >
+            {draft.map((value, index) => (
+              <span key={index}>
+                {index > 0 && <b aria-hidden="true">:</b>}
+                <TimerWheel
+                  label={["HH", "MM", "SS"][index]}
+                  max={index === 0 ? 23 : 59}
+                  value={value}
+                  onChange={(next) =>
+                    setDraft((previous) =>
+                      previous.map((part, position) =>
+                        position === index ? next : part,
+                      ),
+                    )
                   }
                 />
-                {t("fcboard.timer_mute")}
-              </label>
-            </div>
-          </>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <output
+            role="timer"
+            tabIndex={0}
+            onClick={reveal}
+            className="fc-timer-digits"
+            style={{ color: seconds < 5 ? "#ff0000" : undefined }}
+          >
+            {text}
+          </output>
+        )}
+        {(!compact || editing) && (
+          <div className="fc-timer-actions">
+            <button
+              type="button"
+              aria-label={t(editing ? "fcboard.reset" : "fcboard.settings")}
+              onClick={editing ? () => setDraft([0, 0, 0]) : setTime}
+            >
+              {editing ? resetZoom : settingsIcon}
+            </button>
+            <button
+              type="button"
+              aria-label={t(
+                state.started === null
+                  ? "fcboard.play_tool"
+                  : "fcboard.pause_tool",
+              )}
+              disabled={editing && !draft.some(Boolean)}
+              onClick={() => {
+                unlockSound();
+                if (editing) {
+                  act({
+                    action: "configure",
+                    seconds: draft[0] * 3600 + draft[1] * 60 + draft[2],
+                  });
+                }
+                act({ action: state.started === null ? "start" : "pause" });
+              }}
+            >
+              {state.started === null ? playerPlayIcon : playerStopFilledIcon}
+            </button>
+            {!editing && (
+              <button
+                type="button"
+                aria-label={t("fcboard.fullscreen")}
+                onClick={() => setFull(true)}
+              >
+                {fullscreenIcon}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </FloatingToolPanel>
-  ) : null;
+  );
 };

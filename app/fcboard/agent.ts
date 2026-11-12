@@ -61,6 +61,7 @@ export const runBoardCommands = async (
     completion?: string;
     exclude?: readonly string[];
     maxTokens?: number;
+    maxRounds?: number;
     textSourceIds?: readonly string[];
     allowed?: readonly string[];
     validate?: (command: Command) => boolean;
@@ -68,15 +69,32 @@ export const runBoardCommands = async (
     verify?: boolean;
     observe?: () => unknown | Promise<unknown>;
     settings?: Settings;
+    updates?: () => string[];
+    dispatch?: (command: Command, signal?: AbortSignal) => Promise<unknown>;
   } = {},
 ): Promise<BoardAgentAction> => {
   let action = initial;
   let calls = 0;
   let textStyleConfigured = false;
   const conversation = [...messages];
-  for (let round = 0; round < 6 && action.action === "commands"; round++) {
+  const maxRounds = options.maxRounds ?? 6;
+  for (let round = 0; round < maxRounds; round++) {
     if (signal?.aborted || !current()) {
       return { action: "done" };
+    }
+    const updates = options.updates?.();
+    if (updates?.length) {
+      conversation.push({ role: "user", content: updates.join("\n") });
+      action = parseJSON(
+        await chat(conversation, signal, options.settings, {
+          maxTokens: options.maxTokens || 4096,
+        }),
+      ) as BoardAgentAction;
+      signal?.throwIfAborted();
+      continue;
+    }
+    if (action.action !== "commands") {
+      return action;
     }
     const commands = action.commands;
     if (
@@ -108,7 +126,12 @@ export const runBoardCommands = async (
       result?: unknown;
       error?: string;
     }[] = [];
+    const amendments: string[] = [];
     for (const command of commands) {
+      amendments.push(...(options.updates?.() || []));
+      if (amendments.length) {
+        break;
+      }
       if (signal?.aborted || !current()) {
         return { action: "done" };
       }
@@ -140,7 +163,10 @@ export const runBoardCommands = async (
                 },
               }
             : command;
-        const result = await executeBoardCommand(routed, signal);
+        const result = await (options.dispatch || executeBoardCommand)(
+          routed,
+          signal,
+        );
         if (
           command.name === "canvas.style" &&
           ["color", "fontSize", "fontFamily", "textAlign", "opacity"].some(
@@ -175,7 +201,7 @@ export const runBoardCommands = async (
     ) {
       return { action: "done" };
     }
-    if (round === 5) {
+    if (round === maxRounds - 1) {
       throw new Error(
         t(
           "fcboard.observation_limit_reached_completed_work_is_preserved_describe_the_next_step_to_continue",
@@ -204,6 +230,10 @@ export const runBoardCommands = async (
         })}`,
       },
     );
+    amendments.push(...(options.updates?.() || []));
+    if (amendments.length) {
+      conversation.push({ role: "user", content: amendments.join("\n") });
+    }
     action = parseJSON(
       await chat(conversation, signal, options.settings, {
         maxTokens: options.maxTokens,

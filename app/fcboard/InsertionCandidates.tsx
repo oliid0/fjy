@@ -5,6 +5,7 @@ import ClickAwayListener from "@mui/material/ClickAwayListener";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 
 import { classroomCommands } from "./commands";
+import { MagicCandidates } from "./MagicCandidates";
 
 export const chooseInsertionCandidate = async (
   candidates: readonly string[],
@@ -93,55 +94,57 @@ export const InsertionCandidates = () => {
       window.removeEventListener("keydown", key);
     };
   }, []);
-  if (!request) {
-    return null;
-  }
-  const left = Math.max(8, Math.min(request.x, window.innerWidth - 240));
+  const left = Math.max(8, Math.min(request?.x ?? 8, window.innerWidth - 240));
   return (
-    <ClickAwayListener onClickAway={() => finish.current()}>
-      <Paper
-        data-insertion-candidates
-        role="toolbar"
-        aria-label={t("fcboard.handwriting_recognition")}
-        onPointerDown={(event) => event.stopPropagation()}
-        sx={{
-          position: "fixed",
-          zIndex: 1700,
-          left,
-          top: Math.max(8, Math.min(request.y, window.innerHeight - 64)),
-          display: "flex",
-          gap: "4px",
-          padding: "7px",
-          borderRadius: "5px",
-          bgcolor: "rgba(255,255,255,.96)",
-          boxShadow: "0 2px 12px #0002",
-          maxWidth: `calc(100vw - ${left + 8}px)`,
-        }}
-      >
-        <div style={{ display: "flex", overflowX: "auto" }}>
-          {request.candidates.map((candidate) => (
+    <>
+      <MagicCandidates />
+      {request && (
+        <ClickAwayListener onClickAway={() => finish.current()}>
+          <Paper
+            data-insertion-candidates
+            role="toolbar"
+            aria-label={t("fcboard.handwriting_recognition")}
+            onPointerDown={(event) => event.stopPropagation()}
+            sx={{
+              position: "fixed",
+              zIndex: 1700,
+              left,
+              top: Math.max(8, Math.min(request.y, window.innerHeight - 64)),
+              display: "flex",
+              gap: "4px",
+              padding: "7px",
+              borderRadius: "5px",
+              bgcolor: "rgba(255,255,255,.96)",
+              boxShadow: "0 2px 12px #0002",
+              maxWidth: `calc(100vw - ${left + 8}px)`,
+            }}
+          >
+            <div style={{ display: "flex", overflowX: "auto" }}>
+              {request.candidates.map((candidate) => (
+                <ButtonBase
+                  key={candidate}
+                  onClick={() => finish.current(candidate)}
+                  sx={{
+                    padding: "6px 14px",
+                    whiteSpace: "nowrap",
+                    fontSize: "15px",
+                    color: "#333",
+                  }}
+                >
+                  {candidate}
+                </ButtonBase>
+              ))}
+            </div>
             <ButtonBase
-              key={candidate}
-              onClick={() => finish.current(candidate)}
-              sx={{
-                padding: "6px 14px",
-                whiteSpace: "nowrap",
-                fontSize: "15px",
-                color: "#333",
-              }}
+              aria-label={t("buttons.cancel")}
+              onClick={() => finish.current()}
+              sx={{ padding: "6px 10px", color: "#777" }}
             >
-              {candidate}
+              ×
             </ButtonBase>
-          ))}
-        </div>
-        <ButtonBase
-          aria-label={t("buttons.cancel")}
-          onClick={() => finish.current()}
-          sx={{ padding: "6px 10px", color: "#777" }}
-        >
-          ×
-        </ButtonBase>
-      </Paper>
-    </ClickAwayListener>
+          </Paper>
+        </ClickAwayListener>
+      )}
+    </>
   );
 };

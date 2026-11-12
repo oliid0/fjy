@@ -21,6 +21,8 @@ import {
   contentViewport,
   objectSelection,
 } from "./board";
+import { currentSettings } from "./settings";
+import { insertGeneratedImage } from "./imageGeneration";
 import { documentStrokeBounds } from "./documents";
 import {
   alignmentOffset,
@@ -234,8 +236,16 @@ export const registerCanvasCommands = (
           })
         : await boardContext(
             api,
-            true,
-            undefined,
+            !Array.isArray(args.sourceIds) || !args.sourceIds.length,
+            Array.isArray(args.sourceIds) && args.sourceIds.length
+              ? api
+                  .getSceneElements()
+                  .filter(
+                    (element) =>
+                      args.sourceIds &&
+                      (args.sourceIds as string[]).includes(element.id),
+                  )
+              : undefined,
             contentViewport(api),
             args.capture !== false,
           );
@@ -303,6 +313,17 @@ export const registerCanvasCommands = (
             ].includes(String(args.action))
           ) {
             return classroomCommands.execute({ name: "document.zoom", args });
+          }
+          if (
+            [
+              "bringForward",
+              "sendBackward",
+              "bringToFront",
+              "sendToBack",
+              "toggleElementLock",
+            ].includes(String(args.action))
+          ) {
+            return classroomCommands.execute({ name: "document.action", args });
           }
           if (args.action === "duplicateSelection") {
             return classroomCommands.execute({ name: "document.duplicate" });
@@ -392,9 +413,22 @@ export const registerCanvasCommands = (
         return { tool: api.getAppState().activeTool };
       },
     ),
+    classroomCommands.register("canvas.editText", "@internal", () => {
+      if (classroomCommands.has("document.editText")) {
+        return classroomCommands.execute({ name: "document.editText" });
+      }
+      const selected = selectedBoardElements(api);
+      if (
+        selected.length !== 1 ||
+        selected[0].type !== "text" ||
+        !api.editTextElement(selected[0].id)
+      ) {
+        throw new Error(t("fcboard.this_board_action_is_unavailable"));
+      }
+    }),
     classroomCommands.register(
       "canvas.style",
-      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language 设置白板后续书写笔型",
+      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontWeight=400|700,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language 设置白板后续书写笔型",
       (args) => {
         if (classroomCommands.has("document.style")) {
           return classroomCommands.execute({ name: "document.style", args });
@@ -405,6 +439,7 @@ export const registerCanvasCommands = (
           "width",
           "fontSize",
           "fontFamily",
+          "fontWeight",
           "opacity",
           "roughness",
           "textAlign",
@@ -473,6 +508,21 @@ export const registerCanvasCommands = (
           throw new Error(t("fcboard.unknown_font"));
         }
         if (
+          args.fontWeight !== undefined &&
+          args.fontWeight !== 400 &&
+          args.fontWeight !== 700
+        ) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const textIds = new Set(
+          (args.fontWeight !== undefined ? selectedBoardElements(api) : [])
+            .filter((element) => element.type === "text" && !element.locked)
+            .map((element) => element.id),
+        );
+        if (args.fontWeight !== undefined && !textIds.size) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        if (
           args.width !== undefined &&
           (typeof args.width !== "number" ||
             !Number.isFinite(args.width) ||
@@ -515,6 +565,9 @@ export const registerCanvasCommands = (
           if (args[key] !== undefined) {
             api.executeAction(action, args[key]);
           }
+        }
+        if (args.fontWeight !== undefined) {
+          api.executeAction("changeFontWeight", args.fontWeight);
         }
         if (args.fontFamily !== undefined) {
           api.executeAction("changeFontFamily", {
@@ -624,6 +677,33 @@ export const registerCanvasCommands = (
         if (args.role !== undefined && args.role !== "title") {
           throw new Error(t("fcboard.invalid_style_parameters"));
         }
+        if (
+          !args.id &&
+          args.presentation === "handwritten" &&
+          currentSettings().handwritingGeneration === "cloud" &&
+          currentSettings().apiKey.trim()
+        ) {
+          const signal =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : AbortSignal.timeout(90000);
+          try {
+            await insertGeneratedImage(
+              api,
+              `Render only this exact text as clear handwritten board writing, preserving every character, mathematical symbol and line break. No extra text, illustrations or decorations. Text: ${JSON.stringify(
+                args.text,
+              )}`,
+              signal,
+            );
+            return;
+          } catch (error) {
+            signal.throwIfAborted();
+            if (error instanceof DOMException && error.name === "AbortError") {
+              throw error;
+            }
+          }
+          // A failed optional output provider cannot disable local text writing.
+        }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });
         }
@@ -709,7 +789,11 @@ export const registerCanvasCommands = (
         }
         const viewport = contentViewport(api);
         const scale = api.getAppState().zoom.value;
-        const position = resourcePlacement(viewport, scale);
+        const position = resourcePlacement(
+          viewport,
+          scale,
+          resource.id === "builtin-calculator",
+        );
         const ids = insertElements(api, [
           newIframeElement({
             type: "iframe",

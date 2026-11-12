@@ -18,7 +18,6 @@ describe("Test LanguageList", () => {
 
     // Properties are explicitly opened from the shared bottom toolbar.
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     const englishFountain = t("fcboard.fountain");
     expect(screen.getByRole("button", { name: englishFountain })).toBeVisible();
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);

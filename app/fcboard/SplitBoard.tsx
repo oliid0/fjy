@@ -1,18 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { sweptRectangle } from "@fcboard/fcboard/eraser/stroke";
+
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import { MaterialPanel } from "./MaterialPanel";
+import { createNativeSplitInk } from "./nativeSplitInk";
 
 import { classroomCommands } from "./commands";
 import { savePageFiles } from "./boardFile";
+import { useAnchoredPanel } from "./floating";
+
+import "./SplitBoard.scss";
 
 type Point = [number, number];
-type Stroke = { points: Point[]; color: string; width: number; erase: boolean };
-type Pane = { strokes: Stroke[] };
-// MultiScreenView.f12491g and the first three PenUtil.PenSize resources.
-const colors = ["#f3f3f3", "#000000", "#e95504", "#0079c2"];
+type Stroke = {
+  points: Point[];
+  color: string;
+  width: number;
+  erase: boolean;
+  complete: boolean;
+  gesture?: string;
+};
+type Pane = {
+  strokes: Stroke[];
+  color: number;
+  penSize: number;
+  eraser?: number;
+};
+// BSD HDataSet.getSplitColor, with independent explicit120/180-size erasers.
+const colors = ["#000000", "#0000ff", "#ff0000"];
 const penWidths = [1.34, 2.01, 2.68];
 const backgrounds = [
   { color: "#ffffff", label: "split_background_0" },
@@ -40,24 +58,31 @@ const drawSegment = (
   context.lineCap = stroke.erase ? "square" : "round";
   context.lineJoin = "round";
   context.beginPath();
+  if (stroke.erase) {
+    const polygon = sweptRectangle(
+      { x: from[0] * canvas.width, y: from[1] * canvas.height },
+      { x: to[0] * canvas.width, y: to[1] * canvas.height },
+      context.lineWidth,
+      context.lineWidth * 1.2,
+    );
+    polygon.forEach((point, index) =>
+      index
+        ? context.lineTo(point.x, point.y)
+        : context.moveTo(point.x, point.y),
+    );
+    context.closePath();
+    context.fill();
+    return;
+  }
   if (!previous && from[0] === to[0] && from[1] === to[1]) {
-    if (stroke.erase) {
-      context.fillRect(
-        to[0] * canvas.width - context.lineWidth / 2,
-        to[1] * canvas.height - context.lineWidth / 2,
-        context.lineWidth,
-        context.lineWidth,
-      );
-    } else {
-      context.arc(
-        to[0] * canvas.width,
-        to[1] * canvas.height,
-        context.lineWidth / 2,
-        0,
-        2 * Math.PI,
-      );
-      context.fill();
-    }
+    context.arc(
+      to[0] * canvas.width,
+      to[1] * canvas.height,
+      context.lineWidth / 2,
+      0,
+      2 * Math.PI,
+    );
+    context.fill();
   } else {
     // HCurveObject joins midpoint quadratic segments for smooth live ink.
     const start = previous
@@ -73,40 +98,77 @@ const drawSegment = (
     context.stroke();
   }
 };
+const finishStroke = (canvas: HTMLCanvasElement, stroke: Stroke) => {
+  const last = stroke.points[stroke.points.length - 1];
+  const previous = stroke.points[stroke.points.length - 2];
+  if (previous) {
+    drawSegment(canvas, stroke, last, last, previous);
+  }
+  stroke.complete = true;
+};
 /** com.xbh.whiteboard MultiScreenView: independent ink, four colors, three sizes. */
 const SplitPane = ({
   model,
   index,
   background,
+  disabled,
 }: {
   model: Pane;
   index: number;
   background: string;
+  disabled: boolean;
 }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   const active = useRef(new Map<number, Stroke>());
-  const [tool, setTool] = useState(0);
-  const [penSize, setPenSize] = useState(1);
-  const redraw = useCallback(() => {
-    const node = canvas.current!;
-    node.getContext("2d")?.clearRect(0, 0, node.width, node.height);
-    for (const stroke of model.strokes) {
-      stroke.points.forEach((point, i) =>
-        drawSegment(
-          node,
-          stroke,
-          stroke.points[Math.max(0, i - 1)],
-          point,
-          stroke.points[i - 2],
-        ),
-      );
-    }
-  }, [model]);
+  const native = useRef<ReturnType<typeof createNativeSplitInk>>(undefined);
+  const nativeContacts = useRef(new Map<string, Stroke>());
+  const [tool, setTool] = useState(model.color);
+  const [eraser, setEraser] = useState(model.eraser || 0);
+  const [penSize, setPenSize] = useState(model.penSize);
+  const nativeStyle = useRef({
+    color: colors[tool],
+    width: penWidths[penSize],
+    eraser,
+    disabled,
+  });
+  nativeStyle.current = {
+    color: colors[tool],
+    width: penWidths[penSize],
+    eraser,
+    disabled,
+  };
+  const redraw = useCallback(
+    (restoreNative = true) => {
+      const node = canvas.current!;
+      node.getContext("2d")?.clearRect(0, 0, node.width, node.height);
+      for (const stroke of model.strokes) {
+        stroke.points.forEach((point, i) =>
+          drawSegment(
+            node,
+            stroke,
+            stroke.points[Math.max(0, i - 1)],
+            point,
+            stroke.points[i - 2],
+          ),
+        );
+        if (stroke.complete) {
+          finishStroke(node, stroke);
+        }
+      }
+      if (restoreNative) {
+        native.current?.restore();
+      }
+    },
+    [model],
+  );
   useEffect(() => {
     const node = canvas.current!;
     const pointers = active.current;
     const fit = () => {
       const rect = node.getBoundingClientRect();
+      if (!(rect.width > 0 && rect.height > 0)) {
+        return;
+      }
       node.width = Math.max(
         1,
         Math.round(rect.width * (devicePixelRatio || 1)),
@@ -118,26 +180,141 @@ const SplitPane = ({
       redraw();
     };
     fit();
-    const observer = new ResizeObserver(fit);
-    observer.observe(node);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(fit);
+    observer?.observe(node);
+    window.addEventListener("resize", fit);
     return () => {
-      observer.disconnect();
+      observer?.disconnect();
+      window.removeEventListener("resize", fit);
+      // A layout/visibility change can unmount a pane before pointerup.
+      pointers.forEach((stroke) => finishStroke(node, stroke));
       pointers.clear();
+      node.width = node.height = 1;
     };
   }, [redraw]);
+  useEffect(() => {
+    const node = canvas.current!;
+    const contacts = nativeContacts.current;
+    const eraseParts = new Map<string, Stroke[]>();
+    native.current = createNativeSplitInk(
+      node,
+      () => nativeStyle.current,
+      (event, style, bounds) => {
+        let stroke = contacts.get(event.id);
+        if (event.phase === "cancel") {
+          if (stroke) {
+            const owned = eraseParts.get(event.id) || [stroke];
+            for (const part of owned) {
+              const index = model.strokes.indexOf(part);
+              if (index >= 0) {
+                model.strokes.splice(index, 1);
+              }
+            }
+            eraseParts.delete(event.id);
+            contacts.delete(event.id);
+            // Native already restored this gesture's tiles. A new snapshot
+            // would cancel a different writer still active in the same pane.
+            redraw(false);
+          }
+          return;
+        }
+        if (event.phase === "start") {
+          stroke = {
+            color: style.color,
+            width: event.mode === "erase" ? event.width : style.width,
+            erase: event.mode === "erase",
+            complete: false,
+            points: [],
+            gesture: event.id,
+          };
+          if (stroke.erase) {
+            eraseParts.set(event.id, [stroke]);
+          }
+          contacts.set(event.id, stroke);
+          model.strokes.push(stroke);
+        }
+        if (!stroke) {
+          return;
+        }
+        const points = event.points.map(
+          ([x, y]): Point => [
+            Math.max(0, Math.min(1, (x - bounds.left) / bounds.width)),
+            Math.max(0, Math.min(1, (y - bounds.top) / bounds.height)),
+          ],
+        );
+        const fresh =
+          event.mode === "pen" && event.phase === "end"
+            ? points.slice(stroke.points.length)
+            : points;
+        for (const point of fresh) {
+          const previous = stroke.points.at(-1) || point;
+          drawSegment(node, stroke, previous, point, stroke.points.at(-2));
+          stroke.points.push(point);
+        }
+        if (event.phase === "end") {
+          finishStroke(node, stroke);
+          contacts.delete(event.id);
+          if (stroke.erase) {
+            eraseParts.delete(event.id);
+          } else {
+            // Native installs the completed pen above earlier erasure. Keep
+            // later erase packets above that pen in resize/export replay too.
+            const index = model.strokes.indexOf(stroke);
+            if (index >= 0) {
+              model.strokes.splice(index, 1);
+            }
+            model.strokes.push(stroke);
+            for (const [id, erasing] of contacts) {
+              if (!erasing.erase || !erasing.points.length) {
+                continue;
+              }
+              erasing.complete = true;
+              const continuation: Stroke = {
+                ...erasing,
+                complete: false,
+                points: [erasing.points.at(-1)!],
+              };
+              eraseParts.get(id)?.push(continuation);
+              contacts.set(id, continuation);
+              model.strokes.push(continuation);
+            }
+          }
+        }
+      },
+    );
+    return () => {
+      native.current?.dispose();
+      native.current = undefined;
+      for (const [id, stroke] of contacts) {
+        for (const owned of eraseParts.get(id) || [stroke]) {
+          const index = model.strokes.indexOf(owned);
+          if (index >= 0) {
+            model.strokes.splice(index, 1);
+          }
+        }
+      }
+      contacts.clear();
+      eraseParts.clear();
+    };
+  }, [model, redraw]);
+  useEffect(() => native.current?.update(), [disabled, tool, penSize, eraser]);
   const point = (x: number, y: number): Point => {
     const rect = canvas.current!.getBoundingClientRect();
     return [
-      Math.max(0, Math.min(1, (x - rect.left) / rect.width)),
-      Math.max(0, Math.min(1, (y - rect.top) / rect.height)),
+      Math.max(0, Math.min(1, (x - rect.left) / Math.max(1, rect.width))),
+      Math.max(0, Math.min(1, (y - rect.top) / Math.max(1, rect.height))),
     ];
   };
   return (
     <section
       className="fc-split-pane"
+      style={{ background }}
       aria-label={t("fcboard.split_pane", { number: index + 1 })}
       onKeyDown={(event) => {
-        if (active.current.size) {
+        if (disabled || active.current.size || nativeContacts.current.size) {
           return;
         }
         if (
@@ -145,7 +322,12 @@ const SplitPane = ({
           event.key.toLowerCase() === "z"
         ) {
           event.preventDefault();
-          model.strokes.pop();
+          const undone = model.strokes.pop();
+          if (undone?.gesture) {
+            model.strokes = model.strokes.filter(
+              (stroke) => stroke.gesture !== undone.gesture,
+            );
+          }
           redraw();
         }
         if (event.key === "Delete") {
@@ -157,21 +339,33 @@ const SplitPane = ({
     >
       <canvas
         ref={canvas}
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        onContextMenu={(event) => event.preventDefault()}
         style={{ background, touchAction: "none" }}
         onPointerDown={(event) => {
-          if (event.pointerType === "mouse" && event.button !== 0) {
+          if (
+            disabled ||
+            (event.pointerType === "mouse" && event.button !== 0) ||
+            active.current.has(event.pointerId)
+          ) {
             return;
           }
           event.preventDefault();
           event.currentTarget.focus({ preventScroll: true });
-          event.currentTarget.setPointerCapture?.(event.pointerId);
+          try {
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+          } catch {
+            // WebViews may retire a pointer before capture reaches the DOM.
+          }
           const contact = Math.max(event.width || 0, event.height || 0);
-          const erase = event.pointerType === "touch" && contact >= 36;
+          const erase =
+            !!eraser || (event.pointerType === "touch" && contact >= 36);
           const stroke: Stroke = {
             color: colors[tool],
-            width: erase ? Math.max(36, contact) : penWidths[penSize],
+            width: erase ? eraser || Math.max(60, contact) : penWidths[penSize],
             erase,
+            complete: false,
             points: [point(event.clientX, event.clientY)],
           };
           model.strokes.push(stroke);
@@ -188,11 +382,14 @@ const SplitPane = ({
           if (!stroke) {
             return;
           }
-          const samples = event.nativeEvent.getCoalescedEvents?.() || [
-            event.nativeEvent,
-          ];
+          const coalesced = event.nativeEvent.getCoalescedEvents?.();
+          const samples = coalesced?.length ? coalesced : [event.nativeEvent];
           for (const sample of samples) {
             const next = point(sample.clientX, sample.clientY);
+            const last = stroke.points[stroke.points.length - 1];
+            if (next[0] === last[0] && next[1] === last[1]) {
+              continue;
+            }
             drawSegment(
               event.currentTarget,
               stroke,
@@ -215,11 +412,24 @@ const SplitPane = ({
               stroke.points[stroke.points.length - 2],
             );
             stroke.points.push(next);
+            finishStroke(event.currentTarget, stroke);
             active.current.delete(event.pointerId);
           }
         }}
-        onPointerCancel={(event) => active.current.delete(event.pointerId)}
-        onLostPointerCapture={(event) => active.current.delete(event.pointerId)}
+        onPointerCancel={(event) => {
+          const stroke = active.current.get(event.pointerId);
+          if (stroke) {
+            finishStroke(event.currentTarget, stroke);
+            active.current.delete(event.pointerId);
+          }
+        }}
+        onLostPointerCapture={(event) => {
+          const stroke = active.current.get(event.pointerId);
+          if (stroke) {
+            finishStroke(event.currentTarget, stroke);
+            active.current.delete(event.pointerId);
+          }
+        }}
       />
       <div className="fc-split-bottom">
         <div className="fc-split-penbar">
@@ -228,24 +438,63 @@ const SplitPane = ({
             role="group"
             aria-label={t("fcboard.split_pen_colors")}
           >
-            {(
-              [
-                "split_white",
-                "split_black",
-                "split_orange",
-                "split_blue",
-              ] as const
-            ).map((label, value) => (
-              <button
-                type="button"
-                key={label}
-                aria-label={t(`fcboard.${label}`)}
-                aria-pressed={tool === value}
-                onClick={() => setTool(value)}
-              >
-                <span style={{ background: colors[value] }} />
-              </button>
-            ))}
+            {(["split_black", "split_blue", "split_red"] as const).map(
+              (label, value) => (
+                <button
+                  type="button"
+                  key={label}
+                  aria-label={t(`fcboard.${label}`)}
+                  aria-pressed={!eraser && tool === value}
+                  disabled={disabled}
+                  onClick={() => {
+                    model.color = value;
+                    model.eraser = 0;
+                    setTool(value);
+                    setEraser(0);
+                  }}
+                >
+                  <FactoryIcon
+                    name={
+                      (
+                        [
+                          "splitBlackPen",
+                          "splitBluePen",
+                          "splitRedPen",
+                        ] as const
+                      )[value]
+                    }
+                  />
+                </button>
+              ),
+            )}
+          </div>
+          <div
+            className="fc-split-erasers"
+            role="group"
+            aria-label={t("toolBar.eraser")}
+          >
+            {(["split_small_eraser", "split_large_eraser"] as const).map(
+              (label, index) => {
+                const size = index ? 90 : 60;
+                return (
+                  <button
+                    type="button"
+                    key={label}
+                    aria-label={t(`fcboard.${label}`)}
+                    aria-pressed={eraser === size}
+                    disabled={disabled}
+                    onClick={() => {
+                      model.eraser = size;
+                      setEraser(size);
+                    }}
+                  >
+                    <FactoryIcon
+                      name={index ? "splitLargeEraser" : "splitSmallEraser"}
+                    />
+                  </button>
+                );
+              },
+            )}
           </div>
           <span className="fc-split-divider" />
           <div
@@ -259,9 +508,22 @@ const SplitPane = ({
                 key={width}
                 aria-label={t("fcboard.split_pen_size", { size: value + 1 })}
                 aria-pressed={penSize === value}
-                onClick={() => setPenSize(value)}
+                disabled={disabled}
+                onClick={() => {
+                  model.penSize = value;
+                  setPenSize(value);
+                }}
               >
-                <span style={{ width: 6 + value * 4, height: 6 + value * 4 }} />
+                <span
+                  style={{
+                    width: `calc(${
+                      6 + value * 4
+                    } * var(--fc-split-unit, 0.67px))`,
+                    height: `calc(${
+                      6 + value * 4
+                    } * var(--fc-split-unit, 0.67px))`,
+                  }}
+                />
               </button>
             ))}
           </div>
@@ -273,6 +535,8 @@ const SplitPane = ({
 export const SplitBoard = () => {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(2);
+  const [ratio, setRatio] = useState(50);
+  const resizing = useRef<{ pointer: number; original: number } | null>(null);
   const [background, setBackground] = useState(1);
   const [draft, setDraft] = useState<{
     count: number;
@@ -283,6 +547,12 @@ export const SplitBoard = () => {
   const [error, setError] = useState("");
   const section = useRef<HTMLElement>(null);
   const saveRequest = useRef<AbortController | undefined>(undefined);
+  const exitPanel = useRef<HTMLElement>(null);
+  const exitStyle = useAnchoredPanel(
+    exitPanel,
+    "[data-split-exit]",
+    exiting && open,
+  );
   useEffect(() => () => saveRequest.current?.abort(), []);
   const save = async () => {
     if (saveRequest.current) {
@@ -292,9 +562,10 @@ export const SplitBoard = () => {
     saveRequest.current = request;
     setSaving(true);
     setError("");
+    let canvas: HTMLCanvasElement | undefined;
     try {
       const panes = Array.from(section.current!.querySelectorAll("canvas"));
-      const canvas = document.createElement("canvas");
+      canvas = document.createElement("canvas");
       canvas.width = panes.reduce((sum, pane) => sum + pane.width, 0);
       canvas.height = Math.max(...panes.map((pane) => pane.height));
       const context = canvas.getContext("2d");
@@ -317,8 +588,9 @@ export const SplitBoard = () => {
         }
         x += pane.width;
       }
+      const output = canvas;
       const blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob(
+        output.toBlob(
           (value) =>
             value
               ? resolve(value)
@@ -327,6 +599,7 @@ export const SplitBoard = () => {
           1,
         ),
       );
+      canvas.width = canvas.height = 1;
       request.signal.throwIfAborted();
       const saved = await savePageFiles(
         [{ page: 1, blob }],
@@ -343,6 +616,9 @@ export const SplitBoard = () => {
         setError(failure instanceof Error ? failure.message : String(failure));
       }
     } finally {
+      if (canvas) {
+        canvas.width = canvas.height = 1;
+      }
       if (saveRequest.current === request) {
         saveRequest.current = undefined;
         setSaving(false);
@@ -352,13 +628,13 @@ export const SplitBoard = () => {
   const current = useRef({ open, count, background });
   current.current = { open, count, background };
   const models = useRef<Pane[]>(
-    Array.from({ length: 4 }, () => ({ strokes: [] })),
+    Array.from({ length: 4 }, () => ({ strokes: [], color: 0, penSize: 1 })),
   );
   useEffect(
     () =>
       classroomCommands.register(
         "tools.split",
-        "Open independent 2/3/4 column writing canvases (not Android system split). No args opens the original layout/background settings for confirmation. args.open=false closes; args.open=true or args.count=2|3|4 opens immediately; args.background=0..3. args.configure=true reopens settings. Ink is retained per pane when switching layout or closing.",
+        "Open independent 2/3/4 column writing canvases immediately. args.open=false closes; args.count=2|3|4; args.background=0..3. args.configure=true opens optional settings. Ink is retained per pane when switching layout or closing.",
         (args) => {
           if (
             (args.open !== undefined && typeof args.open !== "boolean") ||
@@ -371,12 +647,7 @@ export const SplitBoard = () => {
           ) {
             throw new Error(t("fcboard.invalid_style_parameters"));
           }
-          const configure =
-            args.open !== false &&
-            (args.configure === true ||
-              (args.open !== true &&
-                args.count === undefined &&
-                args.background === undefined));
+          const configure = args.open !== false && args.configure === true;
           const next = {
             open: configure ? current.current.open : args.open !== false,
             count: Number(args.count ?? current.current.count),
@@ -386,6 +657,7 @@ export const SplitBoard = () => {
             setDraft({ count: next.count, background: next.background });
           } else {
             saveRequest.current?.abort();
+            setError("");
             setExiting(false);
             setDraft(null);
             setOpen(next.open);
@@ -405,6 +677,48 @@ export const SplitBoard = () => {
     [],
   );
   useEffect(() => {
+    if (!open || count !== 2 || exiting || saving || draft) {
+      resizing.current = null;
+      return;
+    }
+    const move = (event: PointerEvent) => {
+      if (resizing.current?.pointer !== event.pointerId) {
+        return;
+      }
+      const rect = section.current?.getBoundingClientRect();
+      if (rect && rect.width > 0) {
+        event.preventDefault();
+        setRatio(
+          Math.max(
+            15,
+            Math.min(85, ((event.clientX - rect.left) / rect.width) * 100),
+          ),
+        );
+      }
+    };
+    const end = (event: PointerEvent) => {
+      if (resizing.current?.pointer === event.pointerId) {
+        move(event);
+        resizing.current = null;
+      }
+    };
+    const cancel = (event: PointerEvent) => {
+      if (resizing.current?.pointer === event.pointerId) {
+        setRatio(resizing.current.original);
+        resizing.current = null;
+      }
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+      resizing.current = null;
+    };
+  }, [open, count, exiting, saving, draft]);
+  useEffect(() => {
     if (!open && !draft) {
       return;
     }
@@ -413,13 +727,35 @@ export const SplitBoard = () => {
         if (draft) {
           setDraft(null);
         } else {
-          setExiting(true);
+          if (exiting) {
+            saveRequest.current?.abort();
+            saveRequest.current = undefined;
+            setSaving(false);
+          }
+          setError("");
+          setExiting((value) => !value);
         }
       }
     };
+    const dismiss = (event: globalThis.PointerEvent) => {
+      if (
+        exiting &&
+        !exitPanel.current?.contains(event.target as Node) &&
+        !(event.target as Element).closest?.("[data-split-exit]")
+      ) {
+        saveRequest.current?.abort();
+        saveRequest.current = undefined;
+        setSaving(false);
+        setExiting(false);
+      }
+    };
     window.addEventListener("keydown", escape);
-    return () => window.removeEventListener("keydown", escape);
-  }, [open, draft]);
+    window.addEventListener("pointerdown", dismiss);
+    return () => {
+      window.removeEventListener("keydown", escape);
+      window.removeEventListener("pointerdown", dismiss);
+    };
+  }, [open, draft, exiting, saving]);
   return (
     <>
       {open && (
@@ -429,23 +765,94 @@ export const SplitBoard = () => {
           role="dialog"
           aria-label={t("fcboard.split_screen")}
         >
-          <div className="fc-split-panes">
+          <div
+            className="fc-split-panes"
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                count === 2
+                  ? `minmax(0, ${ratio}fr) minmax(0, ${100 - ratio}fr)`
+                  : `repeat(${count}, minmax(0, 1fr))`,
+            }}
+          >
             {models.current.slice(0, count).map((model, i) => (
               <SplitPane
                 key={i}
                 index={i}
                 model={model}
                 background={backgrounds[background].color}
+                disabled={exiting || saving || !!draft}
               />
             ))}
           </div>
+          {count === 2 && (
+            <div
+              role="separator"
+              aria-label={t("fcboard.split_resize")}
+              aria-orientation="vertical"
+              aria-valuemin={15}
+              aria-valuemax={85}
+              aria-valuenow={Math.round(ratio)}
+              tabIndex={exiting || saving || draft ? -1 : 0}
+              aria-disabled={exiting || saving || !!draft}
+              className="fc-split-resize"
+              style={{ left: `${ratio}%` }}
+              onPointerDown={(event) => {
+                if (exiting || saving || draft || event.button !== 0) {
+                  return;
+                }
+                event.preventDefault();
+                resizing.current = {
+                  pointer: event.pointerId,
+                  original: ratio,
+                };
+                try {
+                  event.currentTarget.setPointerCapture?.(event.pointerId);
+                } catch {
+                  /* Window handlers retain the drag when WebView retires capture. */
+                }
+              }}
+              onLostPointerCapture={() => {
+                if (resizing.current) {
+                  setRatio(resizing.current.original);
+                }
+                resizing.current = null;
+              }}
+              onKeyDown={(event) => {
+                if (exiting || saving || draft) {
+                  return;
+                }
+                if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) {
+                  event.preventDefault();
+                  setRatio((value) =>
+                    event.key === "Home"
+                      ? 50
+                      : Math.max(
+                          15,
+                          Math.min(
+                            85,
+                            value + (event.key === "ArrowRight" ? 2 : -2),
+                          ),
+                        ),
+                  );
+                }
+              }}
+            />
+          )}
           <button
             className="fc-split-exit"
+            data-split-exit
+            aria-expanded={exiting}
             type="button"
             aria-label={t("buttons.close")}
             onClick={() => {
+              if (exiting) {
+                saveRequest.current?.abort();
+                saveRequest.current = undefined;
+                setSaving(false);
+              }
               setError("");
-              setExiting(true);
+              setExiting((value) => !value);
             }}
           >
             <FactoryIcon name="splitExit" />
@@ -458,6 +865,7 @@ export const SplitBoard = () => {
           role="dialog"
           aria-label={`${t("fcboard.split_screen")} · ${t("fcboard.settings")}`}
           className="fc-split-settings"
+          onDismiss={() => setDraft(null)}
         >
           <h2>
             {t("fcboard.split_screen")} · {t("fcboard.settings")}
@@ -475,11 +883,41 @@ export const SplitBoard = () => {
                     aria-label={String(number)}
                     onChange={() => setDraft({ ...draft, count: number })}
                   />
-                  <span
+                  <svg
                     className="fc-split-preview"
                     data-count={number}
+                    viewBox="0 0 42 42"
                     aria-hidden="true"
-                  />
+                  >
+                    <rect
+                      x="2"
+                      y="6"
+                      width="38"
+                      height="30"
+                      fill="none"
+                      stroke="currentColor"
+                    />
+                    {Array.from({ length: number - 1 }, (_, index) => (
+                      <path
+                        key={index}
+                        d={`M${2 + ((index + 1) * 38) / number} 6v30`}
+                        stroke="currentColor"
+                        strokeDasharray="1 1"
+                      />
+                    ))}
+                    <text
+                      x="21"
+                      y="27"
+                      textAnchor="middle"
+                      fill="currentColor"
+                      stroke="#ffffff"
+                      strokeWidth="0.5"
+                      fontFamily="Arial"
+                      fontSize="16"
+                    >
+                      {number}
+                    </text>
+                  </svg>
                 </label>
               ))}
             </div>
@@ -496,12 +934,21 @@ export const SplitBoard = () => {
                     checked={draft.background === value}
                     onChange={() => setDraft({ ...draft, background: value })}
                   />
-                  <span
+                  <svg
                     className="fc-split-preview"
                     data-background={value + 1}
-                    style={{ background: color }}
+                    viewBox="0 0 42 42"
                     aria-hidden="true"
-                  />
+                  >
+                    <rect
+                      x="2"
+                      y="6"
+                      width="38"
+                      height="30"
+                      fill={color}
+                      stroke="currentColor"
+                    />
+                  </svg>
                 </label>
               ))}
             </div>
@@ -526,7 +973,8 @@ export const SplitBoard = () => {
       )}
       {exiting && open && (
         <MaterialPanel
-          centered
+          ref={exitPanel}
+          style={exitStyle}
           role="dialog"
           aria-label={t("fcboard.split_exit_prompt")}
           className="fc-split-exit-dialog"

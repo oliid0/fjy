@@ -1,14 +1,22 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
-import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { insertGeneratedImage } from "./imageGeneration";
+import {
+  generateImage,
+  insertGeneratedImage,
+  insertImageResult,
+} from "./imageGeneration";
 import { sceneAPI } from "./test/scene";
 import { selectionSignature } from "./selection";
 import { classroomCommands } from "./commands";
 import { defaults, saveSettings } from "./settings";
-import * as transparent from "./transparentInkImage";
+
+vi.mock("@capacitor/core", async (original) => ({
+  ...(await original<typeof import("@capacitor/core")>()),
+  CapacitorHttp: { post: vi.fn() },
+}));
 
 const image =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==";
@@ -278,7 +286,7 @@ it("reports a per-image provider error inside HTTP 200 without replacing the han
   expect(api.addFiles).not.toHaveBeenCalled();
 });
 
-const subjectGeneration = () => {
+const pngGeneration = () => {
   saveSettings({ ...defaults, apiKey: "test" }, false);
   vi.stubGlobal(
     "Image",
@@ -289,127 +297,128 @@ const subjectGeneration = () => {
       decode = async () => {};
     },
   );
-  const compose = vi.spyOn(transparent, "transparentInkImage").mockReturnValue({
-    dataURL: "data:image/png;base64,subject" as DataURL,
-    width: 100,
-    height: 100,
-  });
-  const fetcher = vi.fn().mockResolvedValueOnce({
+  const fetcher = vi.fn().mockResolvedValue({
     status: 200,
     json: async () => ({ data: [{ b64_json: image }] }),
   });
   vi.stubGlobal("fetch", fetcher);
-  return { api: sceneAPI(), compose, fetcher };
-};
-const subject = {
-  b64_json: image,
-  z_index: 1,
-  bounding_box: { absolute: [10, 20, 110, 120] },
+  return { api: sceneAPI(), fetcher };
 };
 
-it("generates then decomposes, excluding the base and atomically replacing ink with only the transparent subject", async () => {
-  const { api, compose, fetcher } = subjectGeneration();
-  fetcher.mockResolvedValueOnce({
-    status: 200,
-    json: async () => ({
-      data: [{ b64_json: "base-is-never-decoded", z_index: 0 }, subject],
-    }),
-  });
-  const before = api.getSceneElements();
-  await insertGeneratedImage(
-    api,
-    "一个二次元女孩",
-    new AbortController().signal,
-    {
-      transparent: true,
-      replaceIds: before.map((element) => element.id),
-      sourceSignature: selectionSignature(before),
-    },
-  );
-  expect(fetcher).toHaveBeenCalledTimes(2);
-  const [first, split] = fetcher.mock.calls.map((call) =>
-    JSON.parse(call[1].body),
-  );
-  expect(first.layer_decomposition).toBeUndefined();
-  expect(split).toMatchObject({
-    model: defaults.imageModel,
-    layer_decomposition: true,
-    size: "1.5K",
-    response_format: "b64_json",
-    image: `data:image/png;base64,${image}`,
-  });
-  expect(compose).toHaveBeenCalledWith([
-    expect.objectContaining({
-      zIndex: 1,
-      bounds: { left: 10, top: 20, right: 110, bottom: 120 },
-    }),
-  ]);
-  expect(api.addFiles).toHaveBeenCalledWith([
-    expect.objectContaining({ dataURL: "data:image/png;base64,subject" }),
-  ]);
-  expect(api.getSceneElements()).toHaveLength(1);
-  expect(api.getSceneElements()[0].type).toBe("image");
-  expect(api.updateScene).toHaveBeenCalledTimes(1);
-});
-
-it.each([
-  [{ z_index: 0, b64_json: image }],
-  [{ ...subject, bounding_box: undefined }],
-  [{ ...subject, b64_json: "/9j/jpeg-layer" }],
-  [{ z_index: 0, b64_json: image }, { error: { message: "split failed" } }],
-])(
-  "keeps the successful generation when optional decomposition returns invalid layers %j",
-  async (...items) => {
-    const { api, fetcher } = subjectGeneration();
+it.each([defaults.imageModel, "custom-illustrator"])(
+  "inserts the original transparent PNG from model %s in exactly one request",
+  async (imageModel) => {
+    const { api, fetcher } = pngGeneration();
+    saveSettings({ ...defaults, apiKey: "test", imageModel }, false);
     const before = api.getSceneElements();
-    fetcher.mockResolvedValueOnce({
-      status: 200,
-      json: async () => ({ data: items }),
+    await insertGeneratedImage(
+      api,
+      "参考PNG中的文字和草图",
+      new AbortController().signal,
+      {
+        transparent: true,
+        referenceImage: "data:image/png;base64,source",
+        replaceIds: before.map((element) => element.id),
+        sourceSignature: selectionSignature(before),
+      },
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body).toMatchObject({
+      model: imageModel,
+      background: "transparent",
+      output_format: "png",
+      image: "data:image/png;base64,source",
     });
-    await insertGeneratedImage(api, "小狗", new AbortController().signal, {
-      transparent: true,
-      replaceIds: before.map((element) => element.id),
-    });
+    expect(body).not.toHaveProperty("layer_decomposition");
+    expect(api.addFiles).toHaveBeenCalledWith([
+      expect.objectContaining({
+        dataURL: `data:image/png;base64,${image}`,
+        mimeType: "image/png",
+      }),
+    ]);
     expect(api.getSceneElements()).toHaveLength(1);
     expect(api.getSceneElements()[0].type).toBe("image");
-    expect(api.addFiles).toHaveBeenCalledWith([
-      expect.objectContaining({ dataURL: `data:image/png;base64,${image}` }),
-    ]);
     expect(api.updateScene).toHaveBeenCalledTimes(1);
   },
 );
 
-it("keeps ink while splitting and discards a successful late split after cancellation", async () => {
-  const { api, compose, fetcher } = subjectGeneration();
-  const before = api.getSceneElements();
-  let finish!: (response: object) => void;
-  fetcher.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
+it("keeps every returned creative pixel with no alpha pass, background option or second request", async () => {
+  const { api, fetcher } = pngGeneration();
+  await insertGeneratedImage(
+    api,
+    "保留完整背景",
+    new AbortController().signal,
+    {
+      referenceImage: "data:image/png;base64,selection",
+      transparent: false,
+    },
   );
-  const request = new AbortController();
-  const pending = insertGeneratedImage(api, "小狗", request.signal, {
-    transparent: true,
-    replaceIds: before.map((element) => element.id),
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const body = JSON.parse(fetcher.mock.calls[0][1].body);
+  expect(body).toMatchObject({
+    output_format: "png",
+    image: "data:image/png;base64,selection",
   });
-  await vi.waitFor(() => expect(finish).toBeDefined());
-  expect(api.getSceneElements()).toEqual(before);
-  expect(api.addFiles).not.toHaveBeenCalled();
-  request.abort();
-  finish({ status: 200, json: async () => ({ data: [subject] }) });
-  await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-  expect(compose).not.toHaveBeenCalled();
-  expect(api.getSceneElements()).toEqual(before);
+  expect(body).not.toHaveProperty("background");
+  expect(body).not.toHaveProperty("layer_decomposition");
+  expect(api.addFiles).toHaveBeenCalledWith([
+    expect.objectContaining({ dataURL: `data:image/png;base64,${image}` }),
+  ]);
 });
 
-it("uses the same transparent subject transaction on the courseware surface", async () => {
-  const { api, fetcher } = subjectGeneration();
-  fetcher.mockResolvedValueOnce({
+it("uses the returned magic PNG immediately without a pixel scan, canvas export or extra request", async () => {
+  const { api, fetcher } = pngGeneration();
+  const sample = vi.spyOn(HTMLCanvasElement.prototype, "getContext");
+  const encode = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL");
+  sample.mockClear();
+  encode.mockClear();
+  const generated = await generateImage(
+    "魔法笔",
+    new AbortController().signal,
+    {
+      transparent: true,
+    },
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(sample).not.toHaveBeenCalled();
+  expect(encode).not.toHaveBeenCalled();
+  await insertImageResult(api, generated, new AbortController().signal);
+  expect(api.addFiles).toHaveBeenCalledWith([
+    expect.objectContaining({ dataURL: `data:image/png;base64,${image}` }),
+  ]);
+});
+
+it("uses the same one-call transparent PNG body through Android CapacitorHttp", async () => {
+  const { api, fetcher } = pngGeneration();
+  vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
+  const post = vi.spyOn(CapacitorHttp, "post").mockResolvedValue({
     status: 200,
-    json: async () => ({ data: [subject] }),
+    data: { data: [{ b64_json: image }] },
+    headers: {},
+    url: "https://image.test",
   });
+  await insertGeneratedImage(
+    api,
+    "手写要求和草图",
+    new AbortController().signal,
+    {
+      transparent: true,
+      referenceImage: "data:image/png;base64,ink",
+    },
+  );
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(post.mock.calls[0][0].data).toMatchObject({
+    output_format: "png",
+    background: "transparent",
+    image: "data:image/png;base64,ink",
+  });
+  expect(post.mock.calls[0][0].data).not.toHaveProperty("layer_decomposition");
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("inserts the provider PNG on courseware in one guarded transaction", async () => {
+  const { api, fetcher } = pngGeneration();
   const draw = vi.fn();
   const unregister = classroomCommands.register(
     "document.draw",
@@ -423,13 +432,15 @@ it("uses the same transparent subject transaction on the courseware surface", as
   try {
     await insertGeneratedImage(api, "小狗", new AbortController().signal, {
       transparent: true,
+      referenceImage: "data:image/png;base64,sketch",
       replaceIds: ["original-ink"],
       sourcePage: 2,
       sourceSignature: "signature",
     });
+    expect(fetcher).toHaveBeenCalledTimes(1);
     expect(draw).toHaveBeenCalledWith(
       expect.objectContaining({
-        image: "data:image/png;base64,subject",
+        image: `data:image/png;base64,${image}`,
         replaceIds: ["original-ink"],
         sourcePage: 2,
         sourceSignature: "signature",

@@ -28,7 +28,7 @@ export const writeQuestion = async (page: Page, text: string) => {
   const box = (await ink.boundingBox())!;
   await page
     .getByRole("toolbar", { name: "白板工具栏", exact: true })
-    .getByRole("button", { name: "画笔", exact: true })
+    .getByRole("button", { name: "笔", exact: true })
     .click();
   await page.mouse.move(box.x + 20, box.y + 20);
   await page.mouse.down();

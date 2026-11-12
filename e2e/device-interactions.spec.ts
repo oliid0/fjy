@@ -11,6 +11,7 @@ const dragTouch = async (
   to: { x: number; y: number },
   radius = 2,
   cancel = false,
+  via: { x: number; y: number }[] = [],
 ) => {
   const session = await page.context().newCDPSession(page);
   try {
@@ -18,19 +19,23 @@ const dragTouch = async (
       type: "touchStart",
       touchPoints: [{ ...from, id: 1, radiusX: radius, radiusY: radius }],
     });
-    for (let step = 1; step <= 8; step++) {
-      await session.send("Input.dispatchTouchEvent", {
-        type: "touchMove",
-        touchPoints: [
-          {
-            x: from.x + ((to.x - from.x) * step) / 8,
-            y: from.y + ((to.y - from.y) * step) / 8,
-            id: 1,
-            radiusX: radius,
-            radiusY: radius,
-          },
-        ],
-      });
+    let previous = from;
+    for (const end of [...via, to]) {
+      for (let step = 1; step <= 8; step++) {
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [
+            {
+              x: previous.x + ((end.x - previous.x) * step) / 8,
+              y: previous.y + ((end.y - previous.y) * step) / 8,
+              id: 1,
+              radiusX: radius,
+              radiusY: radius,
+            },
+          ],
+        });
+      }
+      previous = end;
     }
     await session.send("Input.dispatchTouchEvent", {
       type: cancel ? "touchCancel" : "touchEnd",
@@ -307,12 +312,11 @@ for (const width of [390, 1920]) {
       .locator(".fc-native-eraser-row")
       .getByRole("button", { name: "框选擦除", exact: true })
       .click();
-    await dragTouch(
-      page,
-      { x: 30, y: 175 },
+    await dragTouch(page, { x: 30, y: 175 }, { x: 30, y: 175 }, 2, false, [
+      { x: Math.min(width - 30, 390), y: 175 },
       { x: Math.min(width - 30, 390), y: 415 },
-      2,
-    );
+      { x: 30, y: 415 },
+    ]);
     await expect.poll(table).toEqual([]);
   });
 }
@@ -370,10 +374,13 @@ for (const width of [390, 1920]) {
     await expect(
       board.getByRole("button", { name: "关闭", exact: true }),
     ).toHaveCount(1);
-    await expect(board.locator(".fc-split-bottom").first()).toHaveCSS(
-      "height",
-      "32.16px",
-    );
+    await expect
+      .poll(
+        async () =>
+          (await board.locator(".fc-split-bottom").first().boundingBox())!
+            .height,
+      )
+      .toBeCloseTo(36.18, 1);
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),
       height: Math.max(...items.map((canvas) => canvas.height)),

@@ -256,9 +256,11 @@ for (const width of [1440, 3080, 390]) {
         ),
       )
       .toBe(true);
-    await expect(page.locator(".fc-voice-caption")).toContainText(
-      "牛顿定律描述力和运动的关系",
-    );
+    await expect
+      .poll(() =>
+        page.evaluate(() => Reflect.get(window, "fcTestSpeechOutput")),
+      )
+      .toContain("牛顿定律描述力和运动的关系。");
     await say(page, "推力撤去后为什么还能运动？");
     await expect(page.locator(".fc-voice-caption")).toContainText(
       "我们可以继续讨论",

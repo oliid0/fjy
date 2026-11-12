@@ -33,12 +33,15 @@ export const installVoice = async (page: Page) => {
       }
     }
     Object.assign(window, { SpeechRecognition: Recognition });
+    const spoken: string[] = [];
+    Reflect.set(window, "fcTestSpeechOutput", spoken);
     Object.defineProperty(window, "speechSynthesis", {
       configurable: true,
       value: {
         cancel() {},
         getVoices: () => [],
         speak(utterance: SpeechSynthesisUtterance) {
+          spoken.push(utterance.text);
           setTimeout(
             () => utterance.onend?.(new Event("end") as SpeechSynthesisEvent),
             20,

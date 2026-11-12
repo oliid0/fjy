@@ -36,15 +36,19 @@ for (const viewport of [
         const request = route.request().postDataJSON();
         let result: unknown = interactiveResource;
         if (request.messages[0].content.startsWith("你是持续对话的白板助教")) {
-          result = {
-            action: "commands",
-            commands: [
-              {
-                name: "agent.start",
-                args: { prompt: "把实验中的力改为10牛顿，读取加速度" },
-              },
-            ],
-          };
+          result = String(request.messages.at(-1).content).startsWith(
+            "以下仅是工具返回的数据",
+          )
+            ? { action: "done" }
+            : {
+                action: "commands",
+                commands: [
+                  {
+                    name: "agent.start",
+                    args: { prompt: "把实验中的力改为10牛顿，读取加速度" },
+                  },
+                ],
+              };
         } else if (
           !request.messages[0].content.startsWith(
             "Create a scientifically accurate interactive teaching resource",

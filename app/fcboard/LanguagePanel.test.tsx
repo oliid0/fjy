@@ -26,6 +26,7 @@ import { observeInkAssistance } from "./inkAssistance";
 import { classroomCommands } from "./commands";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
+import * as localTranslation from "./localTranslation";
 import { defaults, saveSettings } from "./settings";
 
 const setup = () => {
@@ -364,6 +365,49 @@ it("opens a language card through the selection tool without drawing a language-
     host.release();
     stopTranslate();
     stopVoice();
+  }
+});
+
+it("translates selected language text locally without an API key or cloud request", async () => {
+  vi.useFakeTimers();
+  saveSettings(
+    { ...defaults, apiKey: "", translationProvider: "local" },
+    false,
+  );
+  const host = setup();
+  const translate = vi
+    .spyOn(localTranslation, "translateLocally")
+    .mockResolvedValue({ language: "en", translation: "你好世界" });
+  const [word] = convertToFcboardElements([
+    {
+      type: "text",
+      text: "Hello world",
+      x: 220,
+      y: 150,
+      customData: { fcInk: { version: 2, pen: "hard", assist: "language" } },
+    },
+  ]);
+  const view = render(<LanguagePanel api={host.api} />);
+  try {
+    Object.assign(host.api.getAppState(), {
+      activeTool: { type: "lasso" },
+      selectedElementIds: { [word.id]: true },
+    });
+    act(() => host.api.updateScene({ elements: [word] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(translate).toHaveBeenCalledWith(
+      "Hello world",
+      "zh-CN",
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByText("你好世界")).toBeVisible();
+    expect(host.chat).not.toHaveBeenCalled();
+    expect(host.api.getSceneElements()).toEqual([word]);
+  } finally {
+    view.unmount();
+    host.release();
   }
 });
 

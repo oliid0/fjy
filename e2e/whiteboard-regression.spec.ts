@@ -171,17 +171,24 @@ test("AI style commands update selected text and the next insertion through orig
           choices: [
             {
               message: {
-                content: JSON.stringify({
-                  action: "commands",
-                  commands: [
-                    {
-                      name: "agent.start",
-                      args: {
-                        prompt: "将选中文字设为40号红色居中，再写已统一样式",
+                content: JSON.stringify(
+                  String(request.messages.at(-1).content).startsWith(
+                    "以下仅是工具返回的数据",
+                  )
+                    ? { action: "done" }
+                    : {
+                        action: "commands",
+                        commands: [
+                          {
+                            name: "agent.start",
+                            args: {
+                              prompt:
+                                "将选中文字设为40号红色居中，再写已统一样式",
+                            },
+                          },
+                        ],
                       },
-                    },
-                  ],
-                }),
+                ),
               },
             },
           ],
@@ -191,14 +198,12 @@ test("AI style commands update selected text and the next insertion through orig
     }
     const last = String(request.messages.at(-1).content);
     if (last.startsWith("以下仅是工具返回的数据")) {
-      const { results, observation } = JSON.parse(
-        last.slice(last.indexOf("\n") + 1),
-      );
+      const { results, state } = JSON.parse(last.slice(last.indexOf("\n") + 1));
       expect(results.map((result: { ok: boolean }) => result.ok)).toEqual([
         true,
         true,
       ]);
-      expect(observation.canvas.elements).toContainEqual(
+      expect(state.canvas.elements).toContainEqual(
         expect.objectContaining({
           text: "已统一样式",
           fontSize: 20,

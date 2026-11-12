@@ -463,7 +463,6 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
     .toBe(1);
   const eraser = toolbar.getByRole("button", { name: "板擦", exact: true });
   await eraser.click();
-  await eraser.click();
   await expect(page.getByRole("dialog", { name: "橡皮设置" })).toBeVisible();
   await page.screenshot({
     path: info.outputPath("apk-toolbar-eraser-settings.png"),

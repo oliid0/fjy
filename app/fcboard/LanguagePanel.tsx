@@ -15,6 +15,7 @@ import { boardInk } from "./digitalInk";
 import { selectedBoardElements } from "./ai";
 import { selectionSignature } from "./selection";
 import { languageInkSignature, parseLanguageStudy } from "./languageStudy";
+import { currentSettings } from "./settings";
 
 import type { InkStroke } from "./documents";
 import type { LanguageInk, LanguageStudy } from "./languageStudy";
@@ -163,7 +164,7 @@ export const LanguagePanel = ({ api }: { api: FcboardImperativeAPI }) => {
               name: "language.translate",
               args: {
                 sourceIds: source?.sourceIds || ids,
-                study: true,
+                study: !!currentSettings().apiKey.trim(),
                 region: args.region,
                 insert: false,
                 signal: controller.signal,

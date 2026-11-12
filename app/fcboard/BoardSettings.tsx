@@ -53,7 +53,7 @@ export const BoardSettings = ({
   };
   return (
     <>
-      <SettingsSection id="teaching">
+      <SettingsSection id="toolbar">
         <button
           type="button"
           onClick={() =>

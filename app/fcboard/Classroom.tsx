@@ -3542,7 +3542,7 @@ export const Classroom = ({
                       )}
                     </label>
                   </SettingsSection>
-                  <SettingsSection id="teaching">
+                  <SettingsSection id="voice">
                     <label className="fc-check">
                       <input
                         type="checkbox"

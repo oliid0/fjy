@@ -6,11 +6,7 @@ import { localFunctionResult, recognizeMath } from "./mathRecognition";
 import { prepareCalculation } from "./math";
 import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
-import {
-  explainLanguage,
-  translateLanguageImage,
-  translationTargetLanguage,
-} from "./languageStudy";
+import { explainLanguage, translateLanguageImage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
 import { calculationInk } from "./calculationInk";
 import { calculateAsync } from "./mathComputation";
@@ -160,10 +156,7 @@ export async function recognizeInkContent(
         kind: "language",
         text: study.term,
         study,
-        targetLanguage: translationTargetLanguage(
-          study.language,
-          targetLanguage,
-        ),
+        targetLanguage,
       };
     }
     const calculations = new Map<
@@ -235,10 +228,8 @@ export async function recognizeInkContent(
         : /^\p{ASCII}+$/u.test(text)
         ? "en"
         : undefined;
-      const translationTarget = translationTargetLanguage(
-        source,
-        targetLanguage,
-      );
+      const translationTarget =
+        source === "zh" ? "en" : source === "en" ? "zh" : targetLanguage;
       const study = await explainLanguage(text, signal, translationTarget);
       assertLanguageCurrent();
       return {
@@ -313,7 +304,7 @@ export async function recognizeInkContent(
     };
   }
   const instruction =
-    '识别手绘几何，只返回 {"shape":"rectangle|ellipse|line|arrow|triangle|star|diamond|pentagon|hexagon"} 中最接近的一种。不确定返回 {"none":true}。';
+    'Recognize the hand-drawn geometry and return only {"shape":"rectangle|ellipse|line|arrow|triangle|star|diamond|pentagon|hexagon"} for the closest match. Return {"none":true} when uncertain.';
   const result = parseJSON(
     await chat([visualMessage(instruction, image)], signal),
   ) as Record<string, unknown>;

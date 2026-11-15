@@ -37,19 +37,27 @@ export const WhiteboardTools = ({
   const [eraserOpen, setEraserOpen] = React.useState(false);
   const [eraserExpanded, setEraserExpanded] = React.useState(false);
   const [popupGap, setPopupGap] = React.useState(6.7);
+  const [popupMaxHeight, setPopupMaxHeight] = React.useState<number>();
+  const { container } = useFcboardContainer();
   const [eraserAnchor, setEraserAnchor] = React.useState<HTMLElement | null>(
     null,
   );
   const [insertAnchor, setInsertAnchor] = React.useState<HTMLElement | null>(
     null,
   );
-  const updateGap = (anchor: HTMLElement) => {
-    const rect = anchor.getBoundingClientRect();
-    const top =
-      anchor.closest(".fc-unified-toolbar")?.getBoundingClientRect().top ??
-      rect.top;
-    setPopupGap(rect.top - top + (10 * rect.height) / 58);
-  };
+  const updateGap = React.useCallback(
+    (anchor: HTMLElement) => {
+      const rect = anchor.getBoundingClientRect();
+      const top =
+        anchor.closest(".fc-unified-toolbar")?.getBoundingClientRect().top ??
+        rect.top;
+      setPopupGap(rect.top - top + (10 * rect.height) / 58);
+      setPopupMaxHeight(
+        Math.max(1, top - (container?.getBoundingClientRect().top || 0) - 12),
+      );
+    },
+    [container],
+  );
   const state = useUIAppState();
   const tunnels = useTunnels();
   const hasHostShapes = tunnels.ToolbarShapesTunnel.useHasEntries();
@@ -58,7 +66,24 @@ export const WhiteboardTools = ({
     "rectangle" | "diamond" | "ellipse" | "arrow" | "line"
   >("line");
   const openingShape = React.useRef(false);
-  const { container } = useFcboardContainer();
+  React.useEffect(() => {
+    if (!open || shapesOpen || !insertAnchor) {
+      return;
+    }
+    const measure = () => updateGap(insertAnchor);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(measure);
+    observer?.observe(
+      insertAnchor.closest(".fc-unified-toolbar") || insertAnchor,
+    );
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [open, shapesOpen, insertAnchor, updateGap]);
   const finishClear = async () => {
     try {
       if (app.props.onClearCanvas) {
@@ -141,7 +166,7 @@ export const WhiteboardTools = ({
       window.removeEventListener("fcboard:toolbox-open", show);
       window.removeEventListener("fcboard:toolbox-close", hide);
     };
-  }, [container]);
+  }, [container, updateGap]);
   React.useEffect(() => {
     const dismiss = (event: Event) => {
       const target = (event as CustomEvent<HTMLElement>).detail;
@@ -447,6 +472,7 @@ export const WhiteboardTools = ({
             sx={{ zIndex: 1300 }}
             modifiers={[
               { name: "offset", options: { offset: [0, popupGap] } },
+              { name: "flip", enabled: false },
               { name: "preventOverflow", options: { padding: 12 } },
             ]}
             onKeyDown={(event) => {
@@ -459,6 +485,7 @@ export const WhiteboardTools = ({
             <Paper
               className="fc-insert-tools fc-insert-picker fc-combined-toolbox"
               role="dialog"
+              style={{ maxHeight: popupMaxHeight }}
               aria-label={t("fcboard.toolbox")}
             >
               <div

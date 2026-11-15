@@ -1813,7 +1813,7 @@ describe("selection-driven classroom controls", () => {
         ),
       ).toBe(true);
       expect(String(chat.mock.calls[0][0][0].content)).toContain(
-        "独立白板任务agent",
+        "independent whiteboard task agent",
       );
       await waitFor(() =>
         expect(
@@ -2766,7 +2766,7 @@ describe("selection-driven classroom controls", () => {
       expect(scene).toEqual([source]);
       expect(api.addFiles).not.toHaveBeenCalled();
       expect(generate).toHaveBeenCalledWith(
-        expect.stringContaining("自由创作"),
+        expect.stringContaining("Create freely"),
         expect.any(AbortSignal),
         {
           referenceImage: "data:image/png;base64,selected",
@@ -3814,7 +3814,11 @@ describe("selection-driven classroom controls", () => {
             },
           };
       const chat = vi.spyOn(ai, "chat").mockImplementation(async (messages) => {
-        if (String(messages[0]?.content).includes("你是持续对话的白板助教")) {
+        if (
+          String(messages[0]?.content).includes(
+            "You are a continuously conversational whiteboard assistant",
+          )
+        ) {
           return JSON.stringify(
             messages.length > 2
               ? { action: "done" }

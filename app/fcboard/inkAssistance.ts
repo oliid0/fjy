@@ -637,7 +637,7 @@ export const observeInkAssistance = (
   });
   const command = classroomCommands.register(
     "canvas.inkAssist",
-    "选择文字/图形/魔术/函数/算式/语言笔，args.mode=text|shape|magic|function|calculation|language|off；停笔后识别，失败保留原笔迹",
+    "Choose the text/shape/magic/function/calculation/language pen: args.mode=text|shape|magic|function|calculation|language|off. Recognize after pen release; keep original ink on failure.",
     (args) => {
       if (
         ![

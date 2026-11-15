@@ -53,6 +53,7 @@ public class NativeWidgetsPlugin extends Plugin {
                     entry.view = new NativeCalculatorView(getActivity(), (type, dx, dy) -> action(created, type, dx, dy));
                     entries.put(instance, entry); layer.addView(entry.view);
                 }
+                entry.view.localize(call.getObject("labels"));
                 entry.scale = getBridge().getWebView().getWidth() / (float)viewport;
                 if (!(entry.scale > 0)) throw new IllegalStateException("Whiteboard viewport is not ready");
                 if (!entry.gesturing) { entry.x = (float)x; entry.y = (float)y; entry.width = (float)width; entry.height = (float)height; place(entry); }

@@ -90,7 +90,7 @@ it("uses the independent image endpoint and inserts an ordinary image object wit
   );
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
     model: "image-test",
-    prompt: "月球",
+    prompt: expect.stringContaining("月球"),
     response_format: "b64_json",
   });
   expect(api.addFiles).toHaveBeenCalledWith([

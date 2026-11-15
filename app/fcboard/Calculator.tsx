@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isColorDark } from "@fcboard/common";
-import { t } from "@fcboard/fcboard/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { requestResourceControl } from "@fcboard/fcboard/interactiveResourceControls";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
 import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import { calculatorLocalization } from "./calculatorLocalization";
 
 import { classroomCommands } from "./commands";
 import {
@@ -23,23 +25,30 @@ export const calculatorResource = (dark: boolean) =>
   validateInteractiveResource({
     id: calculatorId,
     title: t("fcboard.calculator"),
-    html: calculator.replace(
-      '<html lang="en">',
-      `<html lang="en" data-board-theme="${dark ? "dark" : "light"}">`,
-    ),
+    html: calculator
+      .replace(
+        "__FCBOARD_CALCULATOR_I18N__",
+        JSON.stringify(calculatorLocalization()).replace(/</g, "\\u003c"),
+      )
+      .replace(
+        '<html lang="en">',
+        `<html lang="en" data-board-theme="${dark ? "dark" : "light"}">`,
+      ),
   });
 
 /** CalculatorService's centered floating window, independent of board/page history. */
 export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
+  const { langCode } = useI18n();
+  const iframe = useRef<HTMLIFrameElement>(null);
   const [open, setOpen] = useState(false);
   const [bounds, setBounds] = useState(() => calculatorBounds());
   const [dark, setDark] = useState(() =>
     isColorDark(api.getAppState().viewBackgroundColor || "#ffffff"),
   );
-  const current = useRef({ open, dark });
-  current.current = { open, dark };
-  const objectId = "floating-calculator";
   const resource = useMemo(() => calculatorResource(dark), [dark]);
+  const current = useRef({ open, html: resource.html });
+  current.current = { open, html: resource.html };
+  const objectId = "floating-calculator";
   useEffect(() => {
     const theme = () =>
       setDark(isColorDark(api.getAppState().viewBackgroundColor || "#ffffff"));
@@ -74,7 +83,7 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
         {
           id: objectId,
           surface: "whiteboard",
-          html: calculatorResource(current.current.dark).html,
+          html: current.current.html,
         },
         action,
         { signal, current: () => current.current.open },
@@ -123,6 +132,23 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
       setNativeCalculatorTheme(objectId, dark);
     }
   }, [open, dark]);
+  useEffect(() => {
+    const frame = iframe.current;
+    if (!open || !frame) {
+      return;
+    }
+    const update = () =>
+      frame.contentWindow?.postMessage(
+        {
+          channel: "fc-calculator-language",
+          localization: calculatorLocalization(),
+        },
+        "*",
+      );
+    frame.addEventListener("load", update);
+    update();
+    return () => frame.removeEventListener("load", update);
+  }, [open, langCode]);
   return open ? (
     <div
       className="fc-floating-calculator"
@@ -136,7 +162,8 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
       }}
     >
       <InteractiveResourceFrame
-        resource={resource}
+        resource={{ ...resource, title: t("fcboard.calculator") }}
+        iframeRef={iframe}
         objectId={objectId}
         surface="whiteboard"
         window={{

@@ -283,12 +283,12 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.inspect",
-      "读取当前可见白板或课件层的真实对象、选区、画笔、可书写视口和缩放；bounds 顺序为左上右下，坐标使用返回的 coordinates；操作前读取，操作后再次检查结果，不使用背后白板对象",
+      "Inspect actual objects, selection, pen, writable viewport and zoom on the visible board/document layer. bounds=[left,top,right,bottom]; use the returned coordinates. Inspect before/after changes; never operate on a hidden board.",
       inspect,
     ),
     classroomCommands.register(
       "canvas.toolbar",
-      "显示或隐藏原白板工具栏，args.visible 必须是布尔值；隐藏会收起工具属性和菜单",
+      "Show or hide the original board toolbar; boolean args.visible is required. Hiding also closes properties and menus.",
       (args) => {
         if (typeof args.visible !== "boolean") {
           throw new Error(t("fcboard.specify_whether_to_show_the_toolbar"));
@@ -300,7 +300,9 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.action",
-      `执行原白板动作，args.action 仅限 ${Array.from(actions).join(",")}`,
+      `Perform an existing board action; args.action must be ${Array.from(
+        actions,
+      ).join(",")}`,
       (args) => {
         if (classroomCommands.has("document.draw")) {
           if (
@@ -428,7 +430,7 @@ export const registerCanvasCommands = (
     }),
     classroomCommands.register(
       "canvas.style",
-      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontWeight=400|700,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language 设置白板后续书写笔型",
+      "Style the pen or selection: args.color/background are hex (background also transparent); width=1..30,fontSize=8..200,fontWeight=400|700,fontFamily=1|2|3|5|6|7|8|9|10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted. pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language controls future handwriting.",
       (args) => {
         if (classroomCommands.has("document.style")) {
           return classroomCommands.execute({ name: "document.style", args });
@@ -656,7 +658,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.text",
-      '插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区。板书标题用 {"text":"完整标题","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}，标题按36屏幕像素排版，正文仍按邻近笔迹排版。',
+      'Insert or update editable text; args.text is required. args.id updates existing text. Without id, insert beside the selection using its color/size. args.presentation=match|handwritten|text; placement=center finds space in the current visible canvas independently of previous selection. For titles use {"text":"complete title","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}, laid out at 36 screen pixels; body text follows nearby handwriting.',
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -811,7 +813,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.shapes",
-      "插入可编辑图形，args.shapes 为 rectangle|ellipse|diamond|line|arrow|text 数组，坐标相对选区，包含 x,y,width,height，文本带text",
+      "Insert editable shapes: args.shapes contains rectangle|ellipse|diamond|line|arrow|text with x,y,width,height relative to the selection; text shapes also need text.",
       async (args) => {
         const origin = insertionPoint(api);
         if (classroomCommands.has("document.draw")) {
@@ -847,7 +849,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.animate",
-      '逐步板书，args.commands 是扁平命令数组，例如 {"commands":[{"type":"write_text","id":"note","text":"板书内容","x":0,"y":0,"duration":0.8}]}。内部命令使用 type，不使用 name/args 嵌套。type支持 write_text/draw_path/draw_arrow 等，支持id、x,y,width,height,text,points,color,duration。返回 lessonId 与真实对象；更正已写内容须从 canvas.inspect 读取 lessonId 和 tutorId，传 args.lessonId 并复用 command.id=tutorId，原位置/字号/颜色会保留。独立标题用canvas.text的role=title。',
+      'Animate incremental board writing using a flat args.commands array, for example {"commands":[{"type":"write_text","id":"note","text":"board text","x":0,"y":0,"duration":0.8}]}. Internal commands use type, never nested name/args. Types include write_text/draw_path/draw_arrow with id,x,y,width,height,text,points,color,duration. Returns lessonId and real objects. Inspect lessonId/tutorId before correcting, pass args.lessonId and reuse command.id=tutorId to preserve position/size/color. Use canvas.text role=title for independent titles.',
       async (args) => {
         const signal =
           args.signal instanceof AbortSignal ? args.signal : undefined;
@@ -865,7 +867,7 @@ export const registerCanvasCommands = (
           );
         }
         const lesson = validateLesson({
-          title: "白板操作",
+          title: t("fcboard.aiMessages.boardActions"),
           steps: [{ say: "", commands: args.commands }],
           quiz: [],
         });
@@ -899,7 +901,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.erase",
-      "擦除 args.ids 指定的对象；省略时仅擦除圈选对象",
+      "Erase objects identified by args.ids, or only the current selection when omitted.",
       (args) => {
         if (classroomCommands.has("document.erase")) {
           return classroomCommands.execute({ name: "document.erase", args });
@@ -919,7 +921,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.clear",
-      "清空当前白板，仅在用户明确要求清空当前白板时使用",
+      "Clear the current whiteboard only when the user explicitly requests it.",
       () =>
         classroomCommands.has("document.clearInk")
           ? classroomCommands.execute({ name: "document.clearInk" })
@@ -934,7 +936,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.select",
-      "选择已存在的对象，args.ids 为对象id数组",
+      "Select existing objects using the ID array in args.ids.",
       async (args) => {
         if (classroomCommands.has("document.select")) {
           const result = await classroomCommands.execute({
@@ -973,7 +975,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.resize",
-      "等比例放大/缩小选区或args.ids指定对象，支持真实手写笔迹与文本；args.scale=0.1..10，args.anchor=center（默认）|top-left。先canvas.inspect查真实id，完整选择标题所有笔画/组合及绑定文字。保留位置关系、笔型和可编辑参数，返回实际bounds。",
+      "Uniformly scale selected objects or args.ids, including real handwriting/text. args.scale=0.1..10; args.anchor=center (default)|top-left. Inspect real IDs and include all title strokes/groups/bound text. Preserve relative layout, pen style and editable parameters; return actual bounds.",
       (args) => {
         if (classroomCommands.has("document.resize")) {
           return classroomCommands.execute({ name: "document.resize", args });
@@ -1009,7 +1011,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.align",
-      "把选区或args.ids指定对象作为整体对齐可见画布，保留内部布局。args.horizontal=left|center|right，args.vertical=top|center|bottom，至少一项；返回真实位移与bounds。",
+      "Align selected objects or args.ids as a group inside the visible canvas, preserving internal layout. args.horizontal=left|center|right; args.vertical=top|center|bottom; provide at least one. Return actual displacement/bounds.",
       (args) => {
         if (classroomCommands.has("document.align")) {
           return classroomCommands.execute({ name: "document.align", args });
@@ -1051,7 +1053,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.move",
-      "移动选区或args.ids指定对象，args.dx/dy为有限位移；保留对象类型与参数",
+      "Move the selection or args.ids by finite args.dx/dy; preserve object types and parameters.",
       (args) => {
         if (classroomCommands.has("document.move")) {
           return classroomCommands.execute({ name: "document.move", args });

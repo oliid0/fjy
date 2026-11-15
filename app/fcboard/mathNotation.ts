@@ -1,3 +1,4 @@
+import { recognitionPattern } from "./recognitionVocabulary";
 import { scientificNotation } from "./scientificNotation";
 
 /** Unsupported or ambiguous layouts stay ink; numerical work belongs to the engine. */
@@ -34,7 +35,7 @@ export const mathNotation = (input: string): string => {
           .join("")})`,
     )
     .replace(/\^\s*(?:\{\s*\\circ\s*\}|\\circ(?![A-Za-z]))/g, "°")
-    .replace(/度|\bdeg(?:rees?)?\b/gi, "°")
+    .replace(recognitionPattern("mathNotation_0"), "°")
     .replace(/\*\*/g, "^")
     .replace(/∞/g, "Infinity")
     .replace(/≥|\\geq?\b/g, ">=")

@@ -24,7 +24,7 @@ public class DoubaoSpeechProtocolTest {
         DoubaoSpeechProtocol.Response response = DoubaoSpeechProtocol.parse(finalFrame);
         assertTrue(response.last); assertEquals("完成", response.body.getJSONObject("result").getString("text"));
         try { DoubaoSpeechProtocol.parse(Arrays.copyOf(finalFrame, finalFrame.length - 1)); fail(); }
-        catch (java.io.IOException expected) { assertTrue(expected.getMessage().contains("长度")); }
+        catch (java.io.IOException expected) { assertTrue(expected.getMessage().contains("length")); }
     }
 
     @Test public void onlyStableUtterancesAreDeliveredOnceAndRepeatedCommandsRemainDistinct() throws Exception {

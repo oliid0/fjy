@@ -66,7 +66,7 @@ for (const width of [390, 800, 1920]) {
       page.getByRole("dialog", { name: "工具箱" }),
     ).not.toBeVisible();
     await frame
-      .getByRole("button", { name: "Close calculator", exact: true })
+      .getByRole("button", { name: "关闭计算器", exact: true })
       .click();
     await openToolbox(page);
     await group

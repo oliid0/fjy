@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { recognitionVocabulary } from "./recognitionVocabulary";
+
 import { TransientMessage } from "./TransientMessage";
 
 import { MaterialPanel } from "./MaterialPanel";
@@ -505,7 +507,10 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
             if (!joined.current || cancelled) {
               return;
             }
-            if (event.code === 1000 && !["连接已断开"].includes(event.reason)) {
+            if (
+              event.code === 1000 &&
+              !recognitionVocabulary.normalCloseReasons.includes(event.reason)
+            ) {
               joined.current = false;
               controller.dispose();
               setSharing(false);
@@ -608,7 +613,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
     const registrations = [
       classroomCommands.register(
         "network.panel",
-        "打开白板实时协作浮层，args.panel=collab",
+        "Open the live board collaboration panel; args.panel=collab.",
         (args) => {
           if (args.panel !== undefined && args.panel !== "collab") {
             throw new Error(t("fcboard.this_panel_does_not_exist"));
@@ -632,7 +637,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "collaboration.start",
-        "开启白板实时协作，args.mode=local|cloud（默认 local）；cloud 先用 collaboration.configure 设置实际服务地址与密钥。两种模式都使用原二维码密码开关及双向场景编辑。",
+        "Start live collaboration; args.mode=local|cloud, default local. Configure the actual cloud endpoint/key with collaboration.configure first. Both modes preserve QR/password controls and bidirectional scene editing.",
         (args) => {
           const mode = args.mode === undefined ? "local" : args.mode;
           if (mode !== "local" && mode !== "cloud") {
@@ -646,12 +651,12 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "collaboration.stop",
-        "结束或离开当前白板协作，保留本机内容",
+        "End or leave collaboration, preserving local content.",
         leave,
       ),
       classroomCommands.register(
         "collaboration.configure",
-        "配置实时分享云端连接：args.endpoint 和 args.key，自动保存；密钥只保留当前会话，不进入公开上下文。",
+        "Configure the cloud live-share connection with args.endpoint and args.key; save automatically. Keep the key in this session only and out of public context.",
         (args) => {
           if (
             starting.current ||

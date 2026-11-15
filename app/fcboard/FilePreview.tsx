@@ -924,16 +924,21 @@ export const FilePreview = ({
     const registrations = [
       classroomCommands.register(
         "document.next",
-        "下一页课件；若有当前页动画，先播放动画",
+        "Advance the presentation, playing the current slide animation first if present.",
         (args) =>
           next(args.signal instanceof AbortSignal ? args.signal : undefined),
       ),
-      classroomCommands.register("document.previous", "上一页课件", (args) =>
-        previous(args.signal instanceof AbortSignal ? args.signal : undefined),
+      classroomCommands.register(
+        "document.previous",
+        "Go to the previous presentation page.",
+        (args) =>
+          previous(
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+          ),
       ),
       classroomCommands.register(
         "document.page",
-        "跳转课件到 args.page（从1开始）",
+        "Go to one-based args.page in the presentation.",
         (args) => {
           const index = Number(args.page) - 1;
           if (!Number.isInteger(index) || index < 0 || index >= pages.length) {
@@ -947,7 +952,7 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.zoom",
-        "缩放课件，args.value=0.5..3，或args.action=zoomIn|zoomOut|resetZoom|zoomToFit",
+        "Zoom the presentation with args.value=0.5..3 or args.action=zoomIn|zoomOut|resetZoom|zoomToFit.",
         (args) => {
           const value =
             typeof args.value === "number"
@@ -968,23 +973,27 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.ink",
-        "打开或关闭透明板书，args.enabled 为布尔值",
+        "Show or hide the transparent annotation layer; args.enabled must be boolean.",
         (args) => setInkOn(args.enabled !== false),
       ),
       classroomCommands.register(
         "document.clearInk",
-        "仅清除当前页板书，不修改原课件",
+        "Clear only the current page annotations; preserve the source document.",
         () => commitInk({ ...inkRef.current, [pageRef.current]: [] }),
       ),
-      classroomCommands.register("document.undo", "撤销当前页板书", () =>
-        undoInk(),
+      classroomCommands.register(
+        "document.undo",
+        "Undo the current page annotation.",
+        () => undoInk(),
       ),
-      classroomCommands.register("document.redo", "重做当前页板书", () =>
-        undoInk(true),
+      classroomCommands.register(
+        "document.redo",
+        "Redo the current page annotation.",
+        () => undoInk(true),
       ),
       classroomCommands.register(
         "document.erase",
-        "擦除课件上的板书，args.ids 可指定板书id，省略为圈选板书",
+        "Erase document annotations by args.ids, or the current annotation selection when omitted.",
         (args) => {
           const ids =
             args.ids === undefined ? selectedInkRef.current : args.ids;
@@ -1012,7 +1021,7 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.select",
-        "选择指定课件板书，args.ids 为已存在板书id数组",
+        "Select existing document annotations using their IDs in args.ids.",
         (args) => {
           const ids = commandObjectIds(
             args.ids,
@@ -1029,7 +1038,7 @@ export const FilePreview = ({
       ),
       classroomCommands.register(
         "document.duplicate",
-        "复制当前圈选板书",
+        "Duplicate the currently selected annotations.",
         () => {
           const page = pageRef.current;
           const all = inkRef.current[page] || [];
@@ -1169,7 +1178,7 @@ export const FilePreview = ({
       }),
       classroomCommands.register(
         "document.tool",
-        "切换课件板书工具，args.tool=freedraw|eraser|selection",
+        "Switch document annotation tool; args.tool=freedraw|eraser|selection.",
         (args) => {
           if (
             !["freedraw", "eraser", "selection"].includes(String(args.tool))
@@ -1236,7 +1245,7 @@ export const FilePreview = ({
       }),
       classroomCommands.register(
         "document.style",
-        "更改板书或圈选板书：args.color 十六进制颜色，width=1..30,fontSize=8..200,opacity=0..100,pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language",
+        "Style future or selected annotations: args.color is hexadecimal; width=1..30, fontSize=8..200, opacity=0..100, pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language.",
         (args) => {
           if (
             !Object.keys(args).length ||
@@ -1699,7 +1708,7 @@ export const FilePreview = ({
       }),
       classroomCommands.register(
         "document.close",
-        "关闭课件并返回白板，板书自动保存",
+        "Close the document and return to the board; save annotations automatically.",
         (args) =>
           close(
             args.next !== false,

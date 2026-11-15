@@ -150,7 +150,7 @@ export const registerBoardAgents = () => {
     const messages: Message[] = [
       {
         role: "system",
-        content: `你是独立白板任务agent。根据完整目标、已有对话、真实画布和动态工具自主规划与执行；角色只用于分工，不限制可用工具，不按关键词或固定示例套流程。可按依赖关系执行步骤或通过agent.start并发安排独立任务，用agent.update传递后续更正。只有需要用户听到的正文才调用agent.say，它立即返回，继续白板操作；需要边写边说时，写入和朗读采用相同正文。任务进度、成功、失败仅为内部数据，不朗读，不另开进度面板。根据真实结果继续，不猜测对象id、不重放成功动作；操作语音会话和旧课程播放器不属于后台任务。${
+        content: `You are an independent whiteboard task agent. Plan and execute from the complete goal, conversation, actual canvas and current tools. Roles describe responsibilities without restricting tools. Follow dependencies or start independent parallel tasks with agent.start; use agent.update for corrections. Call agent.say only for content the user should hear; it returns immediately so board work can continue. Use identical text for simultaneous writing/narration. Task status, success and failures remain internal data, without narration or progress panels. Verify actual results, never guess IDs or repeat successful operations. Do not manage voice sessions or obsolete lesson playback. ${
           endpoint
             ? " Use the supplied real function tools."
             : ' Return JSON {"action":"commands","commands":[{"name":"registered command","args":{}}]} or {"action":"done"} when complete.'
@@ -244,7 +244,7 @@ export const registerBoardAgents = () => {
             {
               role: "system",
               content:
-                "根据完整目标联网核实资料，优先一手来源，返回结论和真实来源链接，区分事实、推导与不确定内容；不执行白板和语音操作。",
+                "Research the complete goal using real web search. Prefer primary sources; return findings and actual source URLs, distinguishing facts, reasoning and uncertainty. Do not operate the board or voice.",
             },
             { role: "user", content: args.prompt },
           ],
@@ -272,7 +272,7 @@ export const registerBoardAgents = () => {
     ),
     classroomCommands.register(
       "agent.tools",
-      "查询当前真实工具用途、参数/必填项、返回约定与调用方式；args.query可搜索名字或说明，args.names精确查询，offset/limit分页。陌生操作先查询，界面控件再用ui.inspect获取当前真实id。",
+      "Inspect real tool purposes, parameters/required fields, return contracts and invocation. args.query searches names/descriptions; args.names selects exact names; offset/limit paginate. Discover unfamiliar actions first; use ui.inspect for real UI control IDs.",
       (args) => {
         if (
           (args.query !== undefined && typeof args.query !== "string") ||
@@ -309,7 +309,7 @@ export const registerBoardAgents = () => {
     ),
     classroomCommands.register(
       "agent.say",
-      "仅供正在运行的子任务提交需要朗读的正文；args.text为短段讲解。立即返回，白板操作继续，不播报状态或错误。",
+      "Only a running child task may submit actual narration in args.text. Return immediately and continue board work; never narrate status or errors.",
       (args) => {
         const entry = Array.from(tasks.values()).find(
           ({ task, request }) =>
@@ -455,7 +455,7 @@ export const registerBoardAgents = () => {
     ),
     classroomCommands.register(
       "agent.update",
-      "向args.id指定的运行中agent传递args.prompt补充或更正，不中断实时语音，不重放已完成操作。",
+      "Deliver supplemental/corrected args.prompt to the running task identified by args.id; keep voice active and never repeat completed operations.",
       (args) => {
         const entry = tasks.get(String(args.id));
         if (
@@ -474,7 +474,7 @@ export const registerBoardAgents = () => {
     ),
     classroomCommands.register(
       "agent.inspect",
-      "读取后台任务真实状态/错误；省略args.id读取全部摘要，指定真实id读取该任务完整结果。running仅表示执行中，不能称已完成。",
+      "Read actual background task state/errors. Omit args.id for all summaries, or use a real ID for complete results. running means in progress, never completed.",
       (args) => {
         if (args.id === undefined) {
           return snapshot();
@@ -488,7 +488,7 @@ export const registerBoardAgents = () => {
     ),
     classroomCommands.register(
       "agent.wait",
-      "等待args.id指定后台任务的真实终态；完成返回完整任务及result，失败/取消明确报错。取消等待不会取消原任务；不要在实时对话中等待无关长任务。",
+      "Wait for the real terminal state of args.id; return the complete task/result on success and report failure/cancellation. Cancelling this wait does not cancel the task; never block live conversation on unrelated long tasks.",
       (args) => {
         const id = String(args.id);
         if (!tasks.has(id)) {
@@ -540,7 +540,7 @@ export const registerBoardAgents = () => {
     ),
     classroomCommands.register(
       "agent.cancel",
-      "取消args.id指定的后台任务，保留已完成的板书；不关闭语音会话。",
+      "Cancel the background task identified by args.id, preserving completed board work and the voice session.",
       (args) => {
         const entry = tasks.get(String(args.id));
         if (!entry) {

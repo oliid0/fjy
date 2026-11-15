@@ -7,7 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'"
     />
-    <title>Calculator</title>
+    <title>Fcboard</title>
     <style>
       :root {
         /* Default Theme: Sky Blue (Matching Index) */
@@ -839,6 +839,9 @@
     </style>
   </head>
   <body>
+    <script type="application/json" id="calculator-localization">
+      __FCBOARD_CALCULATOR_I18N__
+    </script>
     <!-- Calculator Container -->
     <div
       class="w-full max-w-[400px] md:max-w-[800px] transition-all duration-500 ease-in-out"
@@ -850,11 +853,15 @@
         <!-- Main Calculator Section -->
         <div class="flex-1 flex flex-col px-3 py-3 relative">
           <header id="calculator-header">
-            <span id="calculator-title" tabindex="0">Calculator</span>
+            <span
+              id="calculator-title"
+              tabindex="0"
+              data-i18n-text="title"
+            ></span>
             <button
               id="theme-toggle"
-              aria-label="Toggle color theme"
-              title="Toggle color theme"
+              data-i18n-aria-label="toggle_color_theme"
+              data-i18n-title="toggle_color_theme"
             >
               <svg
                 id="icon-sun"
@@ -879,11 +886,20 @@
               </svg>
             </button>
             <span id="mode-indicator" hidden></span>
-            <button id="btn-basic" onclick="setMode('basic')">Basic</button>
-            <button id="btn-scientific" onclick="setMode('scientific')">
-              Sci
-            </button>
-            <button id="calculator-close" aria-label="Close calculator">
+            <button
+              id="btn-basic"
+              onclick="setMode('basic')"
+              data-i18n-text="basic"
+            ></button>
+            <button
+              id="btn-scientific"
+              onclick="setMode('scientific')"
+              data-i18n-text="scientificShort"
+            ></button>
+            <button
+              id="calculator-close"
+              data-i18n-aria-label="close_calculator"
+            >
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -941,7 +957,7 @@
             <button
               data-key="%"
               onclick="appendOperator('%')"
-              title="Remainder (modulo)"
+              data-i18n-title="remainder_modulo"
               class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-slate-800 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-semibold text-xl"
             >
               %
@@ -1085,14 +1101,15 @@
               <h3
                 class="text-lg font-bold text-slate-500 uppercase tracking-wider"
               >
-                Scientific
+                <span data-i18n-text="scientific"></span>
               </h3>
               <button
                 onclick="toggleInverse()"
                 id="btn-inv"
                 class="px-2 py-1 text-md font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 dark:hover:bg-brand-900 transition-colors"
-                aria-label="Toggle inverse trigonometric functions"
-                title="Toggle inverse sine, cosine, and tangent"
+                data-i18n-aria-label="toggle_inverse_trigonometric_functions"
+                data-i18n-title="toggle_inverse_sine_cosine_and_tangent"
+                data-i18n-text="inverse"
               >
                 2nd
               </button>
@@ -1102,8 +1119,8 @@
                 id="deg-rad-toggle"
                 onclick="toggleAngleMode()"
                 class="btn-press h-12 rounded-xl bg-brand-100 dark:bg-slate-700 text-brand-600 dark:text-brand-400 font-semibold text-sm"
-                aria-label="Switch angle unit"
-                title="Toggle degrees and radians"
+                data-i18n-aria-label="switch_angle_unit"
+                data-i18n-title="toggle_degrees_and_radians"
               >
                 DEG
               </button>
@@ -1112,7 +1129,7 @@
                 data-key="s"
                 id="btn-sin"
                 onclick="appendFunc('sin(')"
-                title="Sine (angle uses DEG/RAD mode)"
+                data-i18n-title="sine_angle_uses_deg_rad_mode"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 sin
@@ -1121,7 +1138,7 @@
                 data-key="c"
                 id="btn-cos"
                 onclick="appendFunc('cos(')"
-                title="Cosine (angle uses DEG/RAD mode)"
+                data-i18n-title="cosine_angle_uses_deg_rad_mode"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 cos
@@ -1130,7 +1147,7 @@
                 data-key="t"
                 id="btn-tan"
                 onclick="appendFunc('tan(')"
-                title="Tangent (angle uses DEG/RAD mode)"
+                data-i18n-title="tangent_angle_uses_deg_rad_mode"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 tan
@@ -1140,21 +1157,21 @@
               <button
                 data-key="l"
                 onclick="appendFunc('log(')"
-                title="Base-10 logarithm; input must be positive"
+                data-i18n-title="base_10_logarithm_input_must_be_positive"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 log
               </button>
               <button
                 onclick="appendFunc('ln(')"
-                title="Natural logarithm; input must be positive"
+                data-i18n-title="natural_logarithm_input_must_be_positive"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 ln
               </button>
               <button
                 onclick="appendFunc('sqrt(')"
-                title="Square root; input must be non-negative"
+                data-i18n-title="square_root_input_must_be_non_negative"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 √
@@ -1164,7 +1181,7 @@
               <button
                 data-key="^"
                 onclick="appendOperator('^')"
-                title="Raise a value to a power"
+                data-i18n-title="raise_a_value_to_a_power"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 x^y
@@ -1172,7 +1189,7 @@
               <button
                 data-key="p"
                 onclick="appendConstant('PI')"
-                title="Insert pi (π)"
+                data-i18n-title="insert_pi"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 π
@@ -1180,7 +1197,7 @@
               <button
                 data-key="e"
                 onclick="appendConstant('E')"
-                title="Insert Euler's number (e)"
+                data-i18n-title="insert_euler_s_number_e"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 e
@@ -1204,96 +1221,96 @@
               <button
                 onclick="appendFunc('fact(')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Factorial"
-                title="Factorial of a non-negative integer"
+                data-i18n-aria-label="factorial"
+                data-i18n-title="factorial_of_a_non_negative_integer"
               >
                 n!
               </button>
               <button
                 onclick="appendUnaryFunction('square')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Square"
-                title="Square the current value"
+                data-i18n-aria-label="square"
+                data-i18n-title="square_the_current_value"
               >
                 x²
               </button>
               <button
                 onclick="appendUnaryFunction('cube')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Cube"
-                title="Cube the current value"
+                data-i18n-aria-label="cube"
+                data-i18n-title="cube_the_current_value"
               >
                 x³
               </button>
               <button
                 onclick="appendUnaryFunction('cbrt')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Cube root"
-                title="Cube root"
+                data-i18n-aria-label="cube_root"
+                data-i18n-title="cube_root"
               >
                 ∛x
               </button>
               <button
                 onclick="appendUnaryFunction('reciprocal')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Reciprocal"
-                title="Reciprocal (1 divided by the current value)"
+                data-i18n-aria-label="reciprocal"
+                data-i18n-title="reciprocal_1_divided_by_the_current_value"
               >
                 1/x
               </button>
               <button
                 onclick="appendUnaryFunction('exp')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Exponential e to the x"
-                title="Exponential function e to the x"
+                data-i18n-aria-label="exponential_e_to_the_x"
+                data-i18n-title="exponential_function_e_to_the_x"
               >
                 eˣ
               </button>
               <button
                 onclick="appendUnaryFunction('pow10')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Ten to the x"
-                title="Ten raised to the current value"
+                data-i18n-aria-label="ten_to_the_x"
+                data-i18n-title="ten_raised_to_the_current_value"
               >
                 10ˣ
               </button>
               <button
                 onclick="appendUnaryFunction('pct')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Percent of value"
-                title="Divide the current value by 100"
+                data-i18n-aria-label="percent_of_value"
+                data-i18n-title="divide_the_current_value_by_100"
               >
                 x%
               </button>
               <button
                 onclick="appendUnaryFunction('abs')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Absolute value"
-                title="Absolute value"
+                data-i18n-aria-label="absolute_value"
+                data-i18n-title="absolute_value"
               >
                 |x|
               </button>
               <button
                 onclick="appendUnaryFunction('round')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Round"
-                title="Round to the nearest integer"
+                data-i18n-aria-label="round"
+                data-i18n-title="round_to_the_nearest_integer"
               >
                 round
               </button>
               <button
                 onclick="appendUnaryFunction('floor')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Round down"
-                title="Round down to the nearest integer"
+                data-i18n-aria-label="round_down"
+                data-i18n-title="round_down_to_the_nearest_integer"
               >
                 floor
               </button>
               <button
                 onclick="appendUnaryFunction('ceil')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Round up"
-                title="Round up to the nearest integer"
+                data-i18n-aria-label="round_up"
+                data-i18n-title="round_up_to_the_nearest_integer"
               >
                 ceil
               </button>
@@ -1310,16 +1327,17 @@
             id="mobile-deg-rad-toggle"
             onclick="toggleAngleMode()"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold"
-            aria-label="Switch angle unit"
-            title="Toggle degrees and radians"
+            data-i18n-aria-label="switch_angle_unit"
+            data-i18n-title="toggle_degrees_and_radians"
           >
             DEG
           </button>
           <button
             id="mobile-btn-inv"
             onclick="toggleInverse()"
-            aria-label="Toggle inverse trigonometric functions"
-            title="Toggle inverse sine, cosine, and tangent"
+            data-i18n-aria-label="toggle_inverse_trigonometric_functions"
+            data-i18n-title="toggle_inverse_sine_cosine_and_tangent"
+            data-i18n-text="inverse"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold"
           >
             2nd
@@ -1327,7 +1345,7 @@
           <button
             id="mobile-btn-sin"
             onclick="appendFunc('sin(')"
-            title="Sine (angle uses DEG/RAD mode)"
+            data-i18n-title="sine_angle_uses_deg_rad_mode"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             sin
@@ -1335,7 +1353,7 @@
           <button
             id="mobile-btn-cos"
             onclick="appendFunc('cos(')"
-            title="Cosine (angle uses DEG/RAD mode)"
+            data-i18n-title="cosine_angle_uses_deg_rad_mode"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             cos
@@ -1343,28 +1361,28 @@
           <button
             id="mobile-btn-tan"
             onclick="appendFunc('tan(')"
-            title="Tangent (angle uses DEG/RAD mode)"
+            data-i18n-title="tangent_angle_uses_deg_rad_mode"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             tan
           </button>
           <button
             onclick="appendFunc('sqrt(')"
-            title="Square root; input must be non-negative"
+            data-i18n-title="square_root_input_must_be_non_negative"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             √
           </button>
           <button
             onclick="appendFunc('log(')"
-            title="Base-10 logarithm; input must be positive"
+            data-i18n-title="base_10_logarithm_input_must_be_positive"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             log
           </button>
           <button
             onclick="appendFunc('ln(')"
-            title="Natural logarithm; input must be positive"
+            data-i18n-title="natural_logarithm_input_must_be_positive"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             ln
@@ -1401,95 +1419,95 @@
           </button>
           <button
             onclick="appendFunc('fact(')"
-            title="Factorial of an integer from 0 to 170"
+            data-i18n-title="factorial_of_an_integer_from_0_to_170"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             !
           </button>
           <button
             onclick="appendUnaryFunction('square')"
-            aria-label="Square"
-            title="Square the current value"
+            data-i18n-aria-label="square"
+            data-i18n-title="square_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             x²
           </button>
           <button
             onclick="appendUnaryFunction('cube')"
-            aria-label="Cube"
-            title="Cube the current value"
+            data-i18n-aria-label="cube"
+            data-i18n-title="cube_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             x³
           </button>
           <button
             onclick="appendUnaryFunction('cbrt')"
-            aria-label="Cube root"
-            title="Cube root"
+            data-i18n-aria-label="cube_root"
+            data-i18n-title="cube_root"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             ∛x
           </button>
           <button
             onclick="appendUnaryFunction('reciprocal')"
-            aria-label="Reciprocal"
-            title="1 divided by the current value"
+            data-i18n-aria-label="reciprocal"
+            data-i18n-title="1_divided_by_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             1/x
           </button>
           <button
             onclick="appendUnaryFunction('exp')"
-            aria-label="Exponential e to the x"
-            title="e raised to the current value"
+            data-i18n-aria-label="exponential_e_to_the_x"
+            data-i18n-title="e_raised_to_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             eˣ
           </button>
           <button
             onclick="appendUnaryFunction('pow10')"
-            aria-label="Ten to the x"
-            title="10 raised to the current value"
+            data-i18n-aria-label="ten_to_the_x"
+            data-i18n-title="10_raised_to_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             10ˣ
           </button>
           <button
             onclick="appendUnaryFunction('pct')"
-            aria-label="Percent of value"
-            title="Divide the current value by 100"
+            data-i18n-aria-label="percent_of_value"
+            data-i18n-title="divide_the_current_value_by_100"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             x%
           </button>
           <button
             onclick="appendUnaryFunction('abs')"
-            aria-label="Absolute value"
-            title="Absolute value"
+            data-i18n-aria-label="absolute_value"
+            data-i18n-title="absolute_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             |x|
           </button>
           <button
             onclick="appendUnaryFunction('round')"
-            aria-label="Round"
-            title="Round to the nearest integer"
+            data-i18n-aria-label="round"
+            data-i18n-title="round_to_the_nearest_integer"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             round
           </button>
           <button
             onclick="appendUnaryFunction('floor')"
-            aria-label="Round down"
-            title="Round down to the nearest integer"
+            data-i18n-aria-label="round_down"
+            data-i18n-title="round_down_to_the_nearest_integer"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             floor
           </button>
           <button
             onclick="appendUnaryFunction('ceil')"
-            aria-label="Round up"
-            title="Round up to the nearest integer"
+            data-i18n-aria-label="round_up"
+            data-i18n-title="round_up_to_the_nearest_integer"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             ceil
@@ -1499,6 +1517,29 @@
     </div>
 
     <script>
+      let calculatorLocale = JSON.parse(
+        document.getElementById("calculator-localization").textContent,
+      );
+      const calculatorText = (key, values = {}) =>
+        calculatorLocale.strings[key].replace(/\{\{(\w+)\}\}/g, (_all, name) =>
+          String(values[name]),
+        );
+      function applyCalculatorLanguage() {
+        document.documentElement.lang = calculatorLocale.language;
+        document.title = calculatorText("title");
+        for (const [attribute, target] of [
+          ["data-i18n-text", "textContent"],
+          ["data-i18n-title", "title"],
+          ["data-i18n-aria-label", "aria-label"],
+        ]) {
+          document.querySelectorAll("[" + attribute + "]").forEach((node) => {
+            const value = calculatorText(node.getAttribute(attribute));
+            if (target === "textContent") node.textContent = value;
+            else node.setAttribute(target, value);
+          });
+        }
+      }
+
       const html = document.documentElement;
       const themeToggle = document.getElementById("theme-toggle");
       const resultDisplay = document.getElementById("result-display");
@@ -1818,7 +1859,9 @@
         inputDisplay.textContent = (shouldResetDisplay ? "" : fullExpression)
           .replace(/\*/g, "×")
           .replace(/\//g, "÷");
-        resultDisplay.textContent = hasError ? "Error" : currentInput || "0";
+        resultDisplay.textContent = hasError
+          ? calculatorText("error")
+          : currentInput || "0";
 
         if (
           !hasError &&
@@ -1860,12 +1903,13 @@
         mobileDegRadToggle.textContent = label;
         degRadToggle.setAttribute(
           "aria-label",
-          `Switch angle unit (currently ${label})`,
+          calculatorText("angleMode", { unit: label }),
         );
         mobileDegRadToggle.setAttribute(
           "aria-label",
-          `Switch angle unit (currently ${label})`,
+          calculatorText("angleMode", { unit: label }),
         );
+        updateInverseButtons();
         updateDisplay();
       }
 
@@ -1884,11 +1928,16 @@
             button.setAttribute("onclick", `appendFunc('${fn}(')`);
             button.setAttribute(
               "aria-label",
-              isInverse ? `Inverse ${description}` : description,
+              calculatorText(
+                isInverse ? "inverse_" + description : description,
+              ),
             );
-            button.title = isInverse
-              ? `Inverse ${description}; result uses DEG/RAD mode`
-              : `${description} (angle uses DEG/RAD mode)`;
+            button.title = calculatorText("trigDescription", {
+              function: calculatorText(
+                isInverse ? "inverse_" + description : description,
+              ),
+              unit: isDegrees ? "DEG" : "RAD",
+            });
           });
         });
       }
@@ -2114,7 +2163,7 @@
         } catch {
           hasError = true;
           currentInput = "";
-          historyDisplay.textContent = "Check your expression";
+          historyDisplay.textContent = calculatorText("checkExpression");
           shouldResetDisplay = false;
         }
         updateDisplay();
@@ -2194,6 +2243,21 @@
         }
       });
 
+      applyCalculatorLanguage();
+      addEventListener("message", (event) => {
+        if (
+          event.source === parent &&
+          event.data?.channel === "fc-calculator-language" &&
+          event.data.localization?.strings
+        ) {
+          calculatorLocale = event.data.localization;
+          applyCalculatorLanguage();
+          updateInverseButtons();
+          updateDisplay();
+          if (hasError)
+            historyDisplay.textContent = calculatorText("checkExpression");
+        }
+      });
       setMode("basic");
       updateDisplay();
     </script>

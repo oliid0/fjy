@@ -4,6 +4,9 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { QRCode } from "../share/QRCode";
 
+import { pageLocalization } from "./pageLocalization";
+import { nativeErrorMessage } from "./nativeErrorMessage";
+
 import { classroomCommands } from "./commands";
 import { FloatingToolPanel } from "./FloatingToolPanel";
 import { Voting as bridge } from "./builtinNative";
@@ -87,6 +90,7 @@ export const Voting = () => {
             topic: args.topic.trim(),
             options: args.options as string[],
             multiple: args.multiple === true,
+            localization: pageLocalization(),
           });
           setSession(value);
           return value;
@@ -247,7 +251,7 @@ export const Voting = () => {
             </button>
           </>
         )}
-        {error && <p role="alert">{error}</p>}
+        {error && <p role="alert">{nativeErrorMessage(error)}</p>}
       </div>
     </FloatingToolPanel>
   ) : null;

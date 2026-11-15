@@ -1,0 +1,24 @@
+{
+  "patterns": [
+    "(?:出|生成|设计|编写|创建|给我)\\s*([\\d零〇一二两三四五六七八九十百]+)\\s*(?:道|题)",
+    "([\\d零〇一二两三四五六七八九十百]+)\\s*(?:道|题|questions?)",
+    "(?:generate|create|write|give me)\\s+(\\d+)\\s+(?:questions?|items?)",
+    "(\\d+)\\s*(?:questions?|items?|preguntas?|questions?|Fragen|domande|perguntas|\\u0623\\u0633\\u0626\\u0644\\u0629|\\u554f|\\ubb38\\ud56d)"
+  ],
+  "digits": {
+    "零": 0,
+    "〇": 0,
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9
+  },
+  "hundred": "百",
+  "ten": "十"
+}

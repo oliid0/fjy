@@ -566,16 +566,22 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   };
   useEffect(() => {
     const registrations = [
-      classroomCommands.register("tools.open", "展开教学工具", () => {
-        if (classroomCommands.has("panel.close")) {
-          void classroomCommands.execute({ name: "panel.close" });
-        }
-        api.updateScene({ appState: { toolbarHidden: false } });
-        setOpen(true);
-      }),
+      classroomCommands.register(
+        "tools.open",
+        "Open the current toolbox.",
+        () => {
+          if (classroomCommands.has("panel.close")) {
+            void classroomCommands.execute({ name: "panel.close" });
+          }
+          api.updateScene({ appState: { toolbarHidden: false } });
+          setOpen(true);
+        },
+      ),
       classroomCommands.register(
         "tools.insert",
-        `插入原生教学工具，args.kind=${Object.keys(teachingTools).join("|")}`,
+        `Insert a native teaching object; args.kind=${Object.keys(
+          teachingTools,
+        ).join("|")}`,
         (args) => {
           if (!(String(args.kind) in teachingTools)) {
             throw new Error(t("fcboard.this_teaching_tool_is_unavailable"));
@@ -585,13 +591,13 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.configure",
-        "修改选中教学工具或args.id指定工具；参数 args.rotation,size,length,gravity,angle,vx,vy,duration(秒),names；图形可带solid:{stroke:十六进制颜色,border:boolean}；仅立方体/圆柱另支持solid:{unfold:0|1,net:从0开始的网格索引,colors:{面id:十六进制颜色}}；展开/合起有动画，颜色绑定物理面",
+        "Configure the selected teaching object or args.id: rotation,size,length,gravity,angle,vx,vy,duration (seconds),names. Solids accept solid:{stroke:hex,border:boolean}; cube/cylinder also accept solid:{unfold:0|1,net:zero-based index,colors:{faceId:hex}}. Folding animates and colors stay attached to physical faces.",
         (args) =>
           change(args, typeof args.id === "string" ? args.id : undefined),
       ),
       classroomCommands.register(
         "tools.delete",
-        "删除args.id指定的整个教学对象，包含全部面和边",
+        "Delete the entire teaching object identified by args.id, including all faces and edges.",
         async (args) => {
           const id =
             typeof args.id === "string" ? args.id : selectedRef.current?.id;
@@ -620,7 +626,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.duplicate",
-        "复制args.id指定的整个教学对象及逐面颜色，保留原对象",
+        "Duplicate the entire object identified by args.id, preserving face colors and the original object.",
         async (args) => {
           const id =
             typeof args.id === "string" ? args.id : selectedRef.current?.id;
@@ -654,7 +660,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.play",
-        "开始或暂停计时器、实验；args.enabled 布尔值，可带args.id",
+        "Start or pause a timer or experiment; optional boolean args.enabled and args.id.",
         (args) =>
           play(
             typeof args.enabled === "boolean" ? args.enabled : undefined,
@@ -663,7 +669,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.random",
-        "掷骰子或随机抽取，可带args.id",
+        "Roll dice or make a random selection; optional args.id.",
         (args) => random(typeof args.id === "string" ? args.id : undefined),
       ),
       classroomCommands.context("tools", () => ({
@@ -675,11 +681,11 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
         ? [
             classroomCommands.register(
               "tools.factory",
-              `打开应用内置教学工具，不依赖外部APK，args.tool=${factory.join(
+              `Open a built-in tool without an external APK; args.tool=${factory.join(
                 "|",
-              )}，依次对应 ${factory
+              )}; corresponding current UI labels: ${factory
                 .map((tool) => t(`fcboard.${factoryTools[tool].label}`))
-                .join("、")}`,
+                .join(", ")}`,
               async (args) => {
                 const tool = args.tool as FactoryTool;
                 if (!(factory as readonly string[]).includes(tool)) {

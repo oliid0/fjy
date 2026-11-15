@@ -1,3 +1,5 @@
+import { t } from "@fcboard/fcboard/i18n";
+
 /** Seeduplex official web demo's PCM16 / 24 kHz WebAudio scheduling.
  * Keep sources so barge-in can stop queued audio without recreating a context. */
 export const createDuplexPlayer = (changed: (playing: boolean) => void) => {
@@ -62,7 +64,7 @@ export const createDuplexPlayer = (changed: (playing: boolean) => void) => {
         return;
       }
       if (next - context.currentTime > 120) {
-        throw new Error("实时语音播放缓冲过长，请打断后重试");
+        throw new Error(t("fcboard.aiMessages.voiceBufferFull"));
       }
       const buffer = context.createBuffer(1, samples, 24000);
       const channel = buffer.getChannelData(0);

@@ -143,7 +143,6 @@ it("keeps original ink, translates below it at matching size, opens cached card,
           type: "text",
           text: JSON.stringify({
             targetLanguage: "zh-CN",
-            sameLanguageTarget: "en",
           }),
         }),
       ]),

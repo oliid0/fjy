@@ -18,16 +18,16 @@ final class LanRoom {
         Object rawPage = value.get("page");
         double index = rawPage instanceof Number ? ((Number)rawPage).doubleValue() : -1;
         if (id.isEmpty() || id.length() > 128 || name.isEmpty() || name.length() > 512 || mime.length() > 128 ||
-            index < 0 || index > 9007199254740991d || index != Math.floor(index)) throw new IllegalArgumentException("共享课件无效");
+            index < 0 || index > 9007199254740991d || index != Math.floor(index)) throw new IllegalArgumentException("Invalid shared document");
         String data = value.has("dataURL") ? value.getString("dataURL") :
             previous != null && id.equals(previous.getString("id")) ? previous.getString("dataURL") : "";
-        if (!data.matches("^data:[^;,]*;base64,[A-Za-z0-9+/]*={0,2}$")) throw new IllegalArgumentException("共享课件内容无效");
+        if (!data.matches("^data:[^;,]*;base64,[A-Za-z0-9+/]*={0,2}$")) throw new IllegalArgumentException("Invalid shared document contents");
         JSONObject result = new JSONObject().put("id", id).put("name", name).put("mimeType", mime).put("page", (long)index).put("dataURL", data);
         if (value.has("view")) {
             JSONObject view = value.getJSONObject("view");
             double zoom = view.getDouble("zoom"), scroll = view.getDouble("scroll"), animation = view.getDouble("animation");
             if (!Double.isFinite(zoom) || zoom < .5 || zoom > 3 || !Double.isFinite(scroll) || !Double.isFinite(animation) ||
-                animation < 0 || animation > 9007199254740991d || animation != Math.floor(animation) || !(view.get("animate") instanceof Boolean)) throw new IllegalArgumentException("共享课件视图无效");
+                animation < 0 || animation > 9007199254740991d || animation != Math.floor(animation) || !(view.get("animate") instanceof Boolean)) throw new IllegalArgumentException("Invalid shared document viewport");
             result.put("view", view);
         }
         return result;
@@ -45,7 +45,7 @@ final class LanRoom {
         Object epoch = value.get("epoch");
         double number = epoch instanceof Number ? ((Number)epoch).doubleValue() : -1;
         if (value.getString("id").isEmpty() || value.getString("id").length() > 128 ||
-            number < 0 || number > 9007199254740991d || number != Math.floor(number)) throw new IllegalArgumentException("白板页面无效");
+            number < 0 || number > 9007199254740991d || number != Math.floor(number)) throw new IllegalArgumentException("Invalid whiteboard page");
         return new JSONObject().put("id", value.getString("id")).put("epoch", (long)number);
     }
 
@@ -54,11 +54,11 @@ final class LanRoom {
         JSONObject nextDocument = message.has("document") ? document(message.getJSONObject("document"), document) : document;
         JSONArray incoming = message.optJSONArray("elements");
         if (incoming != null) {
-            if (incoming.length() > 50000) throw new IllegalArgumentException("白板元素过多");
+            if (incoming.length() > 50000) throw new IllegalArgumentException("Too many whiteboard elements");
             for (int i = 0; i < incoming.length(); i++) {
                 JSONObject next = incoming.getJSONObject(i);
                 String id = next.getString("id");
-                if (id.length() > 128 || !next.has("version") || !next.has("versionNonce")) throw new IllegalArgumentException("白板数据无效");
+                if (id.length() > 128 || !next.has("version") || !next.has("versionNonce")) throw new IllegalArgumentException("Invalid whiteboard data");
                 JSONObject old = elements.get(id);
                 if (old == null || next.getLong("version") > old.getLong("version") ||
                     (next.getLong("version") == old.getLong("version") && next.getLong("versionNonce") < old.getLong("versionNonce"))) {

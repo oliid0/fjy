@@ -59,6 +59,10 @@ it("inserts one saved transparent SVG object and renders a direct Vega SVG with 
   expect(document.querySelector("iframe[data-resource-object-id]")).toBeNull();
   expect(document.querySelector(".fc-resource-window")).toBeNull();
   expect(svg()).toHaveAttribute("viewBox", "0 0 500 440");
+  expect(document.querySelector(".fc-inline-function")).toHaveAttribute(
+    "aria-label",
+    "y = x",
+  );
   const element = graph();
   if (element.type !== "image" || !element.fileId) {
     throw new Error("Expected SVG image");

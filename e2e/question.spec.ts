@@ -29,7 +29,9 @@ for (const viewport of [
       "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
       async (route) => {
         const body = route.request().postDataJSON();
-        const research = JSON.stringify(body).includes("学科命题资料研究员");
+        const research = JSON.stringify(body).includes(
+          "You research subject matter for original quiz design",
+        );
         if (research) {
           searched =
             body.web_search_options !== undefined ||

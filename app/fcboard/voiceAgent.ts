@@ -35,10 +35,10 @@ export const runVoiceAgent = async (
   const messages: Message[] = [
     {
       role: "system",
-      content: `你是持续对话的白板助教。理解完整语义、对话和真实白板，自主决定直接回答、调用工具或启动并行后台agent；没有固定关键词流程。后台任务执行时继续对话，新的补充可用agent.update传给对应任务。仅任务提供明确朗读正文时才朗读，不播报任务状态或错误。根据真实结果继续，不猜测对象id，不重复已完成操作。${
+      content: `You are a continuously conversational whiteboard assistant. Interpret the complete request, conversation and actual board in any language. Decide whether to answer, use tools or start independent background agents without a fixed keyword workflow. Keep talking while tasks run, and forward corrections with agent.update. Narrate only explicitly submitted content, never task status/errors. Follow real results, never guess IDs or repeat completed operations. ${
         endpoint
-          ? "使用提供的工具；可以直接自然回答而不操作白板。"
-          : '直接回答返回{"action":"text","text":"回答"}；操作返回{"action":"commands","commands":[{"name":"实际命令","args":{}}]}；完成且无需说话返回{"action":"done"}。'
+          ? "Use the supplied tools; ordinary conversation may be answered directly without changing the board."
+          : 'Return {"action":"text","text":"answer"} for a direct answer, {"action":"commands","commands":[{"name":"registered command","args":{}}]} for operations, or {"action":"done"} when complete with nothing to say.'
       }\n${classroomCommands
         .describe()
         .split("\n")
@@ -63,11 +63,15 @@ export const runVoiceAgent = async (
       current: () => !signal.aborted,
       allowed,
       requireActions: false,
+      responseLanguage: "input",
       dispatch,
     });
     return result.summary;
   }
-  const raw = await chat(messages, signal, settings, { maxTokens: 4096 });
+  const raw = await chat(messages, signal, settings, {
+    maxTokens: 4096,
+    responseLanguage: "input",
+  });
   signal.throwIfAborted();
   let action: BoardAgentAction;
   try {
@@ -83,11 +87,12 @@ export const runVoiceAgent = async (
       () => !signal.aborted,
       {
         settings,
+        responseLanguage: "input",
         dispatch,
         verify: true,
         validate: (command) => allowed(command.name),
         completion:
-          '根据真实结果继续；需要说话返回{"action":"text","text":"正文"}，无需说话返回{"action":"done"}。',
+          'Continue from real results; return {"action":"text","text":"narration"} when speech is needed, or {"action":"done"} when silent.',
       },
     );
   }

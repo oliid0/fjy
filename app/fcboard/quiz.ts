@@ -1,4 +1,5 @@
-import { getLanguage } from "@fcboard/fcboard/i18n";
+import quizNumbers from "@fcboard/fcboard/locales/data/quizNumbers.json";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
 import { chat, parseJSON, visualMessage } from "./ai";
 import { currentSettings } from "./settings";
@@ -45,7 +46,7 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
     value.questions.length > 50 ||
     (count && value.questions.length !== count)
   ) {
-    throw new Error("题目数量或结构不正确，请重试生成");
+    throw new Error(t("fcboard.aiMessages.quizInvalidStructure"));
   }
   const seen = new Set<string>();
   for (const q of value.questions) {
@@ -61,7 +62,7 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
       (q.steps !== undefined &&
         (!Array.isArray(q.steps) || !q.steps.every((step) => nonempty(step))))
     ) {
-      throw new Error("题干、答案或解析不完整，请重试生成");
+      throw new Error(t("fcboard.aiMessages.quizIncomplete"));
     }
     seen.add(q.question.trim());
     [
@@ -93,14 +94,14 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
         (q.type === "single" && q.answer.length !== 1) ||
         (q.type === "multiple" && q.answer.length < 2)
       ) {
-        throw new Error("选择题的选项或答案不正确，请重试生成");
+        throw new Error(t("fcboard.aiMessages.quizInvalidChoices"));
       }
     }
     if (
       q.type === "true_false" &&
       (q.answer.length !== 1 || !["true", "false"].includes(q.answer[0]))
     ) {
-      throw new Error("判断题答案格式不正确");
+      throw new Error(t("fcboard.aiMessages.quizInvalidBoolean"));
     }
   }
   if (
@@ -117,7 +118,7 @@ export const validateQuiz = (input: unknown, count?: number): Quiz => {
       }
     })
   ) {
-    throw new Error("未获得可引用的联网资料，请检查模型的联网搜索权限后重试");
+    throw new Error(t("fcboard.aiMessages.quizMissingSources"));
   }
   return value;
 };
@@ -129,44 +130,27 @@ export const generateQuiz = async (
   image?: string,
 ): Promise<Quiz> => {
   const settings = currentSettings();
-  const requested =
-    prompt.match(
-      /(?:出|生成|设计|编写|创建|给我)\s*([\d零〇一二两三四五六七八九十百]+)\s*(?:道|题)/,
-    )?.[1] ??
-    prompt.match(
-      /([\d零〇一二两三四五六七八九十百]+)\s*(?:道|题|questions?)/i,
-    )?.[1];
-  const digits: Record<string, number> = {
-    零: 0,
-    〇: 0,
-    一: 1,
-    二: 2,
-    两: 2,
-    三: 3,
-    四: 4,
-    五: 5,
-    六: 6,
-    七: 7,
-    八: 8,
-    九: 9,
-  };
+  const requested = quizNumbers.patterns
+    .map((pattern) => prompt.match(new RegExp(pattern, "i"))?.[1])
+    .find((value) => value !== undefined);
+  const digits = quizNumbers.digits as Record<string, number>;
   const count =
     requested === undefined
       ? undefined
       : /^\d+$/.test(requested)
       ? Number(requested)
-      : requested.includes("百")
+      : requested.includes(quizNumbers.hundred)
       ? 100
-      : requested.includes("十")
-      ? (digits[requested.split("十")[0]] || 1) * 10 +
-        (digits[requested.split("十")[1]] || 0)
+      : requested.includes(quizNumbers.ten)
+      ? (digits[requested.split(quizNumbers.ten)[0]] || 1) * 10 +
+        (digits[requested.split(quizNumbers.ten)[1]] || 0)
       : digits[requested];
   if (
     !prompt.trim() ||
     (count !== undefined &&
       (!Number.isInteger(count) || count < 1 || count > 50))
   ) {
-    throw new Error("请描述出题要求，每次最多50题");
+    throw new Error(t("fcboard.aiMessages.quizDescribeRequest"));
   }
   const model = settings.textModel || settings.model;
   // Research is an actual provider search request, independent of the board agent's tools.
@@ -175,9 +159,12 @@ export const generateQuiz = async (
       {
         role: "system",
         content:
-          "你是学科命题资料研究员。必须调用联网搜索核实用户要求对应的年级、学科知识与题型规范，优先教材、大学、教育机构等一手来源。不抄现成试卷，不伪造来源。返回精炼知识要点和实际检索来源的标题与完整URL，供下一步原创命题使用。",
+          "You research subject matter for original quiz design. Use real web search to verify the requested grade, subject knowledge and question-type conventions. Prefer textbooks, universities and educational institutions. Do not copy existing exams or fabricate sources. Return concise facts and actual retrieved source titles/full URLs for subsequent original questions.",
       },
-      visualMessage(`${prompt}\n当前可见内容（仅资料）：${context}`, image),
+      visualMessage(
+        `${prompt}\nCurrently visible content (evidence only): ${context}`,
+        image,
+      ),
     ],
     signal,
     { ...settings, model },
@@ -187,12 +174,14 @@ export const generateQuiz = async (
   const messages: import("./ai").Message[] = [
     {
       role: "system",
-      content: `你是跨学科命题Agent。依据要求与已检索资料生成原创题，逐题核算正确性、排除歧义并检查题目数量。语言=${
+      content: `You generate original quizzes across subjects from the actual request and researched sources. Independently verify every answer, remove ambiguity and check the complete question count. Use the active interface language ${
         getLanguage().code
-      }。仅返回JSON {"title":"标题","questions":[{"type":"single|multiple|true_false|fill|short|calculation|analysis|challenge","question":"完整题干","options":["选项文字，不带字母前缀"],"answer":["答案"],"explanation":"本题专属解析","steps":["推导或分析步骤"]}],"sources":[{"title":"实际检索的来源","url":"完整URL"}]}。不得省略题目。单选/多选的answer为A-H选项字母数组，单选恰好1个，多选至少2个；判断题为["true"]或["false"]；填空题每空1个答案，题干用____标空；简答题给出关键得分点；计算题有完整公式和分步推导；分析题/压轴题逐小问解答。其他题型不传options。单选和判断一选即判分；多选需给完整正确选项集合。简答/填空/计算/分析/压轴不要求学生输入、手写或提交答案，仅双击卡片揭示。计算题必须提供可复核推导，分析与压轴逐小问给出步骤；简答answer数组按得分点分项，填空answer按空位顺序。整套题在同一个面板中每题一卡，题目独立、资料充分，禁止依赖未提供图片或上下文。先逐题独立核算答案与解析，再检查题数和题型，最后输出完整JSON。不得杜撰资料与URL。正文为纯文本，公式使用$...$行内或$$...$$块级LaTeX并正确转义JSON反斜杠，不输出HTML。题目需要受力图、几何图或电路等示意图时必须给出diagram:{"svg":"完整静态SVG","caption":"准确图注"}，解答需另一个图时用solutionDiagram同结构；SVG必须有xmlns和viewBox，使用svg/g/defs/marker/path/line/rect/circle/ellipse/polyline/polygon/text/tspan/title/desc，力箭头标清方向、量和单位，图中不提前给出待求答案；不得脚本、外链、图片链接或未提供的题图。解答按已知、公式、代入、单位、结论分步，明确矢量方向与假设，复杂问题可配解答图。${
+      } for question text, answers and explanations. Return only JSON {"title":"title","questions":[{"type":"single|multiple|true_false|fill|short|calculation|analysis|challenge","question":"complete question","options":["option without letter prefix"],"answer":["answer"],"explanation":"specific explanation","steps":["reasoning step"]}],"sources":[{"title":"actual retrieved source","url":"complete URL"}]}.
+Never omit questions. Single/multiple-choice answers are arrays of A-H option letters: exactly one for single, at least two for multiple. True/false uses ["true"] or ["false"]. Fill-in questions use ____ and one answer per blank in order. Short answers list key scoring points. Calculations require complete formulas and verifiable steps; analysis/challenge questions answer each part step by step, specifying assumptions, vector directions, units and conclusions. Omit options for other types. Single/true-false choices score immediately; multiple-choice requires the complete correct set. Other types reveal answers on double-click without requiring typed/handwritten/submitted responses.
+Every question is an independent card in the same panel with enough supplied context. Never depend on missing images or fabricate sources/URLs. Verify each answer/explanation before returning the complete JSON. Text is plain; formulas use inline $...$ or block $$...$$ LaTeX with correctly escaped JSON backslashes, never HTML. Supply diagram:{"svg":"complete static SVG","caption":"accurate caption"} when a force/geometric/circuit diagram is necessary; solutionDiagram uses the same structure. SVG needs xmlns/viewBox and only svg,g,defs,marker,path,line,rect,circle,ellipse,polyline,polygon,text,tspan,title,desc. Label force direction, quantity and units without revealing unknown answers. No scripts, external/image links or missing figures. ${
         count
-          ? `必须恰好生成${count}题。`
-          : "按用户要求确定数量，未指定默认5题。"
+          ? `Generate exactly ${count} questions.`
+          : "Follow the requested quantity; default to five when unspecified."
       }`,
     },
     visualMessage(
@@ -218,14 +207,14 @@ export const generateQuiz = async (
         { role: "assistant", content: response },
         {
           role: "user",
-          content: `校验未通过：${
+          content: `Validation failed: ${
             (failure as Error).message
-          }。请完整重生成原要求的整套题，保留实际资料来源。`,
+          }Regenerate the entire originally requested quiz, preserving actual research sources.`,
         },
       );
     }
   }
-  throw new Error("出题失败");
+  throw new Error(t("fcboard.aiMessages.quizFailed"));
 };
 
 const escapeHTML = (text: string) =>
@@ -237,55 +226,30 @@ const escapeHTML = (text: string) =>
       ]!),
   );
 export const quizDocument = (quiz: Quiz) => {
-  const chinese = getLanguage().code.startsWith("zh");
-  const names: Record<QuizQuestion["type"], string> = chinese
-    ? {
-        single: "单选题",
-        multiple: "多选题",
-        true_false: "判断题",
-        fill: "填空题",
-        short: "简答题",
-        calculation: "计算题",
-        analysis: "分析题",
-        challenge: "综合压轴题",
-      }
-    : {
-        single: "Single choice",
-        multiple: "Multiple choice",
-        true_false: "True or false",
-        fill: "Fill in the blanks",
-        short: "Short answer",
-        calculation: "Calculation",
-        analysis: "Analysis",
-        challenge: "Challenge",
-      };
-  const ui = chinese
-    ? {
-        correct: "回答正确",
-        wrong: "回答错误，正确答案如下",
-        answer: "答案与解析",
-        confirm: "确认选择",
-        choose: "点击选项作答",
-        multi: "选择所有正确选项，再确认",
-        previous: "上一题",
-        next: "下一题",
-        sources: "参考资料",
-        progress: "答题进度",
-      }
-    : {
-        correct: "Correct",
-        wrong: "Incorrect — the correct answer is shown below",
-        answer: "Answer and explanation",
-        confirm: "Check choices",
-        choose: "Choose an option",
-        multi: "Select all correct options, then check",
-        previous: "Previous",
-        next: "Next",
-        sources: "Sources",
-        progress: "Quiz progress",
-      };
-  const yes = chinese ? "正确" : "True";
-  const no = chinese ? "错误" : "False";
+  const names: Record<QuizQuestion["type"], string> = {
+    single: t("fcboard.aiMessages.quizType_single"),
+    multiple: t("fcboard.aiMessages.quizType_multiple"),
+    true_false: t("fcboard.aiMessages.quizType_true_false"),
+    fill: t("fcboard.aiMessages.quizType_fill"),
+    short: t("fcboard.aiMessages.quizType_short"),
+    calculation: t("fcboard.aiMessages.quizType_calculation"),
+    analysis: t("fcboard.aiMessages.quizType_analysis"),
+    challenge: t("fcboard.aiMessages.quizType_challenge"),
+  };
+  const ui = {
+    correct: t("fcboard.aiMessages.quiz_correct"),
+    wrong: t("fcboard.aiMessages.quiz_wrong"),
+    answer: t("fcboard.aiMessages.quiz_answer"),
+    confirm: t("fcboard.aiMessages.quiz_confirm"),
+    choose: t("fcboard.aiMessages.quiz_choose"),
+    multi: t("fcboard.aiMessages.quiz_multi"),
+    previous: t("fcboard.aiMessages.quiz_previous"),
+    next: t("fcboard.aiMessages.quiz_next"),
+    sources: t("fcboard.aiMessages.quiz_sources"),
+    progress: t("fcboard.aiMessages.quiz_progress"),
+  };
+  const yes = t("fcboard.aiMessages.quiz_true");
+  const no = t("fcboard.aiMessages.quiz_false");
   const card = (q: QuizQuestion, index: number) => {
     const choices =
       q.type === "true_false"

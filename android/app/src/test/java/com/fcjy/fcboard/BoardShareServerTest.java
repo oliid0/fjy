@@ -8,6 +8,7 @@ import java.util.Collections;
 import org.junit.Test;
 
 public class BoardShareServerTest {
+    @org.junit.Before public void configurePageLanguage() throws Exception { TestPageLocalization.configure("en"); }
     private HttpURLConnection get(BoardShareServer server, String path) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + server.getListeningPort() + path).openConnection();
         connection.setConnectTimeout(3000); connection.setReadTimeout(3000);
@@ -28,7 +29,7 @@ public class BoardShareServerTest {
             wrong.setRequestMethod("POST"); wrong.setDoOutput(true);
             wrong.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             wrong.getOutputStream().write("password=0123".getBytes(StandardCharsets.UTF_8));
-            assertTrue(new String(wrong.getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("密码错误"));
+            assertTrue(new String(wrong.getInputStream().readAllBytes(), StandardCharsets.UTF_8).contains("Incorrect password"));
             HttpURLConnection correct = get(server, root);
             correct.setRequestMethod("POST"); correct.setDoOutput(true);
             correct.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");

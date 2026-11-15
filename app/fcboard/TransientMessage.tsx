@@ -1,4 +1,8 @@
+import { useI18n } from "@fcboard/fcboard/i18n";
+
 import { useEffect, useState } from "react";
+
+import { nativeErrorMessage } from "./nativeErrorMessage";
 
 /** Hide feedback without clearing functional state (e.g. a failed document stays failed). */
 export const TransientMessage = ({
@@ -12,6 +16,7 @@ export const TransientMessage = ({
   className?: string;
   duration?: number;
 }) => {
+  useI18n();
   const [visible, setVisible] = useState(message);
   useEffect(() => {
     setVisible(message);
@@ -20,7 +25,7 @@ export const TransientMessage = ({
   }, [message, duration]);
   return visible && message ? (
     <div className={className} role={role}>
-      {visible}
+      {nativeErrorMessage(visible)}
     </div>
   ) : null;
 };

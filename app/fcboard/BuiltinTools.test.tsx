@@ -8,6 +8,8 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { pageLocalization } from "./pageLocalization";
+
 import { render } from "./test/render";
 import { ToolTimer } from "./ToolTimer";
 import { Curtain, moveCurtain } from "./Curtain";
@@ -509,6 +511,7 @@ it("starts a real native voting session, displays its LAN QR/results, and ends w
     topic: session.topic,
     options: session.options,
     multiple: false,
+    localization: pageLocalization(),
   });
   expect(
     screen.getAllByRole("progressbar").map((bar) => bar.getAttribute("value")),

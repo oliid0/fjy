@@ -246,7 +246,13 @@ it("retries rejected fast requests once without changing the model or adding tun
     expect(bodies[0].service_tier).toBe("fast");
     expect(bodies[1]).toEqual({
       model: defaults.model,
-      messages: [{ role: "user", content: "测试" }],
+      messages: [
+        {
+          role: "system",
+          content: expect.stringContaining("active interface language"),
+        },
+        { role: "user", content: "测试" },
+      ],
       stream: true,
     });
   } finally {

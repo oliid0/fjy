@@ -1,3 +1,5 @@
+import { t } from "@fcboard/fcboard/i18n";
+
 import { generateQuiz, quizDocument, validateQuiz } from "./quiz";
 import { defaults, saveSettings } from "./settings";
 import * as ai from "./ai";
@@ -51,7 +53,9 @@ it("researches online before generating the exact requested batch and retries in
   expect(result.questions).toHaveLength(3);
   expect(chat.mock.calls[0][3]).toMatchObject({ webSearch: true });
   expect(chat.mock.calls[1][2]).toMatchObject({ model: "chosen-model" });
-  expect(chat.mock.calls[2][0].at(-1)?.content).toContain("选择题");
+  expect(chat.mock.calls[2][0].at(-1)?.content).toContain(
+    t("fcboard.aiMessages.quizInvalidChoices"),
+  );
 });
 
 it.each([
@@ -79,7 +83,7 @@ it.each([
       ),
     ).resolves.toMatchObject({ questions: value.questions });
     expect(chat.mock.calls[1][0][0].content).toContain(
-      `必须恰好生成${count}题`,
+      `Generate exactly ${count} questions.`,
     );
     expect(JSON.stringify(chat.mock.calls[1][0][1].content)).toContain(
       "data:image/png;base64,actual-board",
@@ -92,7 +96,7 @@ it.each(["出零道题", "出0道题", "出五十一道题", "出一百道题"])
     const chat = vi.spyOn(ai, "chat");
     await expect(
       generateQuiz(prompt, new AbortController().signal),
-    ).rejects.toThrow("最多50题");
+    ).rejects.toThrow(t("fcboard.aiMessages.quizDescribeRequest"));
     expect(chat).not.toHaveBeenCalled();
   },
 );

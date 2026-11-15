@@ -27,15 +27,15 @@ public class FactoryFileBrowserTest {
     @Test public void listsActualBoardFilesAndDirectoriesAndRejectsTraversal() throws Exception {
         File root=temporary();
         try{
-            File folder=new File(root,"课堂");assertTrue(folder.mkdir());
-            File board=new File(root,"力学.bzd");write(board,"<bzd/>");
+            File folder=new File(root,"Lesson");assertTrue(folder.mkdir());
+            File board=new File(root,"Mécanique.bzd");write(board,"<bzd/>");
             write(new File(root,"unrelated.txt"),"not a whiteboard");
             List<File> listed=FactoryFileAccess.list(root,root);
             assertEquals(2,listed.size());assertTrue(listed.contains(board));assertTrue(listed.contains(folder));
             for(String invalid:new String[]{"", "..", "../outside", "nested/name", "nested\\name"}){
                 try{FactoryFileAccess.destination(root,folder,invalid);fail("Invalid name must fail");}catch(IOException expected){}
             }
-            assertEquals(new File(folder,"牛顿.bzd"),FactoryFileAccess.destination(root,folder," 牛顿 "));
+            assertEquals(new File(folder,"Newton.bzd"),FactoryFileAccess.destination(root,folder," Newton "));
             assertFalse(FactoryFileAccess.contains(root,new File(root.getParentFile(),root.getName()+"-other")));
         }finally{remove(root);}
     }
@@ -43,7 +43,7 @@ public class FactoryFileBrowserTest {
         File root=temporary();
         try{
             File source=new File(root,"source.bzd"),target=new File(root,"target.bzd");
-            write(source,"<bzd><slide name='牛顿'/></bzd>");write(target,"previous");
+            write(source,"<bzd><slide name='Newton'/></bzd>");write(target,"previous");
             FactoryFileAccess.copyAtomic(source,target);
             assertEquals("bzd",BoardFilePlugin.readXml(target).getDocumentElement().getTagName());
             byte[] previous=Files.readAllBytes(target.toPath());
@@ -57,7 +57,7 @@ public class FactoryFileBrowserTest {
     }
     @Test public void originalGridSelectsAndConfirmsARealFileAndAdaptsToTheActivityWindow() throws Exception {
         File root=temporary(),initial=new File(root,"Whiteboard/xml");assertTrue(initial.mkdirs());
-        File board=new File(initial,"课堂.bzd");write(board,"<bzd><slide name='课堂'/></bzd>");
+        File board=new File(initial,"Lesson.bzd");write(board,"<bzd><slide name='Lesson'/></bzd>");
         ExecutorService worker=Executors.newSingleThreadExecutor();
         AtomicReference<FactoryFileBrowserDialog> ref=new AtomicReference<>();
         AtomicReference<File> selected=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
@@ -88,7 +88,7 @@ public class FactoryFileBrowserTest {
     }
     @Test public void originalSaveUsesAnEditableTimestampNameAndReportsOnlyAfterTheFileIsWritten() throws Exception {
         File root=temporary(),initial=new File(root,"Whiteboard/xml");assertTrue(initial.mkdirs());
-        File staged=new File(root,"staged.bzd");write(staged,"<bzd><slide name='原版'/></bzd>");
+        File staged=new File(root,"staged.bzd");write(staged,"<bzd><slide name='Original'/></bzd>");
         ExecutorService worker=Executors.newSingleThreadExecutor();
         AtomicReference<FactoryFileBrowserDialog> ref=new AtomicReference<>();AtomicReference<File> saved=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
@@ -99,15 +99,15 @@ public class FactoryFileBrowserTest {
                 AtomicReference<Boolean> enabled=new AtomicReference<>(false);scenario.onActivity(activity->enabled.set(ref.get().findViewById(R.id.factory_fb_confirm).isEnabled()));ready=enabled.get();if(!ready)Thread.sleep(50);
             }
             assertTrue(ready);
-            scenario.onActivity(activity->{EditText name=ref.get().findViewById(R.id.factory_fb_file_name);assertTrue(name.getText().toString().matches("\\d{14}"));name.setText("保存课件");ref.get().findViewById(R.id.factory_fb_confirm).performClick();});
-            assertTrue(done.await(5,TimeUnit.SECONDS));assertEquals(new File(initial,"保存课件.bzd"),saved.get());
+            scenario.onActivity(activity->{EditText name=ref.get().findViewById(R.id.factory_fb_file_name);assertTrue(name.getText().toString().matches("\\d{14}"));name.setText("SavedLesson");ref.get().findViewById(R.id.factory_fb_confirm).performClick();});
+            assertTrue(done.await(5,TimeUnit.SECONDS));assertEquals(new File(initial,"SavedLesson.bzd"),saved.get());
             assertEquals("bzd",BoardFilePlugin.readXml(saved.get()).getDocumentElement().getTagName());
         }finally{scenario.onActivity(activity->{if(ref.get()!=null)ref.get().dismiss();});}
         }finally{worker.shutdownNow();remove(root);}
     }
     @Test public void imageModeShowsTheActualThumbnailAndSelectsOnlyTheRequestedFileType() throws Exception {
         File root=temporary(),initial=new File(root,"Whiteboard/image");assertTrue(initial.mkdirs());
-        File picture=new File(initial,"课堂.png");android.graphics.Bitmap pixels=android.graphics.Bitmap.createBitmap(20,10,android.graphics.Bitmap.Config.ARGB_8888);
+        File picture=new File(initial,"Lesson.png");android.graphics.Bitmap pixels=android.graphics.Bitmap.createBitmap(20,10,android.graphics.Bitmap.Config.ARGB_8888);
         try{pixels.eraseColor(android.graphics.Color.RED);Files.write(picture.toPath(),BzdBitmap.png(pixels));}finally{pixels.recycle();}
         write(new File(initial,"board.bzd"),"<bzd/>");write(new File(initial,"document.pdf"),"not an image");
         ExecutorService worker=Executors.newSingleThreadExecutor();AtomicReference<FactoryFileBrowserDialog> ref=new AtomicReference<>();AtomicReference<File> selected=new AtomicReference<>();CountDownLatch done=new CountDownLatch(1);

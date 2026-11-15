@@ -1,3 +1,4 @@
+import * as i18n from "@fcboard/fcboard/i18n";
 import { t } from "@fcboard/fcboard/i18n";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
@@ -153,6 +154,10 @@ describe("AI configuration and transport", () => {
       max_output_tokens: 256,
       input: [
         {
+          role: "system",
+          content: expect.stringContaining("active interface language"),
+        },
+        {
           role: "user",
           content: [
             { type: "input_image", image_url: "data:image/png;base64,test" },
@@ -284,3 +289,66 @@ it("migrates the old native system default to WSS when a speech key was configur
   localStorage.clear();
   sessionStorage.clear();
 });
+
+it.each(["chat/completions", "responses"])(
+  "sends Spanish UI output policy while preserving multilingual source on %s, and lets voice follow input",
+  async (route) => {
+    vi.spyOn(i18n, "getLanguage").mockReturnValue({
+      code: "es-ES",
+      label: "Español",
+    });
+    const messages: import("./ai").Message[] = [
+      {
+        role: "system",
+        content: 'Return JSON {"answer":"text"}; preserve exact source fields.',
+      },
+      { role: "user", content: "Explain this English sentence: Good morning." },
+    ];
+    const before = JSON.stringify(messages);
+    const fetcher = vi.fn().mockResolvedValue({
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          choices: [{ message: { content: "respuesta" } }],
+          output: [
+            {
+              type: "message",
+              content: [{ type: "output_text", text: "respuesta" }],
+            },
+          ],
+        }),
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const settings = {
+      ...defaults,
+      apiKey: "test",
+      model: "language-model",
+      endpoint: `https://example.com/v1/${route}`,
+    };
+    try {
+      await chat(messages, undefined, settings);
+      const first = JSON.parse(fetcher.mock.calls[0][1].body);
+      const content = first.messages || first.input;
+      expect(content[0].content).toContain(
+        "active interface language is es-ES",
+      );
+      expect(content[0].content).toContain("any language");
+      expect(content[0].content).toContain(
+        "translation target languages take priority",
+      );
+      expect(content[1]).toEqual(messages[1]);
+      await chat(messages, undefined, settings, { responseLanguage: "input" });
+      const second = JSON.parse(fetcher.mock.calls[1][1].body);
+      expect((second.messages || second.input)[0].content).toContain(
+        "respond in the language of the actual spoken/written request",
+      );
+      expect((second.messages || second.input)[0].content).not.toContain(
+        "active interface language",
+      );
+      expect(JSON.stringify(messages)).toBe(before);
+    } finally {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
+  },
+);

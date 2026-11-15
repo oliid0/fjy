@@ -45,12 +45,12 @@ public class CloudSpeechPlugin extends Plugin {
 
     @PluginMethod public void start(PluginCall call) {
         worker.execute(() -> {
-            if (active != null) { call.reject("已有云端语音任务正在运行"); return; }
+            if (active != null) { call.reject("A cloud speech task is already running"); return; }
             String key = call.getString("key", "").trim();
             String resource = call.getString("resource", "volc.seedasr.sauc.duration");
             if (key.isEmpty() || key.contains("\n") || key.contains("\r")
                     || !resource.matches("volc\\.(seedasr|bigasr)\\.sauc\\.(duration|concurrent)")) {
-                call.reject("请在语音设置中填写豆包语音 API Key 与已开通的资源 ID"); return;
+                call.reject("Enter an enabled Doubao Speech API key and resource ID in voice settings"); return;
             }
             Session session = new Session(); active = session;
             try {
@@ -62,10 +62,10 @@ public class CloudSpeechPlugin extends Plugin {
                     @Override public void onOpen(WebSocket socket, Response response) {
                         try {
                             if (!socket.send(ByteString.of(DoubaoSpeechProtocol.frame(1, 1, DoubaoSpeechProtocol.configuration())))) {
-                                throw new IOException("无法发送语音配置");
+                                throw new IOException("Unable to send speech configuration");
                             }
                             session.opened.countDown();
-                        } catch (Exception error) { fail(session, "无法配置豆包语音"); }
+                        } catch (Exception error) { fail(session, "Unable to configure Doubao speech"); }
                     }
                     @Override public void onMessage(WebSocket socket, ByteString bytes) {
                         try {
@@ -74,26 +74,26 @@ public class CloudSpeechPlugin extends Plugin {
                                 JSONArray lines = session.protocol.lines(response.body);
                                 session.interim = DoubaoSpeechProtocol.interim(response.body);
                                 session.activity |= session.interim != null;
-                                if (session.pending.length() + lines.length() > 1000) { throw new IOException("语音文稿接收过慢"); }
+                                if (session.pending.length() + lines.length() > 1000) { throw new IOException("Speech transcript consumption is too slow"); }
                                 for (int i = 0; i < lines.length(); i++) { session.pending.put(lines.get(i)); }
                             }
                             session.opened.countDown();
                             if (response.last) {
                                 session.ended.countDown();
-                                if (!session.stopping) { fail(session, "云端语音连接已结束，请重新开启"); }
+                                if (!session.stopping) { fail(session, "Cloud speech ended; start a new session"); }
                             }
                         } catch (Exception error) { fail(session, error.getMessage()); }
                     }
                     @Override public void onFailure(WebSocket socket, Throwable error, Response response) {
-                        fail(session, response == null ? "豆包语音连接失败，请检查网络"
-                            : "豆包语音连接失败 (HTTP " + response.code() + ")，请检查语音密钥与资源权限");
+                        fail(session, response == null ? "Speech connection failed; check the network"
+                            : "Speech connection failed (HTTP " + response.code() + "); check the speech key and resource permissions");
                     }
                     @Override public void onClosing(WebSocket socket, int code, String reason) {
                         socket.close(code, null);
-                        if (!session.stopping || session.ended.getCount() != 0) { fail(session, "云端语音连接中断"); }
+                        if (!session.stopping || session.ended.getCount() != 0) { fail(session, "Cloud speech connection interrupted"); }
                     }
                 });
-                if (!session.opened.await(12, TimeUnit.SECONDS)) { throw new IOException("豆包语音连接超时"); }
+                if (!session.opened.await(12, TimeUnit.SECONDS)) { throw new IOException("Speech connection timed out"); }
                 if (session.error != null) { throw new IOException(session.error); }
                 JSObject result = new JSObject(); result.put("session", session.id); call.resolve(result);
             } catch (Exception error) {
@@ -108,7 +108,7 @@ public class CloudSpeechPlugin extends Plugin {
     }
     private Session require(PluginCall call) throws IOException {
         Session session = active;
-        if (session == null || !session.id.equals(call.getString("session"))) { throw new IOException("云端语音任务已结束"); }
+        if (session == null || !session.id.equals(call.getString("session"))) { throw new IOException("The cloud speech task ended"); }
         if (session.error != null) { throw new IOException(session.error); }
         return session;
     }
@@ -126,11 +126,11 @@ public class CloudSpeechPlugin extends Plugin {
             try {
                 Session session = require(call);
                 String encoded = call.getString("pcm", "");
-                if (call.getInt("sampleRate", 0) != 16000 || encoded.length() > 44000) { throw new IOException("云端语音需要 16 kHz PCM 音频"); }
+                if (call.getInt("sampleRate", 0) != 16000 || encoded.length() > 44000) { throw new IOException("Cloud speech requires 16 kHz PCM audio"); }
                 byte[] pcm = Base64.decode(encoded, Base64.DEFAULT);
-                if (pcm.length == 0 || pcm.length % 2 != 0 || pcm.length > 32000) { throw new IOException("无效的语音片段"); }
+                if (pcm.length == 0 || pcm.length % 2 != 0 || pcm.length > 32000) { throw new IOException("Invalid speech audio segment"); }
                 if (session.socket.queueSize() > 320000 || !session.socket.send(ByteString.of(
-                        DoubaoSpeechProtocol.frame(2, ++session.sequence, pcm)))) { throw new IOException("语音网络发送过慢，请检查连接"); }
+                        DoubaoSpeechProtocol.frame(2, ++session.sequence, pcm)))) { throw new IOException("Speech upload is too slow; check the connection"); }
                 call.resolve(drain(session));
             } catch (Exception error) { call.reject(error.getMessage()); }
         });
@@ -138,13 +138,13 @@ public class CloudSpeechPlugin extends Plugin {
     @PluginMethod public void stop(PluginCall call) {
         worker.execute(() -> {
             Session session = active;
-            if (session == null || !session.id.equals(call.getString("session"))) { call.reject("云端语音任务已结束"); return; }
+            if (session == null || !session.id.equals(call.getString("session"))) { call.reject("The cloud speech task ended"); return; }
             try {
                 session.stopping = true;
                 if (call.getBoolean("discard", false)) { call.resolve(new JSObject().put("lines", new JSArray())); return; }
                 if (session.error != null) { throw new IOException(session.error); }
                 if (!session.socket.send(ByteString.of(DoubaoSpeechProtocol.frame(2, -(++session.sequence), new byte[0])))
-                        || !session.ended.await(5, TimeUnit.SECONDS)) { throw new IOException("云端文稿收尾超时"); }
+                        || !session.ended.await(5, TimeUnit.SECONDS)) { throw new IOException("Timed out while finalizing the cloud transcript"); }
                 if (session.error != null) { throw new IOException(session.error); }
                 call.resolve(drain(session));
             } catch (Exception error) { call.reject(error.getMessage()); }

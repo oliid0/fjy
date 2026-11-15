@@ -352,7 +352,7 @@ export const SkizzePen = ({ api }: { api: FcboardImperativeAPI }) => {
       }),
       classroomCommands.register(
         "skizze.mode",
-        "设置已连接智能笔悬浮层，args.mode=laser|mouse|spotlight|magnifier，args.visible=false 收起",
+        "Configure the connected smart-pen overlay; args.mode=laser|mouse|spotlight|magnifier, args.visible=false hides it.",
         (args) => {
           if (!connected) {
             throw new Error(t("fcboard.smart_pen_error"));

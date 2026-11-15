@@ -21,8 +21,9 @@ public class ClassroomReceiverTest {
     private String base;
 
     @Before public void start() throws Exception {
+        TestPageLocalization.configure("en");
         directory = temporary.newFolder("uploads");
-        receiver = new ClassroomPlugin.Receiver(directory);
+        receiver = new ClassroomPlugin.Receiver(directory, null, TestPageLocalization.transferPage());
         receiver.start(5000, true);
         base = "http://127.0.0.1:" + receiver.getListeningPort() + "/" + receiver.token + "/";
     }
@@ -72,7 +73,7 @@ public class ClassroomReceiverTest {
     @Test public void acceptsOfficeDocumentsAndNotifiesOnlyAfterTheFileIsComplete() throws Exception {
         receiver.stop();
         java.util.concurrent.atomic.AtomicReference<File> received = new java.util.concurrent.atomic.AtomicReference<>();
-        receiver = new ClassroomPlugin.Receiver(directory, received::set);
+        receiver = new ClassroomPlugin.Receiver(directory, received::set, TestPageLocalization.transferPage());
         receiver.start(5000, true);
         base = "http://127.0.0.1:" + receiver.getListeningPort() + "/" + receiver.token + "/";
         byte[] bytes = new byte[] {0, 1, 2, -1, 80, 75, 13, 10};

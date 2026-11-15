@@ -349,7 +349,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
         args: {
           url:
             getLanguage().code === "zh-CN"
-              ? "https://image.baidu.com/search/index?tn=baiduimage&word=壁纸"
+              ? "https://image.baidu.com/search/index?tn=baiduimage&word=%E5%A3%81%E7%BA%B8"
               : "https://www.google.com/",
           signal,
         },

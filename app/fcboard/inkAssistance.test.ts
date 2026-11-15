@@ -743,7 +743,7 @@ it.each([true, false])(
       expect(request.model).toBe(layers ? defaults.imageModel : "illustrator");
       expect(request.image).toMatch(/^data:image\//);
       expect(ai.chat).not.toHaveBeenCalled();
-      expect(request.prompt).toContain("立体3D风格");
+      expect(request.prompt).toContain("3D style");
       expect(request).toMatchObject({
         background: "transparent",
         output_format: "png",

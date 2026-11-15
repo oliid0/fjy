@@ -42,7 +42,7 @@ public class LocalSpeechPlugin extends Plugin {
     static File modelDirectory(android.content.Context context) throws Exception {
         File directory = new File(context.getFilesDir(), "moonshine-tiny-zh-26-08-24");
         if (!directory.isDirectory() && !directory.mkdirs()) {
-            throw new IllegalStateException("无法准备离线语音模型目录");
+            throw new IllegalStateException("Unable to prepare the offline speech model directory");
         }
         for (int index = 0; index < FILES.length; index++) {
             String name = FILES[index];
@@ -57,7 +57,7 @@ public class LocalSpeechPlugin extends Plugin {
                 output.getFD().sync();
             }
             if (pending.length() != SIZES[index] || !pending.renameTo(target)) {
-                throw new IllegalStateException("离线模型不完整，请检查安装包与剩余存储空间");
+                throw new IllegalStateException("The offline model is incomplete; check the installed package and free storage");
             }
         }
         return directory;
@@ -69,14 +69,14 @@ public class LocalSpeechPlugin extends Plugin {
             try {
                 prepareModel();
                 call.resolve();
-            } catch (Exception | LinkageError error) { release(); call.reject("离线中文语音模型不可用：" + error.getMessage()); }
+            } catch (Exception | LinkageError error) { release(); call.reject("The bundled Chinese speech model is unavailable: " + error.getMessage()); }
         });
     }
 
     @PluginMethod
     public void start(PluginCall call) {
         worker.execute(() -> {
-            if (session != null) { call.reject("已有语音任务正在运行"); return; }
+            if (session != null) { call.reject("A speech task is already running"); return; }
             try {
                 prepareModel();
                 completed = new JSArray();
@@ -86,7 +86,7 @@ public class LocalSpeechPlugin extends Plugin {
                 session = UUID.randomUUID().toString();
                 JSObject result = new JSObject(); result.put("session", session); call.resolve(result);
             } catch (Exception | LinkageError error) {
-                release(); call.reject("无法启动内置中文语音：" + error.getMessage());
+                release(); call.reject("Unable to start bundled Chinese speech: " + error.getMessage());
             }
         });
     }
@@ -99,11 +99,11 @@ public class LocalSpeechPlugin extends Plugin {
                 int rate = call.getInt("sampleRate", 16000);
                 String pcm = call.getString("pcm", "");
                 if (rate < 8000 || rate > 96000 || pcm.length() > 512000) {
-                    throw new IllegalArgumentException("音频片段格式无效");
+                    throw new IllegalArgumentException("Invalid audio segment format");
                 }
                 byte[] data = Base64.decode(pcm, Base64.DEFAULT);
                 if (data.length % 2 != 0 || data.length > rate * 4) {
-                    throw new IllegalArgumentException("音频片段过长或不完整");
+                    throw new IllegalArgumentException("The audio segment is too long or incomplete");
                 }
                 ByteBuffer input = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
                 float[] samples = new float[data.length / 2];
@@ -111,7 +111,7 @@ public class LocalSpeechPlugin extends Plugin {
                 transcriber.addAudioToStream(stream, samples, rate);
                 call.resolve(drain());
             } catch (Exception | LinkageError error) {
-                call.reject("离线识别失败：" + error.getMessage());
+                call.reject("Offline recognition failed: " + error.getMessage());
             }
         });
     }
@@ -120,19 +120,19 @@ public class LocalSpeechPlugin extends Plugin {
     public void stop(PluginCall call) {
         worker.execute(() -> {
             if (session == null || !session.equals(call.getString("session"))) {
-                call.reject("语音任务已结束"); return;
+                call.reject("The speech task ended"); return;
             }
             try {
                 transcriber.stopStream(stream);
                 call.resolve(drain());
-            } catch (Exception | LinkageError error) { call.reject("无法结束离线识别：" + error.getMessage()); }
+            } catch (Exception | LinkageError error) { call.reject("Unable to finish offline recognition: " + error.getMessage()); }
             finally { releaseSession(); }
         });
     }
 
     private void requireSession(PluginCall call) {
         if (session == null || !session.equals(call.getString("session"))) {
-            throw new IllegalStateException("语音任务已结束，请重新开启");
+            throw new IllegalStateException("The speech task ended; start a new session");
         }
     }
     private JSObject drain() {

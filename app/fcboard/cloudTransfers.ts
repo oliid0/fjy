@@ -1,5 +1,7 @@
 import { t } from "@fcboard/fcboard/i18n";
 
+import { pageLocalization } from "./pageLocalization";
+
 import {
   CloudShareHttpError,
   cloudShareAddress,
@@ -43,7 +45,12 @@ export class CloudPageShare {
         `${endpoint}shares`,
         key,
         "POST",
-        { id: share.id, key: share.key, pages },
+        {
+          id: share.id,
+          key: share.key,
+          pages,
+          localization: pageLocalization(),
+        },
         signal,
       );
       if (result.id !== share.id || result.protocol !== 1) {
@@ -54,6 +61,17 @@ export class CloudPageShare {
     } catch (error) {
       void share.end().catch(() => {});
       throw error;
+    }
+  }
+  async setLocalization() {
+    const result = await cloudShareRequest(
+      `${this.endpoint}shares/${this.id}/localization`,
+      this.key,
+      "PUT",
+      { localization: pageLocalization() },
+    );
+    if (result.updated !== true) {
+      throw invalid();
     }
   }
   async setPassword(password: string) {

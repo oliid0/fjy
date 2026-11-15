@@ -131,9 +131,9 @@ it.each([defaults.imageModel, "custom-illustrator"])(
     if (result.kind !== "magic") {
       throw new Error("Expected magic screenshot");
     }
-    expect(result.prompt).toContain("立体3D风格");
-    expect(result.prompt).toContain("用户指定的风格优先");
-    expect(result.prompt).toContain("Alpha透明通道的PNG");
+    expect(result.prompt).toContain("3D style");
+    expect(result.prompt).toContain("explicit user preferences take priority");
+    expect(result.prompt).toContain("real alpha channel");
     expect(capture).toHaveBeenCalledTimes(1);
     expect(chat).not.toHaveBeenCalled();
     expect(ocrRead).not.toHaveBeenCalled();
@@ -228,10 +228,12 @@ it("discards local language output if the selected handwriting language changes 
 });
 
 it.each([
-  ["zh-CN", "zh", "今天是晴天。", "It is sunny today.", "en"],
-  ["en", "en", "It is sunny today.", "今天是晴天。", "zh"],
+  ["zh-CN", "en", "It is sunny today.", "今天是晴天。", "zh-CN"],
+  ["en", "zh", "今天是晴天。", "It is sunny today.", "en"],
+  ["es-ES", "en", "It is sunny today.", "Hoy hace sol.", "es-ES"],
+  ["es-ES", "zh", "今天是晴天。", "Hoy hace sol.", "es-ES"],
 ])(
-  "translates a same-language sentence in one cloud image call from %s",
+  "translates multilingual handwriting into UI target %s in one cloud image call",
   async (code, language, term, translation, targetLanguage) => {
     vi.spyOn(i18n, "getLanguage").mockReturnValue({
       ...i18n.getLanguage(),
@@ -263,9 +265,7 @@ it.each([
       expect.arrayContaining([
         expect.objectContaining({
           type: "text",
-          text: expect.stringContaining(
-            `"sameLanguageTarget":"${targetLanguage}"`,
-          ),
+          text: expect.stringContaining(`"targetLanguage":"${targetLanguage}"`),
         }),
       ]),
     );

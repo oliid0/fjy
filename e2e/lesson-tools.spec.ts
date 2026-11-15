@@ -41,7 +41,11 @@ for (const width of [1440, 3080, 390]) {
           releaseResource = resolve;
         });
         result = inertiaResource;
-      } else if (system.startsWith("你是持续对话的白板助教")) {
+      } else if (
+        system.startsWith(
+          "You are a continuously conversational whiteboard assistant",
+        )
+      ) {
         if (last.startsWith("详细演示")) {
           result = {
             action: "commands",
@@ -88,7 +92,7 @@ for (const width of [1440, 3080, 390]) {
           result = { action: "text", text: "牛顿定律描述力和运动的关系。" };
         }
       } else {
-        expect(system).toContain("独立白板任务agent");
+        expect(system).toContain("independent whiteboard task agent");
         workerCalls++;
         if (workerCalls === 1) {
           result = {

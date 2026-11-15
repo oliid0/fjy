@@ -52,10 +52,10 @@ final class BoardAttachments {
     }
 
     private static Intent create(Context context, JSArray pages, String format, String title) throws Exception {
-        if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("请选择 1 至 20 页分享");
+        if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("Choose 1 to 20 pages to share");
         if (!"png".equals(format) && !"pdf".equals(format)) throw new IOException("Unsupported board export format");
         File root = new File(context.getCacheDir(), "board-attachments");
-        if (!root.isDirectory() && !root.mkdirs()) throw new IOException("无法准备分享附件");
+        if (!root.isDirectory() && !root.mkdirs()) throw new IOException("Unable to prepare sharing attachments");
         File[] old = root.listFiles();
         if (old != null) for (File file : old) {
             if (file.isFile() && System.currentTimeMillis() - file.lastModified() > 86400000) file.delete();
@@ -66,11 +66,11 @@ final class BoardAttachments {
         int total = 0;
         for (int index = 0; index < pages.length(); index++) {
             String value = pages.getString(index);
-            if (!value.startsWith("data:image/png;base64,") || value.length() > 14000000) throw new IOException("分享页面格式或大小无效");
+            if (!value.startsWith("data:image/png;base64,") || value.length() > 14000000) throw new IOException("Invalid shared page format or size");
             byte[] image = Base64.decode(value.substring(22), Base64.DEFAULT);
             total += image.length;
-            if (total > 20000000) throw new IOException("分享图片总大小超过 20 MB，请减少页数");
-            if (image.length < 8 || image[0] != (byte)137 || image[1] != 80 || image[2] != 78 || image[3] != 71) throw new IOException("分享页面必须是 PNG 图片");
+            if (total > 20000000) throw new IOException("Shared images exceed 20 MB; select fewer pages");
+            if (image.length < 8 || image[0] != (byte)137 || image[1] != 80 || image[2] != 78 || image[3] != 71) throw new IOException("Shared pages must be PNG images");
             File file = new File(root, id + "-" + (index + 1) + ".png");
             try (FileOutputStream output = new FileOutputStream(file)) { output.write(image); }
             images.add(file);
@@ -117,10 +117,10 @@ final class BoardAttachments {
         android.content.Intent intent = new android.content.Intent(attachments.size() == 1
             ? android.content.Intent.ACTION_SEND : android.content.Intent.ACTION_SEND_MULTIPLE);
         intent.setType("pdf".equals(format) ? "application/pdf" : "image/png");
-        intent.putExtra(android.content.Intent.EXTRA_SUBJECT, "Fcboard 白板");
+        intent.putExtra(android.content.Intent.EXTRA_SUBJECT, "Fcboard whiteboard");
         if (attachments.size() == 1) intent.putExtra(android.content.Intent.EXTRA_STREAM, attachments.get(0));
         else intent.putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, attachments);
-        android.content.ClipData clip = android.content.ClipData.newRawUri("Fcboard 白板", attachments.get(0));
+        android.content.ClipData clip = android.content.ClipData.newRawUri("Fcboard whiteboard", attachments.get(0));
         for (int index = 1; index < attachments.size(); index++) clip.addItem(new android.content.ClipData.Item(attachments.get(index)));
         intent.setClipData(clip);
         intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);

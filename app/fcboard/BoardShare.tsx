@@ -5,6 +5,8 @@ import { getDataURL } from "@fcboard/fcboard/data/blob";
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
+import { pageLocalization } from "./pageLocalization";
+
 import { TransientMessage } from "./TransientMessage";
 
 import { classroomCommands } from "./commands";
@@ -30,7 +32,7 @@ import type { BoardPages, BoardCanvasSize } from "./boardExport";
 
 /** The existing menu shares chosen pages; collaboration is a separate operation. */
 export const BoardShare = () => {
-  useI18n();
+  const { langCode } = useI18n();
   const [open, setOpen] = useState(false);
   const [pages, setPages] = useState<Board[]>([]);
   const [canvasSize, setCanvasSize] = useState(boardCanvasSize);
@@ -54,6 +56,17 @@ export const BoardShare = () => {
   const [transfer, setTransfer] = useState<"qr" | "bzd">();
   const [code, setCode] = useState("");
   const cloud = useRef<CloudPageShare | undefined>(undefined);
+  useEffect(() => {
+    let active = true;
+    void cloud.current?.setLocalization().catch((failure) => {
+      if (active) {
+        setError(String(failure));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [langCode]);
   const panel = useRef<HTMLElement>(null);
   const generation = useRef(0);
   const exportRequest = useRef<AbortController | undefined>(undefined);
@@ -167,7 +180,7 @@ export const BoardShare = () => {
     };
     const stopShare = classroomCommands.register(
       "board.share",
-      "选择白板页面以导出图片或扫码分享",
+      "Choose board pages to export images or share via QR code.",
       (args) =>
         openPages(
           false,
@@ -178,7 +191,7 @@ export const BoardShare = () => {
     );
     const stopSave = classroomCommands.register(
       "board.saveFile",
-      "选择白板页面并保存原厂 BZD / JPG / PDF 文件",
+      "Choose board pages and save native BZD/JPG/PDF files.",
       (args) =>
         openPages(
           false,
@@ -189,7 +202,7 @@ export const BoardShare = () => {
     );
     const stopMail = classroomCommands.register(
       "board.mail",
-      "选择白板页面并打开邮件；Android 使用原版账户 / 提供方 / 写信 / SMTP 配置层级，可由 mail.action 和 mail.configure 操作，发送选中页面 PDF；浏览器打开系统分享",
+      "Choose board pages and email their PDF. Android uses the original account/provider/compose/SMTP hierarchy through mail.action/mail.configure; browsers use system sharing.",
       (args) =>
         openPages(
           true,
@@ -368,7 +381,10 @@ export const BoardShare = () => {
           cloud.current = session;
           result = { urls: [session.url] };
         } else {
-          result = await Classroom.startShare({ pages: images });
+          result = await Classroom.startShare({
+            pages: images,
+            localization: pageLocalization(),
+          });
           if (current !== generation.current || controller.signal.aborted) {
             await Classroom.stopShare();
             return;

@@ -74,7 +74,7 @@ export const Spotlight = () => {
   useEffect(() => {
     const release = classroomCommands.register(
       "tools.spotlight",
-      "聚光灯：args.open=true|false，args.x/y 为屏幕坐标，args.radius=48..600，args.shape=circle|rectangle|triangle|star，args.color=#RRGGBB，args.alpha=0..255（光圈内白色遮罩）；从光圈内按住拖动",
+      "Spotlight: args.open=true|false, x/y in screen coordinates, radius=48..600, shape=circle|rectangle|triangle|star, color=#RRGGBB, alpha=0..255 for the inner white overlay. Drag from inside the aperture.",
       (args) => {
         if (
           (args.shape !== undefined &&

@@ -5,6 +5,8 @@ import type { FileId } from "@fcboard/element/types";
 
 import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { aiLanguagePolicy } from "./aiLocale";
+
 import { currentSettings, validateEndpoint } from "./settings";
 import { contentViewport, insertElements, insertionPoint } from "./board";
 import { classroomCommands } from "./commands";
@@ -57,7 +59,7 @@ export const generateImage = async (
   };
   const body = {
     model: settings.imageModel.trim(),
-    prompt,
+    prompt: `${prompt}\n\n${aiLanguagePolicy()}`,
     response_format: "b64_json",
     size: /^doubao-seedream-5-0-(flash|pro)-/.test(settings.imageModel)
       ? "1.5K"

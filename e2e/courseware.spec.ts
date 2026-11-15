@@ -165,7 +165,7 @@ test("continuous voice answers concepts and delegates real math, board writing a
     const body = route.request().postDataJSON();
     const system = String(body.messages[0].content);
     let result: unknown;
-    if (system.startsWith("你是持续对话")) {
+    if (system.startsWith("You are a continuously conversational")) {
       result = String(body.messages.at(-1).content).startsWith("用白板")
         ? {
             action: "commands",
@@ -180,9 +180,13 @@ test("continuous voice answers concepts and delegates real math, board writing a
             ],
           }
         : { action: "text", text: "等式两边同时减去相同的数，等式仍然成立。" };
-    } else if (system.includes("学科命题资料研究员")) {
+    } else if (
+      system.includes("You research subject matter for original quiz design")
+    ) {
       result = "依据教材核算：x+1=3，得到x=2。https://www.moe.gov.cn/";
-    } else if (system.includes("跨学科命题Agent")) {
+    } else if (
+      system.includes("You generate original quizzes across subjects")
+    ) {
       result = {
         title: "一元一次方程练习",
         questions: [
@@ -197,7 +201,7 @@ test("continuous voice answers concepts and delegates real math, board writing a
         sources: [{ title: "教育部", url: "https://www.moe.gov.cn/" }],
       };
     } else {
-      expect(system).toContain("独立白板任务agent");
+      expect(system).toContain("independent whiteboard task agent");
       worker++;
       if (worker === 1) {
         result = {

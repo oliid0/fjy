@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { recognitionPattern } from "./recognitionVocabulary";
+
 import { InkQuestion } from "./InkQuestion";
 import { QuizPanel } from "./QuizPanel";
 import { selectionMathIntent, selectionRequest } from "./intent";
@@ -51,10 +53,7 @@ export const Teacher = ({
     forceQuiz = false,
     sourceContext?: { text: string; image?: string },
   ) => {
-    const quizRequirement =
-      /(?:出|生成|设计|编写|创建|给我).*(?:题|卷)|\b(?:quiz|questions|exam|test)\b/i.test(
-        text,
-      );
+    const quizRequirement = recognitionPattern("Teacher_0").test(text);
     // Preserve the existing deterministic math and explicit tool routes.
     // Ordinary prompts in this entry generate quiz cards instead of board answers.
     if (
@@ -173,7 +172,7 @@ export const Teacher = ({
       }),
       classroomCommands.register(
         "quiz.generate",
-        "根据args.prompt联网核实资料并生成可作答卡片测验，支持任意学科与题型，例：出10道高一数学选择题。完成后返回真实标题/题数。无需打开手写输入框；可选args.context={text,image}只基于已经圈选的截图/文字出题，未传则读取当前白板。该命令会等待生成完成。",
+        "Research args.prompt using actual web search and generate original answerable quiz cards for any subject/question type. Wait for completion and return the real title/count. No handwriting input panel is required. Optional args.context={text,image} restricts the source to the selected text/screenshot; otherwise inspect the current board.",
         async (args) => {
           if (typeof args.prompt !== "string" || !args.prompt.trim()) {
             throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
@@ -219,7 +218,7 @@ export const Teacher = ({
       ),
       classroomCommands.register(
         "quiz.inspect",
-        "读取最近生成测验的真实标题/题数；传args.index（从0开始）读取该题题干、选项、答案与解析，用于继续讲解，不编造题目。",
+        "Inspect the actual most recent quiz title/count. Pass zero-based args.index to read its question, options, answers and explanation before teaching; never invent questions.",
         (args) => {
           const value = quizValue.current;
           if (!value) {
@@ -245,7 +244,7 @@ export const Teacher = ({
       ),
       classroomCommands.register(
         "quiz.open",
-        "重新显示最近生成的答题卡，保留已有作答和卡片位置。",
+        "Reopen the latest quiz cards, preserving answers and card positions.",
         () => {
           if (!quizValue.current) {
             throw new Error(t("fcboard.generate_a_quiz_first"));

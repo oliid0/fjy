@@ -26,7 +26,9 @@ final class NativeCalculatorView extends LinearLayout {
     private final Events events;
     private final LinearLayout header, science;
     private final GridLayout keypad;
-    private final TextView history, input, result;
+    private final TextView history, input, result, title, resize;
+    private final Button basicButton, scientificButton, closeButton, themeButton;
+    private org.json.JSONObject labels = new org.json.JSONObject();
     private final List<Button> controls = new ArrayList<>();
     private String expression = "", lastResult = "0", previous = "";
     private boolean scientific, degrees, inverse, dark, finished, error;
@@ -36,13 +38,13 @@ final class NativeCalculatorView extends LinearLayout {
     NativeCalculatorView(Context context, Events events) {
         super(context); this.events = events; setOrientation(VERTICAL); setClipChildren(true);
         header = new LinearLayout(context); header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(context); title.setText("Calculator"); title.setSingleLine(true);
+        title = new TextView(context); title.setSingleLine(true);
         header.addView(title, new LinearLayout.LayoutParams(0, -1, 1));
         title.setOnTouchListener((view, event) -> gesture(event, "move"));
-        header.addView(key("☀", () -> theme(!dark)));
-        header.addView(key("Basic", () -> mode(false)));
-        header.addView(key("Sci", () -> mode(true)));
-        header.addView(key("×", () -> events.action("close", 0, 0)));
+        themeButton = key("☀", () -> theme(!dark)); header.addView(themeButton);
+        basicButton = key("Basic", () -> mode(false)); header.addView(basicButton);
+        scientificButton = key("Sci", () -> mode(true)); header.addView(scientificButton);
+        closeButton = key("×", () -> events.action("close", 0, 0)); header.addView(closeButton);
         addView(header, new LayoutParams(-1, 0, .08f));
         LinearLayout display = new LinearLayout(context); display.setOrientation(VERTICAL); display.setGravity(Gravity.BOTTOM);
         history = line(context); input = line(context); result = line(context); result.setText("0");
@@ -65,9 +67,18 @@ final class NativeCalculatorView extends LinearLayout {
             science.addView(strip, new LayoutParams(-1, 0, 1));
         }
         addView(science, new LayoutParams(-1, 0, .40f)); science.setVisibility(GONE);
-        TextView resize = new TextView(context); resize.setText("◢"); resize.setGravity(Gravity.END); resize.setTextSize(12);
-        resize.setContentDescription("Resize calculator"); resize.setOnTouchListener((view, event) -> gesture(event, "resize"));
+        resize = new TextView(context); resize.setText("◢"); resize.setGravity(Gravity.END); resize.setTextSize(12);
+        resize.setOnTouchListener((view, event) -> gesture(event, "resize"));
         addView(resize, new LayoutParams(-1, dp(18))); theme(false);
+    }
+    void localize(org.json.JSONObject value) throws Exception {
+        labels = value; title.setText(labels.getString("title"));
+        basicButton.setText(labels.getString("basic")); basicButton.setContentDescription(labels.getString("basic"));
+        scientificButton.setText(labels.getString("scientificShort")); scientificButton.setContentDescription(labels.getString("scientific"));
+        closeButton.setContentDescription(labels.getString("close_calculator")); themeButton.setContentDescription(labels.getString("toggle_color_theme"));
+        resize.setContentDescription(labels.getString("resize"));
+        for (Button button : controls) if ("Inv".equals(button.getTag())) { button.setText(labels.getString("inverse")); button.setContentDescription(labels.getString("toggle_inverse_trigonometric_functions")); }
+        if (error) { lastResult = labels.getString("mathError"); result.setText(lastResult); }
     }
     void interactionEnabled(boolean value) { interactionEnabled = value; }
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
@@ -79,7 +90,7 @@ final class NativeCalculatorView extends LinearLayout {
     }
     private Button key(String label, Runnable action) {
         Button button = new Button(getContext()); button.setText(label); button.setAllCaps(false); button.setMinWidth(0); button.setMinimumWidth(0); button.setMinHeight(0); button.setMinimumHeight(0); button.setPadding(1, 0, 1, 0);
-        button.setContentDescription(label); button.setOnClickListener(view -> { action.run(); revision++; }); controls.add(button); return button;
+        button.setTag(label); button.setContentDescription(label); button.setOnClickListener(view -> { action.run(); revision++; }); controls.add(button); return button;
     }
     private boolean gesture(MotionEvent event, String mode) {
         switch (event.getActionMasked()) {
@@ -116,7 +127,7 @@ final class NativeCalculatorView extends LinearLayout {
         else if (label.equals("⌫")) { if (error) { expression = ""; error = false; } else if (!expression.isEmpty()) expression = expression.substring(0, expression.length() - 1); finished = false; }
         else if (label.equals("=")) {
             try { lastResult = evaluate(expression, degrees); previous = expression + " ="; expression = lastResult; finished = true; error = false; }
-            catch (RuntimeException failure) { error = true; lastResult = "Math error"; }
+            catch (RuntimeException failure) { error = true; lastResult = labels.optString("mathError"); }
         } else {
             if (error) { expression = ""; error = false; }
             boolean operator = "+−×÷%^".contains(label);

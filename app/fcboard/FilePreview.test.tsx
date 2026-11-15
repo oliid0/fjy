@@ -1173,6 +1173,18 @@ it.each(["calculation", "function", "text"] as const)(
     draw();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1200);
+      await vi.waitFor(() => {
+        const visible = classroomCommands.read("document") as {
+          ink: import("./documents").InkStroke[];
+        };
+        expect(
+          visible.ink.some((stroke) =>
+            mode === "function"
+              ? stroke.plot?.plot.expression === "x^2"
+              : stroke.text === (mode === "text" ? "课堂笔记" : "0.3"),
+          ),
+        ).toBe(true);
+      });
     });
     const { ink } = classroomCommands.read("document") as {
       ink: import("./documents").InkStroke[];

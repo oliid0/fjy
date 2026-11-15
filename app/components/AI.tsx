@@ -26,9 +26,12 @@ export const AIComponents = ({
           {
             role: "system",
             content:
-              "你是代码助手。根据白板草图生成完整可交互的单文件 HTML，包含内联 CSS 和 JavaScript。只返回 HTML，不要 markdown，不使用外部链接或外部资源。",
+              "You generate code from whiteboard sketches. Return one complete interactive self-contained HTML document with inline CSS/JavaScript, without Markdown, external links or external resources.",
           },
-          visualMessage("将这张草图转为可以使用的页面", await getDataURL(blob)),
+          visualMessage(
+            "Convert this sketch into a working interactive page.",
+            await getDataURL(blob),
+          ),
         ]);
         return {
           html: html
@@ -45,7 +48,7 @@ export const AIComponents = ({
             {
               role: "system",
               content:
-                "你是图表助手。根据用户要求生成 Mermaid 图表，只输出有效 Mermaid 代码，用 ```mermaid 代码块包裹。不使用外链。",
+                "You generate Mermaid diagrams from the actual request. Return only valid Mermaid code in a ```mermaid code block, without external links.",
             },
             ...messages,
           ],

@@ -1,0 +1,189 @@
+{
+  "spokenMath": [
+    {
+      "pattern": "等于|\\bequals?\\b",
+      "value": "="
+    },
+    {
+      "pattern": "加上?|\\bplus\\b",
+      "value": "+"
+    },
+    {
+      "pattern": "减去?|\\bminus\\b",
+      "value": "-"
+    },
+    {
+      "pattern": "乘以?|\\btimes\\b|\\bmultiplied by\\b",
+      "value": "*"
+    },
+    {
+      "pattern": "除以|\\bdivided by\\b",
+      "value": "/"
+    },
+    {
+      "pattern": "的平方|平方|\\bsquared\\b",
+      "value": "^2"
+    },
+    {
+      "pattern": "的立方|立方|\\bcubed\\b",
+      "value": "^3"
+    },
+    {
+      "pattern": "(?:的)?(?:函数)?(?:图像|图象|曲线|曲面)[。！!？?]*$|\\s+(?:function\\s+)?(?:graph|curve|surface)[.!?]*$",
+      "value": ""
+    },
+    {
+      "pattern": "零",
+      "value": "0"
+    },
+    {
+      "pattern": "一",
+      "value": "1"
+    },
+    {
+      "pattern": "二",
+      "value": "2"
+    },
+    {
+      "pattern": "三",
+      "value": "3"
+    },
+    {
+      "pattern": "四",
+      "value": "4"
+    },
+    {
+      "pattern": "五",
+      "value": "5"
+    },
+    {
+      "pattern": "六",
+      "value": "6"
+    },
+    {
+      "pattern": "七",
+      "value": "7"
+    },
+    {
+      "pattern": "八",
+      "value": "8"
+    },
+    {
+      "pattern": "九",
+      "value": "9"
+    },
+    {
+      "pattern": "\\bzero\\b",
+      "value": "0"
+    },
+    {
+      "pattern": "\\bone\\b",
+      "value": "1"
+    },
+    {
+      "pattern": "\\btwo\\b",
+      "value": "2"
+    },
+    {
+      "pattern": "\\bthree\\b",
+      "value": "3"
+    },
+    {
+      "pattern": "\\bfour\\b",
+      "value": "4"
+    },
+    {
+      "pattern": "\\bfive\\b",
+      "value": "5"
+    },
+    {
+      "pattern": "\\bsix\\b",
+      "value": "6"
+    },
+    {
+      "pattern": "\\bseven\\b",
+      "value": "7"
+    },
+    {
+      "pattern": "\\beight\\b",
+      "value": "8"
+    },
+    {
+      "pattern": "\\bnine\\b",
+      "value": "9"
+    }
+  ],
+  "intent_0": {
+    "pattern": "可视化|交互网页|图表|统计图|折线图|柱状图|条形图|散点图|饼图|热力图|箱线图|直方图|地图|人口增长|\\b(?:html5?|visuali[sz](?:ation|e)|charts?|plots?|graphs?|maps?|histograms?|scatterplots?|population growth)\\b",
+    "flags": "i"
+  },
+  "intent_1": {
+    "pattern": "(?:不要|不用|别|停止|取消).{0,8}(?:生成|绘制|制作|画)|\\b(?:don't|do not|stop|cancel)\\b",
+    "flags": "i"
+  },
+  "intent_2": {
+    "pattern": "^(?:(?:请|帮我|麻烦|我想|我要|给我)\\s*)*(?:生成|绘制|画|制作|做|展示|演示|对比|比较|可视化)|^(?:please\\s+)?(?:generate|create|draw|show|make|visuali[sz]e|compare)\\b",
+    "flags": "i"
+  },
+  "intent_3": {
+    "pattern": "^(?:(?:请|帮我|麻烦)\\s*)?(?:讲解|解释|教我|演示|画(?!布|笔|册)|绘制|生成|插入|计算|总结|概括|标注|录制|开始录制|停止录制|新建白板|切换白板|撤销|撤回|重做|删除选中|清空白板|为什么|如何|怎么)|^(?:please\\s+)?(?:explain|teach|show|draw|generate|insert|calculate|summari[sz]e|annotate|record|start recording|stop recording|new board|switch board|undo|redo|delete selection|clear board|why|how)\\b",
+    "flags": "i"
+  },
+  "intent_4": {
+    "pattern": "([yz])\\s*(?:=|equals?|等于)\\s*(.+)",
+    "flags": "i"
+  },
+  "intent_5": {
+    "pattern": "(?:calculate|compute|evaluate|计算|求值)(?:一下)?\\s*[:：]?\\s*(.+)",
+    "flags": "i"
+  },
+  "Teacher_0": {
+    "pattern": "(?:出|生成|设计|编写|创建|给我).*(?:题|卷)|\\b(?:quiz|questions|exam|test)\\b",
+    "flags": "i"
+  },
+  "Classroom_0": {
+    "pattern": "^(?:请|帮我|麻烦)?(?:总结|小结|概括)|^(?:please\\s+)?(?:summari[sz]e|summary)\\b",
+    "flags": "i"
+  },
+  "Classroom_1": {
+    "pattern": "^(?:帮我)?(?:计算|求值)(?:一下)?[，。!！\\s]*$|^(?:please\\s+)?(?:calculate|compute|evaluate)[.!?\\s]*$",
+    "flags": "i"
+  },
+  "Classroom_2": {
+    "pattern": "改|调|删|擦|移|设|关闭|暂停|放大|缩小|清空|保存|丢弃|切换|\\b(?:change|adjust|delete|erase|move|set|close|pause|zoom|clear|save|discard|switch)\\b",
+    "flags": "i"
+  },
+  "SelectionActions_0": {
+    "pattern": "^(?:(?:请|帮我|麻烦)\\s*)?(?:讲解|解释|引导|辅导|讲一|教我|演示|画|绘制|生成|插入|总结|标注|录制|开始录制|停止录制|新建白板|切换白板|撤销|撤回|重做|删除选中|清空白板)|^(?:please\\s+)?(?:explain|teach|show|draw|generate|insert|summari[sz]e|annotate|record|new board|undo|redo|clear board)\\b",
+    "flags": "i"
+  },
+  "teachingResourcePrompt_0": {
+    "pattern": "\\bhtml5?\\b|\\bcanvas\\b|(?:原生|自定义)\\s*svg|svg\\s*(?:动画|交互)|\\b(?:native|custom|use|using)\\s+svg\\b|(?:不要|不用|不需要|不使用)(?:使用)?\\s*(?:vega|图表)|\\b(?:without|no|not)\\s+(?:vega|charts?)\\b",
+    "flags": "i"
+  },
+  "teachingResourcePrompt_1": {
+    "pattern": "拖动|拖拽|动态几何|切线|黎曼|单位圆|仿真|模拟实验|探究|涌现|粒子|主体建模|\\b(?:dragg?ing|draggable|simulation|agent-based|emergence|dynamic geometry|riemann)\\b",
+    "flags": "i"
+  },
+  "teachingResourcePrompt_2": {
+    "pattern": "图表|统计图|折线图|柱状图|条形图|散点图|饼图|热力图|箱线图|直方图|地图|人口增长|\\b(?:charts?|plots?|graphs?|maps?|histograms?|scatterplots?|population growth)\\b",
+    "flags": "i"
+  },
+  "teachingResourcePrompt_3": {
+    "pattern": "可视化|\\bvisuali[sz](?:ation|e)\\b",
+    "flags": "i"
+  },
+  "mathNotation_0": {
+    "pattern": "度|\\bdeg(?:rees?)?\\b",
+    "flags": "gi"
+  },
+  "duplexSpeech_0": {
+    "pattern": "\\b(?:5\\d{7}|45000003)\\b|连接(?:失败|中断|超时)|网络|会话已结束|connection|network|socket|timed?\\s*out",
+    "flags": "i"
+  },
+  "realtimeSpeech_0": {
+    "pattern": "key|密钥|权限|resource|资源|HTTP [4]|unavailable|unsupported|not installed|missing",
+    "flags": "i"
+  },
+  "normalCloseReasons": ["Connection closed"]
+}

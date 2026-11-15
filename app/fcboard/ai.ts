@@ -8,9 +8,13 @@ import type { FcboardElement } from "@fcboard/element/types";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { withAILanguagePolicy } from "./aiLocale";
+
 import { AIStream, postAI, readAIResult } from "./aiTransport";
 import { currentSettings, defaults, validateEndpoint } from "./settings";
 import { handwritingText } from "./handwriting";
+
+import type { AIResponseLanguage } from "./aiLocale";
 
 import type { Settings } from "./settings";
 
@@ -31,6 +35,7 @@ export const chat = async (
   settings: Settings = currentSettings(),
   options: {
     maxTokens?: number;
+    responseLanguage?: AIResponseLanguage;
     onDelta?: (text: string) => void;
     onReset?: () => void;
     timeoutMs?: number;
@@ -61,11 +66,15 @@ export const chat = async (
   // Only the shipped text model opts into fast. Vision and custom models use
   // the provider's ordinary schema, without model-specific tuning parameters.
   const fast = ark && !visual && model === defaults.model && streaming;
+  const localizedMessages = withAILanguagePolicy(
+    messages,
+    options.responseLanguage,
+  );
   const body = {
     model,
     ...(responses
       ? {
-          input: messages.map((message) => ({
+          input: localizedMessages.map((message) => ({
             role: message.role,
             content:
               typeof message.content === "string"
@@ -77,7 +86,7 @@ export const chat = async (
                   ),
           })),
         }
-      : { messages }),
+      : { messages: localizedMessages }),
     stream: streaming,
     ...(options.webSearch
       ? responses

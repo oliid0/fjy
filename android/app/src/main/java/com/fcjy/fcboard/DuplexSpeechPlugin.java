@@ -94,13 +94,13 @@ public class DuplexSpeechPlugin extends Plugin {
             if (id.isEmpty() || key.isEmpty() || key.contains("\n") || key.contains("\r")
                     || configuration == null || !"session.create".equals(configuration.optString("type"))) {
                 opening.remove(id);
-                call.reject("请填写已开通 Seeduplex 的豆包语音 API Key"); return;
+                call.reject("Enter a Doubao Speech API key with Seeduplex enabled"); return;
             }
             Session session = new Session(id);
             synchronized (this) {
                 if (!opening.remove(id)) { call.reject("Native voice session cancelled"); return; }
                 if (active != null && (active.closed || active.error != null)) release(active);
-                if (active != null) { call.reject("已有实时语音会话正在运行"); return; }
+                if (active != null) { call.reject("A live speech session is already running"); return; }
                 active = session;
             }
             try {
@@ -130,12 +130,12 @@ public class DuplexSpeechPlugin extends Plugin {
                 WebSocket connected = client.newWebSocket(request, new WebSocketListener() {
                     @Override public void onOpen(WebSocket socket, Response response) {
                         if (session.closed) { socket.cancel(); return; }
-                        if (!socket.send(configuration.toString())) fail(session, "无法发送实时语音配置");
+                        if (!socket.send(configuration.toString())) fail(session, "Unable to send live speech configuration");
                     }
                     @Override public void onMessage(WebSocket socket, String text) {
                         if (session.closed) return;
                         try {
-                            if (text.length() > 2 * 1024 * 1024) throw new IOException("实时语音响应过大");
+                            if (text.length() > 2 * 1024 * 1024) throw new IOException("Live speech response is too large");
                             JSONObject event = new JSONObject(text);
                             String type = event.optString("type");
                             if (session.audio != null) {
@@ -147,29 +147,29 @@ public class DuplexSpeechPlugin extends Plugin {
                             }
                             if ("error".equals(type)) {
                                 JSONObject detail = event.optJSONObject("error");
-                                String message = event.optString("message", detail == null ? "实时语音服务返回错误" : detail.optString("message", "实时语音服务返回错误"));
+                                String message = event.optString("message", detail == null ? "The live speech service returned an error" : detail.optString("message", "The live speech service returned an error"));
                                 long code = event.optLong("status_code", event.optLong("code", detail == null ? 0 : detail.optLong("code", 0)));
                                 fail(session, message + (code == 0 ? "" : " [" + code + "]")); return;
                             }
                             emit(session, event);
                             if ("session.created".equals(type)) session.ready.countDown();
-                            if ("session.closed".equals(type)) fail(session, "实时语音会话已结束");
+                            if ("session.closed".equals(type)) fail(session, "The live speech session ended");
                         } catch (Exception error) { fail(session, error.getMessage()); }
                     }
                     @Override public void onFailure(WebSocket socket, Throwable error, Response response) {
-                        fail(session, response == null ? "实时语音连接失败，请检查网络"
-                            : "实时语音连接失败 (HTTP " + response.code() + ")，请检查密钥与 Seeduplex 权限");
+                        fail(session, response == null ? "Live speech connection failed; check the network"
+                            : "Live speech connection failed (HTTP " + response.code() + "); check the key and Seeduplex permissions");
                     }
                     @Override public void onClosing(WebSocket socket, int code, String reason) {
                         socket.close(code, null);
-                        fail(session, "实时语音连接中断");
+                        fail(session, "Live speech connection interrupted");
                     }
                 });
                 synchronized (this) {
                     if (session.closed) { connected.cancel(); throw new IOException("Native voice session cancelled"); }
                     session.socket = connected;
                 }
-                if (!session.ready.await(12, TimeUnit.SECONDS)) throw new IOException("实时语音连接超时");
+                if (!session.ready.await(12, TimeUnit.SECONDS)) throw new IOException("Live speech connection timed out");
                 if (session.error != null) throw new IOException(session.error);
                 if (session.closed) throw new IOException("Native voice session cancelled");
                 synchronized (this) {
@@ -219,10 +219,10 @@ public class DuplexSpeechPlugin extends Plugin {
         worker.execute(() -> {
             try {
                 Session session = active;
-                if (session == null || session.closed || !session.id.equals(call.getString("session"))) throw new IOException("实时语音会话已结束");
+                if (session == null || session.closed || !session.id.equals(call.getString("session"))) throw new IOException("The live speech session ended");
                 if (session.error != null) throw new IOException(session.error);
                 JSObject event = call.getObject("event");
-                if (event == null || event.toString().length() > 1024 * 1024) throw new IOException("无效的实时语音事件");
+                if (event == null || event.toString().length() > 1024 * 1024) throw new IOException("Invalid live speech event");
                 if ("input_audio_buffer.commit".equals(event.optString("type"))) {
                     // Commit follows every already accepted microphone frame.
                     audio.schedule(() -> {
@@ -236,8 +236,8 @@ public class DuplexSpeechPlugin extends Plugin {
         });
     }
     private void send(Session session, JSONObject event) throws IOException {
-        if (session != active || session.closed || session.error != null) throw new IOException("实时语音会话已结束");
-        if (session.socket.queueSize() > 320000 || !session.socket.send(event.toString())) throw new IOException("实时语音网络发送过慢");
+        if (session != active || session.closed || session.error != null) throw new IOException("The live speech session ended");
+        if (session.socket.queueSize() > 320000 || !session.socket.send(event.toString())) throw new IOException("Live speech upload is too slow");
     }
     /** One 100 ms bridge transfer, then the documented 640-byte frames paced at 20 ms.
      * Do not make 50 sequential UI/bridge round trips per second on a teaching display. */
@@ -245,13 +245,13 @@ public class DuplexSpeechPlugin extends Plugin {
         worker.execute(() -> {
             try {
                 Session session = active;
-                if (session == null || session.closed || !session.id.equals(call.getString("session"))) throw new IOException("实时语音会话已结束");
+                if (session == null || session.closed || !session.id.equals(call.getString("session"))) throw new IOException("The live speech session ended");
                 String encoded = call.getString("pcm", "");
-                if (call.getInt("sampleRate", 0) != 16000 || encoded.length() > 8600) throw new IOException("实时语音需要16 kHz PCM");
+                if (call.getInt("sampleRate", 0) != 16000 || encoded.length() > 8600) throw new IOException("Live speech requires 16 kHz PCM");
                 byte[] bytes = Base64.decode(encoded, Base64.DEFAULT);
-                if (bytes.length == 0 || bytes.length > 6400 || bytes.length % 2 != 0) throw new IOException("无效的实时音频片段");
+                if (bytes.length == 0 || bytes.length > 6400 || bytes.length % 2 != 0) throw new IOException("Invalid live audio segment");
                 long now = System.nanoTime();
-                if (session.nextAudioAt - now > TimeUnit.SECONDS.toNanos(2)) throw new IOException("实时音频发送积压，请检查网络后重新开始");
+                if (session.nextAudioAt - now > TimeUnit.SECONDS.toNanos(2)) throw new IOException("Live audio upload is backed up; check the network and restart");
                 for (int offset = 0; offset < bytes.length; offset += 640) {
                     byte[] frame = java.util.Arrays.copyOfRange(bytes, offset, Math.min(bytes.length, offset + 640));
                     JSONObject event = new JSObject().put("type", "input_audio_buffer.append")

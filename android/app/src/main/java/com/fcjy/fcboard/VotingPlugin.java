@@ -29,8 +29,9 @@ public class VotingPlugin extends Plugin {
         worker.execute(() -> {
             VoteServer next = null;
             try {
+                PageLocalization.configure(call.getObject("localization"));
                 List<String> links = NetworkPlugin.lanAddresses(getContext());
-                if (links.isEmpty()) throw new IllegalStateException("请先连接局域网Wi-Fi或有线网络");
+                if (links.isEmpty()) throw new IllegalStateException("Connect to a LAN using Wi-Fi or Ethernet");
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
                 try (InputStream input = getContext().getAssets().open("vote.html")) { byte[] buffer = new byte[8192]; int count; while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count); }
                 next = new VoteServer(output.toString("UTF-8"), call.getString("topic"), call.getArray("options"), call.getBoolean("multiple", false));
@@ -40,7 +41,7 @@ public class VotingPlugin extends Plugin {
         });
     }
     @PluginMethod public void read(PluginCall call) { worker.execute(() -> { try { call.resolve(state()); } catch (Exception error) { call.reject(error.getMessage(), error); } }); }
-    @PluginMethod public void end(PluginCall call) { worker.execute(() -> { try { if (server == null) throw new IllegalStateException("请先发起投票"); server.setAccepting(false); call.resolve(state()); } catch (Exception error) { call.reject(error.getMessage(), error); } }); }
+    @PluginMethod public void end(PluginCall call) { worker.execute(() -> { try { if (server == null) throw new IllegalStateException("Start a vote first"); server.setAccepting(false); call.resolve(state()); } catch (Exception error) { call.reject(error.getMessage(), error); } }); }
     @PluginMethod public void clear(PluginCall call) { worker.execute(() -> { close(); call.resolve(new JSObject().put("active", false)); }); }
     @Override protected void handleOnDestroy() { worker.execute(this::close); worker.shutdown(); }
 }

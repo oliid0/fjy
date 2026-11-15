@@ -1,3 +1,4 @@
+import voiceVocabulary from "@fcboard/fcboard/locales/data/voiceCommands.json";
 import { t } from "@fcboard/fcboard/i18n";
 
 export type Command = { name: string; args?: Record<string, unknown> };
@@ -328,271 +329,120 @@ export const commandObjectIds = (
   return new Set<string>(input);
 };
 
-/** Frequent unambiguous commands remain instant and work without a cloud model. */
+type VoiceRule = {
+  patterns: string[];
+  compact: boolean;
+  rejectCompound?: boolean;
+  command?: Command;
+  kind?: string;
+};
+const voiceRules = (voiceVocabulary.rules as VoiceRule[]).map((rule) => ({
+  ...rule,
+  patterns: rule.patterns.map((pattern) => new RegExp(pattern, "i")),
+}));
+const compoundRequests = voiceVocabulary.compound.map(
+  (pattern) => new RegExp(pattern, "i"),
+);
+const voiceWord = (word: string) =>
+  (voiceVocabulary.words as Record<string, string>)[word.toLowerCase()];
+const voiceNumber = (value: string) =>
+  /^\d+$/.test(value)
+    ? Number(value)
+    : (voiceVocabulary.numbers as Record<string, number>)[value.toLowerCase()];
+
+/** Localized exact labels and unambiguous speech shortcuts share the component routes. */
 export const directCommand = (text: string): Command | null => {
-  if (
-    /^(?:(?:please\s+)?(?:stop|cancel|stop talking)|(?:请)?(?:停止|取消|别说了|停下|停一下|等一下))[。.!！?？\s]*$/i.test(
-      text.trim(),
-    )
-  ) {
-    return { name: "voice.interrupt" };
-  }
   const request = text.trim();
-  if (
-    /^(?:请|帮我)?(?:画|插入|生成|创建)(?:一个|个|一|标准|线条|的|\s)*(?:立方体|正方体)[吧。！!\s]*$/.test(
-      request,
-    )
-  ) {
-    return { name: "tools.insert", args: { kind: "cube" } };
-  }
-  const title = request.match(
-    /^(?:请|帮我)?(?:用(?:画笔|钢笔))?(?:手写|板书|写下?|写一个)(?:一个)?(?:标题|题目)\s*[:：]?\s*(.+)$/,
-  );
-  if (
-    title?.[1]?.trim() &&
-    !/(?:然后|接着|随后|并且|之后|同时(?:打开|使用|开始|插入|录制))/.test(
-      request,
-    )
-  ) {
-    return {
-      name: "canvas.text",
-      args: {
-        text: title[1].trim(),
-        role: "title",
-        presentation: "handwritten",
-        placement: "center",
-        sourceIds: [],
-      },
-    };
-  }
-  const file = request.match(
-    /^(?:请|帮我)?(?:打开|切换到)(?:课件|文档|文件)\s*[:：]?\s*[“"「]?(.+?)[”"」]?[。！!]*$/,
-  );
-  if (
-    file?.[1]?.trim() &&
-    !/(?:然后|接着|随后|并且|并(?:写|插|用|生成|开始|录))/.test(request)
-  ) {
-    return { name: "files.open", args: { name: file[1].trim() } };
-  }
-  if (
-    !/(?:然后|接着|随后|并且|之后|并讲解|同时(?:打开|使用|开始|插入|录制))/.test(
-      request,
-    ) &&
-    /^(?:请|帮我)?(?:生成|制作|创建).*(?:html|动画|交互(?:实验|图形|资源)|可交互|教学资源)/i.test(
-      request,
-    )
-  ) {
-    return { name: "resources.generate", args: { prompt: request } };
-  }
-  const written = text
-    .trim()
-    .match(/^(?:请|帮我)?(?:写下|写上|写一个|写个|写[：:])\s*([\s\S]+)$/);
-  if (written?.[1].trim()) {
-    return {
-      name: "canvas.text",
-      args: {
-        text: written[1].trim(),
-        presentation: "handwritten",
-        placement: "center",
-      },
-    };
-  }
-  const value = text.replace(/[，。！!？?\s]/g, "");
-  const pen = value.match(
-    /^(?:请|帮我)?(?:换成|切换到|切换为|改用|换|使用|选择|用)?(?:一支)?(画笔|钢笔|荧光笔|虚线笔|文字笔|图形笔|彩虹笔|魔术笔|算式笔|函数笔|语言笔)$/,
-  )?.[1];
-  if (pen) {
-    const kinds = new Map([
-      ["画笔", "hard"],
-      ["钢笔", "brush"],
-      ["荧光笔", "highlighter"],
-      ["虚线笔", "dashed"],
-      ["文字笔", "text"],
-      ["图形笔", "shape"],
-      ["彩虹笔", "rainbow"],
-      ["魔术笔", "magic"],
-      ["算式笔", "calculation"],
-      ["函数笔", "function"],
-      ["语言笔", "language"],
-    ]);
-    return { name: "canvas.style", args: { pen: kinds.get(pen) } };
-  }
-  if (
-    /^(?:请|帮我)?(?:换成|切换到|使用|选择)?(?:选择|圈选|选择工具|套索)$/.test(
-      value,
-    )
-  ) {
-    return { name: "canvas.tool", args: { tool: "lasso" } };
-  }
-  const eraser = value.match(
-    /^(?:请|帮我)?(?:换成|切换到|使用|选择|打开)?(局部|对象)?(?:橡皮擦?|擦除)$/,
-  )?.[1];
-  if (
-    eraser ||
-    /^(?:请|帮我)?(?:换成|切换到|使用|选择|打开)?橡皮擦?$/.test(value)
-  ) {
-    return {
-      name: "canvas.tool",
-      args: {
-        tool: "eraser",
-        ...(eraser
-          ? { eraserMode: eraser === "对象" ? "object" : "stroke" }
-          : {}),
-      },
-    };
-  }
-  if (/^(?:请|帮我)?(?:清屏|清空画布|擦掉全部内容)$/.test(value)) {
-    return { name: "canvas.clear" };
-  }
-  if (/^(?:请|帮我)?(?:全选|选择全部|选中全部)$/.test(value)) {
-    return { name: "canvas.action", args: { action: "selectAll" } };
-  }
-  if (/^(?:请|帮我)?(?:取消选择|取消圈选)$/.test(value)) {
-    return { name: "canvas.select", args: { ids: [] } };
-  }
-  if (
-    /^(?:请|帮我)?(?:复制)(?:圈中|选中|所选|选区)(?:的)?(?:内容|部分|对象)?$/.test(
-      value,
-    )
-  ) {
-    return { name: "canvas.action", args: { action: "duplicateSelection" } };
-  }
-  if (/^(?:请|帮我)?(?:开始|开启|打开)?录制$/.test(value)) {
-    return { name: "record.start" };
-  }
-  if (/^(?:请|帮我)?暂停录制$/.test(value)) {
-    return { name: "record.pause" };
-  }
-  if (/^(?:请|帮我)?继续录制$/.test(value)) {
-    return { name: "record.resume" };
-  }
-  if (/^(?:请|帮我)?(?:打开|查看)(?:课件|文档|文件)$/.test(value)) {
-    return { name: "files.open" };
-  }
-  if (/^(?:请|帮我)?(?:打开|开启|使用)聚光灯$/.test(value)) {
-    return { name: "tools.spotlight", args: { open: true } };
-  }
-  if (/^(?:请|帮我)?(?:关闭|结束)聚光灯$/.test(value)) {
-    return { name: "tools.spotlight", args: { open: false } };
-  }
-  const ruler = value.match(
-    /^(?:请|帮我)?(?:插入|添加|创建|打开|使用)(?:一个|一把|个)?(直尺|量角器|圆规|三角板)$/,
-  )?.[1];
-  if (ruler) {
-    return {
-      name: "tools.insert",
-      args: {
-        kind: new Map([
-          ["直尺", "ruler"],
-          ["量角器", "protractor"],
-          ["圆规", "compass"],
-          ["三角板", "setSquare"],
-        ]).get(ruler),
-      },
-    };
-  }
-  if (
-    /^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?(?:思维导图|思维图)$/.test(
-      value,
-    )
-  ) {
-    return { name: "insert.object", args: { kind: "mindmap" } };
-  }
-  if (/^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?表格$/.test(value)) {
-    return { name: "insert.object", args: { kind: "table" } };
-  }
-  const table = value.match(
-    /^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?([\d一二三四五六七八九十]+)行([\d一二三四五六七八九十]+)列(?:的)?表格$/,
-  );
-  if (table) {
-    const number = (input: string) =>
-      /^\d+$/.test(input)
-        ? Number(input)
-        : [
-            "一",
-            "二",
-            "三",
-            "四",
-            "五",
-            "六",
-            "七",
-            "八",
-            "九",
-            "十",
-            "十一",
-            "十二",
-          ].indexOf(input) + 1;
-    const rows = number(table[1]);
-    const columns = number(table[2]);
-    if (rows < 1 || rows > 12 || columns < 1 || columns > 12) {
-      return null;
+  const compact = request.replace(/[，。！!？?\s]/g, "");
+  for (const rule of voiceRules) {
+    const input = rule.compact ? compact : request;
+    const match = rule.patterns
+      .map((pattern) => input.match(pattern))
+      .find(Boolean);
+    if (
+      !match ||
+      (rule.rejectCompound &&
+        compoundRequests.some((pattern) => pattern.test(request)))
+    ) {
+      continue;
     }
-    return {
-      name: "insert.object",
-      args: {
-        kind: "table",
-        rows,
-        columns,
-      },
-    };
+    if (rule.command) {
+      return {
+        ...rule.command,
+        ...(rule.command.args ? { args: { ...rule.command.args } } : {}),
+      };
+    }
+    const value = match[1]?.trim() || "";
+    switch (rule.kind) {
+      case "title":
+      case "write":
+        if (value) {
+          return {
+            name: "canvas.text",
+            args: {
+              text: value,
+              presentation: "handwritten",
+              placement: "center",
+              ...(rule.kind === "title"
+                ? { role: "title", sourceIds: [] }
+                : {}),
+            },
+          };
+        }
+        break;
+      case "file":
+        if (value) {
+          return { name: "files.open", args: { name: value } };
+        }
+        break;
+      case "resource":
+        return { name: "resources.generate", args: { prompt: request } };
+      case "pen":
+        return { name: "canvas.style", args: { pen: voiceWord(value) } };
+      case "gizmo":
+        return { name: "tools.insert", args: { kind: voiceWord(value) } };
+      case "eraser":
+        return {
+          name: "canvas.tool",
+          args: {
+            tool: "eraser",
+            ...(value
+              ? {
+                  eraserMode: voiceVocabulary.objectEraser.includes(value)
+                    ? "object"
+                    : "stroke",
+                }
+              : {}),
+          },
+        };
+      case "table": {
+        const rows = voiceNumber(match[1]);
+        const columns = voiceNumber(match[2]);
+        if (rows >= 1 && rows <= 12 && columns >= 1 && columns <= 12) {
+          return {
+            name: "insert.object",
+            args: { kind: "table", rows, columns },
+          };
+        }
+        return null;
+      }
+    }
   }
-  if (/^(?:帮我)?(?:新建|创建)$/.test(value)) {
-    return { name: "board.new" };
-  }
-  if (/^(?:清空|擦净)(?:当前|这块)?白板$/.test(value)) {
-    return { name: "canvas.clear" };
-  }
-  if (/^(?:停止|结束)录制$/.test(value)) {
-    return { name: "record.stop" };
-  }
-  if (/^(?:开启|打开)(?:快传|一键上屏|局域网快传)$/.test(value)) {
-    return { name: "files.receive", args: { enabled: true } };
-  }
-  if (/^(?:关闭|停止)(?:快传|一键上屏|局域网快传)$/.test(value)) {
-    return { name: "files.receive", args: { enabled: false } };
-  }
-  if (/^(?:关闭浮层|关闭总结|关闭设置)$/.test(value)) {
-    return { name: "panel.close" };
-  }
-  if (/^(?:帮我)?放大$/.test(value)) {
-    return { name: "canvas.action", args: { action: "zoomIn" } };
-  }
-  if (/^(?:帮我)?缩小$/.test(value)) {
-    return { name: "canvas.action", args: { action: "zoomOut" } };
-  }
-  if (/^(?:帮我)?(?:新建|创建|新增)(?:一[块张个])?(?:白板|板)$/.test(value)) {
-    return { name: "board.new" };
-  }
-  if (/^(?:下一页|下一张|往后翻)$/.test(value)) {
-    return { name: "document.next" };
-  }
-  if (/^(?:上一页|上一张|往前翻)$/.test(value)) {
-    return { name: "document.previous" };
-  }
-  if (/^(?:开启|打开|开始)板书$/.test(value)) {
-    return { name: "document.ink", args: { enabled: true } };
-  }
-  if (/^(?:关闭|结束)板书$/.test(value)) {
-    return { name: "document.ink", args: { enabled: false } };
-  }
-  if (/^(?:撤销|撤回)$/.test(value)) {
-    return { name: "canvas.action", args: { action: "undo" } };
-  }
-  if (/^(?:重做|恢复上一步)$/.test(value)) {
-    return { name: "canvas.action", args: { action: "redo" } };
-  }
-  if (
-    /^(?:擦掉|删除|消除)(?:圈中|选中|所选|选区)(?:的)?(?:内容|部分|对象)?$/.test(
-      value,
-    )
-  ) {
-    return { name: "canvas.erase" };
-  }
-  if (/^(?:关闭课件|关闭预览|返回白板)$/.test(value)) {
-    return { name: "document.close" };
-  }
-  if (/^(?:保存白板|保存这块板)$/.test(value)) {
-    return { name: "board.save" };
+  const labels = [
+    ["language_pen", "language"],
+    ["function_pen", "function"],
+    ["calculation_pen", "calculation"],
+    ["magic_pen", "magic"],
+    ["rainbow_pen", "rainbow"],
+    ["text_pen", "text"],
+    ["shape_pen", "shape"],
+  ] as const;
+  for (const [label, pen] of labels) {
+    if (
+      request.toLocaleLowerCase() === t(`fcboard.${label}`).toLocaleLowerCase()
+    ) {
+      return { name: "canvas.style", args: { pen } };
+    }
   }
   return null;
 };

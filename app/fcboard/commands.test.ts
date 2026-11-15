@@ -233,3 +233,36 @@ describe("component commands", () => {
     }
   });
 });
+
+it.each([
+  ["next slide", { name: "document.next" }],
+  [
+    "please use language pen",
+    { name: "canvas.style", args: { pen: "language" } },
+  ],
+  [
+    "write Hello, world! 3.14",
+    {
+      name: "canvas.text",
+      args: {
+        text: "Hello, world! 3.14",
+        presentation: "handwritten",
+        placement: "center",
+      },
+    },
+  ],
+  [
+    "insert a table with 3 rows and 4 columns",
+    { name: "insert.object", args: { kind: "table", rows: 3, columns: 4 } },
+  ],
+  ["start recording", { name: "record.start" }],
+  [
+    "open the document Mechanics.pptx",
+    { name: "files.open", args: { name: "Mechanics.pptx" } },
+  ],
+])(
+  "routes the English shortcut %s through its actual component",
+  (text, expected) => {
+    expect(directCommand(text as string)).toEqual(expected);
+  },
+);

@@ -5,10 +5,13 @@ import { registerNativeResourceRenderer } from "@fcboard/fcboard/nativeResourceR
 import type { InteractiveResourceFrameProps } from "@fcboard/fcboard/components/InteractiveResourceFrame";
 import type { ResourceControlState } from "@fcboard/fcboard/interactiveResourceControls";
 
+import { calculatorLocalization } from "./calculatorLocalization";
+
 const widgets = registerPlugin<{
   upsert(options: {
     instance: string;
     objectId: string;
+    labels: Record<string, string>;
     x: number;
     y: number;
     width: number;
@@ -101,6 +104,7 @@ const NativeCalculatorFrame = ({
       const options = {
         instance,
         objectId,
+        labels: calculatorLocalization().strings,
         x: box.left,
         y: box.top,
         width: Math.max(1, box.width),

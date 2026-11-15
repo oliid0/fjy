@@ -1,5 +1,7 @@
 import { registerPlugin } from "@capacitor/core";
 
+import type { PageLocalization } from "./pageLocalization";
+
 export type VoteState = {
   active: true;
   topic: string;
@@ -15,6 +17,7 @@ export const Voting = registerPlugin<{
     topic: string;
     options: string[];
     multiple: boolean;
+    localization: PageLocalization;
   }): Promise<VoteState>;
   read(): Promise<VoteState | { active: false }>;
   end(): Promise<VoteState>;

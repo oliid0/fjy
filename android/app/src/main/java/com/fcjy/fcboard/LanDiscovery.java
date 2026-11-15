@@ -46,7 +46,7 @@ final class LanDiscovery implements AutoCloseable {
             stopAdvertisement();
             Advertisement next = new Advertisement(success, failure); advertisement = next;
             try {
-                if (manager == null) throw new IllegalStateException("局域网服务发现不可用");
+                if (manager == null) throw new IllegalStateException("LAN service discovery is unavailable");
                 acquire(); next.locked = true;
                 NsdServiceInfo info = new NsdServiceInfo();
                 info.setServiceName("Fcboard-" + token.substring(0, 8)); info.setServiceType(TYPE); info.setPort(port);
@@ -65,7 +65,7 @@ final class LanDiscovery implements AutoCloseable {
         public void onServiceRegistered(NsdServiceInfo info) { main.post(() -> {
             if (advertisement == this && !completed) { completed = true; success.run(); }
         }); }
-        public void onRegistrationFailed(NsdServiceInfo info, int error) { main.post(() -> fail("无法发布协同码：" + error)); }
+        public void onRegistrationFailed(NsdServiceInfo info, int error) { main.post(() -> fail("Unable to publish the collaboration code: " + error)); }
         public void onServiceUnregistered(NsdServiceInfo info) { }
         public void onUnregistrationFailed(NsdServiceInfo info, int error) { }
     }
@@ -74,31 +74,31 @@ final class LanDiscovery implements AutoCloseable {
         if (old != null) {
             try { manager.unregisterService(old); } catch (RuntimeException ignored) { }
             if (old.locked) { old.locked = false; release(); }
-            if (!old.completed) { old.completed = true; old.failure.accept("协同已取消"); }
+            if (!old.completed) { old.completed = true; old.failure.accept("Collaboration cancelled"); }
         }
     }
     void stopAdvertising() { main.post(this::stopAdvertisement); }
     void resolve(String id, String code, Consumer<String> success, Consumer<String> failure) {
         main.post(() -> {
             if (id == null || id.isEmpty() || id.length() > 200 || !code.matches("[0-9A-Za-z]{4}") || lookups.containsKey(id)) {
-                failure.accept("请输入四位协同码"); return;
+                failure.accept("Enter the four-digit collaboration code"); return;
             }
             Lookup lookup = new Lookup(id, code, success, failure); lookups.put(id, lookup); lookup.start();
         });
     }
-    void cancel(String id) { main.post(() -> { Lookup lookup = lookups.get(id); if (lookup != null) lookup.finish(null, "协同已取消"); }); }
+    void cancel(String id) { main.post(() -> { Lookup lookup = lookups.get(id); if (lookup != null) lookup.finish(null, "Collaboration cancelled"); }); }
     private final class Lookup implements NsdManager.DiscoveryListener {
         final String id, code; final Consumer<String> success, failure;
         final ArrayDeque<NsdServiceInfo> queue = new ArrayDeque<>();
         final HashSet<String> seen = new HashSet<>();
-        final Runnable timeout = () -> finish(null, "找不到该协同码，请确认设备位于同一局域网");
+        final Runnable timeout = () -> finish(null, "Collaboration code not found; verify both devices are on the same LAN");
         boolean finished, started, resolving, locked;
         Lookup(String id, String code, Consumer<String> success, Consumer<String> failure) {
             this.id = id; this.code = code; this.success = success; this.failure = failure;
         }
         void start() {
             try {
-                if (manager == null) throw new IllegalStateException("局域网服务发现不可用");
+                if (manager == null) throw new IllegalStateException("LAN service discovery is unavailable");
                 acquire(); locked = true; main.postDelayed(timeout, 8000);
                 manager.discoverServices(TYPE, NsdManager.PROTOCOL_DNS_SD, this); started = true;
             } catch (Exception error) { finish(null, error.getMessage()); }
@@ -129,7 +129,7 @@ final class LanDiscovery implements AutoCloseable {
             }); } catch (RuntimeException error) { resolving = false; next(); }
         }
         public void onDiscoveryStarted(String type) { }
-        public void onStartDiscoveryFailed(String type, int error) { main.post(() -> finish(null, "局域网服务发现失败：" + error)); }
+        public void onStartDiscoveryFailed(String type, int error) { main.post(() -> finish(null, "LAN service discovery failed: " + error)); }
         public void onStopDiscoveryFailed(String type, int error) { }
         public void onDiscoveryStopped(String type) { }
         public void onServiceLost(NsdServiceInfo info) { }
@@ -148,6 +148,6 @@ final class LanDiscovery implements AutoCloseable {
     }
     @Override public void close() { main.post(() -> {
         stopAdvertisement();
-        for (Lookup lookup : new java.util.ArrayList<>(lookups.values())) lookup.finish(null, "协同已取消");
+        for (Lookup lookup : new java.util.ArrayList<>(lookups.values())) lookup.finish(null, "Collaboration cancelled");
     }); }
 }

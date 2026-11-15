@@ -1,5 +1,7 @@
 import { registerPlugin } from "@capacitor/core";
 
+import type { PageLocalization } from "./pageLocalization";
+
 import type { PluginListenerHandle } from "@capacitor/core";
 
 export type Upload = { id: string; name: string; path: string; size: number };
@@ -133,7 +135,10 @@ export const Classroom = registerPlugin<{
     id?: string;
     language?: string;
   }): Promise<SignalSourceState>;
-  startShare(options: { pages: string[] }): Promise<{ urls: string[] }>;
+  startShare(options: {
+    pages: string[];
+    localization: PageLocalization;
+  }): Promise<{ urls: string[] }>;
   setSharePassword(options: { password: string }): Promise<void>;
   stopShare(): Promise<void>;
   sharePages(options: {
@@ -162,7 +167,12 @@ export const Classroom = registerPlugin<{
     event: "fileReceived",
     listener: (file: Upload) => void,
   ): Promise<PluginListenerHandle>;
-  startReceiver(): Promise<{ urls: string[] }>;
+  setPageLocalization(options: {
+    localization: PageLocalization;
+  }): Promise<void>;
+  startReceiver(options: {
+    localization: PageLocalization;
+  }): Promise<{ urls: string[] }>;
   stopReceiver(): Promise<void>;
   listUploads(): Promise<{ files: Upload[] }>;
   deleteUpload(options: { id: string }): Promise<void>;

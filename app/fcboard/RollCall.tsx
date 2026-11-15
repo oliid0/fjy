@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
+import { nativeErrorMessage } from "./nativeErrorMessage";
+
 import { MaterialPanel } from "./MaterialPanel";
 import { classroomCommands } from "./commands";
 
@@ -112,7 +114,7 @@ export const RollCall = () => {
             onChange={(event) => setDraft(event.target.value)}
             maxLength={400000}
           />
-          {error && <p role="alert">{error}</p>}
+          {error && <p role="alert">{nativeErrorMessage(error)}</p>}
           <footer>
             <button type="button" onClick={() => setEditing(false)}>
               {t("buttons.cancel")}

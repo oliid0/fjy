@@ -655,7 +655,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.list",
-        "查找教学资源，args.query 搜索名称，args.category 可筛选学科；返回最多40项真实id、名称和类型，使用前先查询",
+        "Find teaching resources by args.query and optional args.category. Return at most 40 real IDs, names and types; inspect before use.",
         async (args) =>
           [
             ...teachingResources,
@@ -693,7 +693,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.use",
-        "使用教学资源，args.id 必须来自 resources 清单；或args.taskId等待真实后台准备任务并插入它的资源。只传id或taskId其中之一。本地图示插入可编辑白板对象，在线实验在应用内打开",
+        "Use a real resource from resources.list via args.id, or wait for a real preparation task via args.taskId and insert its result. Supply exactly one. Local diagrams become editable objects; online experiments open inside the app.",
         async (args) => {
           if (args.taskId === undefined) {
             return insertResource(args.id, args);
@@ -719,7 +719,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "web.open",
-        "在白板内打开网页，args.url 必填 http/https 地址",
+        "Open a web page inside the whiteboard; args.url must be an HTTP/HTTPS URL.",
         (args) => openWeb(args.url),
       ),
       classroomCommands.context("resources", () => ({

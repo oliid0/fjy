@@ -138,14 +138,18 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
     });
     boot();
     const registrations = [
-      classroomCommands.register("board.list", "打开白板列表", () => {
-        api.updateScene({ appState: { toolbarHidden: false } });
-        setValue({ ...controller.value });
-        setOpen(true);
-      }),
+      classroomCommands.register(
+        "board.list",
+        "Open the whiteboard list.",
+        () => {
+          api.updateScene({ appState: { toolbarHidden: false } });
+          setValue({ ...controller.value });
+          setOpen(true);
+        },
+      ),
       classroomCommands.register(
         "board.new",
-        "新建并切换白板，args.name 可选；原板自动保存",
+        "Create and switch to a new board; optional args.name. Save the previous board automatically.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -160,7 +164,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.switch",
-        "切换白板，args.id 或 args.name，或从1开始的 args.index",
+        "Switch by args.id, args.name, or one-based args.index.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -181,13 +185,13 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.rename",
-        "重命名当前白板，args.name 必填",
+        "Rename the current board; args.name is required.",
         async (args) =>
           controller.rename(controller.value.active, String(args.name || "")),
       ),
       classroomCommands.register(
         "board.discard",
-        "丢弃白板，仅在用户明确要求丢弃时调用，args.id 省略为当前板",
+        "Discard a board only when explicitly requested. Omitted args.id means the current board.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -200,12 +204,14 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
           await controller.discard(id, source);
         },
       ),
-      classroomCommands.register("board.save", "保存当前白板到本机", () =>
-        controller.flush(),
+      classroomCommands.register(
+        "board.save",
+        "Save the current board on this device.",
+        () => controller.flush(),
       ),
       classroomCommands.register(
         "board.reorder",
-        "按args.ids完整白板ID列表调整顺序，保留当前白板与笔迹",
+        "Reorder using the complete board ID list in args.ids; preserve the active board and its ink.",
         (args) => {
           if (
             !Array.isArray(args.ids) ||
@@ -223,7 +229,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.export",
-        "将全部白板保存为原厂 BZD 文件。显示实际文件保存位置选择；返回 saved=false 表示取消，不能声称成功。",
+        "Save all boards to a native BZD file using the actual save-location picker. saved=false means cancellation, never success.",
         async (args) => {
           await controller.flush();
           const source =
@@ -242,7 +248,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.open",
-        "打开原厂 BZD 白板文件，保留已有页面并导入全部页。args.code 为四位云端提取码，args.endpoint 可选；省略则打开本地文件窗。",
+        "Import every page from a native BZD file, preserving existing boards. args.code is a four-digit cloud retrieval code; args.endpoint is optional. Omit them to open the local file picker.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal

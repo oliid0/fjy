@@ -219,6 +219,7 @@ export const InlineFunctionGraph = ({
           "viewBox",
           `0 0 ${plotSize.width} ${plotSize.height}`,
         );
+        node.setAttribute("aria-label", `y = ${plot.expression}`);
         node.id = `fc-inline-function-${id}`;
         onReady?.();
       })

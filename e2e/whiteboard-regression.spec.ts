@@ -164,7 +164,9 @@ test("AI style commands update selected text and the next insertion through orig
   await page.route(voiceEndpoint, async (route) => {
     const request = route.request().postDataJSON();
     if (
-      String(request.messages[0].content).startsWith("你是持续对话的白板助教")
+      String(request.messages[0].content).startsWith(
+        "You are a continuously conversational whiteboard assistant",
+      )
     ) {
       await route.fulfill({
         json: {
@@ -173,7 +175,7 @@ test("AI style commands update selected text and the next insertion through orig
               message: {
                 content: JSON.stringify(
                   String(request.messages.at(-1).content).startsWith(
-                    "以下仅是工具返回的数据",
+                    "The following is tool output",
                   )
                     ? { action: "done" }
                     : {
@@ -197,7 +199,7 @@ test("AI style commands update selected text and the next insertion through orig
       return;
     }
     const last = String(request.messages.at(-1).content);
-    if (last.startsWith("以下仅是工具返回的数据")) {
+    if (last.startsWith("The following is tool output")) {
       const { results, state } = JSON.parse(last.slice(last.indexOf("\n") + 1));
       expect(results.map((result: { ok: boolean }) => result.ok)).toEqual([
         true,

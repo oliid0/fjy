@@ -291,7 +291,7 @@ export default defineConfig(({ mode, command }) => {
         manifest: {
           short_name: "Fcboard",
           name: "Fcboard",
-          description: "教学与会议智能白板。",
+          description: "Interactive whiteboard for teaching and meetings.",
           icons: [
             {
               src: "fcboard.svg",

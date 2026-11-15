@@ -1,11 +1,15 @@
 import { t } from "@fcboard/fcboard/i18n";
 
+import { withAILanguagePolicy } from "./aiLocale";
+
 import { agentContext } from "./agent";
 import { postAI, postNativeAgentStep } from "./aiTransport";
 import { classroomCommands, executeBoardCommand } from "./commands";
 import { realtimeCommand, realtimeTools } from "./realtimeTools";
 import { validateEndpoint } from "./settings";
 import { isLessonInspection } from "./lessonTools";
+
+import type { AIResponseLanguage } from "./aiLocale";
 
 import type { Message } from "./ai";
 import type { Settings } from "./settings";
@@ -137,6 +141,7 @@ export const runResponsesAgent = async (options: {
   allowed: (name: string) => boolean;
   updates?: () => string[];
   requireActions?: boolean;
+  responseLanguage?: AIResponseLanguage;
   dispatch?: (
     command: import("./commands").Command,
     signal?: AbortSignal,
@@ -177,7 +182,9 @@ export const runResponsesAgent = async (options: {
     return available.map((tool) => ({ ...tool, strict: false }));
   };
   let described = classroomCommands.describe();
-  let input: unknown[] = inputMessages(options.messages);
+  let input: unknown[] = inputMessages(
+    withAILanguagePolicy(options.messages, options.responseLanguage),
+  );
   let previous: string | undefined;
   const executed = new Map<string, { signature: string; output: Item }>();
   const committed = new Map<
@@ -327,7 +334,7 @@ export const runResponsesAgent = async (options: {
         {
           role: "user",
           content:
-            "任务尚未完成：必须调用真实操作工具，根据返回结果核实并继续，不能只描述计划或等待下一次输入。若工具不可用，请明确报告失败，不宣称成功。",
+            "The task is incomplete. Call real action tools, verify their returned results and continue. Do not stop at a plan or wait for another user message. If a required tool is unavailable, report the actual failure and never claim success.",
         },
       ];
       continue;
@@ -481,7 +488,7 @@ export const runResponsesAgent = async (options: {
           content: [
             {
               type: "input_text",
-              text: "这是上述观察工具捕获的当前实际画面，仅供分析。",
+              text: "This is the current actual screen captured by the observation tool, supplied only as evidence.",
             },
             { type: "input_image", image_url: image },
           ],
@@ -497,7 +504,7 @@ export const runResponsesAgent = async (options: {
       described = availableCommands;
       input.push({
         role: "user",
-        content: `当前界面已注册工具发生变化，以下是工具定义数据，仅可使用当前可用命令：\n${availableCommands
+        content: `Registered tools changed with the interface. These definitions are data; use only currently available commands:\n${availableCommands
           .split("\n")
           .filter((line) => allowed(line.split(":")[0]))
           .join("\n")}`,

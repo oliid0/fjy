@@ -1,3 +1,4 @@
+import { recognitionPattern } from "./recognitionVocabulary";
 import { visualizationInstructions } from "./visualizationPrompt";
 
 export type TeachingResourceKind = "auto" | "experiment" | "visualization";
@@ -9,11 +10,7 @@ export const teachingResourceFormat = (
   topic: string,
   kind: TeachingResourceKind = "auto",
 ): TeachingResourceFormat => {
-  if (
-    /\bhtml5?\b|\bcanvas\b|(?:原生|自定义)\s*svg|svg\s*(?:动画|交互)|\b(?:native|custom|use|using)\s+svg\b|(?:不要|不用|不需要|不使用)(?:使用)?\s*(?:vega|图表)|\b(?:without|no|not)\s+(?:vega|charts?)\b/i.test(
-      topic,
-    )
-  ) {
+  if (recognitionPattern("teachingResourcePrompt_0").test(topic)) {
     return "html";
   }
   if (kind === "experiment") {
@@ -22,18 +19,12 @@ export const teachingResourceFormat = (
   if (kind === "visualization" || /\bvega(?:-lite)?\b/i.test(topic)) {
     return "vega";
   }
-  if (
-    /拖动|拖拽|动态几何|切线|黎曼|单位圆|仿真|模拟实验|探究|涌现|粒子|主体建模|\b(?:dragg?ing|draggable|simulation|agent-based|emergence|dynamic geometry|riemann)\b/i.test(
-      topic,
-    )
-  ) {
+  if (recognitionPattern("teachingResourcePrompt_1").test(topic)) {
     return "html";
   }
-  return /图表|统计图|折线图|柱状图|条形图|散点图|饼图|热力图|箱线图|直方图|地图|人口增长|\b(?:charts?|plots?|graphs?|maps?|histograms?|scatterplots?|population growth)\b/i.test(
-    topic,
-  )
+  return recognitionPattern("teachingResourcePrompt_2").test(topic)
     ? "vega"
-    : /可视化|\bvisuali[sz](?:ation|e)\b/i.test(topic)
+    : recognitionPattern("teachingResourcePrompt_3").test(topic)
     ? "auto"
     : "html";
 };

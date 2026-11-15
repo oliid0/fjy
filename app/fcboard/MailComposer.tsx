@@ -7,6 +7,8 @@ import type { fcboard } from "@fcboard/fcboard/locales/en.json";
 
 import type { TranslationKeys } from "@fcboard/fcboard/i18n";
 
+import { nativeErrorMessage } from "./nativeErrorMessage";
+
 import { Mail } from "./mail";
 import { MaterialPanel } from "./MaterialPanel";
 import { TransientMessage } from "./TransientMessage";
@@ -901,7 +903,7 @@ export const MailComposer = ({
           }}
         >
           <p>{text("confirm_remove")}</p>
-          {error && <p role="alert">{error}</p>}
+          {error && <p role="alert">{nativeErrorMessage(error)}</p>}
           <footer>
             <button
               type="button"

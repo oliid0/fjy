@@ -393,7 +393,7 @@ export const IntegratedSearch = ({ api }: { api: FcboardImperativeAPI }) => {
     const stops = [
       classroomCommands.register(
         "search.open",
-        "在应用内同时搜索释义、图片和视频；args.keyword 可省略以输入关键词。",
+        "Search definitions, images and videos inside the app; optional args.keyword, otherwise ask through the search input.",
         (args) => {
           if (
             args.keyword !== undefined &&

@@ -82,7 +82,7 @@ public class NetworkPlugin extends Plugin {
 
     private synchronized void ensureServer() throws Exception {
         addresses = lanAddresses(getContext());
-        if (addresses.isEmpty()) throw new IllegalStateException("请先连接同一局域网的 Wi-Fi 或有线网络");
+        if (addresses.isEmpty()) throw new IllegalStateException("Connect both devices to the same LAN using Wi-Fi or Ethernet");
         if (server != null) return;
         server = new LanServer(path -> getContext().getAssets().open("public/" + path), text -> {
             try { notifyListeners("message", new JSObject(text)); } catch (Exception ignored) { }
@@ -122,9 +122,9 @@ public class NetworkPlugin extends Plugin {
                 JSObject result = new JSObject(); result.put("urls", urls("/#lan=" + token)); result.put("code", code);
                 LanServer current = server;
                 discovery.advertise(code, token, current.getListeningPort(), addresses.get(0),
-                    () -> { if (sharing && server == current) call.resolve(result); else call.reject("协同已取消"); },
+                    () -> { if (sharing && server == current) call.resolve(result); else call.reject("Collaboration cancelled"); },
                     error -> { synchronized (NetworkPlugin.this) { if (server == current) { sharing = false; releaseIfIdle(); } } call.reject(error); });
-            } catch (Exception error) { releaseIfIdle(); call.reject("无法开启协作：" + error.getMessage()); }
+            } catch (Exception error) { releaseIfIdle(); call.reject("Unable to start collaboration: " + error.getMessage()); }
         });
     }
     @PluginMethod public void collaborationInfo(PluginCall call) {
@@ -142,20 +142,20 @@ public class NetworkPlugin extends Plugin {
     @PluginMethod public void setCollaborationPassword(PluginCall call) {
         worker.execute(() -> {
             try {
-                if (server == null || !sharing) throw new IllegalStateException("协作已结束");
+                if (server == null || !sharing) throw new IllegalStateException("Collaboration ended");
                 server.setPassword(call.getString("password", "")); call.resolve();
             } catch (Exception error) { call.reject(error.getMessage()); }
         });
     }
     @PluginMethod public void sendScene(PluginCall call) {
         worker.execute(() -> {
-            try { if (server == null) throw new IllegalStateException("协作未开启"); server.publish(call.getString("message", ""), null); call.resolve(); }
-            catch (Exception error) { call.reject("同步失败：" + error.getMessage()); }
+            try { if (server == null) throw new IllegalStateException("Collaboration is not active"); server.publish(call.getString("message", ""), null); call.resolve(); }
+            catch (Exception error) { call.reject("Synchronization failed: " + error.getMessage()); }
         });
     }
     @PluginMethod public void getScene(PluginCall call) {
         worker.execute(() -> {
-            try { if (server == null) throw new IllegalStateException("协作已结束"); call.resolve(new JSObject(server.snapshotRoom().toString())); }
+            try { if (server == null) throw new IllegalStateException("Collaboration ended"); call.resolve(new JSObject(server.snapshotRoom().toString())); }
             catch (Exception error) { call.reject(error.getMessage()); }
         });
     }

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { openTeachingTools } from "./menu";
+import { openToolbox } from "./menu";
 
 for (const width of [390, 800, 1920]) {
   test(`built-in toolbox works without OEM packages and remains reachable at ${width}px`, async ({
@@ -8,12 +8,12 @@ for (const width of [390, 800, 1920]) {
   }, info) => {
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/");
-    await openTeachingTools(page);
+    await openToolbox(page);
     const group = page.getByRole("group", { name: "大屏工具", exact: true });
-    await expect(group.getByRole("button")).toHaveCount(6);
+    await expect(group.getByRole("button")).toHaveCount(5);
     await expect(
       page
-        .getByRole("dialog", { name: "教学工具", exact: true })
+        .getByRole("dialog", { name: "工具箱", exact: true })
         .getByRole("button", { name: "快传", exact: true }),
     ).toBeVisible();
     await expect(
@@ -39,7 +39,7 @@ for (const width of [390, 800, 1920]) {
     expect(box.x + box.width).toBeLessThanOrEqual(width);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(720);
-    expect(controls).toHaveLength(6);
+    expect(controls).toHaveLength(5);
     for (const control of controls) {
       expect(control.x).toBeGreaterThanOrEqual(box.x);
       expect(control.x + control.width).toBeLessThanOrEqual(box.x + box.width);
@@ -63,12 +63,12 @@ for (const width of [390, 800, 1920]) {
     await frame.locator('button[data-key="Enter"]').click();
     await expect(frame.locator("#result-display")).toHaveText("5");
     await expect(
-      page.getByRole("dialog", { name: "教学工具" }),
+      page.getByRole("dialog", { name: "工具箱" }),
     ).not.toBeVisible();
     await frame
       .getByRole("button", { name: "Close calculator", exact: true })
       .click();
-    await openTeachingTools(page);
+    await openToolbox(page);
     await group
       .getByRole("button", { name: "打开计时器", exact: true })
       .click();

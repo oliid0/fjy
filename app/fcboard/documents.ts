@@ -89,7 +89,7 @@ export type InkStroke = {
   plot?: {
     id: string;
     plot: Plot;
-    renderer?: "vega" | "iframe";
+    renderer?: "vega";
     sourceRegions?: {
       left: number;
       top: number;

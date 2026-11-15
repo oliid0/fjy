@@ -227,7 +227,7 @@ public class NativeInputTest {
             } finally { pixels.recycle(); }
         });
     }
-    @Test public void regionEraseHasNativeFillWhileSelectorStaysAnOpenOutline() {
+    @Test public void regionEraseAndSelectorHaveCompleteNativeFill() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             for (String mode : new String[]{"select", "regionErase"}) {
                 List<JSObject> events = new ArrayList<>();
@@ -241,8 +241,33 @@ public class NativeInputTest {
                 Bitmap pixels = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
                 try {
                     view.draw(new Canvas(pixels));
-                    assertEquals(mode.equals("regionErase") ? 48 : 0, Color.alpha(pixels.getPixel(100, 100)));
+                    assertEquals(mode.equals("regionErase") ? 48 : 128, Color.alpha(pixels.getPixel(100, 100)));
                 } finally { pixels.recycle(); }
+            }
+        });
+    }
+    @Test public void liftedEraserCursorsDisappearBeforeDelayedAcknowledgement() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            for (String mode : new String[]{"erase", "pen"}) {
+                List<JSObject> events = new ArrayList<>();
+                NativeInkView view = surface(events, mode);
+                float major = mode.equals("pen") ? 70 : 2;
+                Bitmap pixels = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
+                Bitmap empty = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
+                try {
+                    for (int position : new int[]{40, 130}) {
+                        motion(view, MotionEvent.ACTION_DOWN, 11, 1, major, position, position);
+                        motion(view, MotionEvent.ACTION_MOVE, 11, 1, major, position + 20, position + 20);
+                        pixels.eraseColor(Color.TRANSPARENT);
+                        view.draw(new Canvas(pixels));
+                        assertFalse("Active explicit/palm eraser has a visible cursor", pixels.sameAs(empty));
+                        motion(view, MotionEvent.ACTION_UP, 11, 1, major, position + 20, position + 20);
+                        assertEquals("end", events.get(events.size() - 1).optString("phase"));
+                        pixels.eraseColor(Color.TRANSPARENT);
+                        view.draw(new Canvas(pixels));
+                        assertTrue("Lifted cursors must not wait for any WebView ACK", pixels.sameAs(empty));
+                    }
+                } finally { pixels.recycle(); empty.recycle(); }
             }
         });
     }

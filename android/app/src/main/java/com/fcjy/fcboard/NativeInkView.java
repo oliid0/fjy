@@ -379,6 +379,8 @@ final class NativeInkView extends View {
         for(RectF box:blocked)canvas.clipOutRect((box.left-x)*scale,(box.top-y)*scale,(box.right-x)*scale,(box.bottom-y)*scale);
         if(splitInk!=null)splitInk.draw(canvas);
         for (Contact contact : pending.values()) {
+            // Erasure reconciliation may wait for JS; its cursor ends at native UP.
+            if (contact.mode.equals("erase")) continue;
             int saved=canvas.save();
             for(Path cut:contact.erasures.values())canvas.clipOutPath(cut);
             draw(canvas,contact);canvas.restoreToCount(saved);

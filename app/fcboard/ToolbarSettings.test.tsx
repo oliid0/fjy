@@ -15,7 +15,6 @@ import { SettingsNavigation } from "./SettingsNavigation";
 
 afterEach(() => {
   localStorage.removeItem(TOOLBAR_STORAGE);
-  localStorage.removeItem("fcboard-toolbar-tools-v1");
   vi.restoreAllMocks();
 });
 const badge = (name: string, added = false) =>
@@ -91,10 +90,7 @@ it("enforces the original total limit of 13 and reports the original message on 
   expect(readToolbarItems()).toHaveLength(10);
 });
 
-it("migrates the old default and restores original-order membership without rewriting old storage", () => {
-  localStorage.setItem("fcboard-toolbar-tools-v1", '["toolbox"]');
-  expect(readToolbarItems()).toEqual(DEFAULT_TOOLBAR_ITEMS);
-  expect(localStorage.getItem(TOOLBAR_STORAGE)).toBeNull();
+it("normalizes toolbar membership in native order without duplicates", () => {
   expect(
     normalizeToolbarItems(["mindmap", "undo", "shape", "undo", "unknown"]),
   ).toEqual(["shape", "undo", "mindmap"]);

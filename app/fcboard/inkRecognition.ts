@@ -2,7 +2,7 @@ import { getLanguage, t } from "@fcboard/fcboard/i18n";
 
 import { chat, parseJSON, visualMessage } from "./ai";
 import { recognizeHandwriting } from "./ocr";
-import { localMathResult, recognizeMath } from "./mathRecognition";
+import { localFunctionResult, recognizeMath } from "./mathRecognition";
 import { prepareCalculation } from "./math";
 import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
@@ -211,7 +211,7 @@ export async function recognizeInkContent(
                   answer: await calculateAsync(candidate, signal),
                 });
               } else {
-                localMathResult(candidate, "function");
+                localFunctionResult(candidate);
               }
               return true;
             } catch {

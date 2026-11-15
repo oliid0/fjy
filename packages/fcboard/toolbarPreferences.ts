@@ -66,7 +66,6 @@ export const NATIVE_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
 export const TOOLBAR_LIMIT = 13;
 export const FIXED_TOOL_COUNT = 3;
 export const TOOLBAR_STORAGE = "fcboard-toolbar-tools-v2";
-const legacyStorage = "fcboard-toolbar-tools-v1";
 export const DEFAULT_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   "shape",
   "toolbox",
@@ -99,22 +98,7 @@ export const normalizeToolbarItems = (value: unknown): ToolbarItem[] =>
 
 export const readToolbarItems = (): readonly ToolbarItem[] => {
   try {
-    let stored = localStorage.getItem(TOOLBAR_STORAGE);
-    if (stored === null) {
-      const legacy = localStorage.getItem(legacyStorage);
-      if (legacy !== null) {
-        // Preserve the previous user's choices and the formerly fixed history
-        // controls. Do not overwrite either version until the user saves.
-        stored = JSON.stringify([
-          ...(legacy === JSON.stringify(["toolbox"])
-            ? defaults
-            : normalizeToolbarItems(JSON.parse(legacy))),
-          "undo",
-          "redo",
-          "aerial",
-        ]);
-      }
-    }
+    const stored = localStorage.getItem(TOOLBAR_STORAGE);
     if (stored !== raw) {
       raw = stored;
       snapshot =

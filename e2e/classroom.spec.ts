@@ -366,7 +366,7 @@ for (const viewport of [
   });
 }
 
-test("selecting a formula creates pure interactive axes and parameter/zoom edits keep its document", async ({
+test("selecting a formula creates inline SVG axes and parameter/zoom edits keep its object", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
@@ -374,13 +374,13 @@ test("selecting a formula creates pure interactive axes and parameter/zoom edits
   await enterText(page, "y=a*x+1");
   await page.getByRole("button", { name: "AI", exact: true }).click();
   await page.getByRole("menuitem", { name: "问答", exact: true }).click();
-  const graph = page.frameLocator("iframe[data-resource-object-id]").last();
+  const graph = page.locator(".fc-inline-function-object").last();
   const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
-  await graph.locator("html").evaluate((html) => {
-    html.dataset.mount = "original";
-  });
-  const curve = graph.locator("#fc-vega .mark-line path").first();
+  const objectId = await graph
+    .locator(".fc-inline-function")
+    .getAttribute("data-native-resource-object-id");
+  const curve = graph.locator(".mark-line path").first();
   const initial = await curve.getAttribute("d");
   await slider.focus();
   for (let i = 0; i < 10; i++) {
@@ -389,11 +389,15 @@ test("selecting a formula creates pure interactive axes and parameter/zoom edits
   await expect(slider).toHaveValue("2");
   await expect.poll(() => curve.getAttribute("d")).not.toBe(initial);
   const beforeZoom = await curve.getAttribute("d");
-  await graph.locator("#fc-vega").hover();
+  await graph.locator(".fc-inline-function svg").hover();
   await page.mouse.wheel(0, -150);
   await expect.poll(() => curve.getAttribute("d")).not.toBe(beforeZoom);
   await expect(graph.getByRole("spinbutton")).toHaveCount(0);
-  await expect(graph.locator("html")).toHaveAttribute("data-mount", "original");
+  await expect(graph.locator(".fc-inline-function")).toHaveAttribute(
+    "data-native-resource-object-id",
+    objectId!,
+  );
+  await expect(page.locator("iframe[data-resource-object-id]")).toHaveCount(0);
   await expect(slider).toHaveValue("2");
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });
 });

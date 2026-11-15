@@ -10,7 +10,7 @@ import {
   drawPlot,
   selectedPlot,
 } from "./board";
-import { localMathResult, validatedPlot } from "./mathRecognition";
+import { localFunctionResult, validatedPlot } from "./mathRecognition";
 import {
   insertionDefaults,
   readInsertions,
@@ -528,7 +528,7 @@ it("places a function beside its source rather than at the old distant lower-rig
 });
 
 it("retains the original equation and its actual residual in the saved function object", () => {
-  const result = localMathResult("x^2+1/x-1=0", "function");
+  const result = localFunctionResult("x^2+1/x-1=0");
   if (result.kind !== "function") {
     throw new Error("Expected equation graph");
   }
@@ -539,9 +539,10 @@ it("retains the original equation and its actual residual in the saved function 
     .getSceneElements()
     .find((element) => element.customData?.fcPlot);
   expect(graph).toMatchObject({
-    type: "iframe",
+    type: "image",
     customData: {
       fcPlot: {
+        renderer: "vega",
         plot: { equation: "x^2+1/x-1=0", expression: plot.expression },
       },
     },

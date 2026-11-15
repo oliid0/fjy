@@ -1,7 +1,6 @@
 import { chat, parseJSON } from "./ai";
 import { currentSettings } from "./settings";
 import {
-  calculate,
   compileExpression,
   defaultPlot,
   plotExpression,
@@ -119,31 +118,21 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
   return plot;
 };
 
-export const localMathResult = (
+export const localFunctionResult = (
   text: string,
-  mode: MathPenMode,
-): MathResult => {
+): Extract<MathResult, { kind: "function" }> => {
   const definitions = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
   if (
-    mode === "function" &&
     definitions.length > 1 &&
     definitions.every((line) => /^(?:y|f\s*\(\s*x\s*\))\s*=/.test(line))
   ) {
     if (definitions.length > 4) {
       throw new Error("Compare at most four functions");
     }
-    const plots = definitions.map(
-      (line) =>
-        (
-          localMathResult(line, "function") as Extract<
-            MathResult,
-            { kind: "function" }
-          >
-        ).plot,
-    );
+    const plots = definitions.map((line) => localFunctionResult(line).plot);
     return {
       kind: "function",
       plot: validatedPlot({
@@ -153,9 +142,6 @@ export const localMathResult = (
     };
   }
   const input = mathNotation(text);
-  if (mode === "calculation") {
-    return { kind: mode, expression: input, answer: calculate(input) };
-  }
   const definition = input.match(
     /^(y|z|f\s*x|f\s*\(\s*x(?:(?:,\s*y)|(?:\s*[+-]\s*\d+(?:\.\d+)?))?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
   );
@@ -181,7 +167,7 @@ export const localMathResult = (
     ...(definition && definition[2] !== "=" ? { relation: definition[2] } : {}),
   });
   return {
-    kind: mode,
+    kind: "function",
     plot: { ...plot, ...(equation ? { equation: input } : {}) },
   };
 };
@@ -209,7 +195,7 @@ export const recognizeMath = async (
         answer: await calculateAsync(expression, signal),
       };
     }
-    return localMathResult(text, mode);
+    return localFunctionResult(text);
   } catch (failure) {
     const settings = currentSettings();
     if (

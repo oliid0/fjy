@@ -470,11 +470,7 @@ test("APK toolbar keeps drawing controls compact and insertion tools contextual"
   await page.keyboard.press("Escape");
   const menu = page.getByTestId("main-menu-trigger");
   await openSettingsMenu(page);
-  await page
-    .getByText("任务栏开关", { exact: true })
-    .locator("..")
-    .getByRole("checkbox")
-    .check();
+  await page.getByRole("switch", { name: "任务栏开关", exact: true }).check();
   await page.locator(".fc-settings-dialog").press("Escape");
   const initial = (await menu.boundingBox())!;
   await toolbar.getByRole("button", { name: "切换", exact: true }).click();

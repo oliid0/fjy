@@ -3,11 +3,7 @@ import {
   CaptureUpdateAction,
   convertToFcboardElements,
 } from "@fcboard/fcboard";
-import {
-  getCommonBounds,
-  newElementWith,
-  newImageElement,
-} from "@fcboard/element";
+import { getCommonBounds, newElementWith } from "@fcboard/element";
 import {
   DEFAULT_ELEMENT_PROPS,
   FONT_FAMILY,
@@ -685,7 +681,7 @@ export const drawPlot = (
       api,
       plot,
       [
-        newImageElement({
+        {
           type: "image",
           fileId: crypto.randomUUID() as FileId,
           status: "saved",
@@ -695,7 +691,7 @@ export const drawPlot = (
           ...plotSize,
           strokeWidth: 0,
           strokeColor: color,
-        }),
+        },
       ],
       position,
       replaceIds,

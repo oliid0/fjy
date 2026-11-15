@@ -2,8 +2,6 @@ import { isNonDeletedElement, newFrameElement } from "@fcboard/element";
 
 import type { AppState } from "@fcboard/fcboard/types";
 
-import { restoreBoardFunctionGraphs } from "./functionGraphRestore";
-
 import type { Board, Workspace } from "./boards";
 
 export type BoardCanvasSize = {
@@ -53,9 +51,8 @@ export const boardPageExportOptions = (
       1,
       maxEdge / (Math.max(size.width, size.height) * size.pixelRatio),
     );
-  const restored = restoreBoardFunctionGraphs(board.elements, board.files);
-  const elements = restored.elements.filter(isNonDeletedElement);
-  const files = restored.files;
+  const elements = board.elements.filter(isNonDeletedElement);
+  const files = board.files;
   return {
     elements,
     files,

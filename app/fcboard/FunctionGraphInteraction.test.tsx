@@ -6,24 +6,19 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { Fcboard, convertToFcboardElements } from "@fcboard/fcboard";
-import { newFreeDrawElement, newIframeElement } from "@fcboard/element";
+import { newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 import { createInlineVegaView } from "@fcboard/fcboard/visualizationRuntime";
-import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 import { t } from "@fcboard/fcboard/i18n";
 
 import { drawPlot, objectSelection, updateFunctionGraph } from "./board";
 import { defaultPlot } from "./math";
-import { localMathResult } from "./mathRecognition";
+import { localFunctionResult } from "./mathRecognition";
 import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
-import { restoreDocumentFunctionGraphs } from "./functionGraphRestore";
-import { functionGraphImage, functionGraphSpec } from "./functionVisualization";
+import { functionGraphSpec } from "./functionVisualization";
 import { functionGraphNavigation } from "./functionGraphNavigation";
-import { documentStrokeBounds } from "./documents";
 import * as ocr from "./ocr";
-
-import type { DocumentInk, InkStroke } from "./documents";
 
 afterEach(() => {
   cleanup();
@@ -127,7 +122,7 @@ it("commits one parameter gesture and undoes the saved SVG without changing obje
 });
 
 it("keeps comparison curves in one coordinate system and preserves them through serialization", () => {
-  const result = localMathResult("y=x\ny=x^2", "function");
+  const result = localFunctionResult("y=x\ny=x^2");
   if (result.kind !== "function") {
     throw new Error("Expected functions");
   }
@@ -241,68 +236,11 @@ it.each([false, true])(
     }
   },
 );
-it("restores saved courseware SVG graphs as interactive objects without moving them or changing unrelated ink", () => {
-  const legacy: InkStroke = {
-    id: "old-graph",
-    color: "#123456",
-    width: 0,
-    points: [[240, 180]],
-    anchor: { x: 240, y: 180 },
-    image: functionGraphImage(defaultPlot, "#123456"),
-    resource: validateInteractiveResource({
-      id: "plot-group",
-      title: "old function",
-      html: '<p>Saved function</p><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
-    }),
-    imageWidth: 490,
-    imageHeight: 440,
-    plot: {
-      id: "plot-group",
-      renderer: "iframe",
-      plot: defaultPlot,
-      origin: { x: 100, y: 100 },
-      position: { x: 345, y: 320 },
-    },
-  };
-  const note: InkStroke = {
-    id: "note",
-    color: "#000000",
-    width: 2,
-    points: [
-      [10, 10],
-      [30, 30],
-    ],
-  };
-  legacy.resource = { ...legacy.resource!, width: 490, height: 440 };
-  const original: DocumentInk = { 0: [legacy, note] };
-  const restored = restoreDocumentFunctionGraphs(original);
-  expect(restored[0][0]).toMatchObject({
-    id: legacy.id,
-    shapeType: "image",
-    resource: undefined,
-    plot: { renderer: "vega" },
-  });
-  expect(documentStrokeBounds(restored[0][0])).toEqual(
-    documentStrokeBounds(legacy),
-  );
-  expect(restored[0][1]).toBe(note);
-  expect(original[0][0]).toBe(legacy);
-  expect(restoreDocumentFunctionGraphs(restored)).toBe(restored);
-  const invalid = {
-    ...legacy,
-    plot: {
-      ...legacy.plot!,
-      plot: { ...defaultPlot, expression: "unknown(x)" },
-    },
-  };
-  expect(restoreDocumentFunctionGraphs({ 0: [invalid] })[0][0]).toBe(invalid);
-});
-
 it("automatically adds a nearby function-pen expression to the same axes without a selection", async () => {
   const { api } = await setup();
   act(() => api.updateScene({ elements: [] }));
-  const first = localMathResult("y=x", "function");
-  const second = localMathResult("y=x^2", "function");
+  const first = localFunctionResult("y=x");
+  const second = localFunctionResult("y=x^2");
   if (first.kind !== "function" || second.kind !== "function") {
     throw new Error("Invalid fixture");
   }
@@ -343,45 +281,4 @@ it("automatically adds a nearby function-pen expression to the same axes without
   expect(
     api.getSceneElements().filter((element) => element.type === "image"),
   ).toHaveLength(2);
-});
-
-it("decodes a saved iframe graph into the same SVG object and renders no legacy iframe", async () => {
-  const { api } = await setup();
-  const saved = newIframeElement({
-    type: "iframe",
-    x: 120,
-    y: 100,
-    width: 500,
-    height: 440,
-    customData: {
-      fcPlot: { renderer: "iframe", plot: defaultPlot },
-      fcInteractiveResource: validateInteractiveResource({
-        id: "old-function",
-        title: "saved function",
-        html: '<p>saved function</p><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
-      }),
-    },
-  });
-  act(() => api.updateScene({ elements: [saved] }));
-  await waitFor(() => expect(api.getSceneElements()[0].type).toBe("image"));
-  const restored = api.getSceneElements()[0];
-  expect(restored).toMatchObject({
-    id: saved.id,
-    x: 120,
-    y: 100,
-    width: 500,
-    height: 440,
-    customData: { fcPlot: { renderer: "vega" } },
-  });
-  expect(restored.customData?.fcInteractiveResource).toBeUndefined();
-  if (restored.type !== "image" || !restored.fileId) {
-    throw new Error("Expected saved SVG graph");
-  }
-  expect(api.getFiles()[restored.fileId].mimeType).toBe("image/svg+xml");
-  await waitFor(() =>
-    expect(
-      document.querySelector(".fc-inline-function .mark-line path"),
-    ).not.toBeNull(),
-  );
-  expect(document.querySelector("iframe[data-resource-object-id]")).toBeNull();
 });

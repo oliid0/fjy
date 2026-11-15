@@ -133,7 +133,7 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       ).toBe(true);
     }
     await page.keyboard.press("Escape");
-    await page.locator("[data-teaching-tools]").click();
+    await page.locator("[data-board-insert]").click();
     await page
       .getByRole("button", { name: labels.recording, exact: true })
       .click();

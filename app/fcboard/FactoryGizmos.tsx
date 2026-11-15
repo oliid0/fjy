@@ -663,7 +663,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
       <svg
         ref={layer}
         className="fc-factory-gizmos"
-        aria-label={t("fcboard.teaching_tools")}
+        aria-label={t("fcboard.geometry_tools")}
         style={{
           position: "absolute",
           inset: 0,

@@ -59,8 +59,8 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
   try {
     await act(async () => {
       api.updateScene({ appState: { width: 1600, height: 900 } });
-      await classroomCommands.execute({ name: "tools.extended" });
     });
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
     fireEvent.click(
       screen.getByRole("button", {
         name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
@@ -103,7 +103,7 @@ it("restores the actual tool button after an opening failure", async () => {
   );
   try {
     await act(async () => {
-      await classroomCommands.execute({ name: "tools.extended" });
+      await classroomCommands.execute({ name: "tools.open" });
     });
     const button = screen.getByRole("button", {
       name: t("fcboard.open_name", { name: t("fcboard.curtain") }),
@@ -123,10 +123,10 @@ it.each(["ltr", "rtl"])(
   async (direction) => {
     await render(<TeachingTools api={emptyApi()} />);
     await act(async () => {
-      await classroomCommands.execute({ name: "tools.extended" });
+      await classroomCommands.execute({ name: "tools.open" });
     });
     const panel = screen.getByRole("dialog", {
-      name: t("fcboard.teaching_tools"),
+      name: t("fcboard.toolbox"),
     });
     panel.style.direction = direction;
     for (const label of [
@@ -149,11 +149,10 @@ it("keeps every built-in tool available without OEM packages and places curtain 
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   await render(<TeachingTools api={emptyApi()} />);
   await act(async () => {
-    await classroomCommands.execute({ name: "tools.extended" });
+    await classroomCommands.execute({ name: "tools.open" });
   });
   expect(classroomCommands.has("tools.factory")).toBe(true);
   for (const label of [
-    "split_screen",
     "vote",
     "calculator",
     "spotlight",
@@ -183,7 +182,7 @@ it("uses one internal transfer entry even when a factory transfer application is
   const release = classroomCommands.register("ui.invoke", "@internal", invoke);
   const view = await render(<TeachingTools api={emptyApi()} />);
   await act(async () => {
-    await classroomCommands.execute({ name: "tools.extended" });
+    await classroomCommands.execute({ name: "tools.open" });
   });
   await waitFor(() =>
     expect(screen.queryByRole("status")).not.toBeInTheDocument(),
@@ -225,7 +224,7 @@ it.each([
     const view = await render(<TeachingTools api={emptyApi()} />);
     try {
       await act(async () => {
-        await classroomCommands.execute({ name: "tools.extended" });
+        await classroomCommands.execute({ name: "tools.open" });
       });
       if (label === "ai_questions") {
         expect(
@@ -296,10 +295,10 @@ it("closes the tool picker with the toolbar and allows the AI to show it again",
   });
   await render(<TeachingTools api={api} />);
   await act(async () => {
-    await classroomCommands.execute({ name: "tools.extended" });
+    await classroomCommands.execute({ name: "tools.open" });
   });
   expect(
-    screen.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
+    screen.getByRole("dialog", { name: t("fcboard.toolbox") }),
   ).toBeInTheDocument();
   act(() => {
     state.toolbarHidden = true;

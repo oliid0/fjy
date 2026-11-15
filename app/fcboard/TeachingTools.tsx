@@ -48,7 +48,6 @@ import {
   renderWidget,
   teachingTools,
   widgetDefaults,
-  widgetShapes,
   widgetTime,
   solidWidgetKinds,
 } from "./widgets";
@@ -102,11 +101,7 @@ const labels = {
 export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const pinned = useToolbarItems();
-  const [extended, setExtended] = useState(false);
   const setOpen = (value: boolean) => {
-    if (!value) {
-      setExtended(false);
-    }
     window.dispatchEvent(
       new Event(value ? "fcboard:toolbox-open" : "fcboard:toolbox-close"),
     );
@@ -571,17 +566,6 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   };
   useEffect(() => {
     const registrations = [
-      classroomCommands.register(
-        "tools.extended",
-        "打开已有扩展教学工具",
-        async () => {
-          if (classroomCommands.has("panel.close")) {
-            await classroomCommands.execute({ name: "panel.close" });
-          }
-          window.dispatchEvent(new Event("fcboard:toolbox-close"));
-          setExtended(true);
-        },
-      ),
       classroomCommands.register("tools.open", "展开教学工具", () => {
         if (classroomCommands.has("panel.close")) {
           void classroomCommands.execute({ name: "panel.close" });
@@ -746,7 +730,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       setError(String(failure));
     }
   };
-  const widgetButton = ([kind, name]: [WidgetKind, string]) => (
+  const gizmoButton = ([kind]: [WidgetKind, string]) => (
     <ButtonBase
       key={kind}
       data-close-insert
@@ -761,65 +745,14 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
             compass: 4,
             protractor: 5,
             setSquare: 6,
-            timer: 9,
           } as Partial<Record<WidgetKind, number>>
         )[kind],
       }}
       onClick={() => attempt(() => insert(kind))}
     >
-      {factoryGizmoKinds.has(kind) ? (
-        <FactoryIcon
-          name={
-            kind === "setSquare"
-              ? "setSquare"
-              : (kind as "ruler" | "protractor" | "compass")
-          }
-        />
-      ) : (
-        <svg viewBox="-10 -20 380 280" aria-hidden="true">
-          {widgetShapes({
-            id: "preview",
-            kind,
-            params: { ...widgetDefaults(), duration: 180 },
-            position: { x: 0, y: 0 },
-          }).map((shape, index) =>
-            shape.type === "line" && shape.points ? (
-              <polyline
-                key={index}
-                points={shape.points
-                  .map(
-                    ([x, y]) => `${x + (shape.x || 0)},${y + (shape.y || 0)}`,
-                  )
-                  .join(" ")}
-                stroke="#245bd6"
-                strokeWidth="3"
-                fill="none"
-              />
-            ) : shape.type === "ellipse" || shape.type === "rectangle" ? (
-              <rect
-                key={index}
-                x={shape.x}
-                y={shape.y}
-                width={shape.width}
-                height={shape.height}
-                rx={shape.type === "ellipse" ? (shape.width || 0) / 2 : 4}
-                stroke="#245bd6"
-                strokeWidth="3"
-                fill="none"
-              />
-            ) : shape.type === "text" ? (
-              <text
-                key={index}
-                x={shape.x}
-                y={(shape.y || 0) + (shape.fontSize || 18)}
-                fontSize={shape.fontSize}
-              >
-                {shape.text}
-              </text>
-            ) : null,
-          )}
-        </svg>
-      )}
+      <FactoryIcon
+        name={kind as "ruler" | "protractor" | "compass" | "setSquare"}
+      />
       <span>{t(`fcboard.${teachingTools[kind]}`)}</span>
     </ButtonBase>
   );
@@ -867,8 +800,8 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       <span>{label}</span>
     </ButtonBase>
   );
-  const entries = Object.entries(teachingTools).filter(
-    ([kind]) => kind !== "shape",
+  const entries = Object.entries(teachingTools).filter(([kind]) =>
+    factoryGizmoKinds.has(kind as WidgetKind),
   ) as [WidgetKind, string][];
   const actions = [
     [t("fcboard.file_transfer"), "files.open", <FactoryIcon name="transfer" />],
@@ -915,50 +848,6 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   );
   return (
     <>
-      {extended && (
-        <MaterialPanel
-          centered
-          role="dialog"
-          className="fc-extended-tools"
-          aria-label={t("fcboard.teaching_tools")}
-          onDismiss={() => setExtended(false)}
-        >
-          <header>
-            <h2>{t("fcboard.teaching_tools")}</h2>
-            <button
-              type="button"
-              aria-label={t("buttons.close")}
-              onClick={() => setExtended(false)}
-            >
-              {CloseIcon}
-            </button>
-          </header>
-          <div className="fc-insert-grid">
-            <div
-              className="fc-factory-tools"
-              role="group"
-              aria-label={t("fcboard.display_tools")}
-            >
-              {factory.map(factoryButton)}
-            </div>
-            {entries
-              .filter(
-                ([kind]) => !factoryGizmoKinds.has(kind) || kind === "ruler",
-              )
-              .map((entry) =>
-                entry[0] === "ruler" ? (
-                  <GizmoPicker
-                    key="gizmos"
-                    onInsert={(kind) => attempt(() => insert(kind))}
-                  />
-                ) : (
-                  widgetButton(entry)
-                ),
-              )}
-            {actions.map(actionButton)}
-          </div>
-        </MaterialPanel>
-      )}
       <NativeToolbarItems api={api} />
       <FactoryGizmos api={api} />
       <FactoryShapes api={api} />
@@ -995,22 +884,18 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           {factoryButton(tool)}
         </ToolbarExtras>
       ))}
-      {entries
-        .filter(([kind]) => factoryGizmoKinds.has(kind))
-        .map((entry) => (
-          <ToolbarExtras
-            key={entry[0]}
-            toolId={
-              entry[0] as "ruler" | "compass" | "protractor" | "setSquare"
-            }
-          >
-            {entry[0] === "ruler" ? (
-              <GizmoPicker onInsert={(kind) => attempt(() => insert(kind))} />
-            ) : (
-              widgetButton(entry)
-            )}
-          </ToolbarExtras>
-        ))}
+      {entries.map((entry) => (
+        <ToolbarExtras
+          key={entry[0]}
+          toolId={entry[0] as "ruler" | "compass" | "protractor" | "setSquare"}
+        >
+          {entry[0] === "ruler" ? (
+            <GizmoPicker onInsert={(kind) => attempt(() => insert(kind))} />
+          ) : (
+            gizmoButton(entry)
+          )}
+        </ToolbarExtras>
+      ))}
       {actions.map((entry) => (
         <ToolbarExtras key={entry[1]} toolId={actionIds[entry[1]]}>
           {actionButton(entry)}

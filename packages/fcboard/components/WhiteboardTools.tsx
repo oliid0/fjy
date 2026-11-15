@@ -410,7 +410,6 @@ export const WhiteboardTools = ({
             icon={<FactoryIcon name="toolbox" />}
             aria-label={t("fcboard.toolbox")}
             data-board-insert
-            data-teaching-tools
             data-menu-toggle
             selected={open && !shapesOpen}
             showAriaLabel

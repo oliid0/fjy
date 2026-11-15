@@ -838,25 +838,6 @@
   }
 }
 
-.app .fc-extended-tools {
-  width: min(560px, calc(100vw - 24px));
-  padding: 16px;
-  border-radius: 12px;
-  > header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  > .fc-insert-grid {
-    grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
-    max-height: calc(100vh - 160px);
-    overflow: auto;
-  }
-  .fc-factory-tools {
-    display: contents;
-  }
-}
-
 /* Preserve the app's existing phone support; tablet/VM uses the native row. */
 @media (max-width: 1000px) {
   .app .fcboard .fc-unified-toolbar {

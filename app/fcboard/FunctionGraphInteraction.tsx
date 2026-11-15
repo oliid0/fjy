@@ -5,7 +5,6 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { updateFunctionGraph } from "./board";
 import { InlineFunctionGraph } from "./InlineFunctionGraph";
-import { restoreBoardFunctionGraphs } from "./functionGraphRestore";
 import { observeFunctionComparison } from "./functionComparison";
 import { classroomCommands } from "./commands";
 
@@ -27,33 +26,8 @@ export const FunctionGraphInteraction = ({
   }, [api]);
   useEffect(() => observeFunctionComparison(api), [api]);
   useEffect(() => {
-    let migrating = false;
     let signature = "";
     const sync = () => {
-      if (migrating) {
-        return;
-      }
-      const files = api.getFiles();
-      const restored = restoreBoardFunctionGraphs(
-        api.getSceneElements(),
-        files,
-      );
-      if (restored.files !== files) {
-        migrating = true;
-        try {
-          api.addFiles(
-            Object.values(restored.files).filter(
-              (file) => files[file.id] !== file,
-            ),
-          );
-          api.updateScene({
-            elements: restored.elements,
-            captureUpdate: CaptureUpdateAction.NEVER,
-          });
-        } finally {
-          migrating = false;
-        }
-      }
       const state = api.getAppState();
       const next = JSON.stringify([
         state.scrollX,

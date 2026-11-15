@@ -53,7 +53,6 @@ import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { validatedPlot } from "./mathRecognition";
-import { restoreDocumentFunctionGraphs } from "./functionGraphRestore";
 import { InlineFunctionGraph } from "./InlineFunctionGraph";
 import { functionGraphImage } from "./functionVisualization";
 
@@ -435,7 +434,7 @@ export const FilePreview = ({
     void (async () => {
       try {
         const fingerprint = await documentKey(file);
-        const saved = restoreDocumentFunctionGraphs(await loadInk(fingerprint));
+        const saved = await loadInk(fingerprint);
         if (!active) {
           return;
         }
@@ -4155,7 +4154,7 @@ export const FilePreview = ({
         {onTools && (
           <button
             aria-label={t("fcboard.document_teaching_tools")}
-            title={t("fcboard.teaching_tools")}
+            title={t("fcboard.document_teaching_tools")}
             onClick={onTools}
           >
             {gridIcon}

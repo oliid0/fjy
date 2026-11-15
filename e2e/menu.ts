@@ -18,7 +18,7 @@ export const selectMenu = async (page: Page, label: string) => {
       "语音指令",
     ].includes(label)
   ) {
-    await openTeachingTools(page);
+    await openToolbox(page);
     const names: Record<string, string> = {
       提问与讲解: "AI出題",
       课堂录制: "录制",
@@ -55,8 +55,6 @@ export const selectMenu = async (page: Page, label: string) => {
   );
 };
 
-export const openTeachingTools = async (page: Page) => {
-  await openSettingsMenu(page);
-  await page.getByRole("button", { name: "工具栏", exact: true }).click();
-  await page.getByRole("button", { name: "教学工具", exact: true }).click();
+export const openToolbox = async (page: Page) => {
+  await page.locator("[data-board-insert]").click();
 };

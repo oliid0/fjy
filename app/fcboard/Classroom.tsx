@@ -320,7 +320,7 @@ export const Classroom = ({
     panelRef,
     panel === "settings"
       ? "[data-testid='main-menu-trigger']"
-      : "[data-teaching-tools], .fc-presentation-toolbar",
+      : "[data-board-insert], .fc-presentation-toolbar",
     !!panel && panel !== "plot" && panel !== "settings",
   );
   const active = records.find((item) => item.id === activeId);
@@ -2576,7 +2576,7 @@ export const Classroom = ({
       classroomCommands.register("ui.invoke", "@internal", async (args) => {
         returnFocus.current = document.querySelector<HTMLElement>(
           args.origin === "tools"
-            ? "[data-teaching-tools]"
+            ? "[data-board-insert]"
             : "[data-testid='main-menu-trigger']",
         );
         await run(async () => {

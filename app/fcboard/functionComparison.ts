@@ -9,7 +9,7 @@ import { boardInk } from "./digitalInk";
 import { documentStrokeBounds, inkSnapshot } from "./documents";
 import { latestFunctionInk } from "./functionInk";
 import { recognizeInkContent } from "./inkRecognition";
-import { localMathResult, validatedPlot } from "./mathRecognition";
+import { localFunctionResult, validatedPlot } from "./mathRecognition";
 
 import type { InkStroke } from "./documents";
 import type { Plot } from "./math";
@@ -149,7 +149,7 @@ export const observeFunctionComparison = (api: FcboardImperativeAPI) => {
           return known.plot;
         }
         if (known.text) {
-          const result = localMathResult(known.text, "function");
+          const result = localFunctionResult(known.text);
           if (result.kind === "function") {
             return result.plot;
           }

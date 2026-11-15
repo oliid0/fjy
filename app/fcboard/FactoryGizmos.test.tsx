@@ -335,14 +335,12 @@ it("opens both added native gizmos from the original toolbox page and draws a co
   const tools = render(<TeachingTools api={api} />);
   try {
     await act(async () => {
-      await classroomCommands.execute({ name: "tools.extended" });
+      await classroomCommands.execute({ name: "tools.open" });
     });
     const toolbar = within(tools.container);
     const openPicker = () =>
       fireEvent.click(
-        within(
-          toolbar.getByRole("dialog", { name: t("fcboard.teaching_tools") }),
-        ).getByRole("button", { name: t("fcboard.geometry_tools") }),
+        toolbar.getByRole("button", { name: t("fcboard.geometry_tools") }),
       );
     openPicker();
     expect(
@@ -397,7 +395,7 @@ it("opens both added native gizmos from the original toolbox page and draws a co
     expect(circle.points.at(-1)![0]).toBeCloseTo(0);
     expect(circle.points.at(-1)![1]).toBeCloseTo(0);
     await act(async () => {
-      await classroomCommands.execute({ name: "tools.extended" });
+      await classroomCommands.execute({ name: "tools.open" });
     });
     openPicker();
     fireEvent.click(

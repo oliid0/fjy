@@ -54,15 +54,13 @@ public class ClassroomPlugin extends Plugin {
                     android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
                 String[] actions = enabled ? new String[] {
                     android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS,
-                    android.provider.Settings.ACTION_DEVICE_INFO_SETTINGS,
                     android.provider.Settings.ACTION_SETTINGS
                 } : new String[] {
-                    android.provider.Settings.ACTION_DEVICE_INFO_SETTINGS,
                     android.provider.Settings.ACTION_SETTINGS
                 };
                 for (String action : actions) {
                     android.content.Intent intent = android.content.Intent.parseUri(
-                        "intent:#Intent;action=" + action + ";end", android.content.Intent.URI_INTENT_SCHEME);
+                        "intent:#Intent;action=" + action + ";package=com.android.settings;end", android.content.Intent.URI_INTENT_SCHEME);
                     if (android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS.equals(action)) {
                         // AOSP DevelopmentSettingsDashboardFragment scrolls to/highlights this preference.
                         // Android exposes no public action for the nested WirelessDebuggingFragment.

@@ -32,6 +32,21 @@ public class NativeInputRouterTest {
             assertEquals(350,rightEvents.get(1).optJSONArray("points").optJSONArray(0).optDouble(0),0);
         });
     }
+    @Test public void webPointerReceivesItsUpWhileAnotherPointerWritesNatively(){
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            List<JSObject> ink=new ArrayList<>();NativeInkView right=surface(ink,300);
+            Map<NativeInkView,RectF> boxes=new HashMap<>();boxes.put(right,new RectF(300,0,600,200));NativeInputRouter router=new NativeInputRouter(boxes);
+            List<Integer> actions=new ArrayList<>(),ids=new ArrayList<>();
+            java.util.function.Consumer<MotionEvent> forward=e->{actions.add(e.getActionMasked());ids.add(e.getPointerId(0));assertEquals(1,e.getPointerCount());};
+            MotionEvent first=event(MotionEvent.ACTION_DOWN,1,110);try{assertFalse(router.dispatch(first,forward));}finally{first.recycle();}
+            MotionEvent second=event(MotionEvent.ACTION_POINTER_DOWN|(1<<8),2,120);try{assertTrue(router.dispatch(second,forward));}finally{second.recycle();}
+            MotionEvent release=event(MotionEvent.ACTION_POINTER_UP,2,130);try{assertTrue(router.dispatch(release,forward));}finally{release.recycle();}
+            assertEquals(Arrays.asList(MotionEvent.ACTION_MOVE,MotionEvent.ACTION_UP),actions);assertEquals(Arrays.asList(0,0),ids);
+            MotionEvent source=event(MotionEvent.ACTION_POINTER_UP|(1<<8),2,140),end=NativeInputRouter.subset(source,Collections.singletonList(1));
+            try{assertTrue(router.dispatch(end,forward));}finally{end.recycle();source.recycle();}
+            assertEquals(2,ink.size());assertEquals("end",ink.get(1).optString("phase"));
+        });
+    }
     @Test public void filteredEventsKeepHistoricalCoordinatesPressureAndHardwareIdentity(){
         MotionEvent original=event(MotionEvent.ACTION_MOVE,2,110);
         MotionEvent.PointerCoords[] points={new MotionEvent.PointerCoords(),new MotionEvent.PointerCoords()};original.getPointerCoords(0,points[0]);original.getPointerCoords(1,points[1]);points[1].x=370;points[1].pressure=.9f;original.addBatch(120,points,0);

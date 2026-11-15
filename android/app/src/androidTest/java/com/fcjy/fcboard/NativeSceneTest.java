@@ -37,6 +37,28 @@ public class NativeSceneTest {
             finally{after.recycle();}
         });
     }
+    @Test public void selectingAnUnderlyingStrokePreservesIdleStackingOrder()throws Exception{
+        NativeScene scene=new NativeScene();
+        JSONObject data=update(new JSONArray().put(ink("under","a0","M20 60 L580 60","#ff0000",true,0)).put(ink("over","a1","M20 60 L580 60","#0000ff",true,0)),true)
+            .put("selectionIds",new JSONArray().put("under")).put("selectionBounds",new JSONArray("[20,50,580,70]"));
+        NativeScene.Frame frame=scene.synchronize(data,1,0);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            NativeSceneView view=surface();view.apply(frame);Bitmap idle=pixels(view);
+            try{int color=idle.getPixel(100,60);assertTrue("Upper blue stroke stays above the selected red stroke",Color.blue(color)>Color.red(color));}finally{idle.recycle();}
+        });
+    }
+    @Test public void appendingInkDoesNotRasterizeHistoryOrMutateAnInstalledFrame()throws Exception{
+        NativeScene scene=new NativeScene();
+        NativeScene.Frame first=scene.synchronize(update(new JSONArray().put(ink("old","a0","M20 60 L580 60","#ff0000",true,0)),true),1,0);
+        NativeScene.Frame next=scene.synchronize(update(new JSONArray().put(ink("new","a1","M20 140 L580 140","#0000ff",true,1)),false).put("eraseThrough",1),1,1);
+        assertEquals("Only the new stroke in each of three tiles",3,next.rasterizedNodes);
+        for(NativeScene.Tile tile:next.tiles.values())assertEquals("Acknowledged ink shares one part",1,tile.parts.size());
+        assertEquals(0,Color.alpha(first.tiles.get(NativeScene.key(0,0)).pixels.getPixel(100,140)));
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            NativeSceneView view=surface();view.apply(first);view.erase("pending",90,40,110,80,30,30);view.apply(next);view.cancelErase("pending");
+            Bitmap output=pixels(view);try{assertEquals(128,Color.alpha(output.getPixel(100,60)));assertEquals(128,Color.alpha(output.getPixel(100,140)));}finally{output.recycle();}
+        });
+    }
     @Test public void clearPreservesLockedInkAndInterleavedObjectPixels()throws Exception{
         Bitmap image=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);Canvas canvas=new Canvas(image);Paint paint=new Paint();paint.setColor(Color.BLUE);canvas.drawRect(240,40,280,80,paint);
         java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();image.compress(Bitmap.CompressFormat.PNG,100,bytes);image.recycle();
@@ -146,6 +168,18 @@ public class NativeSceneTest {
             try{assertTrue(input.onTouchEvent(cancel));}finally{cancel.recycle();}
             Bitmap restored=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.draw(new Canvas(restored));
             try{assertEquals(128,Color.alpha(restored.getPixel(256,60)));assertEquals(128,Color.alpha(restored.getPixel(100,60)));}finally{cut.recycle();restored.recycle();}
+        });
+    }
+
+    @Test public void selectionPixelsMoveNativelyBeforeAnyJavascriptAndCancelRestoresThem()throws Exception{
+        NativeScene scene=new NativeScene();
+        JSONObject selected=ink("selected","a0","M30 60 L130 60","#ff0000",true,-1).put("bounds",new JSONArray("[20,40,140,80]"));
+        NativeScene.Frame frame=scene.synchronize(update(new JSONArray().put(selected),true).put("selectionIds",new JSONArray().put("selected")).put("selectionKey","selected").put("selectionBounds",new JSONArray("[20,40,140,80]")),1,0);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            NativeSceneView view=surface();view.apply(frame);assertTrue(view.canTransform("selected"));assertFalse(view.canTransform("another"));
+            view.transformSelection("move",1,200,0,20,40);
+            Bitmap moved=pixels(view);try{assertEquals(0,Color.alpha(moved.getPixel(60,60)));assertEquals(128,Color.alpha(moved.getPixel(260,60)));}finally{moved.recycle();}
+            view.cancelSelection("move");Bitmap restored=pixels(view);try{assertEquals(128,Color.alpha(restored.getPixel(60,60)));assertEquals(0,Color.alpha(restored.getPixel(260,60)));}finally{restored.recycle();}
         });
     }
 

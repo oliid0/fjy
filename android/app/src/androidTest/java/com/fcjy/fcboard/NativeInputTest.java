@@ -80,8 +80,9 @@ public class NativeInputTest {
     }
     @Test public void movingPalmCanBeginErasingWhileAnotherContactWrites() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            for(boolean multi:new boolean[]{false,true}) {
             List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
-            view.setMultiStroke(false);
+            view.setMultiStroke(multi);
             motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
             motion(view, MotionEvent.ACTION_DOWN, 22, 1, 2, 150, 50);
             motion(view, MotionEvent.ACTION_MOVE, 11, 1, 70, 80, 80);
@@ -91,6 +92,7 @@ public class NativeInputTest {
             assertEquals("pen", events.get(0).optString("mode"));
             assertEquals("erase", events.get(1).optString("mode"));
             for (JSObject event : events) assertNotEquals("cancel", event.optString("phase"));
+            }
         });
     }
     @Test public void explicitEraserStartsImmediatelyForLargeAndSmallContacts() {
@@ -106,9 +108,10 @@ public class NativeInputTest {
             }
         });
     }
-    @Test public void multiContactWritingDoesNotReclassifyBroadFingersAsErasers() {
+    @Test public void multiContactWritingHonorsExplicitlyDisabledPalmErasure() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
+            view.configure("no-palm",true,0,0,1,4,1,1,"#ff0000",false,36,Collections.emptyList(),null,0,"pen",false,60,null);
             motion(view, MotionEvent.ACTION_DOWN, 11, 1, 70, 20, 20);
             motion(view, MotionEvent.ACTION_POINTER_DOWN | (1 << 8), 11, 2, 70, 40, 40);
             motion(view, MotionEvent.ACTION_MOVE, 11, 2, 80, 80, 80);

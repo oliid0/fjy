@@ -8,6 +8,7 @@ import {
 } from "@fcboard/common";
 import {
   getBoundTextElement,
+  getSelectedElements,
   getCommonBounds,
   getElementAbsoluteCoords,
   getContainingFrame,
@@ -41,6 +42,7 @@ type NativeNode = {
   nonce: number;
   through: number;
   ink: boolean;
+  inline: boolean;
   bounds: readonly number[];
   bitmap?: string;
   path?: string;
@@ -74,6 +76,11 @@ const native = registerPlugin<{
     scrollY: number;
     eraseThrough: number;
     background?: string;
+    backgroundColor?: string;
+    selectionIds: string[];
+    selectionKey: string;
+    selectionBounds?: number[];
+    selectionThrough?: string;
     nodes: NativeNode[];
     removals: string[];
   }): Promise<void>;
@@ -115,6 +122,10 @@ export const nativeSceneNode = (
     nonce: element.versionNonce,
     through,
     ink: element.type === "freedraw" && !element.locked,
+    inline: !!(
+      element.customData?.fcPlot?.renderer === "vega" &&
+      document.getElementById(`fc-inline-function-${element.id}`)
+    ),
     bounds,
   };
   if (
@@ -300,11 +311,13 @@ export const createNativeSceneRenderer = (
   let bg = "";
   let latest: StaticSceneRenderConfig | undefined;
   let eraseThrough = 0;
+  let selectionThrough = "";
+  const selectionWaiters = new Map<string, () => void>();
   const sources = new Map<string, FcboardElement>();
   const dirty = new Map<string, number>();
   const removals = new Set<string>();
   const bitmaps = new Set<string>();
-  const imageStates = new Map<string, unknown>();
+  const imageStates = new Map<string, { image: unknown; inline: boolean }>();
   const queue = () => {
     if (!scheduled && !busy && alive && !failed) {
       scheduled = true;
@@ -381,7 +394,30 @@ export const createNativeSceneRenderer = (
         innerWidth,
       ]);
       const changedView = viewport !== view;
+      const selectionState = api.getAppState();
+      const selected = ["selection", "lasso"].includes(
+        selectionState.activeTool.type,
+      )
+        ? selectionState.whiteboardSelection
+        : undefined;
+      const selectionIds = selected
+        ? getSelectedElements(sources, selectionState, {
+            includeBoundTextElement: true,
+            includeElementsInFrames: true,
+          }).map((element) => element.id)
+        : [];
+      const selectionBounds =
+        selected && selectionIds.length
+          ? [
+              selected.bounds.left,
+              selected.bounds.top,
+              selected.bounds.right,
+              selected.bounds.bottom,
+            ]
+          : undefined;
       const pigment = JSON.stringify([
+        selectionIds,
+        selectionBounds,
         state.theme,
         state.frameRendering,
         state.openDialog?.name === "elementLinkSelector"
@@ -404,8 +440,13 @@ export const createNativeSceneRenderer = (
         const element = sources.get(id);
         if (element?.type === "image" && element.fileId) {
           const image = config.renderConfig.imageCache.get(element.fileId);
-          if (imageStates.get(id) !== image) {
-            imageStates.set(id, image);
+          const inline = !!(
+            element.customData?.fcPlot?.renderer === "vega" &&
+            document.getElementById(`fc-inline-function-${id}`)
+          );
+          const previous = imageStates.get(id);
+          if (previous?.image !== image || previous?.inline !== inline) {
+            imageStates.set(id, { image, inline });
             dirty.set(id, -1);
           }
         }
@@ -435,7 +476,8 @@ export const createNativeSceneRenderer = (
         !removals.size &&
         backgroundKey === bg &&
         !reset &&
-        !eraseThrough
+        !eraseThrough &&
+        !selectionThrough
       ) {
         activate();
         return;
@@ -460,6 +502,8 @@ export const createNativeSceneRenderer = (
       removals.clear();
       const request = ++revision;
       const acknowledged = eraseThrough;
+      const selectedGesture = selectionThrough;
+      selectionThrough = "";
       eraseThrough = 0;
       await native.synchronize({
         owner: api.id,
@@ -475,8 +519,18 @@ export const createNativeSceneRenderer = (
         scrollX: state.scrollX,
         scrollY: state.scrollY,
         eraseThrough: acknowledged,
+        selectionIds,
+        selectionKey: [...selectionIds].sort().join("\u0000"),
+        selectionBounds,
+        selectionThrough: selectedGesture,
         ...(backgroundKey !== bg || reset
-          ? { background: background(config) }
+          ? !state.whiteboardBackground && !config.renderConfig.renderGrid
+            ? {
+                backgroundColor: nativeColor(
+                  state.viewBackgroundColor || "#ffffff",
+                ),
+              }
+            : { background: background(config) }
           : {}),
         nodes,
         removals: [...deleted],
@@ -484,6 +538,8 @@ export const createNativeSceneRenderer = (
       if (!alive || stamp !== epoch) {
         return;
       }
+      selectionWaiters.get(selectedGesture)?.();
+      selectionWaiters.delete(selectedGesture);
       reset = false;
       view = viewport;
       paint = pigment;
@@ -492,6 +548,8 @@ export const createNativeSceneRenderer = (
     } catch (error) {
       if (alive && stamp === epoch) {
         failed = true;
+        selectionWaiters.forEach((resolve) => resolve());
+        selectionWaiters.clear();
         deactivate();
         void native.remove({ owner: api.id, epoch }).catch(() => {});
         stopRenderer.invalidate();
@@ -499,7 +557,13 @@ export const createNativeSceneRenderer = (
       }
     } finally {
       busy = false;
-      if (dirty.size || removals.size || eraseThrough || latest !== config) {
+      if (
+        dirty.size ||
+        removals.size ||
+        eraseThrough ||
+        selectionThrough ||
+        latest !== config
+      ) {
         queue();
       }
     }
@@ -528,6 +592,14 @@ export const createNativeSceneRenderer = (
   };
   document.fonts?.addEventListener?.("loadingdone", fonts);
   return {
+    acknowledgeSelection(gesture: string) {
+      selectionThrough = gesture;
+      const completed = new Promise<void>((resolve) =>
+        selectionWaiters.set(gesture, resolve),
+      );
+      queue();
+      return completed;
+    },
     acknowledgeErase(sequence: number) {
       eraseThrough = Math.max(eraseThrough, sequence);
       queue();
@@ -536,22 +608,27 @@ export const createNativeSceneRenderer = (
       if (!alive) {
         return;
       }
+      selectionWaiters.forEach((resolve) => resolve());
+      selectionWaiters.clear();
+      selectionThrough = "";
       epoch = nextEpoch();
       reset = true;
       view = paint = bg = "";
       latest = undefined;
       eraseThrough = 0;
-      deactivate();
+      // Keep the installed frame until synchronize atomically installs the next
+      // epoch. Removing it exposes the transparent WebView between pages.
       for (const id of sources.keys()) {
         dirty.set(id, -1);
       }
-      void native.remove({ owner: api.id, epoch }).catch(onError);
     },
     dispose() {
       if (!alive) {
         return;
       }
       alive = false;
+      selectionWaiters.forEach((resolve) => resolve());
+      selectionWaiters.clear();
       deactivate();
       stopMutations();
       stopDocument();

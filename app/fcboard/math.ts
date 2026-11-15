@@ -9,7 +9,8 @@ import { continuousMathRange } from "./mathDomain";
 
 import type { CurveView } from "./curveSampling";
 
-const math = create(all);
+let math: ReturnType<typeof create>;
+const parser = () => (math ||= create(all));
 
 export const normalizeExpression = (text: string) =>
   text
@@ -29,7 +30,7 @@ export const compileExpression = (expression: string) => {
       t("fcboard.enter_a_mathematical_expression_of_up_to_500_characters"),
     );
   }
-  const node = math.parse(mathNotation(expression));
+  const node = parser().parse(mathNotation(expression));
   let count = 0;
   node.traverse((child) => {
     count++;
@@ -70,10 +71,7 @@ export const compileExpression = (expression: string) => {
   return node.compile();
 };
 
-export {
-  calculateLocal as calculate,
-  prepareCalculation,
-} from "./mathCalculation";
+export { prepareCalculation } from "./calculationSyntax";
 
 export type Plot = {
   expression: string;
@@ -124,7 +122,7 @@ export const sampleFunctionCurve = (
   scope: Record<string, number> = {},
 ) => {
   const compiled = compileExpression(expression);
-  const domain = math.parse(mathNotation(expression));
+  const domain = parser().parse(mathNotation(expression));
   const evaluate = (x: number) => {
     try {
       const value = compiled.evaluate({ ...scope, x });
@@ -172,7 +170,7 @@ export const samplePlot = (plot: Plot): number[][][] => {
   }
 
   const compiled = compileExpression(plotExpression(plot.expression));
-  const domain = math.parse(mathNotation(plotExpression(plot.expression)));
+  const domain = parser().parse(mathNotation(plotExpression(plot.expression)));
   const lines: number[][][] = [];
   const value = (x: number, y: number) => {
     try {
@@ -248,7 +246,7 @@ export const sampleInequality = (plot: Plot): number[][][] => {
     return [];
   }
   const compiled = compileExpression(plot.expression);
-  const domain = math.parse(mathNotation(plot.expression));
+  const domain = parser().parse(mathNotation(plot.expression));
   const polygons: number[][][] = [];
   let boundary: number[][] = [];
   const edge = plot.relation.startsWith(">") ? -plot.range : plot.range;

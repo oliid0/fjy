@@ -54,6 +54,8 @@ export const observeInkAssistance = (
 ) => {
   const seen = new Set(api.getSceneElements().map((element) => element.id));
   const failed = new Set<string>();
+  const settled = new Set<string>();
+  const writing = new Set<string>();
   const requests = new InkRequests();
   let previous = "";
   let disposed = false;
@@ -80,7 +82,13 @@ export const observeInkAssistance = (
     const state = api.getAppState();
     const nextConfiguration = configuration();
     const currentScene = api.getSceneElements();
-    requests.prune(currentScene.map((element) => element.id));
+    const present = new Set(currentScene.map((element) => element.id));
+    requests.prune([...present]);
+    for (const id of settled) {
+      if (!present.has(id)) {
+        settled.delete(id);
+      }
+    }
     if (
       !rescan &&
       currentScene === observedScene &&
@@ -103,7 +111,16 @@ export const observeInkAssistance = (
       previous = "";
       return;
     }
-    if (state.cursorButton === "down" || state.activeTool.type !== "freedraw") {
+    const pointerDown = state.cursorButton === "down";
+    const hasCompletedInk =
+      !writing.size &&
+      currentScene.some(
+        (element) => settled.has(element.id) && !seen.has(element.id),
+      );
+    if (
+      (pointerDown && !hasCompletedInk) ||
+      state.activeTool.type !== "freedraw"
+    ) {
       onBusy(requests.busy);
       previous = "";
       return;
@@ -137,7 +154,11 @@ export const observeInkAssistance = (
       return target;
     };
     const pending = scene
-      .filter((element) => element.type === "freedraw")
+      .filter(
+        (element) =>
+          element.type === "freedraw" &&
+          (!pointerDown || settled.has(element.id)),
+      )
       .filter((element) => {
         if (
           seen.has(element.id) ||
@@ -527,12 +548,18 @@ export const observeInkAssistance = (
   const tables = new LiveTableWriting(api);
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
     if (phase === "start" || phase === "update") {
+      writing.add(stroke.id);
       const mode = inkAssistMode(stroke.customData?.fcInk?.assist);
       if (mode) {
         requests.revise(boardInk([stroke]), mode);
       }
       previous = "";
       onBusy(requests.busy);
+    } else {
+      writing.delete(stroke.id);
+      if (phase === "settled") {
+        queueMicrotask(() => refresh(true));
+      }
     }
     if (!classroomCommands.has("document.draw")) {
       tables.progress(stroke, phase);
@@ -542,6 +569,8 @@ export const observeInkAssistance = (
     if (classroomCommands.has("document.draw")) {
       return;
     }
+    settled.add(stroke.id);
+    queueMicrotask(() => refresh(true));
     tables.commit(stroke);
     if (
       !stroke.customData?.fcInsertion &&
@@ -587,6 +616,8 @@ export const observeInkAssistance = (
     }
   });
   const invalidate = classroomCommands.onInvalidate(() => {
+    settled.clear();
+    writing.clear();
     requests.cancelAll();
     onBusy(false);
   });
@@ -597,6 +628,8 @@ export const observeInkAssistance = (
         ?.active || "";
     if (active !== board) {
       board = active;
+      settled.clear();
+      writing.clear();
       requests.cancelAll();
       onBusy(requests.busy);
       api.getSceneElements().forEach((element) => seen.add(element.id));

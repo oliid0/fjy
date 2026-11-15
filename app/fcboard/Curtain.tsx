@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
-import { CloseIcon, palette } from "@fcboard/fcboard/components/icons";
+import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
 import { MaterialPanel } from "./MaterialPanel";
 
@@ -8,6 +8,8 @@ import { classroomCommands } from "./commands";
 import first from "./assets/curtain/mubu01.jpg";
 import second from "./assets/curtain/mubu02.jpg";
 import third from "./assets/curtain/mubu03.jpg";
+
+import "./Curtain.scss";
 
 const themes = [first, second, third];
 // DataTools.bgList and the original colors.xml.
@@ -253,43 +255,21 @@ export const Curtain = () => {
                 );
               }
             }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path
-                d={
-                  edge === "move"
-                    ? "M3 12h18M12 3v18M3 12l4-4M3 12l4 4M21 12l-4-4M21 12l-4 4M12 3l-4 4M12 3l4 4M12 21l-4-4M12 21l4-4"
-                    : ["left", "right"].includes(edge)
-                    ? "M3 12h18M3 12l5-5M3 12l5 5M21 12l-5-5M21 12l-5 5"
-                    : "M12 3v18M12 3l-5 5M12 3l5 5M12 21l-5-5M12 21l5-5"
-                }
-              />
-            </svg>
-          </button>
+          ></button>
         ))}
         <div className="fc-curtain-actions">
           <button
             type="button"
+            className="fc-curtain-background"
             onClick={() => setSettings(true)}
             aria-label={t("fcboard.curtain_theme")}
-          >
-            {palette}
-          </button>
+          ></button>
           <button
             type="button"
+            className="fc-curtain-close"
             onClick={() => setOpen(false)}
             aria-label={t("buttons.close")}
-          >
-            {CloseIcon}
-          </button>
+          ></button>
         </div>
       </section>
       {settings && (

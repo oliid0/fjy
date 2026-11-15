@@ -94,7 +94,15 @@ final class NativeCalculatorView extends LinearLayout {
         dark = value; setBackgroundColor(dark ? Color.rgb(28, 28, 30) : Color.rgb(250, 250, 250));
         int color = dark ? Color.WHITE : Color.rgb(25, 25, 25);
         history.setTextColor(color); input.setTextColor(color); result.setTextColor(color);
-        for (Button button : controls) button.setTextColor(color);
+        for (Button button : controls) {
+            String label=button.getText().toString();
+            boolean operator=java.util.Arrays.asList("÷","×","−","+","=").contains(label);
+            boolean utility=java.util.Arrays.asList("AC","⌫","%").contains(label);
+            android.graphics.drawable.GradientDrawable background=new android.graphics.drawable.GradientDrawable();
+            background.setColor(operator?Color.rgb(255,159,10):utility?Color.rgb(165,165,167):dark?Color.rgb(51,51,54):Color.rgb(229,229,231));
+            background.setCornerRadius(dp(12));button.setBackground(background);
+            button.setTextColor(operator?Color.WHITE:utility?Color.rgb(22,22,22):color);
+        }
         ((TextView)header.getChildAt(0)).setTextColor(color);
     }
     private void mode(boolean value) {

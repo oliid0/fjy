@@ -1,12 +1,12 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useId, useRef, useState } from "react";
-import { palette } from "@fcboard/fcboard/components/icons";
 
 import { classroomCommands } from "./commands";
 import {
   keepSpotlightVisible,
   spotlightMenu,
   spotlightStar,
+  spotlightColor,
 } from "./spotlightGeometry";
 
 import "./Spotlight.scss";
@@ -19,6 +19,21 @@ export const Spotlight = () => {
   const [shape, setShape] = useState<keyof typeof shapes>("circle");
   const [popup, setPopup] = useState<"shape" | "settings" | null>(null);
   const [alpha, setAlpha] = useState(0);
+  const [picker, setPicker] = useState(false);
+  const pickerPointer = useRef<number | undefined>(undefined);
+  const colorAt = (event: {
+    clientX: number;
+    clientY: number;
+    currentTarget: HTMLElement;
+  }) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    setMaskColor(
+      spotlightColor(
+        (event.clientX - box.left - box.width / 2) / (box.width / 2),
+        (event.clientY - box.top - box.height / 2) / (box.height / 2),
+      ),
+    );
+  };
   const [state, setState] = useState({
     open: false,
     x: window.innerWidth / 2,
@@ -93,6 +108,7 @@ export const Spotlight = () => {
         pending.current = undefined;
         dragging.current = undefined;
         setPopup(null);
+        setPicker(false);
         if (typeof args.color === "string") {
           setMaskColor(args.color);
         }
@@ -206,6 +222,7 @@ export const Spotlight = () => {
         }
         event.stopPropagation();
         setPopup(null);
+        setPicker(false);
         // MarkSizeView only moves an existing mark when the press starts inside it.
         if (
           dragging.current ||
@@ -416,18 +433,13 @@ export const Spotlight = () => {
                       onClick={() => setMaskColor(color)}
                     />
                   ))}
-                  <label
+                  <button
+                    type="button"
                     className="fc-spotlight-color"
-                    title={t("fcboard.colour")}
-                  >
-                    {palette}
-                    <input
-                      type="color"
-                      aria-label={t("fcboard.colour")}
-                      value={maskColor}
-                      onChange={(event) => setMaskColor(event.target.value)}
-                    />
-                  </label>
+                    aria-label={t("fcboard.colour")}
+                    aria-expanded={picker}
+                    onClick={() => setPicker(!picker)}
+                  />
                 </div>
                 <label className="fc-spotlight-alpha">
                   {t("labels.opacity")}
@@ -436,11 +448,98 @@ export const Spotlight = () => {
                     min={0}
                     max={255}
                     value={alpha}
+                    aria-label={t("labels.opacity")}
+                    style={{
+                      background: `linear-gradient(to right, #fff ${
+                        (alpha / 255) * 100
+                      }%, #8a8a8a ${(alpha / 255) * 100}%)`,
+                    }}
+                    onInput={(event) =>
+                      setAlpha(Number(event.currentTarget.value))
+                    }
                     onChange={(event) => setAlpha(Number(event.target.value))}
                   />
                 </label>
               </>
             )}
+          </div>
+        )}
+        {picker && popup === "settings" && (
+          <div
+            className="fc-spotlight-picker"
+            role="dialog"
+            aria-label={t("fcboard.colour")}
+            style={{
+              left: Math.max(12, Math.min(innerWidth - 312, menu.x - 245)),
+              top: Math.max(12, Math.min(innerHeight - 312, menu.y - 300)),
+            }}
+          >
+            <button
+              type="button"
+              role="slider"
+              aria-label={t("fcboard.colour")}
+              aria-valuetext={maskColor}
+              aria-valuemin={0}
+              aria-valuemax={16777215}
+              aria-valuenow={Number.parseInt(maskColor.slice(1), 16)}
+              className="fc-spotlight-wheel"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+                pickerPointer.current = event.pointerId;
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                colorAt(event);
+              }}
+              onPointerMove={(event) => {
+                if (pickerPointer.current === event.pointerId) {
+                  colorAt(event);
+                }
+              }}
+              onPointerUp={() => {
+                pickerPointer.current = undefined;
+              }}
+              onPointerCancel={() => {
+                pickerPointer.current = undefined;
+              }}
+              onLostPointerCapture={() => {
+                pickerPointer.current = undefined;
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  setPicker(false);
+                }
+              }}
+            >
+              <svg viewBox="0 0 300 300" aria-hidden="true">
+                <defs>
+                  <radialGradient id={`${maskId}-white`}>
+                    <stop offset="0" stopColor="white" />
+                    <stop offset="1" stopColor="white" stopOpacity="0" />
+                  </radialGradient>
+                </defs>
+                {Array.from({ length: 72 }, (_, index) => {
+                  const a = (index * Math.PI) / 36;
+                  const b = ((index + 1) * Math.PI) / 36;
+                  return (
+                    <path
+                      key={index}
+                      d={`M150 150L${150 + 150 * Math.cos(a)} ${
+                        150 - 150 * Math.sin(a)
+                      }A150 150 0 0 0 ${150 + 150 * Math.cos(b)} ${
+                        150 - 150 * Math.sin(b)
+                      }Z`}
+                      fill={`hsl(${index * 5} 100% 50%)`}
+                    />
+                  );
+                })}
+                <circle
+                  cx="150"
+                  cy="150"
+                  r="150"
+                  fill={`url(#${maskId}-white)`}
+                />
+              </svg>
+            </button>
           </div>
         )}
         <button

@@ -196,9 +196,9 @@ export const xbhToolbarIcons = {
     viewBox: "0 0 24 24",
     body: '<path fill="#ffffff" d="M0,0h24v24h-24z" fill-opacity="0" /><path fill="none" d="M18.75,3C19.99,3 21,4 21,5.25L21,18.75C21,19.99 19.99,21 18.75,21L5.25,21C4,21 3,19.99 3,18.75L3,5.25C3,4 4,3 5.25,3L18.75,3Z" stroke="currentColor" stroke-width="1.65" /><path fill="none" d="M8.25,8.25m-2.25,0a2.25,2.25 0,1 1,4.5 0a2.25,2.25 0,1 1,-4.5 0" stroke="currentColor" stroke-width="1.65" /><path fill="none" d="M9,21L13.79,12.6C14.34,11.63 15.72,11.59 16.34,12.51L21,19.5" stroke="currentColor" stroke-width="1.65" />',
   },
-  areaBg: {
+  rollcall: {
     viewBox: "0 0 24 24",
-    body: '<path fill="none" d="M19.5,3.75C20.74,3.75 21.75,4.75 21.75,6L21.75,18C21.75,19.24 20.74,20.25 19.5,20.25L4.5,20.25C3.25,20.25 2.25,19.24 2.25,18L2.25,6C2.25,4.75 3.25,3.75 4.5,3.75L19.5,3.75Z" stroke="currentColor" stroke-width="1.65" /><path fill="none" d="M7.59,9.53C7.02,9.53 6.51,9.93 6.34,10.51L5.26,14.26C5.05,14.99 5.44,15.77 6.13,15.99C6.26,16.03 6.39,16.05 6.52,16.05L17.74,16.05C18.46,16.05 19.05,15.43 19.05,14.66C19.05,14.53 19.03,14.39 18.99,14.25L17.89,10.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" /><path fill="#000000" d="M11.31,12.565a1.309,0.75 0,1 0,2.618 0a1.309,0.75 0,1 0,-2.618 0z" /><path fill="none" d="M11.31,12.565a1.309,0.75 0,1 0,2.618 0a1.309,0.75 0,1 0,-2.618 0z" stroke="#000000" stroke-width="0.6545" /><path fill="none" d="M10.5,9.5L12.68,11.93L16.84,7.5" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" />',
+    body: '<path d="M5 3h14v18H5zM8 7h2m3 0h3M8 12h2m3 0h3M8 17h2m3 0h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   },
   sticky: {
     viewBox: "0 0 24 24",

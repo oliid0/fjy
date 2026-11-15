@@ -19,7 +19,7 @@ public class MainActivity extends BridgeActivity {
     }
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
         NativeInkPlugin input = inkInput;
-        if (input != null && input.dispatchInput(event)) return true;
+        if (input != null && input.dispatchInput(event, super::dispatchTouchEvent)) return true;
         return super.dispatchTouchEvent(event);
     }
     private static volatile boolean foreground;

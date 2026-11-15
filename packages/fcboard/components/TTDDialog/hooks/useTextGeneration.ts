@@ -1,5 +1,4 @@
 import { useRef } from "react";
-import { parseMermaidToExcalidraw as parseMermaidToFcboard } from "@excalidraw/mermaid-to-excalidraw";
 import { isFiniteNumber } from "@fcboard/math";
 
 import { useAtom } from "../../../editor-jotai";
@@ -191,6 +190,11 @@ export const useTextGeneration = ({
       }
 
       try {
+        const { parseMermaidToExcalidraw: parseMermaidToFcboard } =
+          await import("@excalidraw/mermaid-to-excalidraw");
+        if (abortController.signal.aborted) {
+          return;
+        }
         await parseMermaidToFcboard(generatedResponse ?? "");
         trackEvent("ai", "mermaid parse success", "ttd");
       } catch (error: any) {

@@ -1,6 +1,9 @@
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
+import { CaptureUpdateAction } from "@fcboard/element";
 import { render as editor } from "@fcboard/fcboard/tests/test-utils";
+
+import { selectedRegion } from "@fcboard/fcboard/lasso/region";
 
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 
@@ -172,7 +175,7 @@ it("keeps brush and gradient previews native with the calibrated style", async (
   });
 });
 
-it("updates input exclusions from object mutations without scanning scene elements during configure", async () => {
+it("keeps native lasso continuous across object bounds without scanning scene elements during configure", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;
   window.h.state.width = 1000;
@@ -194,15 +197,13 @@ it("updates input exclusions from object mutations without scanning scene elemen
   try {
     render(<NativeInkInteraction api={api} />);
     await waitFor(() =>
-      expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
-        88, 88, 132, 132,
-      ]),
+      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
     );
     act(() => api.mutateElement(shape, { x: 160 }));
     await waitFor(() =>
-      expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
-        148, 88, 192, 132,
-      ]),
+      expect(
+        backend.configure.mock.calls.at(-1)?.[0].blocked,
+      ).not.toContainEqual([148, 88, 192, 132]),
     );
     expect(backend.configure.mock.calls.at(-1)![0].blocked).not.toContainEqual([
       88, 88, 132, 132,
@@ -291,7 +292,7 @@ it.each(["select", "regionErase"] as const)(
     expect(options.enabled).toBe(true);
     expect(options.mode).toBe(mode);
     if (mode === "select") {
-      expect(options.blocked).toContainEqual([108, 108, 147, 147]);
+      expect(options.blocked).not.toContainEqual([108, 108, 147, 147]);
     }
     const contact = {
       owner: api.id,
@@ -434,4 +435,270 @@ it("acknowledges empty native eraser batches before lift and falls back visibly 
     expect(document.documentElement).not.toHaveClass("fc-native-scene"),
   );
   expect(api.getAppState().errorMessage).toBe("native geometry unavailable");
+  expect(api.getAppState().cursorButton).toBe("up");
 });
+
+it("commits native selection movement and uniform scale only on release and restores it with one undo", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  const target = API.createElement({
+    type: "rectangle",
+    x: 100,
+    y: 100,
+    width: 80,
+    height: 60,
+  });
+  act(() => {
+    api.setActiveTool({ type: "lasso" });
+    api.updateScene({
+      elements: [target],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      appState: {
+        width: 1000,
+        height: 700,
+        selectedElementIds: { [target.id]: true },
+        whiteboardSelection: selectedRegion([target], undefined, 1),
+      },
+    });
+  });
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() =>
+    expect(
+      backend.configure.mock.calls.at(-1)?.[0].selectionBounds,
+    ).toBeDefined(),
+  );
+  await waitFor(() =>
+    expect(backend.synchronize.mock.calls.at(-1)?.[0].selectionIds).toEqual([
+      target.id,
+    ]),
+  );
+  const options = backend.configure.mock.calls.at(-1)![0];
+  const before = api.getSceneElements()[0];
+  const bounds = options.selectionBounds as number[];
+  const contact = {
+    owner: api.id,
+    id: "native-transform",
+    token: options.token,
+    mode: "transform",
+    phase: "start",
+    width: 2,
+    height: 2,
+    pointerType: "touch",
+    points: [[140, 130, 0.5]],
+    transform: {
+      scale: 1,
+      dx: 0,
+      dy: 0,
+      anchorX: bounds[0],
+      anchorY: bounds[1],
+    },
+  };
+  act(() => backend.listeners.forEach((listener) => listener(contact)));
+  expect(api.getSceneElements()[0]).toBe(before);
+  expect(document.documentElement).toHaveClass("fc-native-selection-transform");
+  await act(async () =>
+    backend.listeners.forEach((listener) =>
+      listener({
+        ...contact,
+        phase: "end",
+        transform: { ...contact.transform, scale: 2, dx: 30, dy: 20 },
+      }),
+    ),
+  );
+  await waitFor(() => expect(api.getSceneElements()[0].width).toBe(160));
+  expect(api.getSceneElements()[0].x).toBe(
+    bounds[0] + (100 - bounds[0]) * 2 + 30,
+  );
+  await waitFor(() =>
+    expect(document.documentElement).not.toHaveClass(
+      "fc-native-selection-transform",
+    ),
+  );
+  expect(backend.synchronize.mock.calls.at(-1)![0].selectionThrough).toBe(
+    "native-transform",
+  );
+  fireEvent.click(document.querySelector('[data-testid="button-undo"]')!);
+  await waitFor(() => expect(api.getSceneElements()[0].width).toBe(80));
+  expect(api.getSceneElements()[0].x).toBe(100);
+});
+
+it("does not overwrite an object edited while a native selection preview is in flight", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  const target = API.createElement({
+    type: "rectangle",
+    x: 100,
+    y: 100,
+    width: 80,
+    height: 60,
+  });
+  act(() => {
+    api.setActiveTool({ type: "lasso" });
+    api.updateScene({
+      elements: [target],
+      appState: {
+        width: 1000,
+        height: 700,
+        selectedElementIds: { [target.id]: true },
+        whiteboardSelection: selectedRegion([target], undefined, 1),
+      },
+    });
+  });
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() => expect(backend.configure).toHaveBeenCalled());
+  const options = backend.configure.mock.calls.at(-1)![0];
+  const contact = {
+    owner: api.id,
+    id: "stale-transform",
+    token: options.token,
+    mode: "transform",
+    phase: "start",
+    width: 2,
+    height: 2,
+    pointerType: "touch",
+    points: [[140, 130, 0.5]],
+    transform: { scale: 1, dx: 0, dy: 0, anchorX: 0, anchorY: 0 },
+  };
+  act(() => backend.listeners.forEach((listener) => listener(contact)));
+  act(() => api.mutateElement(target, { x: 420 }));
+  await act(async () =>
+    backend.listeners.forEach((listener) =>
+      listener({
+        ...contact,
+        phase: "end",
+        transform: { ...contact.transform, dx: 30 },
+      }),
+    ),
+  );
+  await waitFor(() =>
+    expect(document.documentElement).not.toHaveClass(
+      "fc-native-selection-transform",
+    ),
+  );
+  expect(api.getSceneElements()[0].x).toBe(420);
+});
+
+it("cancels every active native writer when geometry failure returns control to WebView", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() => expect(backend.configure).toHaveBeenCalled());
+  const token = backend.configure.mock.calls.at(-1)![0].token;
+  const progress: string[] = [];
+  const stop = api.onInkProgress((stroke, phase) =>
+    progress.push(`${stroke.id}:${phase}`),
+  );
+  const emit = async (id: string, mode = "pen", phase = "start") =>
+    act(async () => {
+      backend.listeners.forEach((listener) =>
+        listener({
+          owner: api.id,
+          id,
+          token,
+          mode,
+          phase,
+          palm: mode === "erase",
+          width: 60,
+          height: 72,
+          pointerType: "touch",
+          points: [[100, 100, 0.5]],
+        }),
+      );
+    });
+  try {
+    await emit("left");
+    await emit("right");
+    expect(api.getAppState().cursorButton).toBe("down");
+    backend.erase.mockRejectedValueOnce(new Error("worker unavailable"));
+    await emit("palm", "erase");
+    await waitFor(() =>
+      expect(api.getAppState().errorMessage).toBe("worker unavailable"),
+    );
+    expect(progress.filter((item) => item.endsWith(":cancel"))).toHaveLength(2);
+    expect(api.getAppState().cursorButton).toBe("up");
+    await emit("left", "pen", "end");
+    expect(api.getSceneElements()).toHaveLength(0);
+  } finally {
+    stop();
+  }
+});
+
+it.each([false, true])(
+  "cancels an awaiting eraser start, accepts fresh input immediately, and ignores old failure=%s",
+  async (failure) => {
+    await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    const api = window.h.app.api;
+    window.h.state.width = 1000;
+    window.h.state.height = 700;
+    act(() => api.setActiveTool({ type: "eraser" }));
+    render(<NativeInkInteraction api={api} />);
+    await waitFor(() => expect(backend.configure).toHaveBeenCalled());
+    const token = backend.configure.mock.calls.at(-1)![0].token;
+    let finish!: (value: { patches: [] }) => void;
+    let reject!: (error: Error) => void;
+    backend.erase.mockReturnValueOnce(
+      new Promise((resolve, fail) => {
+        finish = resolve;
+        reject = fail;
+      }),
+    );
+    const contact = {
+      owner: api.id,
+      id: "awaiting",
+      token,
+      mode: "erase",
+      phase: "start",
+      width: 60,
+      height: 72,
+      pointerType: "touch",
+      points: [[100, 100, 0.5]],
+    };
+    await act(async () =>
+      backend.listeners.forEach((listener) => listener(contact)),
+    );
+    await waitFor(() => expect(backend.erase).toHaveBeenCalledTimes(1));
+    const configured = backend.configure.mock.calls.length;
+    act(() => {
+      backend.listeners.forEach((listener) =>
+        listener({ ...contact, id: "queued-old" }),
+      );
+      classroomCommands.invalidate();
+    });
+    expect(api.getAppState().cursorButton).toBe("up");
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.length).toBeGreaterThan(configured),
+    );
+    const freshToken = backend.configure.mock.calls.at(-1)![0].token;
+    expect(freshToken).not.toBe(token);
+    await act(async () =>
+      backend.listeners.forEach((listener) =>
+        listener({ ...contact, id: "late-old" }),
+      ),
+    );
+    await act(async () =>
+      backend.listeners.forEach((listener) =>
+        listener({ ...contact, id: "fresh", token: freshToken }),
+      ),
+    );
+    await waitFor(() => expect(backend.erase).toHaveBeenCalledTimes(2));
+    expect(api.getAppState().cursorButton).toBe("down");
+    await act(async () =>
+      backend.listeners.forEach((listener) =>
+        listener({ ...contact, id: "fresh", token: freshToken, phase: "end" }),
+      ),
+    );
+    await waitFor(() => expect(api.getAppState().cursorButton).toBe("up"));
+    await act(async () => {
+      if (failure) {
+        reject(new Error("old board worker failed"));
+      } else {
+        finish({ patches: [] });
+      }
+    });
+    expect(backend.erase).toHaveBeenCalledTimes(3);
+    expect(api.getAppState().errorMessage).toBeNull();
+  },
+);

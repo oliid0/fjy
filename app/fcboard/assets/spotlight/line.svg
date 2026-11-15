@@ -1,1 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 40"><path d="M1 0v40" stroke="#bcbcbc" stroke-width="2"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generator: visioncortex VTracer 1.0.0-alpha.4 -->
+<svg viewBox="0 0 1 44" version="1.1" xmlns="http://www.w3.org/2000/svg" width="1" height="44">
+<path d="M0,0C.33,0,.66,0,1,0C1,14.667,1,29.333,1,44c-.33,0-.66,0-1,0C0,29.333,0,14.667,0,0Z" fill="#606060"/>
+</svg>

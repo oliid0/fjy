@@ -54,18 +54,6 @@ export const BoardSettings = ({
   return (
     <>
       <SettingsSection id="toolbar">
-        <button
-          type="button"
-          onClick={() =>
-            void classroomCommands
-              .execute({ name: "tools.extended" })
-              .catch((failure) => setError(String(failure)))
-          }
-        >
-          {t("fcboard.teaching_tools")}
-        </button>
-      </SettingsSection>
-      <SettingsSection id="toolbar">
         <ToolbarSettings />
       </SettingsSection>
       <SettingsSection id="background">

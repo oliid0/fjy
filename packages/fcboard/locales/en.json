@@ -726,6 +726,16 @@
     "mmb": "Scroll wheel"
   },
   "fcboard": {
+    "roll_call": "Roll call",
+    "namelist": "Namelist",
+    "namelist_hint": "Enter one name per line, or separate names with commas.",
+    "namelist_empty": "Add names to begin.",
+    "namelist_invalid": "Use at most 5,000 names, each up to 80 characters.",
+    "rollcall_ready": "Ready to roll",
+    "rollcall_start": "Start",
+    "rollcall_stop": "Stop",
+    "rollcall_resume": "Continue",
+
     "touch_locked": "Touch locked. Use the sideboard unlock button to resume.",
     "touch_unlocked": "Touch unlocked.",
     "factorySettings": {

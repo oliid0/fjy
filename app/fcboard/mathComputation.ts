@@ -1,6 +1,6 @@
 import { t } from "@fcboard/fcboard/i18n";
 
-import { calculateLocal, prepareCalculation } from "./mathCalculation";
+import { prepareCalculation } from "./calculationSyntax";
 
 /** A symbolic solver can loop on valid syntax. Cancellation/timeout terminates its worker. */
 export const calculateAsync = async (
@@ -20,6 +20,8 @@ export const calculateAsync = async (
     !parsed.symbolic &&
     /^[\d\s.eE+\-*/%()]+$/.test(parsed.expression)
   ) {
+    const { calculateLocal } = await import("./mathCalculation");
+    signal?.throwIfAborted();
     return calculateLocal(parsed.expression);
   }
   if (typeof Worker === "undefined") {

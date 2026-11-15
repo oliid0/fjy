@@ -169,15 +169,19 @@ const SplitPane = ({
       if (!(rect.width > 0 && rect.height > 0)) {
         return;
       }
-      node.width = Math.max(
+      const width = Math.max(
         1,
         Math.round(rect.width * (devicePixelRatio || 1)),
       );
-      node.height = Math.max(
+      const height = Math.max(
         1,
         Math.round(rect.height * (devicePixelRatio || 1)),
       );
-      redraw();
+      if (node.width !== width || node.height !== height) {
+        node.width = width;
+        node.height = height;
+        redraw();
+      }
     };
     fit();
     const observer =

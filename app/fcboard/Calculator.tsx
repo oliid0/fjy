@@ -1,12 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isColorDark } from "@fcboard/common";
-import { CaptureUpdateAction, newElementWith } from "@fcboard/element";
 import { t } from "@fcboard/fcboard/i18n";
 import { requestResourceControl } from "@fcboard/fcboard/interactiveResourceControls";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
+import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
+
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
-import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
 import { classroomCommands } from "./commands";
 import {
@@ -16,7 +16,7 @@ import {
 } from "./nativeResources";
 import calculator from "./calculator/calculator.html?raw";
 
-import type { InkStroke } from "./documents";
+import "./Calculator.scss";
 
 const calculatorId = "builtin-calculator";
 export const calculatorResource = (dark: boolean) =>
@@ -29,67 +29,22 @@ export const calculatorResource = (dark: boolean) =>
     ),
   });
 
-/** The offline reference calculator lives in the same object/frame path as lessons. */
+/** CalculatorService's centered floating window, independent of board/page history. */
 export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
+  const [open, setOpen] = useState(false);
+  const [bounds, setBounds] = useState(() => calculatorBounds());
+  const [dark, setDark] = useState(() =>
+    isColorDark(api.getAppState().viewBackgroundColor || "#ffffff"),
+  );
+  const current = useRef({ open, dark });
+  current.current = { open, dark };
+  const objectId = "floating-calculator";
+  const resource = useMemo(() => calculatorResource(dark), [dark]);
   useEffect(() => {
-    const current = () => {
-      const document = classroomCommands.read("document") as
-        | { ink: InkStroke[] }
-        | undefined;
-      if (document) {
-        const object = document.ink.find(
-          (stroke) => stroke.resource?.id === calculatorId,
-        );
-        return object?.resource
-          ? {
-              id: object.id,
-              resource: object.resource,
-              surface: "document" as const,
-            }
-          : undefined;
-      }
-      const object = api
-        .getSceneElements()
-        .find(
-          (element) =>
-            !element.isDeleted &&
-            element.customData?.fcInteractiveResource?.id === calculatorId,
-        );
-      return object
-        ? {
-            id: object.id,
-            resource: object.customData!
-              .fcInteractiveResource as InteractiveResource,
-            surface: "whiteboard" as const,
-          }
-        : undefined;
-    };
-    const close = async () => {
-      const object = current();
-      if (!object) {
-        return;
-      }
-      if (object.surface === "document") {
-        await classroomCommands.execute({
-          name: "document.erase",
-          args: { ids: [object.id] },
-        });
-      } else {
-        api.updateScene({
-          elements: api
-            .getSceneElements()
-            .map((element) =>
-              element.id === object.id
-                ? newElementWith(element, { isDeleted: true })
-                : element,
-            ),
-          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-        });
-      }
-    };
+    const theme = () =>
+      setDark(isColorDark(api.getAppState().viewBackgroundColor || "#ffffff"));
     const operate = (args: Record<string, unknown>, click: boolean) => {
-      const object = current();
-      if (!object) {
+      if (!current.current.open) {
         throw new Error(t("fcboard.this_board_action_is_unavailable"));
       }
       if (
@@ -98,93 +53,57 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
       ) {
         throw new Error(t("fcboard.invalid_style_parameters"));
       }
+      const action = click
+        ? {
+            type: "click" as const,
+            version: args.version as string,
+            control: args.control as string,
+          }
+        : { type: "inspect" as const };
+      const signal =
+        args.signal instanceof AbortSignal ? args.signal : undefined;
       if (hasNativeCalculator()) {
         return nativeCalculatorControl(
-          object.id,
-          click
-            ? {
-                type: "click",
-                version: args.version as string,
-                control: args.control as string,
-              }
-            : { type: "inspect" },
-          args.signal instanceof AbortSignal ? args.signal : undefined,
-          () => current()?.id === object.id,
+          objectId,
+          action,
+          signal,
+          () => current.current.open,
         );
       }
       return requestResourceControl(
-        { id: object.id, surface: object.surface, html: object.resource.html },
-        click
-          ? {
-              type: "click",
-              version: args.version as string,
-              control: args.control as string,
-            }
-          : { type: "inspect" },
         {
-          signal: args.signal instanceof AbortSignal ? args.signal : undefined,
-          current: () => current()?.id === object.id,
+          id: objectId,
+          surface: "whiteboard",
+          html: calculatorResource(current.current.dark).html,
         },
+        action,
+        { signal, current: () => current.current.open },
       );
     };
-    let previousTheme: boolean | undefined;
-    const theme = () => {
-      const dark = isColorDark(
-        api.getAppState().viewBackgroundColor || "#ffffff",
-      );
-      if (dark === previousTheme) {
-        return;
-      }
-      previousTheme = dark;
-      const object = current();
-      if (!object) {
-        return;
-      }
-      if (hasNativeCalculator()) {
-        setNativeCalculatorTheme(object.id, dark);
-      }
-      document
-        .querySelector<HTMLIFrameElement>(
-          `iframe[data-resource-object-id="${object.id}"]`,
-        )
-        ?.contentWindow?.postMessage(
-          { channel: "fc-calculator-theme", dark },
-          "*",
-        );
-    };
+    const resize = () => setBounds((box) => fitCalculator(box));
+    window.addEventListener("resize", resize);
     const stops = [
       classroomCommands.register(
         "tools.calculator",
-        "Open the offline calculator object on the visible surface; args.open=false closes it. calculator.inspect/press operate its real keys.",
-        async (args) => {
+        "Open the centered floating calculator over the current board or document. args.open=false closes it. calculator.inspect/press operate its actual keys.",
+        (args) => {
           if (args.open !== undefined && typeof args.open !== "boolean") {
             throw new Error(t("fcboard.invalid_style_parameters"));
           }
-          if (args.open === false) {
-            await close();
-            return { open: false };
+          if (args.open !== false && !current.current.open) {
+            setBounds(calculatorBounds());
           }
-          const object = current();
-          if (object) {
-            await classroomCommands.execute({
-              name: "canvas.select",
-              args: { ids: [object.id] },
-            });
-            return { open: true, ids: [object.id] };
-          }
-          const resource = calculatorResource(
-            isColorDark(api.getAppState().viewBackgroundColor || "#ffffff"),
-          );
-          const result = await classroomCommands.execute({
-            name: "canvas.resource",
-            args: { resource },
-          });
-          return { open: true, ...(result as { ids: string[] }) };
+          current.current.open = args.open !== false;
+          setOpen(args.open !== false);
+          return {
+            open: args.open !== false,
+            ...(args.open === false ? {} : { ids: [objectId] }),
+          };
         },
       ),
       classroomCommands.register(
         "calculator.inspect",
-        "Read the calculator object's actual keys, display and version.",
+        "Read the floating calculator's actual keys, display and version.",
         (args) => operate(args, false),
       ),
       classroomCommands.register(
@@ -193,12 +112,70 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
         (args) => operate(args, true),
       ),
       api.onChange(theme),
-      classroomCommands.watch("document", () => {
-        previousTheme = undefined;
-        theme();
-      }),
     ];
-    return () => stops.forEach((stop) => stop());
+    return () => {
+      stops.forEach((stop) => stop());
+      window.removeEventListener("resize", resize);
+    };
   }, [api]);
-  return null;
+  useEffect(() => {
+    if (open && hasNativeCalculator()) {
+      setNativeCalculatorTheme(objectId, dark);
+    }
+  }, [open, dark]);
+  return open ? (
+    <div
+      className="fc-floating-calculator"
+      role="group"
+      aria-label={t("fcboard.calculator")}
+      style={{
+        left: bounds.x,
+        top: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+      }}
+    >
+      <InteractiveResourceFrame
+        resource={resource}
+        objectId={objectId}
+        surface="whiteboard"
+        window={{
+          bounds,
+          scale: 1,
+          viewport: { left: 0, top: 0, right: innerWidth, bottom: innerHeight },
+          onCommit: (box) => setBounds(fitCalculator(box)),
+          onClose: () => {
+            current.current.open = false;
+            setOpen(false);
+          },
+        }}
+      />
+    </div>
+  ) : null;
+};
+
+const fitCalculator = (box: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}) => {
+  const width = Math.min(innerWidth - 16, Math.max(180, box.width));
+  const height = Math.min(innerHeight - 16, Math.max(260, box.height));
+  return {
+    width,
+    height,
+    x: Math.max(8, Math.min(innerWidth - width - 8, box.x)),
+    y: Math.max(8, Math.min(innerHeight - height - 8, box.y)),
+  };
+};
+const calculatorBounds = () => {
+  const height = Math.min(innerHeight * 0.78, 720);
+  const width = Math.min(height * 0.62, 440, innerWidth - 24);
+  return fitCalculator({
+    width,
+    height,
+    x: (innerWidth - width) / 2,
+    y: (innerHeight - height) / 2,
+  });
 };

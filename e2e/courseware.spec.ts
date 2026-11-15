@@ -382,15 +382,17 @@ test("voice draws into the visible PPT and function controls update its transpar
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("画y=a*x+1的函数图像"),
   );
-  const graph = page.frameLocator("iframe[data-resource-object-id]").last();
+  const graph = page
+    .locator(".fc-document-ink foreignObject:has(.fc-inline-function)")
+    .last();
   const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
   await expect(slider).toBeVisible();
   await slider.focus();
   await slider.press("ArrowRight");
   await expect(slider).toHaveValue("1.1");
-  await expect(graph.locator("#fc-vega .mark-line path").first()).toBeVisible();
+  await expect(graph.locator(".mark-line path").first()).toBeVisible();
   await expect(
-    graph.getByRole("heading", { name: "y = a*x+1", exact: true }),
+    graph.locator('.fc-inline-function[aria-label="y = a*x+1"]'),
   ).toHaveCount(1);
   await page.screenshot({ path: info.outputPath("voice-ppt-function.png") });
   await page.evaluate(() =>

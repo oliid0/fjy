@@ -6,3 +6,7 @@ html.fc-native-scene .app,
 html.fc-native-scene .app .fcboard {
   background-color: transparent !important;
 }
+
+html.fc-native-selection-transform .fcboard__canvas.interactive {
+  visibility: hidden;
+}

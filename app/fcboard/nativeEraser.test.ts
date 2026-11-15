@@ -2,6 +2,7 @@ import { newElementWith } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 import { eraseStroke } from "@fcboard/fcboard/eraser/stroke";
+import * as strokeGeometry from "@fcboard/fcboard/eraser/stroke";
 
 import type { LocalPoint } from "@fcboard/math";
 
@@ -32,6 +33,7 @@ const path = [
 it("sends version deltas once and removes deleted or locked strokes from the native index", async () => {
   const ink = stroke();
   const backend = createNativeEraserBackend("board");
+  backend.synchronize([ink], []);
   await backend.erase([ink], path, 10, 12);
   expect(native.erase.mock.calls[0][0]).toMatchObject({
     owner: "board",
@@ -53,19 +55,18 @@ it("sends version deltas once and removes deleted or locked strokes from the nat
   await backend.erase([ink], path, 10, 12);
   expect(native.erase.mock.calls[1][0].updates).toEqual([]);
   const changed = newElementWith(ink, { x: 200 });
+  backend.synchronize([changed], []);
   await backend.erase([changed], path, 10, 12);
   expect(native.erase.mock.calls[2][0].updates).toHaveLength(1);
-  await backend.erase(
-    [newElementWith(changed, { locked: true })],
-    path,
-    10,
-    12,
-  );
+  const locked = newElementWith(changed, { locked: true });
+  backend.synchronize([locked], []);
+  await backend.erase([locked], path, 10, 12);
   expect(native.erase.mock.calls[3][0].removals).toEqual([ink.id]);
 });
 it("reconstructs native intersections with the exact existing browser vector metadata", async () => {
   const ink = stroke();
   const backend = createNativeEraserBackend("board");
+  backend.synchronize([ink], []);
   native.erase.mockResolvedValueOnce({
     patches: [
       {
@@ -113,6 +114,7 @@ it("reconstructs native intersections with the exact existing browser vector met
 it("drops an in-flight old-board response after native index reset", async () => {
   const ink = stroke();
   const backend = createNativeEraserBackend("board");
+  backend.synchronize([ink], []);
   let finish!: (value: {
     patches: { id: string; pieces: number[][][]; nibHit: boolean }[];
   }) => void;
@@ -126,6 +128,7 @@ it("drops an in-flight old-board response after native index reset", async () =>
   finish({ patches: [{ id: ink.id, pieces: [], nibHit: true }] });
   expect(await pending).toEqual([]);
   expect(native.release).toHaveBeenCalledWith({ owner: "board" });
+  backend.synchronize([ink], []);
   await backend.erase([ink], path, 10, 12);
   expect(native.erase.mock.calls[1][0].updates).toHaveLength(1);
 });
@@ -172,4 +175,24 @@ it("preserves a new object version received while a native cut is in flight", as
   expect(stale.source).toBe(ink);
   await backend.erase([], path, 10, 12);
   expect(native.erase.mock.calls.at(-1)![0].updates[0].samples[0][0]).toBe(300);
+});
+
+it("prepares eraser geometry only when a sweep needs the latest committed version", async () => {
+  const prepare = vi.spyOn(strokeGeometry, "prepareNativeEraseStroke");
+  const ink = stroke();
+  const backend = createNativeEraserBackend("board");
+  try {
+    backend.synchronize([ink], []);
+    const moved = newElementWith(ink, { x: 200 });
+    backend.synchronize([moved], []);
+    expect(prepare).not.toHaveBeenCalled();
+    await backend.erase([moved], path, 10, 12);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(prepare).toHaveBeenCalledWith(moved);
+    await backend.erase([moved], path, 10, 12);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(native.erase.mock.calls[1][0].updates).toEqual([]);
+  } finally {
+    prepare.mockRestore();
+  }
 });

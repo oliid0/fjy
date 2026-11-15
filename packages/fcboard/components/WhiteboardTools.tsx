@@ -374,14 +374,17 @@ export const WhiteboardTools = ({
             icon={<FactoryIcon name="shape" />}
             aria-label={t("fcboard.shape")}
             showAriaLabel
-            selected={[
-              "rectangle",
-              "diamond",
-              "ellipse",
-              "arrow",
-              "line",
-              "custom",
-            ].includes(activeTool.type)}
+            selected={
+              !(open && !shapesOpen) &&
+              [
+                "rectangle",
+                "diamond",
+                "ellipse",
+                "arrow",
+                "line",
+                "custom",
+              ].includes(activeTool.type)
+            }
             onClick={(event) => {
               if (activeTool.type !== lastShape.current) {
                 openingShape.current = true;

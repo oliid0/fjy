@@ -33,6 +33,38 @@ public class NativeInkPlugin extends Plugin {
         @Override public void onInputDeviceChanged(int id){}
         @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);}
     };
+    // HWhiteBoard onStart/onStop owns this provider flag. Without it BSD
+    // firmware can suppress side-board touches before Activity dispatch.
+    // Probe the actual provider; unrelated devices receive no vendor commands.
+    private final java.util.concurrent.ExecutorService vendor = java.util.concurrent.Executors.newSingleThreadExecutor(r -> new Thread(r, "native-board-mode"));
+    private String previousBoardMode;
+    private final android.net.Uri boardSettings = android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings");
+    private void boardMode(boolean foreground) {
+        try {
+            android.content.ContentResolver resolver = getContext().getContentResolver();
+            try (android.database.Cursor cursor = resolver.query(boardSettings, new String[]{"whiteboard_state"}, null, null, null)) {
+                if (cursor == null || !cursor.moveToFirst()) return;
+                String current = cursor.getString(cursor.getColumnIndexOrThrow("whiteboard_state"));
+                String next;
+                if (foreground) {
+                    if (previousBoardMode != null || !("0".equals(current) || "1".equals(current))) return;
+                    previousBoardMode = current;
+                    next = "1";
+                } else {
+                    if (previousBoardMode == null) return;
+                    next = previousBoardMode;
+                    previousBoardMode = null;
+                    if (!"1".equals(current)) return;
+                }
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put("whiteboard_state", next);
+                resolver.update(boardSettings, values, null, null);
+            }
+        } catch (Exception unavailable) {
+            android.util.Log.d("NativeInk", "Vendor board mode unavailable: " + unavailable.getClass().getSimpleName());
+        }
+    }
+    @Override protected void handleOnResume() { vendor.execute(() -> boardMode(true)); }
     @Override public void load() {
         ((MainActivity)getActivity()).setInkInput(this);
         inputManager=(android.hardware.input.InputManager)getContext().getSystemService(android.content.Context.INPUT_SERVICE);
@@ -40,9 +72,9 @@ public class NativeInkPlugin extends Plugin {
     }
     void sceneCommitted(String owner) { NativeInkView view=surfaces.get(owner);if(view!=null)view.sceneCommitted(); }
     /** Route the real event before ViewGroup can cancel another device's stream. */
-    boolean dispatchInput(MotionEvent event) {
+    boolean dispatchInput(MotionEvent event,java.util.function.Consumer<MotionEvent> forward) {
         if (touchLocked && event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) return true;
-        return inputRouter.dispatch(event);
+        return inputRouter.dispatch(event,forward);
     }
 
     boolean dispatchKey(KeyEvent event) {
@@ -105,6 +137,7 @@ public class NativeInkPlugin extends Plugin {
                         JSONArray box = boxes.getJSONArray(i); blocked.add(new RectF((float)box.getDouble(0), (float)box.getDouble(1), (float)box.getDouble(2), (float)box.getDouble(3)));
                     }
                 }
+                view.setSelection(call.getArray("selectionBounds"),call.getString("selectionKey",""),call.getFloat("selectionMinScale",.1f),call.getBoolean("selectionResize",true));
                 view.setPersistent(call.getBoolean("persistent",false));
                 view.setMultiStroke(call.getBoolean("multiStroke", true));
                 view.setRetainedScene(() -> ((MainActivity)getActivity()).nativeScene(owner), !"object".equals(call.getString("eraserMode", "stroke")));
@@ -140,8 +173,9 @@ public class NativeInkPlugin extends Plugin {
     @PluginMethod public void remove(PluginCall call) {
         getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); inputRouter.remove(view); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
     }
-    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
+    @Override protected void handleOnPause() { vendor.execute(() -> boardMode(false)); getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
     @Override protected void handleOnDestroy() {
+        vendor.execute(() -> boardMode(false)); vendor.shutdown();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(devices);
         getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
     }

@@ -44,7 +44,9 @@ public final class NativeScenePlugin extends Plugin {
                 float scale=getBridge().getWebView().getWidth()/viewport;if(!(scale>0))throw new IllegalStateException("Native viewport unavailable");
                 int[] web=new int[2],origin=new int[2];getBridge().getWebView().getLocationInWindow(web);layer.getLocationInWindow(origin);
                 FrameLayout.LayoutParams bounds=new FrameLayout.LayoutParams(Math.max(1,Math.round(width*scale)),Math.max(1,Math.round(height*scale)));
-                bounds.leftMargin=Math.round(web[0]-origin[0]+x*scale);bounds.topMargin=Math.round(web[1]-origin[1]+y*scale);entry.view.setLayoutParams(bounds);
+                bounds.leftMargin=Math.round(web[0]-origin[0]+x*scale);bounds.topMargin=Math.round(web[1]-origin[1]+y*scale);
+                ViewGroup.LayoutParams old=entry.view.getLayoutParams();
+                if(!(old instanceof FrameLayout.LayoutParams)||old.width!=bounds.width||old.height!=bounds.height||((FrameLayout.LayoutParams)old).leftMargin!=bounds.leftMargin||((FrameLayout.LayoutParams)old).topMargin!=bounds.topMargin)entry.view.setLayoutParams(bounds);
                 long received=entry.view.sequence();Entry target=entry;
                 worker.execute(()->{
                     try{

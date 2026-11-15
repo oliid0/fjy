@@ -11,6 +11,7 @@ import { observeInkAssistance } from "./inkAssistance";
 import { saveSettings, defaults } from "./settings";
 import * as ai from "./ai";
 import * as ocr from "./ocr";
+import * as localTranslation from "./localTranslation";
 import { classroomCommands } from "./commands";
 import { validatedPlot } from "./mathRecognition";
 import { drawPlot } from "./board";
@@ -82,7 +83,8 @@ const confirmMagicImage = () =>
   });
 
 const setup = (
-  mode?: "text" | "shape" | "function" | "calculation" | "magic",
+  mode?: "text" | "shape" | "function" | "calculation" | "magic" | "language",
+  cursorButton: "up" | "down" = "up",
 ) => {
   let scene: readonly FcboardElement[] = [];
   let refresh = () => {};
@@ -96,7 +98,7 @@ const setup = (
       height: 900,
       zoom: { value: 1 },
       currentItemInkAssist: mode,
-      cursorButton: "up",
+      cursorButton,
       activeTool: { type: "freedraw" },
       selectedElementIds: {},
     }),
@@ -156,7 +158,9 @@ const setup = (
       refresh();
     },
     append: () => {
-      scene = [...scene, { ...ink, id: "second-stroke", x: 240 }];
+      const next = { ...ink, id: "second-stroke", x: 240 };
+      scene = [...scene, next];
+      commit(next);
       refresh();
     },
     erase: () => {
@@ -426,11 +430,16 @@ it("waits for the complete formula after another stroke instead of recognizing p
   }
 });
 
-it.each(["function", "calculation"] as const)(
-  "runs the %s pen locally without switching tools or opening AI",
-  async (mode) => {
+it.each([
+  ["function", "up"],
+  ["function", "down"],
+  ["calculation", "up"],
+  ["calculation", "down"],
+] as const)(
+  "runs the %s pen locally with cursor %s without switching tools or opening AI",
+  async (mode, cursorButton) => {
     vi.useFakeTimers();
-    const { api, ink, draw, append } = setup(mode);
+    const { api, ink, draw, append } = setup(mode, cursorButton);
     saveSettings({ ...defaults, apiKey: "", model: "" }, false);
     vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue(
       mode === "function" ? "y=x^2" : "0.1+0.2",
@@ -1082,5 +1091,37 @@ it("measures three triangle corners from one batch without serial OCR work or lo
     expect(errors).not.toHaveBeenCalled();
   } finally {
     release();
+  }
+});
+
+it("translates committed language ink while a WebView pointer remains down", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("language", "down");
+  saveSettings({ ...defaults, apiKey: "", ocr: "local" }, false);
+  vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue("hello");
+  const translate = vi
+    .spyOn(localTranslation, "translateLocally")
+    .mockResolvedValue({ language: "en", translation: "你好" });
+  const error = vi.fn();
+  const stop = observeInkAssistance(api, vi.fn(), error);
+  try {
+    draw();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1250);
+    });
+    expect(translate).toHaveBeenCalledTimes(1);
+    expect(
+      api
+        .getSceneElements()
+        .filter((element) => element.type === "text")
+        .map((element) => element.text),
+    ).toContain("你好");
+    expect(
+      api.getSceneElements().find((element) => element.id === ink.id)
+        ?.customData?.fcLanguage?.study?.translation,
+    ).toBe("你好");
+    expect(error).not.toHaveBeenCalled();
+  } finally {
+    stop();
   }
 });

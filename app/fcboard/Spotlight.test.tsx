@@ -184,3 +184,34 @@ it("coalesces dragging to one display frame and commits the final position befor
     screen.queryByRole("region", { name: t("fcboard.spotlight") }),
   ).toBeNull();
 });
+
+it("opens the reference color wheel and updates the mask from real pointer input", async () => {
+  render(<Spotlight />);
+  await act(async () => classroomCommands.execute({ name: "tools.spotlight" }));
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.colour") }));
+  const wheel = screen.getByRole("slider", { name: t("fcboard.colour") });
+  vi.spyOn(wheel, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 0, 300, 300),
+  );
+  fireEvent(
+    wheel,
+    Object.assign(new Event("pointerdown", { bubbles: true }), {
+      pointerId: 1,
+      clientX: 300,
+      clientY: 150,
+    }),
+  );
+  expect(wheel).toHaveAttribute("aria-valuetext", "#ff0000");
+  const overlay = screen.getByRole("region", { name: t("fcboard.spotlight") });
+  expect(overlay.querySelector("svg > rect")).toHaveAttribute(
+    "fill",
+    "#ff0000",
+  );
+  fireEvent.input(screen.getByRole("slider", { name: t("labels.opacity") }), {
+    target: { value: "200" },
+  });
+  expect(
+    Number(overlay.querySelector("svg > g")!.getAttribute("fill-opacity")),
+  ).toBeCloseTo(200 / 255);
+});

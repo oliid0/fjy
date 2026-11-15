@@ -82,10 +82,10 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
         args: { tool: "signal" },
       }),
     ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
+    expect(api.getSceneElements()).toHaveLength(0);
     expect(
-      api.getSceneElements().find((element) => element.type === "iframe")
-        ?.customData?.fcInteractiveResource?.id,
-    ).toBe("builtin-calculator");
+      document.querySelector(".fc-floating-calculator"),
+    ).toBeInTheDocument();
   } finally {
     stop();
     view.unmount();

@@ -783,10 +783,12 @@ describe("selection-driven classroom controls", () => {
         await vi.advanceTimersByTimeAsync(500);
       });
       expect(
-        screen.queryByRole("slider", {
-          name: t("fcboard.adjust_key", { key: "a" }),
-        }),
-      ).toBeNull();
+        screen
+          .getByRole("slider", {
+            name: t("fcboard.adjust_key", { key: "a" }),
+          })
+          .closest(".fc-inline-function-object"),
+      ).toBeInTheDocument();
       expect(scene.some((element) => element.customData?.fcPlot)).toBe(true);
       expect(chat).not.toHaveBeenCalled();
       expect(cancel).not.toHaveBeenCalled();
@@ -3891,10 +3893,8 @@ describe("selection-driven classroom controls", () => {
     );
     const original = scene.filter((el) => el.customData?.fcPlot);
     expect(original).toHaveLength(1);
-    expect(original[0].type).toBe("iframe");
-    expect(
-      original[0].customData?.fcInteractiveResource.visualization.mode,
-    ).toBe("vega");
+    expect(original[0].type).toBe("image");
+    expect(original[0].customData?.fcPlot.renderer).toBe("vega");
     await act(async () => {
       await classroomCommands.execute({
         name: "math.parameters",
@@ -3927,10 +3927,12 @@ describe("selection-driven classroom controls", () => {
       scene.find((el) => el.customData?.fcPlot)?.customData?.fcPlot.plot.a,
     ).toBe(2);
     expect(
-      screen.queryByRole("slider", {
-        name: t("fcboard.adjust_key", { key: "a" }),
-      }),
-    ).toBeNull();
+      screen
+        .getByRole("slider", {
+          name: t("fcboard.adjust_key", { key: "a" }),
+        })
+        .closest(".fc-inline-function-object"),
+    ).toBeInTheDocument();
   });
 
   it("uses the same projection for the 3D surface and its x/y/z axes", async () => {

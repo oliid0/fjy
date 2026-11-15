@@ -5,28 +5,21 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { Fcboard } from "@fcboard/fcboard";
-import { convertToFcboardElements } from "@fcboard/fcboard";
-import { newFreeDrawElement } from "@fcboard/element";
+import { Fcboard, convertToFcboardElements } from "@fcboard/fcboard";
+import { newFreeDrawElement, newIframeElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
-import {
-  EditorJotaiProvider,
-  editorJotaiStore,
-} from "@fcboard/fcboard/editor-jotai";
 import { createInlineVegaView } from "@fcboard/fcboard/visualizationRuntime";
+import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import { t } from "@fcboard/fcboard/i18n";
 
-import type { Spec } from "@fcboard/fcboard/visualizationRuntime";
-
-import { drawPlot, objectSelection } from "./board";
+import { drawPlot, objectSelection, updateFunctionGraph } from "./board";
 import { defaultPlot } from "./math";
 import { localMathResult } from "./mathRecognition";
 import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
-import {
-  functionGraphResource,
-  restoreDocumentFunctionGraphs,
-} from "./functionGraphResource";
-import { functionGraphImage } from "./functionVisualization";
+import { restoreDocumentFunctionGraphs } from "./functionGraphRestore";
+import { functionGraphImage, functionGraphSpec } from "./functionVisualization";
+import { functionGraphNavigation } from "./functionGraphNavigation";
 import { documentStrokeBounds } from "./documents";
 import * as ocr from "./ocr";
 
@@ -37,14 +30,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const setup = async (expression = "x") => {
-  await renderEditor(
-    <EditorJotaiProvider store={editorJotaiStore}>
-      <Fcboard UIOptions={{ unifiedToolbar: true }} />
-    </EditorJotaiProvider>,
-  );
-  window.h.state.width = 1600;
-  window.h.state.height = 900;
+  await renderEditor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;
+  act(() => api.updateScene({ appState: { width: 1600, height: 900 } }));
   let ids: string[] = [];
   act(() => {
     ids = drawPlot(api, { ...defaultPlot, expression }, { x: 350, y: 300 });
@@ -57,102 +45,47 @@ const setup = async (expression = "x") => {
   });
   const { render } = await import("./test/render");
   render(<FunctionGraphInteraction api={api} />);
+  await waitFor(() =>
+    expect(
+      document.querySelector(".fc-inline-function svg .mark-line path"),
+    ).not.toBeNull(),
+  );
   const graph = () =>
     api.getSceneElements().find((element) => ids.includes(element.id))!;
-  let frame!: HTMLIFrameElement;
-  await waitFor(() => {
-    frame = document.querySelector(
-      `iframe[data-resource-object-id="${ids[0]}"]`,
-    )!;
-    expect(frame).not.toBeNull();
-    expect(frame).toHaveAttribute("aria-busy", "false");
-  });
-  const reply = vi
-    .spyOn(frame.contentWindow!, "postMessage")
-    .mockImplementation(() => {});
-  const send = (
-    type: string,
-    extra: Record<string, unknown> = {},
-    source = frame.contentWindow,
-  ) => {
-    act(() =>
-      fireEvent(
-        window,
-        new MessageEvent("message", {
-          source,
-          data: {
-            channel: "fc-function-graph",
-            id: graph().customData!.fcInteractiveResource.id,
-            request: 1,
-            type,
-            view: { left: -10, right: 10, bottom: -10, top: 10 },
-            ...extra,
-          },
-        }),
-      ),
-    );
-  };
-  return { api, graph, frame, reply, send };
+  const svg = () =>
+    document.querySelector<SVGSVGElement>(".fc-inline-function svg")!;
+  return { api, graph, svg };
 };
-
-it("inserts transparent axes without range chrome and preserves Vega pan/pinch signals", async () => {
-  const { graph, frame } = await setup();
-  expect(graph().type).toBe("iframe");
-  expect(frame).toHaveAttribute("sandbox", "allow-scripts");
-  const resource = graph().customData!.fcInteractiveResource;
-  const html = new DOMParser().parseFromString(resource.html, "text/html");
-  expect(html.querySelectorAll("input[data-bound]")).toHaveLength(0);
-  expect(html.querySelector("nav")?.childElementCount).toBe(0);
-  expect(html.querySelector("output")?.textContent).toBe("");
-  expect(
-    [...html.querySelectorAll("style")].some((style) =>
-      style.textContent?.includes("nav:empty,output:empty{display:none}"),
-    ),
-  ).toBe(true);
-  expect(html.querySelector("output")).not.toBeNull();
-  expect(html.querySelector("svg .mark-line path")).not.toBeNull();
-  const view = createInlineVegaView(resource.visualization.spec as Spec);
-  try {
-    view.run();
-    expect(view.signal("xdom")).toEqual([-10, 10]);
-    view.signal("xdom", [-2, 3]).run();
-    expect(view.scale("x")(-2)).toBeCloseTo(0);
-    expect(view.scale("x")(3)).toBeCloseTo(view.width());
-  } finally {
-    view.finalize();
+it("inserts one saved transparent SVG object and renders a direct Vega SVG with no iframe or window chrome", async () => {
+  const { api, graph, svg } = await setup();
+  expect(graph().type).toBe("image");
+  expect(graph().customData!.fcPlot.renderer).toBe("vega");
+  expect(graph().customData!.fcInteractiveResource).toBeUndefined();
+  expect(document.querySelector("iframe[data-resource-object-id]")).toBeNull();
+  expect(document.querySelector(".fc-resource-window")).toBeNull();
+  expect(svg()).toHaveAttribute("viewBox", "0 0 500 440");
+  const element = graph();
+  if (element.type !== "image" || !element.fileId) {
+    throw new Error("Expected SVG image");
   }
+  expect(api.getFiles()[element.fileId].mimeType).toBe("image/svg+xml");
 });
-
-it("queries exact curve values and resamples another range without rewriting canvas objects or image files", async () => {
-  const { api, graph, send, reply } = await setup();
+it("queries a clicked curve and persists a real Vega wheel domain on the same object", async () => {
+  const { graph, svg } = await setup();
   const before = graph();
-  const files = Object.keys(api.getFiles());
-  const zoom = api.getAppState().zoom.value;
-  send("point", { point: [0.5, 0.5], width: 440, height: 400 });
-  expect(reply).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      type: "point",
-      point: { expression: "x", x: 0, y: 0 },
-    }),
-    "*",
-  );
-  send("sample", { view: { left: 10, right: 20, bottom: 10, top: 20 } });
-  const data = reply.mock.lastCall![0].points as { x: number; y: number }[];
-  expect(data.length).toBeGreaterThan(2);
-  expect(data.every(({ x, y }) => x >= 10 && x <= 20 && y === x)).toBe(true);
-  expect(graph()).toBe(before);
-  expect(Object.keys(api.getFiles())).toEqual(files);
-  expect(api.getAppState().zoom.value).toBe(zoom);
-});
-
-it("persists a completed range on the same movable/resizable object and undoes the whole gesture once", async () => {
-  const { api, graph, frame, reply, send } = await setup();
-  const before = graph();
-  const documentBefore = frame.srcdoc;
-  const bounds = { left: -2, right: 4, bottom: -3, top: 5 };
-  send("commit", { view: bounds });
+  fireEvent.click(svg(), { clientX: 260, clientY: 220 });
   await waitFor(() =>
-    expect(graph().customData!.fcPlot.plot.view).toEqual(bounds),
+    expect(screen.getByRole("status")).toHaveTextContent("y = x"),
+  );
+  expect(screen.getByRole("status")).toHaveTextContent("x = 0, y = 0");
+  fireEvent.wheel(svg(), {
+    clientX: 260,
+    clientY: 220,
+    deltaY: -160,
+    deltaMode: 0,
+  });
+  await waitFor(() =>
+    expect(graph().customData!.fcPlot.plot.view).toBeDefined(),
   );
   expect(graph()).toMatchObject({
     id: before.id,
@@ -160,75 +93,37 @@ it("persists a completed range on the same movable/resizable object and undoes t
     y: before.y,
     width: before.width,
     height: before.height,
-    groupIds: before.groupIds,
   });
-  expect(
-    document.querySelector(`iframe[data-resource-object-id="${before.id}"]`),
-  ).toBe(frame);
-  expect(frame.srcdoc).toBe(documentBefore);
-  expect(graph().customData!.fcInteractiveResource.html).not.toBe(
-    before.customData!.fcInteractiveResource.html,
-  );
-  expect(reply).toHaveBeenLastCalledWith(
-    expect.objectContaining({ type: "restore", view: bounds }),
-    "*",
-  );
-  expect(Object.keys(api.getFiles())).toHaveLength(0);
-  fireEvent.click(screen.getByTestId("button-undo"));
-  await waitFor(() =>
-    expect(graph().customData!.fcPlot.plot.view).toBeUndefined(),
-  );
-  expect(frame.srcdoc).toBe(documentBefore);
-  expect(reply).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      type: "restore",
-      view: { left: -10, right: 10, bottom: -10, top: 10 },
-    }),
-    "*",
-  );
+  const box = graph().customData!.fcPlot.plot.view;
+  expect(box.right - box.left).toBeLessThan(20);
 });
-
-it("rejects forged sources and invalid domains without touching the board", async () => {
-  const { graph, send, reply } = await setup();
+it("commits one parameter gesture and undoes the saved SVG without changing object bounds", async () => {
+  const { api, graph } = await setup("a*x+1");
   const before = graph();
-  send("commit", { view: { left: 1, right: 1, bottom: -1, top: 1 } });
-  send("point", { point: [0.5, 0.5], width: 440, height: 400 }, window);
-  send("sample", {
-    view: { left: -Infinity, right: 20, bottom: -10, top: 10 },
+  const slider = screen.getByRole("slider", {
+    name: t("fcboard.adjust_key", { key: "a" }),
   });
-  expect(reply).not.toHaveBeenCalled();
-  expect(graph()).toBe(before);
-});
-it("updates a real parameter on the same iframe and restores it on undo", async () => {
-  const { api, graph, frame, send, reply } = await setup("a*x+1");
-  const html = frame.getAttribute("srcdoc");
-  expect(html).toContain('data-parameter="a"');
-  send("commit", { parameters: { a: 2 } });
+  fireEvent.input(slider, { target: { value: "2" } });
+  expect(graph().customData!.fcPlot.plot.a).toBe(1);
+  fireEvent.pointerUp(slider);
   await waitFor(() => expect(graph().customData!.fcPlot.plot.a).toBe(2));
-  expect(
-    document.querySelector(`iframe[data-resource-object-id="${graph().id}"]`),
-  ).toBe(frame);
-  expect(frame.getAttribute("srcdoc")).toBe(html);
-  expect(reply).toHaveBeenCalledWith(
-    expect.objectContaining({
-      type: "restore",
-      parameters: { a: 2, b: defaultPlot.b, c: defaultPlot.c },
-    }),
-    "*",
-  );
-  send("sample");
-  const points = reply.mock.lastCall![0].points as { x: number; y: number }[];
-  expect(points.every(({ x, y }) => Math.abs(y - (2 * x + 1)) < 1e-9)).toBe(
-    true,
-  );
+  expect(graph()).toMatchObject({
+    id: before.id,
+    x: before.x,
+    y: before.y,
+    width: before.width,
+    height: before.height,
+  });
+  act(() => {
+    updateFunctionGraph(
+      api,
+      { ...graph().customData!.fcPlot.plot, a: 3 },
+      { ids: [before.id] },
+    );
+  });
+  await waitFor(() => expect(graph().customData!.fcPlot.plot.a).toBe(3));
   fireEvent.click(screen.getByTestId("button-undo"));
-  await waitFor(() => expect(graph().customData!.fcPlot.plot.a).toBe(1));
-  expect(frame.getAttribute("srcdoc")).toBe(html);
-  expect(
-    api
-      .getSceneElements()
-      .filter((element) => !element.isDeleted && element.type === "iframe"),
-  ).toHaveLength(1);
+  await waitFor(() => expect(graph().customData!.fcPlot.plot.a).toBe(2));
 });
 
 it("keeps comparison curves in one coordinate system and preserves them through serialization", () => {
@@ -237,8 +132,9 @@ it("keeps comparison curves in one coordinate system and preserves them through 
     throw new Error("Expected functions");
   }
   expect(result.plot.compare).toEqual(["x^2"]);
-  const resource = functionGraphResource(result.plot, "#000000", "comparison");
-  const view = createInlineVegaView(resource.visualization!.spec as Spec);
+  const spec = functionGraphSpec(result.plot, "#000000");
+  spec.signals = functionGraphNavigation(result.plot);
+  const view = createInlineVegaView(spec);
   try {
     view.run();
     const points = view.data("curves") as {
@@ -251,7 +147,7 @@ it("keeps comparison curves in one coordinate system and preserves them through 
     view.finalize();
   }
   expect(
-    JSON.parse(JSON.stringify(resource)).visualization.spec.signals.some(
+    JSON.parse(JSON.stringify(spec)).signals.some(
       (signal: { name: string }) => signal.name === "dist2",
     ),
   ).toBe(true);
@@ -283,13 +179,13 @@ it("automatically compares two selected expressions in function mode without del
       .getSceneElements()
       .find((element) => element.customData?.fcPlot?.plot.compare),
   ).toMatchObject({
-    type: "iframe",
+    type: "image",
     customData: { fcPlot: { plot: { expression: "x", compare: ["x^2"] } } },
   });
   expect(api.getSceneElements().slice(0, 2)).toEqual(source);
   await new Promise((resolve) => setTimeout(resolve, 150));
   expect(
-    api.getSceneElements().filter((element) => element.type === "iframe"),
+    api.getSceneElements().filter((element) => element.type === "image"),
   ).toHaveLength(1);
 });
 it.each([false, true])(
@@ -335,11 +231,11 @@ it.each([false, true])(
     } else {
       await waitFor(() =>
         expect(
-          api.getSceneElements().filter((element) => element.type === "iframe"),
+          api.getSceneElements().filter((element) => element.type === "image"),
         ).toHaveLength(1),
       );
       expect(
-        api.getSceneElements().find((element) => element.type === "iframe")
+        api.getSceneElements().find((element) => element.type === "image")
           ?.customData?.fcPlot.plot.compare,
       ).toEqual(["x^2"]);
     }
@@ -353,11 +249,16 @@ it("restores saved courseware SVG graphs as interactive objects without moving t
     points: [[240, 180]],
     anchor: { x: 240, y: 180 },
     image: functionGraphImage(defaultPlot, "#123456"),
+    resource: validateInteractiveResource({
+      id: "plot-group",
+      title: "old function",
+      html: '<p>Saved function</p><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
+    }),
     imageWidth: 490,
     imageHeight: 440,
     plot: {
       id: "plot-group",
-      renderer: "vega",
+      renderer: "iframe",
       plot: defaultPlot,
       origin: { x: 100, y: 100 },
       position: { x: 345, y: 320 },
@@ -372,13 +273,14 @@ it("restores saved courseware SVG graphs as interactive objects without moving t
       [30, 30],
     ],
   };
+  legacy.resource = { ...legacy.resource!, width: 490, height: 440 };
   const original: DocumentInk = { 0: [legacy, note] };
   const restored = restoreDocumentFunctionGraphs(original);
   expect(restored[0][0]).toMatchObject({
     id: legacy.id,
-    shapeType: "iframe",
-    resource: { id: "plot-group", width: 490, height: 440 },
-    plot: { renderer: "iframe" },
+    shapeType: "image",
+    resource: undefined,
+    plot: { renderer: "vega" },
   });
   expect(documentStrokeBounds(restored[0][0])).toEqual(
     documentStrokeBounds(legacy),
@@ -410,7 +312,7 @@ it("automatically adds a nearby function-pen expression to the same axes without
   });
   const original = api
     .getSceneElements()
-    .find((element) => element.type === "iframe")!;
+    .find((element) => element.type === "image")!;
   act(() => {
     drawPlot(api, second.plot, { x: 450, y: 380 }, [], "second", true, {
       ...bounds,
@@ -420,7 +322,7 @@ it("automatically adds a nearby function-pen expression to the same axes without
   });
   const graphs = api
     .getSceneElements()
-    .filter((element) => element.type === "iframe");
+    .filter((element) => element.type === "image");
   expect(graphs).toHaveLength(1);
   expect(graphs[0]).toMatchObject({
     id: original.id,
@@ -439,6 +341,47 @@ it("automatically adds a nearby function-pen expression to the same axes without
     });
   });
   expect(
-    api.getSceneElements().filter((element) => element.type === "iframe"),
+    api.getSceneElements().filter((element) => element.type === "image"),
   ).toHaveLength(2);
+});
+
+it("decodes a saved iframe graph into the same SVG object and renders no legacy iframe", async () => {
+  const { api } = await setup();
+  const saved = newIframeElement({
+    type: "iframe",
+    x: 120,
+    y: 100,
+    width: 500,
+    height: 440,
+    customData: {
+      fcPlot: { renderer: "iframe", plot: defaultPlot },
+      fcInteractiveResource: validateInteractiveResource({
+        id: "old-function",
+        title: "saved function",
+        html: '<p>saved function</p><svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L10 10"/></svg>',
+      }),
+    },
+  });
+  act(() => api.updateScene({ elements: [saved] }));
+  await waitFor(() => expect(api.getSceneElements()[0].type).toBe("image"));
+  const restored = api.getSceneElements()[0];
+  expect(restored).toMatchObject({
+    id: saved.id,
+    x: 120,
+    y: 100,
+    width: 500,
+    height: 440,
+    customData: { fcPlot: { renderer: "vega" } },
+  });
+  expect(restored.customData?.fcInteractiveResource).toBeUndefined();
+  if (restored.type !== "image" || !restored.fileId) {
+    throw new Error("Expected saved SVG graph");
+  }
+  expect(api.getFiles()[restored.fileId].mimeType).toBe("image/svg+xml");
+  await waitFor(() =>
+    expect(
+      document.querySelector(".fc-inline-function .mark-line path"),
+    ).not.toBeNull(),
+  );
+  expect(document.querySelector("iframe[data-resource-object-id]")).toBeNull();
 });

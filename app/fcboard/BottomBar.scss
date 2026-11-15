@@ -521,7 +521,7 @@
 .app .fcboard .fc-combined-toolbox [data-native-tool="fourline"] {
   order: 11 !important;
 }
-.app .fcboard .fc-combined-toolbox [data-native-tool="areaBg"] {
+.app .fcboard .fc-combined-toolbox [data-native-tool="rollcall"] {
   order: 12 !important;
 }
 .app .fcboard .fc-combined-toolbox [data-native-tool="sticky"] {
@@ -705,75 +705,6 @@
   border-radius: calc(12 * var(--fc-unit));
   accent-color: #0368ff;
 }
-.fc-classroom .fc-native-area {
-  --fc-unit: 0.67px;
-  width: calc(640 * var(--fc-unit));
-  height: calc(560 * var(--fc-unit));
-  padding: 0;
-  border-radius: calc(32 * var(--fc-unit));
-  background: #fcfcfe;
-  border: 1px solid #dbdbdb;
-  color: #010101;
-}
-.fc-classroom .fc-native-area > header {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: calc(84 * var(--fc-unit));
-  padding-bottom: calc(12 * var(--fc-unit));
-  box-sizing: border-box;
-}
-.fc-classroom .fc-native-area h2 {
-  font: 700 calc(24 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
-}
-.fc-classroom .fc-native-area header button {
-  position: absolute;
-  right: calc(36 * var(--fc-unit));
-  width: calc(18 * var(--fc-unit));
-  min-width: 0;
-  height: calc(18 * var(--fc-unit));
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-}
-.fc-classroom .fc-native-area-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: calc(8 * var(--fc-unit)) calc(24 * var(--fc-unit))
-    calc(30 * var(--fc-unit));
-  gap: calc(16 * var(--fc-unit));
-  overflow-y: auto;
-  min-height: 0;
-}
-.fc-classroom .fc-native-area-grid button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: calc(113 * var(--fc-unit));
-  padding: 0;
-  border: 0;
-  background: transparent;
-  gap: calc(8 * var(--fc-unit));
-  font: 400 calc(14 * var(--fc-unit)) / 1.2 system-ui, sans-serif;
-  color: #010101;
-  &:active img {
-    background: #ebebeb;
-  }
-}
-.fc-classroom .fc-native-area-grid img {
-  width: calc(113 * var(--fc-unit));
-  height: calc(100 * var(--fc-unit));
-  border-radius: calc(24 * var(--fc-unit));
-  background: #f6f6f8;
-}
-
 /* Retain native 44x66 pens and 12-unit gaps; widen for six columns. */
 .app :is(.fcboard, .fc-classroom) .fc-pen-properties {
   --fc-unit: 0.67px;

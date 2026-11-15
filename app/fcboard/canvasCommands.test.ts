@@ -419,8 +419,9 @@ it("routes text, shapes, selection and plots into the visible document instead o
     expect(draw).toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith({ ids: ["ink"] });
     expect(strokes).toHaveLength(1);
-    expect(strokes[0].resource?.html).toContain("<svg");
-    expect(strokes[0].resource?.visualization?.mode).toBe("vega");
+    expect(strokes[0].image).toMatch(/^data:image\/svg\+xml/);
+    expect(strokes[0].resource).toBeUndefined();
+    expect(strokes[0].plot?.renderer).toBe("vega");
     await classroomCommands.execute({
       name: "canvas.action",
       args: { action: "selectAll" },

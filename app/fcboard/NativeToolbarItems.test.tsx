@@ -1,153 +1,42 @@
-import { Fcboard } from "@fcboard/fcboard";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { t } from "@fcboard/fcboard/i18n";
-import { Keyboard } from "@fcboard/fcboard/tests/helpers/ui";
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@fcboard/fcboard/tests/test-utils";
 
-import { useState } from "react";
+import { RollCall, parseNamelist } from "./RollCall";
+import { classroomCommands } from "./commands";
+import { render } from "./test/render";
 
-import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
-
-import { NativeToolbarItems } from "./NativeToolbarItems";
-import badminton from "./native-toolbar-assets/area_badminton_court_bg.svg?raw";
-import go from "./native-toolbar-assets/area_go_bg.svg?raw";
-
-const { h } = window;
-const area = () =>
-  h.elements.find(
-    (element) => !element.isDeleted && element.customData?.fcNativeArea,
-  );
-const svgBlob = (svg: string) => {
-  const file = new File([svg], "site.svg", { type: "image/svg+xml" });
-  Object.defineProperty(file, "text", { value: async () => svg });
-  return file;
-};
-const setup = async () => {
-  let api!: FcboardImperativeAPI;
-  const Harness = () => {
-    const [current, setCurrent] = useState<FcboardImperativeAPI>();
-    return (
-      <Fcboard
-        UIOptions={{ unifiedToolbar: true }}
-        onFcboardAPI={(value) => {
-          api = value;
-          setCurrent(value);
-        }}
-      >
-        {current && <NativeToolbarItems api={current} />}
-      </Fcboard>
-    );
-  };
-  await render(<Harness />);
-  act(() => api.updateScene({ appState: { width: 1600, height: 900 } }));
-  const open = async () => {
-    fireEvent.click(screen.getByRole("button", { name: t("fcboard.toolbox") }));
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: t("fcboard.area_background"),
-      }),
-    );
-    return screen.findByRole("dialog", {
-      name: t("fcboard.area_background"),
-    });
-  };
-  return { api, open };
-};
-afterEach(() => vi.restoreAllMocks());
-
-it("inserts one native-size site, replaces its bitmap at the existing scale and undoes the replacement", async () => {
-  const fetcher = vi.spyOn(window, "fetch").mockResolvedValue({
-    ok: true,
-    blob: async () => svgBlob(badminton),
-  } as unknown as Response);
-  const { api, open } = await setup();
-  let picker = await open();
-  expect(within(picker).getAllByRole("button")).toHaveLength(11);
-  fireEvent.click(
-    within(picker).getByRole("button", {
-      name: t("fcboard.native_sites.area_badminton"),
-    }),
-  );
-  await waitFor(() => expect(area()).toBeDefined());
-  const initial = area()!;
-  expect(initial.width).toBeCloseTo(841.9);
-  expect(initial.height).toBeCloseTo(595.3);
-  expect(initial.locked).toBe(true);
-  expect(Object.values(api.getFiles())).toHaveLength(1);
-  picker = await open();
-  fetcher.mockResolvedValue({
-    ok: true,
-    blob: async () => svgBlob(go),
-  } as unknown as Response);
-  fireEvent.click(
-    within(picker).getByRole("button", {
-      name: t("fcboard.native_sites.area_weiqi"),
-    }),
-  );
-  await waitFor(() => expect(area()?.version).toBeGreaterThan(initial.version));
-  const replaced = area()!;
-  const viewBox = new DOMParser()
-    .parseFromString(go, "image/svg+xml")
-    .documentElement.getAttribute("viewBox")!
-    .split(/\s+/)
-    .map(Number);
-  expect(replaced.id).toBe(initial.id);
-  expect([replaced.x, replaced.y]).toEqual([initial.x, initial.y]);
-  expect(replaced.width).toBeCloseTo(viewBox[2]);
-  expect(replaced.height).toBeCloseTo(viewBox[3]);
+it("replaces the site tool with real persistent roll-call names, start, stop and resume", async () => {
+  localStorage.removeItem("fcboard-rollcall-names");
+  expect(parseNamelist("张三，李四\n王五")).toEqual(["张三", "李四", "王五"]);
+  const mounted = render(<RollCall />);
+  await act(async () => classroomCommands.execute({ name: "tools.rollcall" }));
   expect(
-    h.elements.filter(
-      (element) => !element.isDeleted && element.customData?.fcNativeArea,
-    ),
-  ).toHaveLength(1);
-  Keyboard.withModifierKeys({ ctrl: true }, () => Keyboard.keyPress("z"));
-  await waitFor(() => expect(area()?.width).toBeCloseTo(initial.width));
-  expect(area()?.height).toBeCloseTo(initial.height);
-});
-
-it("does not insert a site after its picker closes while the resource loads and reports actual failures", async () => {
-  let finish!: (response: Response) => void;
-  const fetcher = vi.spyOn(window, "fetch").mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      }),
-  );
-  const { api, open } = await setup();
-  let picker = await open();
+    screen.getByRole("button", { name: t("fcboard.rollcall_start") }),
+  ).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.namelist") }));
+  fireEvent.change(screen.getByRole("textbox"), {
+    target: { value: "张三\n李四" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.save") }));
   fireEvent.click(
-    within(picker).getByRole("button", {
-      name: t("fcboard.native_sites.area_badminton"),
-    }),
-  );
-  fireEvent.click(
-    within(picker).getByRole("button", {
-      name: t("buttons.close"),
-    }),
-  );
-  fetcher.mockRejectedValue(new Error("site unavailable"));
-  picker = await open();
-  fireEvent.click(
-    within(picker).getByRole("button", {
-      name: t("fcboard.native_sites.area_badminton"),
-    }),
+    screen.getByRole("button", { name: t("fcboard.rollcall_start") }),
   );
   await waitFor(() =>
-    expect(screen.getByRole("alert")).toHaveTextContent("site unavailable"),
+    expect(screen.getByRole("status").textContent).toMatch(/张三|李四/),
   );
-  await act(async () =>
-    finish({
-      ok: true,
-      blob: async () => svgBlob(badminton),
-    } as unknown as Response),
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.rollcall_stop") }),
   );
-  expect(area()).toBeUndefined();
-  expect(Object.values(api.getFiles())).toHaveLength(0);
-  expect(screen.getByRole("alert")).toHaveTextContent("site unavailable");
+  const result = screen.getByRole("status").textContent;
+  expect(
+    screen.getByRole("button", { name: t("fcboard.rollcall_resume") }),
+  ).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  mounted.unmount();
+  render(<RollCall />);
+  await act(async () => classroomCommands.execute({ name: "tools.rollcall" }));
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.namelist") }));
+  expect(screen.getByRole("textbox")).toHaveValue("张三\n李四");
+  expect(result).toMatch(/张三|李四/);
 });

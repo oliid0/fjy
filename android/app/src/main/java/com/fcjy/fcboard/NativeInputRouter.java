@@ -21,7 +21,8 @@ final class NativeInputRouter {
         }
     }
     void remove(NativeInkView view){for(Map<Integer,NativeInkView> pointers:captured.values())pointers.values().removeIf(owner->owner==view);}
-    boolean dispatch(MotionEvent event){
+    boolean dispatch(MotionEvent event){return dispatch(event,remaining->{});}
+    boolean dispatch(MotionEvent event,java.util.function.Consumer<MotionEvent> forward){
         NativeInputStream stream=new NativeInputStream(event);
         int action=event.getActionMasked(),changed=event.getActionIndex();
         Map<Integer,NativeInkView> pointers=captured.get(stream);
@@ -41,6 +42,8 @@ final class NativeInputRouter {
             NativeInkView view=pointers.get(event.getPointerId(i));
             if(view!=null&&surfaces.containsKey(view))groups.computeIfAbsent(view,key->new ArrayList<>()).add(i);
         }
+        List<Integer> unowned=new ArrayList<>();
+        for(int i=0;i<event.getPointerCount();i++)if(!pointers.containsKey(event.getPointerId(i)))unowned.add(i);
         for(Map.Entry<NativeInkView,List<Integer>> group:groups.entrySet()){
             NativeInkView view=group.getKey();RectF bounds=surfaces.get(view);
             if(group.getValue().size()==event.getPointerCount())view.handleTouchEvent(event,bounds.left,bounds.top);
@@ -48,6 +51,13 @@ final class NativeInputRouter {
                 MotionEvent subset=subset(event,group.getValue());
                 try{view.handleTouchEvent(subset,bounds.left,bounds.top);}finally{subset.recycle();}
             }
+        }
+        // A toolbar/WebView pointer can share this exact MotionEvent with native
+        // ink. Forward its real filtered lifecycle, including UP/CANCEL; consuming
+        // the whole packet otherwise leaves the editor permanently cursor-down.
+        if(!groups.isEmpty()&&!unowned.isEmpty()){
+            MotionEvent remainder=subset(event,unowned);
+            try{forward.accept(remainder);}finally{remainder.recycle();}
         }
         if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)captured.remove(stream);
         else if(action==MotionEvent.ACTION_POINTER_UP)pointers.remove(event.getPointerId(changed));

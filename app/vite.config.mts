@@ -119,11 +119,11 @@ export default defineConfig(({ mode, command }) => {
             ) {
               return "fcboard-ocr.chunk";
             }
-            if (
-              id.includes("/node_modules/mathjs/") ||
-              id.includes("/node_modules/nerdamer/")
-            ) {
+            if (id.includes("/node_modules/mathjs/")) {
               return "fcboard-math";
+            }
+            if (id.includes("/node_modules/nerdamer/")) {
+              return "fcboard-symbolic";
             }
             if (
               id.includes("packages/fcboard/locales") &&

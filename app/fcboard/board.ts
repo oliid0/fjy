@@ -6,7 +6,7 @@ import {
 import {
   getCommonBounds,
   newElementWith,
-  newIframeElement,
+  newImageElement,
 } from "@fcboard/element";
 import {
   DEFAULT_ELEMENT_PROPS,
@@ -34,7 +34,6 @@ import { findContentPosition, findVisibleContentPosition } from "./placement";
 import { answerFontSize, layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
 import { functionGraphImage, plotSize } from "./functionVisualization";
-import { functionGraphResource } from "./functionGraphResource";
 import { functionRegionMatch, compareFunctionRegion } from "./functionRegion";
 
 import type { TextPlacement } from "./textLayout";
@@ -686,8 +685,11 @@ export const drawPlot = (
       api,
       plot,
       [
-        newIframeElement({
-          type: "iframe",
+        newImageElement({
+          type: "image",
+          fileId: crypto.randomUUID() as FileId,
+          status: "saved",
+          scale: [1, 1],
           x: position.x - plotSize.width / 2,
           y: position.y - plotSize.height / 2,
           ...plotSize,
@@ -894,15 +896,6 @@ const insertPlot = (
   );
   const plotId = crypto.randomUUID();
   const shapes = fitted.shapes.map((shape) => {
-    const resource =
-      shape.type === "iframe" && image
-        ? functionGraphResource(
-            plot,
-            shape.strokeColor || "#1e1e1e",
-            plotId,
-            image,
-          )
-        : undefined;
     return {
       strokeColor: api.getAppState().currentItemStrokeColor,
       ...shape,
@@ -910,19 +903,11 @@ const insertPlot = (
       groupIds: [plotId],
       customData: {
         fcSelectionSource: sourceSignature,
-        ...(resource
-          ? {
-              fcInteractiveResource: resource,
-              generationData: { status: "done" as const, html: resource.html },
-            }
-          : {}),
         fcPlot: {
           id: plotId,
           plot,
           ...(sourceBounds ? { sourceRegions: [sourceBounds] } : {}),
-          ...(image
-            ? { renderer: shape.type === "iframe" ? "iframe" : "vega" }
-            : {}),
+          ...(image ? { renderer: "vega" } : {}),
           position: fitted.center,
           origin: { x: shape.x || 0, y: shape.y || 0 },
         },
@@ -1066,12 +1051,6 @@ export const updateFunctionGraph = (
     return null;
   }
   const image = functionGraphImage(plot, graph.image.color);
-  const resource = functionGraphResource(
-    plot,
-    graph.image.color,
-    graph.resourceId,
-    image,
-  );
   if (classroomCommands.has("document.plot.update")) {
     void classroomCommands
       .execute({
@@ -1080,7 +1059,6 @@ export const updateFunctionGraph = (
           ids: graph.ids,
           plot,
           image,
-          resource,
           remember: !options.preview,
           before: options.before,
           sourceRegions: options.sourceRegions,
@@ -1107,31 +1085,6 @@ export const updateFunctionGraph = (
       (selected.type !== "image" && selected.type !== "iframe")
     ) {
       return null;
-    }
-    if (selected.type === "iframe") {
-      api.updateScene({
-        elements: api.getSceneElements().map((element) =>
-          element.id === selected.id
-            ? newElementWith(element, {
-                customData: {
-                  ...element.customData,
-                  fcInteractiveResource: resource,
-                  fcPlot: {
-                    ...element.customData!.fcPlot,
-                    plot,
-                    ...(options.sourceRegions
-                      ? { sourceRegions: options.sourceRegions }
-                      : {}),
-                  },
-                },
-              })
-            : element,
-        ),
-        captureUpdate: options.preview
-          ? CaptureUpdateAction.NEVER
-          : CaptureUpdateAction.IMMEDIATELY,
-      });
-      return { ...graph, plot };
     }
     const fileId = options.fileId || (crypto.randomUUID() as FileId);
     const previous = api.getFiles()[fileId];

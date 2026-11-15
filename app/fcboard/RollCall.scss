@@ -1,0 +1,89 @@
+.fc-classroom .fc-rollcall {
+  box-sizing: border-box;
+  width: min(86vw, 1800px);
+  height: min(76vh, 1100px);
+  min-height: min(300px, 90vh);
+  padding: clamp(12px, 2vw, 48px);
+  border-radius: clamp(12px, 2vw, 36px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vh, 32px);
+  color: #17243b;
+  background: #f6f8ff;
+  header,
+  footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 12px;
+  }
+  h2 {
+    margin: 0;
+    font-size: clamp(20px, 2vw, 48px);
+  }
+  header > button {
+    width: clamp(32px, 3vw, 64px);
+    height: clamp(32px, 3vw, 64px);
+    padding: 6px;
+  }
+  button {
+    border: 0;
+    border-radius: 10px;
+    background: #e5eafe;
+    color: #20345d;
+    font: inherit;
+    min-height: 40px;
+    padding: 8px 20px;
+  }
+  footer > button {
+    font-size: clamp(16px, 1.8vw, 40px);
+  }
+  footer > button:last-child {
+    background: #3569ee;
+    color: white;
+  }
+  button:disabled {
+    opacity: 0.45;
+  }
+  .fc-rollcall-stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    container-type: size;
+    border-radius: 16px;
+    background: radial-gradient(ellipse, #dce8ff, #f6f8ff);
+    overflow: hidden;
+  }
+  .fc-rollcall-stage output {
+    max-width: 95%;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .fc-rollcall-stage p {
+    font-size: clamp(16px, 3vw, 64px);
+    text-align: center;
+    padding: 16px;
+  }
+  .fc-rollcall-stage[data-rolling="true"] {
+    cursor: pointer;
+  }
+  .fc-rollcall-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  textarea {
+    flex: 1;
+    min-height: 0;
+    resize: none;
+    font: clamp(16px, 1.5vw, 32px) / 1.5 system-ui;
+    padding: 12px;
+    border: 1px solid #a9b9dc;
+    border-radius: 10px;
+  }
+}

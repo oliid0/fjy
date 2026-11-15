@@ -13,16 +13,23 @@ final class NativeScene {
     static final int SIZE = 256;
     static long key(int x,int y) { return ((long)x<<32)|(y&0xffffffffL); }
     static final class Part {
-        final Bitmap pixels = Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ARGB_8888);
+        final Bitmap pixels;
         final boolean ink;
         final long through;
-        Part(boolean ink,long through) { this.ink=ink; this.through=through; }
+        Part(boolean ink,long through) { this(ink,through,Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ARGB_8888)); }
+        Part(boolean ink,long through,Bitmap pixels) { this.ink=ink;this.through=through;this.pixels=pixels; }
     }
     static final class Tile {
         final int x,y;
         final List<Part> parts=new ArrayList<>();
-        final Bitmap pixels=Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ARGB_8888);
-        Tile(int x,int y) { this.x=x;this.y=y; }
+        final Bitmap pixels;
+        Tile(int x,int y) { this(x,y,Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ARGB_8888)); }
+        Tile(int x,int y,Bitmap pixels) { this.x=x;this.y=y;this.pixels=pixels; }
+        Tile snapshot(long through) {
+            Tile copy=new Tile(x,y,pixels.copy(Bitmap.Config.ARGB_8888,true));
+            for(Part part:parts)copy.parts.add(new Part(part.ink,Math.max(part.through,through),part.pixels.copy(Bitmap.Config.ARGB_8888,true)));
+            return copy;
+        }
         void compose() {
             pixels.eraseColor(Color.TRANSPARENT); Canvas canvas=new Canvas(pixels);
             for(Part part:parts) canvas.drawBitmap(part.pixels,0,0,null);
@@ -31,14 +38,19 @@ final class NativeScene {
     static final class Frame {
         final Map<Long,Tile> tiles=new HashMap<>();
         final Set<String> upserts=new HashSet<>(),removed=new HashSet<>();
+        final Map<Long,Bitmap> selected=new HashMap<>(),selectedIdle=new HashMap<>();
+        RectF selectionBounds;
+        String selectionThrough="",selectionKey="";
         boolean reset;
         Bitmap background;
+        int backgroundColor=Color.TRANSPARENT;
         boolean backgroundChanged;
         long eraseThrough;
+        long rasterizedNodes;
     }
     private static final class Node {
         String id,order;
-        boolean ink;
+        boolean ink,inline;
         long through;
         RectF bounds;
         Path path,nib,clip;
@@ -49,7 +61,7 @@ final class NativeScene {
         Bitmap image;
         final List<Long> cells=new ArrayList<>();
         Node(JSONObject value,long received) throws JSONException {
-            id=value.getString("id"); order=value.getString("order"); ink=value.getBoolean("ink");
+            id=value.getString("id"); order=value.getString("order"); ink=value.getBoolean("ink");inline=value.optBoolean("inline",false);
             through=value.optLong("through",-1);if(through<0) through=received;
             JSONArray box=value.getJSONArray("bounds");bounds=new RectF(number(box,0),number(box,1),number(box,2),number(box,3));
             if(id.isEmpty()||!Float.isFinite(bounds.left+bounds.top+bounds.right+bounds.bottom)) throw new IllegalArgumentException("Invalid native scene bounds");
@@ -86,12 +98,16 @@ final class NativeScene {
         }
     }
     private final Map<String,Node> nodes=new HashMap<>();
+    private final Map<Long,Tile> rasterTiles=new HashMap<>();
+    private long rasterizedNodes;
     private final Map<Long,TreeMap<String,Node>> buckets=new HashMap<>();
     private final Bitmap mask=Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ALPHA_8);
     private final Paint imagePaint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
     private int width,height;
     private float zoom=1,scrollX,scrollY;
     private String viewport="";
+    private Set<String> selection=new HashSet<>();
+    private long reconciledThrough;
     static float number(JSONArray input,int index)throws JSONException { float result=(float)input.getDouble(index);if(!Float.isFinite(result))throw new IllegalArgumentException("Invalid native scene number");return result; }
     static Bitmap bitmap(String data) {
         if(!data.startsWith("data:image/png;base64,"))throw new IllegalArgumentException("Invalid native scene bitmap");
@@ -112,6 +128,7 @@ final class NativeScene {
     }
     private Matrix matrix(Tile tile) { Matrix matrix=new Matrix();matrix.setTranslate(scrollX,scrollY);matrix.postScale(zoom,zoom);matrix.postTranslate(-tile.x,-tile.y);return matrix; }
     private void draw(Node node,Tile tile,Canvas target) {
+        rasterizedNodes++;
         Matrix position=matrix(tile);
         if(node.image!=null){target.save();target.concat(position);target.drawBitmap(node.image,null,node.bounds,imagePaint);target.restore();return;}
         mask.eraseColor(Color.TRANSPARENT);Canvas coverage=new Canvas(mask);coverage.concat(position);
@@ -124,7 +141,8 @@ final class NativeScene {
         target.drawRect(0,0,SIZE,SIZE,color);
     }
     Frame synchronize(JSONObject data,float scale,long received) throws JSONException {
-        Frame frame=new Frame();frame.eraseThrough=data.optLong("eraseThrough",0);Set<Long> dirty=new HashSet<>();
+        Frame frame=new Frame();frame.eraseThrough=data.optLong("eraseThrough",0);Set<Long> dirty=new HashSet<>(),rebuild=new HashSet<>();
+        Map<Long,List<Node>> additions=new HashMap<>();long previousDraws=rasterizedNodes;
         // The bootstrap snapshot predates input accepted while its worker was starting.
         long authoritative=viewport.isEmpty()?0:received;
         float nextZoom=(float)data.getDouble("zoom")*scale,nextX=(float)data.getDouble("scrollX"),nextY=(float)data.getDouble("scrollY");
@@ -132,25 +150,78 @@ final class NativeScene {
         if(!Float.isFinite(nextZoom+nextX+nextY)||nextZoom<=0)throw new IllegalArgumentException("Invalid native scene viewport");
         String nextView=nextWidth+":"+nextHeight+":"+nextZoom+":"+nextX+":"+nextY;
         frame.reset=data.optBoolean("reset")||!nextView.equals(viewport);
-        if(data.optBoolean("reset")){nodes.clear();buckets.clear();}
-        if(frame.reset){viewport=nextView;width=nextWidth;height=nextHeight;zoom=nextZoom;scrollX=nextX;scrollY=nextY;buckets.clear();for(Node node:nodes.values()){node.cells.clear();index(node,dirty);}}
+        if(data.optBoolean("reset")){nodes.clear();buckets.clear();rasterTiles.clear();}
+        if(frame.reset){rasterTiles.clear();viewport=nextView;width=nextWidth;height=nextHeight;zoom=nextZoom;scrollX=nextX;scrollY=nextY;buckets.clear();for(Node node:nodes.values()){node.cells.clear();index(node,dirty);}}
+        Set<String> selected=new HashSet<>();JSONArray selectedIds=data.optJSONArray("selectionIds");
+        if(selectedIds!=null)for(int i=0;i<selectedIds.length();i++)selected.add(selectedIds.getString(i));
+        if(!selected.equals(selection)){dirty.addAll(buckets.keySet());rebuild.addAll(buckets.keySet());selection=selected;}
+        JSONArray selectionBox=data.optJSONArray("selectionBounds");
+        if(!selection.isEmpty()&&selectionBox!=null)frame.selectionBounds=new RectF((number(selectionBox,0)+scrollX)*zoom,(number(selectionBox,1)+scrollY)*zoom,(number(selectionBox,2)+scrollX)*zoom,(number(selectionBox,3)+scrollY)*zoom);
+        frame.selectionThrough=data.optString("selectionThrough","");frame.selectionKey=data.optString("selectionKey","");
         JSONArray removed=data.getJSONArray("removals"),updates=data.getJSONArray("nodes");
-        for(int i=0;i<removed.length();i++){String id=removed.getString(i);Node old=nodes.remove(id);if(old!=null)unindex(old,dirty);frame.removed.add(id);}
+        for(int i=0;i<removed.length();i++){String id=removed.getString(i);Node old=nodes.remove(id);if(old!=null){rebuild.addAll(old.cells);unindex(old,dirty);}frame.removed.add(id);}
         for(int i=0;i<updates.length();i++){
             JSONObject update=updates.getJSONObject(i);frame.eraseThrough=Math.max(frame.eraseThrough,update.optLong("through",0));
             Node node=new Node(update,authoritative),old=nodes.put(node.id,node);
-            if(old!=null)unindex(old,dirty);index(node,dirty);frame.upserts.add(node.id);
+            if(old!=null){rebuild.addAll(old.cells);unindex(old,dirty);}
+            index(node,dirty);frame.upserts.add(node.id);
+            for(long cell:node.cells){
+                TreeMap<String,Node> bucket=buckets.get(cell);
+                if(old==null&&!frame.reset&&bucket.lastEntry().getValue()==node&&!rebuild.contains(cell))additions.computeIfAbsent(cell,k->new ArrayList<>()).add(node);
+                else rebuild.add(cell);
+            }
         }
         if(data.has("background")){frame.background=bitmap(data.getString("background"));frame.backgroundChanged=true;}
+        else if(data.has("backgroundColor")){frame.backgroundColor=Color.parseColor(data.getString("backgroundColor"));frame.backgroundChanged=true;}
+        // Versions through this watermark already contain their vector erasure.
+        // They can share one retained ink part; keeping a 256x256 ARGB bitmap
+        // for every old contact sequence makes rapid write/erase allocate layers
+        // without bound. Newer ink keeps its birth sequence for pending sweeps.
+        reconciledThrough=Math.max(reconciledThrough,frame.eraseThrough);
         for(long key:dirty){
-            Tile tile=new Tile((int)(key>>32)*SIZE,(int)key*SIZE);TreeMap<String,Node> bucket=buckets.get(key);
-            Part part=null;Canvas canvas=null;
-            if(bucket!=null)for(Node node:bucket.values()){
-                if(part==null||part.ink!=node.ink||(part.ink&&part.through!=node.through)) {part=new Part(node.ink,node.through);tile.parts.add(part);canvas=new Canvas(part.pixels);}
+            Tile tile=rasterTiles.get(key);List<Node> appended=additions.get(key);
+            if(tile!=null&&!frame.reset&&!rebuild.contains(key)&&appended!=null){
+                // HCanvas's retained bitmap behavior: append only new topmost
+                // ink. Older vectors are rasterized again only for real edits,
+                // erasure, reordering or a viewport change.
+                for(Node node:appended){
+                    if(selection.contains(node.id)||node.inline)continue;
+                    long through=Math.max(node.through,reconciledThrough);
+                    Part part=tile.parts.isEmpty()?null:tile.parts.get(tile.parts.size()-1);
+                    if(part==null||part.ink!=node.ink||(part.ink&&Math.max(part.through,reconciledThrough)!=through)){part=new Part(node.ink,through);tile.parts.add(part);}
+                    draw(node,tile,new Canvas(part.pixels));
+                }
+            }else{
+                tile=new Tile((int)(key>>32)*SIZE,(int)key*SIZE);TreeMap<String,Node> bucket=buckets.get(key);
+                Part part=null;Canvas canvas=null;
+                if(bucket!=null)for(Node node:bucket.values()){
+                    if(selection.contains(node.id)||node.inline)continue;
+                    long through=Math.max(node.through,reconciledThrough);
+                    if(part==null||part.ink!=node.ink||(part.ink&&part.through!=through)){part=new Part(node.ink,through);tile.parts.add(part);canvas=new Canvas(part.pixels);}
+                    draw(node,tile,canvas);
+                }
+            }
+            tile.compose();rasterTiles.put(key,tile);
+            // UI CLEAR owns a separate snapshot; it cannot modify worker pixels
+            // or corrupt later appends/cancelled erasures.
+            frame.tiles.put(key,tile.snapshot(reconciledThrough));
+        }
+        if(frame.selectionBounds!=null)for(Map.Entry<Long,TreeMap<String,Node>> entry:buckets.entrySet()){
+            Tile tile=null;Canvas canvas=null;
+            for(Node node:entry.getValue().values())if(selection.contains(node.id)){
+                if(tile==null){long cell=entry.getKey();tile=new Tile((int)(cell>>32)*SIZE,(int)cell*SIZE);canvas=new Canvas(tile.pixels);}
                 draw(node,tile,canvas);
             }
-            tile.compose();frame.tiles.put(key,tile);
+            if(tile!=null){
+                frame.selected.put(entry.getKey(),tile.pixels);
+                // Idle selection preserves the actual interleaved scene order.
+                // Only an active transform lifts selected pixels into a preview.
+                Tile idle=new Tile(tile.x,tile.y);Canvas idleCanvas=new Canvas(idle.pixels);
+                for(Node node:entry.getValue().values())if(!node.inline)draw(node,idle,idleCanvas);
+                frame.selectedIdle.put(entry.getKey(),idle.pixels);
+            }
         }
+        frame.rasterizedNodes=rasterizedNodes-previousDraws;
         return frame;
     }
 }
@@ -170,7 +241,21 @@ final class NativeSceneView extends View {
     private final Map<String,Map<NativeScene.Part,Backup>> backups=new HashMap<>();
     private final Paint clear=new Paint(Paint.ANTI_ALIAS_FLAG),image=new Paint(Paint.FILTER_BITMAP_FLAG);
     private Bitmap background;
+    private int backgroundColor=Color.TRANSPARENT;
     private long sequence;
+    private Map<Long,Bitmap> selected=new HashMap<>(),selectedIdle=new HashMap<>();
+    private RectF selectionBounds;
+    private final Matrix selectionMatrix=new Matrix();
+    private final Paint selectionPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private String selectionGesture="",selectionKey="";
+    boolean canTransform(){return selectionBounds!=null&&!selected.isEmpty();}
+    boolean canTransform(String key){return selectionKey.equals(key)&&canTransform();}
+    void transformSelection(String gesture,float scale,float dx,float dy,float anchorX,float anchorY){
+        if(!canTransform())return;
+        selectionGesture=gesture;selectionMatrix.setScale(scale,scale,anchorX,anchorY);selectionMatrix.postTranslate(dx,dy);postInvalidateOnAnimation();
+    }
+    void cancelSelection(String gesture){if(selectionGesture.equals(gesture)){selectionGesture="";selectionMatrix.reset();postInvalidateOnAnimation();}}
+
     private boolean hasFrame;
     NativeSceneView(Context context){super(context);setWillNotDraw(false);setFocusable(false);setClickable(false);clear.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));}
     long sequence(){return sequence;}
@@ -178,7 +263,9 @@ final class NativeSceneView extends View {
     void apply(NativeScene.Frame frame){
         if(frame.reset){tiles.clear();dirty.clear();elements.clear();if(hasFrame){cuts.clear();backups.clear();}}
         hasFrame=true;
-        if(frame.backgroundChanged)background=frame.background;
+        selected=frame.selected;selectedIdle=frame.selectedIdle;selectionBounds=frame.selectionBounds;selectionKey=frame.selectionKey;
+        if(selectionGesture.equals(frame.selectionThrough)||selectionBounds==null){selectionGesture="";selectionMatrix.reset();}
+        if(frame.backgroundChanged){background=frame.background;backgroundColor=frame.backgroundColor;}
         elements.removeAll(frame.removed);elements.addAll(frame.upserts);
         for(Map.Entry<Long,NativeScene.Tile> entry:frame.tiles.entrySet()){
             NativeScene.Tile tile=entry.getValue();
@@ -226,7 +313,21 @@ final class NativeSceneView extends View {
     @Override protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
         for(long key:dirty){NativeScene.Tile tile=tiles.get(key);if(tile!=null)tile.compose();}dirty.clear();
+        canvas.drawColor(backgroundColor);
         if(background!=null)canvas.drawBitmap(background,null,new RectF(0,0,getWidth(),getHeight()),image);
-        for(NativeScene.Tile tile:tiles.values())canvas.drawBitmap(tile.pixels,tile.x,tile.y,null);
+        for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
+            NativeScene.Tile tile=entry.getValue();Bitmap idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
+            canvas.drawBitmap(idle==null?tile.pixels:idle,tile.x,tile.y,null);
+        }
+        int saved=canvas.save();canvas.concat(selectionMatrix);
+        if(!selectionGesture.isEmpty())for(Map.Entry<Long,Bitmap> entry:selected.entrySet()){long cell=entry.getKey();canvas.drawBitmap(entry.getValue(),(int)(cell>>32)*NativeScene.SIZE,(int)cell*NativeScene.SIZE,null);}
+        canvas.restoreToCount(saved);
+        if(!selectionGesture.isEmpty()&&selectionBounds!=null){
+            RectF box=new RectF(selectionBounds);selectionMatrix.mapRect(box);
+            selectionPaint.setStyle(Paint.Style.STROKE);selectionPaint.setColor(Color.rgb(22,182,241));selectionPaint.setStrokeWidth(2);
+            canvas.drawRect(box,selectionPaint);
+            selectionPaint.setStyle(Paint.Style.FILL);
+            for(float px:new float[]{box.left,box.right})for(float py:new float[]{box.top,box.bottom})canvas.drawCircle(px,py,5,selectionPaint);
+        }
     }
 }

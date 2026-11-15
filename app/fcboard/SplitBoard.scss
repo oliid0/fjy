@@ -2,6 +2,14 @@
 // A stronger scope replaces legacy fixed-pixel split styles without changing other tools.
 .app .fc-classroom .fc-split-board {
   color: #010101;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  .fc-split-panes {
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
   .fc-split-resize {
     position: absolute;
     top: 0;
@@ -27,6 +35,12 @@
     }
   }
   .fc-split-pane {
+    min-height: 0;
+    overflow: hidden;
+    canvas {
+      position: absolute;
+      inset: 0;
+    }
     border-inline-end-width: calc(2 * var(--fc-split-unit, 0.67px));
   }
   .fc-split-pane:first-child .fc-split-bottom {

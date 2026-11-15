@@ -2,7 +2,6 @@ import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
 
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
-import { functionGraphFrameState } from "@fcboard/fcboard/functionGraphFrameState";
 import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 import { newIframeElement } from "@fcboard/element";
 import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
@@ -54,7 +53,9 @@ import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { validatedPlot } from "./mathRecognition";
-import { restoreDocumentFunctionGraphs } from "./functionGraphResource";
+import { restoreDocumentFunctionGraphs } from "./functionGraphRestore";
+import { InlineFunctionGraph } from "./InlineFunctionGraph";
+import { functionGraphImage } from "./functionVisualization";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -2236,35 +2237,19 @@ export const FilePreview = ({
             typeof args.image !== "string" ||
             !current.some(
               (stroke) =>
-                ids.has(stroke.id) &&
-                ["vega", "iframe"].includes(stroke.plot?.renderer || ""),
+                ids.has(stroke.id) && stroke.plot?.renderer === "vega",
             )
           ) {
             throw new Error("The function plot was removed");
           }
-          const resource = args.resource
-            ? validateInteractiveResource(args.resource)
-            : undefined;
           commitInk(
             {
               ...inkRef.current,
               [pageRef.current]: current.map((stroke) =>
-                ids.has(stroke.id) &&
-                ["vega", "iframe"].includes(stroke.plot?.renderer || "")
+                ids.has(stroke.id) && stroke.plot?.renderer === "vega"
                   ? {
                       ...stroke,
                       image: args.image as string,
-                      ...(resource
-                        ? {
-                            resource: {
-                              ...resource,
-                              width:
-                                stroke.resource?.width ?? stroke.imageWidth!,
-                              height:
-                                stroke.resource?.height ?? stroke.imageHeight!,
-                            },
-                          }
-                        : {}),
                       plot: {
                         ...stroke.plot!,
                         plot,
@@ -2275,7 +2260,7 @@ export const FilePreview = ({
                               >["sourceRegions"],
                             }
                           : {}),
-                        ...(resource ? { renderer: "iframe" as const } : {}),
+                        renderer: "vega" as const,
                       },
                     }
                   : stroke,
@@ -3577,7 +3562,44 @@ export const FilePreview = ({
               </g>
             )}
             {paths.map((stroke) =>
-              stroke.resource ? (
+              stroke.plot?.renderer === "vega" && stroke.image ? (
+                <foreignObject
+                  key={stroke.id}
+                  x={stroke.anchor?.x ?? stroke.points[0][0]}
+                  y={stroke.anchor?.y ?? stroke.points[0][1]}
+                  width={stroke.imageWidth}
+                  height={stroke.imageHeight}
+                  opacity={(stroke.opacity ?? 100) / 100}
+                  style={{
+                    overflow: "visible",
+                    pointerEvents: inkOn && !selecting ? "none" : "auto",
+                  }}
+                >
+                  <InlineFunctionGraph
+                    id={stroke.id}
+                    plot={stroke.plot.plot}
+                    color={stroke.color}
+                    onCommit={(plot) => {
+                      if (pageRef.current !== page) {
+                        return;
+                      }
+                      const all = inkRef.current[page] || [];
+                      commitInk({
+                        ...inkRef.current,
+                        [page]: all.map((item) =>
+                          item.id === stroke.id && item.plot
+                            ? {
+                                ...item,
+                                image: functionGraphImage(plot, item.color),
+                                plot: { ...item.plot, plot },
+                              }
+                            : item,
+                        ),
+                      });
+                    }}
+                  />
+                </foreignObject>
+              ) : stroke.resource ? (
                 <foreignObject
                   key={stroke.id}
                   x={stroke.points[0][0]}
@@ -3595,15 +3617,6 @@ export const FilePreview = ({
                 >
                   <InteractiveResourceFrame
                     resource={stroke.resource}
-                    live={
-                      stroke.plot?.renderer === "iframe"
-                        ? functionGraphFrameState(
-                            stroke.resource.id,
-                            stroke.plot.plot,
-                            stroke.color,
-                          )
-                        : undefined
-                    }
                     objectId={stroke.id}
                     surface="document"
                     window={{

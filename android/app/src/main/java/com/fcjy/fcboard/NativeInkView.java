@@ -37,11 +37,19 @@ final class NativeInkView extends View {
     private final Set<NativeInputStream> ownedDevices = new HashSet<>();
     private final Map<String, Contact> pending = new HashMap<>();
     private final List<RectF> blocked = new ArrayList<>();
-    private final Paint regionFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint regionFill = new Paint(Paint.ANTI_ALIAS_FLAG), selectionFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private boolean enabled, palmEnabled = true, routedInput, multiStroke = true;
     private final float touchSlop;
     private float eraserSize = 60;
     private String token = "", mode = "pen";
+    private RectF selection;
+    private String selectionKey="";
+    private float selectionMinScale=.1f;
+    private boolean selectionResize=true;
+    void setSelection(org.json.JSONArray bounds,String key,float minimum,boolean resize){
+        selectionKey=key;selectionMinScale=Math.max(.1f,Math.min(10,minimum));selectionResize=resize;
+        selection=bounds==null?null:new RectF((float)bounds.optDouble(0),(float)bounds.optDouble(1),(float)bounds.optDouble(2),(float)bounds.optDouble(3));
+    }
     private float x, y, scale = 1, width = 4, unit = 1, opacity = 1, palm = 36;
     private int color = Color.BLACK;
     private boolean dashed, thickDashed;
@@ -76,6 +84,10 @@ final class NativeInkView extends View {
         float dashOn, dashOff, dashDistance;
         final PathMeasure measure = new PathMeasure();
         int sent;
+        RectF selection;
+        float anchorX,anchorY,transformScale=1,dx,dy,startX,startY;
+        boolean resize;
+        float minimumScale;
     }
     NativeInkView(Context context, Events events) { this(context, events, Runnable::run); }
     NativeInkView(Context context, Events events, Executor publisher) {
@@ -83,7 +95,7 @@ final class NativeInkView extends View {
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         try { eraserPicture = com.caverock.androidsvg.SVG.getFromResource(context, R.raw.factory_eraser).renderToPicture(); }
         catch (com.caverock.androidsvg.SVGParseException error) { throw new IllegalStateException("Native eraser vector cannot be loaded", error); }
-        regionFill.setColor(Color.argb(48, 255, 0, 0)); setWillNotDraw(false); setFocusable(false);
+        selectionFill.setColor(Color.argb(128,3,136,236)); regionFill.setColor(Color.argb(48, 255, 0, 0)); setWillNotDraw(false); setFocusable(false);
     }
     void configure(String token, boolean enabled, float x, float y, float scale, float width, float unit, float opacity, String color, boolean dashed, float palm, List<RectF> blocked, org.json.JSONObject thick, float threshold, String mode, boolean palmEnabled, float eraserSize, org.json.JSONObject appearance) {
         if (!token.equals(this.token) || !enabled) cancel();
@@ -104,6 +116,12 @@ final class NativeInkView extends View {
     void setMultiStroke(boolean value) { multiStroke = value; }
     private boolean blocked(float cssX, float cssY) { for (RectF rect : blocked) if (rect.contains(cssX, cssY)) return true; return false; }
     boolean accepts(MotionEvent event,int index,float offsetX,float offsetY){
+        float cssX=x+(event.getX(index)-offsetX)/scale,cssY=y+(event.getY(index)-offsetY)/scale;
+        if(mode.equals("select")&&selection!=null){RectF hit=new RectF(selection);hit.inset(-20,-20);NativeSceneView scene=retainedScene.get();if(hit.contains(cssX,cssY)){
+            if(scene==null||!scene.canTransform(selectionKey))return false;
+            boolean corner=(Math.abs(cssX-selection.left)<20||Math.abs(cssX-selection.right)<20)&&(Math.abs(cssY-selection.top)<20||Math.abs(cssY-selection.bottom)<20);
+            if(corner&&!selectionResize)return false;
+        }}
         return enabled&&(event.getButtonState()&(MotionEvent.BUTTON_SECONDARY|MotionEvent.BUTTON_TERTIARY))==0&&!blocked(x+(event.getX(index)-offsetX)/scale,y+(event.getY(index)-offsetY)/scale);
     }
     private boolean palm(MotionEvent event, int index) {
@@ -134,6 +152,19 @@ final class NativeInkView extends View {
             contact.dashOn = Math.max(penWidth * 1.6f, 8 * penUnit) * scale;
             contact.dashOff = Math.max(penWidth * 1.8f, 10 * penUnit) * scale;
             contact.paint.setPathEffect(new DashPathEffect(new float[]{contact.dashOn, contact.dashOff}, 0));
+        }
+        if(contact.mode.equals("select")&&selection!=null){
+            float cssX=x+(event.getX(index)-offsetX)/scale,cssY=y+(event.getY(index)-offsetY)/scale;
+            RectF hit=new RectF(selection);hit.inset(-20,-20);NativeSceneView scene=retainedScene.get();
+            if(hit.contains(cssX,cssY)&&scene!=null&&scene.canTransform(selectionKey)){
+                contact.mode="transform";contact.selection=new RectF(selection);
+                contact.startX=cssX;contact.startY=cssY;
+                boolean west=Math.abs(cssX-selection.left)<20,east=Math.abs(cssX-selection.right)<20;
+                boolean north=Math.abs(cssY-selection.top)<20,south=Math.abs(cssY-selection.bottom)<20;
+                contact.resize=selectionResize&&(west||east)&&(north||south);
+                contact.minimumScale=selectionMinScale;
+                contact.anchorX=west?selection.right:selection.left;contact.anchorY=north?selection.bottom:selection.top;
+            }
         }
         if (contact.mode.equals("select") || contact.mode.equals("regionErase")) {
             contact.paint.setColor(contact.mode.equals("select") ? Color.rgb(22, 182, 241) : Color.RED);
@@ -201,7 +232,7 @@ final class NativeInkView extends View {
             if (action == MotionEvent.ACTION_DOWN) cancelStream(device);
             float cssX = x + (event.getX(index)-offsetX) / scale, cssY = y + (event.getY(index)-offsetY) / scale;
             if (!enabled || (event.getButtonState() & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY)) != 0 || blocked(cssX, cssY)) return ownedDevices.contains(device);
-            boolean candidate = mode.equals("pen") && !multiStroke && palmEnabled && palm(event, index);
+            boolean candidate = mode.equals("pen") && palmEnabled && palm(event, index);
             boolean temporary = candidate || event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER;
             boolean erase = temporary || mode.equals("erase");
             if (!erase && !mode.equals("pen") && !active.isEmpty()) return true;
@@ -214,7 +245,7 @@ final class NativeInkView extends View {
         if (action == MotionEvent.ACTION_MOVE) {
             for (int i = 0; i < event.getPointerCount(); i++) {
                 Contact contact = active.get(key(event, i)); if (contact == null) continue;
-                if (contact.mode.equals("pen") && !multiStroke && palmEnabled && palm(event, i)) {
+                if (contact.mode.equals("pen") && palmEnabled && palm(event, i)) {
                     active.remove(key(event, i)); emit(contact, "cancel", false);
                     start(event, i, true, true, true, offsetX, offsetY); continue;
                 }
@@ -241,6 +272,20 @@ final class NativeInkView extends View {
         return ownedDevices.contains(device);
     }
     private void sample(Contact contact, float px, float py, float pressure, boolean first) {
+        if(contact.mode.equals("transform")){
+            float cssX=x+px/scale,cssY=y+py/scale;
+            if(contact.resize){
+                float width=contact.selection.width(),height=contact.selection.height();
+                float changeX=(contact.anchorX==contact.selection.right?-1:1)*(cssX-contact.startX);
+                float changeY=(contact.anchorY==contact.selection.bottom?-1:1)*(cssY-contact.startY);
+                contact.transformScale=Math.max(contact.minimumScale,Math.min(10f,((width+changeX)/Math.max(1,width)+(height+changeY)/Math.max(1,height))/2));
+            }else{contact.dx=cssX-contact.startX;contact.dy=cssY-contact.startY;}
+            NativeSceneView scene=retainedScene.get();
+            if(scene!=null)scene.transformSelection(contact.id,contact.transformScale,contact.dx*scale,contact.dy*scale,(contact.anchorX-x)*scale,(contact.anchorY-y)*scale);
+            contact.lastX=px;contact.lastY=py;
+            if(first)contact.points.add(new float[]{cssX,cssY,pressure});
+            return;
+        }
         if (contact.points.size() >= 120000) return;
         if (!first && Math.hypot(px - contact.lastX, py - contact.lastY) < .15f * scale) return;
         NativeSceneView scene=retainedScene.get();
@@ -290,12 +335,13 @@ final class NativeInkView extends View {
         boolean temporary = contact.palm;
         float major = contact.major, minor = contact.minor;
         long sequence=contact.nativeSequence;
+        JSObject transform=contact.mode.equals("transform")?new JSObject().put("scale",contact.transformScale).put("dx",contact.dx).put("dy",contact.dy).put("anchorX",contact.anchorX).put("anchorY",contact.anchorY):null;
         // JSON encoding of a long lifted stroke must never occupy the input/UI thread.
         publisher.execute(() -> {
             JSArray points = new JSArray();
             for (float[] point : values) points.put(new JSArray(java.util.Arrays.asList(point[0], point[1], point[2])));
             events.contact(new JSObject().put("id", id).put("token", stamp).put("phase", phase).put("points", points)
-                .put("mode", kind).put("palm", temporary).put("width", major).put("height", minor).put("pointerType", pointerType).put("nativeSequence",sequence));
+                .put("mode", kind).put("palm", temporary).put("width", major).put("height", minor).put("pointerType", pointerType).put("nativeSequence",sequence).put("transform",transform));
         });
     }
     void acknowledge(String id) {
@@ -315,14 +361,15 @@ final class NativeInkView extends View {
         for(Contact preview:pending.values())preview.erasures.remove(gesture);
     }
     void cancel() {
-        for (Contact contact : active.values()) if (!contact.mode.equals("palm")) { NativeSceneView scene=retainedScene.get();if(contact.mode.equals("erase")){if(scene!=null)scene.cancelErase(contact.id);restorePreview(contact.id);}emit(contact, "cancel", false); }
+        for (Contact contact : active.values()) if (!contact.mode.equals("palm")) { NativeSceneView scene=retainedScene.get();if(contact.mode.equals("transform")&&scene!=null)scene.cancelSelection(contact.id);if(contact.mode.equals("erase")){if(scene!=null)scene.cancelErase(contact.id);restorePreview(contact.id);}emit(contact, "cancel", false); }
+        NativeSceneView scene=retainedScene.get();if(scene!=null)for(Contact contact:pending.values())if(contact.mode.equals("transform"))scene.cancelSelection(contact.id);
         active.clear(); pending.clear(); ownedDevices.clear(); invalidate();
     }
     void cancelStream(NativeInputStream device) {
         java.util.Iterator<Contact> contacts = active.values().iterator();
         while (contacts.hasNext()) {
             Contact contact = contacts.next();
-            if (contact.stream.sameGesture(device)) { if (!contact.mode.equals("palm")) {NativeSceneView scene=retainedScene.get();if(contact.mode.equals("erase")){if(scene!=null)scene.cancelErase(contact.id);restorePreview(contact.id);}emit(contact, "cancel", false);} contacts.remove(); }
+            if (contact.stream.sameGesture(device)) { if (!contact.mode.equals("palm")) {NativeSceneView scene=retainedScene.get();if(contact.mode.equals("transform")&&scene!=null)scene.cancelSelection(contact.id);if(contact.mode.equals("erase")){if(scene!=null)scene.cancelErase(contact.id);restorePreview(contact.id);}emit(contact, "cancel", false);} contacts.remove(); }
         }
         ownedDevices.remove(device); invalidate();
     }
@@ -345,15 +392,15 @@ final class NativeInkView extends View {
         canvas.restoreToCount(scope);
     }
     private void draw(Canvas canvas, Contact contact) {
-        if (contact.mode.equals("palm")) return;
+        if (contact.mode.equals("palm")||contact.mode.equals("transform")) return;
         if (contact.mode.equals("erase")) {
             float halfWidth = contact.major * scale / 2, halfHeight = contact.minor * scale / 2;
             eraserRect.set(contact.lastX - halfWidth, contact.lastY - halfHeight, contact.lastX + halfWidth, contact.lastY + halfHeight);
             canvas.drawPicture(eraserPicture, eraserRect); return;
         }
-        if (contact.mode.equals("regionErase") && contact.points.size() >= 3) {
+        if ((contact.mode.equals("regionErase") || contact.mode.equals("select")) && contact.points.size() >= 3) {
             contact.fillPath.set(contact.path); contact.fillPath.close();
-            canvas.drawPath(contact.fillPath, regionFill);
+            canvas.drawPath(contact.fillPath, contact.mode.equals("select") ? selectionFill : regionFill);
         }
         if (contact.brush != null) { contact.brush.draw(canvas, contact.paint); return; }
         if (contact.raster != null) { contact.raster.draw(canvas, contact.paint, contact.tip, contact.revision); return; }

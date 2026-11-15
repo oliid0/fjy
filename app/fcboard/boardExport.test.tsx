@@ -100,7 +100,11 @@ it("renders a completely empty page at full size with its actual background and 
         appState: { width: 1600, height: 900, viewBackgroundColor: "#253a35" },
       }),
     );
-    const board = { ...page(), elements: api.getSceneElements() };
+    const board = {
+      ...page(),
+      elements: api.getSceneElements(),
+      files: api.getFiles(),
+    };
     const canvas = await exportToCanvas(
       boardPageExportOptions(board, boardCanvasSize(api.getAppState())),
     );
@@ -132,7 +136,7 @@ it("uses one proportional size limit for high resolution output and thumbnails",
   );
   expect([thumbnail.width, thumbnail.height]).toEqual([280, 158]);
 });
-it("exports actual function curves for thumbnails and cloud PNG shares while retaining the editable iframe in the board", () => {
+it("exports actual function curves for thumbnails and cloud PNG shares while retaining the editable SVG in the board", () => {
   const api = sceneAPI();
   api.updateScene({ elements: [] });
   drawPlot(
@@ -141,7 +145,16 @@ it("exports actual function curves for thumbnails and cloud PNG shares while ret
     { x: 400, y: 300 },
   );
   const original = api.getSceneElements()[0];
-  const board = { ...page(), elements: api.getSceneElements() };
+  const savedFiles = Object.fromEntries(
+    vi
+      .mocked(api.addFiles)
+      .mock.calls.flatMap(([files]) => files.map((file) => [file.id, file])),
+  );
+  const board = {
+    ...page(),
+    elements: api.getSceneElements(),
+    files: savedFiles,
+  };
   const before = JSON.stringify(board);
   const result = boardPageExportOptions(board, {
     width: 1600,
@@ -166,6 +179,6 @@ it("exports actual function curves for thumbnails and cloud PNG shares while ret
   expect(file.dataURL).toMatch(/^data:image\/svg\+xml/);
   expect(file.dataURL).toContain("base64");
   expect(JSON.stringify(board)).toBe(before);
-  expect(original.type).toBe("iframe");
-  expect(board.files).toEqual({});
+  expect(original.type).toBe("image");
+  expect(board.files).toEqual(savedFiles);
 });

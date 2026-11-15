@@ -382,6 +382,7 @@ const FcboardWrapper = () => {
   }
 
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneInitialized = useRef(false);
 
   useEffect(() => {
     trackEvent("load", "frame", getFrame());
@@ -507,14 +508,33 @@ const FcboardWrapper = () => {
   );
 
   useEffect(() => {
-    if (!excalidrawAPI || (!isCollabDisabled && !collabAPI)) {
+    if (
+      !excalidrawAPI ||
+      (isCollaborationLink(window.location.href) &&
+        !isCollabDisabled &&
+        !collabAPI)
+    ) {
       return;
     }
 
-    initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
-      loadImages(data, /* isInitialLoad */ true);
-      initialStatePromiseRef.current.promise.resolve(data.scene);
-    });
+    if (!sceneInitialized.current) {
+      sceneInitialized.current = true;
+      // A local board has no dependency on a collaboration session. Bootstrap
+      // once; a later collab API mount must not reload images or sweep storage.
+      initializeScene({ collabAPI, excalidrawAPI })
+        .then((data) => {
+          loadImages(data, /* isInitialLoad */ true);
+          initialStatePromiseRef.current.promise.resolve(data.scene);
+        })
+        .catch((error) => {
+          initialStatePromiseRef.current.promise.resolve({
+            appState: {
+              errorMessage:
+                error instanceof Error ? error.message : String(error),
+            },
+          });
+        });
+    }
 
     const onHashChange = async (event: HashChangeEvent) => {
       event.preventDefault();

@@ -322,7 +322,16 @@ const _renderStaticScene = ({
 
   // Paint visible elements
   visibleElements
-    .filter((el) => !isIframeLikeElement(el))
+    .filter(
+      (el) =>
+        !isIframeLikeElement(el) &&
+        !(
+          !isExporting &&
+          canvas.classList.contains("static") &&
+          el.customData?.fcPlot?.renderer === "vega" &&
+          document.getElementById(`fc-inline-function-${el.id}`)
+        ),
+    )
     .forEach((element) => {
       try {
         const frameId = element.frameId || appState.frameToHighlight?.id;

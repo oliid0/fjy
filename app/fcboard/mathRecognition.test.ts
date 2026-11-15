@@ -1,9 +1,6 @@
-import {
-  calculate,
-  compileExpression,
-  samplePlot,
-  sampleInequality,
-} from "./math";
+import { calculateLocal as calculate } from "./mathCalculation";
+
+import { compileExpression, samplePlot, sampleInequality } from "./math";
 import {
   localMathResult,
   recognizeMath,

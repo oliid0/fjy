@@ -722,6 +722,16 @@
     "mmb": "鼠标滚轮"
   },
   "fcboard": {
+    "roll_call": "点名",
+    "namelist": "名单设置",
+    "namelist_hint": "每行一个名字，也可以用逗号分隔。",
+    "namelist_empty": "请先添加名单",
+    "namelist_invalid": "最多5000个名字，每个名字不超过80个字符。",
+    "rollcall_ready": "准备开始点名",
+    "rollcall_start": "开始点名",
+    "rollcall_stop": "停止",
+    "rollcall_resume": "继续抽取",
+
     "touch_locked": "触控已锁定，按副板解锁键恢复。",
     "touch_unlocked": "触控已解锁。",
     "factorySettings": {

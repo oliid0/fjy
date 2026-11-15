@@ -455,8 +455,6 @@ import { getShortcutKey } from "../shortcut";
 
 import { tryParseSpreadsheet } from "../charts";
 
-import { functionGraphFrameState } from "../functionGraphFrameState";
-
 import { InteractiveResourceFrame } from "./InteractiveResourceFrame";
 
 import factoryEraser from "./FactoryEraser.svg?url";
@@ -1839,15 +1837,6 @@ class App extends React.Component<AppProps, AppState> {
                   {(el.customData?.fcInteractiveResource ? (
                     <InteractiveResourceFrame
                       resource={el.customData.fcInteractiveResource}
-                      live={
-                        el.customData.fcPlot?.renderer === "iframe"
-                          ? functionGraphFrameState(
-                              el.customData.fcInteractiveResource.id,
-                              el.customData.fcPlot.plot,
-                              el.strokeColor,
-                            )
-                          : undefined
-                      }
                       objectId={el.id}
                       surface="whiteboard"
                       iframeRef={(ref) => this.cacheEmbeddableRef(el, ref)}

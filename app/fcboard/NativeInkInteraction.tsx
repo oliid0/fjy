@@ -1,15 +1,22 @@
 import { useEffect } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { getCommonBounds } from "@fcboard/element";
-import { colorToHex } from "@fcboard/common";
+import {
+  CaptureUpdateAction,
+  getCommonBounds,
+  getSelectedElements,
+} from "@fcboard/element";
+import { colorToHex, MIN_FONT_SIZE } from "@fcboard/common";
 import { t } from "@fcboard/fcboard/i18n";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
 import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
 
+import type { FcboardElement } from "@fcboard/element/types";
+
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { classroomCommands, executeBoardCommand } from "./commands";
+import { transformBoardElement } from "./canvasTransform";
 import { createNativeEraserBackend } from "./nativeEraser";
 import { createNativeSceneRenderer } from "./nativeScene";
 
@@ -20,7 +27,14 @@ type Contact = {
   id: string;
   token: string;
   phase: "start" | "move" | "end" | "cancel";
-  mode?: "pen" | "select" | "regionErase" | "erase";
+  mode?: "pen" | "select" | "regionErase" | "erase" | "transform";
+  transform?: {
+    scale: number;
+    dx: number;
+    dy: number;
+    anchorX: number;
+    anchorY: number;
+  };
   points: [number, number, number][];
   width: number;
   height: number;
@@ -68,6 +82,10 @@ const ink = registerPlugin<{
     palmEnabled: boolean;
     eraserSize: number;
     blocked: number[][];
+    selectionBounds?: number[];
+    selectionKey?: string;
+    selectionMinScale?: number;
+    selectionResize?: boolean;
   }): Promise<void>;
   acknowledge(options: {
     owner: string;
@@ -138,42 +156,158 @@ export const NativeInkInteraction = ({
     let uiBlocksInk = false;
     const contacts = new Map<string, NonNullable<Contact["mode"]>>();
     const eraser = createNativeEraserBackend(api.id);
-    const objectBounds = new Map<string, readonly number[]>();
     const compositionBounds = new Map<string, readonly number[]>();
+    const selectionElements = new Map<string, FcboardElement>();
     const unregisterEraser = api.registerNativeEraserBackend?.(
       eraser.erase,
       (updated, removed) => {
         eraser.synchronize(updated, removed);
         for (const id of removed) {
-          objectBounds.delete(id);
           compositionBounds.delete(id);
+          selectionElements.delete(id);
         }
         for (const element of updated) {
           if (element.isDeleted) {
-            objectBounds.delete(element.id);
             compositionBounds.delete(element.id);
+            selectionElements.delete(element.id);
             continue;
           }
-          const bounds = getCommonBounds([element]);
-          objectBounds.set(element.id, bounds);
+          selectionElements.set(element.id, element);
           if (
             element.customData?.fcInsertion ||
             element.customData?.fcQuestionInput ||
             element.customData?.fcQuestion
           ) {
-            compositionBounds.set(element.id, bounds);
+            compositionBounds.set(element.id, getCommonBounds([element]));
           } else {
             compositionBounds.delete(element.id);
           }
         }
       },
     );
+    const selections = new Map<
+      string,
+      {
+        ids: string[];
+        versions: number[];
+        region: NonNullable<
+          ReturnType<typeof api.getAppState>["whiteboardSelection"]
+        >;
+      }
+    >();
     let eraserQueue = Promise.resolve();
+    let generation = 0;
     const apply = (
       contact: Contact,
       phase = contact.phase,
       restoreSelection = true,
     ) => {
+      if (contact.mode === "transform") {
+        const clear = () =>
+          document.documentElement.classList.remove(
+            "fc-native-selection-transform",
+          );
+        if (phase === "start") {
+          const state = api.getAppState();
+          if (state.whiteboardSelection) {
+            const selected = getSelectedElements(
+              api.getSceneElements(),
+              state,
+              { includeBoundTextElement: true, includeElementsInFrames: true },
+            );
+            selections.set(contact.id, {
+              ids: selected.map((element) => element.id),
+              versions: selected.map((element) => element.version),
+              region: state.whiteboardSelection,
+            });
+            document.documentElement.classList.add(
+              "fc-native-selection-transform",
+            );
+          }
+          return;
+        }
+        const original = selections.get(contact.id);
+        selections.delete(contact.id);
+        if (phase === "cancel" || !original || !contact.transform) {
+          clear();
+          return;
+        }
+        const transform = contact.transform;
+        const state = api.getAppState();
+        const elements = api.getSceneElements();
+        const current = new Map(
+          elements.map((element) => [element.id, element]),
+        );
+        if (
+          original.ids.some(
+            (id, index) =>
+              current.get(id)?.version !== original.versions[index],
+          )
+        ) {
+          clear();
+          return scene?.acknowledgeSelection(contact.id);
+        }
+        if (
+          !Object.values(transform).every(Number.isFinite) ||
+          transform.scale < 0.1 ||
+          transform.scale > 10
+        ) {
+          throw new Error("Invalid native selection transform");
+        }
+        const anchor = {
+          x:
+            (transform.anchorX - state.offsetLeft) / state.zoom.value -
+            state.scrollX,
+          y:
+            (transform.anchorY - state.offsetTop) / state.zoom.value -
+            state.scrollY,
+        };
+        const dx = transform.dx / state.zoom.value;
+        const dy = transform.dy / state.zoom.value;
+        const point = (x: number, y: number) =>
+          [
+            anchor.x + (x - anchor.x) * transform.scale + dx,
+            anchor.y + (y - anchor.y) * transform.scale + dy,
+          ] as const;
+        const [left, top] = point(
+          original.region.bounds.left,
+          original.region.bounds.top,
+        );
+        const [right, bottom] = point(
+          original.region.bounds.right,
+          original.region.bounds.bottom,
+        );
+        const ids = new Set(original.ids);
+        try {
+          api.updateScene({
+            elements: elements.map((element) =>
+              ids.has(element.id)
+                ? transformBoardElement(
+                    element,
+                    anchor,
+                    transform.scale,
+                    dx,
+                    dy,
+                  )
+                : element,
+            ),
+            appState: {
+              whiteboardSelection: {
+                ...original.region,
+                bounds: { left, top, right, bottom },
+                path: original.region.path?.map(([x, y]) =>
+                  point(x, y),
+                ) as typeof original.region.path,
+              },
+            },
+            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+          });
+        } catch (error) {
+          clear();
+          throw error;
+        }
+        return scene?.acknowledgeSelection(contact.id).finally(clear);
+      }
       if (contact.mode === "erase") {
         return api.nativeEraserGesture!({
           ...contact,
@@ -200,6 +334,24 @@ export const NativeInkInteraction = ({
         return;
       }
       failed = true;
+      generation++;
+      for (const [id, mode] of contacts) {
+        apply(
+          {
+            id,
+            mode,
+            owner: api.id,
+            token,
+            phase: "cancel",
+            points: [],
+            width: 0,
+            height: 0,
+            pointerType: "touch",
+          },
+          "cancel",
+        );
+      }
+      contacts.clear();
       scene?.dispose();
       void ink.remove({ owner: api.id }).catch(() => {});
       api.updateScene({
@@ -293,6 +445,7 @@ export const NativeInkInteraction = ({
       configuredSurface = surfaceStamp(api);
       token = JSON.stringify([
         api.id,
+        generation,
         board,
         enabled,
         mode,
@@ -368,10 +521,8 @@ export const NativeInkInteraction = ({
       }
       const blocked: number[][] = enabled ? [...uiBounds] : [];
       // Table/label/question surfaces keep their existing live composition path.
-      const exclusions = mode === "select" ? objectBounds : compositionBounds;
-      for (const [left, top, right, bottom] of enabled
-        ? exclusions.values()
-        : []) {
+      const exclusions = mode === "select" ? [] : compositionBounds.values();
+      for (const [left, top, right, bottom] of enabled ? exclusions : []) {
         const padding = mode === "select" ? 12 : 0;
         blocked.push([
           (left + state.scrollX) * state.zoom.value +
@@ -386,26 +537,27 @@ export const NativeInkInteraction = ({
             padding,
         ]);
       }
-      // Selected contents/handles keep the existing move/resize path. Direct
-      // object taps also pass through; blank-area lasso input stays native.
       const selected = state.whiteboardSelection?.bounds;
-      if (mode === "select" && selected) {
-        const padding = 20;
-        blocked.push([
-          (selected.left + state.scrollX) * state.zoom.value +
-            state.offsetLeft -
-            padding,
-          (selected.top + state.scrollY) * state.zoom.value +
-            state.offsetTop -
-            padding,
-          (selected.right + state.scrollX) * state.zoom.value +
-            state.offsetLeft +
-            padding,
-          (selected.bottom + state.scrollY) * state.zoom.value +
-            state.offsetTop +
-            padding,
-        ]);
-      }
+      const contents =
+        mode === "select" && selected
+          ? getSelectedElements(selectionElements, state, {
+              includeBoundTextElement: true,
+              includeElementsInFrames: true,
+            })
+          : [];
+      const selectionBounds =
+        mode === "select" && selected
+          ? [
+              (selected.left + state.scrollX) * state.zoom.value +
+                state.offsetLeft,
+              (selected.top + state.scrollY) * state.zoom.value +
+                state.offsetTop,
+              (selected.right + state.scrollX) * state.zoom.value +
+                state.offsetLeft,
+              (selected.bottom + state.scrollY) * state.zoom.value +
+                state.offsetTop,
+            ]
+          : undefined;
       const options: Parameters<typeof ink.configure>[0] = {
         owner: api.id,
         token,
@@ -450,6 +602,20 @@ export const NativeInkInteraction = ({
           Math.min(240, state.eraserSize ?? inkProfile?.eraserSize ?? 60),
         ),
         blocked: blocked.slice(0, 512),
+        selectionBounds,
+        selectionKey: contents
+          .map((element) => element.id)
+          .sort()
+          .join("\u0000"),
+        selectionMinScale: Math.max(
+          0.1,
+          ...contents.map((element) =>
+            element.type === "text" ? MIN_FONT_SIZE / element.fontSize : 0.1,
+          ),
+        ),
+        selectionResize: contents.every(
+          (element) => element.customData?.fcInsertion?.kind !== "table",
+        ),
       };
       const signature = JSON.stringify(options);
       if (signature === previous) {
@@ -463,8 +629,14 @@ export const NativeInkInteraction = ({
         frame = requestAnimationFrame(sync);
       }
     };
-    const handleContact = async (contact: Contact) => {
-      if (!active || contact.owner !== api.id || !contact.id) {
+    const handleContact = async (contact: Contact, received = generation) => {
+      if (
+        !active ||
+        failed ||
+        received !== generation ||
+        contact.owner !== api.id ||
+        !contact.id
+      ) {
         return;
       }
       if (
@@ -488,24 +660,41 @@ export const NativeInkInteraction = ({
           );
           contacts.delete(contact.id);
         } else {
+          // Register before waiting: invalidation must be able to cancel even
+          // the first geometry request, not only an acknowledged contact.
+          if (contact.phase === "start") {
+            contacts.set(contact.id, contact.mode || "pen");
+          }
           const result = apply(contact);
           if (typeof result === "string") {
             elementId = result;
           } else if (result) {
             await result;
           }
+          if (!active || failed || received !== generation) {
+            return;
+          }
+          if (
+            contact.token !== token ||
+            configuredSurface !== surfaceStamp(api)
+          ) {
+            apply(contact, "cancel", configuredSurface === surfaceStamp(api));
+            contacts.delete(contact.id);
+            return;
+          }
           if (contact.mode === "erase" && contact.nativeSequence) {
             // Empty hits also complete vector reconciliation. Do not retain an
             // unbounded history of cuts during a long sweep over empty space.
             scene?.acknowledgeErase(contact.nativeSequence);
           }
-          if (contact.phase === "start") {
-            contacts.set(contact.id, contact.mode || "pen");
-          } else if (contact.phase !== "move") {
+          if (contact.phase !== "start" && contact.phase !== "move") {
             contacts.delete(contact.id);
           }
         }
       } catch (error) {
+        if (!active || received !== generation) {
+          return;
+        }
         apply(contact, "cancel");
         fail(error);
       }
@@ -534,8 +723,9 @@ export const NativeInkInteraction = ({
       // Native eraser start/move/end share one ordered transaction, while other
       // writers continue committing independently of the geometry worker.
       if (contact.mode === "erase") {
+        const received = generation;
         eraserQueue = eraserQueue
-          .then(() => handleContact(contact))
+          .then(() => handleContact(contact, received))
           .catch(fail);
       } else {
         void handleContact(contact).catch(fail);
@@ -618,7 +808,40 @@ export const NativeInkInteraction = ({
       uiDirty = true;
       schedule();
     };
-    const observer = new MutationObserver(scheduleUi);
+    const observer = new MutationObserver((records) => {
+      const controls =
+        'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.MuiPopper-root,.fc-editor-properties,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]';
+      if (
+        records.some((record) => {
+          const target = record.target;
+          if (
+            target instanceof SVGElement ||
+            target instanceof HTMLCanvasElement
+          ) {
+            return false;
+          }
+          if (record.type === "attributes") {
+            return (
+              ["style", "class", "hidden", "open", "aria-hidden"].includes(
+                record.attributeName || "",
+              ) &&
+              target instanceof HTMLElement &&
+              (!!target.closest(controls) || !!target.querySelector(controls))
+            );
+          }
+          return (
+            (target instanceof HTMLElement && !!target.closest(controls)) ||
+            [...record.addedNodes, ...record.removedNodes].some(
+              (node) =>
+                node instanceof HTMLElement &&
+                (node.matches(controls) || !!node.querySelector(controls)),
+            )
+          );
+        })
+      ) {
+        scheduleUi();
+      }
+    });
     observer.observe(document.documentElement, {
       attributes: true,
       childList: true,
@@ -629,6 +852,8 @@ export const NativeInkInteraction = ({
       classroomCommands.watch("document", schedule),
       classroomCommands.watch("boards", schedule),
       classroomCommands.onInvalidate(() => {
+        generation++;
+        eraserQueue = Promise.resolve();
         token = "";
         previous = "";
         for (const [id, mode] of contacts) {
@@ -650,6 +875,7 @@ export const NativeInkInteraction = ({
         }
         contacts.clear();
         void eraser.reset().catch(fail);
+        eraser.synchronize([...selectionElements.values()], []);
         scene?.reset();
         void ink.remove({ owner: api.id }).catch(() => {});
         schedule();
@@ -662,6 +888,10 @@ export const NativeInkInteraction = ({
     schedule();
     return () => {
       active = false;
+      generation++;
+      document.documentElement.classList.remove(
+        "fc-native-selection-transform",
+      );
       cancelAnimationFrame(frame);
       observer.disconnect();
       stops.forEach((stop) => stop());

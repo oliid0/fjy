@@ -113,9 +113,10 @@ it("reconciles a viewport change made while a previous native snapshot is still 
     await waitFor(() =>
       expect(native.synchronize.mock.calls.at(-1)?.[0].scrollX).toBe(100),
     );
-    expect(native.synchronize.mock.calls.at(-1)![0].background).toMatch(
-      /^data:image\/png/,
-    );
+    expect(native.synchronize.mock.calls.at(-1)![0].background).toBeUndefined();
+    expect(
+      native.synchronize.mock.calls.at(-1)![0].backgroundColor,
+    ).toBeDefined();
   } finally {
     act(() => controller.dispose());
   }
@@ -282,5 +283,41 @@ it("waits for canonical render maps before acknowledging an erase that introduce
   } finally {
     act(() => controller.dispose());
     vi.restoreAllMocks();
+  }
+});
+
+it("retains the installed frame while a new board epoch is rasterized and sends plain background colors without PNG", async () => {
+  const api = await setup();
+  let controller!: NonNullable<ReturnType<typeof createNativeSceneRenderer>>;
+  act(() => {
+    controller = createNativeSceneRenderer(api, vi.fn())!;
+  });
+  try {
+    await waitFor(() =>
+      expect(document.documentElement).toHaveClass("fc-native-scene"),
+    );
+    expect(native.synchronize.mock.calls.at(-1)![0].background).toBeUndefined();
+    expect(
+      native.synchronize.mock.calls.at(-1)![0].backgroundColor,
+    ).toBeDefined();
+    native.remove.mockClear();
+    let install!: () => void;
+    native.synchronize.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          install = resolve;
+        }),
+    );
+    act(() => {
+      controller.reset();
+      api.updateScene({ elements: [ink(450)] });
+    });
+    await waitFor(() => expect(install).toBeDefined());
+    expect(native.remove).not.toHaveBeenCalled();
+    expect(document.documentElement).toHaveClass("fc-native-scene");
+    await act(async () => install());
+    expect(document.documentElement).toHaveClass("fc-native-scene");
+  } finally {
+    act(() => controller.dispose());
   }
 });

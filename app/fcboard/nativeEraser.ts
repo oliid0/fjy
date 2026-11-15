@@ -31,7 +31,7 @@ type Cached = {
   source: FcboardFreeDrawElement;
   version: number;
   nonce: number;
-  geometry: ReturnType<typeof prepareNativeEraseStroke>;
+  geometry?: ReturnType<typeof prepareNativeEraseStroke>;
 };
 
 /** The native worker owns the index and all repeated sweep/clip calculations.
@@ -42,7 +42,6 @@ export const createNativeEraserBackend = (owner: string) => {
   const indexed = new Map<string, Cached>();
   const dirty = new Map<string, Cached>();
   const removed = new Set<string>();
-  let streamed = false;
   let epoch = 0;
   const update = (
     elements: readonly FcboardElement[],
@@ -74,11 +73,10 @@ export const createNativeEraserBackend = (owner: string) => {
       ) {
         continue;
       }
-      const entry = {
+      const entry: Cached = {
         source,
         version: source.version,
         nonce: source.versionNonce,
-        geometry: prepareNativeEraseStroke(source),
       };
       cache.set(source.id, entry);
       dirty.set(source.id, entry);
@@ -89,21 +87,13 @@ export const createNativeEraserBackend = (owner: string) => {
     elements: readonly FcboardElement[],
     removals: readonly string[],
   ) => {
-    streamed = true;
     update(elements, removals);
   };
-  const erase: NativeEraserBackend = async (elements, path, width, height) => {
+  const erase: NativeEraserBackend = async (_elements, path, width, height) => {
     const stamp = epoch;
-    if (!streamed) {
-      // Compatibility for standalone callers; the editor uses onMutation deltas.
-      const ids = new Set(elements.map((element) => element.id));
-      update(
-        elements,
-        [...cache.keys()].filter((id) => !ids.has(id)),
-      );
-    }
     const updates = [...dirty.values()].map((entry) => {
-      const { source, geometry } = entry;
+      const { source } = entry;
+      const geometry = (entry.geometry ??= prepareNativeEraseStroke(source));
       indexed.set(source.id, entry);
       return {
         id: source.id,
@@ -165,7 +155,7 @@ export const createNativeEraserBackend = (owner: string) => {
         version: entry.version,
         nonce: entry.nonce,
         survivors: restoreEraseFragments(entry.source, pieces, {
-          ...entry.geometry,
+          ...entry.geometry!,
           nibHit: patch.nibHit,
         }),
       });
@@ -178,7 +168,6 @@ export const createNativeEraserBackend = (owner: string) => {
     indexed.clear();
     dirty.clear();
     removed.clear();
-    streamed = false;
     return plugin.release({ owner });
   };
   return { erase, synchronize, reset };

@@ -132,3 +132,21 @@ it("recognizes explicit long division and does not turn an ordinary minus into a
     ),
   ).toBeUndefined();
 });
+
+it.each([
+  [String.raw`\begin{array}{r}123\\+45\\\hline\end{array}`, "168"],
+  [String.raw`\begin{aligned}12\\&\times 3\\\hline\end{aligned}`, "36"],
+])(
+  "calculates exact vision column notation locally: %s",
+  async (text, answer) => {
+    expect(await calculateAsync(text)).toBe(answer);
+  },
+);
+it("does not guess a missing operator or accept an already written answer in a column", async () => {
+  await expect(
+    calculateAsync(String.raw`\begin{array}{r}12\\3\\\hline\end{array}`),
+  ).rejects.toThrow();
+  await expect(
+    calculateAsync(String.raw`\begin{array}{r}12\\+3\\\hline15\end{array}`),
+  ).rejects.toThrow();
+});

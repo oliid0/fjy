@@ -48,9 +48,14 @@ export const WhiteboardTools = ({
   const updateGap = React.useCallback(
     (anchor: HTMLElement) => {
       const rect = anchor.getBoundingClientRect();
-      const top =
-        anchor.closest(".fc-unified-toolbar")?.getBoundingClientRect().top ??
-        rect.top;
+      const toolbar = anchor.closest(".fc-unified-toolbar");
+      const visibility = toolbar
+        ?.querySelector(".fc-toolbar-visibility")
+        ?.getBoundingClientRect();
+      const top = Math.min(
+        toolbar?.getBoundingClientRect().top ?? rect.top,
+        visibility?.height ? visibility.top : Infinity,
+      );
       setPopupGap(rect.top - top + (10 * rect.height) / 58);
       setPopupMaxHeight(
         Math.max(1, top - (container?.getBoundingClientRect().top || 0) - 12),

@@ -1,5 +1,6 @@
 import {
   calculationInk,
+  columnInkRows,
   hasStructuredMathInk,
   preservesMathInkStructure,
 } from "./calculationInk";
@@ -151,4 +152,33 @@ it("preserves the two dots of division instead of accepting a minus transcriptio
       strokes.filter((_, index) => index !== 2 && index !== 3),
     ),
   ).toBe(false);
+});
+
+it("keeps unequal-height vertical operand rows out of superscript rejection", () => {
+  const strokes: InkInput = [
+    [
+      [25, 10],
+      [29, 20],
+    ],
+    [
+      [25, 35],
+      [30, 65],
+    ],
+    [
+      [3, 50],
+      [13, 50],
+    ],
+    [
+      [8, 45],
+      [8, 55],
+    ],
+    [
+      [0, 75],
+      [50, 75],
+    ],
+  ];
+  const rows = columnInkRows(strokes);
+  expect(rows).toEqual([[strokes[0]], [strokes[1], strokes[2], strokes[3]]]);
+  expect(hasStructuredMathInk(strokes)).toBe(true);
+  expect(preservesMathInkStructure(strokes, "1\n+3")).toBe(true);
 });

@@ -369,7 +369,7 @@ export const insertText = (
       return { left, top, right, bottom };
     });
   let elements: FcboardElement[] | undefined;
-  for (let attempt = 0; attempt < 24; attempt++) {
+  for (let attempt = 0; attempt < (inkOutput ? 48 : 24); attempt++) {
     const layout = layoutBoardText(
       text,
       size * 0.9 ** attempt,
@@ -378,7 +378,7 @@ export const insertText = (
       obstacles,
       position,
       gap,
-      placement,
+      inkOutput ? { ...placement, allowShrink: false } : placement,
     );
     if (!layout) {
       break;

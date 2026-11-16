@@ -83,6 +83,7 @@ const native = registerPlugin<{
     selectionThrough?: string;
     nodes: NativeNode[];
     removals: string[];
+    erasureRemovals: string[];
   }): Promise<void>;
   remove(options: { owner: string; epoch: number }): Promise<void>;
 }>("FcboardNativeScene");
@@ -315,7 +316,7 @@ export const createNativeSceneRenderer = (
   const selectionWaiters = new Map<string, () => void>();
   const sources = new Map<string, FcboardElement>();
   const dirty = new Map<string, number>();
-  const removals = new Set<string>();
+  const removals = new Map<string, number>();
   const bitmaps = new Set<string>();
   const imageStates = new Map<string, { image: unknown; inline: boolean }>();
   const queue = () => {
@@ -335,14 +336,14 @@ export const createNativeSceneRenderer = (
       sources.delete(id);
       dirty.delete(id);
       bitmaps.delete(id);
-      removals.add(id);
+      removals.set(id, through ?? -1);
     }
     for (const element of updated) {
       if (element.isDeleted) {
         sources.delete(element.id);
         dirty.delete(element.id);
         bitmaps.delete(element.id);
-        removals.add(element.id);
+        removals.set(element.id, through ?? -1);
       } else {
         sources.set(element.id, element);
         dirty.set(element.id, through ?? -1);
@@ -483,7 +484,10 @@ export const createNativeSceneRenderer = (
         return;
       }
       const nodes: NativeNode[] = [];
-      const deleted = new Set(removals);
+      const deleted = new Set(removals.keys());
+      const erasureRemovals = [...removals].filter(
+        ([, through]) => through > 0,
+      );
       for (const [id, through] of dirty) {
         const source = sources.get(id);
         const node = source && nativeSceneNode(source, config, through);
@@ -501,7 +505,13 @@ export const createNativeSceneRenderer = (
       dirty.clear();
       removals.clear();
       const request = ++revision;
-      const acknowledged = eraseThrough;
+      const acknowledged = erasureRemovals.reduce(
+        (maximum, [, through]) => Math.max(maximum, through),
+        nodes.reduce(
+          (maximum, node) => Math.max(maximum, node.through),
+          eraseThrough,
+        ),
+      );
       const selectedGesture = selectionThrough;
       selectionThrough = "";
       eraseThrough = 0;
@@ -534,6 +544,7 @@ export const createNativeSceneRenderer = (
           : {}),
         nodes,
         removals: [...deleted],
+        erasureRemovals: erasureRemovals.map(([id]) => id),
       });
       if (!alive || stamp !== epoch) {
         return;

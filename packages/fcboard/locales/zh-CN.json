@@ -722,6 +722,11 @@
     "mmb": "鼠标滚轮"
   },
   "fcboard": {
+    "functionEditor": {
+      "edit": "编辑函数",
+      "expressions": "每行一个函数，最多四个函数共用同一坐标系",
+      "invalid": "请输入一至四个有效的 x 函数。"
+    },
     "appTitle": "Fcboard 白板",
     "appDescription": "Fcboard 教学与会议智能白板",
     "calculatorUi": {

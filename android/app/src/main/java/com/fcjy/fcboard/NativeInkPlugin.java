@@ -33,39 +33,12 @@ public class NativeInkPlugin extends Plugin {
         @Override public void onInputDeviceChanged(int id){}
         @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);}
     };
-    // HWhiteBoard onStart/onStop owns this provider flag. Without it BSD
-    // firmware can suppress side-board touches before Activity dispatch.
-    // Probe the actual provider; unrelated devices receive no vendor commands.
     private final java.util.concurrent.ExecutorService vendor = java.util.concurrent.Executors.newSingleThreadExecutor(r -> new Thread(r, "native-board-mode"));
-    private String previousBoardMode;
-    private final android.net.Uri boardSettings = android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings");
-    private void boardMode(boolean foreground) {
-        try {
-            android.content.ContentResolver resolver = getContext().getContentResolver();
-            try (android.database.Cursor cursor = resolver.query(boardSettings, new String[]{"whiteboard_state"}, null, null, null)) {
-                if (cursor == null || !cursor.moveToFirst()) return;
-                String current = cursor.getString(cursor.getColumnIndexOrThrow("whiteboard_state"));
-                String next;
-                if (foreground) {
-                    if (previousBoardMode != null || !("0".equals(current) || "1".equals(current))) return;
-                    previousBoardMode = current;
-                    next = "1";
-                } else {
-                    if (previousBoardMode == null) return;
-                    next = previousBoardMode;
-                    previousBoardMode = null;
-                    if (!"1".equals(current)) return;
-                }
-                android.content.ContentValues values = new android.content.ContentValues();
-                values.put("whiteboard_state", next);
-                resolver.update(boardSettings, values, null, null);
-            }
-        } catch (Exception unavailable) {
-            android.util.Log.d("NativeInk", "Vendor board mode unavailable: " + unavailable.getClass().getSimpleName());
-        }
-    }
-    @Override protected void handleOnResume() { vendor.execute(() -> boardMode(true)); }
+    private NativeBoardMode boardMode;
+    @Override protected void handleOnStart() { vendor.execute(() -> boardMode.foreground(true)); }
+    @Override protected void handleOnStop() { vendor.execute(() -> boardMode.foreground(false)); }
     @Override public void load() {
+        boardMode = new NativeBoardMode(getContext());
         ((MainActivity)getActivity()).setInkInput(this);
         inputManager=(android.hardware.input.InputManager)getContext().getSystemService(android.content.Context.INPUT_SERVICE);
         if(inputManager!=null)inputManager.registerInputDeviceListener(devices,new android.os.Handler(android.os.Looper.getMainLooper()));
@@ -173,9 +146,9 @@ public class NativeInkPlugin extends Plugin {
     @PluginMethod public void remove(PluginCall call) {
         getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); inputRouter.remove(view); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
     }
-    @Override protected void handleOnPause() { vendor.execute(() -> boardMode(false)); getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
+    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
     @Override protected void handleOnDestroy() {
-        vendor.execute(() -> boardMode(false)); vendor.shutdown();
+        vendor.execute(() -> boardMode.foreground(false)); vendor.shutdown();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(devices);
         getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
     }

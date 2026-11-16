@@ -5,6 +5,7 @@ import { recognizeLocalMath } from "./localMathOcr";
 import { currentSettings } from "./settings";
 import {
   calculationInk,
+  columnInkRows,
   hasStructuredMathInk,
   preservesMathInkStructure,
 } from "./calculationInk";
@@ -108,6 +109,35 @@ export const recognizeHandwriting = async (
       const value = await cloud(signal);
       signal.throwIfAborted();
       return chooseCandidate ? chooseCandidate([value]) : value;
+    } catch {
+      signal.throwIfAborted();
+    }
+  }
+  const columnRows =
+    kind === "math" && strokes ? columnInkRows(strokes) : undefined;
+  if (columnRows && hasDigitalInk()) {
+    progress(t("fcboard.recognizing_handwriting_locally"));
+    try {
+      const candidates = await Promise.all(
+        columnRows.map((row) =>
+          recognizeDigitalInk(row, signal, "math", languageHint),
+        ),
+      );
+      const rows = candidates.map((values, index) =>
+        values.find((value) =>
+          (index
+            ? /^[+\-−×xX*÷/]\s*\d+(?:\.\d+)?$/
+            : /^[+\-−]?\d+(?:\.\d+)?$/
+          ).test(value.trim()),
+        ),
+      );
+      if (rows.every((row) => row !== undefined)) {
+        const text = rows.join("\n");
+        if (await accepted(text)) {
+          signal.throwIfAborted();
+          return chooseCandidate ? chooseCandidate([text]) : text;
+        }
+      }
     } catch {
       signal.throwIfAborted();
     }

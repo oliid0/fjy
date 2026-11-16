@@ -32,6 +32,7 @@ type Cached = {
   version: number;
   nonce: number;
   geometry?: ReturnType<typeof prepareNativeEraseStroke>;
+  failure?: { reason: unknown };
 };
 
 /** The native worker owns the index and all repeated sweep/clip calculations.
@@ -43,12 +44,42 @@ export const createNativeEraserBackend = (owner: string) => {
   const dirty = new Map<string, Cached>();
   const removed = new Set<string>();
   let epoch = 0;
+  const preparation = new Map<string, Cached>();
+  let preparationTimer: ReturnType<typeof setTimeout> | undefined;
+  const schedulePreparation = () => {
+    if (preparationTimer !== undefined || !preparation.size) {
+      return;
+    }
+    preparationTimer = setTimeout(() => {
+      preparationTimer = undefined;
+      const began = performance.now();
+      for (const [id, entry] of preparation) {
+        preparation.delete(id);
+        if (cache.get(id) !== entry) {
+          continue;
+        }
+        try {
+          entry.geometry ??= prepareNativeEraseStroke(entry.source);
+        } catch (reason) {
+          entry.failure = { reason };
+        }
+        // Keep recognition, result placement and ordinary editor work responsive
+        // while a loaded dense page prepares its existing stroke geometry.
+        if (performance.now() - began >= 4) {
+          break;
+        }
+      }
+      schedulePreparation();
+    }, 0);
+  };
+
   const update = (
     elements: readonly FcboardElement[],
     removals: readonly string[],
   ) => {
     for (const id of removals) {
       cache.delete(id);
+      preparation.delete(id);
       dirty.delete(id);
       removed.add(id);
     }
@@ -60,6 +91,7 @@ export const createNativeEraserBackend = (owner: string) => {
         !source.points.length
       ) {
         if (cache.delete(source.id) || indexed.has(source.id)) {
+          preparation.delete(source.id);
           dirty.delete(source.id);
           removed.add(source.id);
         }
@@ -80,6 +112,7 @@ export const createNativeEraserBackend = (owner: string) => {
       };
       cache.set(source.id, entry);
       dirty.set(source.id, entry);
+      preparation.set(source.id, entry);
       removed.delete(source.id);
     }
   };
@@ -88,11 +121,16 @@ export const createNativeEraserBackend = (owner: string) => {
     removals: readonly string[],
   ) => {
     update(elements, removals);
+    schedulePreparation();
   };
   const erase: NativeEraserBackend = async (_elements, path, width, height) => {
     const stamp = epoch;
     const updates = [...dirty.values()].map((entry) => {
       const { source } = entry;
+      preparation.delete(source.id);
+      if (entry.failure) {
+        throw entry.failure.reason;
+      }
       const geometry = (entry.geometry ??= prepareNativeEraseStroke(source));
       indexed.set(source.id, entry);
       return {
@@ -164,6 +202,9 @@ export const createNativeEraserBackend = (owner: string) => {
   };
   const reset = () => {
     epoch++;
+    clearTimeout(preparationTimer);
+    preparationTimer = undefined;
+    preparation.clear();
     cache.clear();
     indexed.clear();
     dirty.clear();

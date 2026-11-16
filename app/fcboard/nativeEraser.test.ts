@@ -196,3 +196,31 @@ it("prepares eraser geometry only when a sweep needs the latest committed versio
     prepare.mockRestore();
   }
 });
+
+it("prepares committed geometry before the first erase and discards superseded or reset work", async () => {
+  vi.useFakeTimers();
+  const prepare = vi.spyOn(strokeGeometry, "prepareNativeEraseStroke");
+  const backend = createNativeEraserBackend("prepared");
+  const original = stroke();
+  const moved = newElementWith(original, { x: 300 });
+  try {
+    backend.synchronize([original], []);
+    backend.synchronize([moved], []);
+    await vi.runOnlyPendingTimersAsync();
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(prepare).toHaveBeenCalledWith(moved);
+    await backend.erase([], path, 10, 12);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(native.erase.mock.calls.at(-1)![0].updates[0].samples[0][0]).toBe(
+      300,
+    );
+    backend.synchronize([newElementWith(moved, { x: 500 })], []);
+    await backend.reset();
+    await vi.runOnlyPendingTimersAsync();
+    expect(prepare).toHaveBeenCalledTimes(1);
+  } finally {
+    await backend.reset();
+    prepare.mockRestore();
+    vi.useRealTimers();
+  }
+});

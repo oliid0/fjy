@@ -726,6 +726,11 @@
     "mmb": "Scroll wheel"
   },
   "fcboard": {
+    "functionEditor": {
+      "edit": "Edit functions",
+      "expressions": "One function per line, up to four in the same coordinate system",
+      "invalid": "Enter one to four valid functions of x."
+    },
     "appTitle": "Fcboard Whiteboard",
     "appDescription": "Fcboard teaching and meeting whiteboard",
     "calculatorUi": {

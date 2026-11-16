@@ -13,6 +13,7 @@ export type TextPlacement = {
   role?: "title";
   bounds?: ContentRect;
   sourceLines?: number;
+  allowShrink?: boolean;
 };
 
 /** AI answers use half the source size and a screen-space cap. Local arithmetic,
@@ -97,7 +98,11 @@ export const layoutBoardText = (
     candidates.push({ x: viewport.left, y: source.bottom + gap });
     candidates.push({ x: source.left, y: source.top, nearby: true });
   }
-  for (let attempt = 0; attempt < 48; attempt++) {
+  for (
+    let attempt = 0;
+    attempt < (placement.allowShrink === false ? 1 : 48);
+    attempt++
+  ) {
     const size = fontSize * 0.9 ** attempt;
     if (size < Math.min(fontSize, (gap * 6) / 16)) {
       break;

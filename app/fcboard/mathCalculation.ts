@@ -3,6 +3,7 @@ import nerdamer from "nerdamer/all";
 import {
   prepareCalculation,
   calculationEngine as engine,
+  evaluateNumericCalculation,
 } from "./calculationSyntax";
 import { solveEquations } from "./equations";
 import { continuousMathRange } from "./mathDomain";
@@ -61,15 +62,5 @@ export const calculateLocal = (input: string): string => {
     }
     return expression.startsWith("integrate(") ? `${result} + C` : result;
   }
-  const result = engine().format(node.compile().evaluate(), {
-    precision: 32,
-  });
-  if (
-    !result ||
-    result.length > 4000 ||
-    /NaN|Infinity|undefined/.test(result)
-  ) {
-    throw new Error("fcboard.this_expression_has_no_available_result");
-  }
-  return result;
+  return evaluateNumericCalculation(node);
 };

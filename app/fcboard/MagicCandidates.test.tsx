@@ -228,7 +228,7 @@ it("previews a generated image without touching files or ink, then inserts that 
   await pending;
   expect(generate).toHaveBeenCalledTimes(1);
   expect(generate).toHaveBeenCalledWith(
-    expect.stringContaining("3D风格"),
+    expect.stringContaining("3D style"),
     expect.any(AbortSignal),
     {
       referenceImage: "data:image/png;base64,sketch",

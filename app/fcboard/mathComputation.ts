@@ -1,6 +1,9 @@
 import { t } from "@fcboard/fcboard/i18n";
 
-import { prepareCalculation } from "./calculationSyntax";
+import {
+  prepareCalculation,
+  evaluateNumericCalculation,
+} from "./calculationSyntax";
 
 /** A symbolic solver can loop on valid syntax. Cancellation/timeout terminates its worker. */
 export const calculateAsync = async (
@@ -8,21 +11,20 @@ export const calculateAsync = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   signal?.throwIfAborted();
-  const latex = /\\[A-Za-z]+/.test(input)
-    ? input
-        .trim()
-        .replace(/^\$\$?|\$\$?$/g, "")
-        .replace(/\s*[=＝]\s*$/, "")
-    : undefined;
+  const latex =
+    /\\[A-Za-z]+/.test(input) && !/^\s*\\begin\{(?:array|aligned)\}/.test(input)
+      ? input
+          .trim()
+          .replace(/^\$\$?|\$\$?$/g, "")
+          .replace(/\s*[=＝]\s*$/, "")
+      : undefined;
   const parsed = latex === undefined ? prepareCalculation(input) : undefined;
   if (
     parsed &&
     !parsed.symbolic &&
     /^[\d\s.eE+\-*/%()]+$/.test(parsed.expression)
   ) {
-    const { calculateLocal } = await import("./mathCalculation");
-    signal?.throwIfAborted();
-    return calculateLocal(parsed.expression);
+    return evaluateNumericCalculation(parsed.node!);
   }
   if (typeof Worker === "undefined") {
     throw new Error(t("fcboard.this_expression_has_no_available_result"));

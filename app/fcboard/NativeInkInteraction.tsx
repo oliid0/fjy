@@ -607,11 +607,13 @@ export const NativeInkInteraction = ({
           .map((element) => element.id)
           .sort()
           .join("\u0000"),
-        selectionMinScale: Math.max(
+        selectionMinScale: contents.reduce(
+          (minimum, element) =>
+            Math.max(
+              minimum,
+              element.type === "text" ? MIN_FONT_SIZE / element.fontSize : 0.1,
+            ),
           0.1,
-          ...contents.map((element) =>
-            element.type === "text" ? MIN_FONT_SIZE / element.fontSize : 0.1,
-          ),
         ),
         selectionResize: contents.every(
           (element) => element.customData?.fcInsertion?.kind !== "table",

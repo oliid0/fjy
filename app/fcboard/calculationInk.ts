@@ -82,10 +82,57 @@ export const calculationInk = (input: InkInput) => {
   return { complete: false, strokes: input };
 };
 
+/** A completed bottom bar separates operand rows from a fraction or exponent. */
+export const columnInkRows = (input: InkInput): InkInput[] | undefined => {
+  const ending = calculationInk(input);
+  if (!ending.complete || ending.strokes === input) {
+    return;
+  }
+  const bounds = boxes(ending.strokes);
+  const letters = bounds
+    .filter((box) => height(box) > 4)
+    .sort((a, b) => a.top - b.top);
+  const typical =
+    letters.map(height).sort((a, b) => a - b)[Math.floor(letters.length / 2)] ||
+    0;
+  const rows: { top: number; bottom: number; indices: number[] }[] = [];
+  for (const box of letters) {
+    const row = rows.at(-1);
+    if (row && box.top <= row.bottom + typical * 0.2) {
+      row.bottom = Math.max(row.bottom, box.bottom);
+      row.indices.push(box.index);
+    } else {
+      rows.push({ top: box.top, bottom: box.bottom, indices: [box.index] });
+    }
+  }
+  if (rows.length < 2 || rows.length > 12) {
+    return;
+  }
+  for (const box of bounds.filter((box) => height(box) <= 4)) {
+    const center = (box.top + box.bottom) / 2;
+    const row = [...rows].sort(
+      (a, b) =>
+        Math.abs(center - (a.top + a.bottom) / 2) -
+        Math.abs(center - (b.top + b.bottom) / 2),
+    )[0];
+    row.indices.push(box.index);
+  }
+  return rows.map((row) =>
+    row.indices.sort((a, b) => a - b).map((index) => ending.strokes[index]),
+  );
+};
+
 /** Ordinary text recognizers must not flatten a fraction or a raised/lowered
  * operand into another valid but incorrect horizontal calculation. */
 const mathStructure = (input: InkInput) => {
-  const bounds = boxes(calculationInk(input).strokes);
+  const ending = calculationInk(input);
+  const bounds = boxes(ending.strokes);
+  const columnRows = columnInkRows(input);
+  const rowByStroke = new Map(
+    columnRows?.flatMap((row, index) =>
+      row.map((stroke) => [stroke, index] as const),
+    ),
+  );
   const sizes = bounds
     .map(height)
     .filter((size) => size > 4)
@@ -137,6 +184,9 @@ const mathStructure = (input: InkInput) => {
       bounds.some(
         (base) =>
           base !== small &&
+          (!columnRows ||
+            rowByStroke.get(ending.strokes[base.index]) ===
+              rowByStroke.get(ending.strokes[small.index])) &&
           height(small) <= height(base) * 0.6 &&
           small.left >= base.right - height(base) * 0.2 &&
           small.left <= base.right + height(base) * 0.6 &&

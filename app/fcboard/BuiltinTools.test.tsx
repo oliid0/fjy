@@ -424,7 +424,7 @@ it("uses the original edge exit controls and exports all actual panes through th
     name: t("fcboard.split_exit_prompt"),
   });
   const button = () =>
-    within(prompt).getByRole("button", { name: t("buttons.save") });
+    within(prompt).getByRole("button", { name: t("fcboard.save") });
   fireEvent.click(button());
   await waitFor(() => expect(button()).toBeEnabled());
   expect(save).toHaveBeenCalledWith(

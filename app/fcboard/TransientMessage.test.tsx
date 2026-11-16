@@ -1,3 +1,7 @@
+import {
+  EditorJotaiProvider,
+  editorJotaiStore,
+} from "@fcboard/fcboard/editor-jotai";
 import { act, render, screen } from "@testing-library/react";
 
 import { TransientMessage } from "./TransientMessage";
@@ -7,6 +11,13 @@ it("dismisses feedback automatically and gives a new message its own lifetime", 
   try {
     const { rerender, unmount } = render(
       <TransientMessage message="first error" role="alert" />,
+      {
+        wrapper: ({ children }) => (
+          <EditorJotaiProvider store={editorJotaiStore}>
+            {children}
+          </EditorJotaiProvider>
+        ),
+      },
     );
     act(() => vi.advanceTimersByTime(4000));
     expect(screen.getByRole("alert")).toHaveTextContent("first error");

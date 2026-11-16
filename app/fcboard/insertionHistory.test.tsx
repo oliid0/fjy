@@ -247,7 +247,7 @@ it("undoes a language translation and its metadata together while preserving the
     expect(
       api.getSceneElements().find((item) => item.id === ink.id)?.customData
         ?.fcLanguage.targetLanguage,
-    ).toBe("zh");
+    ).toBe(defaultLang.code);
     Keyboard.undo();
     expect(api.getSceneElements().map((item) => item.id)).toEqual([ink.id]);
     expect(api.getSceneElements()[0].customData?.fcLanguage).toBeUndefined();

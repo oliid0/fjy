@@ -987,7 +987,7 @@ export const SplitBoard = () => {
           {error && <p role="alert">{error}</p>}
           <footer>
             <button type="button" disabled={saving} onClick={() => void save()}>
-              {t("buttons.save")}
+              {t("fcboard.save")}
             </button>
             <button
               type="button"

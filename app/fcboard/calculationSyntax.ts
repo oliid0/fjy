@@ -175,3 +175,18 @@ export const prepareCalculation = (input: string) => {
   }
   return { expression, symbolic, node };
 };
+
+/** Numerical arithmetic uses the already validated AST without loading the symbolic solver. */
+export const evaluateNumericCalculation = (node: import("mathjs").MathNode) => {
+  const result = calculationEngine().format(node.compile().evaluate(), {
+    precision: 32,
+  });
+  if (
+    !result ||
+    result.length > 4000 ||
+    /NaN|Infinity|undefined/.test(result)
+  ) {
+    throw new Error("fcboard.this_expression_has_no_available_result");
+  }
+  return result;
+};

@@ -48,10 +48,11 @@ public final class NativeScenePlugin extends Plugin {
                 ViewGroup.LayoutParams old=entry.view.getLayoutParams();
                 if(!(old instanceof FrameLayout.LayoutParams)||old.width!=bounds.width||old.height!=bounds.height||((FrameLayout.LayoutParams)old).leftMargin!=bounds.leftMargin||((FrameLayout.LayoutParams)old).topMargin!=bounds.topMargin)entry.view.setLayoutParams(bounds);
                 long received=entry.view.sequence();Entry target=entry;
+                List<NativeScene.Cut> eraseSamples=entry.view.erasureSamples(call.getData().optLong("eraseThrough",0));
                 worker.execute(()->{
                     try{
                         State state=states.get(owner);if(state==null||state.epoch!=epoch){state=new State(epoch);states.put(owner,state);}
-                        NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received);
+                        NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples);
                         getActivity().runOnUiThread(()->{
                             if(entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);((MainActivity)getActivity()).nativeSceneCommitted(owner);}
                             call.resolve();

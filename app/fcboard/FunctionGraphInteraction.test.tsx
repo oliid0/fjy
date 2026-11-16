@@ -286,3 +286,65 @@ it("automatically adds a nearby function-pen expression to the same axes without
     api.getSceneElements().filter((element) => element.type === "image"),
   ).toHaveLength(2);
 });
+
+it("edits and compares real functions in one saved coordinate system and undoes the whole edit", async () => {
+  const { api, graph } = await setup("x");
+  const original = graph();
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.functionEditor.edit") }),
+  );
+  const editor = screen.getByRole("form", {
+    name: t("fcboard.functionEditor.edit"),
+  });
+  fireEvent.change(editor.querySelector("textarea")!, {
+    target: { value: "y=x^2\ny=sin(x)" },
+  });
+  fireEvent.submit(editor);
+  await waitFor(() =>
+    expect(graph().customData!.fcPlot.plot).toMatchObject({
+      expression: "x^2",
+      compare: ["sin(x)"],
+    }),
+  );
+  expect(graph()).toMatchObject({
+    id: original.id,
+    x: original.x,
+    y: original.y,
+    width: original.width,
+    height: original.height,
+  });
+  await waitFor(() =>
+    expect(
+      document.querySelectorAll(".fc-inline-function svg .mark-line path")
+        .length,
+    ).toBeGreaterThanOrEqual(2),
+  );
+  act(() => api.executeAction("undo"));
+  await waitFor(() =>
+    expect(graph().customData!.fcPlot.plot.expression).toBe("x"),
+  );
+  expect(graph().customData!.fcPlot.plot.compare).toBeUndefined();
+});
+it("retains a function object when an expression edit is invalid or cancelled", async () => {
+  const { graph } = await setup("x");
+  const original = graph();
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.functionEditor.edit") }),
+  );
+  const editor = screen.getByRole("form", {
+    name: t("fcboard.functionEditor.edit"),
+  });
+  fireEvent.change(editor.querySelector("textarea")!, {
+    target: { value: "unknown(x)" },
+  });
+  fireEvent.submit(editor);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    t("fcboard.functionEditor.invalid"),
+  );
+  expect(graph()).toEqual(original);
+  fireEvent.click(editor.querySelector('button[type="button"]')!);
+  expect(
+    screen.queryByRole("form", { name: t("fcboard.functionEditor.edit") }),
+  ).toBeNull();
+  expect(graph()).toEqual(original);
+});

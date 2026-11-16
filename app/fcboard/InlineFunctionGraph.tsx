@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { t } from "@fcboard/fcboard/i18n";
+import { t, useI18n } from "@fcboard/fcboard/i18n";
 import {
   createInlineVegaView,
   vega,
@@ -15,6 +15,7 @@ import {
 } from "./functionVisualization";
 import { functionGraphNavigation } from "./functionGraphNavigation";
 import { functionView } from "./math";
+import { validatedPlot } from "./mathRecognition";
 
 import type { Plot } from "./math";
 
@@ -31,6 +32,9 @@ export const InlineFunctionGraph = ({
   onCommit: (plot: Plot) => void;
   onReady?: () => void;
 }) => {
+  useI18n();
+  const [editing, setEditing] = useState(false);
+  const [expressionError, setExpressionError] = useState("");
   const root = useRef<HTMLDivElement>(null);
   const props = useRef({ plot, onCommit });
   props.current = { plot, onCommit };
@@ -250,6 +254,68 @@ export const InlineFunctionGraph = ({
         data-native-resource-object-id={id}
         aria-label={`y = ${plot.expression}`}
       />
+      <button
+        className="fc-function-edit"
+        type="button"
+        aria-expanded={editing}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => {
+          setEditing((value) => !value);
+          setExpressionError("");
+        }}
+      >
+        {t("fcboard.functionEditor.edit")}
+      </button>
+      {editing && (
+        <form
+          className="fc-inline-function-editor"
+          aria-label={t("fcboard.functionEditor.edit")}
+          onPointerDown={(event) => event.stopPropagation()}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const expressions = String(
+              new FormData(event.currentTarget).get("functions") || "",
+            )
+              .split(/\r?\n/)
+              .map((value) => value.trim())
+              .filter(Boolean);
+            try {
+              if (!expressions.length || expressions.length > 4) {
+                throw new Error("Invalid function count");
+              }
+              const next = validatedPlot({
+                ...props.current.plot,
+                expression: expressions[0],
+                compare:
+                  expressions.length > 1 ? expressions.slice(1) : undefined,
+              });
+              props.current.onCommit(next);
+              setExpressionError("");
+              setEditing(false);
+            } catch {
+              setExpressionError(t("fcboard.functionEditor.invalid"));
+            }
+          }}
+        >
+          <label>
+            {t("fcboard.functionEditor.expressions")}
+            <textarea
+              key={[plot.expression, ...(plot.compare || [])].join("\n")}
+              name="functions"
+              rows={4}
+              required
+              defaultValue={[plot.expression, ...(plot.compare || [])].join(
+                "\n",
+              )}
+            />
+          </label>
+          {expressionError && <p role="alert">{expressionError}</p>}
+          <button type="submit">{t("buttons.confirm")}</button>
+          <button type="button" onClick={() => setEditing(false)}>
+            {t("buttons.cancel")}
+          </button>
+        </form>
+      )}
       {["a", "b", "c"].some((key) =>
         new RegExp(`\\b${key}\\b`).test(
           [plot.expression, ...(plot.compare || [])].join(" "),

@@ -722,6 +722,11 @@
     "mmb": "Rueda de desplazamiento"
   },
   "fcboard": {
+    "functionEditor": {
+      "edit": "Editar funciones",
+      "expressions": "Una función por línea, hasta cuatro en el mismo sistema de coordenadas",
+      "invalid": "Introduzca de una a cuatro funciones válidas de x."
+    },
     "appTitle": "Pizarra Fcboard",
     "appDescription": "Pizarra Fcboard para enseñanza y reuniones",
     "highlighter": "Resaltador",

@@ -150,7 +150,8 @@ describe("explicit handwriting actions", () => {
     expect(backend.cloud).not.toHaveBeenCalled();
     expect(capture).not.toHaveBeenCalled();
   });
-  it("routes a vertical column to native math with its rule intact, without flattening operands", async () => {
+  it("keeps the full vertical column for structured math when native rows lack an explicit operator", async () => {
+    backend.native.mockResolvedValue(["11"]);
     backend.nativeAvailable = true;
     backend.math.mockResolvedValue("11\n+11\n----");
     const strokes: import("./digitalInk").InkInput = [
@@ -179,7 +180,7 @@ describe("explicit handwriting actions", () => {
       ),
     ).resolves.toBe("11\n+11\n----");
     expect(backend.math).toHaveBeenCalledWith(strokes, expect.any(AbortSignal));
-    expect(backend.native).not.toHaveBeenCalled();
+    expect(backend.native).toHaveBeenCalledTimes(2);
     expect(backend.local).not.toHaveBeenCalled();
     expect(capture).not.toHaveBeenCalled();
   });
@@ -441,4 +442,59 @@ it("never loads PaddleOCR after an Android handwriting failure", async () => {
   ).rejects.toThrow("Native handwriting");
   expect(backend.local).not.toHaveBeenCalled();
   expect(backend.cloud).not.toHaveBeenCalled();
+});
+
+it("recognizes a completed vertical sum by native operand rows without capturing an image or loading the math model", async () => {
+  vi.clearAllMocks();
+  backend.nativeAvailable = true;
+  backend.native
+    .mockReset()
+    .mockResolvedValueOnce(["1"])
+    .mockResolvedValueOnce(["+3"]);
+  saveSettings({ ...defaults, ocr: "local", apiKey: "" }, false);
+  const capture = vi.fn();
+  const strokes: import("./digitalInk").InkInput = [
+    [
+      [25, 10],
+      [29, 20],
+    ],
+    [
+      [25, 35],
+      [30, 65],
+    ],
+    [
+      [3, 50],
+      [13, 50],
+    ],
+    [
+      [8, 45],
+      [8, 55],
+    ],
+    [
+      [0, 75],
+      [50, 75],
+    ],
+  ];
+  const accepted = vi.fn(async (text: string) => text === "1\n+3");
+  expect(
+    await recognizeHandwriting(
+      capture,
+      new AbortController().signal,
+      vi.fn(),
+      "math",
+      accepted,
+      strokes,
+    ),
+  ).toBe("1\n+3");
+  expect(backend.native).toHaveBeenCalledTimes(2);
+  expect(backend.native.mock.calls[0][0]).toEqual([strokes[0]]);
+  expect(backend.native.mock.calls[1][0]).toEqual([
+    strokes[1],
+    strokes[2],
+    strokes[3],
+  ]);
+  expect(capture).not.toHaveBeenCalled();
+  expect(backend.math).not.toHaveBeenCalled();
+  expect(backend.cloud).not.toHaveBeenCalled();
+  expect(accepted).toHaveBeenCalledTimes(1);
 });

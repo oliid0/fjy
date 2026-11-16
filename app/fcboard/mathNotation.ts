@@ -6,6 +6,20 @@ export const mathNotation = (input: string): string => {
   if (input.length > 500) {
     throw new Error("Math input is too long");
   }
+  const column = input
+    .trim()
+    .match(
+      /^\\begin\{(array|aligned)\}(?:\{[rlc ]+\})?([\s\S]*?)\\end\{\1\}\s*=?$/,
+    );
+  // Vision models commonly retain a written column as a LaTeX array. Only its
+  // explicit rows/bar are normalized; the existing operand/operator checks below
+  // still reject missing signs, matrices, answers and ambiguous arrangements.
+  if (column) {
+    input = column[2]
+      .replace(/\\hline\b/g, "\n----\n")
+      .replace(/\\\\/g, "\n")
+      .replace(/&/g, "");
+  }
   let text = input
     .trim()
     .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10))

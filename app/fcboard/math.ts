@@ -24,13 +24,25 @@ export const normalizeExpression = (text: string) =>
     .replace(/³/g, "^3")
     .replace(/\s*=\s*$/, "");
 
-export const compileExpression = (expression: string) => {
+const compiledFunctions = new Map<
+  string,
+  {
+    node: import("mathjs").MathNode;
+    compiled: ReturnType<import("mathjs").MathNode["compile"]>;
+  }
+>();
+const functionDefinition = (expression: string) => {
   if (!expression || expression.length > 500) {
     throw new Error(
       t("fcboard.enter_a_mathematical_expression_of_up_to_500_characters"),
     );
   }
-  const node = parser().parse(mathNotation(expression));
+  const normalized = mathNotation(expression);
+  const cached = compiledFunctions.get(normalized);
+  if (cached) {
+    return cached;
+  }
+  const node = parser().parse(normalized);
   let count = 0;
   node.traverse((child) => {
     count++;
@@ -68,8 +80,15 @@ export const compileExpression = (expression: string) => {
       throw new Error(t("fcboard.unknown_variable_supported_x_y_z_a_b_c"));
     }
   });
-  return node.compile();
+  const definition = { node, compiled: node.compile() };
+  if (compiledFunctions.size >= 64) {
+    compiledFunctions.delete(compiledFunctions.keys().next().value!);
+  }
+  compiledFunctions.set(normalized, definition);
+  return definition;
 };
+export const compileExpression = (expression: string) =>
+  functionDefinition(expression).compiled;
 
 export { prepareCalculation } from "./calculationSyntax";
 
@@ -122,7 +141,7 @@ export const sampleFunctionCurve = (
   scope: Record<string, number> = {},
 ) => {
   const compiled = compileExpression(expression);
-  const domain = parser().parse(mathNotation(expression));
+  const domain = functionDefinition(expression).node;
   const evaluate = (x: number) => {
     try {
       const value = compiled.evaluate({ ...scope, x });
@@ -170,7 +189,7 @@ export const samplePlot = (plot: Plot): number[][][] => {
   }
 
   const compiled = compileExpression(plotExpression(plot.expression));
-  const domain = parser().parse(mathNotation(plotExpression(plot.expression)));
+  const domain = functionDefinition(plotExpression(plot.expression)).node;
   const lines: number[][][] = [];
   const value = (x: number, y: number) => {
     try {
@@ -246,7 +265,7 @@ export const sampleInequality = (plot: Plot): number[][][] => {
     return [];
   }
   const compiled = compileExpression(plot.expression);
-  const domain = parser().parse(mathNotation(plot.expression));
+  const domain = functionDefinition(plot.expression).node;
   const polygons: number[][][] = [];
   let boundary: number[][] = [];
   const edge = plot.relation.startsWith(">") ? -plot.range : plot.range;

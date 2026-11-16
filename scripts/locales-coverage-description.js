@@ -1,7 +1,5 @@
 const fs = require("fs");
 
-const nativeLanguageLabels = require("../packages/fcboard/locales/data/languageNames.json");
-
 const THRESSHOLD = 85;
 
 // we're using BCP 47 language tags as keys
@@ -133,7 +131,7 @@ const languages = {
   "hu-HU": "Magyar",
   "id-ID": "Bahasa Indonesia",
   "it-IT": "Italiano",
-  "ja-JP": nativeLanguageLabels["ja-JP"],
+  "ja-JP": "日本語",
   "kab-KAB": "Taqbaylit",
   "kk-KZ": "Қазақ тілі",
   "ko-KR": "한국어",
@@ -158,9 +156,9 @@ const languages = {
   "ta-IN": "Tamil",
   "tr-TR": "Türkçe",
   "uk-UA": "Українська",
-  "zh-CN": nativeLanguageLabels["zh-CN"],
-  "zh-HK": nativeLanguageLabels["zh-HK"],
-  "zh-TW": nativeLanguageLabels["zh-TW"],
+  "zh-CN": "简体中文",
+  "zh-HK": "繁體中文 (香港)",
+  "zh-TW": "繁體中文",
   "vi-VN": "Tiếng Việt",
   "mr-IN": "मराठी",
   "th-TH": "ภาษาไทย",

@@ -21,14 +21,90 @@ export const findVisibleContentPosition = (
     point.y >= viewport.top &&
     point.x + size.width <= viewport.right &&
     point.y + size.height <= viewport.bottom;
-  const collision = (point: typeof preferred) =>
-    valid.find(
-      (rect) =>
-        point.x < rect.right + gap &&
-        point.x + size.width > rect.left - gap &&
-        point.y < rect.bottom + gap &&
-        point.y + size.height > rect.top - gap,
-    );
+  // The native eraser uses the same spatial-bucket principle. Placement may
+  // test hundreds of candidates; unrelated old strokes need no repeated scan.
+  const columns = 16;
+  const rows = 16;
+  const cellWidth = Math.max(1, (viewport.right - viewport.left) / columns);
+  const cellHeight = Math.max(1, (viewport.bottom - viewport.top) / rows);
+  const range = (rect: ContentRect) => ({
+    left: Math.max(
+      0,
+      Math.min(
+        columns - 1,
+        Math.floor((rect.left - viewport.left) / cellWidth),
+      ),
+    ),
+    right: Math.max(
+      0,
+      Math.min(
+        columns - 1,
+        Math.floor((rect.right - viewport.left) / cellWidth),
+      ),
+    ),
+    top: Math.max(
+      0,
+      Math.min(rows - 1, Math.floor((rect.top - viewport.top) / cellHeight)),
+    ),
+    bottom: Math.max(
+      0,
+      Math.min(rows - 1, Math.floor((rect.bottom - viewport.top) / cellHeight)),
+    ),
+  });
+  const cells: number[][] = Array.from({ length: columns * rows }, () => []);
+  valid.forEach((rect, index) => {
+    const box = {
+      left: rect.left - gap,
+      top: rect.top - gap,
+      right: rect.right + gap,
+      bottom: rect.bottom + gap,
+    };
+    if (
+      box.right < viewport.left ||
+      box.left > viewport.right ||
+      box.bottom < viewport.top ||
+      box.top > viewport.bottom
+    ) {
+      return;
+    }
+    const area = range(box);
+    for (let y = area.top; y <= area.bottom; y++) {
+      for (let x = area.left; x <= area.right; x++) {
+        cells[y * columns + x].push(index);
+      }
+    }
+  });
+  const collision = (point: typeof preferred) => {
+    const area = range({
+      left: point.x,
+      top: point.y,
+      right: point.x + size.width,
+      bottom: point.y + size.height,
+    });
+    const seen = new Set<number>();
+    let first = valid.length;
+    for (let y = area.top; y <= area.bottom; y++) {
+      for (let x = area.left; x <= area.right; x++) {
+        for (const index of cells[y * columns + x]) {
+          if (index >= first || seen.has(index)) {
+            continue;
+          }
+          seen.add(index);
+          const rect = valid[index];
+          if (
+            point.x < rect.right + gap &&
+            point.x + size.width > rect.left - gap &&
+            point.y < rect.bottom + gap &&
+            point.y + size.height > rect.top - gap
+          ) {
+            first = index;
+          }
+        }
+      }
+    }
+    // Retain original obstacle order so the packing/search behavior is stable.
+    return valid[first];
+  };
   const clamp = (point: typeof preferred) => ({
     x: Math.max(viewport.left, Math.min(viewport.right - size.width, point.x)),
     y: Math.max(viewport.top, Math.min(viewport.bottom - size.height, point.y)),

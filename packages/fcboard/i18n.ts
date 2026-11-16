@@ -99,7 +99,10 @@ if (isDevEnv()) {
 }
 
 let currentLang: Language = defaultLang;
-let currentLangData = {};
+let currentLangData: unknown = fallbackLangData;
+let loadedLanguage = defaultLang.code;
+
+export const isLanguageLoaded = (code: string) => loadedLanguage === code;
 let languageRevision = 0;
 
 export const setLanguage = async (lang: Language) => {
@@ -107,6 +110,10 @@ export const setLanguage = async (lang: Language) => {
   currentLang = lang;
   document.documentElement.dir = currentLang.rtl ? "rtl" : "ltr";
   document.documentElement.lang = currentLang.code;
+
+  if (loadedLanguage === lang.code) {
+    return;
+  }
 
   let nextLangData = {};
   if (!lang.code.startsWith(TEST_LANG_CODE)) {
@@ -125,6 +132,7 @@ export const setLanguage = async (lang: Language) => {
     return;
   }
   currentLangData = nextLangData;
+  loadedLanguage = lang.code;
   editorJotaiStore.set(editorLangCodeAtom, lang.code);
 };
 

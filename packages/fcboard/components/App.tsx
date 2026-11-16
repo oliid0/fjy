@@ -114,6 +114,7 @@ import {
   loadDesktopUIModePreference,
   setDesktopUIMode,
   isSelectionLikeTool,
+  isPromiseLike,
   oneOf,
 } from "@fcboard/common";
 
@@ -3070,11 +3071,11 @@ class App extends React.Component<AppProps, AppState> {
     }
     let initialData = null;
     try {
-      if (typeof this.props.initialData === "function") {
-        initialData = (await this.props.initialData()) || null;
-      } else {
-        initialData = (await this.props.initialData) || null;
-      }
+      const source =
+        typeof this.props.initialData === "function"
+          ? this.props.initialData()
+          : this.props.initialData;
+      initialData = (isPromiseLike(source) ? await source : source) || null;
       if (initialData?.libraryItems) {
         this.library
           .updateLibrary({

@@ -143,6 +143,55 @@ describe("persistent whiteboard book", () => {
     expect(localStorage.getItem("fcboard-board-recovery")).toBeNull();
     reloaded.dispose();
   });
+  it("preserves first-frame writing while the saved workspace opens", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    await book.create("second");
+    const stored = structuredClone(book.value);
+    book.dispose();
+    let finish!: (value: typeof stored) => void;
+    const loading = new Promise<typeof stored>((resolve) => (finish = resolve));
+    const reloaded = new BoardBook(api, vi.fn(), () => loading, save);
+    const initialized = reloaded.initialize();
+    const ink = convertToFcboardElements([
+      {
+        type: "freedraw",
+        x: 20,
+        y: 30,
+        points: [
+          [0, 0],
+          [20, 30],
+        ],
+      },
+    ]);
+    api.updateScene({ elements: ink });
+    const resets = vi.mocked(api.resetScene).mock.calls.length;
+    finish(stored);
+    await initialized;
+    expect(api.getSceneElements()).toEqual(ink);
+    expect(api.resetScene).toHaveBeenCalledTimes(resets);
+    expect(
+      reloaded.value.boards.find((page) => page.id === stored.active)?.elements,
+    ).toEqual(ink);
+    expect(reloaded.value.boards[0]).toEqual(stored.boards[0]);
+    const saved = save.mock.calls.at(-1)![0] as BoardBook["value"];
+    expect(saved.active).toBe(stored.active);
+    expect(
+      saved.boards.find((page) => page.id === stored.active)?.elements[0].id,
+    ).toBe(ink[0].id);
+    reloaded.dispose();
+  });
+  it("adopts an already-visible saved page without clearing input or undo", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const stored = structuredClone(book.value);
+    book.dispose();
+    const reloaded = new BoardBook(api, vi.fn(), async () => stored, save);
+    await reloaded.initialize();
+    expect(api.resetScene).not.toHaveBeenCalled();
+    expect(api.history.clear).not.toHaveBeenCalled();
+    reloaded.dispose();
+  });
   it("keeps edits received during an awaited page switch on the visible source board", async () => {
     const { book, api, save } = setup();
     await book.initialize();

@@ -31,6 +31,8 @@ final class DigitalInkModels {
         if (!context.getPackageName().equals(manifest.getString("package")) || !"18.1.0".equals(manifest.getString("sdk"))) {
             throw new IllegalStateException("Digital Ink model registry does not match this application");
         }
+        android.content.SharedPreferences verified = context.getSharedPreferences("offline-ink-verified-v1", Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor fingerprints = verified.edit();
         JSONArray files = manifest.getJSONArray("files");
         for (int index = 0; index < files.length(); index++) {
             JSONObject item = files.getJSONObject(index);
@@ -39,7 +41,13 @@ final class DigitalInkModels {
             if (!output.getCanonicalPath().startsWith(context.getFilesDir().getCanonicalPath() + File.separator)) {
                 throw new IllegalArgumentException("Invalid Digital Ink model path");
             }
-            if (valid(output, item)) { continue; }
+            String expected = item.getString("sha256");
+            if (output.isFile() && output.length() == item.getLong("size") &&
+                fingerprint(output, expected).equals(verified.getString(path, ""))) continue;
+            if (valid(output, item)) {
+                fingerprints.putString(path, fingerprint(output, expected));
+                continue;
+            }
             File parent = output.getParentFile();
             if (!parent.isDirectory() && !parent.mkdirs()) { throw new IllegalStateException("Cannot create model directory"); }
             File pending = new File(output.getPath() + ".pending");
@@ -54,7 +62,9 @@ final class DigitalInkModels {
                 pending.delete();
                 throw new IllegalStateException("Offline handwriting model is incomplete: " + output.getName());
             }
+            fingerprints.putString(path, fingerprint(output, expected));
         }
+        fingerprints.apply();
         // The original archive's registry is package-scoped (zzfx/zzwa/zzwe).
         // Own the manifest's bundled file/group keys during versioned installation.
         // A prior download may leave a key pointing to a removed directory even
@@ -85,6 +95,9 @@ final class DigitalInkModels {
         ready = true;
     }
 
+    private static String fingerprint(File file, String checksum) {
+        return checksum + ":" + file.length() + ":" + file.lastModified();
+    }
     private static boolean valid(File file, JSONObject item) throws Exception {
         if (!file.isFile() || file.length() != item.getLong("size")) { return false; }
         MessageDigest digest = MessageDigest.getInstance("SHA-256");

@@ -40,6 +40,17 @@ export const readWorkspace = async () => get<Workspace>("workspace", storage);
 export const writeWorkspace = (value: Workspace) =>
   set("workspace", value, storage);
 
+const sameSceneVersions = (
+  left: readonly Pick<FcboardElement, "id" | "versionNonce">[],
+  right: readonly Pick<FcboardElement, "id" | "versionNonce">[],
+) =>
+  left.length === right.length &&
+  left.every(
+    (element, index) =>
+      element.id === right[index].id &&
+      element.versionNonce === right[index].versionNonce,
+  );
+
 /** Save before switching, keep binary assets, and keep undo from crossing boards. */
 export class BoardBook {
   value: Workspace = { active: "", boards: [] };
@@ -90,6 +101,12 @@ export class BoardBook {
     };
   }
   async initialize() {
+    const before = this.capture("", "");
+    const versions = before.elements.map(({ id, versionNonce }) => ({
+      id,
+      versionNonce,
+    }));
+    let needsSave = false;
     const stored = await this.load();
     if (this.disposed) {
       return;
@@ -126,12 +143,40 @@ export class BoardBook {
                 : board,
             ),
           };
-          await this.flush();
+          needsSave = true;
         }
       } catch (error) {
         this.onError(error);
       }
-      this.restore(this.value.active);
+      const active = this.value.boards.find(
+        (board) => board.id === this.value.active,
+      )!;
+      const current = this.capture(active.name, active.id);
+      const edited =
+        !sameSceneVersions(versions, current.elements) ||
+        JSON.stringify(before.view) !== JSON.stringify(current.view) ||
+        this.api.getAppState().cursorButton === "down";
+      if (edited) {
+        // First-frame input belongs to the visible active page. A late IDB read
+        // must never reset that stroke or replace edits already made by the user.
+        current.files = { ...active.files, ...current.files };
+        current.updated = Math.max(current.updated, active.updated + 1);
+        this.value = {
+          ...this.value,
+          boards: this.value.boards.map((board) =>
+            board.id === active.id ? current : board,
+          ),
+        };
+        this.api.addFiles(Object.values(active.files));
+        needsSave = true;
+      } else if (
+        sameSceneVersions(active.elements, current.elements) &&
+        JSON.stringify(active.view) === JSON.stringify(current.view)
+      ) {
+        this.api.addFiles(Object.values(active.files));
+      } else {
+        this.restore(this.value.active);
+      }
     } else {
       const first = this.capture(`${t("fcboard.board")} 1`);
       this.value = {
@@ -139,7 +184,7 @@ export class BoardBook {
         boards: [first],
         customBackground: first.view.whiteboardCustomBackground,
       };
-      await this.flush();
+      needsSave = true;
     }
     if (this.disposed) {
       return;
@@ -188,6 +233,9 @@ export class BoardBook {
       }, 1200);
     });
     this.emit();
+    if (needsSave) {
+      await this.flush();
+    }
   }
   subscribe(listener: () => void) {
     this.listeners.add(listener);

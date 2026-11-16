@@ -325,6 +325,32 @@ public class OfflineInkTest {
         }
     }
 
+    @Test public void alternatingLanguagesKeepBothRealInkClientsWarm() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(false, false);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            try {
+                for (String language : new String[]{"zh-Hani-CN", "en-US", "zh-Hani-CN", "en-US"}) {
+                    InkCall call = new InkCall("recognize", chineseSelection().put("language", language).put("reuse", true));
+                    plugin.recognize(call);
+                    assertTrue(call.done.await(30, TimeUnit.SECONDS));
+                    assertNull(call.error.get(), call.error.get());
+                    assertTrue(call.result.get().getJSONArray("candidates").length() > 0);
+                }
+                assertEquals(2, plugin.clients.get());
+                assertEquals(0, plugin.closes.get());
+                plugin.retireLanguage("zh-Hani-CN");
+                assertEquals(1, plugin.closes.get());
+                InkCall english = new InkCall("recognize", chineseSelection().put("language", "en-US").put("reuse", true));
+                plugin.recognize(english);
+                assertTrue(english.done.await(30, TimeUnit.SECONDS));
+                assertNull(english.error.get(), english.error.get());
+                assertEquals(2, plugin.clients.get());
+            } finally { plugin.handleOnDestroy(); }
+            assertEquals(2, plugin.closes.get());
+        }
+    }
+
     @Test public void completedInkClientsAreReusedAndDeletedLanguagesRetireTheCache() throws Exception {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             ControlledInkPlugin plugin = new ControlledInkPlugin(false, false);

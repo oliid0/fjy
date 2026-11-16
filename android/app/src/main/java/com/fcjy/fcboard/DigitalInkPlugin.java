@@ -26,14 +26,32 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class DigitalInkPlugin extends Plugin {
     private static final Executor DIRECT = Runnable::run;
     // Serialize short SDK submissions, never wait here for model checks or inference.
-    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(task -> new Thread(() -> {
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+        task.run();
+    }, "fcboard-ink-models"));
     private final java.util.concurrent.Semaphore inference = new java.util.concurrent.Semaphore(2);
     private final Set<Request> pending = ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
     private DigitalInkPacks packs;
-    private DigitalInkRecognizer idleRecognizer;
-    private String idleLanguage;
-    private java.util.concurrent.ScheduledFuture<?> idleRelease;
+    private final java.util.ArrayDeque<IdleRecognizer> idleRecognizers = new java.util.ArrayDeque<>();
+    private static final class IdleRecognizer {
+        final String language;
+        final DigitalInkRecognizer client;
+        IdleRecognizer(String language, DigitalInkRecognizer client) { this.language = language; this.client = client; }
+    }
+    private boolean observingMemory;
+    private final android.content.ComponentCallbacks2 memory = new android.content.ComponentCallbacks2() {
+        @Override public void onConfigurationChanged(android.content.res.Configuration configuration) { }
+        @Override public void onLowMemory() { closeIdle(); }
+        @Override public void onTrimMemory(int level) {
+            if ((level >= TRIM_MEMORY_RUNNING_LOW && level < TRIM_MEMORY_UI_HIDDEN) || level >= TRIM_MEMORY_BACKGROUND) closeIdle();
+        }
+    };
+    @Override public void load() {
+        getContext().registerComponentCallbacks(memory);
+        observingMemory = true;
+    }
     private final java.util.Map<String, Long> retired = new ConcurrentHashMap<>();
     private interface Action { void run() throws Exception; }
     private static final class Request {
@@ -57,7 +75,11 @@ public class DigitalInkPlugin extends Plugin {
     }
     synchronized void retireLanguage(String tag) {
         retired.merge(tag, 1L, Long::sum);
-        if (tag.equals(idleLanguage)) closeIdle();
+        java.util.Iterator<IdleRecognizer> clients = idleRecognizers.iterator();
+        while (clients.hasNext()) {
+            IdleRecognizer idle = clients.next();
+            if (tag.equals(idle.language)) { clients.remove(); idle.client.close(); }
+        }
         for (Request request : pending) {
             if (tag.equals(request.language)) fail(request, new ModelRequiredException(tag));
         }
@@ -69,33 +91,27 @@ public class DigitalInkPlugin extends Plugin {
         };
     }
     private synchronized void closeIdle() {
-        if (idleRelease != null) idleRelease.cancel(false);
-        idleRelease = null;
-        if (idleRecognizer != null) idleRecognizer.close();
-        idleRecognizer = null; idleLanguage = null;
+        for (IdleRecognizer idle : idleRecognizers) idle.client.close();
+        idleRecognizers.clear();
     }
     private synchronized DigitalInkRecognizer borrow(DigitalInkRecognitionModel model, Request request) {
-        if (Boolean.TRUE.equals(request.call.getBoolean("reuse", false)) && request.language.equals(idleLanguage)) {
-            if (idleRelease != null) idleRelease.cancel(false);
-            idleRelease = null;
-            DigitalInkRecognizer result = idleRecognizer;
-            idleRecognizer = null; idleLanguage = null;
-            return result;
+        if (Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) {
+            java.util.Iterator<IdleRecognizer> clients = idleRecognizers.iterator();
+            while (clients.hasNext()) {
+                IdleRecognizer idle = clients.next();
+                if (request.language.equals(idle.language)) { clients.remove(); return idle.client; }
+            }
         }
-        if (Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) closeIdle();
         return createRecognizer(model);
     }
     private synchronized void release(DigitalInkRecognizer recognizer, Request request, long revision, boolean success) {
         if (closed || request.settled.get() || !success || revision != retired.getOrDefault(request.language, 0L) || !Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) {
             recognizer.close(); return;
         }
-        closeIdle();
-        idleRecognizer = recognizer; idleLanguage = request.language;
-        idleRelease = worker.schedule(() -> {
-            synchronized (DigitalInkPlugin.this) {
-                if (idleRecognizer == recognizer) closeIdle();
-            }
-        }, 60, TimeUnit.SECONDS);
+        // Two idle clients match the two permitted in-flight recognitions. Keep
+        // language switches and completed column rows warm without a time-based reload.
+        while (idleRecognizers.size() >= 2) idleRecognizers.removeFirst().client.close();
+        idleRecognizers.addLast(new IdleRecognizer(request.language, recognizer));
     }
     @PluginMethod public void cancel(PluginCall call) {
         String id = call.getString("id", "");
@@ -162,14 +178,25 @@ public class DigitalInkPlugin extends Plugin {
         });
     }
 
+    private synchronized void warm(String language, DigitalInkRecognitionModel model) {
+        for (IdleRecognizer idle : idleRecognizers) if (language.equals(idle.language)) return;
+        DigitalInkRecognizer recognizer = createRecognizer(model);
+        while (idleRecognizers.size() >= 2) idleRecognizers.removeFirst().client.close();
+        idleRecognizers.addLast(new IdleRecognizer(language, recognizer));
+    }
+
     @PluginMethod public void prepare(PluginCall call) {
         Request request = new Request(call, null, true);
         pending.add(request);
-        dispatch(request, () -> Tasks.whenAll(model("zh-Hani-CN"), model("en-US"))
-            .addOnCompleteListener(DIRECT, ready -> dispatch(request, () -> {
+        dispatch(request, () -> {
+            Task<DigitalInkRecognitionModel> chinese = model("zh-Hani-CN"), english = model("en-US");
+            Tasks.whenAll(chinese, english).addOnCompleteListener(DIRECT, ready -> dispatch(request, () -> {
                 if (!ready.isSuccessful()) throw failure(ready);
+                warm("zh-Hani-CN", chinese.getResult());
+                warm("en-US", english.getResult());
                 succeed(request, null);
-            })));
+            }));
+        });
     }
 
     @PluginMethod public void recognize(PluginCall call) {
@@ -234,6 +261,7 @@ public class DigitalInkPlugin extends Plugin {
 
     @Override protected void handleOnDestroy() {
         closed = true;
+        if (observingMemory) { getContext().unregisterComponentCallbacks(memory); observingMemory = false; }
         closeIdle();
         if (packs != null) packs.close();
         for (Request request : pending) fail(request, new IllegalStateException("Handwriting recognition closed"));

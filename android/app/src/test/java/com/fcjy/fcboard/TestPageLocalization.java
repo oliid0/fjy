@@ -2,14 +2,16 @@ package com.fcjy.fcboard;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 import org.json.JSONObject;
 
 final class TestPageLocalization {
     static String repositoryText(String relative) throws Exception {
-        Path directory = Path.of("").toAbsolutePath();
+        Path directory = Paths.get("").toAbsolutePath();
         while (directory != null) {
             Path file = directory.resolve(relative);
-            if (Files.isRegularFile(file)) return Files.readString(file);
+            if (Files.isRegularFile(file)) return new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
             directory = directory.getParent();
         }
         throw new IllegalStateException("Missing repository fixture: " + relative);

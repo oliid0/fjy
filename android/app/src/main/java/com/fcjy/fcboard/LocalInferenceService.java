@@ -19,7 +19,10 @@ import java.util.concurrent.CancellationException;
 /** Only this private :ml_engine process maps model files and allocates tensors. */
 public class LocalInferenceService extends Service {
     static final int INFER = 1, CANCEL = 2;
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(task -> new Thread(() -> {
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+        task.run();
+    }, "fcboard-local-model"));
     private final ExecutorService dictionaryWorker = Executors.newSingleThreadExecutor();
     private NativeLexicon lexicon;
     private final Map<String, Job> jobs = new ConcurrentHashMap<>();
@@ -87,10 +90,15 @@ public class LocalInferenceService extends Service {
     @Override public void onTrimMemory(int level) {
         super.onTrimMemory(level);
         if (closed) return;
-        if (level >= TRIM_MEMORY_RUNNING_LOW) {
-            worker.execute(() -> { if (models != null) { models.close(); models = null; } });
-            dictionaryWorker.execute(() -> lexicon = null);
-        }
+        if (level >= TRIM_MEMORY_BACKGROUND || level >= TRIM_MEMORY_RUNNING_LOW && level < TRIM_MEMORY_UI_HIDDEN) releaseModels();
+    }
+    @Override public void onLowMemory() {
+        super.onLowMemory();
+        if (!closed) releaseModels();
+    }
+    private void releaseModels() {
+        worker.execute(() -> { if (models != null) { models.close(); models = null; } });
+        dictionaryWorker.execute(() -> lexicon = null);
     }
     @Override public void onDestroy() {
         closed = true;

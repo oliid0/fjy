@@ -67,7 +67,6 @@ import type {
   FcboardProps,
 } from "@fcboard/fcboard/types";
 import type { ResolutionType } from "@fcboard/common/utility-types";
-import type { ResolvablePromise } from "@fcboard/common/utils";
 
 import { nativeImagePicker } from "./fcboard/boardFile";
 
@@ -373,13 +372,19 @@ const FcboardWrapper = () => {
   // initial state
   // ---------------------------------------------------------------------------
 
-  const initialStatePromiseRef = useRef<{
-    promise: ResolvablePromise<FcboardInitialDataState | null>;
-  }>({ promise: null! });
-  if (!initialStatePromiseRef.current.promise) {
-    initialStatePromiseRef.current.promise =
-      resolvablePromise<FcboardInitialDataState | null>();
-  }
+  const [initialScene] = useState(() => {
+    const external =
+      new URLSearchParams(window.location.search).has("id") ||
+      /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/.test(window.location.hash) ||
+      /^#url=(.*)$/.test(window.location.hash) ||
+      isCollaborationLink(window.location.href);
+    return external
+      ? {
+          external: true as const,
+          data: resolvablePromise<FcboardInitialDataState | null>(),
+        }
+      : { external: false as const, data: importFromLocalStorage() };
+  });
 
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
   const sceneInitialized = useRef(false);
@@ -519,21 +524,26 @@ const FcboardWrapper = () => {
 
     if (!sceneInitialized.current) {
       sceneInitialized.current = true;
-      // A local board has no dependency on a collaboration session. Bootstrap
-      // once; a later collab API mount must not reload images or sweep storage.
-      initializeScene({ collabAPI, excalidrawAPI })
-        .then((data) => {
-          loadImages(data, /* isInitialLoad */ true);
-          initialStatePromiseRef.current.promise.resolve(data.scene);
-        })
-        .catch((error) => {
-          initialStatePromiseRef.current.promise.resolve({
-            appState: {
-              errorMessage:
-                error instanceof Error ? error.message : String(error),
-            },
+      if (!initialScene.external) {
+        loadImages(
+          { scene: initialScene.data, isExternalScene: false },
+          /* isInitialLoad */ true,
+        );
+      } else {
+        initializeScene({ collabAPI, excalidrawAPI })
+          .then((data) => {
+            loadImages(data, /* isInitialLoad */ true);
+            initialScene.data.resolve(data.scene);
+          })
+          .catch((error) => {
+            initialScene.data.resolve({
+              appState: {
+                errorMessage:
+                  error instanceof Error ? error.message : String(error),
+              },
+            });
           });
-        });
+      }
     }
 
     const onHashChange = async (event: HashChangeEvent) => {
@@ -654,7 +664,14 @@ const FcboardWrapper = () => {
         false,
       );
     };
-  }, [isCollabDisabled, collabAPI, excalidrawAPI, setLangCode, loadImages]);
+  }, [
+    isCollabDisabled,
+    collabAPI,
+    excalidrawAPI,
+    setLangCode,
+    loadImages,
+    initialScene,
+  ]);
 
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
@@ -883,7 +900,7 @@ const FcboardWrapper = () => {
         onImagePick={nativeImagePicker}
         onChange={onChange}
         onExport={onExport}
-        initialData={initialStatePromiseRef.current.promise}
+        initialData={initialScene.data}
         isCollaborating={isCollaborating}
         onPointerUpdate={collabAPI?.onPointerUpdate}
         onObjectDoubleClick={(element) => {

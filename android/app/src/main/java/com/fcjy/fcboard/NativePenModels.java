@@ -33,6 +33,17 @@ final class NativePenModels implements AutoCloseable {
     private String loaded;
     private MarianTokenizer tokenizer;
     private JSONObject vocab;
+    // Only the three shipped model contracts can enter this bounded cache.
+    private final Map<String, Model> resident = new HashMap<>();
+    private static final class Model implements AutoCloseable {
+        OrtSession encoder, decoder;
+        MarianTokenizer tokenizer;
+        JSONObject vocab;
+        @Override public void close() {
+            if (decoder != null) try { decoder.close(); } catch (Exception ignored) { }
+            if (encoder != null) try { encoder.close(); } catch (Exception ignored) { }
+        }
+    }
     private final Map<String, String> translations = new LinkedHashMap<String, String>(32, .75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, String> entry) { return size() > 32; }
     };
@@ -95,18 +106,27 @@ final class NativePenModels implements AutoCloseable {
         return file;
     }
     private void ensure(String key) throws Exception {
+        if (!key.equals("comer") && !key.equals("Xenova/opus-mt-en-zh") && !key.equals("Xenova/opus-mt-zh-en")) throw new IllegalArgumentException("Unsupported native pen model");
         if (key.equals(loaded)) return;
-        close();
-        try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
-            options.setIntraOpNumThreads(2); options.setInterOpNumThreads(1);
-            options.setMemoryPatternOptimization(false); options.setCPUArenaAllocator(false);
-            boolean math = key.equals("comer");
-            encoder = environment.createSession(model(key + (math ? "/encoder_int8.onnx" : "/onnx/encoder_model_quantized.onnx")).getPath(), options);
-            decoder = environment.createSession(model(key + (math ? "/decoder_int8.onnx" : "/onnx/decoder_model_merged_quantized.onnx")).getPath(), options);
-            if (math) vocab = json("comer/vocab.json");
-            else tokenizer = new MarianTokenizer(json(key + "/tokenizer.json"));
-            loaded = key;
-        } catch (Exception | LinkageError error) { close(); throw error; }
+        if (!key.equals("comer") && !key.equals("Xenova/opus-mt-en-zh") && !key.equals("Xenova/opus-mt-zh-en")) {
+            throw new IllegalArgumentException("Unsupported local model");
+        }
+        Model next = resident.get(key);
+        if (next == null) {
+            next = new Model();
+            try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
+                options.setIntraOpNumThreads(2); options.setInterOpNumThreads(1);
+                options.setMemoryPatternOptimization(false); options.setCPUArenaAllocator(false);
+                boolean math = key.equals("comer");
+                next.encoder = environment.createSession(model(key + (math ? "/encoder_int8.onnx" : "/onnx/encoder_model_quantized.onnx")).getPath(), options);
+                next.decoder = environment.createSession(model(key + (math ? "/decoder_int8.onnx" : "/onnx/decoder_model_merged_quantized.onnx")).getPath(), options);
+                if (math) next.vocab = json("comer/vocab.json");
+                else next.tokenizer = new MarianTokenizer(json(key + "/tokenizer.json"));
+            } catch (Exception | LinkageError error) { next.close(); throw error; }
+            resident.put(key, next);
+        }
+        encoder = next.encoder; decoder = next.decoder;
+        tokenizer = next.tokenizer; vocab = next.vocab; loaded = key;
     }
     private OrtSession.Result run(OrtSession session, Map<String, OnnxTensor> inputs, LocalInferenceService.Job job) throws Exception {
         job.check();
@@ -284,8 +304,8 @@ final class NativePenModels implements AutoCloseable {
         }
     }
     @Override public void close() {
-        if (decoder != null) try { decoder.close(); } catch (Exception ignored) { }
-        if (encoder != null) try { encoder.close(); } catch (Exception ignored) { }
+        for (Model model : resident.values()) model.close();
+        resident.clear();
         encoder = null; decoder = null; tokenizer = null; vocab = null; loaded = null;
     }
 }

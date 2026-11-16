@@ -27,7 +27,6 @@ public class LocalInferencePlugin extends Plugin {
     private final Map<String, Pending> pending = new LinkedHashMap<>();
     private Messenger remote;
     private boolean bound, closed;
-    private final Runnable idle = this::disconnect;
     private static final class Pending {
         final PluginCall call;
         final Bundle input;
@@ -51,7 +50,6 @@ public class LocalInferencePlugin extends Plugin {
             }
             request.call.resolve(value);
         }
-        scheduleIdle();
         return true;
     }));
     private final ServiceConnection connection = new ServiceConnection() {
@@ -73,7 +71,6 @@ public class LocalInferencePlugin extends Plugin {
             if (closed || pending.size() >= 8 || pending.containsKey(id)) {
                 call.reject("Native inference unavailable or queue full"); return;
             }
-            main.removeCallbacks(idle);
             Pending request = new Pending(call, input, () -> cancel(id, "Native inference timed out"));
             pending.put(id, request);
             main.postDelayed(request.timeout, 90000);
@@ -141,10 +138,6 @@ public class LocalInferencePlugin extends Plugin {
             try { remote.send(cancel); } catch (RemoteException ignored) { /* Death handled by connection. */ }
         }
         request.call.reject(reason, "NATIVE_INFERENCE_CANCELLED");
-        scheduleIdle();
-    }
-    private void scheduleIdle() {
-        if (pending.isEmpty()) { main.removeCallbacks(idle); main.postDelayed(idle, 60000); }
     }
     private void lost() {
         for (Pending request : pending.values()) {
@@ -154,7 +147,7 @@ public class LocalInferencePlugin extends Plugin {
         pending.clear(); disconnect();
     }
     private void disconnect() {
-        main.removeCallbacks(idle); remote = null;
+        remote = null;
         if (bound) { bound = false; getContext().unbindService(connection); }
     }
     @Override protected void handleOnDestroy() {

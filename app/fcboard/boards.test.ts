@@ -1,4 +1,5 @@
 import { convertToFcboardElements } from "@fcboard/fcboard";
+import { pointFrom } from "@fcboard/math";
 
 import type { FcboardImperativeAPI, DataURL } from "@fcboard/fcboard/types";
 
@@ -158,10 +159,7 @@ describe("persistent whiteboard book", () => {
         type: "freedraw",
         x: 20,
         y: 30,
-        points: [
-          [0, 0],
-          [20, 30],
-        ],
+        points: [pointFrom(0, 0), pointFrom(20, 30)],
       },
     ]);
     api.updateScene({ elements: ink });

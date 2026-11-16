@@ -1,4 +1,5 @@
 import { convertToFcboardElements } from "@fcboard/fcboard";
+import { newFreeDrawElement } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
 import type { FcboardImperativeAPI, DataURL } from "@fcboard/fcboard/types";
@@ -154,14 +155,15 @@ describe("persistent whiteboard book", () => {
     const loading = new Promise<typeof stored>((resolve) => (finish = resolve));
     const reloaded = new BoardBook(api, vi.fn(), () => loading, save);
     const initialized = reloaded.initialize();
-    const ink = convertToFcboardElements([
-      {
+    const ink = [
+      newFreeDrawElement({
         type: "freedraw",
         x: 20,
         y: 30,
         points: [pointFrom(0, 0), pointFrom(20, 30)],
-      },
-    ]);
+        simulatePressure: true,
+      }),
+    ];
     api.updateScene({ elements: ink });
     const resets = vi.mocked(api.resetScene).mock.calls.length;
     finish(stored);

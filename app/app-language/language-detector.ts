@@ -1,4 +1,4 @@
-import { defaultLang, languages } from "@fcboard/fcboard";
+import { defaultLang, languages } from "@fcboard/fcboard/i18n";
 import LanguageDetector from "i18next-browser-languagedetector";
 
 export const languageDetector = new LanguageDetector();

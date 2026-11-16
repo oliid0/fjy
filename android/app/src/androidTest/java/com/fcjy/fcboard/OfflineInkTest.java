@@ -346,7 +346,11 @@ public class OfflineInkTest {
                 assertTrue(english.done.await(30, TimeUnit.SECONDS));
                 assertNull(english.error.get(), english.error.get());
                 assertEquals(2, plugin.clients.get());
-            } finally { plugin.handleOnDestroy(); }
+            } finally {
+                plugin.handleOnDestroy();
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                    () -> scenario.onActivity(MainActivity::finish));
+            }
             assertEquals(2, plugin.closes.get());
         }
     }

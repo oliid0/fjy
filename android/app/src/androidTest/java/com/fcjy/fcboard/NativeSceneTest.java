@@ -47,6 +47,25 @@ public class NativeSceneTest {
             try{int color=idle.getPixel(100,60);assertTrue("Upper blue stroke stays above the selected red stroke",Color.blue(color)>Color.red(color));}finally{idle.recycle();}
         });
     }
+    @Test public void selectingAndClearingOneObjectDoesNotReplayTenThousandDistantStrokes()throws Exception{
+        NativeScene scene=new NativeScene();JSONArray nodes=new JSONArray();
+        nodes.put(ink("chosen","a00000","M20 60 L140 60","#ff0000",true,0).put("bounds",new JSONArray("[20,50,140,70]")));
+        for(int i=0;i<10000;i++)nodes.put(ink("history"+i,"b"+String.format(java.util.Locale.ROOT,"%05d",i),"M300 100 L430 100","#0000ff",true,0).put("bounds",new JSONArray("[290,90,440,110]")));
+        NativeScene.Frame first=scene.synchronize(update(nodes,true),1,0,java.util.Collections.emptyList());
+        NativeScene.Frame selected=scene.synchronize(update(new JSONArray(),false).put("selectionIds",new JSONArray().put("chosen")).put("selectionBounds",new JSONArray("[20,50,140,70]")),1,0,java.util.Collections.emptyList());
+        assertEquals("Selection only rebuilds its own tile",1,selected.tiles.size());
+        assertEquals("Only the chosen selection and its idle composite are drawn",2,selected.rasterizedNodes);
+        assertFalse(selected.tiles.containsKey(NativeScene.key(1,0)));
+        NativeScene.Frame cleared=scene.synchronize(update(new JSONArray(),false),1,0,java.util.Collections.emptyList());
+        assertEquals(1,cleared.tiles.size());assertEquals(1,cleared.rasterizedNodes);assertTrue(cleared.selected.isEmpty());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            NativeSceneView view=surface();view.apply(first);view.apply(selected);Bitmap chosen=pixels(view);
+            try{assertEquals(128,Color.alpha(chosen.getPixel(60,60)));assertEquals(255,Color.blue(chosen.getPixel(350,100)));}finally{chosen.recycle();}
+            view.apply(cleared);Bitmap restored=pixels(view);
+            try{assertEquals(128,Color.alpha(restored.getPixel(60,60)));assertEquals(255,Color.blue(restored.getPixel(350,100)));}finally{restored.recycle();}
+        });
+    }
+
     @Test public void appendingInkDoesNotRasterizeHistoryOrMutateAnInstalledFrame()throws Exception{
         NativeScene scene=new NativeScene();
         NativeScene.Frame first=scene.synchronize(update(new JSONArray().put(ink("old","a0","M20 60 L580 60","#ff0000",true,0)),true),1,0,java.util.Collections.emptyList());
@@ -228,7 +247,7 @@ public class NativeSceneTest {
     @Test public void denseErasureConfirmationClearsOnlySweptTilesWithoutReplayingUnchangedInk() throws Exception {
         NativeScene scene=new NativeScene();JSONArray nodes=new JSONArray();
         nodes.put(ink("source","a0000","M20 60 L580 60","#ff0000",true,0));
-        for(int i=1;i<=500;i++)nodes.put(ink("dense"+i,"a"+String.format(java.util.Locale.ROOT,"%04d",i),"M20 160 L580 160","#ff0000",true,0));
+        for(int i=1;i<=20000;i++)nodes.put(ink("dense"+i,"a"+String.format(java.util.Locale.ROOT,"%04d",i),"M20 160 L580 160","#ff0000",true,0));
         NativeScene.Frame first=scene.synchronize(update(nodes,true),1,0,java.util.Collections.emptyList());
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             try {

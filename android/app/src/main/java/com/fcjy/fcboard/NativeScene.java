@@ -178,7 +178,16 @@ final class NativeScene {
         Set<String> selected=new HashSet<>();JSONArray selectedIds=data.optJSONArray("selectionIds");
         if(selectedIds!=null)for(int i=0;i<selectedIds.length();i++)selected.add(selectedIds.getString(i));
         boolean selectionChanged=!selected.equals(selection);
-        if(selectionChanged){dirty.addAll(buckets.keySet());rebuild.addAll(buckets.keySet());selection=selected;}
+        if(selectionChanged){
+            // Like FocusSelectionView's retained background/selection bitmap,
+            // only cells whose membership changed need to move between layers.
+            // Selecting a small object must not replay all distant board ink.
+            Set<String> changed=new HashSet<>(selection);changed.addAll(selected);
+            for(String id:changed)if(selection.contains(id)!=selected.contains(id)){
+                Node node=nodes.get(id);if(node!=null){dirty.addAll(node.cells);rebuild.addAll(node.cells);}
+            }
+            selection=selected;
+        }
         JSONArray selectionBox=data.optJSONArray("selectionBounds");
         if(!selection.isEmpty()&&selectionBox!=null)frame.selectionBounds=new RectF((number(selectionBox,0)+scrollX)*zoom,(number(selectionBox,1)+scrollY)*zoom,(number(selectionBox,2)+scrollX)*zoom,(number(selectionBox,3)+scrollY)*zoom);
         frame.selectionThrough=data.optString("selectionThrough","");frame.selectionKey=data.optString("selectionKey","");

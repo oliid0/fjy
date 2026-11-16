@@ -3,6 +3,7 @@ import { Fcboard } from "@fcboard/fcboard";
 import { newElementWith } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
+import { selectedRegion } from "@fcboard/fcboard/lasso/region";
 import { render } from "@fcboard/fcboard/tests/test-utils";
 
 import { createNativeSceneRenderer } from "./nativeScene";
@@ -91,6 +92,56 @@ it("keeps web display until native installation then sends only the changed obje
     act(() => controller.dispose());
   }
   expect(document.documentElement).not.toHaveClass("fc-native-scene");
+});
+
+it("updates selection membership without retransmitting unchanged scene geometry", async () => {
+  const api = await setup();
+  const chosen = ink(100);
+  const history = Array.from({ length: 1000 }, (_, index) => ink(400 + index));
+  act(() => api.updateScene({ elements: [chosen, ...history] }));
+  let controller!: NonNullable<ReturnType<typeof createNativeSceneRenderer>>;
+  act(() => {
+    controller = createNativeSceneRenderer(api, vi.fn())!;
+  });
+  try {
+    await waitFor(() =>
+      expect(document.documentElement).toHaveClass("fc-native-scene"),
+    );
+    native.synchronize.mockClear();
+    act(() => {
+      api.setActiveTool({ type: "lasso" });
+      api.updateScene({
+        appState: {
+          selectedElementIds: { [chosen.id]: true },
+          whiteboardSelection: selectedRegion([chosen], undefined, 1),
+        },
+      });
+    });
+    await waitFor(() =>
+      expect(native.synchronize.mock.calls.at(-1)?.[0].selectionIds).toEqual([
+        chosen.id,
+      ]),
+    );
+    expect(
+      native.synchronize.mock.calls.every(
+        ([request]) => request.nodes.length === 0,
+      ),
+    ).toBe(true);
+    native.synchronize.mockClear();
+    act(() =>
+      api.updateScene({
+        appState: { selectedElementIds: {}, whiteboardSelection: undefined },
+      }),
+    );
+    await waitFor(() =>
+      expect(native.synchronize.mock.calls.at(-1)?.[0].selectionIds).toEqual(
+        [],
+      ),
+    );
+    expect(native.synchronize.mock.calls.at(-1)?.[0].nodes).toEqual([]);
+  } finally {
+    act(() => controller.dispose());
+  }
 });
 
 it("reconciles a viewport change made while a previous native snapshot is still in flight", async () => {

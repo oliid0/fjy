@@ -15,6 +15,7 @@ public final class NativeScenePlugin extends Plugin {
     private static final class Entry { NativeSceneView view;long epoch,revision; }
     private static final class State { NativeScene scene=new NativeScene();long epoch;State(long epoch){this.epoch=epoch;} }
     private FrameLayout layer;
+    private boolean closed;
     private final Map<String,Entry> entries=new HashMap<>();
     private final Map<String,Long> epochs=new HashMap<>();
     private final Map<String,State> states=new HashMap<>();
@@ -31,6 +32,7 @@ public final class NativeScenePlugin extends Plugin {
     @PluginMethod public void synchronize(PluginCall call){
         getActivity().runOnUiThread(()->{
             try{
+                if(closed){call.reject("Native scene closed");return;}
                 String owner=call.getString("owner","");long epoch=call.getData().getLong("epoch"),revision=call.getData().getLong("revision");
                 if(owner.isEmpty()||owner.length()>200)throw new IllegalArgumentException("Invalid native scene owner");
                 if(epoch<epochs.getOrDefault(owner,Long.MIN_VALUE)){call.resolve();return;}
@@ -54,7 +56,7 @@ public final class NativeScenePlugin extends Plugin {
                         State state=states.get(owner);if(state==null||state.epoch!=epoch){state=new State(epoch);states.put(owner,state);}
                         NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples);
                         getActivity().runOnUiThread(()->{
-                            if(entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);((MainActivity)getActivity()).nativeSceneCommitted(owner);}
+                            if(!closed&&entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);((MainActivity)getActivity()).nativeSceneCommitted(owner);}
                             call.resolve();
                         });
                     }catch(Exception error){call.reject("Native scene unavailable: "+error.getMessage(),error);}
@@ -64,6 +66,7 @@ public final class NativeScenePlugin extends Plugin {
     }
     @PluginMethod public void remove(PluginCall call){
         getActivity().runOnUiThread(()->{
+            if(closed){call.resolve();return;}
             String owner=call.getString("owner","");long epoch=call.getData().optLong("epoch",Long.MAX_VALUE);
             if(epoch<epochs.getOrDefault(owner,Long.MIN_VALUE)){call.resolve();return;}
             epochs.put(owner,epoch);Entry old=entries.remove(owner);if(old!=null)layer.removeView(old.view);
@@ -71,6 +74,7 @@ public final class NativeScenePlugin extends Plugin {
         });
     }
     @Override protected void handleOnDestroy(){
+        if(closed)return;closed=true;
         ((MainActivity)getActivity()).setNativeScene(null);entries.clear();epochs.clear();
         worker.execute(states::clear);worker.shutdown();
         if(layer!=null){((ViewGroup)layer.getParent()).removeView(layer);layer=null;}

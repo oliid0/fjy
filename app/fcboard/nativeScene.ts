@@ -309,6 +309,7 @@ export const createNativeSceneRenderer = (
   let reset = true;
   let view = "";
   let paint = "";
+  let selection = "";
   let bg = "";
   let latest: StaticSceneRenderConfig | undefined;
   let eraseThrough = 0;
@@ -416,9 +417,8 @@ export const createNativeSceneRenderer = (
               selected.bounds.bottom,
             ]
           : undefined;
+      const selectedLayer = JSON.stringify([selectionIds, selectionBounds]);
       const pigment = JSON.stringify([
-        selectionIds,
-        selectionBounds,
         state.theme,
         state.frameRendering,
         state.openDialog?.name === "elementLinkSelector"
@@ -478,7 +478,8 @@ export const createNativeSceneRenderer = (
         backgroundKey === bg &&
         !reset &&
         !eraseThrough &&
-        !selectionThrough
+        !selectionThrough &&
+        selectedLayer === selection
       ) {
         activate();
         return;
@@ -554,6 +555,7 @@ export const createNativeSceneRenderer = (
       reset = false;
       view = viewport;
       paint = pigment;
+      selection = selectedLayer;
       bg = backgroundKey;
       activate();
     } catch (error) {
@@ -624,7 +626,7 @@ export const createNativeSceneRenderer = (
       selectionThrough = "";
       epoch = nextEpoch();
       reset = true;
-      view = paint = bg = "";
+      view = paint = selection = bg = "";
       latest = undefined;
       eraseThrough = 0;
       // Keep the installed frame until synchronize atomically installs the next

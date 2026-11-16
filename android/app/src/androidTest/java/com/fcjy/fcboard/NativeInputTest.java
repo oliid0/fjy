@@ -32,6 +32,28 @@ public class NativeInputTest {
             assertEquals("All twenty strokes survive delayed WebView acknowledgements", 20, completed.size());
         });
     }
+    @Test public void twoHundredIndependentContactsKeepTheirOwnPendingInkUntilAcknowledged() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
+            for(int i=0;i<200;i++)motion(view,MotionEvent.ACTION_DOWN,1000+i,1,2,20+i%20*6,20+i/20*6);
+            assertEquals(200,events.size());
+            for(int i=0;i<200;i++)motion(view,MotionEvent.ACTION_MOVE,1000+i,1,2,23+i%20*6,24+i/20*6);
+            for(int i=199;i>=0;i--)motion(view,MotionEvent.ACTION_UP,1000+i,1,2,23+i%20*6,24+i/20*6);
+            assertEquals(400,events.size());
+            java.util.Set<String> completed=new java.util.HashSet<>();
+            for(JSObject event:events)if(event.optString("phase").equals("end"))completed.add(event.optString("id"));
+            assertEquals(200,completed.size());
+            Bitmap pixels=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
+            try {
+                view.draw(new Canvas(pixels));assertTrue(Color.alpha(pixels.getPixel(23,24))>0);
+                for(String id:completed)view.acknowledge(id);
+                pixels.eraseColor(Color.TRANSPARENT);view.draw(new Canvas(pixels));
+                Bitmap empty=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
+                try{assertTrue("Every acknowledged contact releases its preview",pixels.sameAs(empty));}finally{empty.recycle();}
+            }finally{pixels.recycle();}
+        });
+    }
+
     @Test public void aRestingHandDoesNotEraseOrEndTheOtherDevicesPen() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");

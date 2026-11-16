@@ -277,7 +277,8 @@ it("cancels pointer sorting without a write and commits a drop once while keepin
     await waitFor(() =>
       expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"),
     );
-    expect(api.history.clear).toHaveBeenCalledTimes(1);
+    expect(api.history.clear).not.toHaveBeenCalled();
+    expect(api.resetScene).not.toHaveBeenCalled();
     expect(screen.queryByRole("textbox")).toBeNull();
     const preview = screen.getByRole("button", {
       name: t("fcboard.switch_to_name", { name: "first" }),
@@ -365,7 +366,8 @@ it("keeps the original list after persistence failure and cancels a pending dest
     expect(api.getSceneElements()[0].id).toBe(
       (await persistence.load.mock.results[0].value).boards[0].elements[0].id,
     );
-    expect(api.history.clear).toHaveBeenCalledTimes(1);
+    expect(api.history.clear).not.toHaveBeenCalled();
+    expect(api.resetScene).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).toBeNull();
   } finally {
     view.unmount();

@@ -31,7 +31,14 @@ export const functionGeometry = (plot: Plot) => {
   const curves = [plot.expression, ...(plot.compare || [])].map(
     (expression) => ({
       expression,
-      lines: sampleFunctionCurve(expression, view, plot),
+      lines: sampleFunctionCurve(expression, view, {
+        x: plot.x,
+        y: plot.y,
+        z: plot.z,
+        a: plot.a,
+        b: plot.b,
+        c: plot.c,
+      }),
     }),
   );
   if (curves.every((curve) => !curve.lines.length) && !plot.view) {

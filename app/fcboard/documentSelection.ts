@@ -35,9 +35,9 @@ export const reorderDocumentSelection = (
     return strokes;
   }
   const layer = action.startsWith("send") ? "board" : "floating";
-  const finish = (next: InkStroke[]) => {
+  const finish = (next: InkStroke[]): InkStroke[] => {
     let changed = false;
-    const result = next.map((stroke) => {
+    const result = next.map((stroke): InkStroke => {
       if (
         chosen.has(documentSelectionGroup(stroke)) &&
         stroke.plot?.renderer === "canvas" &&

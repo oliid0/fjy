@@ -9,10 +9,10 @@ import { API } from "../tests/helpers/api";
 import { getLassoSelectedElementIds } from "./utils";
 
 const path = (left: number, top: number, right: number, bottom: number) => [
-  pointFrom(left, top),
-  pointFrom(right, top),
-  pointFrom(right, bottom),
-  pointFrom(left, bottom),
+  pointFrom<import("@fcboard/math").GlobalPoint>(left, top),
+  pointFrom<import("@fcboard/math").GlobalPoint>(right, top),
+  pointFrom<import("@fcboard/math").GlobalPoint>(right, bottom),
+  pointFrom<import("@fcboard/math").GlobalPoint>(left, bottom),
 ];
 const select = (
   elements: FcboardElement[],
@@ -90,7 +90,7 @@ it("expands only bounds candidates and reuses the current gesture's geometry ins
       x: 1000 + index * 20,
       y: 1000,
       points: Array.from({ length: 256 }, (_, point) =>
-        pointFrom(point, point % 40),
+        pointFrom<import("@fcboard/math").LocalPoint>(point, point % 40),
       ),
     }),
   );

@@ -237,7 +237,7 @@ it("drains old contacts before retiring their styles and preserves a new token d
     );
     style = { ...style, color: "#ff0000" };
     adapter.update();
-    await waitFor(() => expect(drain).toBeTypeOf("function"));
+    await waitFor(() => expect(typeof drain).toBe("function"));
     const next = backend.configure.mock.calls.at(-1)![0];
     emit({ ...packet, phase: "cancel" });
     expect(contact.mock.calls.at(-1)![1].color).toBe("#000000");

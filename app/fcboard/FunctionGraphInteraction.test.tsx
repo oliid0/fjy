@@ -49,7 +49,9 @@ const setup = async (expression = "x") => {
     expect(document.querySelector(".fc-inline-function canvas")).not.toBeNull(),
   );
   const graph = () =>
-    api.getSceneElements().find((element) => ids.includes(element.id))!;
+    api
+      .getSceneElements()
+      .find((element) => element.type === "image" && ids.includes(element.id))!;
   const canvas = () =>
     document.querySelector<HTMLCanvasElement>(".fc-inline-function canvas")!;
   vi.spyOn(canvas(), "getBoundingClientRect").mockImplementation(() => {
@@ -340,10 +342,10 @@ it("merges handwritten functions only on request and labels the actual reciproca
   );
   const intersections = functionGeometry(plot).intersections;
   expect(intersections).toHaveLength(2);
-  expect(intersections.map((point) => [point.x, point.y])).toEqual([
-    expect.arrayContaining([expect.closeTo(-1, 5), expect.closeTo(-1, 5)]),
-    expect.arrayContaining([expect.closeTo(1, 5), expect.closeTo(1, 5)]),
-  ]);
+  intersections.forEach((point, index) => {
+    expect(point.x).toBeCloseTo(index === 0 ? -1 : 1, 5);
+    expect(point.y).toBeCloseTo(index === 0 ? -1 : 1, 5);
+  });
   await waitFor(() =>
     expect(
       document.querySelector(".fc-inline-function canvas"),

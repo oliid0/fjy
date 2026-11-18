@@ -2,6 +2,8 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { waitFor } from "@testing-library/react";
 
+import type { DataURL } from "@fcboard/fcboard/types";
+
 import { generateQuiz, quizDocument, quizUpdate, validateQuiz } from "./quiz";
 import { defaults, saveSettings } from "./settings";
 import * as ai from "./ai";
@@ -252,7 +254,7 @@ it("publishes all text while an independent image is slow, then verifies only th
     "pending",
   );
   finish({
-    dataURL: "data:image/png;base64,aGVsbG8=",
+    dataURL: "data:image/png;base64,aGVsbG8=" as DataURL,
     mimeType: "image/png",
     width: 100,
     height: 100,
@@ -260,7 +262,7 @@ it("publishes all text while an independent image is slow, then verifies only th
   const result = await job;
   expect(result.questions[0].image).toMatchObject({
     status: "ready",
-    dataURL: "data:image/png;base64,aGVsbG8=",
+    dataURL: "data:image/png;base64,aGVsbG8=" as DataURL,
   });
   expect(JSON.stringify(chat.mock.calls.at(-1)![0])).toContain(
     "data:image/png;base64,aGVsbG8=",
@@ -378,7 +380,7 @@ it("publishes complete questions and answers before a Vega figure and retains th
     undefined,
     progress,
   );
-  await waitFor(() => expect(rejectDrawing).toBeTypeOf("function"));
+  await waitFor(() => expect(typeof rejectDrawing).toBe("function"));
   const partial = progress.mock.calls.at(-1)![0] as Quiz;
   expect(partial.questions).toHaveLength(2);
   expect(partial.questions[0].answer).toEqual(["C"]);
@@ -537,7 +539,7 @@ it("replaces pending slots progressively without resetting answers, position or 
           image: {
             ...second.image,
             status: "ready",
-            dataURL: "data:image/png;base64,aGVsbG8=",
+            dataURL: "data:image/png;base64,aGVsbG8=" as DataURL,
           },
         },
       ],

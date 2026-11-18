@@ -460,7 +460,7 @@ it("publishes the latest partial quiz immediately while preserving its iframe th
       args: { prompt: "出2道题" },
     });
   });
-  await waitFor(() => expect(publish).toBeTypeOf("function"));
+  await waitFor(() => expect(typeof publish).toBe("function"));
   const partial: quizzes.Quiz = {
     ...builderQuiz(),
     id: "partial",
@@ -510,7 +510,7 @@ it("immediately stops visible native-style pending work, ignores its late progre
       .execute({ name: "quiz.generate", args: { prompt: "出2道题" } })
       .catch(() => undefined);
   });
-  await waitFor(() => expect(publish).toBeTypeOf("function"));
+  await waitFor(() => expect(typeof publish).toBe("function"));
   const partial: quizzes.Quiz = {
     ...builderQuiz(),
     id: "cancel-images",

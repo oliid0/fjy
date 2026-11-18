@@ -485,7 +485,9 @@ export const selectDocumentLasso = (
       )
       .map((stroke) => stroke.id);
   }
-  const lassoPath = path.map(([x, y]) => pointFrom(x, y));
+  const lassoPath = path.map(([x, y]) =>
+    pointFrom<import("@fcboard/math").GlobalPoint>(x, y),
+  );
   const area = getLassoBounds(lassoPath);
   const candidates = strokes.filter((stroke) => {
     if (stroke.locked) {

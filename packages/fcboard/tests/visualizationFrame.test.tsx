@@ -117,7 +117,7 @@ it("holds authored JSXGraph scripts and inline handlers until its declared packa
   expect(preview.querySelector("[onclick]")).toBeNull();
   expect(preview.body.style.pointerEvents).toBe("none");
   expect(preview.querySelector('[role="status"]')).not.toBeNull();
-  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  await waitFor(() => expect(typeof finish).toBe("function"));
   await act(async () => finish("<svg>Installed engine ready</svg>"));
   expect(frame).toHaveAttribute("aria-busy", "false");
   expect(frame.srcdoc).toBe("<svg>Installed engine ready</svg>");

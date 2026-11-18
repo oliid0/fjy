@@ -1,5 +1,7 @@
 import { waitFor } from "@testing-library/react";
 
+import type { DataURL } from "@fcboard/fcboard/types";
+
 import { generateQuizImage, quizRequest } from "./quizRequests";
 import * as ai from "./ai";
 import * as images from "./imageGeneration";
@@ -75,13 +77,13 @@ it("retries a semantically wrong picture using actual visual feedback before pub
   const generate = vi
     .spyOn(images, "generateImage")
     .mockResolvedValueOnce({
-      dataURL: "data:image/png;base64,d3Jvbmc=",
+      dataURL: "data:image/png;base64,d3Jvbmc=" as DataURL,
       mimeType: "image/png",
       width: 100,
       height: 100,
     })
     .mockResolvedValueOnce({
-      dataURL: "data:image/png;base64,Y29ycmVjdA==",
+      dataURL: "data:image/png;base64,Y29ycmVjdA==" as DataURL,
       mimeType: "image/png",
       width: 100,
       height: 100,
@@ -111,7 +113,7 @@ it("retries a semantically wrong picture using actual visual feedback before pub
 
 it("never publishes a second inconsistent picture or retries indefinitely", async () => {
   const generate = vi.spyOn(images, "generateImage").mockResolvedValue({
-    dataURL: "data:image/png;base64,d3Jvbmc=",
+    dataURL: "data:image/png;base64,d3Jvbmc=" as DataURL,
     mimeType: "image/png",
     width: 100,
     height: 100,
@@ -240,7 +242,7 @@ it("finishes another program figure while an independent figure is still drawing
     },
   );
   try {
-    await waitFor(() => expect(release).toBeTypeOf("function"));
+    await waitFor(() => expect(typeof release).toBe("function"));
     expect(await generateQuizImage(second, new AbortController().signal)).toBe(
       "data:image/png;base64,ZmFzdA==",
     );

@@ -93,13 +93,20 @@ it("does not serialize scratch ink during pauses but preserves the explicit exit
     .spyOn(LocalData.fileStorage, "saveFiles")
     .mockResolvedValue({ savedFiles: new Map(), erroredFiles: new Map() });
   const ink = newFreeDrawElement({
+    type: "freedraw",
     x: 20,
     y: 20,
     points: [pointFrom(0, 0), pointFrom(100, 0)],
     pressures: [],
     simulatePressure: true,
   });
-  const state = getDefaultAppState();
+  const state = {
+    ...getDefaultAppState(),
+    width: 1600,
+    height: 900,
+    offsetTop: 0,
+    offsetLeft: 0,
+  };
   const saved = vi.fn();
   LocalData.save([ink], state, {}, saved);
   await vi.runOnlyPendingTimersAsync();
@@ -120,7 +127,17 @@ it("rejects an actual explicit save storage failure without granting resume inte
     throw new DOMException("full", "QuotaExceededError");
   });
   await expect(
-    LocalData.saveForExit([], getDefaultAppState(), {}),
+    LocalData.saveForExit(
+      [],
+      {
+        ...getDefaultAppState(),
+        width: 1600,
+        height: 900,
+        offsetTop: 0,
+        offsetLeft: 0,
+      },
+      {},
+    ),
   ).rejects.toThrow("full");
   expect(localStorage.getItem("fcboard-saved-exit")).toBeNull();
 });

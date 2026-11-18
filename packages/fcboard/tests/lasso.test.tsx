@@ -1825,7 +1825,11 @@ it("refreshes a live gesture's cached geometry when the same object changes insi
   expect(h.state.selectedElementIds).toEqual({ [line.id]: true });
   act(() => {
     h.app.scene.mutateElement(line, {
-      points: [pointFrom(0, 100), pointFrom(100, 0), pointFrom(200, 100)],
+      points: [
+        pointFrom<LocalPoint>(0, 100),
+        pointFrom<LocalPoint>(100, 0),
+        pointFrom<LocalPoint>(200, 100),
+      ],
     });
     h.app.lassoTrail.addPointToPath(89, 110);
   });

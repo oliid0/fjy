@@ -338,6 +338,7 @@ it("opens a language card through the selection tool without drawing a language-
   vi.stubGlobal(
     "Audio",
     class {
+      onended?: () => void;
       play = play;
       pause = pause;
       constructor() {
@@ -363,7 +364,11 @@ it("opens a language card through the selection tool without drawing a language-
   const view = render(<LanguagePanel api={host.api} />);
   try {
     Object.assign(host.api.getAppState(), {
-      activeTool: { type: "lasso" },
+      activeTool: {
+        ...host.api.getAppState().activeTool,
+        type: "lasso",
+        customType: null,
+      },
       selectedElementIds: { [word.id]: true },
     });
     act(() => host.api.updateScene({ elements: [word] }));
@@ -440,7 +445,11 @@ it("keeps language selections ordinary without an API key or an automatic recogn
   const view = render(<LanguagePanel api={host.api} />);
   try {
     Object.assign(host.api.getAppState(), {
-      activeTool: { type: "lasso" },
+      activeTool: {
+        ...host.api.getAppState().activeTool,
+        type: "lasso",
+        customType: null,
+      },
       selectedElementIds: { [word.id]: true },
     });
     act(() => host.api.updateScene({ elements: [word] }));
@@ -473,7 +482,11 @@ it("keeps ordinary and mixed object selections as movable objects while language
   try {
     for (const selected of [[object], [host.source, object]]) {
       Object.assign(host.api.getAppState(), {
-        activeTool: { type: "lasso" },
+        activeTool: {
+          ...host.api.getAppState().activeTool,
+          type: "lasso",
+          customType: null,
+        },
         selectedElementIds: Object.fromEntries(
           selected.map((element) => [element.id, true]),
         ),
@@ -516,7 +529,11 @@ it("closes and cancels an automatic card when its API key is removed and ignores
   const view = render(<LanguagePanel api={host.api} />);
   try {
     Object.assign(host.api.getAppState(), {
-      activeTool: { type: "lasso" },
+      activeTool: {
+        ...host.api.getAppState().activeTool,
+        type: "lasso",
+        customType: null,
+      },
       selectedElementIds: { [word.id]: true },
     });
     act(() => host.api.updateScene({ elements: [word] }));
@@ -570,7 +587,11 @@ it("crops different circled words inside the same sentence object and caches eac
       host.api.updateScene({
         elements: [sentence],
         appState: {
-          activeTool: { type: "lasso" },
+          activeTool: {
+            ...host.api.getAppState().activeTool,
+            type: "lasso",
+            customType: null,
+          },
           selectedElementIds: { [sentence.id]: true },
           whiteboardSelection: {
             elementIds: [sentence.id],
@@ -645,7 +666,11 @@ it("immediately aborts an old crop when the same source is circled elsewhere and
     host.api.updateScene({
       elements: [sentence],
       appState: {
-        activeTool: { type: "lasso" },
+        activeTool: {
+          ...host.api.getAppState().activeTool,
+          type: "lasso",
+          customType: null,
+        },
         selectedElementIds: { [sentence.id]: true },
         whiteboardSelection: {
           elementIds: [sentence.id],

@@ -908,20 +908,20 @@ it("keeps the user's inner circle separate from whole text/image operation bound
   });
   API.updateScene({ elements: [text, image] });
   const word = [
-    pointFrom(100, 15),
-    pointFrom(180, 15),
-    pointFrom(180, 45),
-    pointFrom(100, 45),
+    pointFrom<import("@fcboard/math").GlobalPoint>(100, 15),
+    pointFrom<import("@fcboard/math").GlobalPoint>(180, 15),
+    pointFrom<import("@fcboard/math").GlobalPoint>(180, 45),
+    pointFrom<import("@fcboard/math").GlobalPoint>(100, 45),
   ];
   act(() => h.app.lassoTrail.selectPath(word));
   expect(h.state.selectedElementIds).toEqual({ [text.id]: true });
   expect(h.state.whiteboardSelection?.path).toEqual(word);
   expect(h.state.whiteboardSelection!.bounds.right).toBeGreaterThan(180);
   const graph = [
-    pointFrom(600, 300),
-    pointFrom(680, 300),
-    pointFrom(680, 360),
-    pointFrom(600, 360),
+    pointFrom<import("@fcboard/math").GlobalPoint>(600, 300),
+    pointFrom<import("@fcboard/math").GlobalPoint>(680, 300),
+    pointFrom<import("@fcboard/math").GlobalPoint>(680, 360),
+    pointFrom<import("@fcboard/math").GlobalPoint>(600, 360),
   ];
   act(() => h.app.lassoTrail.selectPath(graph));
   expect(h.state.selectedElementIds).toEqual({ [image.id]: true });

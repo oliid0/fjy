@@ -97,7 +97,13 @@ describe("indexed object erasure", () => {
     try {
       scene.mutateElement(
         ink,
-        { points: [pointFrom(0, 0), pointFrom(600, 0)], width: 600 },
+        {
+          points: [
+            pointFrom<import("@fcboard/math").LocalPoint>(0, 0),
+            pointFrom<import("@fcboard/math").LocalPoint>(600, 0),
+          ],
+          width: 600,
+        },
         { informMutation: false, isDragging: false },
       );
       expect(

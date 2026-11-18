@@ -338,7 +338,7 @@ it("releases a fully erased lifted preview and restores only surviving earlier c
     await act(async () => {
       await api.nativeEraserGesture!({ ...palm, phase: "start" });
     });
-    let result: string | void;
+    let result: string | void = undefined;
     await act(async () => {
       result = await api.nativeInk!({
         ...writer,

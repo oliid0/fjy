@@ -2933,12 +2933,12 @@ it("uses the actual courseware circle for a word card while keeping whole-object
     fontSize: 28,
     color: "#000000",
     width: 2,
-    fcInk: { version: 2, pen: "hard", assist: "language" },
+    fcInk: { version: 2, pen: "hard", assist: "language", unit: 1 },
   };
   vi.mocked(loadInk).mockResolvedValue({ 0: [sentence] });
   const snapshot = vi
     .spyOn(documentTools, "inkSnapshot")
-    .mockResolvedValue("data:image/png;base64,full");
+    .mockResolvedValue("data:image/png;base64,full" as DataURL);
   const crop = vi
     .spyOn(ai, "cropImage")
     .mockResolvedValue("data:image/png;base64,word");

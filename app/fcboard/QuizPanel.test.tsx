@@ -63,5 +63,6 @@ it("keeps the same sandbox document during progressive updates and accepts retry
   send(frame.contentWindow!, "wrong");
   expect(props.onRetryImage).not.toHaveBeenCalled();
   send(frame.contentWindow!, channel);
-  expect(props.onRetryImage).toHaveBeenCalledExactlyOnceWith("q1");
+  expect(props.onRetryImage).toHaveBeenCalledTimes(1);
+  expect(props.onRetryImage).toHaveBeenCalledWith("q1");
 });

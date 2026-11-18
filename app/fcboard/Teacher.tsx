@@ -164,15 +164,17 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
       image: NonNullable<QuizQuestion["image"]>,
       cancelled = false,
     ) => {
+      const current = quizValue.current;
       if (
-        quizValue.current?.id !== source.id ||
+        !current ||
+        current.id !== source.id ||
         (request.signal.aborted && !cancelled)
       ) {
         return;
       }
       const next = {
-        ...quizValue.current,
-        questions: quizValue.current.questions.map((item) =>
+        ...current,
+        questions: current.questions.map((item) =>
           item.id === id ? { ...item, image } : item,
         ),
       };

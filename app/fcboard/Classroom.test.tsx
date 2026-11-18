@@ -154,7 +154,10 @@ const columnElements = (prefix: string, offset = 0) =>
       x: stroke.points[0][0],
       y: stroke.points[0][1],
       points: stroke.points.map(([x, y]) =>
-        pointFrom(x - stroke.points[0][0], y - stroke.points[0][1]),
+        pointFrom<import("@fcboard/math").LocalPoint>(
+          x - stroke.points[0][0],
+          y - stroke.points[0][1],
+        ),
       ),
       strokeColor: stroke.color,
     }),

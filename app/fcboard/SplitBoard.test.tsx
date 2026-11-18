@@ -163,7 +163,7 @@ it("uses exactly the three original colored pen images and one eraser with indep
     "split_blue",
     "split_red",
     "split_large_eraser",
-  ];
+  ] as const;
   const images = ["ic_black_pen", "ic_blue_pen", "ic_red_pen", "ic_big_eraser"];
   const colors = ["#000000", "#0000ff", "#ff0000"];
   const context = panes()[0].getContext("2d")!;

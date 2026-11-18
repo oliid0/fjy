@@ -61,6 +61,7 @@ it("preserves the last saved list and shows a real storage error without claimin
   localStorage.setItem(storageKey, "Original");
   const original = Storage.prototype.setItem;
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+    this: Storage,
     key,
     value,
   ) {

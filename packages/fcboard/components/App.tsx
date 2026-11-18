@@ -10229,14 +10229,14 @@ class App extends React.Component<AppProps, AppState> {
         { clientX: first[0], clientY: first[1] },
         this.state,
       );
-      const element = newElementWith(
-        this.createInkElement(
+      const element = {
+        ...this.createInkElement(
           { ...input, pressure: first[2] },
           origin.x,
           origin.y,
         ),
-        { id: input.id },
-      );
+        id: input.id,
+      };
       this.nativeInkDrafts.set(input.id, element);
       this.setState({ cursorButton: "down" });
       this.onInkProgressEmitter.trigger(element, "start");

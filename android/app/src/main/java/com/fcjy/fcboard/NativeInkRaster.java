@@ -117,7 +117,7 @@ final class NativeInkRaster {
         }
         image.setColor(Color.WHITE); image.setAlpha(color.getAlpha());
         for (Tile tile : tiles.values()) {
-            if (target.quickReject(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE)) continue;
+            if (target.quickReject(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE, Canvas.EdgeType.AA)) continue;
             boolean live = !tip.isEmpty() && tile.x <= area.right && tile.x + SIZE >= area.left && tile.y <= area.bottom && tile.y + SIZE >= area.top;
             if (live) {
                 if (tile.preview == null) tile.preview = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ALPHA_8);

@@ -429,7 +429,7 @@ final class NativeSceneView extends NativeCanvasView {
         canvas.drawColor(backgroundColor);
         if(background!=null)canvas.drawBitmap(background,null,new RectF(0,0,getWidth(),getHeight()),image);
         for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
-            NativeScene.Tile tile=entry.getValue();if(canvas.quickReject(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE))continue;Bitmap idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
+            NativeScene.Tile tile=entry.getValue();if(canvas.quickReject(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE,Canvas.EdgeType.AA))continue;Bitmap idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
             canvas.drawBitmap(idle==null?tile.pixels:idle,tile.x,tile.y,null);
         }
         int saved=canvas.save();canvas.concat(selectionMatrix);

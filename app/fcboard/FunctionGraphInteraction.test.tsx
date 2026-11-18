@@ -161,7 +161,8 @@ it("has no parameter/editor controls and undoes one range gesture with its saved
   await waitFor(() =>
     expect(graph().customData!.fcPlot.plot.view).toBeUndefined(),
   );
-  expect(graph().type === "image" && graph().fileId).toBe(
+  const restoredGraph = graph();
+  expect(restoredGraph.type === "image" && restoredGraph.fileId).toBe(
     before.type === "image" && before.fileId,
   );
 });
@@ -621,7 +622,8 @@ it("undoes a graph color and its saved pixels together as one edit", async () =>
     ).toHaveLength(1);
     act(() => api.executeAction("undo"));
     expect(graph().strokeColor).toBe(before.strokeColor);
-    expect(graph().type === "image" && graph().fileId).toBe(
+    const restoredGraph = graph();
+    expect(restoredGraph.type === "image" && restoredGraph.fileId).toBe(
       before.type === "image" && before.fileId,
     );
   } finally {
@@ -651,7 +653,8 @@ it("uses the ordinary border menu and preserves its actual curve style through r
     );
     act(() => api.executeAction("undo"));
     await waitFor(() => expect(graph().strokeStyle).toBe("solid"));
-    expect(graph().type === "image" && graph().fileId).toBe(
+    const restoredGraph = graph();
+    expect(restoredGraph.type === "image" && restoredGraph.fileId).toBe(
       before.type === "image" && before.fileId,
     );
     act(() =>

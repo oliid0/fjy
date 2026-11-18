@@ -1,10 +1,36 @@
 import type { FcboardElement } from "@fcboard/element/types";
+import type { RegionBounds } from "@fcboard/fcboard/lasso/region";
 
 export const selectionSignature = (elements: readonly FcboardElement[]) =>
   elements
     .map((element) => `${element.id}:${element.version}`)
     .sort()
     .join(",");
+
+/** Semantic crop follows the actual circle, independently of object operation handles. */
+export const selectionPathBounds = (
+  path: readonly (readonly [number, number, ...number[]])[] | undefined,
+): RegionBounds | undefined => {
+  if (!path?.length) {
+    return;
+  }
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const [x, y] of path) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    left = Math.min(left, x);
+    top = Math.min(top, y);
+    right = Math.max(right, x);
+    bottom = Math.max(bottom, y);
+  }
+  return right > left && bottom > top
+    ? { left, top, right, bottom }
+    : undefined;
+};
 
 /** layout_select_shape_submenu:50dp cells,6dp margins,12dp right/vertical padding. */
 export const selectionToolbarPosition = (

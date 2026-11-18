@@ -52,6 +52,7 @@ import { recognizeMath } from "./mathRecognition";
 import { updateQuestionAnswer } from "./questionAnswer";
 import { readInsertions } from "./insertObjects";
 import { TableActions } from "./TableActions";
+import { functionSelection, mergeFunctions } from "./functionMerge";
 
 import type { CropFrame } from "./imageCropGeometry";
 
@@ -69,6 +70,7 @@ type Target = {
   signature: string;
   canSearch: boolean;
   canAI: boolean;
+  canMerge: boolean;
   properties: SelectionPropertiesState;
   left: number;
   top: number;
@@ -229,6 +231,7 @@ export const SelectionActions = ({
                   (!stroke.shapeType || stroke.shapeType === "freedraw")),
             ));
         const canAI = canSearch && !solid;
+        const canMerge = !!functionSelection(api);
         const properties = documentSelectionProperties(selected);
         if (solid) {
           properties.border = true;
@@ -282,6 +285,7 @@ export const SelectionActions = ({
                 signature,
                 canSearch,
                 canAI,
+                canMerge,
                 properties,
                 solid,
                 table,
@@ -316,6 +320,7 @@ export const SelectionActions = ({
                     2 +
                     Number(canAI) +
                     Number(canSearch) +
+                    Number(canMerge) +
                     (solid && ["cube", "cylinder"].includes(solid.kind)
                       ? 3
                       : 0) +
@@ -375,8 +380,7 @@ export const SelectionActions = ({
         state.cursorButton !== "down" &&
         !state.isResizing &&
         !state.isRotating &&
-        source.length &&
-        !source.some((element) => element.customData?.fcPlot)
+        source.length
           ? selectionSignature(source) +
             (region ? `|${JSON.stringify(region)}` : "")
           : "";
@@ -395,6 +399,7 @@ export const SelectionActions = ({
         ? [region.left, region.top, region.right, region.bottom]
         : getCommonBounds(source);
       const unit = 0.67; // x50=33.5dp in the original resources.
+      const canMerge = !!functionSelection(api);
       const properties = boardSelectionProperties(source);
       if (solid) {
         properties.border = true;
@@ -438,6 +443,7 @@ export const SelectionActions = ({
           2 +
           Number(canAI) +
           Number(canSearch) +
+          Number(canMerge) +
           (solid && ["cube", "cylinder"].includes(solid.kind) ? 3 : 0) +
           (table ? 4 : 0) +
           (answerAnchor ? 1 : 0),
@@ -453,6 +459,7 @@ export const SelectionActions = ({
               signature,
               canSearch,
               canAI,
+              canMerge,
               properties,
               ...position,
               region,
@@ -1101,6 +1108,48 @@ export const SelectionActions = ({
             }}
             onAction={(action) => void act(action)}
           />
+        )}
+        {target.canMerge && (
+          <ButtonBase
+            aria-label={t("fcboard.functionGraph.merge")}
+            disabled={pending || target.properties.locked}
+            onClick={() => {
+              controller.current?.abort();
+              const request = new AbortController();
+              controller.current = request;
+              setPending(true);
+              setError("");
+              void mergeFunctions(api, request.signal)
+                .catch((failure) => {
+                  if (
+                    !request.signal.aborted &&
+                    (failure as Error)?.name !== "AbortError"
+                  ) {
+                    setError(
+                      failure instanceof Error
+                        ? failure.message
+                        : String(failure),
+                    );
+                  }
+                })
+                .finally(() => {
+                  if (controller.current === request) {
+                    setPending(false);
+                  }
+                });
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              aria-hidden="true"
+            >
+              <path d="M4 4v6c0 3 8 1 8 5v5m8-16v6c0 3-8 1-8 5m-3 2 3 3 3-3" />
+            </svg>
+            <span>{t("fcboard.functionGraph.merge")}</span>
+          </ButtonBase>
         )}
         {propertyControls("style")}
         {target.solid && (

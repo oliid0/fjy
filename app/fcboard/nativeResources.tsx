@@ -236,6 +236,7 @@ const NativeCalculatorFrame = ({
     <div
       ref={node}
       data-native-resource-object-id={objectId}
+      data-native-resource-id={resource.id}
       role="group"
       aria-label={resource.title}
       style={{ width: "100%", height: "100%" }}

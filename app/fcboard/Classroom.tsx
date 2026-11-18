@@ -2,12 +2,16 @@ import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCommonBounds } from "@fcboard/element";
+import { CaptureUpdateAction, getCommonBounds } from "@fcboard/element";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
 
 import { QRCode } from "../share/QRCode";
 import { LanguageList } from "../app-language/LanguageList";
+import {
+  invalidateSavedBoardExit,
+  markSavedBoardExit,
+} from "../data/boardSession";
 
 import { pageLocalization } from "./pageLocalization";
 
@@ -65,6 +69,7 @@ import {
   DOCUMENT_ACCEPT,
   documentStrokeBounds,
   documentSourceSignature,
+  inkSnapshot,
 } from "./documents";
 
 import { Teacher } from "./Teacher";
@@ -81,9 +86,12 @@ import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
 import { defaultPlot, plotExpression } from "./math";
 import { mathNotation } from "./mathNotation";
 import { calculateAsync } from "./mathComputation";
+import { columnCalculation } from "./columnCalculation";
+import { ownedRequest } from "./ownedRequest";
 import { validatedPlot } from "./mathRecognition";
 import { Classroom as NativeClassroom } from "./native";
 import { createNarrator, isNarrationEcho } from "./narration";
+import { AUDIO_GENERATION_ENDPOINT } from "./studyAudio";
 import { startRealtimeSpeech } from "./realtimeSpeech";
 import { startDuplexSpeech } from "./duplexSpeech";
 
@@ -114,12 +122,8 @@ import { LanguagePanel } from "./LanguagePanel";
 import { Spotlight } from "./Spotlight";
 import { BoardSettings } from "./BoardSettings";
 import { recognizeHandwriting } from "./ocr";
-import {
-  boardInk,
-  clipInk,
-  hasDigitalInk,
-  prepareDigitalInk,
-} from "./digitalInk";
+import { trimLocalInference } from "./localInferenceQueue";
+import { boardInk, clipInk } from "./digitalInk";
 import { placePanel, useAnchoredPanel } from "./floating";
 import { startSystemSpeech, transcribe } from "./speech";
 import { createVoiceTurns } from "./voiceTurns";
@@ -174,6 +178,20 @@ export const Classroom = ({
     }
   }, [langCode]);
   const [panel, setPanel] = useState<Panel | null>(null);
+  useEffect(() => {
+    const hide = () => {
+      if (document.hidden) {
+        trimLocalInference();
+      }
+    };
+    document.addEventListener("visibilitychange", hide);
+    window.addEventListener("pagehide", trimLocalInference);
+    return () => {
+      document.removeEventListener("visibilitychange", hide);
+      window.removeEventListener("pagehide", trimLocalInference);
+      trimLocalInference();
+    };
+  }, []);
   const [exitOpen, setExitOpen] = useState(false);
   const [settings, setSettingsState] = useState(currentSettings);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("home");
@@ -187,22 +205,6 @@ export const Classroom = ({
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!hasDigitalInk()) {
-      return;
-    }
-    let mounted = true;
-    // Copies and verifies all bundled text/shape/emoji packs into SDK data storage.
-    // This precedes any pen mode, including magic without an AI configuration.
-    void prepareDigitalInk().catch((failure) => {
-      if (mounted) {
-        setError(errorMessage(failure));
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, []);
   const persistSettings = (next: Settings, rememberKeys = remember) => {
     setSettingsState(next);
     try {
@@ -316,6 +318,11 @@ export const Classroom = ({
   } | null>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
   const actionBusy = useRef(false);
+  const calculationRequests = useRef(new Set<AbortController>());
+  useEffect(() => {
+    const requests = calculationRequests.current;
+    return () => requests.forEach((request) => request.abort());
+  }, []);
   const assistantGeneration = useRef(0);
   const assistantRequest = useRef<AbortController | undefined>(undefined);
   const assistantRequests = useRef(new Set<AbortController>());
@@ -799,52 +806,27 @@ export const Classroom = ({
     }
   }, []);
 
-  const recognize = useCallback(async () => {
-    const all = api.getSceneElements();
-    const selected = selectedBoardElements(api);
-    const source = selected.length
-      ? selected
-      : all.filter((el) => !el.customData?.fcGenerated);
-    if (!source.length) {
-      throw new Error(
-        t("fcboard.write_something_or_circle_the_area_to_recognize_first"),
-      );
-    }
-    const text = source
-      .filter((el) => el.type === "text")
-      .map((el) => (el.type === "text" ? el.text : ""))
-      .join("\n")
-      .trim();
-    if (
-      text &&
-      !source.some((el) => el.type === "freedraw" || el.type === "image")
-    ) {
-      return text;
-    }
-    return recognizeHandwriting(
-      async () => (await boardContext(api)).image || "",
-      AbortSignal.timeout(30000),
-      setStatus,
-      "math",
-      undefined,
-      boardInk(source),
-    );
-  }, [api]);
-
   const solveMath = useCallback(
     async (
       input?: string,
-      automatic = false,
       sourceIds?: string[],
       signal?: AbortSignal,
       sourceText?: string,
     ) => {
+      signal?.throwIfAborted();
       const revision = classroomCommands.revision;
+      let committing = false;
+      const startRequest = (current: () => boolean, onDocument: boolean) => {
+        const request = ownedRequest(signal, current, (check) => [
+          ...(onDocument ? [] : [api.onChange(check)]),
+          classroomCommands.watch("document", () => queueMicrotask(check)),
+          classroomCommands.onInvalidate(check),
+        ]);
+        calculationRequests.current.add(request.controller);
+        return request;
+      };
       if (classroomCommands.has("document.snapshot")) {
-        if (automatic) {
-          return;
-        }
-        const readSource = () => {
+        const readSource = (ids = sourceIds) => {
           const document = classroomCommands.read("document") as
             | {
                 id?: string;
@@ -855,8 +837,8 @@ export const Classroom = ({
               }
             | undefined;
           const ink = document?.ink || [];
-          const chosen = sourceIds?.length
-            ? ink.filter((stroke) => sourceIds.includes(stroke.id))
+          const chosen = ids?.length
+            ? ink.filter((stroke) => ids.includes(stroke.id))
             : document?.selection?.length
             ? ink.filter((stroke) => document.selection!.includes(stroke.id))
             : ink;
@@ -866,17 +848,36 @@ export const Classroom = ({
             signature: JSON.stringify([
               document?.id,
               document?.page,
-              document?.selection,
-              document?.region,
+              ...(sourceIds?.length || committing
+                ? []
+                : [document?.selection, document?.region]),
               chosen,
             ]),
           };
         };
         const source = readSource();
-        const sourceCurrent = () =>
-          !signal?.aborted &&
-          ((!sourceIds?.length && !!input) ||
-            source.signature === readSource().signature);
+        if (sourceIds?.length && source.chosen.length !== sourceIds.length) {
+          throw new DOMException("Calculation source changed", "AbortError");
+        }
+        const capturedIds = source.chosen.map((stroke) => stroke.id);
+        const surface = JSON.stringify([
+          source.document?.id,
+          source.document?.page,
+        ]);
+        const sourceSignature = documentSourceSignature(source.chosen);
+        const sourceCurrent = () => {
+          const latest = readSource(capturedIds);
+          return (
+            !signal?.aborted &&
+            revision === classroomCommands.revision &&
+            JSON.stringify([latest.document?.id, latest.document?.page]) ===
+              surface &&
+            ((!sourceIds?.length && !!input) ||
+              (committing
+                ? sourceSignature === documentSourceSignature(latest.chosen)
+                : source.signature === latest.signature))
+          );
+        };
         const region = source.document?.region;
         const strokes =
           source.chosen.length &&
@@ -900,70 +901,108 @@ export const Classroom = ({
                   : undefined,
               )
             : [];
-        const expression =
-          input ||
-          (await recognizeHandwriting(
-            async () => {
-              if (!sourceCurrent()) {
-                throw new DOMException(
-                  "Document selection changed",
-                  "AbortError",
-                );
-              }
-              const snapshot = (await classroomCommands.execute({
-                name: "document.snapshot",
-              })) as { image: string };
-              if (!sourceCurrent()) {
-                throw new DOMException(
-                  "Document selection changed",
-                  "AbortError",
-                );
-              }
-              return snapshot.image;
-            },
-            AbortSignal.timeout(30000),
-            setStatus,
-            "math",
-            undefined,
-            strokes,
-          ));
-        if (revision !== classroomCommands.revision || !sourceCurrent()) {
-          return { cancelled: true };
+        const request = startRequest(sourceCurrent, true);
+        try {
+          return await request.run(async () => {
+            const expression =
+              input ||
+              (await recognizeHandwriting(
+                async () => {
+                  if (!sourceCurrent()) {
+                    throw new DOMException(
+                      "Document selection changed",
+                      "AbortError",
+                    );
+                  }
+                  const bounds = source.chosen.map(documentStrokeBounds);
+                  const left = Math.min(...bounds.map((box) => box.left));
+                  const top = Math.min(...bounds.map((box) => box.top));
+                  const right = Math.max(...bounds.map((box) => box.right));
+                  const bottom = Math.max(...bounds.map((box) => box.bottom));
+                  const image = source.chosen.length
+                    ? await inkSnapshot(
+                        source.chosen,
+                        bottom - top + 16,
+                        undefined,
+                        top - 8,
+                        { left: left - 8, width: right - left + 16 },
+                      )
+                    : (
+                        (await classroomCommands.execute({
+                          name: "document.snapshot",
+                        })) as { image: string }
+                      ).image;
+                  request.signal.throwIfAborted();
+                  if (!sourceCurrent()) {
+                    throw new DOMException(
+                      "Document selection changed",
+                      "AbortError",
+                    );
+                  }
+                  return image;
+                },
+                request.signal,
+                setStatus,
+                "math",
+                undefined,
+                strokes,
+              ));
+            request.signal.throwIfAborted();
+            if (!sourceCurrent()) {
+              return { cancelled: true };
+            }
+            if (expression === "NONE") {
+              throw new Error(t("fcboard.no_expression_found_to_calculate"));
+            }
+            const answer = await calculateAsync(expression, request.signal);
+            request.signal.throwIfAborted();
+            if (!sourceCurrent()) {
+              return { cancelled: true };
+            }
+            const inline =
+              (!input || !!sourceIds?.length) && strokes.length > 0;
+            const layout = inline
+              ? columnCalculation(strokes, expression)
+              : undefined;
+            committing = true;
+            await classroomCommands.execute({
+              name: "canvas.text",
+              args: inline
+                ? {
+                    text: `${
+                      layout ||
+                      /=\s*$/.test(sourceText || expression) ||
+                      /^[xyz] =/.test(answer)
+                        ? ""
+                        : "= "
+                    }${answer}`,
+                    signal: request.signal,
+                    presentation: "match",
+                    placement: layout?.mode || "inline",
+                    sourceIds: source.chosen.map((stroke) => stroke.id),
+                    sourceSignature,
+                    sourceLines:
+                      layout?.lines || expression.trim().split("\n").length,
+                  }
+                : {
+                    text: `${mathNotation(expression)} = ${answer}`,
+                    signal: request.signal,
+                  },
+            });
+            return { expression: mathNotation(expression), answer };
+          });
+        } catch (failure) {
+          if (!signal?.aborted && !sourceCurrent()) {
+            return { cancelled: true };
+          }
+          throw failure;
+        } finally {
+          calculationRequests.current.delete(request.controller);
         }
-        if (expression === "NONE") {
-          throw new Error(t("fcboard.no_expression_found_to_calculate"));
-        }
-        const answer = await calculateAsync(expression, signal);
-        if (revision !== classroomCommands.revision || !sourceCurrent()) {
-          return { cancelled: true };
-        }
-        const inline = (!input || !!sourceIds?.length) && strokes.length > 0;
-        await classroomCommands.execute({
-          name: "canvas.text",
-          args: inline
-            ? {
-                text: `${
-                  /=\s*$/.test(sourceText || expression) ||
-                  /^[xyz] =/.test(answer)
-                    ? ""
-                    : "= "
-                }${answer}`,
-                signal,
-                presentation: "match",
-                placement: "inline",
-                sourceIds: source.chosen.map((stroke) => stroke.id),
-                sourceSignature: documentSourceSignature(source.chosen),
-                sourceLines: expression.trim().split("\n").length,
-              }
-            : { text: `${mathNotation(expression)} = ${answer}`, signal },
-        });
-        return { expression: mathNotation(expression), answer };
       }
       const elements = api.getSceneElements();
       const selected = sourceIds?.length
         ? elements.filter((element) => sourceIds.includes(element.id))
-        : automatic
-        ? []
         : selectedBoardElements(api);
       if (sourceIds?.length && selected.length !== sourceIds.length) {
         throw new DOMException("Question changed", "AbortError");
@@ -972,81 +1011,132 @@ export const Classroom = ({
         ? selected
         : elements.filter((el) => !el.customData?.fcGenerated);
       const signature = selectionSignature(source);
-      const expression = input || (await recognize());
-      if (signal?.aborted || revision !== classroomCommands.revision) {
-        return;
-      }
-      if (
-        automatic &&
-        (Object.values(api.getAppState().selectedElementIds).some(Boolean) ||
-          selectionSignature(source) !==
-            selectionSignature(
-              api
-                .getSceneElements()
-                .filter((el) => !el.customData?.fcGenerated),
-            ))
-      ) {
-        return;
-      }
-      if (expression === "NONE") {
-        if (!automatic) {
-          throw new Error(t("fcboard.no_expression_found_to_calculate"));
-        }
-        return;
-      }
-      const answer = await calculateAsync(expression, signal);
-      if (
-        signal?.aborted ||
-        revision !== classroomCommands.revision ||
-        (!sourceIds?.length &&
-          selectionSignature(selectedBoardElements(api)) !==
-            selectionSignature(selected)) ||
+      const selectedIds = () =>
+        Object.entries(api.getAppState().selectedElementIds)
+          .filter(([, value]) => value)
+          .map(([id]) => id)
+          .sort()
+          .join(",");
+      const selection = selectedIds();
+      const sourceCurrent = () =>
+        !signal?.aborted &&
+        revision === classroomCommands.revision &&
+        !classroomCommands.has("document.snapshot") &&
+        (committing || !!sourceIds?.length || selectedIds() === selection) &&
         selectionSignature(
-          api
-            .getSceneElements()
-            .filter((element) =>
-              source.some((input) => input.id === element.id),
-            ),
-        ) !== signature
-      ) {
-        return;
+          source.flatMap((item) => {
+            const current = api
+              .getSceneElementsMapIncludingDeleted()
+              .get(item.id);
+            return current && !current.isDeleted ? [current] : [];
+          }),
+        ) === signature;
+      const request = startRequest(sourceCurrent, false);
+      try {
+        return await request.run(async () => {
+          const text = source
+            .filter((element) => element.type === "text")
+            .map((element) => (element.type === "text" ? element.text : ""))
+            .join("\n")
+            .trim();
+          if (!input && !source.length) {
+            throw new Error(
+              t(
+                "fcboard.write_something_or_circle_the_area_to_recognize_first",
+              ),
+            );
+          }
+          const expression =
+            input ||
+            (text &&
+            !source.some(
+              (element) =>
+                element.type === "freedraw" || element.type === "image",
+            )
+              ? text
+              : await recognizeHandwriting(
+                  async () => {
+                    request.signal.throwIfAborted();
+                    const captured = await boardContext(api, false, source);
+                    request.signal.throwIfAborted();
+                    return captured.image || "";
+                  },
+                  request.signal,
+                  setStatus,
+                  "math",
+                  undefined,
+                  boardInk(source),
+                ));
+          request.signal.throwIfAborted();
+          if (!sourceCurrent()) {
+            return { cancelled: true };
+          }
+          if (expression === "NONE") {
+            throw new Error(t("fcboard.no_expression_found_to_calculate"));
+          }
+          const answer = await calculateAsync(expression, request.signal);
+          request.signal.throwIfAborted();
+          if (!sourceCurrent()) {
+            return { cancelled: true };
+          }
+          const layout = columnCalculation(boardInk(source), expression);
+          const position = layout
+            ? undefined
+            : source.length
+            ? (() => {
+                const lastInput = [...source]
+                  .reverse()
+                  .find((el) => el.type === "text" || el.type === "freedraw");
+                const anchor =
+                  selected.length || !lastInput ? source : [lastInput];
+                const [, top, right, bottom] = getCommonBounds(anchor);
+                return {
+                  x: right + 16,
+                  y: anchor.length === 1 ? top : Math.max(top, bottom - 32),
+                };
+              })()
+            : insertionPoint(api);
+          const lastSource = source[source.length - 1];
+          committing = true;
+          insertText(
+            api,
+            !layout &&
+              sourceIds?.length &&
+              !/=\s*$/.test(sourceText || input || "") &&
+              !/^[xyz] =/.test(answer)
+              ? `= ${answer}`
+              : answer,
+            position,
+            lastSource
+              ? {
+                  fcAnswerSource: lastSource.id,
+                  fcAnswerVersion: lastSource.version,
+                }
+              : undefined,
+            source,
+            layout
+              ? "match"
+              : sourceIds?.length
+              ? "handwritten"
+              : currentSettings().answerStyle,
+            {
+              mode: layout?.mode || "inline",
+              sourceLines: layout?.lines || expression.split("\n").length,
+            },
+          );
+          setOutput(`${expression} = ${answer}`);
+          return { expression: mathNotation(expression), answer };
+        });
+      } catch (failure) {
+        if (!signal?.aborted && !sourceCurrent()) {
+          return { cancelled: true };
+        }
+        throw failure;
+      } finally {
+        calculationRequests.current.delete(request.controller);
       }
-      const position = source.length
-        ? (() => {
-            const lastInput = [...source]
-              .reverse()
-              .find((el) => el.type === "text" || el.type === "freedraw");
-            const anchor = selected.length || !lastInput ? source : [lastInput];
-            const [, top, right, bottom] = getCommonBounds(anchor);
-            return {
-              x: right + 16,
-              y: anchor.length === 1 ? top : Math.max(top, bottom - 32),
-            };
-          })()
-        : insertionPoint(api);
-      const lastSource = source[source.length - 1];
-      insertText(
-        api,
-        sourceIds?.length &&
-          !/=\s*$/.test(sourceText || input || "") &&
-          !/^[xyz] =/.test(answer)
-          ? `= ${answer}`
-          : answer,
-        position,
-        lastSource
-          ? {
-              fcAnswerSource: lastSource.id,
-              fcAnswerVersion: lastSource.version,
-            }
-          : undefined,
-        source,
-        sourceIds?.length ? "handwritten" : currentSettings().answerStyle,
-        { mode: "inline", sourceLines: expression.split("\n").length },
-      );
-      setOutput(`${expression} = ${answer}`);
-      return { expression: mathNotation(expression), answer };
     },
-    [api, recognize],
+    [api],
   );
 
   const createPlot = useCallback(
@@ -1150,6 +1240,7 @@ export const Classroom = ({
               .getSceneElements()
               .filter((element) => ids.includes(element.id)),
           ),
+          captureUpdate: CaptureUpdateAction.NEVER,
         });
       }
       setPlot(next);
@@ -1286,7 +1377,7 @@ export const Classroom = ({
           return;
         }
         if (recognitionPattern("Classroom_1").test(text)) {
-          await solveMath();
+          await solveMath(undefined, selection?.sourceIds, request.signal);
           return;
         }
         const localIntent = recognitionPattern("Classroom_2").test(text)
@@ -1314,7 +1405,6 @@ export const Classroom = ({
         if (localIntent?.action === "calculate") {
           await solveMath(
             localIntent.expression,
-            false,
             selection?.sourceIds,
             selection?.signal,
             text,
@@ -1409,7 +1499,6 @@ Tools and controls depend on the current interface; open the relevant surface be
         ) {
           await solveMath(
             action.expression,
-            false,
             selection?.sourceIds,
             selection?.signal,
             text,
@@ -2670,7 +2759,6 @@ Tools and controls depend on the current interface; open the relevant surface be
         async (args) =>
           solveMath(
             typeof args.expression === "string" ? args.expression : undefined,
-            false,
             Array.isArray(args.sourceIds)
               ? args.sourceIds.filter(
                   (id): id is string => typeof id === "string",
@@ -2908,7 +2996,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       ),
       classroomCommands.register(
         "panel.open",
-        "Open settings, recording or files with args.panel=settings|record|files. Use assistant.open for handwriting questions.",
+        "Open settings, recording or files with args.panel=settings|record|files. Use assistant.open for the quiz builder.",
         (args) => {
           if (!["settings", "record", "files"].includes(String(args.panel))) {
             throw new Error(t("fcboard.this_panel_does_not_exist"));
@@ -2989,12 +3077,7 @@ Tools and controls depend on the current interface; open the relevant surface be
           setPanel("settings");
         }}
       />
-      <Teacher
-        api={api}
-        onCommand={async (text, signal, sourceIds, whole = false) => {
-          await execute(text, whole, { signal, sourceIds });
-        }}
-      />
+      <Teacher api={api} />
       <TeachingTools api={api} />
       <Spotlight />
       <TransientMessage
@@ -3018,9 +3101,23 @@ Tools and controls depend on the current interface; open the relevant surface be
               if (!result.saved) {
                 return false;
               }
+              await classroomCommands.execute({
+                name: "board.save",
+                args: { preserveForExit: true, signal },
+              });
             }
             signal.throwIfAborted();
-            await NativeClassroom.exitApp();
+            if (save) {
+              markSavedBoardExit();
+            } else {
+              invalidateSavedBoardExit();
+            }
+            try {
+              await NativeClassroom.exitApp();
+            } catch (failure) {
+              invalidateSavedBoardExit();
+              throw failure;
+            }
             return true;
           }}
         />
@@ -3528,6 +3625,18 @@ Tools and controls depend on the current interface; open the relevant surface be
                     )}
                     <section aria-label={t("fcboard.spoken_playback_optional")}>
                       <h3>{t("fcboard.spoken_playback_optional")}</h3>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSettings({
+                            ...settings,
+                            ttsEndpoint: AUDIO_GENERATION_ENDPOINT,
+                          })
+                        }
+                      >
+                        {t("fcboard.doubao_audio_generation")}
+                      </button>
+                      <p>{t("fcboard.study_audio_generation_help")}</p>
                       <label className="fc-settings-input">
                         {t("fcboard.custom_speech_endpoint_optional")}
                         <input

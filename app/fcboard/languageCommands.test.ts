@@ -389,3 +389,71 @@ it("sends a cropped courseware learning card screenshot directly to AI without t
     host.stop();
   }
 });
+
+it("releases a stalled translation at its deadline while an independent source completes", async () => {
+  vi.useFakeTimers();
+  const host = setup();
+  const [second] = convertToFcboardElements([
+    { type: "text", text: "second word", x: 450, y: 100 },
+  ]);
+  let finish!: (study: language.LanguageStudy) => void;
+  host.explain.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  try {
+    host.api.updateScene({ elements: [host.source, second] });
+    const first = classroomCommands.execute({
+      name: "language.translate",
+      args: { sourceIds: [host.source.id] },
+    });
+    const rejected = expect(first).rejects.toThrow();
+    const result = await classroomCommands.execute({
+      name: "language.translate",
+      args: { sourceIds: [second.id] },
+    });
+    expect(result).toMatchObject({ translation: languageStudy.translation });
+    expect((host.explain.mock.calls[0][1] as AbortSignal).aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30000);
+    await rejected;
+    expect((host.explain.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
+    const completed = host.api.getSceneElements();
+    finish(languageStudy);
+    await Promise.resolve();
+    expect(host.api.getSceneElements()).toEqual(completed);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    host.stop();
+    vi.useRealTimers();
+  }
+});
+
+it.each(["erase", "unmount"])(
+  "settles an ignored-abort language backend immediately after %s",
+  async (change) => {
+    vi.useFakeTimers();
+    const host = setup();
+    host.explain.mockImplementationOnce(() => new Promise(() => {}));
+    try {
+      const result = classroomCommands.execute({
+        name: "language.translate",
+        args: { sourceIds: [host.source.id] },
+      });
+      const rejected = expect(result).rejects.toMatchObject({
+        name: "AbortError",
+      });
+      if (change === "erase") {
+        host.api.updateScene({ elements: [] });
+      } else {
+        host.stop();
+      }
+      await rejected;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      host.stop();
+      vi.useRealTimers();
+    }
+  },
+);

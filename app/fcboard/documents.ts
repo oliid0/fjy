@@ -13,7 +13,6 @@ import {
 
 import { FONT_FAMILY, getFontString } from "@fcboard/common";
 import { convertToFcboardElements } from "@fcboard/fcboard";
-import { getElementLineSegments } from "@fcboard/element";
 import {
   getLassoBounds,
   getLassoSelectedElementIds,
@@ -75,8 +74,7 @@ export type InkStroke = {
   lesson?: string;
   commandId?: string;
   annotation?: boolean;
-  questionInput?: boolean;
-  questionFrame?: boolean;
+  generated?: boolean;
   language?: LanguageInk;
   questionAnswer?: { owner: string; ids: string[]; folded?: InkStroke[] };
   widget?: Widget & { origin: { x: number; y: number } };
@@ -89,13 +87,8 @@ export type InkStroke = {
   plot?: {
     id: string;
     plot: Plot;
-    renderer?: "vega";
-    sourceRegions?: {
-      left: number;
-      top: number;
-      right: number;
-      bottom: number;
-    }[];
+    renderer?: "canvas";
+    layer?: "floating" | "board";
     position: { x: number; y: number };
     origin: { x: number; y: number };
   };
@@ -492,7 +485,21 @@ export const selectDocumentLasso = (
       )
       .map((stroke) => stroke.id);
   }
-  const elements = strokes.map((stroke) => {
+  const lassoPath = path.map(([x, y]) => pointFrom(x, y));
+  const area = getLassoBounds(lassoPath);
+  const candidates = strokes.filter((stroke) => {
+    if (stroke.locked) {
+      return false;
+    }
+    const bounds = documentStrokeBounds(stroke);
+    return (
+      bounds.left <= area[2] &&
+      bounds.right >= area[0] &&
+      bounds.top <= area[3] &&
+      bounds.bottom >= area[1]
+    );
+  });
+  const elements = candidates.map((stroke) => {
     if (!stroke.text && !stroke.image && !stroke.resource) {
       return documentInkElement(stroke);
     }
@@ -501,6 +508,8 @@ export const selectDocumentLasso = (
       [
         {
           type: "rectangle",
+          // Text/images occupy their whole object rectangle for selection.
+          backgroundColor: "#ffffff",
           id: stroke.id,
           x: bounds.left,
           y: bounds.top,
@@ -513,15 +522,10 @@ export const selectDocumentLasso = (
   });
   const elementsMap = new Map(elements.map((element) => [element.id, element]));
   const selected = getLassoSelectedElementIds({
-    lassoPath: path.map(([x, y]) => pointFrom(x, y)),
+    lassoPath,
     elements,
     elementsMap,
-    elementsSegments: new Map(
-      elements.map((element) => [
-        element.id,
-        getElementLineSegments(element, elementsMap),
-      ]),
-    ),
+    elementsSegments: new Map(),
     enclosedElements: new Set(),
     intersectedElements: new Set(),
   }).selectedElementIds;
@@ -825,8 +829,7 @@ export const shapeInk = (
       : {}),
     annotation: !!shape.customData?.fcAnnotation,
     language: shape.customData?.fcLanguage,
-    ...(shape.customData?.fcQuestionInput ? { questionInput: true } : {}),
-    ...(shape.customData?.fcQuestionFrame ? { questionFrame: true } : {}),
+    ...(shape.customData?.fcGenerated ? { generated: true } : {}),
     widget: shape.customData?.fcWidget,
     insertion: shape.customData?.fcInsertion,
     plot: shape.customData?.fcPlot,

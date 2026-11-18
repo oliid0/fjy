@@ -3,6 +3,7 @@ type Slot = {
   key: string;
   resident: Resident;
   busy: boolean;
+  discard: boolean;
   used: number;
 };
 type Request = {
@@ -13,9 +14,73 @@ type Request = {
   resolve: () => void;
   reject: (error: unknown) => void;
 };
-const slots: Slot[] = [];
 const requests: Request[] = [];
-let sequence = 0;
+const slots: Slot[] = [];
+export const LOCAL_MODEL_IDLE_MS = 15000;
+let lastInk = 0;
+let expiry: ReturnType<typeof setTimeout> | undefined;
+export const noteLocalInferenceActivity = () => {
+  lastInk = Date.now();
+};
+
+const remove = (slot: Slot) => {
+  slots.splice(slots.indexOf(slot), 1);
+  slot.resident.dispose();
+};
+const scheduleExpiry = () => {
+  clearTimeout(expiry);
+  const idle = slots.filter((slot) => !slot.busy);
+  if (!idle.length) {
+    return;
+  }
+  const delay = Math.min(
+    ...idle.map((slot) =>
+      Math.max(
+        1,
+        LOCAL_MODEL_IDLE_MS - (Date.now() - Math.max(lastInk, slot.used)),
+      ),
+    ),
+  );
+  expiry = setTimeout(() => {
+    for (const slot of [...slots]) {
+      if (
+        !slot.busy &&
+        Date.now() - Math.max(lastInk, slot.used) >= LOCAL_MODEL_IDLE_MS
+      ) {
+        remove(slot);
+      }
+    }
+    scheduleExpiry();
+  }, delay);
+};
+export const trimLocalInference = () => {
+  for (const slot of [...slots]) {
+    slot.discard = true;
+    if (!slot.busy) {
+      remove(slot);
+    }
+  }
+  scheduleExpiry();
+};
+
+const execute = async (request: Request, slot: Slot) => {
+  let success = false;
+  try {
+    await request.run(slot.resident);
+    success = true;
+  } finally {
+    slot.busy = false;
+    slot.used = Date.now();
+    try {
+      if (!success || slot.discard) {
+        remove(slot);
+      }
+    } finally {
+      scheduleExpiry();
+      drain();
+    }
+  }
+};
 
 const drain = () => {
   while (requests.length) {
@@ -25,59 +90,45 @@ const drain = () => {
       request.resolve();
       continue;
     }
-    const available = slots.filter((slot) => !slot.busy);
-    let slot = available.find((slot) => slot.key === request.key);
-    if (!slot && slots.length < 2) {
+    let slot = slots.find((entry) => !entry.busy && entry.key === request.key);
+    if (!slot && slots.length >= 2) {
+      const evicted = slots
+        .filter((entry) => !entry.busy)
+        .sort((a, b) => a.used - b.used)[0];
+      if (!evicted) {
+        return;
+      }
+      try {
+        remove(evicted);
+      } catch (error) {
+        requests.shift();
+        request.reject(error);
+        continue;
+      }
+    }
+    requests.shift();
+    if (!slot) {
       try {
         slot = {
           key: request.key,
           resident: request.create(),
           busy: false,
-          used: 0,
+          discard: false,
+          used: Date.now(),
         };
         slots.push(slot);
       } catch (error) {
-        requests.shift();
         request.reject(error);
         continue;
       }
     }
-    if (!slot && available.length) {
-      slot = available.sort((a, b) => a.used - b.used)[0];
-      slot.resident.dispose();
-      try {
-        slot.resident = request.create();
-        slot.key = request.key;
-      } catch (error) {
-        slots.splice(slots.indexOf(slot), 1);
-        requests.shift();
-        request.reject(error);
-        continue;
-      }
-    }
-    if (!slot) {
-      return;
-    }
-    requests.shift();
     slot.busy = true;
-    slot.used = ++sequence;
-    const active = slot;
-    void Promise.resolve()
-      .then(() => request.run(active.resident))
-      .then(request.resolve, (error) => {
-        active.resident.dispose();
-        slots.splice(slots.indexOf(active), 1);
-        request.reject(error);
-      })
-      .finally(() => {
-        active.busy = false;
-        drain();
-      });
+    void execute(request, slot).then(request.resolve, request.reject);
   }
 };
 
-/** Two independent WASM heaps can make progress together. Keep an idle model
- * ready until another model needs its slot; never evict an active caller. */
+/** Two exclusive heaps: reuse during smart writing, evict idle language/model
+ * slots on demand, unload after inactivity. Never evict an active caller. */
 export const queueLocalInference = <T extends Resident>(
   key: string,
   create: () => T,

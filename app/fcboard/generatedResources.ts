@@ -10,7 +10,9 @@ import { currentSettings } from "./settings";
 import { createVisualizationResource } from "./visualizationResource";
 import {
   teachingResourceFormat,
+  teachingResourceEngines,
   teachingResourceInstructions,
+  assertResourceEngines,
 } from "./teachingResourcePrompt";
 
 import type { TeachingResourceKind } from "./teachingResourcePrompt";
@@ -44,7 +46,7 @@ const updateResources = (
 export const deleteGeneratedResource = (id: string) =>
   updateResources((items) => items.filter((item) => item.id !== id));
 
-const resourceResponse = async (
+export const parseGeneratedResource = async (
   response: string,
   topic: string,
 ): Promise<GeneratedResource> => {
@@ -57,6 +59,7 @@ const resourceResponse = async (
     html?: unknown;
     mode?: unknown;
     spec?: unknown;
+    libraries?: unknown;
   } | null;
   if (/^(?:<!doctype\s+html[^>]*>\s*)?<html\b/i.test(source)) {
     const document = new DOMParser().parseFromString(source, "text/html");
@@ -93,7 +96,8 @@ export const generateTeachingResource = async (
     throw new Error(t("fcboard.describe_the_teaching_resource_to_generate"));
   }
   const settings = currentSettings();
-  const format = teachingResourceFormat(prompt, kind);
+  const format = teachingResourceFormat(prompt);
+  const engines = teachingResourceEngines(prompt);
   const messages: Message[] = [
     {
       role: "system",
@@ -102,6 +106,8 @@ export const generateTeachingResource = async (
     visualMessage(
       JSON.stringify({
         topic: prompt,
+        kind,
+        engines,
         language: getLanguage().code,
         source: context
           ? { text: context.text, name: context.name, page: context.page }
@@ -120,10 +126,8 @@ export const generateTeachingResource = async (
     signal.throwIfAborted();
     let item: GeneratedResource;
     try {
-      item = await resourceResponse(response, prompt);
-      if (format === "vega" && !item.visualization) {
-        throw new Error("Expected a Vega visualization specification");
-      }
+      item = await parseGeneratedResource(response, prompt);
+      assertResourceEngines(item, engines);
       if (format === "html" && item.visualization) {
         throw new Error("Expected a self-contained HTML teaching resource");
       }
@@ -138,22 +142,13 @@ export const generateTeachingResource = async (
         { role: "assistant", content: response.slice(0, 120000) },
         {
           role: "user",
-          content:
-            format === "vega"
-              ? `The visualization failed validation/rendering: ${String(
-                  failure instanceof Error ? failure.message : failure,
-                ).slice(
-                  0,
-                  1200,
-                )}. Return corrected, complete JSON with title, mode and spec. Follow the original Vega/Vega-Lite contract, mathematical domains/branches and inline-data limits. No HTML, scripts or URLs. Preserve the topic, data and language.`
-              : format === "auto"
-              ? `The resource did not validate: ${String(
-                  failure instanceof Error ? failure.message : failure,
-                ).slice(
-                  0,
-                  1200,
-                )}. Return a complete corrected resource using either the HTML or Vega contract above, choosing the medium suited to the requested interaction and style. Keep the original topic, data and language. No planning response or external dependencies.`
-              : "The response could not be displayed as a visual teaching resource. Return one complete corrected self-contained HTML document starting with <!doctype html>, with a title and a visible SVG/canvas diagram or CSS-illustrated animation. A self-running visual demonstration is sufficient; interactive controls and working inline script are optional. Remove forms and external dependencies. Keep the original topic and language. Return complete HTML, not JSON, a patch or an explanation.",
+          content: `The resource failed validation: ${String(
+            failure instanceof Error ? failure.message : failure,
+          ).slice(0, 1200)}. Return a ${
+            format === "html" || format === "jsxgraph"
+              ? "complete corrected self-contained HTML document starting with <!doctype html>, not a JSON specification"
+              : "complete corrected resource using the original HTML/optional-engine or declarative Vega contract"
+          }. Preserve the topic, data, language and every explicit medium/engine choice or exclusion. A real visual demonstration and working inline script/controls are required when requested. Return the complete artifact, not a patch or planning response; use only the available declared engines and no external dependencies.`,
         },
       );
       continue;

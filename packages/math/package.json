@@ -54,8 +54,6 @@
       "last 1 safari version"
     ]
   },
-  "bugs": "https://github.com/fcboard/fcboard/issues",
-  "repository": "https://github.com/fcboard/fcboard",
   "scripts": {
     "gen:types": "rimraf types && tsc",
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && npm run gen:types"

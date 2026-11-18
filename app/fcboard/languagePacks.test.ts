@@ -61,14 +61,12 @@ it("uses the unified language's handwriting model and preserves explicit math an
     strokes,
     language: "de-DE",
     id: expect.any(String),
-    reuse: true,
   });
   await recognizeDigitalInk(strokes, signal, "math");
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "en-US",
     id: expect.any(String),
-    reuse: true,
   });
   vi.mocked(currentSettings).mockReturnValue({
     ...currentSettings(),
@@ -79,14 +77,12 @@ it("uses the unified language's handwriting model and preserves explicit math an
     strokes,
     language: "de-DE",
     id: expect.any(String),
-    reuse: true,
   });
   await recognizeDigitalInk(strokes, signal, "text", "zh-Hani-CN");
   expect(backend.recognize).toHaveBeenLastCalledWith({
     strokes,
     language: "zh-Hani-CN",
     id: expect.any(String),
-    reuse: true,
   });
 });
 

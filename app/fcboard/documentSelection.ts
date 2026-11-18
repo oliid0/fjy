@@ -34,6 +34,22 @@ export const reorderDocumentSelection = (
   if (!chosen.size) {
     return strokes;
   }
+  const layer = action.startsWith("send") ? "board" : "floating";
+  const finish = (next: InkStroke[]) => {
+    let changed = false;
+    const result = next.map((stroke) => {
+      if (
+        chosen.has(documentSelectionGroup(stroke)) &&
+        stroke.plot?.renderer === "canvas" &&
+        stroke.plot.layer !== layer
+      ) {
+        changed = true;
+        return { ...stroke, plot: { ...stroke.plot, layer } };
+      }
+      return stroke;
+    });
+    return changed ? result : next;
+  };
   const units = [...groups.entries()];
   let moved = false;
   if (action === "bringToFront" || action === "sendToBack") {
@@ -43,7 +59,7 @@ export const reorderDocumentSelection = (
       action === "bringToFront" ? [...back, ...front] : [...front, ...back];
     moved = units.some(([key], index) => key !== next[index][0]);
     if (moved) {
-      return next.flatMap(([, group]) => group);
+      return finish(next.flatMap(([, group]) => group));
     }
   } else {
     const forward = action === "bringForward";
@@ -57,7 +73,7 @@ export const reorderDocumentSelection = (
       }
     }
   }
-  return moved ? units.flatMap(([, group]) => group) : strokes;
+  return finish(moved ? units.flatMap(([, group]) => group) : strokes);
 };
 
 export const documentSelectionIds = (

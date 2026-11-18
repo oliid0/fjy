@@ -25,7 +25,18 @@ public class NativeSceneTest {
         android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
         NativeSceneView view=new NativeSceneView(context);new FrameLayout(context).addView(view);view.layout(0,0,600,200);return view;
     }
-    private static Bitmap pixels(NativeSceneView view){Bitmap bitmap=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);view.draw(new Canvas(bitmap));return bitmap;}
+    private static Bitmap pixels(NativeSceneView view){Bitmap bitmap=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);view.paintCanvas(new Canvas(bitmap));return bitmap;}
+    @Test public void brushStampsUseExactNativeEllipsesAndPreserveOpacity()throws Exception{
+        JSONObject brush=ink("brush","a0","","#ff0000",true,0).put("strokeWidth",0)
+            .put("brush",new JSONObject().put("angle",0).put("stamps",new JSONArray("[100,60,40,110,60,40]")));
+        brush.remove("path");
+        NativeScene scene=new NativeScene();NativeScene.Frame frame=scene.synchronize(update(new JSONArray().put(brush),true),1,0,java.util.Collections.emptyList());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            NativeSceneView view=surface();view.apply(frame);Bitmap output=pixels(view);
+            try{assertEquals(128,Color.alpha(output.getPixel(105,60)));assertEquals(128,Color.alpha(output.getPixel(84,60)));assertEquals(0,Color.alpha(output.getPixel(100,75)));}
+            finally{output.recycle();}
+        });
+    }
     @Test public void retainedPixelsEraseAcrossTileSeamsWithoutAnyJavascriptAcknowledgement()throws Exception{
         NativeScene scene=new NativeScene();NativeScene.Frame frame=scene.synchronize(update(new JSONArray().put(ink("ink","a0","M20 60 L580 60","#ff0000",true,-1)),true),1,0,java.util.Collections.emptyList());
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
@@ -139,8 +150,8 @@ public class NativeSceneTest {
                 try{assertTrue(input.onTouchEvent(event));}finally{event.recycle();}
             }
             String id=events.get(events.size()-1).optString("id");input.acknowledge(id,"committed",true);
-            Bitmap before=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.draw(new Canvas(before));assertEquals(128,Color.alpha(before.getPixel(100,60)));before.recycle();
-            retained.apply(canonical);input.sceneCommitted();Bitmap after=pixels(retained);input.draw(new Canvas(after));assertEquals("One opacity after preview handoff",128,Color.alpha(after.getPixel(100,60)));after.recycle();
+            Bitmap before=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.paintCanvas(new Canvas(before));assertEquals(128,Color.alpha(before.getPixel(100,60)));before.recycle();
+            retained.apply(canonical);input.sceneCommitted();Bitmap after=pixels(retained);input.paintCanvas(new Canvas(after));assertEquals("One opacity after preview handoff",128,Color.alpha(after.getPixel(100,60)));after.recycle();
             input.configure("erase",true,0,0,1,20,1,.5f,"#ff0000",false,36,java.util.Collections.emptyList(),null,0,"erase",true,60,null);
             android.view.MotionEvent erase=android.view.MotionEvent.obtain(down+1,down+1,android.view.MotionEvent.ACTION_DOWN,256,60,0);
             try{assertTrue(input.onTouchEvent(erase));}finally{erase.recycle();}
@@ -180,12 +191,12 @@ public class NativeSceneTest {
             try{assertTrue(input.onTouchEvent(erase));}finally{erase.recycle();}
             android.view.MotionEvent move=android.view.MotionEvent.obtain(down+10,down+11,android.view.MotionEvent.ACTION_MOVE,500,160,0);
             try{assertTrue(input.onTouchEvent(move));}finally{move.recycle();}
-            Bitmap cut=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.draw(new Canvas(cut));
+            Bitmap cut=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.paintCanvas(new Canvas(cut));
             assertEquals("Pending ink disappears before any JavaScript acknowledgement",0,Color.alpha(cut.getPixel(256,60)));
             assertEquals(128,Color.alpha(cut.getPixel(100,60)));
             android.view.MotionEvent cancel=android.view.MotionEvent.obtain(down+10,down+11,android.view.MotionEvent.ACTION_CANCEL,256,60,0);
             try{assertTrue(input.onTouchEvent(cancel));}finally{cancel.recycle();}
-            Bitmap restored=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.draw(new Canvas(restored));
+            Bitmap restored=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.paintCanvas(new Canvas(restored));
             try{assertEquals(128,Color.alpha(restored.getPixel(256,60)));assertEquals(128,Color.alpha(restored.getPixel(100,60)));}finally{cut.recycle();restored.recycle();}
         });
     }

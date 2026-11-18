@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.json.JSONObject;
@@ -33,20 +32,6 @@ final class NativePenModels implements AutoCloseable {
     private String loaded;
     private MarianTokenizer tokenizer;
     private JSONObject vocab;
-    // Only the three shipped model contracts can enter this bounded cache.
-    private final Map<String, Model> resident = new HashMap<>();
-    private static final class Model implements AutoCloseable {
-        OrtSession encoder, decoder;
-        MarianTokenizer tokenizer;
-        JSONObject vocab;
-        @Override public void close() {
-            if (decoder != null) try { decoder.close(); } catch (Exception ignored) { }
-            if (encoder != null) try { encoder.close(); } catch (Exception ignored) { }
-        }
-    }
-    private final Map<String, String> translations = new LinkedHashMap<String, String>(32, .75f, true) {
-        @Override protected boolean removeEldestEntry(Map.Entry<String, String> entry) { return size() > 32; }
-    };
     NativePenModels(Context context) { this.context = context; }
     Bundle infer(LocalInferenceService.Job job) throws Exception {
         if (job.input.getString("kind", "").equals("math")) {
@@ -55,30 +40,25 @@ final class NativePenModels implements AutoCloseable {
             Bundle result = new Bundle(); result.putString("latex", column); return result;
         }
         String source = job.input.getString("source"), target = job.input.getString("target"), text = job.input.getString("text");
-        String key = source + ":" + target + ":" + text;
-        String translated = translations.get(key);
-        if (translated == null) {
-            ensure("Xenova/opus-mt-" + source + "-" + target); job.check();
-            StringBuilder output = new StringBuilder();
-            // Keep input order/newlines, cap encoder attention and KV cache size.
-            int start = 0;
-            while (start < text.length()) {
-                int end = Math.min(text.length(), start + 80);
-                if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) end--;
-                for (int i = start; i < end; i++) if ("。！？.!?\n".indexOf(text.charAt(i)) >= 0) { end = i + 1; break; }
-                String part = text.substring(start, end);
-                if (part.trim().isEmpty()) output.append(part);
-                else {
-                    if (output.length() > 0 && target.equals("en") && !Character.isWhitespace(output.charAt(output.length() - 1))) output.append(' ');
-                    output.append(translate(part, job));
-                    if (part.endsWith("\n")) output.append('\n');
-                }
-                start = end; job.check();
+        ensure("Xenova/opus-mt-" + source + "-" + target); job.check();
+        StringBuilder output = new StringBuilder();
+        // Keep input order/newlines, cap encoder attention and KV cache size.
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(text.length(), start + 80);
+            if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) end--;
+            for (int i = start; i < end; i++) if ("。！？.!?\n".indexOf(text.charAt(i)) >= 0) { end = i + 1; break; }
+            String part = text.substring(start, end);
+            if (part.trim().isEmpty()) output.append(part);
+            else {
+                if (output.length() > 0 && target.equals("en") && !Character.isWhitespace(output.charAt(output.length() - 1))) output.append(' ');
+                output.append(translate(part, job));
+                if (part.endsWith("\n")) output.append('\n');
             }
-            translated = output.toString().trim();
-            if (translated.isEmpty() || translated.length() > 10000) throw new IllegalStateException("Empty or oversized translation");
-            translations.put(key, translated);
+            start = end; job.check();
         }
+        String translated = output.toString().trim();
+        if (translated.isEmpty() || translated.length() > 10000) throw new IllegalStateException("Empty or oversized translation");
         Bundle result = new Bundle(); result.putString("language", source); result.putString("translation", translated); result.putString("engine", "onnxruntime"); return result;
     }
     private JSONObject json(String name) throws Exception {
@@ -89,44 +69,39 @@ final class NativePenModels implements AutoCloseable {
         }
     }
     private File model(String name) throws Exception {
-        File file = new File(context.getNoBackupFilesDir(), "inference-v1/" + name);
-        // Assets are checksum verified before packaging; this versioned private
-        // copy lets ORT load by path without an entire model byte[] in ART.
-        long expected;
-        try (android.content.res.AssetFileDescriptor descriptor = context.getAssets().openFd("inference/" + name)) { expected = descriptor.getLength(); }
-        if (file.isFile() && file.length() == expected) return file;
-        File parent = file.getParentFile();
-        if (!parent.isDirectory() && !parent.mkdirs()) throw new IllegalStateException("Cannot prepare local model directory");
-        File pending = new File(file.getPath() + ".pending");
-        try (InputStream input = context.getAssets().open("inference/" + name); FileOutputStream output = new FileOutputStream(pending)) {
-            byte[] buffer = new byte[131072]; int count;
-            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+        // Parallel first-use callers must not write/rename the same .pending file.
+        synchronized (NativePenModels.class) {
+            File file = new File(context.getNoBackupFilesDir(), "inference-v1/" + name);
+            // Assets are checksum verified before packaging; this versioned private
+            // copy lets ORT load by path without an entire model byte[] in ART.
+            long expected;
+            try (android.content.res.AssetFileDescriptor descriptor = context.getAssets().openFd("inference/" + name)) { expected = descriptor.getLength(); }
+            if (file.isFile() && file.length() == expected) return file;
+            File parent = file.getParentFile();
+            if (!parent.isDirectory() && !parent.mkdirs()) throw new IllegalStateException("Cannot prepare local model directory");
+            File pending = new File(file.getPath() + ".pending");
+            try (InputStream input = context.getAssets().open("inference/" + name); FileOutputStream output = new FileOutputStream(pending)) {
+                byte[] buffer = new byte[131072]; int count;
+                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            }
+            if (pending.length() != expected || !pending.renameTo(file)) throw new IllegalStateException("Incomplete native model copy");
+            return file;
         }
-        if (pending.length() != expected || !pending.renameTo(file)) throw new IllegalStateException("Incomplete native model copy");
-        return file;
     }
     private void ensure(String key) throws Exception {
         if (!key.equals("comer") && !key.equals("Xenova/opus-mt-en-zh") && !key.equals("Xenova/opus-mt-zh-en")) throw new IllegalArgumentException("Unsupported native pen model");
         if (key.equals(loaded)) return;
-        if (!key.equals("comer") && !key.equals("Xenova/opus-mt-en-zh") && !key.equals("Xenova/opus-mt-zh-en")) {
-            throw new IllegalArgumentException("Unsupported local model");
-        }
-        Model next = resident.get(key);
-        if (next == null) {
-            next = new Model();
-            try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
-                options.setIntraOpNumThreads(2); options.setInterOpNumThreads(1);
-                options.setMemoryPatternOptimization(false); options.setCPUArenaAllocator(false);
-                boolean math = key.equals("comer");
-                next.encoder = environment.createSession(model(key + (math ? "/encoder_int8.onnx" : "/onnx/encoder_model_quantized.onnx")).getPath(), options);
-                next.decoder = environment.createSession(model(key + (math ? "/decoder_int8.onnx" : "/onnx/decoder_model_merged_quantized.onnx")).getPath(), options);
-                if (math) next.vocab = json("comer/vocab.json");
-                else next.tokenizer = new MarianTokenizer(json(key + "/tokenizer.json"));
-            } catch (Exception | LinkageError error) { next.close(); throw error; }
-            resident.put(key, next);
-        }
-        encoder = next.encoder; decoder = next.decoder;
-        tokenizer = next.tokenizer; vocab = next.vocab; loaded = key;
+        close();
+        try (OrtSession.SessionOptions options = new OrtSession.SessionOptions()) {
+            options.setIntraOpNumThreads(2); options.setInterOpNumThreads(1);
+            options.setMemoryPatternOptimization(false); options.setCPUArenaAllocator(false);
+            boolean math = key.equals("comer");
+            encoder = environment.createSession(model(key + (math ? "/encoder_int8.onnx" : "/onnx/encoder_model_quantized.onnx")).getPath(), options);
+            decoder = environment.createSession(model(key + (math ? "/decoder_int8.onnx" : "/onnx/decoder_model_merged_quantized.onnx")).getPath(), options);
+            if (math) vocab = json("comer/vocab.json");
+            else tokenizer = new MarianTokenizer(json(key + "/tokenizer.json"));
+        } catch (Exception | LinkageError error) { close(); throw error; }
+        loaded = key;
     }
     private OrtSession.Result run(OrtSession session, Map<String, OnnxTensor> inputs, LocalInferenceService.Job job) throws Exception {
         job.check();
@@ -304,8 +279,8 @@ final class NativePenModels implements AutoCloseable {
         }
     }
     @Override public void close() {
-        for (Model model : resident.values()) model.close();
-        resident.clear();
+        if (decoder != null) try { decoder.close(); } catch (Exception ignored) { }
+        if (encoder != null) try { encoder.close(); } catch (Exception ignored) { }
         encoder = null; decoder = null; tokenizer = null; vocab = null; loaded = null;
     }
 }

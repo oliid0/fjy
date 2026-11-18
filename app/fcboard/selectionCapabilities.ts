@@ -64,18 +64,19 @@ export const boardSelectionProperties = (elements: readonly FcboardElement[]) =>
     elements.map(
       (element): Item => ({
         id: element.id,
-        croppable: element.type === "image",
+        croppable: element.type === "image" && !element.customData?.fcPlot,
         group: element.groupIds.at(-1),
-        type:
-          element.type === "text"
-            ? "text"
-            : element.type === "image" ||
-              element.type === "iframe" ||
-              element.type === "embeddable"
-            ? "image"
-            : element.type === "freedraw"
-            ? "ink"
-            : "shape",
+        type: element.customData?.fcPlot
+          ? "shape"
+          : element.type === "text"
+          ? "text"
+          : element.type === "image" ||
+            element.type === "iframe" ||
+            element.type === "embeddable"
+          ? "image"
+          : element.type === "freedraw"
+          ? "ink"
+          : "shape",
         color: element.strokeColor,
         background: element.backgroundColor,
         width: element.strokeWidth,
@@ -97,13 +98,15 @@ export const documentSelectionProperties = (strokes: readonly InkStroke[]) =>
     strokes.map(
       (stroke): Item => ({
         id: stroke.id,
-        croppable: !!stroke.image,
+        croppable: !!stroke.image && !stroke.plot,
         group:
           stroke.widget?.id ||
           stroke.insertion?.id ||
           stroke.plot?.id ||
           stroke.language?.group,
-        type: stroke.text
+        type: stroke.plot
+          ? "shape"
+          : stroke.text
           ? "text"
           : stroke.image || stroke.resource
           ? "image"

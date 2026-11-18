@@ -82,10 +82,84 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
         args: { tool: "signal" },
       }),
     ).rejects.toThrow(t("fcboard.this_tool_is_not_installed_on_this_display"));
+    const calculator = api.getSceneElements()[0];
+    const originalX = calculator.x;
+    const originalWidth = calculator.width;
+    const calculatorFrame = screen.getByTitle(t("fcboard.calculator"));
+    expect(calculator.type).toBe("iframe");
+    expect(calculator.customData?.fcInteractiveResource.id).toBe(
+      "builtin-calculator",
+    );
+    expect(calculator.height).toBeLessThan(350);
+    expect(calculator.width).toBeLessThan(200);
+    expect(document.querySelector(".fc-floating-calculator")).toBeNull();
+    await act(() => classroomCommands.execute({ name: "tools.calculator" }));
+    expect(api.getSceneElements()).toHaveLength(1);
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.select",
+        args: { ids: [calculator.id] },
+      }),
+    );
+    expect(api.getAppState().whiteboardSelection?.elementIds).toEqual([
+      calculator.id,
+    ]);
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.move",
+        args: { ids: [calculator.id], dx: 40, dy: 20 },
+      }),
+    );
+    expect(api.getSceneElements()[0].x).toBeCloseTo(originalX + 40);
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.action",
+        args: { action: "undo" },
+      }),
+    );
+    expect(api.getSceneElements()[0].x).toBeCloseTo(originalX);
+    const resize = screen.getByRole("button", { name: t("fcboard.size") });
+    for (const [type, x, y] of [
+      ["pointerdown", 100, 100],
+      ["pointermove", 130, 120],
+      ["pointerup", 130, 120],
+    ] as const) {
+      fireEvent(
+        resize,
+        Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+          pointerId: 8,
+          pointerType: "touch",
+          button: 0,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    }
+    expect(api.getSceneElements()[0].width).toBeCloseTo(originalWidth + 30);
+    expect(screen.getByTitle(t("fcboard.calculator"))).toBe(calculatorFrame);
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.action",
+        args: { action: "undo" },
+      }),
+    );
+    expect(api.getSceneElements()[0].width).toBeCloseTo(originalWidth);
+    await act(() =>
+      classroomCommands.execute({
+        name: "tools.calculator",
+        args: { open: false, id: calculator.id },
+      }),
+    );
     expect(api.getSceneElements()).toHaveLength(0);
-    expect(
-      document.querySelector(".fc-floating-calculator"),
-    ).toBeInTheDocument();
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.action",
+        args: { action: "undo" },
+      }),
+    );
+    expect(api.getSceneElements().map((element) => element.id)).toContain(
+      calculator.id,
+    );
   } finally {
     stop();
     view.unmount();
@@ -210,7 +284,7 @@ it.each([
   ["ai_summary", "canvas.summary"],
   ["recording", "record.open"],
   ["file_transfer", "files.open"],
-  ["ai_questions", "assistant.open"],
+  ["quizForm.title", "assistant.open"],
 ] as const)(
   "runs %s from the toolbox through the existing UI command route",
   async (label, command) => {
@@ -226,9 +300,9 @@ it.each([
       await act(async () => {
         await classroomCommands.execute({ name: "tools.open" });
       });
-      if (label === "ai_questions") {
+      if (label === "quizForm.title") {
         expect(
-          screen.getAllByRole("button", { name: t("fcboard.ai_questions") }),
+          screen.getAllByRole("button", { name: t("fcboard.quizForm.title") }),
         ).toHaveLength(1);
         expect(
           screen.queryByRole("button", { name: t("fcboard.capture") }),

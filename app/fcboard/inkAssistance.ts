@@ -15,6 +15,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { insertMagicInk } from "./magicPen";
 import { InkRequests } from "./inkRequests";
+import { noteLocalInferenceActivity } from "./localInferenceQueue";
 
 import { boardContext } from "./ai";
 import { classroomCommands } from "./commands";
@@ -164,7 +165,6 @@ export const observeInkAssistance = (
           seen.has(element.id) ||
           element.customData?.fcGenerated ||
           element.customData?.fcLanguage ||
-          element.customData?.fcQuestionInput ||
           element.customData?.fcWrittenText
         ) {
           return false;
@@ -184,6 +184,7 @@ export const observeInkAssistance = (
     if (!last) {
       return;
     }
+    noteLocalInferenceActivity();
     const target = last ? targetFor(last) : undefined;
     const mode = target
       ? "text"
@@ -551,6 +552,7 @@ export const observeInkAssistance = (
       writing.add(stroke.id);
       const mode = inkAssistMode(stroke.customData?.fcInk?.assist);
       if (mode) {
+        noteLocalInferenceActivity();
         requests.revise(boardInk([stroke]), mode);
       }
       previous = "";
@@ -574,7 +576,7 @@ export const observeInkAssistance = (
     tables.commit(stroke);
     if (
       !stroke.customData?.fcInsertion &&
-      !stroke.customData?.fcQuestionInput &&
+      !stroke.customData?.fcGenerated &&
       (!stroke.customData?.fcInk?.assist ||
         stroke.customData.fcInk.assist === "text")
     ) {
@@ -665,7 +667,6 @@ export const observeInkAssistance = (
                   | "calculation"
                   | "language"),
           currentItemPenMode: "hard",
-          multiStroke: false,
         },
       });
       if (classroomCommands.has("document.tool")) {

@@ -86,6 +86,8 @@ export const loadSettings = (): Settings => {
   }
 };
 
+export const SETTINGS_CHANGED = "fc-settings-changed";
+
 export const saveSettings = (settings: Settings, rememberKey: boolean) => {
   sessionStorage.setItem(
     "fcboard-keys",
@@ -105,6 +107,7 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
       ttsKey: rememberKey ? settings.ttsKey : "",
     }),
   );
+  window.dispatchEvent(new Event(SETTINGS_CHANGED));
 };
 
 export const currentSettings = (): Settings => {

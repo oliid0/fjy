@@ -86,3 +86,34 @@ it("cleans up a failed worker submission immediately", async () => {
   expect(instance.terminate).toHaveBeenCalledTimes(1);
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it("finishes another symbolic expression while the first stalls, then cancels only the removed first source", async () => {
+  vi.useFakeTimers();
+  const instances: ReturnType<typeof worker>["instance"][] = [];
+  vi.stubGlobal(
+    "Worker",
+    vi.fn(() => {
+      const instance = {
+        onmessage: undefined,
+        onerror: undefined,
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      };
+      instances.push(instance);
+      return instance;
+    }),
+  );
+  const source = new AbortController();
+  const first = calculateAsync("integrate(sin(x),x)", source.signal);
+  const rejected = expect(first).rejects.toMatchObject({ name: "AbortError" });
+  const second = calculateAsync("diff(x^2,x)");
+  expect(instances).toHaveLength(2);
+  instances[1].onmessage?.({ data: { answer: "2*x" } } as MessageEvent);
+  await expect(second).resolves.toBe("2*x");
+  expect(instances[0].terminate).not.toHaveBeenCalled();
+  source.abort();
+  await rejected;
+  expect(instances[0].terminate).toHaveBeenCalledTimes(1);
+  expect(instances[1].terminate).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});

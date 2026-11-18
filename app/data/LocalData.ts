@@ -11,6 +11,7 @@
  */
 
 import { clearAppStateForLocalStorage } from "@fcboard/fcboard/appState";
+import { t } from "@fcboard/fcboard/i18n";
 import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR, debounce } from "@fcboard/common";
 import {
   createStore,
@@ -46,6 +47,7 @@ import { FileManager } from "./FileManager";
 import { FileStatusStore } from "./fileStatusStore";
 import { Locker } from "./Locker";
 import { updateBrowserStateVersion } from "./tabSync";
+import { invalidateSavedBoardExit, isNativeBoardSession } from "./boardSession";
 
 const filesStore = createStore("files-db", "files-store");
 
@@ -74,6 +76,7 @@ class LocalFileManager extends FileManager {
 const saveDataStateToLocalStorage = (
   elements: readonly FcboardElement[],
   appState: AppState,
+  required = false,
 ) => {
   const localStorageQuotaExceeded = appJotaiStore.get(
     localStorageQuotaExceededAtom,
@@ -106,6 +109,9 @@ const saveDataStateToLocalStorage = (
     if (isQuotaExceededError(error) && !localStorageQuotaExceeded) {
       appJotaiStore.set(localStorageQuotaExceededAtom, true);
     }
+    if (required) {
+      throw error;
+    }
   }
 };
 
@@ -123,7 +129,13 @@ export class LocalData {
       files: BinaryFiles,
       onFilesSaved: () => void,
     ) => {
-      saveDataStateToLocalStorage(elements, appState);
+      // Android scratch boards live in this process. Keep preferences, without
+      // serializing all ink after every short writing pause. Binary assets keep
+      // their existing deduplicated cache for images/export/collaboration.
+      saveDataStateToLocalStorage(
+        isNativeBoardSession() ? [] : elements,
+        appState,
+      );
 
       await this.fileStorage.saveFiles({
         elements,
@@ -143,12 +155,26 @@ export class LocalData {
   ) => {
     // we need to make the `isSavePaused` check synchronously (undebounced)
     if (!this.isSavePaused()) {
+      invalidateSavedBoardExit();
       this._save(elements, appState, files, onFilesSaved);
     }
   };
 
   static flushSave = () => {
     this._save.flush();
+  };
+
+  static saveForExit = async (
+    elements: readonly FcboardElement[],
+    appState: AppState,
+    files: BinaryFiles,
+  ) => {
+    this._save.cancel();
+    saveDataStateToLocalStorage(elements, appState, true);
+    const result = await this.fileStorage.saveFiles({ elements, files });
+    if (result.erroredFiles.size) {
+      throw new Error(t("fcboard.nativeErrors.unable_to_save_the_file_043be3"));
+    }
   };
 
   private static locker = new Locker<SavingLockTypes>();

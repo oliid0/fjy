@@ -534,9 +534,11 @@ export const newImageElement = (
 ): NonDeleted<FcboardImageElement> => {
   return {
     ..._newElementBase<FcboardImageElement>("image", opts),
-    // in the future we'll support changing stroke color for some SVG elements,
-    // and `transparent` will likely mean "use original colors of the image"
-    strokeColor: "transparent",
+    // Semantic graph images use this color for their live view/backing pixels.
+    // Ordinary photos keep their original image colors.
+    strokeColor: opts.customData?.fcPlot
+      ? opts.strokeColor ?? "#2563eb"
+      : "transparent",
     status: opts.status ?? "pending",
     fileId: opts.fileId ?? null,
     scale: opts.scale ?? [1, 1],

@@ -27,7 +27,8 @@ final class NativeCalculatorView extends LinearLayout {
     private final LinearLayout header, science;
     private final GridLayout keypad;
     private final TextView history, input, result, title, resize;
-    private final Button basicButton, scientificButton, closeButton, themeButton;
+    private final Button closeButton, themeButton;
+    private final android.widget.Switch modeSwitch;
     private org.json.JSONObject labels = new org.json.JSONObject();
     private final List<Button> controls = new ArrayList<>();
     private String expression = "", lastResult = "0", previous = "";
@@ -41,11 +42,19 @@ final class NativeCalculatorView extends LinearLayout {
         title = new TextView(context); title.setSingleLine(true);
         header.addView(title, new LinearLayout.LayoutParams(0, -1, 1));
         title.setOnTouchListener((view, event) -> gesture(event, "move"));
-        themeButton = key("☀", () -> theme(!dark)); header.addView(themeButton);
-        basicButton = key("Basic", () -> mode(false)); header.addView(basicButton);
-        scientificButton = key("Sci", () -> mode(true)); header.addView(scientificButton);
-        closeButton = key("×", () -> events.action("close", 0, 0)); header.addView(closeButton);
-        addView(header, new LayoutParams(-1, 0, .08f));
+        themeButton = key("☀", () -> theme(!dark)); header.addView(themeButton, new LayoutParams(dp(20), -1));
+        modeSwitch = new android.widget.Switch(context);
+        modeSwitch.setShowText(false); modeSwitch.setText(""); modeSwitch.setSwitchMinWidth(dp(28));
+        android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
+        thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL); thumb.setSize(dp(12), dp(12)); thumb.setColor(Color.WHITE);
+        android.graphics.drawable.GradientDrawable track = new android.graphics.drawable.GradientDrawable();
+        track.setSize(dp(28), dp(16)); track.setCornerRadius(dp(8)); track.setColor(Color.rgb(130, 130, 138));
+        modeSwitch.setThumbDrawable(thumb); modeSwitch.setTrackDrawable(track);
+        modeSwitch.setMinHeight(0); modeSwitch.setMinimumHeight(0); modeSwitch.setPadding(0, 0, 0, 0);
+        modeSwitch.setOnCheckedChangeListener((button, checked) -> { mode(checked); revision++; });
+        controls.add(modeSwitch); header.addView(modeSwitch, new LayoutParams(dp(32), -1));
+        closeButton = key("×", () -> events.action("close", 0, 0)); header.addView(closeButton, new LayoutParams(dp(20), -1));
+        addView(header, new LayoutParams(-1, dp(28)));
         LinearLayout display = new LinearLayout(context); display.setOrientation(VERTICAL); display.setGravity(Gravity.BOTTOM);
         history = line(context); input = line(context); result = line(context); result.setText("0");
         display.addView(history, new LayoutParams(-1, 0, 1)); display.addView(input, new LayoutParams(-1, 0, 1)); display.addView(result, new LayoutParams(-1, 0, 2));
@@ -73,8 +82,7 @@ final class NativeCalculatorView extends LinearLayout {
     }
     void localize(org.json.JSONObject value) throws Exception {
         labels = value; title.setText(labels.getString("title"));
-        basicButton.setText(labels.getString("basic")); basicButton.setContentDescription(labels.getString("basic"));
-        scientificButton.setText(labels.getString("scientificShort")); scientificButton.setContentDescription(labels.getString("scientific"));
+        modeSwitch.setContentDescription(labels.getString("scientific"));
         closeButton.setContentDescription(labels.getString("close_calculator")); themeButton.setContentDescription(labels.getString("toggle_color_theme"));
         resize.setContentDescription(labels.getString("resize"));
         for (Button button : controls) if ("Inv".equals(button.getTag())) { button.setText(labels.getString("inverse")); button.setContentDescription(labels.getString("toggle_inverse_trigonometric_functions")); }
@@ -117,7 +125,7 @@ final class NativeCalculatorView extends LinearLayout {
         ((TextView)header.getChildAt(0)).setTextColor(color);
     }
     private void mode(boolean value) {
-        scientific = value; science.setVisibility(value ? VISIBLE : GONE);
+        scientific = value; modeSwitch.setChecked(value); science.setVisibility(value ? VISIBLE : GONE);
         ((LayoutParams)keypad.getLayoutParams()).weight = value ? .43f : .70f; requestLayout();
     }
     private void press(String label) {
@@ -187,7 +195,8 @@ final class NativeCalculatorView extends LinearLayout {
         JSArray buttons = new JSArray();
         for (int i = 0; i < controls.size(); i++) {
             Button button = controls.get(i); if (!button.isShown()) continue;
-            buttons.put(new JSObject().put("id", "c" + i).put("label", button.getText().toString()).put("type", "button").put("disabled", !button.isEnabled()).put("value", ""));
+            CharSequence label = button.getText().length() > 0 ? button.getText() : button.getContentDescription();
+            buttons.put(new JSObject().put("id", "c" + i).put("label", label == null ? "" : label.toString()).put("type", button == modeSwitch ? "switch" : "button").put("disabled", !button.isEnabled()).put("value", button == modeSwitch ? String.valueOf(modeSwitch.isChecked()) : ""));
         }
         return new JSObject().put("version", String.valueOf(revision)).put("title", "Calculator")
             .put("viewport", new JSObject().put("width", getWidth() / scale).put("height", getHeight() / scale))

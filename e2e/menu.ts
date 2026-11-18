@@ -10,17 +10,10 @@ export const selectMenu = async (page: Page, label: string) => {
     return;
   }
   if (
-    [
-      "提问与讲解",
-      "课堂录制",
-      "课件 / 局域网快传",
-      "总结白板",
-      "语音指令",
-    ].includes(label)
+    ["课堂录制", "课件 / 局域网快传", "总结白板", "语音指令"].includes(label)
   ) {
     await openToolbox(page);
     const names: Record<string, string> = {
-      提问与讲解: "AI出題",
       课堂录制: "录制",
       总结白板: "AI 总结",
       "课件 / 局域网快传": "快传",

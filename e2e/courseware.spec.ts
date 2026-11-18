@@ -181,24 +181,23 @@ test("continuous voice answers concepts and delegates real math, board writing a
           }
         : { action: "text", text: "等式两边同时减去相同的数，等式仍然成立。" };
     } else if (
-      system.includes("You research subject matter for original quiz design")
-    ) {
-      result = "依据教材核算：x+1=3，得到x=2。https://www.moe.gov.cn/";
-    } else if (
-      system.includes("You generate original quizzes across subjects")
+      system.startsWith("Research original quiz design using real web search")
     ) {
       result = {
         title: "一元一次方程练习",
-        questions: [
-          {
-            type: "single",
-            question: "x+1=3，x等于多少？",
-            options: ["1", "2"],
-            answer: ["B"],
-            explanation: "两边减去1，得到x=2。",
-          },
-        ],
+        tasks: [{ type: "single", focus: "求解x+1=3" }],
         sources: [{ title: "教育部", url: "https://www.moe.gov.cn/" }],
+      };
+    } else if (
+      system.startsWith("Generate ONE original independent quiz question")
+    ) {
+      result = {
+        type: "single",
+        question: "x+1=3，x等于多少？",
+        options: ["1", "2"],
+        answer: ["B"],
+        explanation: "两边减去1，得到x=2。",
+        needsImage: false,
       };
     } else {
       expect(system).toContain("independent whiteboard task agent");

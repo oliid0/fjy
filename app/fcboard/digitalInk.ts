@@ -18,12 +18,10 @@ export type InkRegion = {
   bottom: number;
 };
 export const digitalInkEngine = registerPlugin<{
-  prepare(): Promise<void>;
   recognize(options: {
     strokes: InkInput;
     language: string;
     id?: string;
-    reuse?: boolean;
   }): Promise<{ candidates: string[]; engine: string }>;
   cancel(options: { id: string }): Promise<void>;
   listPacks(): Promise<HandwritingPacks>;
@@ -52,7 +50,7 @@ export const recognizeNativeInk = (
       };
       signal.addEventListener("abort", abort, { once: true });
       void digitalInkEngine
-        .recognize({ ...options, id, reuse: true })
+        .recognize({ ...options, id })
         .then((result) => {
           signal.throwIfAborted();
           resolve(result);
@@ -176,15 +174,6 @@ export const recognizeEmojiInk = async (
   signal.throwIfAborted();
   return result.candidates;
 };
-let preparation: Promise<void> | undefined;
-export const prepareDigitalInk = () => {
-  preparation ||= digitalInkEngine.prepare().catch((error) => {
-    preparation = undefined;
-    throw error;
-  });
-  return preparation;
-};
-
 export const recognizeDigitalInk = async (
   strokes: InkInput,
   signal: AbortSignal,

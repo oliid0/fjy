@@ -5,7 +5,7 @@ import {
   visualizationSvg,
   vega,
 } from "../visualizationRuntime";
-import { visualizationHtml } from "../visualizationHtml";
+import { resourceHtml } from "../resourceHtml";
 
 const population = {
   mode: "vega-lite" as const,
@@ -76,7 +76,7 @@ it("supports non-function bar charts and releases the real embed view", async ()
 });
 
 it("assembles the three built-in runtimes inside the isolated no-eval resource", async () => {
-  const html = await visualizationHtml({
+  const html = await resourceHtml({
     id: "population",
     title: "Population",
     html: '<html><body><main id="fc-vega"><svg><text>Population</text></svg></main></body></html>',

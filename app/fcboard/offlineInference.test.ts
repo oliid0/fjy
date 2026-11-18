@@ -48,9 +48,9 @@ it("aborting an independent local request cannot terminate another caller's infe
   worker.complete([{ translation_text: "你好" }]);
   await expect(first).resolves.toEqual([{ translation_text: "你好" }]);
   await vi.advanceTimersByTimeAsync(15001);
-  expect(worker.terminate).not.toHaveBeenCalled();
+  expect(worker.terminate).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(105000);
-  expect(worker.terminate).not.toHaveBeenCalled();
+  expect(worker.terminate).toHaveBeenCalledTimes(1);
   expect(ModelWorker.instances[1].terminate).toHaveBeenCalledTimes(1);
 });
 it("terminates hung local WASM and lets the next request use a fresh worker", async () => {
@@ -85,6 +85,7 @@ it("OCR can start while translation is running without unloading either model", 
   const again = offlineInference(task, new AbortController().signal);
   await vi.advanceTimersByTimeAsync(0);
   expect(dispose).not.toHaveBeenCalled();
+  expect(worker.terminate).not.toHaveBeenCalled();
   expect(ModelWorker.instances).toHaveLength(1);
   const last = worker.postMessage.mock.calls.at(-1)![0];
   worker.onmessage?.({

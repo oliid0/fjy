@@ -2,6 +2,7 @@ import { act, waitFor } from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
 import { newElementWith } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
+import { traceFactoryBrush } from "@fcboard/element/factoryBrush";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 import { selectedRegion } from "@fcboard/fcboard/lasso/region";
 import { render } from "@fcboard/fcboard/tests/test-utils";
@@ -92,6 +93,41 @@ it("keeps web display until native installation then sends only the changed obje
     act(() => controller.dispose());
   }
   expect(document.documentElement).not.toHaveClass("fc-native-scene");
+});
+
+it("sends the actual styled brush stamps without SVG semicircle parsing", async () => {
+  const api = await setup();
+  const brush = newElementWith(ink(100), {
+    strokeStyle: "dashed",
+    customData: {
+      fcInk: {
+        version: 3,
+        pen: "brush",
+        unit: 1,
+        finished: true,
+        brushAngle: 0.4,
+      },
+    },
+  });
+  const stamps: number[] = [];
+  traceFactoryBrush(brush, (point) => {
+    stamps.push(point.x, point.y, point.width);
+  });
+  act(() => api.updateScene({ elements: [brush] }));
+  let controller!: NonNullable<ReturnType<typeof createNativeSceneRenderer>>;
+  act(() => {
+    controller = createNativeSceneRenderer(api, vi.fn())!;
+  });
+  try {
+    await waitFor(() => expect(native.synchronize).toHaveBeenCalled());
+    const node = native.synchronize.mock.calls[0][0].nodes[0];
+    expect(stamps.length).toBeGreaterThan(3);
+    expect(node.brush).toEqual({ stamps, angle: 0.4 });
+    expect(node.path).toBeUndefined();
+    expect(node.strokeWidth).toBe(0);
+  } finally {
+    act(() => controller.dispose());
+  }
 });
 
 it("updates selection membership without retransmitting unchanged scene geometry", async () => {

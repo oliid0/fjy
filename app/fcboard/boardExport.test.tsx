@@ -136,7 +136,7 @@ it("uses one proportional size limit for high resolution output and thumbnails",
   );
   expect([thumbnail.width, thumbnail.height]).toEqual([280, 158]);
 });
-it("exports actual function curves for thumbnails and cloud PNG shares while retaining the editable SVG in the board", () => {
+it("exports the canvas function image for thumbnails and cloud shares while retaining editable plot data", () => {
   const api = sceneAPI();
   api.updateScene({ elements: [] });
   drawPlot(
@@ -175,9 +175,15 @@ it("exports actual function curves for thumbnails and cloud PNG shares while ret
     throw new Error("Expected function preview image");
   }
   const file = result.files[image.fileId];
-  expect(file.mimeType).toBe("image/svg+xml");
-  expect(file.dataURL).toMatch(/^data:image\/svg\+xml/);
+  expect(file.mimeType).toBe("image/png");
+  expect(file.dataURL).toMatch(/^data:image\/png/);
   expect(file.dataURL).toContain("base64");
+  expect(image.customData?.fcPlot).toMatchObject({
+    renderer: "canvas",
+    layer: "floating",
+    plot: { expression: "x^2", compare: ["x"] },
+  });
+  expect(image.customData?.fcPlot).toEqual(original.customData?.fcPlot);
   expect(JSON.stringify(board)).toBe(before);
   expect(original.type).toBe("image");
   expect(board.files).toEqual(savedFiles);

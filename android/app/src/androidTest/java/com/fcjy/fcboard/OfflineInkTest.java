@@ -188,7 +188,8 @@ public class OfflineInkTest {
                 }
                 @Override public Task<RecognitionResult> recognize(Ink ink, RecognitionContext context) { return actual.recognize(ink, context); }
                 @Override public void close() {
-                    actual.close(); closes.incrementAndGet();
+                    actual.close();
+                    synchronized(closes){closes.incrementAndGet();closes.notifyAll();}
                     if (first) firstClosed.countDown();
                 }
             };
@@ -213,6 +214,17 @@ public class OfflineInkTest {
         assertEquals("mlkit-digital-ink-18.1.0", call.result.get().getString("engine"));
         assertEquals("十", call.result.get().getJSONArray("candidates").getString(0).trim());
         assertEquals(1, call.completions.get());
+    }
+    private void awaitCloses(ControlledInkPlugin plugin, int expected) throws Exception {
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+        synchronized(plugin.closes){
+            while(plugin.closes.get()<expected){
+                long remaining=deadline-System.nanoTime();
+                assertTrue("Idle SDK clients were not released",remaining>0);
+                TimeUnit.NANOSECONDS.timedWait(plugin.closes,remaining);
+            }
+        }
+        assertEquals(expected,plugin.closes.get());
     }
 
     @Test public void pendingModelCheckDoesNotBlockLaterRecognitionAndRetainsTheMissingPackCode() throws Exception {
@@ -325,13 +337,13 @@ public class OfflineInkTest {
         }
     }
 
-    @Test public void alternatingLanguagesKeepBothRealInkClientsWarm() throws Exception {
+    @Test public void alternatingLanguagesReuseOnlyTwoClientsAndRetireDeletedPacks() throws Exception {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             ControlledInkPlugin plugin = new ControlledInkPlugin(false, false);
             scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
             try {
                 for (String language : new String[]{"zh-Hani-CN", "en-US", "zh-Hani-CN", "en-US"}) {
-                    InkCall call = new InkCall("recognize", chineseSelection().put("language", language).put("reuse", true));
+                    InkCall call = new InkCall("recognize", chineseSelection().put("language", language));
                     plugin.recognize(call);
                     assertTrue(call.done.await(30, TimeUnit.SECONDS));
                     assertNull(call.error.get(), call.error.get());
@@ -340,8 +352,8 @@ public class OfflineInkTest {
                 assertEquals(2, plugin.clients.get());
                 assertEquals(0, plugin.closes.get());
                 plugin.retireLanguage("zh-Hani-CN");
-                assertEquals(1, plugin.closes.get());
-                InkCall english = new InkCall("recognize", chineseSelection().put("language", "en-US").put("reuse", true));
+                awaitCloses(plugin,1);
+                InkCall english = new InkCall("recognize", chineseSelection().put("language", "en-US"));
                 plugin.recognize(english);
                 assertTrue(english.done.await(30, TimeUnit.SECONDS));
                 assertNull(english.error.get(), english.error.get());
@@ -351,30 +363,30 @@ public class OfflineInkTest {
                 InstrumentationRegistry.getInstrumentation().runOnMainSync(
                     () -> scenario.onActivity(MainActivity::finish));
             }
-            assertEquals(2, plugin.closes.get());
+            awaitCloses(plugin,2);
         }
     }
 
-    @Test public void completedInkClientsAreReusedAndDeletedLanguagesRetireTheCache() throws Exception {
+    @Test public void completedInkClientsReuseWithinTheIdleWindow() throws Exception {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             ControlledInkPlugin plugin = new ControlledInkPlugin(false, false);
             scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
             try {
                 for (int index = 0; index < 2; index++) {
-                    InkCall call = new InkCall("recognize", chineseSelection().put("reuse", true));
+                    InkCall call = new InkCall("recognize", chineseSelection());
                     plugin.recognize(call);
                     assertChineseResult(call);
                 }
-                assertEquals("Completed requests reuse the same native model", 1, plugin.clients.get());
-                assertEquals("The warm client remains open while idle", 0, plugin.closes.get());
+                assertEquals(1, plugin.clients.get());
+                assertEquals(0, plugin.closes.get());
                 plugin.retireLanguage("zh-Hani-CN");
-                assertEquals(1, plugin.closes.get());
-                InkCall later = new InkCall("recognize", chineseSelection().put("reuse", true));
+                awaitCloses(plugin,1);
+                InkCall later = new InkCall("recognize", chineseSelection());
                 plugin.recognize(later);
                 assertChineseResult(later);
                 assertEquals(2, plugin.clients.get());
             } finally { plugin.handleOnDestroy(); }
-            assertEquals(2, plugin.closes.get());
+            awaitCloses(plugin,2);
         }
     }
 

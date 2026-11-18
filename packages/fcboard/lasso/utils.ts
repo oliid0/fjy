@@ -13,10 +13,17 @@ import {
   doBoundsIntersect,
   getBoundTextElement,
   getElementBounds,
+  getElementLineSegments,
   intersectElementWithLineSegment,
+  isPointInElement,
+  shouldTestInside,
 } from "@fcboard/element";
 
-import type { ElementsSegmentsMap, GlobalPoint } from "@fcboard/math/types";
+import type {
+  ElementsSegmentsMap,
+  GlobalPoint,
+  LineSegment,
+} from "@fcboard/math/types";
 import type { ElementsMap, FcboardElement } from "@fcboard/element/types";
 
 export const getLassoBounds = (path: GlobalPoint[], padding = 0): Bounds => {
@@ -62,7 +69,17 @@ export const getLassoSelectedElementIds = (input: {
   if (simplifyDistance) {
     path = simplify(lassoPath, simplifyDistance) as GlobalPoint[];
   }
-  const unlockedElements = elements.filter((el) => !el.locked);
+  if (!path.length) {
+    intersectedElements.clear();
+    enclosedElements.clear();
+    return { selectedElementIds: [] };
+  }
+  const lassoPolygon = polygonFromPoints(path);
+  const lassoSegments = path
+    .slice(1)
+    .map((point, index) => lineSegment(path[index], point))
+    .concat([lineSegment(path[path.length - 1], path[0])]);
+  const unlockedElements = elements.filter((el) => !el.locked && !el.isDeleted);
   // as the path might not enclose a shape anymore, clear before checking
   enclosedElements.clear();
   intersectedElements.clear();
@@ -78,11 +95,40 @@ export const getLassoSelectedElementIds = (input: {
       !intersectedElements.has(element.id) &&
       !enclosedElements.has(element.id)
     ) {
-      const enclosed = enclosureTest(path, element, elementsSegments);
+      // A word circle can be wholly inside a text/image object without
+      // touching its outer corners or edges (TextShape/ImageShape in x.apk).
+      const inside =
+        element.type === "text" || element.type === "image"
+          ? path.some(
+              ([x, y]) =>
+                x >= elementBounds[0] &&
+                x <= elementBounds[2] &&
+                y >= elementBounds[1] &&
+                y <= elementBounds[3],
+            )
+          : shouldTestInside(element) &&
+            path.some((point) => isPointInElement(point, element, elementsMap));
+      if (inside) {
+        enclosedElements.add(element.id);
+        continue;
+      }
+      // Only actual bounds candidates need sampled curves. Callers retain this
+      // map for the current gesture and invalidate mutations, never every ink.
+      if (!elementsSegments.has(element.id)) {
+        elementsSegments.set(
+          element.id,
+          getElementLineSegments(element, elementsMap),
+        );
+      }
+      const enclosed = enclosureTest(lassoPolygon, element, elementsSegments);
       if (enclosed) {
         enclosedElements.add(element.id);
       } else {
-        const intersects = intersectionTest(path, element, elementsMap);
+        const intersects = intersectionTest(
+          lassoSegments,
+          element,
+          elementsMap,
+        );
         if (intersects) {
           intersectedElements.add(element.id);
         }
@@ -98,11 +144,10 @@ export const getLassoSelectedElementIds = (input: {
 };
 
 const enclosureTest = (
-  lassoPath: GlobalPoint[],
+  lassoPolygon: ReturnType<typeof polygonFromPoints>,
   element: FcboardElement,
   elementsSegments: ElementsSegmentsMap,
 ): boolean => {
-  const lassoPolygon = polygonFromPoints(lassoPath);
   const segments = elementsSegments.get(element.id);
   if (!segments) {
     return false;
@@ -116,15 +161,10 @@ const enclosureTest = (
 };
 
 const intersectionTest = (
-  lassoPath: GlobalPoint[],
+  lassoSegments: LineSegment<GlobalPoint>[],
   element: FcboardElement,
   elementsMap: ElementsMap,
 ): boolean => {
-  const lassoSegments = lassoPath
-    .slice(1)
-    .map((point: GlobalPoint, index) => lineSegment(lassoPath[index], point))
-    .concat([lineSegment(lassoPath[lassoPath.length - 1], lassoPath[0])]);
-
   const boundTextElement = getBoundTextElement(element, elementsMap);
 
   return lassoSegments.some(

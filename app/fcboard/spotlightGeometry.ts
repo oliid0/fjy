@@ -65,31 +65,3 @@ export const spotlightStar = (
     .map((point) => point.join(","))
     .join(" ");
 };
-
-/** Saturation follows the reference palette's white center and full-color rim. */
-export const spotlightColor = (x: number, y: number) => {
-  const hue = ((Math.atan2(-y, x) * 180) / Math.PI + 360) % 360;
-  const saturation = Math.min(1, Math.hypot(x, y));
-  const chroma = saturation;
-  const offset = 1 - chroma;
-  const second = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const rgb =
-    hue < 60
-      ? [chroma, second, 0]
-      : hue < 120
-      ? [second, chroma, 0]
-      : hue < 180
-      ? [0, chroma, second]
-      : hue < 240
-      ? [0, second, chroma]
-      : hue < 300
-      ? [second, 0, chroma]
-      : [chroma, 0, second];
-  return `#${rgb
-    .map((channel) =>
-      Math.round((channel + offset) * 255)
-        .toString(16)
-        .padStart(2, "0"),
-    )
-    .join("")}`;
-};

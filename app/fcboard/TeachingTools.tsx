@@ -815,7 +815,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
     [t("fcboard.recording"), "record.open", microphoneIcon],
     [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
     [
-      t("fcboard.ai_questions"),
+      t("fcboard.quizForm.title"),
       "assistant.open",
       <FactoryIcon name="questions" />,
     ],

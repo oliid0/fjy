@@ -1,4 +1,11 @@
-beforeEach(() => vi.resetModules());
+beforeEach(() => {
+  vi.resetModules();
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+});
 const deferred = () => {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -12,8 +19,10 @@ const flush = async () => {
   }
 };
 
-it("runs two regions concurrently, bounds active heaps and reuses a ready model", async () => {
-  const { queueLocalInference } = await import("./localInferenceQueue");
+it("bounds concurrent heaps to two and reuses a completed caller while another is blocked", async () => {
+  const { queueLocalInference, LOCAL_MODEL_IDLE_MS } = await import(
+    "./localInferenceQueue"
+  );
   const gates = [deferred(), deferred()];
   const residents: { dispose: ReturnType<typeof vi.fn> }[] = [];
   const create = vi.fn(() => {
@@ -43,13 +52,20 @@ it("runs two regions concurrently, bounds active heaps and reuses a ready model"
   );
   gates[0].resolve();
   await Promise.all([...tasks, third]);
+  await vi.advanceTimersByTimeAsync(LOCAL_MODEL_IDLE_MS);
+  expect(
+    residents.every((model) => model.dispose.mock.calls.length === 1),
+  ).toBe(true);
 });
 
-it("skips cancelled queued work and evicts only an idle model", async () => {
-  const { queueLocalInference } = await import("./localInferenceQueue");
+it("skips cancelled work and trims idle models without unloading a running caller", async () => {
+  const { queueLocalInference, trimLocalInference } = await import(
+    "./localInferenceQueue"
+  );
   const gate = deferred();
   const active = { dispose: vi.fn() };
   const idle = { dispose: vi.fn() };
+  const next = { dispose: vi.fn() };
   const first = queueLocalInference(
     "math",
     () => active,
@@ -60,28 +76,25 @@ it("skips cancelled queued work and evicts only an idle model", async () => {
     () => idle,
     async () => {},
   );
-  await flush();
   const cancelled = vi.fn();
-  await queueLocalInference(
-    "translation:en:zh",
-    vi.fn(),
-    cancelled,
-    () => false,
-  );
+  await queueLocalInference("translation", vi.fn(), cancelled, () => false);
   expect(cancelled).not.toHaveBeenCalled();
   expect(idle.dispose).not.toHaveBeenCalled();
   await queueLocalInference(
-    "translation:en:zh",
-    () => ({ dispose: vi.fn() }),
+    "translation",
+    () => next,
     async () => {},
   );
   expect(idle.dispose).toHaveBeenCalledTimes(1);
+  trimLocalInference();
+  expect(next.dispose).toHaveBeenCalledTimes(1);
   expect(active.dispose).not.toHaveBeenCalled();
   gate.resolve();
   await first;
+  expect(active.dispose).toHaveBeenCalledTimes(1);
 });
 
-it("a failed slot cannot dispose another running region or block subsequent work", async () => {
+it("a failed slot cannot dispose another running region or block later work", async () => {
   const { queueLocalInference } = await import("./localInferenceQueue");
   const gate = deferred();
   const active = { dispose: vi.fn() };
@@ -102,13 +115,92 @@ it("a failed slot cannot dispose another running region or block subsequent work
   ).rejects.toThrow("model unavailable");
   expect(failed.dispose).toHaveBeenCalledTimes(1);
   const next = vi.fn().mockResolvedValue(undefined);
-  await queueLocalInference(
-    "translation:en:zh",
-    () => ({ dispose: vi.fn() }),
-    next,
-  );
+  await queueLocalInference("translation", () => ({ dispose: vi.fn() }), next);
   expect(next).toHaveBeenCalledTimes(1);
   expect(active.dispose).not.toHaveBeenCalled();
   gate.resolve();
   await first;
+});
+
+it("recovers a slot after creation or disposal fails", async () => {
+  const { queueLocalInference } = await import("./localInferenceQueue");
+  const gate = deferred();
+  const active = { dispose: vi.fn() };
+  const first = queueLocalInference(
+    "math",
+    () => active,
+    () => gate.promise,
+  );
+  await expect(
+    queueLocalInference(
+      "ocr",
+      () => {
+        throw new Error("load failed");
+      },
+      async () => {},
+    ),
+  ).rejects.toThrow("load failed");
+  const broken = {
+    dispose: vi.fn(() => {
+      throw new Error("release failed");
+    }),
+  };
+  await expect(
+    queueLocalInference(
+      "ocr",
+      () => broken,
+      async () => {
+        throw new Error("inference failed");
+      },
+    ),
+  ).rejects.toThrow("release failed");
+  const next = vi.fn().mockResolvedValue(undefined);
+  await queueLocalInference("translation", () => ({ dispose: vi.fn() }), next);
+  expect(next).toHaveBeenCalledTimes(1);
+  expect(active.dispose).not.toHaveBeenCalled();
+  gate.resolve();
+  await first;
+});
+
+it("new ink extends idle lifetime without starting inference or initializing again", async () => {
+  const {
+    queueLocalInference,
+    noteLocalInferenceActivity,
+    LOCAL_MODEL_IDLE_MS,
+  } = await import("./localInferenceQueue");
+  const model = { dispose: vi.fn() };
+  const create = vi.fn(() => model);
+  const run = vi.fn().mockResolvedValue(undefined);
+  await queueLocalInference("ocr:zh", create, run);
+  await vi.advanceTimersByTimeAsync(LOCAL_MODEL_IDLE_MS - 1);
+  noteLocalInferenceActivity();
+  await vi.advanceTimersByTimeAsync(LOCAL_MODEL_IDLE_MS - 1);
+  expect(model.dispose).not.toHaveBeenCalled();
+  expect(run).toHaveBeenCalledTimes(1);
+  await queueLocalInference("ocr:zh", create, run);
+  expect(create).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(LOCAL_MODEL_IDLE_MS);
+  expect(model.dispose).toHaveBeenCalledTimes(1);
+});
+
+it("alternating languages evict only the least recently used idle model", async () => {
+  const { queueLocalInference } = await import("./localInferenceQueue");
+  const zh = { dispose: vi.fn() };
+  const en = { dispose: vi.fn() };
+  const de = { dispose: vi.fn() };
+  const chinese = vi.fn(() => zh);
+  const english = vi.fn(() => en);
+  await queueLocalInference("zh", chinese, async () => {});
+  await vi.advanceTimersByTimeAsync(1);
+  await queueLocalInference("en", english, async () => {});
+  await vi.advanceTimersByTimeAsync(1);
+  await queueLocalInference("zh", chinese, async () => {});
+  await queueLocalInference(
+    "de",
+    () => de,
+    async () => {},
+  );
+  expect(chinese).toHaveBeenCalledTimes(1);
+  expect(en.dispose).toHaveBeenCalledTimes(1);
+  expect(zh.dispose).not.toHaveBeenCalled();
 });

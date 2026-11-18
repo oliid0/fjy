@@ -1,221 +1,212 @@
-import { getDataURL_sync } from "@fcboard/fcboard/data/blob";
-import {
-  vega,
-  inlineVisualizationLoader,
-  createInlineVegaView,
-} from "@fcboard/fcboard/visualizationRuntime";
+import type { DataURL } from "@fcboard/fcboard/types";
 
-import type {
-  Spec,
-  VisualizationView,
-} from "@fcboard/fcboard/visualizationRuntime";
-
-import { compileExpression, functionView, sampleFunctionCurve } from "./math";
+import { functionView } from "./math";
+import { functionGeometry } from "./functionGeometry";
 
 import type { Plot } from "./math";
 
 export const plotSize = { width: 500, height: 440 };
-const curveColors = (color: string) =>
-  [
-    color,
-    ...["#2563eb", "#ef4444", "#16a34a", "#9333ea"].filter(
-      (item) => item.toLowerCase() !== color.toLowerCase(),
-    ),
-  ].slice(0, 4);
-const plotScope = ({ x, y, z, a, b, c }: Plot) => ({ x, y, z, a, b, c });
-export const releaseFunctionGraph = (view: VisualizationView) => {
-  view.finalize();
+export const functionColors = ["#2563eb", "#f97316", "#eab308"] as const;
+export type FunctionStroke = {
+  width?: number;
+  strokeStyle?: "solid" | "dashed" | "dotted";
 };
-
-export const functionGraphData = (plot: Plot, color: string) =>
-  [plot.expression, ...(plot.compare || [])].flatMap((expression, curve) =>
-    sampleFunctionCurve(
-      expression,
-      functionView(plot),
-      plotScope(plot),
-    ).flatMap((points, segment) =>
-      points.map(([x, y]) => ({
-        x,
-        y,
-        segment: `${curve}:${segment}`,
-        expression,
-        color: curveColors(color)[curve],
-      })),
-    ),
-  );
-
-/** The saved preview and isolated interactive view share the same Vega scene. */
-export const functionGraphSpec = (
-  plot: Plot,
-  color: string,
-  size = plotSize,
-): Spec => {
-  if (
-    plot.surface ||
-    plot.relation ||
-    !Number.isFinite(plot.range) ||
-    plot.range <= 0 ||
-    plot.range > 1000
+const ticks = (from: number, to: number) => {
+  const raw = (to - from) / 8;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const fraction = raw / power;
+  const step =
+    (fraction > 5 ? 10 : fraction > 2 ? 5 : fraction > 1 ? 2 : 1) * power;
+  const result: number[] = [];
+  for (
+    let value = Math.ceil(from / step) * step;
+    value <= to && result.length < 20;
+    value += step
   ) {
-    throw new Error("Invalid two-dimensional function graph");
+    result.push(Math.abs(value) < step * 1e-8 ? 0 : value);
   }
-  const domain = functionView(plot);
-  const points = functionGraphData(plot, color);
-  if (!points.length && !plot.view) {
-    throw new Error("No real-valued plot in this range");
-  }
-  const axis = {
-    grid: true,
-    gridColor: color,
-    gridOpacity: 0.16,
-    domainColor: color,
-    tickColor: color,
-    labelColor: color,
-    titleColor: color,
-    labelFont: "Arial",
-    titleFont: "Arial",
-    titleFontWeight: "normal" as const,
-  };
-  const spec: Spec = {
-    width: size.width - 60,
-    height: size.height - 40,
-    padding: { left: 40, right: 20, top: 20, bottom: 20 },
-    autosize: "none",
-    data: [{ name: "curves", values: points }],
-    scales: [
-      {
-        name: "x",
-        type: "linear",
-        domain: [domain.left, domain.right],
-        range: "width",
-        zero: false,
-        nice: false,
-      },
-      {
-        name: "y",
-        type: "linear",
-        domain: [domain.bottom, domain.top],
-        range: "height",
-        zero: false,
-        nice: false,
-      },
-      {
-        name: "curveColor",
-        type: "ordinal",
-        domain: [plot.expression, ...(plot.compare || [])],
-        range: curveColors(color),
-      },
-    ],
-    axes: [
-      {
-        ...axis,
-        scale: "x",
-        orient: "bottom",
-        offset: { signal: "clamp(scale('y',0),0,height)-height" },
-        title: "x",
-        titleAnchor: "end",
-        tickCount: 8,
-      },
-      {
-        ...axis,
-        scale: "y",
-        orient: "left",
-        offset: { signal: "-clamp(scale('x',0),0,width)" },
-        title: "y",
-        titleAnchor: "end",
-        titleAngle: 0,
-        tickCount: 8,
-      },
-    ],
-    legends: plot.compare?.length
-      ? [
-          {
-            stroke: "curveColor",
-            orient: "top-left",
-            labelColor: color,
-            labelFont: "Arial",
-            symbolType: "stroke",
-            symbolStrokeWidth: 2,
-            padding: 4,
-          },
-        ]
-      : [],
-    marks: [
-      {
-        type: "group",
-        from: { facet: { name: "curve", data: "curves", groupby: "segment" } },
-        marks: [
-          {
-            type: "line",
-            from: { data: "curve" },
-            clip: true,
-            encode: {
-              update: {
-                x: { scale: "x", field: "x" },
-                y: { scale: "y", field: "y" },
-                stroke: { field: "color" },
-                strokeWidth: { value: 2 },
-                strokeCap: { value: "round" },
-                strokeJoin: { value: "round" },
-              },
-            },
-          },
-        ],
-      },
-    ],
-  };
-  return spec;
+  return result;
 };
+export const graphNumber = (number: number) =>
+  String(Number(number.toPrecision(6)));
 
-export const renderFunctionGraph = (
-  target: HTMLElement,
+/** One Canvas implementation paints both the TSX floating view and its saved
+ * PNG. The transparent backing shows the actual board/document background. */
+export const drawFunctionGraph = (
+  context: CanvasRenderingContext2D,
   plot: Plot,
-  color: string,
+  color = functionColors[0] as string,
   size = plotSize,
+  stroke: FunctionStroke = {},
 ) => {
-  const spec = functionGraphSpec(plot, color, size);
-  const loader = inlineVisualizationLoader();
-  const view = createInlineVegaView(spec);
-  try {
-    // Inline values evaluate synchronously, while View's DOM renderer waits
-    // for a microtask. Use Vega's public string renderer for synchronous object
-    // insertion; serializing the initial DOM SVG would save an empty graph.
-    view.run();
-    const svg = new vega.SVGStringRenderer(loader)
-      .initialize(null, size.width, size.height, [40, 20])
-      .render(
-        // vega-view6 returns Scenegraph; vega-typings incorrectly declares Scene.
-        (view.scenegraph() as unknown as { root: unknown }).root,
-      )
-      .svg();
-    if (!svg) {
-      throw new Error("The function graph could not be rendered");
+  const data = functionGeometry(plot);
+  const view = functionView(plot);
+  const width = size.width - 60;
+  const height = size.height - 40;
+  const px = (x: number) =>
+    40 + ((x - view.left) / (view.right - view.left)) * width;
+  const py = (y: number) =>
+    20 + ((view.top - y) / (view.top - view.bottom)) * height;
+  const xAxis = Math.max(20, Math.min(height + 20, py(0)));
+  const yAxis = Math.max(40, Math.min(width + 40, px(0)));
+  context.clearRect(0, 0, size.width, size.height);
+  context.save();
+  context.setLineDash([]);
+  context.font = "11px Arial, sans-serif";
+  context.lineWidth = 1;
+  const line = (x1: number, y1: number, x2: number, y2: number) => {
+    context.beginPath();
+    context.moveTo(x1, y1);
+    context.lineTo(x2, y2);
+    context.stroke();
+  };
+  context.strokeStyle = "#64748b";
+  context.fillStyle = "#64748b";
+  const xticks = ticks(view.left, view.right);
+  const yticks = ticks(view.bottom, view.top);
+  context.globalAlpha = 0.18;
+  for (const x of xticks) {
+    line(px(x), 20, px(x), 20 + height);
+  }
+  for (const y of yticks) {
+    line(40, py(y), 40 + width, py(y));
+  }
+  context.globalAlpha = 1;
+  line(40, xAxis, 40 + width, xAxis);
+  line(yAxis, 20, yAxis, 20 + height);
+  context.textAlign = "center";
+  context.textBaseline = "top";
+  for (const x of xticks) {
+    line(px(x), xAxis - 3, px(x), xAxis + 3);
+    if (x !== 0) {
+      context.fillText(
+        graphNumber(x),
+        px(x),
+        Math.min(size.height - 14, xAxis + 5),
+      );
     }
-    target.innerHTML = svg;
-    return view;
-  } catch (failure) {
-    view.finalize();
-    target.replaceChildren();
-    throw failure;
   }
-};
-
-export const functionGraphImage = (plot: Plot, color: string) => {
-  const target = document.createElement("div");
-  let view: VisualizationView | undefined;
-  try {
-    view = renderFunctionGraph(target, plot, color);
-    return getDataURL_sync(
-      new XMLSerializer().serializeToString(target.querySelector("svg")!),
-      "image/svg+xml",
+  context.textAlign = "right";
+  context.textBaseline = "middle";
+  for (const y of yticks) {
+    line(yAxis - 3, py(y), yAxis + 3, py(y));
+    if (y !== 0) {
+      context.fillText(graphNumber(y), Math.max(32, yAxis - 5), py(y));
+    }
+  }
+  context.fillText("x", size.width - 3, Math.max(10, xAxis - 9));
+  context.fillText("y", Math.max(16, yAxis - 8), 10);
+  context.save();
+  context.beginPath();
+  context.rect(40, 20, width, height);
+  context.clip();
+  const lineWidth = Math.max(0.5, stroke.width ?? 2);
+  context.lineWidth = lineWidth;
+  // Match the existing ordinary shape dash patterns (element/shape.ts).
+  context.setLineDash(
+    stroke.strokeStyle === "dashed"
+      ? [8, 8 + lineWidth]
+      : stroke.strokeStyle === "dotted"
+      ? [1.5, 6 + lineWidth]
+      : [],
+  );
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  data.curves.forEach((curve, index) => {
+    context.strokeStyle = index ? functionColors[index] : color;
+    for (const points of curve.lines) {
+      context.beginPath();
+      points.forEach(([x, y], i) => {
+        if (!i) {
+          context.moveTo(px(x), py(y));
+        } else {
+          context.lineTo(px(x), py(y));
+        }
+      });
+      context.stroke();
+    }
+  });
+  context.restore();
+  const placed: { x: number; y: number; width: number; height: number }[] = [];
+  const label = (text: string, x: number, y: number, fill: string) => {
+    context.font = "12px Arial, sans-serif";
+    const measured = context.measureText(text).width;
+    const w = Math.min(measured, size.width - 8);
+    const options = [
+      [8, -20],
+      [-w - 8, 6],
+      [8, 8],
+      [-w - 8, -20],
+      [8, -38],
+      [-w - 8, 24],
+    ];
+    const boxes = options.map(([dx, dy]) => ({
+      x: Math.max(4, Math.min(size.width - w - 4, x + dx)),
+      y: Math.max(2, Math.min(size.height - 16, y + dy)),
+      width: w,
+      height: 14,
+    }));
+    const box =
+      boxes.find((box) =>
+        placed.every(
+          (other) =>
+            box.x + box.width < other.x ||
+            box.x > other.x + other.width ||
+            box.y + box.height < other.y ||
+            box.y > other.y + other.height,
+        ),
+      ) || boxes[0];
+    placed.push(box);
+    context.fillStyle = fill;
+    context.textAlign = "left";
+    context.textBaseline = "top";
+    context.fillText(text, box.x, box.y, w);
+  };
+  for (const point of data.intersections) {
+    context.fillStyle = "#64748b";
+    context.beginPath();
+    context.arc(px(point.x), py(point.y), 3.5, 0, Math.PI * 2);
+    context.fill();
+    label(
+      `${point.label} (${graphNumber(point.x)}, ${graphNumber(point.y)})`,
+      px(point.x),
+      py(point.y),
+      "#64748b",
     );
-  } finally {
-    view?.finalize();
-    target.replaceChildren();
   }
+  data.curves.forEach((curve, index) => {
+    const end = curve.lines.at(-1)?.at(-1);
+    if (end) {
+      label(
+        `y = ${curve.expression}`,
+        px(end[0]),
+        py(end[1]),
+        index ? functionColors[index] : color,
+      );
+    }
+  });
+  context.restore();
+  return data;
 };
 
-// The Vega view uses this padding. Normalised coordinates keep pointer math
+export const functionGraphImage = (
+  plot: Plot,
+  color = functionColors[0] as string,
+  stroke: FunctionStroke = {},
+): DataURL => {
+  const canvas = document.createElement("canvas");
+  canvas.width = plotSize.width * 2;
+  canvas.height = plotSize.height * 2;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("The function graph could not be rendered");
+  }
+  context.scale(2, 2);
+  drawFunctionGraph(context, plot, color, plotSize, stroke);
+  return canvas.toDataURL("image/png") as DataURL;
+};
+
+// The canvas graph uses this padding. Normalised coordinates keep pointer math
 // correct after the saved image is resized or rotated.
 export const functionGraphLocation = (u: number, v: number) => ({
   x: (u * plotSize.width - 40) / (plotSize.width - 60),
@@ -253,62 +244,4 @@ export const zoomFunctionGraph = (
     range: Math.max(width, height) / 2,
     view: { left, right: left + width, bottom, top: bottom + height },
   };
-};
-
-export const pickFunctionPoint = (
-  plot: Plot,
-  location: { x: number; y: number },
-  size: { width: number; height: number },
-) => {
-  if (location.x < 0 || location.x > 1 || location.y < 0 || location.y > 1) {
-    return null;
-  }
-  const view = functionView(plot);
-  const width = (size.width * (plotSize.width - 60)) / plotSize.width;
-  const height = (size.height * (plotSize.height - 40)) / plotSize.height;
-  const pixel = ([x, y]: number[]) => [
-    ((x - view.left) / (view.right - view.left)) * width,
-    ((y - view.bottom) / (view.top - view.bottom)) * height,
-  ];
-  const target = [location.x * width, location.y * height];
-  let best: { x: number; distance: number } | undefined;
-  for (const segment of sampleFunctionCurve(
-    plot.expression,
-    view,
-    plotScope(plot),
-  )) {
-    for (let index = 1; index < segment.length; index++) {
-      const a = pixel(segment[index - 1]);
-      const b = pixel(segment[index]);
-      const dx = b[0] - a[0];
-      const dy = b[1] - a[1];
-      const t = Math.max(
-        0,
-        Math.min(
-          1,
-          ((target[0] - a[0]) * dx + (target[1] - a[1]) * dy) /
-            (dx * dx + dy * dy || 1),
-        ),
-      );
-      const distance = Math.hypot(
-        target[0] - a[0] - dx * t,
-        target[1] - a[1] - dy * t,
-      );
-      if (distance <= 10 && (!best || distance < best.distance)) {
-        best = {
-          x:
-            segment[index - 1][0] +
-            t * (segment[index][0] - segment[index - 1][0]),
-          distance,
-        };
-      }
-    }
-  }
-  if (!best) {
-    return null;
-  }
-  const y = compileExpression(plot.expression).evaluate({ ...plot, x: best.x });
-  return typeof y === "number" && Number.isFinite(y)
-    ? { x: best.x, y: y + plot.z }
-    : null;
 };

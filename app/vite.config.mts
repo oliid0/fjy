@@ -10,7 +10,7 @@ import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
 
-import { vegaAssetAliases } from "../config/vegaAssets";
+import { resourceAssetAliases } from "../config/resourceAssets.mjs";
 import { assertClientRuntimeBoundary } from "../config/clientRuntimeBoundary";
 import { assertNativeInferenceBoundary } from "../config/nativeInferenceBoundary";
 
@@ -36,7 +36,7 @@ export default defineConfig(({ mode, command }) => {
     worker: { format: "es" },
     resolve: {
       alias: [
-        ...vegaAssetAliases,
+        ...resourceAssetAliases,
         {
           find: /^@fcboard\/common$/,
           replacement: path.resolve(

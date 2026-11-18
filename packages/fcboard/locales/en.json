@@ -726,11 +726,6 @@
     "mmb": "Scroll wheel"
   },
   "fcboard": {
-    "functionEditor": {
-      "edit": "Edit functions",
-      "expressions": "One function per line, up to four in the same coordinate system",
-      "invalid": "Enter one to four valid functions of x."
-    },
     "appTitle": "Fcboard Whiteboard",
     "appDescription": "Fcboard teaching and meeting whiteboard",
     "calculatorUi": {
@@ -990,6 +985,18 @@
     },
     "roll_call": "Roll call",
     "namelist": "Namelist",
+    "namelistImport": {
+      "importFile": "Import names",
+      "formats": "Excel (.xlsx), CSV/TSV, text or Markdown. Choose a worksheet and name column when needed.",
+      "sheet": "Worksheet",
+      "column": "Name column",
+      "columnNumber": "Column {{column}}",
+      "header": "First row contains column headings",
+      "saved": "Names saved automatically",
+      "invalid": "Cannot import this file. Use up to 5,000 names (80 characters each), a file under 8 MB and at most 256 columns.",
+      "format": "Use Excel .xlsx, CSV/TSV, text or Markdown. Save older .xls workbooks as .xlsx first.",
+      "loading": "Reading names…"
+    },
     "namelist_hint": "Enter one name per line, or separate names with commas.",
     "namelist_empty": "Add names to begin.",
     "namelist_invalid": "Use at most 5,000 names, each up to 80 characters.",
@@ -997,7 +1004,6 @@
     "rollcall_start": "Start",
     "rollcall_stop": "Stop",
     "rollcall_resume": "Continue",
-
     "touch_locked": "Touch locked. Use the sideboard unlock button to resume.",
     "touch_unlocked": "Touch unlocked.",
     "factorySettings": {
@@ -1202,13 +1208,10 @@
     "split_pane": "Writing pane {{number}}",
     "split_white": "White pen",
     "split_orange": "Orange pen",
-    "split_pen_size": "Pen width {{size}}",
     "split_pen_colors": "Pen colors",
-    "split_pen_widths": "Pen widths",
     "split_black": "Black pen",
     "split_blue": "Blue pen",
     "split_red": "Red pen",
-    "split_small_eraser": "Small eraser",
     "split_large_eraser": "Large eraser",
     "split_background_0": "White",
     "split_background_1": "Green",
@@ -1480,6 +1483,31 @@
     "the_image_service_returned_no_valid_image": "The image service returned no valid image",
     "the_image_service_returned_an_unsupported_format": "The image service returned an unsupported format",
     "more_tools": "More tools",
+    "quizForm": {
+      "title": "Quiz builder",
+      "grade": "Grade",
+      "gradeAny": "Match the content",
+      "gradeNumber": "Grade {{grade}}",
+      "gradeHigher": "Higher education",
+      "type": "Question type",
+      "mixed": "Mixed types",
+      "difficulty": "Difficulty",
+      "easy": "Easy",
+      "medium": "Medium",
+      "hard": "Hard",
+      "supplement": "Additional content",
+      "placeholder": "Subject, knowledge points, quantity or other requirements; current board content can also be used.",
+      "generate": "Generate quiz",
+      "typeMismatch": "The quiz does not match the requested question type: {{type}}.",
+      "questionPending": "Generating this question…",
+      "cancelled": "Generation cancelled. Generate a new quiz to replace unfinished questions.",
+      "imagePending": "Generating and checking the illustration…",
+      "imageInvalid": "The illustration did not pass its consistency check.",
+      "retryImage": "Retry illustration",
+      "imageSpecification": "A required illustration needs a complete drawing specification and caption.",
+      "questionFailed": "Question {{number}} could not be generated: {{message}}",
+      "generatingCount": "{{ready}} / {{total}} questions ready"
+    },
     "ai_questions": "Quiz Master",
     "could_not_read_received_files": "Could not read received files",
     "storage_is_full_or_unavailable_download_the_recording_now_to_keep_it": "Storage is full or unavailable. Download the recording now to keep it.",
@@ -1716,6 +1744,10 @@
     "coordinate_range_must_be_between_0_and_1000": "Coordinate range must be between 0 and 1000",
     "no_real_valued_plot_in_this_range": "No real-valued plot in this range",
     "no_speech_engine_is_available_connect_a_voice_service_in_settings_or_teach_with_captions": "No speech engine is available. Connect a voice service in settings, or teach with captions.",
+    "doubao_audio_generation": "Doubao audio generation",
+    "study_audio_generation_help": "For study pronunciation, use the audio generation endpoint and its Speech API key. The button fills the endpoint; enter the key below.",
+    "audio_generation_requires_the_tts_create_endpoint": "For study pronunciation, choose the Doubao audio generation endpoint in voice settings.",
+    "pronunciation_language_not_supported": "Audio generation does not support pronunciation in {{language}}.",
     "the_voice_service_returned_invalid_audio": "The voice service returned invalid audio",
     "this_file_is_encrypted_use_an_unencrypted_document": "This file is encrypted. Use an unencrypted document.",
     "no_document_is_open": "No document is open",
@@ -2191,7 +2223,11 @@
       "insert": "Insert Function",
       "customName": "Custom Function {{number}}",
       "deleteNamed": "Delete {{name}}",
-      "expressionNamed": "Expression: {{name}}"
+      "expressionNamed": "Expression: {{name}}",
+      "invalid": "Could not draw the function graph.",
+      "merge": "Merge",
+      "mergeUnavailable": "Select two or three function expressions or graphs to merge.",
+      "intersections": "Function intersections"
     },
     "resourceMenu": {
       "str_biology": "Biology",
@@ -2324,7 +2360,8 @@
     "search_more": "Load more",
     "search_inserting": "Inserting…",
     "multi_point_switch": "Multi-touch switch",
-    "geometry_tools": "Rulers and compass"
+    "geometry_tools": "Rulers and compass",
+    "resource_loading": "Loading teaching resource…"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "Number Compare",

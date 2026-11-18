@@ -20,6 +20,7 @@ import {
   validateShapes,
   contentViewport,
   objectSelection,
+  styleFunctionPlots,
 } from "./board";
 import { currentSettings } from "./settings";
 import { insertGeneratedImage } from "./imageGeneration";
@@ -31,7 +32,7 @@ import {
 } from "./canvasTransform";
 import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
-import { prepareQuestionWriting, questionStrokeStyle } from "./questionWriting";
+import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
 import { resourcePlacement } from "./resourcePlacement";
 import { registerResourceCommands } from "./resourceControls";
 import { registerLanguageCommands } from "./languageCommands";
@@ -545,17 +546,28 @@ export const registerCanvasCommands = (
             },
           });
         }
+        const graphsOnly = styleFunctionPlots(api, {
+          color: args.color as string | undefined,
+          width: args.width as number | undefined,
+          strokeStyle: args.strokeStyle as
+            | "solid"
+            | "dashed"
+            | "dotted"
+            | undefined,
+        });
         if (args.color) {
-          api.executeAction("changeStrokeColor", {
-            currentItemStrokeColor: args.color,
-          });
+          if (!graphsOnly) {
+            api.executeAction("changeStrokeColor", {
+              currentItemStrokeColor: args.color,
+            });
+          }
         }
         if (args.background) {
           api.executeAction("changeBackgroundColor", {
             currentItemBackgroundColor: args.background,
           });
         }
-        if (args.width) {
+        if (args.width && !graphsOnly) {
           api.executeAction("changeStrokeWidth", args.width);
         }
         for (const [key, [, , action]] of Object.entries(numeric)) {
@@ -564,7 +576,10 @@ export const registerCanvasCommands = (
           }
         }
         for (const [key, [, action]] of Object.entries(choices)) {
-          if (args[key] !== undefined) {
+          if (
+            args[key] !== undefined &&
+            !(graphsOnly && key === "strokeStyle")
+          ) {
             api.executeAction(action, args[key]);
           }
         }
@@ -580,7 +595,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.ink",
-      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional per-command pen=hard|brush|highlighter|dashed|rainbow, color (hex), width=1..30 and opacity=0..100 use real pen effects without changing the global pen. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces a previous question. Returns actual object ids.",
+      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional per-command pen=hard|brush|highlighter|dashed|rainbow, color (hex), width=1..30 and opacity=0..100 use real pen effects without changing the global pen. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces the specified source objects. Returns actual object ids.",
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -602,7 +617,7 @@ export const registerCanvasCommands = (
             api.getSceneElements().filter((item) => replaced.has(item.id)),
           );
         const before = signature();
-        const elements = await prepareQuestionWriting(args, () => {
+        const elements = await prepareInkWriting(args, () => {
           if (
             classroomCommands.has("document.draw") ||
             board() !== target ||
@@ -621,7 +636,7 @@ export const registerCanvasCommands = (
                 return { left, top, right, bottom };
               }),
             scale: state.zoom.value,
-            inkStyle: questionStrokeStyle(
+            inkStyle: inkStrokeStyle(
               args,
               state,
               inkProfile(),
@@ -1075,16 +1090,19 @@ export const registerCanvasCommands = (
             : args.ids,
           elements,
         );
-        elements
-          .filter((el) => ids.has(el.id))
-          .forEach((el) =>
-            api.mutateElement(el, {
-              x: el.x + (args.dx as number),
-              y: el.y + (args.dy as number),
-            }),
-          );
+        const next = elements.map((element) =>
+          ids.has(element.id)
+            ? transformBoardElement(
+                element,
+                { x: 0, y: 0 },
+                1,
+                args.dx as number,
+                args.dy as number,
+              )
+            : element,
+        );
         api.updateScene({
-          elements,
+          elements: next,
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
         return { ids: [...ids], dx: args.dx, dy: args.dy };

@@ -34,34 +34,17 @@ public class DigitalInkPlugin extends Plugin {
     private final Set<Request> pending = ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
     private DigitalInkPacks packs;
-    private final java.util.ArrayDeque<IdleRecognizer> idleRecognizers = new java.util.ArrayDeque<>();
-    private static final class IdleRecognizer {
-        final String language;
-        final DigitalInkRecognizer client;
-        IdleRecognizer(String language, DigitalInkRecognizer client) { this.language = language; this.client = client; }
-    }
-    private boolean observingMemory;
-    private final android.content.ComponentCallbacks2 memory = new android.content.ComponentCallbacks2() {
-        @Override public void onConfigurationChanged(android.content.res.Configuration configuration) { }
-        @Override public void onLowMemory() { closeIdle(); }
-        @Override public void onTrimMemory(int level) {
-            if ((level >= TRIM_MEMORY_RUNNING_LOW && level < TRIM_MEMORY_UI_HIDDEN) || level >= TRIM_MEMORY_BACKGROUND) closeIdle();
-        }
-    };
-    @Override public void load() {
-        getContext().registerComponentCallbacks(memory);
-        observingMemory = true;
-    }
-    private final java.util.Map<String, Long> retired = new ConcurrentHashMap<>();
+    private final ModelPool<DigitalInkRecognizer> clients = new ModelPool<>(2);
+    @Override public void load() { clients.observe(getContext()); }
+    @Override protected void handleOnStop() { clients.trim(); }
     private interface Action { void run() throws Exception; }
     private static final class Request {
         final PluginCall call;
         final String language;
-        final boolean preparing;
         final AtomicBoolean settled = new AtomicBoolean();
         final long deadline = android.os.SystemClock.elapsedRealtime() + 45000;
-        Request(PluginCall call, String language, boolean preparing) {
-            this.call = call; this.language = language; this.preparing = preparing;
+        Request(PluginCall call, String language) {
+            this.call = call; this.language = language;
         }
     }
     private static class ModelRequiredException extends Exception {
@@ -74,12 +57,7 @@ public class DigitalInkPlugin extends Plugin {
         return packs;
     }
     synchronized void retireLanguage(String tag) {
-        retired.merge(tag, 1L, Long::sum);
-        java.util.Iterator<IdleRecognizer> clients = idleRecognizers.iterator();
-        while (clients.hasNext()) {
-            IdleRecognizer idle = clients.next();
-            if (tag.equals(idle.language)) { clients.remove(); idle.client.close(); }
-        }
+        clients.retire(tag);
         for (Request request : pending) {
             if (tag.equals(request.language)) fail(request, new ModelRequiredException(tag));
         }
@@ -89,29 +67,6 @@ public class DigitalInkPlugin extends Plugin {
             public void success(JSObject result) { call.resolve(result); }
             public void failure(Exception error) { call.reject("Handwriting language pack operation failed: " + error.getMessage(), error); }
         };
-    }
-    private synchronized void closeIdle() {
-        for (IdleRecognizer idle : idleRecognizers) idle.client.close();
-        idleRecognizers.clear();
-    }
-    private synchronized DigitalInkRecognizer borrow(DigitalInkRecognitionModel model, Request request) {
-        if (Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) {
-            java.util.Iterator<IdleRecognizer> clients = idleRecognizers.iterator();
-            while (clients.hasNext()) {
-                IdleRecognizer idle = clients.next();
-                if (request.language.equals(idle.language)) { clients.remove(); return idle.client; }
-            }
-        }
-        return createRecognizer(model);
-    }
-    private synchronized void release(DigitalInkRecognizer recognizer, Request request, long revision, boolean success) {
-        if (closed || request.settled.get() || !success || revision != retired.getOrDefault(request.language, 0L) || !Boolean.TRUE.equals(request.call.getBoolean("reuse", false))) {
-            recognizer.close(); return;
-        }
-        // Two idle clients match the two permitted in-flight recognitions. Keep
-        // language switches and completed column rows warm without a time-based reload.
-        while (idleRecognizers.size() >= 2) idleRecognizers.removeFirst().client.close();
-        idleRecognizers.addLast(new IdleRecognizer(request.language, recognizer));
     }
     @PluginMethod public void cancel(PluginCall call) {
         String id = call.getString("id", "");
@@ -127,11 +82,11 @@ public class DigitalInkPlugin extends Plugin {
     private void fail(Request request, Throwable error) {
         if (!request.settled.compareAndSet(false, true)) return;
         pending.remove(request);
-        if (!request.preparing && error instanceof ModelRequiredException) {
+        if (error instanceof ModelRequiredException) {
             ModelRequiredException missing = (ModelRequiredException) error;
             request.call.reject(missing.getMessage(), "HANDWRITING_MODEL_REQUIRED", missing, new JSObject().put("tag", missing.tag));
         } else {
-            request.call.reject((request.preparing ? "Offline handwriting models unavailable: " : "Offline handwriting recognition failed: ") + error.getMessage());
+            request.call.reject("Offline handwriting recognition failed: " + error.getMessage());
         }
     }
     private void succeed(Request request, JSObject value) {
@@ -178,30 +133,9 @@ public class DigitalInkPlugin extends Plugin {
         });
     }
 
-    private synchronized void warm(String language, DigitalInkRecognitionModel model) {
-        for (IdleRecognizer idle : idleRecognizers) if (language.equals(idle.language)) return;
-        DigitalInkRecognizer recognizer = createRecognizer(model);
-        while (idleRecognizers.size() >= 2) idleRecognizers.removeFirst().client.close();
-        idleRecognizers.addLast(new IdleRecognizer(language, recognizer));
-    }
-
-    @PluginMethod public void prepare(PluginCall call) {
-        Request request = new Request(call, null, true);
-        pending.add(request);
-        dispatch(request, () -> {
-            Task<DigitalInkRecognitionModel> chinese = model("zh-Hani-CN"), english = model("en-US");
-            Tasks.whenAll(chinese, english).addOnCompleteListener(DIRECT, ready -> dispatch(request, () -> {
-                if (!ready.isSuccessful()) throw failure(ready);
-                warm("zh-Hani-CN", chinese.getResult());
-                warm("en-US", english.getResult());
-                succeed(request, null);
-            }));
-        });
-    }
-
     @PluginMethod public void recognize(PluginCall call) {
         if (pending.size() >= 16) { call.reject("Offline handwriting queue is full; try a smaller selection"); return; }
-        Request request = new Request(call, call.getString("language", "zh-Hani-CN"), false);
+        Request request = new Request(call, call.getString("language", "zh-Hani-CN"));
         pending.add(request);
         dispatch(request, () -> {
             JSONArray strokes = call.getArray("strokes", new JSArray());
@@ -236,17 +170,16 @@ public class DigitalInkPlugin extends Plugin {
                     return;
                 }
                 if (closed || request.settled.get()) { inference.release(); return; }
-                DigitalInkRecognizer recognizer;
-                try { recognizer = borrow(ready.getResult(), request); }
+                ModelPool.Lease<DigitalInkRecognizer> lease;
+                try { lease = clients.acquire(request.language, () -> createRecognizer(ready.getResult())); }
                 catch (Exception | LinkageError error) { inference.release(); throw error; }
-                long modelRevision = retired.getOrDefault(request.language, 0L);
                 Task<RecognitionResult> actual;
-                try { actual = recognizer.recognize(ink.build()); }
-                catch (Exception | LinkageError error) { recognizer.close(); inference.release(); throw error; }
+                try { actual = lease.value().recognize(ink.build()); }
+                catch (Exception | LinkageError error) { lease.release(false); inference.release(); throw error; }
                 // A timeout does not cancel the underlying Task. Keep its client alive
                 // until actual completion, even after deletion, timeout or plugin unload.
                 actual.addOnCompleteListener(DIRECT, ignored -> {
-                    try { release(recognizer, request, modelRevision, ignored.isSuccessful()); } finally { inference.release(); }
+                    try { lease.release(ignored.isSuccessful() && !request.settled.get()); } finally { inference.release(); }
                 });
                 Tasks.withTimeout(actual, 25, TimeUnit.SECONDS).addOnCompleteListener(DIRECT, result -> dispatch(request, () -> {
                     if (!result.isSuccessful()) throw failure(result);
@@ -261,8 +194,7 @@ public class DigitalInkPlugin extends Plugin {
 
     @Override protected void handleOnDestroy() {
         closed = true;
-        if (observingMemory) { getContext().unregisterComponentCallbacks(memory); observingMemory = false; }
-        closeIdle();
+        clients.close();
         if (packs != null) packs.close();
         for (Request request : pending) fail(request, new IllegalStateException("Handwriting recognition closed"));
         worker.shutdown();

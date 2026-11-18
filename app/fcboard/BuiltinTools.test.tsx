@@ -398,7 +398,7 @@ it("uses the original edge exit controls and exports all actual panes through th
   ).toHaveLength(1);
   expect(
     within(board).getAllByRole("button", {
-      name: t("fcboard.split_small_eraser"),
+      name: t("fcboard.split_large_eraser"),
     }),
   ).toHaveLength(2);
   const panes = Array.from(board.querySelectorAll("canvas"));

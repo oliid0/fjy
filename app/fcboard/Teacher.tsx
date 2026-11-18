@@ -1,40 +1,23 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { recognitionPattern } from "./recognitionVocabulary";
-
-import { InkQuestion } from "./InkQuestion";
+import { QuizComposer } from "./QuizComposer";
 import { QuizPanel } from "./QuizPanel";
-import { selectionMathIntent, selectionRequest } from "./intent";
 import { generateQuiz } from "./quiz";
+import { generateQuizImage } from "./quizRequests";
 
 import { boardContext } from "./ai";
-import { classroomCommands, directCommand } from "./commands";
-import { questionPosition } from "./questionInk";
+import { classroomCommands } from "./commands";
 
-import type { Quiz } from "./quiz";
+import type { Quiz, QuizQuestion } from "./quiz";
 
-export const Teacher = ({
-  api,
-  onCommand,
-}: {
-  api: FcboardImperativeAPI;
-  onCommand: (
-    text: string,
-    signal: AbortSignal,
-    sourceIds?: string[],
-    whole?: boolean,
-  ) => Promise<void>;
-}) => {
+export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
   const [asking, setAsking] = useState(false);
   const [questionWhole, setQuestionWhole] = useState(false);
 
-  const [questionId, setQuestionId] = useState(0);
-  const [questionPlacement, setQuestionPlacement] =
-    useState<ReturnType<typeof questionPosition>>();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const quizValue = useRef<Quiz | null>(null);
   const [quizOpen, setQuizOpen] = useState(false);
@@ -42,6 +25,31 @@ export const Teacher = ({
   const [quizError, setQuizError] = useState("");
   const quizRequest = useRef<AbortController | null>(null);
   const quizRequests = useRef(new Set<AbortController>());
+  const imageRequests = useRef(new Map<string, AbortController>());
+  const stopVisibleQuiz = useCallback(() => {
+    setQuizBusy(false);
+    if (!quizValue.current) {
+      return;
+    }
+    const stopped = {
+      ...quizValue.current,
+      generating: false,
+      questions: quizValue.current.questions.map((question) =>
+        question.image?.status === "pending"
+          ? {
+              ...question,
+              image: {
+                ...question.image,
+                status: "error" as const,
+                error: t("fcboard.quizForm.cancelled"),
+              },
+            }
+          : question,
+      ),
+    };
+    quizValue.current = stopped;
+    setQuiz(stopped);
+  }, []);
   useEffect(() => {
     const requests = quizRequests.current;
     return () => requests.forEach((request) => request.abort());
@@ -49,25 +57,19 @@ export const Teacher = ({
   const createQuiz = async (
     text: string,
     signal: AbortSignal,
-    sourceIds?: string[],
-    forceQuiz = false,
     sourceContext?: { text: string; image?: string },
+    quietFailure = false,
+    questionType?: QuizQuestion["type"],
   ) => {
-    const quizRequirement = recognitionPattern("Teacher_0").test(text);
-    // Preserve the existing deterministic math and explicit tool routes.
-    // Ordinary prompts in this entry generate quiz cards instead of board answers.
-    if (
-      !forceQuiz &&
-      !quizRequirement &&
-      (selectionMathIntent(text) ||
-        directCommand(text) ||
-        selectionRequest(text))
-    ) {
-      return onCommand(text, signal, sourceIds, questionWhole);
-    }
     const request = new AbortController();
     quizRequests.current.add(request);
     quizRequest.current = request;
+    const stopped = () => {
+      if (quizRequest.current === request) {
+        stopVisibleQuiz();
+      }
+    };
+    request.signal.addEventListener("abort", stopped, { once: true });
     const releaseOwner = classroomCommands.registerOwner(
       request.signal,
       signal,
@@ -105,6 +107,13 @@ export const Teacher = ({
         request.signal,
         context,
         visible.image,
+        questionType,
+        (progress) => {
+          if (!request.signal.aborted && quizRequest.current === request) {
+            quizValue.current = progress;
+            setQuiz(progress);
+          }
+        },
       );
       request.signal.throwIfAborted();
       if (quizRequest.current === request) {
@@ -114,22 +123,87 @@ export const Teacher = ({
       return result;
     } catch (failure) {
       if (!request.signal.aborted && quizRequest.current === request) {
-        if (forceQuiz) {
+        if (quietFailure) {
           console.error("[quiz-agent]", failure);
           setQuizOpen(false);
         } else {
-          setQuizError((failure as Error).message);
+          setQuizError(
+            failure instanceof Error ? failure.message : String(failure),
+          );
         }
       }
       throw failure;
     } finally {
       releaseOwner();
       signal.removeEventListener("abort", cancel);
+      request.signal.removeEventListener("abort", stopped);
       quizRequests.current.delete(request);
       if (quizRequest.current === request) {
         quizRequest.current = null;
         setQuizBusy(false);
       }
+    }
+  };
+
+  const retryImage = async (id: string) => {
+    const source = quizValue.current;
+    const question = source?.questions.find((item) => item.id === id);
+    if (
+      !source ||
+      source.generating ||
+      !question?.image ||
+      question.image.status !== "error" ||
+      imageRequests.current.has(id)
+    ) {
+      return;
+    }
+    const request = new AbortController();
+    imageRequests.current.set(id, request);
+    quizRequests.current.add(request);
+    const publish = (
+      image: NonNullable<QuizQuestion["image"]>,
+      cancelled = false,
+    ) => {
+      if (
+        quizValue.current?.id !== source.id ||
+        (request.signal.aborted && !cancelled)
+      ) {
+        return;
+      }
+      const next = {
+        ...quizValue.current,
+        questions: quizValue.current.questions.map((item) =>
+          item.id === id ? { ...item, image } : item,
+        ),
+      };
+      quizValue.current = next;
+      setQuiz(next);
+    };
+    publish({ ...question.image, status: "pending", error: undefined });
+    try {
+      const dataURL = await generateQuizImage(question, request.signal);
+      publish({
+        ...question.image,
+        status: "ready",
+        dataURL,
+        error: undefined,
+      });
+    } catch (failure) {
+      publish(
+        {
+          ...question.image,
+          status: "error",
+          error: request.signal.aborted
+            ? t("fcboard.quizForm.cancelled")
+            : failure instanceof Error
+            ? failure.message
+            : String(failure),
+        },
+        request.signal.aborted,
+      );
+    } finally {
+      quizRequests.current.delete(request);
+      imageRequests.current.delete(id);
     }
   };
 
@@ -143,32 +217,31 @@ export const Teacher = ({
           return;
         }
         quizRequests.current.forEach((request) => request.abort());
+        stopVisibleQuiz();
         setQuizOpen(false);
         setAsking(false);
       }),
-    [api],
+    [api, stopVisibleQuiz],
   );
   useEffect(() => {
     const registrations = [
       classroomCommands.register(
         "assistant.open",
-        "Open the handwriting question frame on the visible canvas. Optional args.whole=true analyzes the entire visible surface on submission; otherwise preserve the current selection context. Supports handwriting and dictation through the existing command router.",
+        "Open the quiz builder to choose grade, question type, difficulty and supplementary subject/knowledge requirements. Optional args.whole=true supplies the visible surface as context. Submission uses the same quiz generation and cards as selection Quiz.",
         (args) => {
           if (args.whole !== undefined && typeof args.whole !== "boolean") {
             throw new Error(t("fcboard.invalid_ai_command_please_try_again"));
           }
-          const placement = questionPosition(api);
           setQuestionWhole(args.whole === true);
-          setQuestionPlacement(placement);
-          setQuestionId((value) => value + 1);
           setAsking(true);
         },
       ),
-      classroomCommands.register("assistant.close", "@internal", async () => {
+      classroomCommands.register("assistant.close", "@internal", () => {
         setAsking(false);
-        if (classroomCommands.has("question.cancel")) {
-          await classroomCommands.execute({ name: "question.cancel" });
-        }
+        quizRequest.current?.abort();
+        imageRequests.current.forEach((request) => request.abort());
+        stopVisibleQuiz();
+        setQuizOpen(false);
       }),
       classroomCommands.register(
         "quiz.generate",
@@ -205,9 +278,8 @@ export const Teacher = ({
           const result = await createQuiz(
             args.prompt,
             signal,
-            undefined,
-            true,
             context as { text: string; image?: string } | undefined,
+            true,
           );
           signal.throwIfAborted();
           if (!result) {
@@ -269,12 +341,18 @@ export const Teacher = ({
 
   return (
     <>
-      <InkQuestion
-        key={questionId}
-        api={api}
-        placement={asking ? questionPlacement : undefined}
-        onSubmit={async (text, signal, ids, context) => {
-          await createQuiz(text, signal, ids, false, context);
+      <QuizComposer
+        open={asking}
+        onClose={() => setAsking(false)}
+        onSubmit={(prompt, type) => {
+          setAsking(false);
+          void createQuiz(
+            prompt,
+            new AbortController().signal,
+            undefined,
+            false,
+            type,
+          ).catch(() => {});
         }}
       />
       {(quizOpen || quiz) && (
@@ -283,8 +361,13 @@ export const Teacher = ({
           quiz={quiz}
           busy={quizBusy}
           error={quizError}
+          onRetryImage={(id) => {
+            void retryImage(id);
+          }}
           onClose={() => {
             quizRequest.current?.abort();
+            imageRequests.current.forEach((request) => request.abort());
+            stopVisibleQuiz();
             setQuizOpen(false);
           }}
         />

@@ -8,6 +8,8 @@ import type { AppState } from "@fcboard/fcboard/types";
 
 import { STORAGE_KEYS } from "../app_constants";
 
+import { shouldRestoreBoardSession } from "./boardSession";
+
 export const saveUsernameToLocalStorage = (username: string) => {
   try {
     localStorage.setItem(
@@ -35,11 +37,14 @@ export const importUsernameFromLocalStorage = (): string | null => {
 };
 
 export const importFromLocalStorage = () => {
+  const restore = shouldRestoreBoardSession();
   let savedElements = null;
   let savedState = null;
 
   try {
-    savedElements = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS);
+    if (restore) {
+      savedElements = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS);
+    }
     savedState = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE);
   } catch (error: any) {
     // Unable to access localStorage
@@ -65,6 +70,12 @@ export const importFromLocalStorage = () => {
           JSON.parse(savedState) as Partial<AppState>,
         ),
       };
+      if (!restore) {
+        const defaults = getDefaultAppState();
+        appState.scrollX = defaults.scrollX;
+        appState.scrollY = defaults.scrollY;
+        appState.zoom = defaults.zoom;
+      }
     } catch (error: any) {
       console.error(error);
       // Do nothing because appState is already null

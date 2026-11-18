@@ -6,6 +6,8 @@ import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { LocalData } from "../data/LocalData";
+
 import { TransientMessage } from "./TransientMessage";
 
 import { MaterialPanel } from "./MaterialPanel";
@@ -207,7 +209,20 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       classroomCommands.register(
         "board.save",
         "Save the current board on this device.",
-        () => controller.flush(),
+        async (args) => {
+          const savedExit = args.preserveForExit === true;
+          await controller.flush(savedExit);
+          if (savedExit) {
+            await LocalData.saveForExit(
+              api.getSceneElements(),
+              api.getAppState(),
+              api.getFiles(),
+            );
+            if (args.signal instanceof AbortSignal) {
+              args.signal.throwIfAborted();
+            }
+          }
+        },
       ),
       classroomCommands.register(
         "board.reorder",

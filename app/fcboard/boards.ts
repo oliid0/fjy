@@ -10,6 +10,11 @@ import type {
 } from "@fcboard/fcboard/types";
 import type { FcboardElement } from "@fcboard/element/types";
 
+import {
+  isNativeBoardSession,
+  shouldRestoreBoardSession,
+} from "../data/boardSession";
+
 import { classroomCommands } from "./commands";
 
 export type Board = {
@@ -36,9 +41,26 @@ export type Workspace = {
 };
 const storage = createStore("fcboard-boards", "workspace");
 const recoveryKey = "fcboard-board-recovery";
-export const readWorkspace = async () => get<Workspace>("workspace", storage);
-export const writeWorkspace = (value: Workspace) =>
-  set("workspace", value, storage);
+let sessionWorkspace: Workspace | undefined;
+export const readWorkspace = async () => {
+  if (isNativeBoardSession()) {
+    if (sessionWorkspace || !shouldRestoreBoardSession()) {
+      return sessionWorkspace;
+    }
+    sessionWorkspace = await get<Workspace>("workspace", storage);
+    return sessionWorkspace;
+  }
+  return get<Workspace>("workspace", storage);
+};
+export const writeWorkspace = (value: Workspace, persist = false) => {
+  if (isNativeBoardSession()) {
+    sessionWorkspace = value;
+    if (!persist) {
+      return Promise.resolve();
+    }
+  }
+  return set("workspace", value, storage);
+};
 
 const sameSceneVersions = (
   left: readonly Pick<FcboardElement, "id" | "versionNonce">[],
@@ -118,35 +140,37 @@ export class BoardBook {
       this.value = stored;
       // An IndexedDB transaction started by pagehide can be abandoned by reload.
       // Recover only the matching page, never replace the other saved boards.
-      try {
-        const recovery = JSON.parse(
-          localStorage.getItem(recoveryKey) || "null",
-        ) as Board | null;
-        const page =
-          recovery && stored.boards.find((board) => board.id === recovery.id);
-        if (
-          page &&
-          recovery &&
-          recovery.updated > page.updated &&
-          Array.isArray(recovery.elements) &&
-          recovery.view
-        ) {
-          this.value = {
-            ...stored,
-            active: page.id,
-            boards: stored.boards.map((board) =>
-              board.id === page.id
-                ? {
-                    ...recovery,
-                    files: { ...board.files, ...recovery.files },
-                  }
-                : board,
-            ),
-          };
-          needsSave = true;
+      if (!isNativeBoardSession()) {
+        try {
+          const recovery = JSON.parse(
+            localStorage.getItem(recoveryKey) || "null",
+          ) as Board | null;
+          const page =
+            recovery && stored.boards.find((board) => board.id === recovery.id);
+          if (
+            page &&
+            recovery &&
+            recovery.updated > page.updated &&
+            Array.isArray(recovery.elements) &&
+            recovery.view
+          ) {
+            this.value = {
+              ...stored,
+              active: page.id,
+              boards: stored.boards.map((board) =>
+                board.id === page.id
+                  ? {
+                      ...recovery,
+                      files: { ...board.files, ...recovery.files },
+                    }
+                  : board,
+              ),
+            };
+            needsSave = true;
+          }
+        } catch (error) {
+          this.onError(error);
         }
-      } catch (error) {
-        this.onError(error);
       }
       const active = this.value.boards.find(
         (board) => board.id === this.value.active,
@@ -246,13 +270,21 @@ export class BoardBook {
   private emit() {
     this.listeners.forEach((listener) => listener());
   }
-  async flush() {
+  async flush(persist = false) {
     clearTimeout(this.timer);
     this.timer = undefined;
     // Clone now: live element mutations must not change an in-flight persistence operation.
-    const snapshot = JSON.parse(JSON.stringify(this.value)) as Workspace;
-    this.writing = this.writing.catch(() => {}).then(() => this.save(snapshot));
+    const snapshot =
+      isNativeBoardSession() && !persist
+        ? this.value
+        : (JSON.parse(JSON.stringify(this.value)) as Workspace);
+    this.writing = this.writing
+      .catch(() => {})
+      .then(() => (persist ? this.save(snapshot, true) : this.save(snapshot)));
     await this.writing;
+    if (isNativeBoardSession()) {
+      return;
+    }
     try {
       const recovery = JSON.parse(
         localStorage.getItem(recoveryKey) || "null",
@@ -272,6 +304,9 @@ export class BoardBook {
   }
   /** Serialize once when leaving, rather than delaying ink with per-stroke JSON. */
   checkpoint() {
+    if (isNativeBoardSession()) {
+      return;
+    }
     const page = this.value.boards.find(
       (board) => board.id === this.visibleActive,
     );

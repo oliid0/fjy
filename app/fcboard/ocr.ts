@@ -9,28 +9,9 @@ import {
   hasStructuredMathInk,
   preservesMathInkStructure,
 } from "./calculationInk";
-import {
-  hasDigitalInk,
-  prepareDigitalInk,
-  recognizeDigitalInk,
-} from "./digitalInk";
+import { hasDigitalInk, recognizeDigitalInk } from "./digitalInk";
 
 import type { InkInput } from "./digitalInk";
-
-export const warmHandwriting = async () => {
-  if (currentSettings().ocr === "cloud") {
-    return;
-  }
-  // Gate the imports themselves: Vite discovers worker assets before Rollup
-  // removes code following an unconditional native return.
-  if (import.meta.env.VITE_NATIVE_INFERENCE !== "true") {
-    if (!hasDigitalInk()) {
-      const { warmHandwriting } = await import("./localOcr");
-      return warmHandwriting();
-    }
-  }
-  return prepareDigitalInk();
-};
 
 /** A caller action owns recognition; the two backends never read or mutate the board. */
 export const recognizeHandwriting = async (

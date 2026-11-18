@@ -112,9 +112,6 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
             api.updateScene({
               appState: {
                 multiStroke: !pointMode.multi,
-                ...(!pointMode.multi
-                  ? { currentItemInkAssist: undefined }
-                  : {}),
               },
             })
           }

@@ -227,6 +227,78 @@ describe("APK-style whiteboard ink", () => {
       staticPaint.mockRestore();
     }
   });
+  it.each([
+    "text",
+    "shape",
+    "magic",
+    "function",
+    "calculation",
+    "language",
+  ] as const)(
+    "retains all five simultaneous finger strokes in %s mode without panning or classifying a palm",
+    async (mode) => {
+      const { container } = await render(
+        <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+      );
+      const canvas = container.querySelector("canvas.interactive")!;
+      act(() => {
+        h.app.api.updateScene({
+          appState: { currentItemInkAssist: mode, multiStroke: true },
+        });
+        h.app.setActiveTool({ type: "freedraw" });
+      });
+      const initial = {
+        scrollX: h.state.scrollX,
+        scrollY: h.state.scrollY,
+        zoom: h.state.zoom.value,
+      };
+      const committed = vi.fn();
+      const stop = h.app.api.onInkCommit(committed);
+      try {
+        for (let id = 1; id <= 5; id++) {
+          pointer(canvas, "pointerdown", 100, 100 + id * 60, {
+            pointerId: id,
+            pointerType: "touch",
+            width: 12,
+            height: 45,
+          });
+        }
+        expect(live()).toHaveLength(5);
+        for (let id = 1; id <= 5; id++) {
+          pointer(canvas, "pointermove", 260, 100 + id * 60, {
+            pointerId: id,
+            pointerType: "touch",
+            width: 12,
+            height: 45,
+          });
+          pointer(canvas, "pointerup", 300, 100 + id * 60, {
+            pointerId: id,
+            pointerType: "touch",
+            width: 12,
+            height: 45,
+          });
+        }
+        expect(live()).toHaveLength(5);
+        expect(new Set(live().map((stroke) => stroke.id)).size).toBe(5);
+        expect(committed).toHaveBeenCalledTimes(5);
+        live().forEach((stroke) => {
+          expect(stroke.type).toBe("freedraw");
+          expect(stroke.customData?.fcInk.assist).toBe(mode);
+          if (stroke.type === "freedraw") {
+            expect(stroke.points.at(-1)).toEqual([200, 0]);
+          }
+        });
+        expect({
+          scrollX: h.state.scrollX,
+          scrollY: h.state.scrollY,
+          zoom: h.state.zoom.value,
+        }).toEqual(initial);
+      } finally {
+        stop();
+      }
+    },
+  );
+
   it("switches local and whole-object erasing through buttons rather than an editable field", async () => {
     await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     const eraser = screen.getByRole("button", {

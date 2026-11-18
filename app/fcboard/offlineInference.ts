@@ -80,12 +80,10 @@ export const offlineInference = (
       signal.reason || new DOMException("Aborted", "AbortError"),
     );
   signal.addEventListener("abort", abort, { once: true });
-  const key =
+  void queueLocalInference(
     input.kind === "translation"
       ? `${input.kind}:${input.source}:${input.target}`
-      : input.kind;
-  void queueLocalInference(
-    key,
+      : input.kind,
     createModel,
     async (resident) => {
       if (done || !payload) {
@@ -140,8 +138,11 @@ export const offlineInference = (
       } catch (error) {
         settle(undefined, error);
       }
-      await result.catch(() => {});
-      model = undefined;
+      try {
+        await result;
+      } finally {
+        model = undefined;
+      }
     },
     () => !done,
   ).catch((error) => settle(undefined, error));

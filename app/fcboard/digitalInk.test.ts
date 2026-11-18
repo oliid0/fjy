@@ -79,8 +79,8 @@ it("cancels a native handwriting request immediately and ignores its late result
     await failure;
     expect(recognize.mock.calls[0][0]).toMatchObject({
       language: "es-ES",
-      reuse: true,
     });
+    expect(recognize.mock.calls[0][0]).not.toHaveProperty("reuse");
     expect(cancel).toHaveBeenCalledWith({ id: recognize.mock.calls[0][0].id });
     finish({ candidates: ["late"], engine: "mlkit" });
     await Promise.resolve();

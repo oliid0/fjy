@@ -3,6 +3,7 @@
   --fc-magic-unit: 0.67px;
   position: fixed;
   z-index: 1700;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;

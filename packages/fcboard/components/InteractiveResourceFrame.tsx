@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-import { interactiveHtml } from "../interactiveHtml";
+import { interactiveHtml, resourceNeedsRuntime } from "../interactiveHtml";
 import { t } from "../i18n";
 import { attachResourceControls } from "../interactiveResourceControls";
 
@@ -64,27 +64,27 @@ const WebInteractiveResourceFrame = ({
   liveMessage.current = live?.message;
   const liveSignature = JSON.stringify(live?.message);
 
-  const [visualizationDocument, setVisualizationDocument] = useState<{
+  const [preparedDocument, setPreparedDocument] = useState<{
     source: InteractiveResource;
     html?: string;
     error?: string;
   }>();
   useEffect(() => {
-    if (!documentResource.visualization) {
+    if (!resourceNeedsRuntime(documentResource)) {
       return;
     }
     let active = true;
-    void import("../visualizationHtml")
-      .then(({ visualizationHtml }) => visualizationHtml(documentResource))
+    void import("../resourceHtml")
+      .then(({ resourceHtml }) => resourceHtml(documentResource))
       .then(
         (html) => {
           if (active) {
-            setVisualizationDocument({ source: documentResource, html });
+            setPreparedDocument({ source: documentResource, html });
           }
         },
         (error) => {
           if (active) {
-            setVisualizationDocument({
+            setPreparedDocument({
               source: documentResource,
               error: error instanceof Error ? error.message : String(error),
             });
@@ -134,17 +134,40 @@ const WebInteractiveResourceFrame = ({
         iframeRef.current = null;
       }
     };
-  }, [iframeRef, resource.html, revision, visualizationDocument]);
+  }, [iframeRef, resource.html, revision, preparedDocument]);
   const html = useMemo(() => {
     try {
-      return interactiveHtml(documentResource.html);
+      const html = interactiveHtml(
+        documentResource.html,
+        documentResource.libraries,
+      );
+      if (!resourceNeedsRuntime(documentResource)) {
+        return html;
+      }
+      const preview = new DOMParser().parseFromString(html, "text/html");
+      preview.querySelectorAll("script").forEach((script) => script.remove());
+      for (const element of preview.querySelectorAll("*")) {
+        for (const attribute of [...element.attributes]) {
+          if (/^on/i.test(attribute.name)) {
+            element.removeAttribute(attribute.name);
+          }
+        }
+      }
+      preview.body.style.pointerEvents = "none";
+      const status = preview.createElement("p");
+      status.setAttribute("role", "status");
+      status.style.cssText =
+        "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 18px;background:#fff;color:#17243c;border-radius:12px";
+      status.textContent = t("fcboard.resource_loading");
+      preview.body.append(status);
+      return `<!doctype html>${preview.documentElement.outerHTML}`;
     } catch {
       return undefined;
     }
-  }, [documentResource.html]);
+  }, [documentResource]);
   const visual =
-    visualizationDocument?.source === documentResource
-      ? visualizationDocument
+    preparedDocument?.source === documentResource
+      ? preparedDocument
       : undefined;
   const error =
     visual?.error ||
@@ -158,6 +181,9 @@ const WebInteractiveResourceFrame = ({
       key={revision}
       ref={ref}
       onLoad={() => {
+        if (resourceNeedsRuntime(documentResource) && !visual?.html) {
+          return;
+        }
         loaded.current = true;
         controls.current?.loaded();
         sendLive();
@@ -165,8 +191,9 @@ const WebInteractiveResourceFrame = ({
       className="fcboard__embeddable"
       title={resource.title}
       data-resource-object-id={objectId}
+      data-resource-id={resource.id}
       srcDoc={visual?.html || html}
-      aria-busy={!!resource.visualization && !visual?.html}
+      aria-busy={resourceNeedsRuntime(documentResource) && !visual?.html}
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"

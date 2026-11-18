@@ -885,3 +885,51 @@ it.each(["language", "cube", "cylinder"] as const)(
     expect(h.state.selectedLinearElement).toBeNull();
   },
 );
+
+it("keeps the user's inner circle separate from whole text/image operation bounds", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  h.state.width = 1600;
+  h.state.height = 900;
+  const text = API.createElement({
+    type: "text",
+    text: "Force and inertia in one sentence",
+    x: 0,
+    y: 0,
+    fontSize: 80,
+    width: 1200,
+    height: 100,
+  });
+  const image = API.createElement({
+    type: "image",
+    x: 500,
+    y: 200,
+    width: 500,
+    height: 400,
+  });
+  API.updateScene({ elements: [text, image] });
+  const word = [
+    pointFrom(100, 15),
+    pointFrom(180, 15),
+    pointFrom(180, 45),
+    pointFrom(100, 45),
+  ];
+  act(() => h.app.lassoTrail.selectPath(word));
+  expect(h.state.selectedElementIds).toEqual({ [text.id]: true });
+  expect(h.state.whiteboardSelection?.path).toEqual(word);
+  expect(h.state.whiteboardSelection!.bounds.right).toBeGreaterThan(180);
+  const graph = [
+    pointFrom(600, 300),
+    pointFrom(680, 300),
+    pointFrom(680, 360),
+    pointFrom(600, 360),
+  ];
+  act(() => h.app.lassoTrail.selectPath(graph));
+  expect(h.state.selectedElementIds).toEqual({ [image.id]: true });
+  expect(h.state.whiteboardSelection?.path).toEqual(graph);
+  expect(h.state.whiteboardSelection!.bounds).toEqual({
+    left: 480,
+    top: 180,
+    right: 1020,
+    bottom: 620,
+  });
+});

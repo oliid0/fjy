@@ -16,6 +16,15 @@ import java.util.concurrent.Executors;
 public final class NativeEraserPlugin extends Plugin {
     private final ExecutorService worker=Executors.newSingleThreadExecutor(r->new Thread(r,"native-eraser-geometry"));
     private final Map<String,NativeStrokeEraser> scenes=new HashMap<>();
+    @PluginMethod public void clip(PluginCall call) {
+        worker.execute(()->{
+            try {
+                org.json.JSONObject stroke=call.getObject("stroke");JSArray cuts=call.getArray("cuts");
+                if(stroke==null||cuts==null)throw new IllegalArgumentException("Missing live ink cuts");
+                call.resolve(JSObject.fromJSONObject(new NativeStrokeEraser().clip(stroke,cuts)));
+            }catch(Exception error){call.reject(error.getMessage(),error);}
+        });
+    }
     @PluginMethod public void erase(PluginCall call) {
         worker.execute(()->{
             try {

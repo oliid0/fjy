@@ -722,11 +722,6 @@
     "mmb": "Rueda de desplazamiento"
   },
   "fcboard": {
-    "functionEditor": {
-      "edit": "Editar funciones",
-      "expressions": "Una función por línea, hasta cuatro en el mismo sistema de coordenadas",
-      "invalid": "Introduzca de una a cuatro funciones válidas de x."
-    },
     "appTitle": "Pizarra Fcboard",
     "appDescription": "Pizarra Fcboard para enseñanza y reuniones",
     "highlighter": "Resaltador",
@@ -1290,6 +1285,10 @@
     "coordinate_range_must_be_between_0_and_1000": "El rango de coordenadas debe estar entre 0 y 1000",
     "no_real_valued_plot_in_this_range": "No hay ningún gráfico de valor real en este rango",
     "no_speech_engine_is_available_connect_a_voice_service_in_settings_or_teach_with_captions": "No hay ningún motor de voz disponible. Conecte un servicio de voz en la configuración o enseñe con subtítulos.",
+    "doubao_audio_generation": "Generación de audio de Doubao",
+    "study_audio_generation_help": "La pronunciación usa el servicio de generación de audio y su clave de Speech. El botón rellena la dirección; introduzca la clave abajo.",
+    "audio_generation_requires_the_tts_create_endpoint": "Seleccione el servicio de generación de audio de Doubao en los ajustes de voz para la pronunciación.",
+    "pronunciation_language_not_supported": "La generación de audio no admite la pronunciación en {{language}}.",
     "the_voice_service_returned_invalid_audio": "El servicio de voz devolvió audio no válido",
     "this_file_is_encrypted_use_an_unencrypted_document": "Este archivo está cifrado. Utilice un documento no cifrado.",
     "no_document_is_open": "No hay ningún documento abierto",
@@ -1644,7 +1643,11 @@
       "quizInvalidStructure": "Cantidad o estructura de preguntas no válida. Vuelva a generar.",
       "quizDiagramUnsupported": "El diagrama contiene contenido de dibujo no compatible.",
       "quizDiagramIncomplete": "El diagrama está incompleto o no es compatible."
-    }
+    },
+    "functionGraph": {
+      "invalid": "No se pudo dibujar la gráfica de la función."
+    },
+    "resource_loading": "Cargando el recurso didáctico…"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "Comparación de números",

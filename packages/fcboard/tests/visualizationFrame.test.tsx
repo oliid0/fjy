@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import { comparisonVisualization } from "../../../app/fcboard/test/comparisonVisualization";
 import { InteractiveResourceFrame } from "../components/InteractiveResourceFrame";
-import * as source from "../visualizationHtml";
+import * as source from "../resourceHtml";
 
 import type { InteractiveResource } from "../interactiveHtml";
 
@@ -43,7 +43,7 @@ it("reports the actual iframe after asynchronous runtime loading and clears it o
 
 it("does not show a stale resource when the previous async load completes later", async () => {
   const pending: ((html: string) => void)[] = [];
-  vi.spyOn(source, "visualizationHtml").mockImplementation(
+  vi.spyOn(source, "resourceHtml").mockImplementation(
     () => new Promise((resolve) => pending.push(resolve)),
   );
   const view = render(
@@ -73,7 +73,7 @@ it("does not show a stale resource when the previous async load completes later"
 });
 
 it("shows an async runtime failure as an actionable error instead of an empty window", async () => {
-  vi.spyOn(source, "visualizationHtml").mockRejectedValue(
+  vi.spyOn(source, "resourceHtml").mockRejectedValue(
     new Error("Cannot open this chart"),
   );
   render(
@@ -87,4 +87,38 @@ it("shows an async runtime failure as an actionable error instead of an empty wi
     "Cannot open this chart",
   );
   expect(document.querySelector("iframe")).toBeNull();
+});
+
+it("holds authored JSXGraph scripts and inline handlers until its declared package is ready", async () => {
+  let finish!: (html: string) => void;
+  vi.spyOn(source, "resourceHtml").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const geometry: InteractiveResource = {
+    id: "geometry",
+    title: "Geometry",
+    libraries: ["jsxgraph"],
+    html: '<html><body><h1>Geometry</h1><div id="b" data-fc-graphics onclick="JXG.JSXGraph.initBoard()"></div><script>JXG.JSXGraph.initBoard("b");</script></body></html>',
+  };
+  render(
+    <InteractiveResourceFrame
+      resource={geometry}
+      objectId="geometry"
+      surface="whiteboard"
+    />,
+  );
+  const frame = screen.getByTitle("Geometry") as HTMLIFrameElement;
+  expect(frame).toHaveAttribute("aria-busy", "true");
+  const preview = new DOMParser().parseFromString(frame.srcdoc, "text/html");
+  expect(preview.querySelector("script")).toBeNull();
+  expect(preview.querySelector("[onclick]")).toBeNull();
+  expect(preview.body.style.pointerEvents).toBe("none");
+  expect(preview.querySelector('[role="status"]')).not.toBeNull();
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  await act(async () => finish("<svg>Installed engine ready</svg>"));
+  expect(frame).toHaveAttribute("aria-busy", "false");
+  expect(frame.srcdoc).toBe("<svg>Installed engine ready</svg>");
 });

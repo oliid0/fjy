@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
 
-import { sweptRectangle } from "@fcboard/fcboard/eraser/stroke";
+import {
+  isPalmContact,
+  pointerSamples,
+  sweptRectangle,
+} from "@fcboard/fcboard/eraser/stroke";
 
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
+
+import blackPenIcon from "./assets/multiscreen/ic_black_pen.svg?url";
+import bluePenIcon from "./assets/multiscreen/ic_blue_pen.svg?url";
+import redPenIcon from "./assets/multiscreen/ic_red_pen.svg?url";
+import eraserIcon from "./assets/multiscreen/ic_big_eraser.svg?url";
 
 import { MaterialPanel } from "./MaterialPanel";
 import { createNativeSplitInk } from "./nativeSplitInk";
@@ -19,6 +28,7 @@ type Stroke = {
   points: Point[];
   color: string;
   width: number;
+  height: number;
   erase: boolean;
   complete: boolean;
   gesture?: string;
@@ -26,12 +36,12 @@ type Stroke = {
 type Pane = {
   strokes: Stroke[];
   color: number;
-  penSize: number;
   eraser?: number;
 };
-// BSD HDataSet.getSplitColor, with independent explicit120/180-size erasers.
+// BSD HDataSet.getSplitColor and the visible big eraser in canvas_item_mid_layout.
 const colors = ["#000000", "#0000ff", "#ff0000"];
-const penWidths = [1.34, 2.01, 2.68];
+const penWidth = 2.01;
+const penIcons = [blackPenIcon, bluePenIcon, redPenIcon];
 const backgrounds = [
   { color: "#ffffff", label: "split_background_0" },
   { color: "#263731", label: "split_background_1" },
@@ -63,7 +73,7 @@ const drawSegment = (
       { x: from[0] * canvas.width, y: from[1] * canvas.height },
       { x: to[0] * canvas.width, y: to[1] * canvas.height },
       context.lineWidth,
-      context.lineWidth * 1.2,
+      stroke.height * (window.devicePixelRatio || 1),
     );
     polygon.forEach((point, index) =>
       index
@@ -106,7 +116,7 @@ const finishStroke = (canvas: HTMLCanvasElement, stroke: Stroke) => {
   }
   stroke.complete = true;
 };
-/** com.xbh.whiteboard MultiScreenView: independent ink, four colors, three sizes. */
+/** BSD MultiScreen: independent ink and the original three pens plus eraser. */
 const SplitPane = ({
   model,
   index,
@@ -124,16 +134,15 @@ const SplitPane = ({
   const nativeContacts = useRef(new Map<string, Stroke>());
   const [tool, setTool] = useState(model.color);
   const [eraser, setEraser] = useState(model.eraser || 0);
-  const [penSize, setPenSize] = useState(model.penSize);
   const nativeStyle = useRef({
     color: colors[tool],
-    width: penWidths[penSize],
+    width: penWidth,
     eraser,
     disabled,
   });
   nativeStyle.current = {
     color: colors[tool],
-    width: penWidths[penSize],
+    width: penWidth,
     eraser,
     disabled,
   };
@@ -229,6 +238,7 @@ const SplitPane = ({
           stroke = {
             color: style.color,
             width: event.mode === "erase" ? event.width : style.width,
+            height: event.mode === "erase" ? event.height : style.width,
             erase: event.mode === "erase",
             complete: false,
             points: [],
@@ -304,13 +314,28 @@ const SplitPane = ({
       eraseParts.clear();
     };
   }, [model, redraw]);
-  useEffect(() => native.current?.update(), [disabled, tool, penSize, eraser]);
-  const point = (x: number, y: number): Point => {
-    const rect = canvas.current!.getBoundingClientRect();
+  useEffect(() => native.current?.update(), [disabled, tool, eraser]);
+  const point = (x: number, y: number, rect: DOMRect): Point => {
     return [
       Math.max(0, Math.min(1, (x - rect.left) / Math.max(1, rect.width))),
       Math.max(0, Math.min(1, (y - rect.top) / Math.max(1, rect.height))),
     ];
+  };
+  const appendSamples = (
+    node: HTMLCanvasElement,
+    stroke: Stroke,
+    event: PointerEvent,
+  ) => {
+    const bounds = node.getBoundingClientRect();
+    for (const sample of pointerSamples(event)) {
+      const next = point(sample.clientX, sample.clientY, bounds);
+      const last = stroke.points.at(-1)!;
+      if (next[0] === last[0] && next[1] === last[1]) {
+        continue;
+      }
+      drawSegment(node, stroke, last, next, stroke.points.at(-2));
+      stroke.points.push(next);
+    }
   };
   return (
     <section
@@ -362,15 +387,30 @@ const SplitPane = ({
           } catch {
             // WebViews may retire a pointer before capture reaches the DOM.
           }
-          const contact = Math.max(event.width || 0, event.height || 0);
           const erase =
-            !!eraser || (event.pointerType === "touch" && contact >= 36);
+            !!eraser ||
+            isPalmContact(event, 36) ||
+            (event.pointerType === "pen" &&
+              (event.button === 2 ||
+                event.button === 5 ||
+                !!(event.buttons & 34)));
           const stroke: Stroke = {
             color: colors[tool],
-            width: erase ? eraser || Math.max(60, contact) : penWidths[penSize],
+            width: erase ? eraser || Math.max(60, event.width || 0) : penWidth,
+            height: erase
+              ? eraser
+                ? eraser * 1.2
+                : Math.max(72, event.height || 0)
+              : penWidth,
             erase,
             complete: false,
-            points: [point(event.clientX, event.clientY)],
+            points: [
+              point(
+                event.clientX,
+                event.clientY,
+                event.currentTarget.getBoundingClientRect(),
+              ),
+            ],
           };
           model.strokes.push(stroke);
           active.current.set(event.pointerId, stroke);
@@ -386,36 +426,12 @@ const SplitPane = ({
           if (!stroke) {
             return;
           }
-          const coalesced = event.nativeEvent.getCoalescedEvents?.();
-          const samples = coalesced?.length ? coalesced : [event.nativeEvent];
-          for (const sample of samples) {
-            const next = point(sample.clientX, sample.clientY);
-            const last = stroke.points[stroke.points.length - 1];
-            if (next[0] === last[0] && next[1] === last[1]) {
-              continue;
-            }
-            drawSegment(
-              event.currentTarget,
-              stroke,
-              stroke.points[stroke.points.length - 1],
-              next,
-              stroke.points[stroke.points.length - 2],
-            );
-            stroke.points.push(next);
-          }
+          appendSamples(event.currentTarget, stroke, event.nativeEvent);
         }}
         onPointerUp={(event) => {
           const stroke = active.current.get(event.pointerId);
           if (stroke) {
-            const next = point(event.clientX, event.clientY);
-            drawSegment(
-              event.currentTarget,
-              stroke,
-              stroke.points[stroke.points.length - 1],
-              next,
-              stroke.points[stroke.points.length - 2],
-            );
-            stroke.points.push(next);
+            appendSamples(event.currentTarget, stroke, event.nativeEvent);
             finishStroke(event.currentTarget, stroke);
             active.current.delete(event.pointerId);
           }
@@ -457,17 +473,7 @@ const SplitPane = ({
                     setEraser(0);
                   }}
                 >
-                  <FactoryIcon
-                    name={
-                      (
-                        [
-                          "splitBlackPen",
-                          "splitBluePen",
-                          "splitRedPen",
-                        ] as const
-                      )[value]
-                    }
-                  />
+                  <img src={penIcons[value]} alt="" draggable={false} />
                 </button>
               ),
             )}
@@ -477,59 +483,18 @@ const SplitPane = ({
             role="group"
             aria-label={t("toolBar.eraser")}
           >
-            {(["split_small_eraser", "split_large_eraser"] as const).map(
-              (label, index) => {
-                const size = index ? 90 : 60;
-                return (
-                  <button
-                    type="button"
-                    key={label}
-                    aria-label={t(`fcboard.${label}`)}
-                    aria-pressed={eraser === size}
-                    disabled={disabled}
-                    onClick={() => {
-                      model.eraser = size;
-                      setEraser(size);
-                    }}
-                  >
-                    <FactoryIcon
-                      name={index ? "splitLargeEraser" : "splitSmallEraser"}
-                    />
-                  </button>
-                );
-              },
-            )}
-          </div>
-          <span className="fc-split-divider" />
-          <div
-            className="fc-split-widths"
-            role="group"
-            aria-label={t("fcboard.split_pen_widths")}
-          >
-            {penWidths.map((width, value) => (
-              <button
-                type="button"
-                key={width}
-                aria-label={t("fcboard.split_pen_size", { size: value + 1 })}
-                aria-pressed={penSize === value}
-                disabled={disabled}
-                onClick={() => {
-                  model.penSize = value;
-                  setPenSize(value);
-                }}
-              >
-                <span
-                  style={{
-                    width: `calc(${
-                      6 + value * 4
-                    } * var(--fc-split-unit, 0.67px))`,
-                    height: `calc(${
-                      6 + value * 4
-                    } * var(--fc-split-unit, 0.67px))`,
-                  }}
-                />
-              </button>
-            ))}
+            <button
+              type="button"
+              aria-label={t("fcboard.split_large_eraser")}
+              aria-pressed={eraser === 90}
+              disabled={disabled}
+              onClick={() => {
+                model.eraser = 90;
+                setEraser(90);
+              }}
+            >
+              <img src={eraserIcon} alt="" draggable={false} />
+            </button>
           </div>
         </div>
       </div>
@@ -632,7 +597,7 @@ export const SplitBoard = () => {
   const current = useRef({ open, count, background });
   current.current = { open, count, background };
   const models = useRef<Pane[]>(
-    Array.from({ length: 4 }, () => ({ strokes: [], color: 0, penSize: 1 })),
+    Array.from({ length: 4 }, () => ({ strokes: [], color: 0 })),
   );
   useEffect(
     () =>

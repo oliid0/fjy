@@ -8,10 +8,15 @@ import type { LocalPoint } from "@fcboard/math";
 
 import { createNativeEraserBackend } from "./nativeEraser";
 
-const native = vi.hoisted(() => ({ erase: vi.fn(), release: vi.fn() }));
+const native = vi.hoisted(() => ({
+  erase: vi.fn(),
+  clip: vi.fn(),
+  release: vi.fn(),
+}));
 vi.mock("@capacitor/core", () => ({ registerPlugin: () => native }));
 beforeEach(() => {
   native.erase.mockReset().mockResolvedValue({ patches: [] });
+  native.clip.mockReset();
   native.release.mockReset().mockResolvedValue(undefined);
 });
 const stroke = () => ({
@@ -30,6 +35,49 @@ const path = [
   { x: 50, y: -30 },
   { x: 50, y: 30 },
 ];
+it("clips a completed active contact in one native batch with its actual sample order", async () => {
+  const ink = stroke();
+  native.clip.mockResolvedValue({
+    pieces: [
+      [
+        [0, 0, 0.2, 10, 0],
+        [43, 0, 0.458, 53, 0],
+      ],
+    ],
+    nibHit: true,
+  });
+  const backend = createNativeEraserBackend("board");
+  const cuts = [
+    {
+      gesture: "palm",
+      at: 1,
+      path: [
+        [50, -30],
+        [50, 30],
+      ] as [number, number][],
+      width: 10,
+      height: 12,
+    },
+  ];
+  const pieces = await backend.clip(ink, cuts);
+  expect(native.clip).toHaveBeenCalledTimes(1);
+  expect(native.clip.mock.calls[0][0]).toMatchObject({
+    cuts,
+    stroke: {
+      id: ink.id,
+      samples: [
+        [0, 0, 0.2, 10, 0, 0],
+        [100, 0, 0.8, 110, 0, 1],
+      ],
+    },
+  });
+  expect(pieces[0]).toMatchObject({
+    id: ink.id,
+    pressures: [0.2, 0.458],
+    customData: { fcInk: { dashOffset: 10 } },
+  });
+  expect(native.erase).not.toHaveBeenCalled();
+});
 it("sends version deltas once and removes deleted or locked strokes from the native index", async () => {
   const ink = stroke();
   const backend = createNativeEraserBackend("board");

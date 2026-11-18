@@ -444,8 +444,8 @@ import {
 
 import { EraserTrail } from "../eraser";
 import { FactoryCircleTrail } from "../eraser/FactoryCircleTrail";
+import { ObjectEraser } from "../eraser/ObjectEraser";
 import {
-  eraseSceneObjects,
   eraseSceneStrokes,
   eraseSceneRegion,
   isPalmContact,
@@ -654,6 +654,7 @@ class App extends React.Component<AppProps, AppState> {
   private excalidrawContainerRef = React.createRef<HTMLDivElement>();
 
   public scene: Scene;
+  private objectEraser: ObjectEraser;
   public fonts: Fonts;
   public renderer: Renderer;
   public visibleElements: readonly NonDeletedFcboardElement[];
@@ -827,6 +828,7 @@ class App extends React.Component<AppProps, AppState> {
       this,
     );
     this.scene = new Scene();
+    this.objectEraser = new ObjectEraser(this.scene);
 
     this.canvas = document.createElement("canvas");
     this.rc = rough.canvas(this.canvas);
@@ -861,6 +863,7 @@ class App extends React.Component<AppProps, AppState> {
       nativeInk: this.nativeInk,
       nativeRegionGesture: this.nativeRegionGesture,
       nativeEraserGesture: this.nativeEraserGesture,
+      eraseOverlayPointer: this.eraseOverlayPointer,
       registerNativeEraserBackend: this.registerNativeEraserBackend,
       onSceneMutation: (callback) => this.scene.onMutation(callback),
       registerNativeSceneRenderer: this.registerNativeSceneRenderer,
@@ -3341,6 +3344,7 @@ class App extends React.Component<AppProps, AppState> {
     }
     (window as any).launchQueue?.setConsumer(() => {});
     this.renderer.destroy();
+    this.objectEraser.dispose();
     this.scene.destroy();
     this.scene = new Scene();
     this.fonts = new Fonts(this.scene);
@@ -3537,9 +3541,6 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   componentDidUpdate(prevProps: AppProps, prevState: AppState) {
-    if (this.state.currentItemInkAssist && this.state.multiStroke !== false) {
-      this.setState({ multiStroke: false });
-    }
     // must be updated *before* state change listeners are triggered below
     if (!this._initialized && !this.state.isLoading) {
       this._initialized = true;
@@ -4909,9 +4910,6 @@ class App extends React.Component<AppProps, AppState> {
         };
         this.setState((previous) => {
           const next = { ...previous, ...update };
-          if (next.currentItemInkAssist) {
-            update.multiStroke = false;
-          }
           if (
             this.props.UIOptions.unifiedToolbar &&
             update.selectedElementIds
@@ -7906,6 +7904,34 @@ class App extends React.Component<AppProps, AppState> {
     target.addEventListener("lostpointercapture", cancel);
   };
 
+  /** Floating object views keep ordinary contacts, while palm/eraser contacts
+   * enter the very same scene eraser as a direct canvas contact. */
+  public eraseOverlayPointer = (event: React.PointerEvent<HTMLElement>) => {
+    if (
+      !this.props.UIOptions.unifiedToolbar ||
+      this.state.viewModeEnabled ||
+      !this.interactiveCanvas
+    ) {
+      return false;
+    }
+    const palm =
+      this.state.palmEraser !== false &&
+      isPalmContact(
+        event,
+        this.state.palmEraserThreshold ??
+          this.props.UIOptions.inkProfile?.palmThreshold ??
+          36,
+      );
+    const penEraser =
+      event.pointerType === "pen" &&
+      (event.button === 5 || !!(event.buttons & 34));
+    if (!palm && !penEraser && this.state.activeTool.type !== "eraser") {
+      return false;
+    }
+    this.handleCanvasPointerDown(event);
+    return true;
+  };
+
   private beginInkErasure = (
     event: React.PointerEvent<HTMLElement>,
     palm: boolean,
@@ -7916,11 +7942,7 @@ class App extends React.Component<AppProps, AppState> {
     const before = this.scene.getElementsIncludingDeleted();
     const objectMode =
       (palm || this.state.activeTool.type === "eraser") &&
-      this.state.eraserMode === "object" &&
-      !(
-        event.pointerType === "pen" &&
-        (event.button === 5 || !!(event.buttons & 34))
-      );
+      this.state.eraserMode === "object";
     const regionMode =
       !palm &&
       this.state.eraserMode === "region" &&
@@ -7954,7 +7976,9 @@ class App extends React.Component<AppProps, AppState> {
     let previous = viewportCoordsToSceneCoords(event, this.state);
     let changed = false;
     let finished = false;
-    const target = event.currentTarget || this.interactiveCanvas!;
+    // The source floating object may be erased immediately. Capture on the
+    // stable board canvas so its removal cannot cancel and restore the erasure.
+    const target = this.interactiveCanvas!;
     target.setPointerCapture?.(event.pointerId);
     const preview = document.createElement("div");
     preview.className = "fc-eraser-preview";
@@ -7974,6 +7998,7 @@ class App extends React.Component<AppProps, AppState> {
       let elements: readonly FcboardElement[] =
         this.scene.getElementsIncludingDeleted();
       let update = false;
+      const objectPath = objectMode ? [previous] : [];
       for (const sample of samples) {
         const next = viewportCoordsToSceneCoords(sample, this.state);
         if (regionMode) {
@@ -7988,15 +8013,7 @@ class App extends React.Component<AppProps, AppState> {
         preview.style.left = `${sample.clientX}px`;
         preview.style.top = `${sample.clientY}px`;
         if (objectMode) {
-          const nextElements = eraseSceneObjects(
-            elements,
-            previous,
-            next,
-            width / zoom,
-            height / zoom,
-          );
-          update ||= nextElements !== elements;
-          elements = nextElements;
+          objectPath.push(next);
           previous = next;
           continue;
         }
@@ -8010,6 +8027,16 @@ class App extends React.Component<AppProps, AppState> {
         update ||= nextElements !== elements;
         elements = nextElements;
         previous = next;
+      }
+      if (objectMode) {
+        const nextElements = this.objectEraser.erase(
+          objectPath,
+          width / zoom,
+          height / zoom,
+          this.activeInkIds,
+        );
+        update = nextElements !== elements;
+        elements = nextElements;
       }
       if (update) {
         changed = true;
@@ -9803,6 +9830,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private nativeEraserBackend: NativeEraserBackend | null = null;
+  private nativeInkClipper?: import("../eraser/stroke").NativeInkClipBackend;
   private nativeSceneRenderer?: (
     config: import("../scene/types").StaticSceneRenderConfig,
   ) => boolean;
@@ -9832,13 +9860,16 @@ class App extends React.Component<AppProps, AppState> {
   public registerNativeEraserBackend = (
     backend: NativeEraserBackend,
     synchronize?: Parameters<Scene["onMutation"]>[0],
+    clip?: import("../eraser/stroke").NativeInkClipBackend,
   ) => {
     this.nativeEraserBackend = backend;
+    this.nativeInkClipper = clip;
     const stop = synchronize && this.scene.onMutation(synchronize);
     return () => {
       stop?.();
       if (this.nativeEraserBackend === backend) {
         this.nativeEraserBackend = null;
+        this.nativeInkClipper = undefined;
       }
     };
   };
@@ -9851,7 +9882,7 @@ class App extends React.Component<AppProps, AppState> {
     height: number;
     objectMode: boolean;
     changed: boolean;
-    originals: Map<string, FcboardElement>;
+    originals: Map<string, readonly FcboardElement[]>;
     applied: Map<string, FcboardElement>;
   } | null = null;
 
@@ -9879,7 +9910,7 @@ class App extends React.Component<AppProps, AppState> {
               return [element];
             }
             const original = draft.originals.get(element.id);
-            return original ? [original] : [];
+            return original || [];
           });
           this.scene.replaceAllElements(restored);
         }
@@ -9917,9 +9948,7 @@ class App extends React.Component<AppProps, AppState> {
         ),
         width: input.width / this.state.zoom.value,
         height: input.height / this.state.zoom.value,
-        objectMode:
-          this.state.eraserMode === "object" &&
-          !(input.palm && input.pointerType === "pen"),
+        objectMode: this.state.eraserMode === "object",
         changed: false,
         originals: new Map(),
         applied: new Map(),
@@ -9942,7 +9971,7 @@ class App extends React.Component<AppProps, AppState> {
         !current.originals.has(element.id) &&
         !current.applied.has(element.id)
       ) {
-        current.originals.set(element.id, original);
+        current.originals.set(element.id, [original]);
       }
       current.applied.set(element.id, element);
     };
@@ -10023,8 +10052,19 @@ class App extends React.Component<AppProps, AppState> {
       });
     }
     let elements: readonly FcboardElement[] = before;
+    if (current.objectMode) {
+      apply(
+        this.objectEraser.erase(
+          path,
+          current.width,
+          current.height,
+          this.activeInkIds,
+        ),
+      );
+      return;
+    }
     for (let i = 1; i < path.length; i++) {
-      elements = (current.objectMode ? eraseSceneObjects : eraseSceneStrokes)(
+      elements = eraseSceneStrokes(
         elements,
         path[i - 1],
         path[i],
@@ -10159,6 +10199,7 @@ class App extends React.Component<AppProps, AppState> {
     width: number;
     height: number;
     pointerType: string;
+    cuts?: readonly import("../eraser/stroke").NativeInkCut[];
   }) => {
     if (input.phase === "cancel") {
       const draft = this.nativeInkDrafts.get(input.id);
@@ -10188,10 +10229,13 @@ class App extends React.Component<AppProps, AppState> {
         { clientX: first[0], clientY: first[1] },
         this.state,
       );
-      const element = this.createInkElement(
-        { ...input, pressure: first[2] },
-        origin.x,
-        origin.y,
+      const element = newElementWith(
+        this.createInkElement(
+          { ...input, pressure: first[2] },
+          origin.x,
+          origin.y,
+        ),
+        { id: input.id },
       );
       this.nativeInkDrafts.set(input.id, element);
       this.setState({ cursorButton: "down" });
@@ -10202,7 +10246,6 @@ class App extends React.Component<AppProps, AppState> {
     if (!draft) {
       throw new Error("Native ink contact is no longer active");
     }
-    this.nativeInkDrafts.delete(input.id);
     const points: LocalPoint[] = [];
     const pressures: number[] = [];
     let left = 0;
@@ -10241,31 +10284,94 @@ class App extends React.Component<AppProps, AppState> {
         fcInk: finishFactoryInk(draft.customData!.fcInk),
       },
     });
-    const previous = this.store.snapshot;
-    this.scene.replaceAllElements([
-      ...this.scene.getElementsIncludingDeleted(),
-      element,
-    ]);
-    this.onInkCommitEmitter.trigger(element);
-    const completed = new Map(
-      this.scene.getElementsIncludingDeleted().map((item) => [item.id, item]),
-    ) as SceneElementsMap;
-    const next = previous.maybeClone(
-      CaptureUpdateAction.IMMEDIATELY,
-      completed,
-      undefined,
-    );
-    this.store.scheduleMicroAction({
-      action: CaptureUpdateAction.IMMEDIATELY,
-      change: StoreChange.create(previous, next),
-      delta: StoreDelta.calculate(previous, next),
-    });
-    this.onInkProgressEmitter.trigger(element, "settled");
-    this.scene.triggerUpdate();
-    if (!this.nativeInkDrafts.size) {
-      this.setState({ cursorButton: "up" });
+    const commit = (
+      survivors: readonly FcboardFreeDrawElement[],
+      original: readonly FcboardFreeDrawElement[] = [element],
+    ) => {
+      if (this.nativeInkDrafts.get(input.id) !== draft) {
+        return;
+      }
+      this.nativeInkDrafts.delete(input.id);
+      if (!this.nativeInkDrafts.size) {
+        this.setState({ cursorButton: "up" });
+      }
+      if (!survivors.length) {
+        const eraser = this.nativeEraserDraft;
+        if (eraser && input.cuts?.some((cut) => cut.gesture === eraser.id)) {
+          // Keep a tombstone so cancelling a simultaneous eraser can restore
+          // this writer even when its entire completed stroke was covered.
+          survivors = [newElementWith(element, { isDeleted: true })];
+        } else {
+          this.onInkProgressEmitter.trigger(draft, "cancel");
+          return;
+        }
+      }
+      const eraser = this.nativeEraserDraft;
+      if (eraser && input.cuts?.some((cut) => cut.gesture === eraser.id)) {
+        eraser.originals.set(element.id, original);
+        survivors.forEach((stroke) => eraser.applied.set(stroke.id, stroke));
+        eraser.changed = true;
+      }
+      const previous = this.store.snapshot;
+      this.scene.replaceAllElements([
+        ...this.scene.getElementsIncludingDeleted(),
+        ...survivors,
+      ]);
+      const visible = survivors.filter((stroke) => !stroke.isDeleted);
+      visible.forEach((stroke) => this.onInkCommitEmitter.trigger(stroke));
+      const completed = new Map(
+        this.scene.getElementsIncludingDeleted().map((item) => [item.id, item]),
+      ) as SceneElementsMap;
+      const next = previous.maybeClone(
+        CaptureUpdateAction.IMMEDIATELY,
+        completed,
+        undefined,
+      );
+      this.store.scheduleMicroAction({
+        action: CaptureUpdateAction.IMMEDIATELY,
+        change: StoreChange.create(previous, next),
+        delta: StoreDelta.calculate(previous, next),
+      });
+      this.onInkProgressEmitter.trigger(
+        visible[0] || draft,
+        visible.length ? "settled" : "cancel",
+      );
+      this.scene.triggerUpdate();
+      return visible[0]?.id;
+    };
+    if (input.cuts?.length) {
+      if (!this.nativeInkClipper) {
+        throw new Error("Native live ink clipping is unavailable");
+      }
+      const zoom = this.state.zoom.value;
+      const cuts = input.cuts.map((cut) => ({
+        ...cut,
+        width: cut.width / zoom,
+        height: cut.height / zoom,
+        path: cut.path.map(([clientX, clientY]) => {
+          const point = viewportCoordsToSceneCoords(
+            { clientX, clientY },
+            this.state,
+          );
+          return [point.x, point.y] as const;
+        }),
+      }));
+      const clip = this.nativeInkClipper;
+      const activeEraser = this.nativeEraserDraft;
+      const retained = activeEraser
+        ? cuts.filter((cut) => cut.gesture !== activeEraser.id)
+        : cuts;
+      return clip(element, cuts).then(async (survivors) => {
+        const original =
+          activeEraser && retained.length !== cuts.length
+            ? retained.length
+              ? await clip(element, retained)
+              : [element]
+            : [element];
+        return commit(survivors, original);
+      });
     }
-    return element.id;
+    return commit([element]);
   };
 
   private createInkElement = (

@@ -2,7 +2,12 @@ import { factoryInkDashes, factoryInkUnit } from "./factoryInk";
 
 import type { FcboardFreeDrawElement } from "./types";
 
-export type BrushSample = { x: number; y: number; width: number };
+export type BrushSample = {
+  x: number;
+  y: number;
+  width: number;
+  sourceIndex?: number;
+};
 
 export const isFactoryBrush = (element: FcboardFreeDrawElement) =>
   element.customData?.fcInk?.version === 3 &&
@@ -165,6 +170,7 @@ export const factoryBrushSamples = (
       x,
       y,
       width: widths[index],
+      sourceIndex: index,
     }));
   }
   const mid = (a: BrushSample, b: BrushSample): BrushSample => ({
@@ -195,6 +201,7 @@ export const factoryBrushSamples = (
       x: element.points[index][0],
       y: element.points[index][1],
       width: widths[index],
+      sourceIndex: index,
     });
   }
   const from = Math.max(1, shared);
@@ -225,6 +232,7 @@ export const factoryBrushSamples = (
         x: a * a * source.x + 2 * a * t * control.x + t * t * destination.x,
         y: a * a * source.y + 2 * a * t * control.y + t * t * destination.y,
         width: source.width + (destination.width - source.width) * t,
+        sourceIndex: i,
       });
     }
     source = destination;

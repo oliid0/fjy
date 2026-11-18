@@ -339,31 +339,6 @@
         font-size: 2.4rem;
       }
 
-      #btn-basic,
-      #btn-scientific {
-        padding: 1px 18px;
-        padding-right: 24px;
-        color: #8b8b92;
-      }
-
-      #btn-basic.mode-selected,
-      #btn-scientific.mode-selected {
-        color: #1b1b1d;
-      }
-
-      .dark #btn-basic.mode-selected,
-      .dark #btn-scientific.mode-selected {
-        color: #fff;
-      }
-
-      #mode-indicator {
-        background: #fff;
-      }
-
-      .dark #mode-indicator {
-        background: #4a4a4e;
-      }
-
       #scientific-panel {
         background: transparent;
         height: min(78dvh, 680px);
@@ -603,17 +578,6 @@
         > div {
         background: #333336;
       }
-      #mode-indicator {
-        display: none;
-      }
-      #btn-basic,
-      #btn-scientific {
-        border-radius: 24px;
-        min-height: 36px;
-        padding: 8px 12px;
-        background: none;
-        font-size: 13px;
-      }
       #theme-toggle {
         width: 36px;
         height: 36px;
@@ -629,13 +593,6 @@
       }
       #theme-toggle i {
         font-style: normal;
-      }
-      #icon-moon,
-      .dark #icon-sun {
-        display: none;
-      }
-      .dark #icon-moon {
-        display: inline;
       }
       #result_display_container {
         text-align: right;
@@ -779,6 +736,16 @@
         width: 14px;
         height: 14px;
       }
+      #calculator-title {
+        min-width: 0;
+      }
+      #calculator-header #mode-toggle {
+        width: 26px;
+      }
+      #calculator-header #mode-toggle svg {
+        width: 26px;
+        height: 16px;
+      }
       #calculator-header button.mode-selected {
         color: #ff9f0a;
         background: #8882;
@@ -875,27 +842,26 @@
                   d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"
                 />
               </svg>
-              <svg
-                id="icon-moon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-              >
-                <path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z" />
+            </button>
+            <button
+              id="mode-toggle"
+              role="switch"
+              aria-checked="false"
+              data-i18n-aria-label="scientific"
+              onclick="setMode(mode === 'basic' ? 'scientific' : 'basic')"
+            >
+              <svg viewBox="0 0 32 20" fill="currentColor" aria-hidden="true">
+                <rect
+                  x="1"
+                  y="2"
+                  width="30"
+                  height="16"
+                  rx="8"
+                  opacity="0.25"
+                />
+                <circle id="mode-knob" cx="9" cy="10" r="6" />
               </svg>
             </button>
-            <span id="mode-indicator" hidden></span>
-            <button
-              id="btn-basic"
-              onclick="setMode('basic')"
-              data-i18n-text="basic"
-            ></button>
-            <button
-              id="btn-scientific"
-              onclick="setMode('scientific')"
-              data-i18n-text="scientificShort"
-            ></button>
             <button
               id="calculator-close"
               data-i18n-aria-label="close_calculator"
@@ -1551,9 +1517,8 @@
         "mobile-scientific-drawer",
       );
       const calculatorWrapper = document.getElementById("calculator-wrapper");
-      const modeIndicator = document.getElementById("mode-indicator");
-      const btnBasic = document.getElementById("btn-basic");
-      const btnScientific = document.getElementById("btn-scientific");
+      const modeToggle = document.getElementById("mode-toggle");
+      const modeKnob = document.getElementById("mode-knob");
       const degRadToggle = document.getElementById("deg-rad-toggle");
       const mobileDegRadToggle = document.getElementById(
         "mobile-deg-rad-toggle",
@@ -2172,11 +2137,9 @@
       function setMode(newMode) {
         mode = newMode;
         const scientific = mode === "scientific";
-        modeIndicator.style.transform = scientific
-          ? "translateX(100%)"
-          : "translateX(0)";
-        btnBasic.classList.toggle("mode-selected", !scientific);
-        btnScientific.classList.toggle("mode-selected", scientific);
+        modeToggle.setAttribute("aria-checked", String(scientific));
+        modeToggle.classList.toggle("mode-selected", scientific);
+        modeKnob.setAttribute("cx", scientific ? "23" : "9");
         scientificPanel.classList.toggle("hidden", !scientific);
         scientificPanel.classList.toggle("w-0", !scientific);
         scientificPanel.classList.toggle("opacity-0", !scientific);

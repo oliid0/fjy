@@ -157,22 +157,6 @@
     "pattern": "^(?:(?:请|帮我|麻烦)\\s*)?(?:讲解|解释|引导|辅导|讲一|教我|演示|画|绘制|生成|插入|总结|标注|录制|开始录制|停止录制|新建白板|切换白板|撤销|撤回|重做|删除选中|清空白板)|^(?:please\\s+)?(?:explain|teach|show|draw|generate|insert|summari[sz]e|annotate|record|new board|undo|redo|clear board)\\b",
     "flags": "i"
   },
-  "teachingResourcePrompt_0": {
-    "pattern": "\\bhtml5?\\b|\\bcanvas\\b|(?:原生|自定义)\\s*svg|svg\\s*(?:动画|交互)|\\b(?:native|custom|use|using)\\s+svg\\b|(?:不要|不用|不需要|不使用)(?:使用)?\\s*(?:vega|图表)|\\b(?:without|no|not)\\s+(?:vega|charts?)\\b",
-    "flags": "i"
-  },
-  "teachingResourcePrompt_1": {
-    "pattern": "拖动|拖拽|动态几何|切线|黎曼|单位圆|仿真|模拟实验|探究|涌现|粒子|主体建模|\\b(?:dragg?ing|draggable|simulation|agent-based|emergence|dynamic geometry|riemann)\\b",
-    "flags": "i"
-  },
-  "teachingResourcePrompt_2": {
-    "pattern": "图表|统计图|折线图|柱状图|条形图|散点图|饼图|热力图|箱线图|直方图|地图|人口增长|\\b(?:charts?|plots?|graphs?|maps?|histograms?|scatterplots?|population growth)\\b",
-    "flags": "i"
-  },
-  "teachingResourcePrompt_3": {
-    "pattern": "可视化|\\bvisuali[sz](?:ation|e)\\b",
-    "flags": "i"
-  },
   "mathNotation_0": {
     "pattern": "度|\\bdeg(?:rees?)?\\b",
     "flags": "gi"

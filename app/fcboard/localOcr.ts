@@ -1,6 +1,5 @@
 import { t } from "@fcboard/fcboard/i18n";
 
-import { currentSettings } from "./settings";
 import { queueLocalInference } from "./localInferenceQueue";
 
 type Engine = Awaited<
@@ -73,16 +72,6 @@ const createOcr = () => {
   return { getEngine, dispose };
 };
 let pending = 0;
-
-/** Prepare one reusable bundled OCR model through the same bounded pool. */
-export const warmHandwriting = async () => {
-  if (currentSettings().ocr === "cloud" || typeof Worker === "undefined") {
-    return;
-  }
-  await queueLocalInference("ocr", createOcr, async (model) => {
-    await model.getEngine();
-  });
-};
 
 export const recognizeLocalHandwriting = async (
   image: string,
@@ -167,8 +156,11 @@ export const recognizeLocalHandwriting = async (
         }
         finish(items.map((item) => item.text).join("\n"));
       })().catch((error) => finish(undefined, error));
-      await result.catch(() => {});
-      model = undefined;
+      try {
+        await result;
+      } finally {
+        model = undefined;
+      }
     },
     () => !settled,
   ).catch((error) => finish(undefined, error));

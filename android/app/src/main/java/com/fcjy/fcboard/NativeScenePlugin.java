@@ -12,7 +12,7 @@ import java.util.concurrent.*;
  * layer is below WebView so existing handles, text editing and UI keep order. */
 @CapacitorPlugin(name="FcboardNativeScene")
 public final class NativeScenePlugin extends Plugin {
-    private static final class Entry { NativeSceneView view;long epoch,revision; }
+    private static final class Entry { NativeSceneView view;long epoch,revision;boolean canonical,reported; }
     private static final class State { NativeScene scene=new NativeScene();long epoch;State(long epoch){this.epoch=epoch;} }
     private FrameLayout layer;
     private boolean closed;
@@ -29,6 +29,30 @@ public final class NativeScenePlugin extends Plugin {
         parent.addView(layer,parent.indexOfChild(getBridge().getWebView()),new ViewGroup.LayoutParams(-1,-1));
         getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
     }
+    private Entry entry(String owner){
+        Entry entry=entries.get(owner);
+        if(entry==null){
+            if(entries.size()>=5)throw new IllegalStateException("Too many native scenes");
+            layer();entry=new Entry();entry.view=new NativeSceneView(getActivity());entries.put(owner,entry);
+            Entry target=entry;
+            entry.view.whenPresented(()->{if(!closed&&entries.get(owner)==target)((MainActivity)getActivity()).nativeScenePresented(owner);});
+            layer.addView(entry.view);
+        }
+        return entry;
+    }
+    void setInput(String owner,NativeInkView input,FrameLayout.LayoutParams bounds){
+        if(closed)throw new IllegalStateException("Native scene closed");
+        Entry entry=entry(owner);entry.view.setInput(input);input.setDisplay(entry.view);
+        ViewGroup.LayoutParams old=entry.view.getLayoutParams();
+        if(!(old instanceof FrameLayout.LayoutParams)||old.width!=bounds.width||old.height!=bounds.height||((FrameLayout.LayoutParams)old).leftMargin!=bounds.leftMargin||((FrameLayout.LayoutParams)old).topMargin!=bounds.topMargin)
+            entry.view.setLayoutParams(new FrameLayout.LayoutParams(bounds));
+    }
+    void removeInput(String owner,NativeInkView input){
+        input.setDisplay(null);Entry entry=entries.get(owner);
+        if(entry==null||!entry.view.hasInput(input))return;
+        entry.view.setInput(null);
+        if(!entry.canonical){entries.remove(owner);layer.removeView(entry.view);}
+    }
     @PluginMethod public void synchronize(PluginCall call){
         getActivity().runOnUiThread(()->{
             try{
@@ -37,8 +61,7 @@ public final class NativeScenePlugin extends Plugin {
                 if(owner.isEmpty()||owner.length()>200)throw new IllegalArgumentException("Invalid native scene owner");
                 if(epoch<epochs.getOrDefault(owner,Long.MIN_VALUE)){call.resolve();return;}
                 epochs.put(owner,epoch);layer();
-                Entry entry=entries.get(owner);
-                if(entry==null){if(entries.size()>=4)throw new IllegalStateException("Too many native scenes");entry=new Entry();entry.view=new NativeSceneView(getActivity());entries.put(owner,entry);layer.addView(entry.view);}
+                Entry entry=entry(owner);entry.canonical=true;
                 if(epoch==entry.epoch&&revision<=entry.revision){call.resolve();return;}
                 entry.epoch=epoch;entry.revision=revision;
                 float viewport=call.getFloat("viewportWidth",0f),x=call.getFloat("x",0f),y=call.getFloat("y",0f),width=call.getFloat("width",0f),height=call.getFloat("height",0f);
@@ -56,7 +79,7 @@ public final class NativeScenePlugin extends Plugin {
                         State state=states.get(owner);if(state==null||state.epoch!=epoch){state=new State(epoch);states.put(owner,state);}
                         NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples);
                         getActivity().runOnUiThread(()->{
-                            if(!closed&&entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);((MainActivity)getActivity()).nativeSceneCommitted(owner);}
+                            if(!closed&&entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);if(!target.reported){target.reported=true;MainActivity.startup("scene.installed");}((MainActivity)getActivity()).nativeSceneCommitted(owner);}
                             call.resolve();
                         });
                     }catch(Exception error){call.reject("Native scene unavailable: "+error.getMessage(),error);}

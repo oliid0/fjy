@@ -151,17 +151,54 @@ it("enters writing directly and resizes two panes without losing independent ink
   expect(screen.queryByRole("separator")).toBeNull();
 });
 
-it("retains each hidden pane's independent color, width and ink through 4/2/3/4 layout and close/reopen", async () => {
+it("uses exactly the three original colored pen images and one eraser with independent working tool selection", async () => {
+  render(<SplitBoard />);
+  await command();
+  const tools = panes()[0].parentElement!.querySelector(".fc-split-penbar")!;
+  const buttons = within(tools as HTMLElement).getAllByRole("button");
+  expect(buttons).toHaveLength(4);
+  expect(tools.querySelector("svg")).toBeNull();
+  const names = [
+    "split_black",
+    "split_blue",
+    "split_red",
+    "split_large_eraser",
+  ];
+  const images = ["ic_black_pen", "ic_blue_pen", "ic_red_pen", "ic_big_eraser"];
+  const colors = ["#000000", "#0000ff", "#ff0000"];
+  const context = panes()[0].getContext("2d")!;
+  for (let index = 0; index < buttons.length; index++) {
+    const button = pane(1).getByRole("button", {
+      name: t(`fcboard.${names[index]}`),
+    });
+    expect(button.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining(`${images[index]}.svg`),
+    );
+    fireEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(tools.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1);
+    pointer(panes()[0], "pointerdown", index + 1, 20);
+    expect(context.globalCompositeOperation).toBe(
+      index === 3 ? "destination-out" : "source-over",
+    );
+    if (index < 3) {
+      expect(context.strokeStyle).toBe(colors[index]);
+    }
+    pointer(panes()[0], "pointerup", index + 1, 80);
+    expect(
+      pane(2).getByRole("button", { name: t("fcboard.split_black") }),
+    ).toHaveAttribute("aria-pressed", "true");
+  }
+});
+
+it("retains each hidden pane's independent color and ink through 4/2/3/4 layout and close/reopen", async () => {
   render(<SplitBoard />);
   await command({ count: 4 });
   fireEvent.click(
     pane(3).getByRole("button", { name: t("fcboard.split_red") }),
   );
-  fireEvent.click(
-    pane(3).getByRole("button", {
-      name: t("fcboard.split_pen_size", { size: 3 }),
-    }),
-  );
+
   pointer(panes()[2], "pointerdown", 3, 20);
   pointer(panes()[2], "pointerup", 3, 120);
   const hiddenCanvas = panes()[2];
@@ -172,11 +209,7 @@ it("retains each hidden pane's independent color, width and ink through 4/2/3/4 
   expect(
     pane(3).getByRole("button", { name: t("fcboard.split_red") }),
   ).toHaveAttribute("aria-pressed", "true");
-  expect(
-    pane(3).getByRole("button", {
-      name: t("fcboard.split_pen_size", { size: 3 }),
-    }),
-  ).toHaveAttribute("aria-pressed", "true");
+
   expect(
     pane(1).getByRole("button", { name: t("fcboard.split_black") }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -188,7 +221,7 @@ it("retains each hidden pane's independent color, width and ink through 4/2/3/4 
   pointer(panes()[2], "pointerup", 4, 140);
   expect(panes()[2].getContext("2d")!.strokeStyle).toBe("#ff0000");
   expect(panes()[2].getContext("2d")!.lineWidth).toBe(
-    2.68 * (window.devicePixelRatio || 1),
+    2.01 * (window.devicePixelRatio || 1),
   );
 });
 
@@ -229,6 +262,66 @@ it("accepts empty coalesced batches, keeps concurrent contacts independent, and 
   expect(await command({ count: 3 })).toMatchObject({
     panes: [{ strokes: 2 }, { strokes: 0 }, { strokes: 0 }, { strokes: 0 }],
   });
+});
+
+it("keeps coalesced bends and dispatch tails on move and release with one layout read per packet", async () => {
+  render(<SplitBoard />);
+  await command();
+  const node = panes()[0];
+  const context = node.getContext("2d")!;
+  const bounds = vi.mocked(HTMLCanvasElement.prototype.getBoundingClientRect);
+  pointer(node, "pointerdown", 1, 20);
+  bounds.mockClear();
+  pointer(node, "pointermove", 1, 100, 100, {
+    getCoalescedEvents: () => [{ clientX: 60, clientY: 160 }],
+  });
+  expect(bounds).toHaveBeenCalledTimes(1);
+  expect(context.quadraticCurveTo).toHaveBeenLastCalledWith(60, 160, 80, 130);
+  bounds.mockClear();
+  pointer(node, "pointerup", 1, 180, 60, {
+    getCoalescedEvents: () => [{ clientX: 140, clientY: 20 }],
+  });
+  expect(bounds).toHaveBeenCalledTimes(1);
+  const releasedBend = vi.mocked(context.quadraticCurveTo).mock.calls[2];
+  expect(releasedBend.slice(0, 3)).toEqual([100, 100, 120]);
+  expect(releasedBend[3]).toBeCloseTo(60);
+  expect(context.quadraticCurveTo).toHaveBeenCalledWith(140, 20, 160, 40);
+  expect(context.quadraticCurveTo).toHaveBeenLastCalledWith(180, 60, 180, 60);
+  vi.mocked(context.quadraticCurveTo).mockClear();
+  bounds.mockReturnValue(new DOMRect(0, 0, 600, 500));
+  fireEvent(window, new Event("resize"));
+  expect(context.quadraticCurveTo).toHaveBeenCalledWith(120, 160, 160, 130);
+  expect(context.quadraticCurveTo).toHaveBeenCalledWith(280, 20, 320, 40);
+});
+
+it("keeps five elongated finger contacts as independent ink and erases the real palm rectangle", async () => {
+  render(<SplitBoard />);
+  await command();
+  const node = panes()[0];
+  const context = node.getContext("2d")!;
+  const finger = { pointerType: "touch", width: 20, height: 80 };
+  for (let id = 1; id <= 5; id++) {
+    pointer(node, "pointerdown", id, id * 30, 60, finger);
+    expect(context.globalCompositeOperation).toBe("source-over");
+  }
+  for (let id = 1; id <= 5; id++) {
+    pointer(node, "pointerup", id, id * 30 + 10, 80, finger);
+  }
+  expect(await command()).toMatchObject({
+    panes: [{ strokes: 5 }, { strokes: 0 }, { strokes: 0 }, { strokes: 0 }],
+  });
+  pointer(node, "pointerdown", 6, 150, 250, {
+    pointerType: "touch",
+    width: 70,
+    height: 110,
+  });
+  expect(context.globalCompositeOperation).toBe("destination-out");
+  expect(context.moveTo).toHaveBeenLastCalledWith(115, 195);
+  expect(context.lineTo).toHaveBeenCalledWith(185, 305);
+  pointer(node, "pointerup", 6, 160, 250);
+  pointer(node, "pointerdown", 7, 80, 80, { button: 5, buttons: 32 });
+  expect(context.globalCompositeOperation).toBe("destination-out");
+  pointer(node, "pointerup", 7, 90, 80);
 });
 
 it("runs without ResizeObserver, handles retired pointer capture and releases backing stores on close", async () => {

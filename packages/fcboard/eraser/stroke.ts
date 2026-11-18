@@ -2,9 +2,6 @@ import { getSizeFromPoints } from "@fcboard/common";
 import {
   getElementAbsoluteCoords,
   getElementBounds,
-  getElementLineSegments,
-  isPointInElement,
-  shouldTestInside,
   newElementWith,
 } from "@fcboard/element";
 import { pointFrom, polygonIncludesPointNonZero } from "@fcboard/math";
@@ -27,7 +24,7 @@ import type {
 } from "@fcboard/element/types";
 import type { GlobalPoint, LocalPoint, Radians } from "@fcboard/math";
 
-import { getLassoBounds, getLassoSelectedElementIds } from "../lasso/utils";
+import { getLassoBounds } from "../lasso/utils";
 
 import { factoryCircleHits, factoryCircleObject } from "./factoryRegion";
 import { createEraseRegion, mergeEraseIntervals } from "./region";
@@ -118,6 +115,70 @@ const insideInterval = (
   return [enter, exit] as const;
 };
 
+/** Shared nib coverage test for whole-object hits and vector clipping. */
+const nibIntersectsSweep = (
+  outline: readonly Point[],
+  from: Point,
+  to: Point,
+  width: number,
+  height: number,
+  region?: EraseRegion,
+) => {
+  if (!outline.length) {
+    return false;
+  }
+  const polygon = outline.map(({ x, y }) => pointFrom<GlobalPoint>(x, y));
+  if (region) {
+    return (
+      outline.some((point) => region.contains(point)) ||
+      outline.some(
+        (point, index) =>
+          index > 0 && region.intervals(outline[index - 1], point).length > 0,
+      ) ||
+      region.path.some((point) => polygonIncludesPointNonZero(point, polygon))
+    );
+  }
+  const area = sweptRectangle(from, to, width, height);
+  return (
+    outline.some(
+      (point, index) =>
+        index > 0 && !!insideInterval(outline[index - 1], point, area),
+    ) ||
+    [from, to].some(({ x, y }) =>
+      polygonIncludesPointNonZero(pointFrom<GlobalPoint>(x, y), polygon),
+    )
+  );
+};
+
+/** Whole-object erasure only needs a first hit, never editable survivor fragments.
+ * The scene-owned object index retains this geometry until the source changes. */
+export const strokeIntersectsSweep = (
+  geometry: ReturnType<typeof prepareNativeEraseStroke>,
+  from: Point,
+  to: Point,
+  width: number,
+  height: number,
+) => {
+  const { samples, nibOutline, brush, brushAngle, cap } = geometry;
+  if (nibIntersectsSweep(nibOutline, from, to, width, height)) {
+    return true;
+  }
+  const area = sweptRectangle(from, to, width + cap, height + cap);
+  const ellipse = brush
+    ? { cos: Math.cos(brushAngle), sin: Math.sin(brushAngle) }
+    : undefined;
+  if (samples.length === 1) {
+    return !!insideInterval(samples[0], samples[0], area, ellipse);
+  }
+  for (let i = 1; i < samples.length; i++) {
+    const hit = insideInterval(samples[i - 1], samples[i], area, ellipse);
+    if (hit && hit[1] - hit[0] > 1e-10) {
+      return true;
+    }
+  }
+  return false;
+};
+
 /** Null means untouched; survivors remain editable, serializable vector strokes. */
 export const eraseStroke = (
   element: FcboardFreeDrawElement,
@@ -130,9 +191,11 @@ export const eraseStroke = (
   if (element.locked || element.isDeleted || !element.points.length) {
     return null;
   }
-  const brush = isFactoryBrush(element) ? factoryBrushSamples(element) : null;
-  const cap = brush
-    ? brush.reduce((maximum, sample) => Math.max(maximum, sample.width), 0)
+  const cap = isFactoryBrush(element)
+    ? factoryBrushSamples(element).reduce(
+        (maximum, sample) => Math.max(maximum, sample.width),
+        0,
+      )
     : element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25);
   const bounds = getElementBounds(element, new Map());
   if (
@@ -143,67 +206,25 @@ export const eraseStroke = (
   ) {
     return null;
   }
-  const factory = isFactoryStroke(element) ? factoryInkSamples(element) : null;
-  const [, , , , cx, cy] = getElementAbsoluteCoords(element, new Map());
-  const cos = Math.cos(element.angle);
-  const sin = Math.sin(element.angle);
-  const globalPoint = ([x, y]: readonly [number, number]) => ({
-    x: cx + (element.x + x - cx) * cos - (element.y + y - cy) * sin,
-    y: cy + (element.x + x - cx) * sin + (element.y + y - cy) * cos,
-  });
-  const nib = factoryNibControls(element)?.map(globalPoint);
-  const nibOutline = factoryNibSamples(element).map(globalPoint);
-  const nibArea = sweptRectangle(from, to, width, height);
-  const nibPolygon = nibOutline.map(({ x, y }) => pointFrom<GlobalPoint>(x, y));
-  const nibHit = region
-    ? nibOutline.some((point) => region.contains(point)) ||
-      nibOutline.some(
-        (point, index) =>
-          index > 0 &&
-          region.intervals(nibOutline[index - 1], point).length > 0,
-      ) ||
-      (nibPolygon.length > 0 &&
-        region.path.some((point) =>
-          polygonIncludesPointNonZero(point, nibPolygon),
-        ))
-    : nibOutline.some(
-        (point, index) =>
-          index > 0 && insideInterval(nibOutline[index - 1], point, nibArea),
-      ) ||
-      (nibPolygon.length > 0 &&
-        [from, to].some(({ x, y }) =>
-          polygonIncludesPointNonZero(pointFrom<GlobalPoint>(x, y), nibPolygon),
-        ));
-  const brushAngle =
-    (element.customData?.fcInk?.brushAngle || 0) + element.angle;
+  const geometry = prepareNativeEraseStroke(element);
+  const { samples, brush, factory, nib, nibOutline, brushAngle } = geometry;
+  const nibHit = nibIntersectsSweep(
+    nibOutline,
+    from,
+    to,
+    width,
+    height,
+    region,
+  );
   const ellipse = brush
     ? { cos: Math.cos(brushAngle), sin: Math.sin(brushAngle) }
     : undefined;
-  let travelled = element.customData?.fcInk?.dashOffset || 0;
-  const input =
-    brush ||
-    factory?.map((p) => ({ ...p, width: 0 })) ||
-    element.points.map(([x, y]) => ({ x, y, width: 0 }));
-  const samples = input.map(({ x, y, width: brushWidth }, i): Sample => {
-    if (i) {
-      travelled += Math.hypot(x - input[i - 1].x, y - input[i - 1].y);
-    }
-    const dx = element.x + x - cx;
-    const dy = element.y + y - cy;
-    return {
-      x: cx + dx * cos - dy * sin,
-      y: cy + dx * sin + dy * cos,
-      pressure: factory?.[i].pressure ?? element.pressures[i] ?? 0.5,
-      distance: travelled,
-      brushWidth,
-    };
-  });
   // Include the stroke cap so a cut doesn't leave half a round cap in the erased area.
   const area = sweptRectangle(
     from,
     to,
-    width + (brush ? 0 : cap),
-    height + (brush ? 0 : cap),
+    width + geometry.cap,
+    height + geometry.cap,
   );
   const result: Sample[][] = [];
   let current: Sample[] = [];
@@ -320,6 +341,7 @@ export const prepareNativeEraseStroke = (element: FcboardFreeDrawElement) => {
     : element.strokeWidth * (element.customData?.fcInk ? 1 : 4.25);
   return {
     samples,
+    sources: input.map((p, i) => ("sourceIndex" in p ? p.sourceIndex ?? i : i)),
     nib,
     nibOutline,
     brush,
@@ -342,6 +364,19 @@ export type NativeEraserBackend = (
   width: number,
   height: number,
 ) => Promise<readonly NativeEraseUpdate[]>;
+
+/** A native sweep affects only geometry already produced by this contact. */
+export type NativeInkCut = {
+  gesture: string;
+  at: number;
+  path: readonly (readonly [number, number])[];
+  width: number;
+  height: number;
+};
+export type NativeInkClipBackend = (
+  element: FcboardFreeDrawElement,
+  cuts: readonly NativeInkCut[],
+) => Promise<readonly FcboardFreeDrawElement[]>;
 
 export const restoreEraseFragments = (
   element: FcboardFreeDrawElement,
@@ -464,82 +499,12 @@ export const eraseSceneStrokes = (
   return changed ? next : elements;
 };
 
-/** The visible rectangular footprint sweeps whole objects, including fast moves. */
-export const eraseSceneObjects = (
-  elements: readonly FcboardElement[],
-  from: Point,
-  to: Point,
-  width: number,
-  height: number,
-) => {
-  const elementsMap = new Map(elements.map((element) => [element.id, element]));
-  const hit = new Set<string>();
-  const groups = new Set<string>();
-  const path = sweptRectangle(from, to, width, height).map(({ x, y }) =>
-    pointFrom<GlobalPoint>(x, y),
-  );
-  for (const element of elements) {
-    if (element.isDeleted || element.locked) {
-      continue;
-    }
-    const bounds = getElementBounds(element, elementsMap);
-    if (
-      Math.max(from.x, to.x) + width / 2 < bounds[0] ||
-      Math.min(from.x, to.x) - width / 2 > bounds[2] ||
-      Math.max(from.y, to.y) + height / 2 < bounds[1] ||
-      Math.min(from.y, to.y) - height / 2 > bounds[3]
-    ) {
-      continue;
-    }
-    const inside =
-      shouldTestInside(element) &&
-      path.some((point) => isPointInElement(point, element, elementsMap));
-    const touched =
-      inside ||
-      (element.type === "freedraw"
-        ? eraseStroke(element, from, to, width, height) !== null
-        : getLassoSelectedElementIds({
-            lassoPath: path,
-            elements: [element],
-            elementsMap,
-            elementsSegments: new Map([
-              [element.id, getElementLineSegments(element, elementsMap)],
-            ]),
-            intersectedElements: new Set(),
-            enclosedElements: new Set(),
-          }).selectedElementIds.length > 0);
-    if (touched) {
-      hit.add(element.id);
-      const group = element.groupIds.at(-1);
-      if (group) {
-        groups.add(group);
-      }
-      element.boundElements
-        ?.filter((bound) => bound.type === "text")
-        .forEach((bound) => hit.add(bound.id));
-      if (element.type === "text" && element.containerId) {
-        hit.add(element.containerId);
-      }
-    }
-  }
-  if (!hit.size) {
-    return elements;
-  }
-  return elements.map((element) =>
-    !element.locked &&
-    !element.isDeleted &&
-    (hit.has(element.id) || element.groupIds.some((id) => groups.has(id)))
-      ? newElementWith(element, { isDeleted: true })
-      : element,
-  );
-};
-
 export const isPalmContact = (
   event: Pick<PointerEvent, "pointerType" | "width" | "height">,
   threshold: number,
 ) =>
   event.pointerType === "touch" &&
-  Math.max(event.width || 0, event.height || 0) >= threshold;
+  Math.min(event.width || 0, event.height || 0) >= threshold;
 
 /** Preserve exterior handwriting fragments; non-ink objects retain native hit/parent rules. */
 export const eraseSceneRegion = (

@@ -69,28 +69,34 @@ public class NativeInferenceTest {
             assertNotEquals(android.os.Process.myPid(), result.getInt("processId"));
         }
     }
-    @Test public void alternatingPenModelsReuseRealSessionsUntilReleased() throws Exception {
+    @Test public void eachRequestOwnsItsSessionsAndReleasesBothOnCompletion() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         java.lang.reflect.Method ensure = NativePenModels.class.getDeclaredMethod("ensure", String.class);
         ensure.setAccessible(true);
-        java.lang.reflect.Field resident = NativePenModels.class.getDeclaredField("resident");
-        resident.setAccessible(true);
         java.lang.reflect.Field encoder = NativePenModels.class.getDeclaredField("encoder");
         encoder.setAccessible(true);
+        java.lang.reflect.Field decoder = NativePenModels.class.getDeclaredField("decoder");
+        decoder.setAccessible(true);
         try (NativePenModels models = new NativePenModels(context)) {
             String[] keys = {"comer", "Xenova/opus-mt-en-zh", "Xenova/opus-mt-zh-en"};
-            java.util.Map<String, Object> sessions = new java.util.HashMap<>();
-            for (String key : keys) { ensure.invoke(models, key); sessions.put(key, encoder.get(models)); }
-            assertEquals(3, ((java.util.Map<?, ?>) resident.get(models)).size());
-            for (String key : keys) { ensure.invoke(models, key); assertSame(sessions.get(key), encoder.get(models)); }
+            for (String key : keys) {
+                ensure.invoke(models, key);
+                Object session = encoder.get(models);
+                try (NativePenModels independent = new NativePenModels(context)) {
+                    ensure.invoke(independent, key);
+                    assertNotSame(session, encoder.get(independent));
+                    independent.close();
+                    assertNull(encoder.get(independent));
+                    assertNull(decoder.get(independent));
+                    assertSame(session, encoder.get(models));
+                }
+                models.close();
+                assertNull(encoder.get(models));
+                assertNull(decoder.get(models));
+            }
             try { ensure.invoke(models, "unknown"); fail("Unknown model loaded"); }
             catch (java.lang.reflect.InvocationTargetException expected) { assertTrue(expected.getCause() instanceof IllegalArgumentException); }
-            assertSame(sessions.get(keys[2]), encoder.get(models));
-            models.close();
-            assertEquals(0, ((java.util.Map<?, ?>) resident.get(models)).size());
             assertNull(encoder.get(models));
-            ensure.invoke(models, keys[0]);
-            assertNotSame(sessions.get(keys[0]), encoder.get(models));
         }
     }
 

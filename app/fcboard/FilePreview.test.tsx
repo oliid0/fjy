@@ -31,8 +31,12 @@ import * as ai from "./ai";
 import * as digitalInk from "./digitalInk";
 import { languageStudy } from "./test/language";
 import { LanguagePanel, readLanguageCard } from "./LanguagePanel";
+import { Calculator } from "./Calculator";
 import { registerCanvasCommands } from "./canvasCommands";
 import { SelectionActions } from "./SelectionActions";
+import { drawPlot } from "./board";
+import { defaultPlot } from "./math";
+import * as functionDrawing from "./functionVisualization";
 import * as imageGeneration from "./imageGeneration";
 import { registerLanguageCommands } from "./languageCommands";
 import { animateSolid } from "./solidAnimation";
@@ -999,7 +1003,7 @@ it("persists mixed dictated question writing only on courseware and undoes the w
   expect(text).toMatchObject({
     originalText: "牛顿第二定律",
     fontFamily: 5,
-    questionInput: true,
+    generated: true,
   });
   const bounds = documentStrokeBounds(text);
   expect(bounds.left).toBeGreaterThanOrEqual(180);
@@ -2594,5 +2598,459 @@ it("crops courseware images from their original pixels, persists the SVG window,
     expect(currentInk()).toEqual([original]);
   } finally {
     unmount();
+  }
+});
+
+it("merges selected document graphs through the real selection menu, preserving one-step undo", async () => {
+  const { api, unmount } = await setup();
+  const controls = render(
+    <SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />,
+  );
+  try {
+    await act(async () => {
+      drawPlot(api, { ...defaultPlot, expression: "x-1" }, { x: 300, y: 250 });
+      drawPlot(api, { ...defaultPlot, expression: "x+1" }, { x: 700, y: 250 });
+    });
+    const before = (classroomCommands.read("document") as { ink: InkStroke[] })
+      .ink;
+    expect(before).toHaveLength(2);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: before.map((stroke) => stroke.id) },
+      });
+    });
+    expect(
+      screen.getByRole("button", { name: t("fcboard.functionGraph.merge") }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.functionGraph.merge") }),
+    );
+    await waitFor(() =>
+      expect(
+        (classroomCommands.read("document") as { ink: InkStroke[] }).ink,
+      ).toHaveLength(1),
+    );
+    const merged = (classroomCommands.read("document") as { ink: InkStroke[] })
+      .ink[0];
+    expect(
+      new Set([merged.plot!.plot.expression, ...merged.plot!.plot.compare!]),
+    ).toEqual(new Set(["x-1", "x+1"]));
+    expect(merged.image).toMatch(/^data:image\/png/);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(
+      (classroomCommands.read("document") as { ink: InkStroke[] }).ink,
+    ).toEqual(before);
+  } finally {
+    controls.unmount();
+    unmount();
+  }
+});
+
+it("moves and recolors a selected courseware graph with real Canvas input and independent history", async () => {
+  const { api, unmount } = await setup();
+  try {
+    await act(async () => {
+      drawPlot(api, { ...defaultPlot, expression: "x" }, { x: 300, y: 250 });
+    });
+    const read = () =>
+      (classroomCommands.read("document") as { ink: InkStroke[] }).ink[0];
+    const before = read();
+    const image = vi.spyOn(functionDrawing, "functionGraphImage");
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      ".fc-inline-function canvas",
+    )!;
+    expect(getComputedStyle(canvas).pointerEvents).toBe("auto");
+    const captures = new Set<number>();
+    Object.assign(canvas, {
+      setPointerCapture: (id: number) => captures.add(id),
+      hasPointerCapture: (id: number) => captures.has(id),
+      releasePointerCapture: (id: number) => captures.delete(id),
+    });
+    const input = (type: string, x: number, y: number) =>
+      fireEvent(
+        canvas,
+        Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+          pointerId: 9,
+          pointerType: "touch",
+          button: 0,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    input("pointerdown", 200, 200);
+    input("pointermove", 250, 230);
+    expect(read().points[0][0]).toBeCloseTo(before.points[0][0] + 50);
+    input("pointerup", 250, 230);
+    expect(read().points[0][0]).toBeCloseTo(before.points[0][0] + 50);
+    expect(read().points[0][1]).toBeCloseTo(before.points[0][1] + 30);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toEqual(before);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [before.id] },
+      });
+      await classroomCommands.execute({
+        name: "document.style",
+        args: { width: 6, strokeStyle: "dashed" },
+      });
+    });
+    expect(image).toHaveBeenLastCalledWith(before.plot!.plot, before.color, {
+      width: 6,
+      strokeStyle: "dashed",
+    });
+    expect(read()).toMatchObject({ width: 6, strokeStyle: "dashed" });
+    expect(
+      document
+        .querySelector(".fc-inline-function")!
+        .querySelector("button,input,textarea,form,nav,output"),
+    ).toBeNull();
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toEqual(before);
+
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [before.id] },
+      });
+    });
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.style",
+        args: { color: "#d32941" },
+      });
+    });
+    expect(image).toHaveBeenCalledWith(before.plot!.plot, "#d32941", {
+      width: before.width,
+      strokeStyle: before.strokeStyle,
+    });
+    expect(read().color).toBe("#d32941");
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toEqual(before);
+  } finally {
+    unmount();
+  }
+});
+
+it("starts a courseware graph pinch directly from the annotation surface without prior graph selection", async () => {
+  const { api, unmount } = await setup();
+  try {
+    await act(async () => {
+      drawPlot(api, { ...defaultPlot, expression: "x" }, { x: 300, y: 250 });
+    });
+    const read = () =>
+      (classroomCommands.read("document") as { ink: InkStroke[] }).ink[0];
+    const before = read();
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [] },
+      });
+    });
+    expect(document.querySelector(".fc-inline-function canvas")).toBeNull();
+    const bounds = documentTools.documentStrokeBounds(before);
+    const x = (bounds.left + bounds.right) / 2;
+    const y = (bounds.top + bounds.bottom) / 2;
+    const pointer = (
+      target: Element,
+      type: string,
+      id: number,
+      clientX: number,
+      clientY: number,
+    ) => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        clientX,
+        clientY,
+      });
+      Object.assign(event, {
+        pointerId: id,
+        pointerType: "touch",
+        isPrimary: id === 51,
+      });
+      fireEvent(target, event);
+    };
+    pointer(
+      document.getElementById(`fc-inline-function-${before.id}`)!,
+      "pointerdown",
+      51,
+      x,
+      y,
+    );
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      ".fc-inline-function canvas",
+    )!;
+    expect(canvas).not.toBeNull();
+    const captures = new Set([51]);
+    Object.assign(canvas, {
+      setPointerCapture: (id: number) => captures.add(id),
+      hasPointerCapture: (id: number) => captures.has(id),
+      releasePointerCapture: (id: number) => captures.delete(id),
+    });
+    pointer(canvas, "pointerdown", 52, x + 100, y);
+    pointer(canvas, "pointermove", 52, x + 170, y);
+    pointer(canvas, "pointerup", 52, x + 170, y);
+    pointer(canvas, "pointerup", 51, x, y);
+    await waitFor(() => expect(read().plot?.plot.view).toBeDefined());
+    expect(read()).toMatchObject({
+      anchor: before.anchor,
+      imageWidth: before.imageWidth,
+      imageHeight: before.imageHeight,
+    });
+    expect(
+      (classroomCommands.read("document") as { selectionInProgress: boolean })
+        .selectionInProgress,
+    ).toBe(false);
+  } finally {
+    unmount();
+  }
+});
+
+it("returns a courseware function to the writable annotation plane and restores floating ownership with undo", async () => {
+  const { api, pointer, unmount } = await setup();
+  try {
+    await act(async () => {
+      drawPlot(api, { ...defaultPlot, expression: "x" }, { x: 300, y: 250 });
+    });
+    const read = () =>
+      (classroomCommands.read("document") as { ink: InkStroke[] }).ink;
+    const before = read()[0];
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [before.id] },
+      });
+      await classroomCommands.execute({
+        name: "document.action",
+        args: { action: "sendToBack" },
+      });
+    });
+    expect(
+      document.getElementById(`fc-inline-function-${before.id}`),
+    ).toBeNull();
+    expect(
+      (classroomCommands.read("document") as { selection: string[] }).selection,
+    ).toEqual([before.id]);
+    await act(async () => {
+      await classroomCommands.execute({
+        name: "document.tool",
+        args: { tool: "freedraw" },
+      });
+    });
+    expect(read()[0].plot?.layer).toBe("board");
+    expect(
+      document.getElementById(`fc-inline-function-${before.id}`),
+    ).toBeNull();
+    const bounds = documentStrokeBounds(before);
+    pointer("pointerdown", bounds.left + 30, bounds.top + 30);
+    pointer("pointermove", bounds.left + 80, bounds.top + 60);
+    pointer("pointerup", bounds.left + 100, bounds.top + 70);
+    expect(read()).toHaveLength(2);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toHaveLength(1);
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toEqual([before]);
+    expect(
+      document.getElementById(`fc-inline-function-${before.id}`),
+    ).not.toBeNull();
+  } finally {
+    unmount();
+  }
+});
+
+it("erases a floating courseware graph with the real palm transaction instead of dragging it", async () => {
+  const { api, pointer, unmount } = await setup(undefined, {
+    eraserMode: "object",
+  });
+  try {
+    await act(async () => {
+      drawPlot(api, { ...defaultPlot, expression: "x" }, { x: 300, y: 250 });
+    });
+    const read = () =>
+      (classroomCommands.read("document") as { ink: InkStroke[] }).ink;
+    const before = read()[0];
+    const bounds = documentStrokeBounds(before);
+    const x = (bounds.left + bounds.right) / 2;
+    const y = (bounds.top + bounds.bottom) / 2;
+    const event = new MouseEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: x,
+      clientY: y,
+    });
+    Object.assign(event, {
+      pointerId: 9,
+      pointerType: "touch",
+      isPrimary: true,
+      width: 90,
+      height: 80,
+    });
+    fireEvent(
+      document.getElementById(`fc-inline-function-${before.id}`)!,
+      event,
+    );
+    expect(read()).toHaveLength(0);
+    pointer("pointerup", x, y, {
+      pointerId: 9,
+      pointerType: "touch",
+      width: 90,
+      height: 80,
+    });
+    await act(async () => {
+      await classroomCommands.execute({ name: "document.undo" });
+    });
+    expect(read()).toEqual([before]);
+  } finally {
+    unmount();
+  }
+});
+
+it("uses the actual courseware circle for a word card while keeping whole-object handles and mapping the crop during a move", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "test-study-key", translationProvider: "cloud" },
+    false,
+  );
+  const sentence: InkStroke = {
+    id: "language-sentence",
+    text: "Force and inertia in one sentence",
+    points: [[100, 100]],
+    fontSize: 28,
+    color: "#000000",
+    width: 2,
+    fcInk: { version: 2, pen: "hard", assist: "language" },
+  };
+  vi.mocked(loadInk).mockResolvedValue({ 0: [sentence] });
+  const snapshot = vi
+    .spyOn(documentTools, "inkSnapshot")
+    .mockResolvedValue("data:image/png;base64,full");
+  const crop = vi
+    .spyOn(ai, "cropImage")
+    .mockResolvedValue("data:image/png;base64,word");
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValue(JSON.stringify({ ...languageStudy, term: "Force" }));
+  const host = await setup("language");
+  const stop = registerLanguageCommands(host.api);
+  const panel = render(<LanguagePanel api={host.api} />);
+  const context = () =>
+    classroomCommands.read("document") as {
+      selection: string[];
+      region: [number, number][];
+      selectionRegion?: {
+        left: number;
+        top: number;
+        right: number;
+        bottom: number;
+      };
+    };
+  try {
+    await act(() =>
+      classroomCommands.execute({
+        name: "document.tool",
+        args: { tool: "selection" },
+      }),
+    );
+    host.pointer("pointerdown", 120, 108);
+    host.pointer("pointermove", 200, 108);
+    host.pointer("pointermove", 200, 125);
+    host.pointer("pointerup", 120, 125);
+    expect(context().selection).toEqual([sentence.id]);
+    expect(context().selectionRegion).toEqual({
+      left: 120,
+      top: 108,
+      right: 200,
+      bottom: 125,
+    });
+    expect(context().region[1][0]).toBeGreaterThan(200);
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
+    expect(snapshot).toHaveBeenCalledWith([sentence], 17, undefined, 108);
+    expect(crop).toHaveBeenCalledWith(
+      "data:image/png;base64,full",
+      { left: 0.12, right: 0.2, top: 0, bottom: 1 },
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByRole("dialog")).toHaveTextContent("Force");
+    fireEvent.doubleClick(screen.getByRole("dialog"));
+    host.pointer("pointerdown", 150, 120);
+    host.pointer("pointerup", 190, 160);
+    const moved = context().selectionRegion!;
+    expect(moved.left).toBeCloseTo(160);
+    expect(moved.top).toBeCloseTo(148);
+    expect(moved.right).toBeCloseTo(240);
+    expect(moved.bottom).toBeCloseTo(165);
+    await act(() =>
+      classroomCommands.execute({
+        name: "document.select",
+        args: { ids: [sentence.id] },
+      }),
+    );
+    expect(context().selectionRegion).toBeUndefined();
+  } finally {
+    panel.unmount();
+    stop();
+    host.unmount();
+  }
+});
+
+it("owns a compact calculator on the visible courseware page and keeps its selection/move/close/undo out of the hidden board", async () => {
+  const host = await setup();
+  const stop = registerCanvasCommands(host.api);
+  const calculator = render(<Calculator api={host.api} />);
+  const read = () =>
+    classroomCommands.read("document") as {
+      ink: InkStroke[];
+      selection: string[];
+    };
+  try {
+    await act(() => classroomCommands.execute({ name: "tools.calculator" }));
+    const original = read().ink[0];
+    expect(original.resource?.id).toBe("builtin-calculator");
+    expect(original.resource!.height).toBeLessThan(250);
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.select",
+        args: { ids: [original.id] },
+      }),
+    );
+    expect(read().selection).toEqual([original.id]);
+    await act(() =>
+      classroomCommands.execute({
+        name: "canvas.move",
+        args: { ids: [original.id], dx: 35, dy: 20 },
+      }),
+    );
+    expect(read().ink[0].points[0][0]).toBeCloseTo(original.points[0][0] + 35);
+    await act(() => classroomCommands.execute({ name: "document.undo" }));
+    expect(read().ink[0].points).toEqual(original.points);
+    await act(() =>
+      classroomCommands.execute({
+        name: "tools.calculator",
+        args: { open: false },
+      }),
+    );
+    expect(read().ink).toHaveLength(0);
+    await act(() => classroomCommands.execute({ name: "document.undo" }));
+    expect(read().ink[0].id).toBe(original.id);
+    expect(host.api.getSceneElements()).toHaveLength(0);
+  } finally {
+    calculator.unmount();
+    stop();
+    host.unmount();
   }
 });

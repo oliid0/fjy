@@ -722,6 +722,18 @@
     "mmb": "滑鼠滾輪"
   },
   "fcboard": {
+    "namelistImport": {
+      "importFile": "匯入名單",
+      "formats": "支援 Excel（.xlsx）、CSV/TSV、文字和 Markdown；可選擇工作表與姓名欄。",
+      "sheet": "工作表",
+      "column": "姓名欄",
+      "columnNumber": "第 {{column}} 欄",
+      "header": "首列為欄名",
+      "saved": "名單已自動儲存",
+      "invalid": "無法匯入。請使用不超過 8 MB、256 欄的檔案；名單最多 5,000 人，每項最多 80 個字元。",
+      "format": "支援 Excel .xlsx、CSV/TSV、文字和 Markdown。舊版 .xls 請先另存為 .xlsx。",
+      "loading": "正在讀取名單…"
+    },
     "factorySettings": {
       "dual_pen": "雙色筆模式",
       "nib": "筆尖",
@@ -894,7 +906,6 @@
     "split_black": "黑笔",
     "split_blue": "蓝笔",
     "split_red": "红笔",
-    "split_small_eraser": "小橡皮",
     "split_large_eraser": "大橡皮",
     "split_background_0": "白色",
     "split_background_1": "绿色",
@@ -1165,6 +1176,31 @@
     "the_image_service_returned_no_valid_image": "圖像服務未返回有效圖片",
     "the_image_service_returned_an_unsupported_format": "圖像服務返回了不支持的圖片格式",
     "more_tools": "更多工具",
+    "quizForm": {
+      "title": "出題面板",
+      "grade": "年級",
+      "gradeAny": "依內容匹配",
+      "gradeNumber": "{{grade}} 年級",
+      "gradeHigher": "高等教育",
+      "type": "題型",
+      "mixed": "混合題型",
+      "difficulty": "難度",
+      "easy": "簡單",
+      "medium": "中等",
+      "hard": "較難",
+      "supplement": "補充內容",
+      "placeholder": "科目、知識點、題目數量或其他要求；也可使用目前白板內容。",
+      "generate": "產生題目",
+      "typeMismatch": "產生的題目不符合所選題型：{{type}}。",
+      "questionPending": "正在產生這道題…",
+      "cancelled": "已取消產生，可重新出題以補充未完成的題目。",
+      "imagePending": "正在產生並核對配圖…",
+      "imageInvalid": "配圖未通過題目一致性檢查。",
+      "retryImage": "重試配圖",
+      "imageSpecification": "需要圖示的題目必須提供完整繪圖要求和圖註。",
+      "questionFailed": "第 {{number}} 道題產生失敗：{{message}}",
+      "generatingCount": "已產生 {{ready}} / {{total}} 道題"
+    },
     "ai_questions": "AI 問答",
     "could_not_read_received_files": "無法讀取接收的課件",
     "storage_is_full_or_unavailable_download_the_recording_now_to_keep_it": "設備存儲不足或不可用，錄製尚未保存；請立即下載保留。",
@@ -1389,6 +1425,10 @@
     "coordinate_range_must_be_between_0_and_1000": "座標範圍必須在 0 到 1000 之間",
     "no_real_valued_plot_in_this_range": "當前範圍內沒有可繪製的實數圖像",
     "no_speech_engine_is_available_connect_a_voice_service_in_settings_or_teach_with_captions": "此設備沒有播報引擎，請在設置中連接語音播報；當前可使用字幕講解",
+    "doubao_audio_generation": "豆包音訊生成",
+    "study_audio_generation_help": "學習卡發音需要音訊生成介面和獨立的豆包語音 API Key。點擊上方按鈕填入介面地址，再在下方填寫語音播放金鑰。",
+    "audio_generation_requires_the_tts_create_endpoint": "請在語音設定中選擇豆包音訊生成介面，用於學習卡發音。",
+    "pronunciation_language_not_supported": "音訊生成暫不支援 {{language}} 的發音。",
     "the_voice_service_returned_invalid_audio": "播報接口未返回有效音頻",
     "this_file_is_encrypted_use_an_unencrypted_document": "文件已加密，請使用未加密的課件",
     "no_document_is_open": "課件尚未打開",
@@ -1865,7 +1905,11 @@
       "insert": "插入函數",
       "customName": "自訂函數{{number}}",
       "deleteNamed": "刪除{{name}}",
-      "expressionNamed": "表達式：{{name}}"
+      "expressionNamed": "表達式：{{name}}",
+      "invalid": "無法繪製函數圖像。",
+      "merge": "合併",
+      "mergeUnavailable": "請選擇兩個或三個函數表達式或圖像進行合併。",
+      "intersections": "函數交點"
     },
     "resourceMenu": {
       "str_biology": "生物",
@@ -1965,7 +2009,8 @@
     "search_more": "載入更多",
     "search_inserting": "正在插入…",
     "multi_point_switch": "多點開關",
-    "geometry_tools": "尺規"
+    "geometry_tools": "尺規",
+    "resource_loading": "正在載入教學資源…"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "數量比較",

@@ -197,7 +197,10 @@ it("does not accept HTML as a substitute for a requested Vega visualization", as
     .spyOn(ai, "chat")
     .mockResolvedValue(JSON.stringify(interactiveResource));
   await expect(
-    generateTeachingResource("人口增长可视化", new AbortController().signal),
+    generateTeachingResource(
+      "用Vega展示人口增长可视化",
+      new AbortController().signal,
+    ),
   ).rejects.toThrow();
   expect(chat).toHaveBeenCalledTimes(2);
   expect(await generatedResources()).toHaveLength(0);
@@ -259,5 +262,53 @@ it("keeps an explicitly requested HTML contract when repairing an accidental Veg
   expect(item.visualization).toBeUndefined();
   expect(chat.mock.calls[1][0].at(-1)?.content).toContain(
     "complete corrected self-contained HTML",
+  );
+});
+
+it.each([
+  "展示圆与直线的关系",
+  "使用JSXGraph演示圆与直线的关系",
+  "使用Vega或JSXGraph展示圆与直线的关系",
+])(
+  "accepts a real declared JSXGraph resource without forcing the subject to another engine: %s",
+  async (topic) => {
+    const html = `<html><head><title>Circle and line</title><meta name="fc-libraries" content="jsxgraph"></head><body><h1>Circle and line</h1><div id="geometry" data-fc-graphics style="width:600px;height:400px"></div><script>const board=JXG.JSXGraph.initBoard('geometry',{boundingbox:[-4,4,4,-4],jc:{compile:false}});board.create('circle',[[0,0],2]);</script></body></html>`;
+    const chat = vi.spyOn(ai, "chat").mockResolvedValue(html);
+    const item = await generateTeachingResource(
+      topic,
+      new AbortController().signal,
+      undefined,
+      "visualization",
+    );
+    expect(item.libraries).toEqual(["jsxgraph"]);
+    expect(item.visualization).toBeUndefined();
+    expect(item.html).toContain("JXG.JSXGraph.initBoard");
+    expect(await generatedResources()).toContainEqual(item);
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(chat.mock.calls[0][0][1].content))).toMatchObject({
+      kind: "visualization",
+    });
+  },
+);
+
+it("repairs a missing explicitly requested engine instead of saving a plain substitute", async () => {
+  const chat = vi
+    .spyOn(ai, "chat")
+    .mockResolvedValueOnce(interactiveResource.html)
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        ...interactiveResource,
+        libraries: ["jsxgraph"],
+        html: `<html><body><h1>Circle</h1><div id="b" data-fc-graphics></div><script>const b=JXG.JSXGraph.initBoard('b',{jc:{compile:false}});b.create('circle',[[0,0],2]);</script></body></html>`,
+      }),
+    );
+  const item = await generateTeachingResource(
+    "用JSXGraph画圆",
+    new AbortController().signal,
+  );
+  expect(item.libraries).toEqual(["jsxgraph"]);
+  expect(chat).toHaveBeenCalledTimes(2);
+  expect(String(chat.mock.calls[1][0].at(-1)?.content)).toContain(
+    "explicit medium/engine choice",
   );
 });

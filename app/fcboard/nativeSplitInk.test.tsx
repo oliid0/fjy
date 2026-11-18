@@ -8,6 +8,7 @@ import {
 import { t } from "@fcboard/fcboard/i18n";
 
 import { SplitBoard } from "./SplitBoard";
+import { createNativeSplitInk } from "./nativeSplitInk";
 import { classroomCommands } from "./commands";
 import { render } from "./test/render";
 
@@ -17,23 +18,13 @@ const backend = vi.hoisted(() => ({
   restore: vi.fn(),
   remove: vi.fn(),
   acknowledge: vi.fn(),
+  addListener: vi.fn(),
   listeners: new Set<(event: Record<string, unknown>) => void>(),
 }));
 vi.mock("@capacitor/core", () => ({
   Capacitor: { getPlatform: () => "android", isNativePlatform: () => true },
   registerPlugin: () => ({
     ...backend,
-    addListener: (
-      _: string,
-      listener: (event: Record<string, unknown>) => void,
-    ) => {
-      backend.listeners.add(listener);
-      return Promise.resolve({
-        remove: async () => {
-          backend.listeners.delete(listener);
-        },
-      });
-    },
   }),
 }));
 const command = async (args: Record<string, unknown> = {}) => {
@@ -69,6 +60,18 @@ beforeEach(() => {
     method.mockReset().mockResolvedValue(undefined);
   }
   backend.listeners.clear();
+  backend.addListener
+    .mockReset()
+    .mockImplementation(
+      (_: string, listener: (event: Record<string, unknown>) => void) => {
+        backend.listeners.add(listener);
+        return Promise.resolve({
+          remove: async () => {
+            backend.listeners.delete(listener);
+          },
+        });
+      },
+    );
   vi.spyOn(
     HTMLCanvasElement.prototype,
     "getBoundingClientRect",
@@ -94,7 +97,7 @@ it("mounts independent persistent native panes and updates real export ink witho
   const [left, right] = await ready();
   expect(left).toMatchObject({
     persistent: true,
-    multiStroke: false,
+    multiStroke: true,
     color: "#000000",
   });
   expect(right.owner).not.toBe(left.owner);
@@ -178,6 +181,81 @@ it("keeps a visible usable export canvas when the native restore fails", async (
   expect(canvas(1).style.opacity).toBe("");
   expect(canvas(2).style.opacity).toBe("");
   expect(failure).toHaveBeenCalledTimes(2);
+});
+
+it("waits for contact registration and keeps both fallbacks visible when registration fails", async () => {
+  const rejects: ((error: Error) => void)[] = [];
+  backend.addListener.mockImplementation(
+    () => new Promise((_, reject) => rejects.push(reject)),
+  );
+  const failure = vi.spyOn(console, "error").mockImplementation(() => {});
+  render(<SplitBoard />);
+  await command();
+  expect(rejects).toHaveLength(2);
+  expect(backend.configure).not.toHaveBeenCalled();
+  expect(canvas(1).style.opacity).toBe("");
+  await act(async () => {
+    rejects.forEach((reject) => reject(new Error("listener unavailable")));
+  });
+  await waitFor(() => expect(backend.remove).toHaveBeenCalledTimes(2));
+  expect(backend.restore).not.toHaveBeenCalled();
+  expect(backend.configure).not.toHaveBeenCalled();
+  expect(canvas(2).style.opacity).toBe("");
+  expect(failure).toHaveBeenCalledTimes(2);
+});
+
+it("drains old contacts before retiring their styles and preserves a new token during cancellation", async () => {
+  const view = render(
+    <div className="fc-split-board">
+      <canvas />
+    </div>,
+  );
+  const node = view.container.querySelector("canvas")!;
+  let style = { color: "#000000", width: 2, eraser: 0, disabled: false };
+  const contact = vi.fn();
+  const adapter = createNativeSplitInk(node, () => style, contact)!;
+  try {
+    await waitFor(() => expect(node.style.opacity).toBe("0"));
+    const first = backend.configure.mock.calls.at(-1)![0];
+    const packet = {
+      owner: first.owner,
+      token: first.token,
+      id: "old",
+      phase: "start",
+      mode: "pen",
+      width: 2,
+      height: 2,
+      points: [[20, 60, 0.5]],
+    };
+    emit(packet);
+    let drain!: () => void;
+    backend.checkpoint.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          drain = resolve;
+        }),
+    );
+    style = { ...style, color: "#ff0000" };
+    adapter.update();
+    await waitFor(() => expect(drain).toBeTypeOf("function"));
+    const next = backend.configure.mock.calls.at(-1)![0];
+    emit({ ...packet, phase: "cancel" });
+    expect(contact.mock.calls.at(-1)![1].color).toBe("#000000");
+    emit({ ...packet, token: next.token, id: "new" });
+    expect(contact.mock.calls.at(-1)![1].color).toBe("#ff0000");
+    await act(async () => {
+      drain();
+    });
+    const count = contact.mock.calls.length;
+    emit({ ...packet, id: "obsolete" });
+    expect(contact).toHaveBeenCalledTimes(count);
+    emit({ ...packet, token: next.token, id: "new", phase: "end" });
+    expect(contact).toHaveBeenCalledTimes(count + 1);
+    expect(backend.restore).toHaveBeenCalledTimes(1);
+  } finally {
+    adapter.dispose();
+    view.unmount();
+  }
 });
 
 it("disables native input before undo restoration and ignores late callbacks after split closes", async () => {

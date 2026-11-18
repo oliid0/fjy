@@ -100,7 +100,7 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
     if (
       !Array.isArray(value.compare) ||
       !value.compare.length ||
-      value.compare.length > 3 ||
+      value.compare.length > 2 ||
       surface ||
       relation
     ) {
@@ -129,8 +129,8 @@ export const localFunctionResult = (
     definitions.length > 1 &&
     definitions.every((line) => /^(?:y|f\s*\(\s*x\s*\))\s*=/.test(line))
   ) {
-    if (definitions.length > 4) {
-      throw new Error("Compare at most four functions");
+    if (definitions.length > 3) {
+      throw new Error("Compare at most three functions");
     }
     const plots = definitions.map((line) => localFunctionResult(line).plot);
     return {

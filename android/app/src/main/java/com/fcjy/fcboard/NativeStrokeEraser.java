@@ -21,16 +21,18 @@ final class NativeStrokeEraser {
     private static final double CELL = 256;
     private static final class Node {
         final double x, y, pressure, distance, width;
+        int source;
         Node(double x, double y, double pressure, double distance, double width) {
             this.x=x; this.y=y; this.pressure=pressure; this.distance=distance; this.width=width;
         }
-        Node mix(Node b, double t) { return new Node(x+(b.x-x)*t,y+(b.y-y)*t,pressure+(b.pressure-pressure)*t,distance+(b.distance-distance)*t,width+(b.width-width)*t); }
+        Node mix(Node b, double t) { Node node=new Node(x+(b.x-x)*t,y+(b.y-y)*t,pressure+(b.pressure-pressure)*t,distance+(b.distance-distance)*t,width+(b.width-width)*t);node.source=b.source;return node; }
         JSONArray json() { return new JSONArray(Arrays.asList(x,y,pressure,distance,width)); }
     }
     private static final class Stroke {
         String id;
         double cap, cos, sin;
         boolean brush, nib;
+        int nibSource;
         List<Node> outline;
         List<List<Node>> pieces = new ArrayList<>();
         final List<Long> cells = new ArrayList<>();
@@ -45,7 +47,7 @@ final class NativeStrokeEraser {
             JSONArray a=input.getJSONArray(i);
             double x=a.getDouble(0), y=a.getDouble(1), p=samples?a.getDouble(2):0, d=samples?a.getDouble(3):0, w=samples?a.getDouble(4):0;
             if (!Double.isFinite(x+y+p+d+w) || w<0) throw new IllegalArgumentException("Invalid native eraser geometry");
-            result.add(new Node(x,y,p,d,w));
+            Node node=new Node(x,y,p,d,w);node.source=samples?a.optInt(5,0):0;result.add(node);
         }
         return result;
     }
@@ -56,6 +58,7 @@ final class NativeStrokeEraser {
             stroke.id=data.getString("id"); stroke.cap=data.getDouble("cap"); stroke.brush=data.getBoolean("brush");
             double angle=data.getDouble("brushAngle"); stroke.cos=Math.cos(angle); stroke.sin=Math.sin(angle);
             stroke.outline=nodes(data.getJSONArray("nibOutline"),false); stroke.nib=!stroke.outline.isEmpty();
+            stroke.nibSource=data.optInt("nibSource",0);
             List<Node> points=nodes(data.getJSONArray("samples"),true);
             if (stroke.id.isEmpty() || !Double.isFinite(stroke.cap+angle) || stroke.cap<0 || points.isEmpty()) throw new IllegalArgumentException("Invalid native eraser stroke");
             stroke.pieces.add(points); remove(stroke.id); strokes.put(stroke.id,stroke); index(stroke);
@@ -129,10 +132,10 @@ final class NativeStrokeEraser {
         }
         return winding!=0;
     }
-    private static boolean cut(Stroke stroke,Node from,Node to,double width,double height) {
+    private static boolean cut(Stroke stroke,Node from,Node to,double width,double height,int through) {
         if(Math.max(from.x,to.x)+width/2<stroke.left||Math.min(from.x,to.x)-width/2>stroke.right||Math.max(from.y,to.y)+height/2<stroke.top||Math.min(from.y,to.y)-height/2>stroke.bottom) return false;
         boolean touched=false;
-        if(stroke.nib) {
+        if(stroke.nib && stroke.nibSource<=through) {
             List<Node> nibArea=area(from,to,width,height);
             boolean hit=contains(stroke.outline,from)||contains(stroke.outline,to);
             for(int i=1;!hit&&i<stroke.outline.size();i++) hit=interval(stroke.outline.get(i-1),stroke.outline.get(i),nibArea,null)!=null;
@@ -141,10 +144,10 @@ final class NativeStrokeEraser {
         List<Node> polygon=area(from,to,width+stroke.cap,height+stroke.cap);
         List<List<Node>> output=new ArrayList<>();
         for(List<Node> samples:stroke.pieces) {
-            if(samples.size()==1) { if(interval(samples.get(0),samples.get(0),polygon,stroke)!=null) touched=true; else output.add(samples); continue; }
+            if(samples.size()==1) { if(samples.get(0).source<=through&&interval(samples.get(0),samples.get(0),polygon,stroke)!=null) touched=true; else output.add(samples); continue; }
             List<Node> current=new ArrayList<>();
             for(int i=1;i<samples.size();i++) {
-                Node a=samples.get(i-1),b=samples.get(i); double[] hit=interval(a,b,polygon,stroke);
+                Node a=samples.get(i-1),b=samples.get(i); double[] hit=b.source<=through?interval(a,b,polygon,stroke):null;
                 if(hit==null||hit[1]-hit[0]<=1e-10) {
                     if(current.isEmpty()) current.add(a); current.add(b); continue;
                 }
@@ -159,13 +162,16 @@ final class NativeStrokeEraser {
         return touched;
     }
     JSONArray erase(JSONArray path,double width,double height) throws JSONException {
+        return erase(path,width,height,Integer.MAX_VALUE);
+    }
+    private JSONArray erase(JSONArray path,double width,double height,int through) throws JSONException {
         if(!Double.isFinite(width+height)||width<=0||height<=0||path.length()<2) throw new IllegalArgumentException("Invalid native sweep");
         List<Node> points=nodes(path,false); Set<String> changed=new LinkedHashSet<>();
         for(int i=1;i<points.size();i++) {
             Node from=points.get(i-1),to=points.get(i);
             for(String id:candidates(from,to,width,height)) {
                 Stroke stroke=strokes.get(id); if(stroke==null) continue;
-                if(cut(stroke,from,to,width,height)) { changed.add(id); unindex(stroke); index(stroke); }
+                if(cut(stroke,from,to,width,height,through)) { changed.add(id); unindex(stroke); index(stroke); }
             }
         }
         JSONArray output=new JSONArray();
@@ -175,5 +181,16 @@ final class NativeStrokeEraser {
             output.put(new JSONObject().put("id",id).put("pieces",pieces).put("nibHit",!stroke.nib));
         }
         return output;
+    }
+    JSONObject clip(JSONObject update,JSONArray cuts) throws JSONException {
+        synchronize(new JSONArray().put(update),new JSONArray());
+        for(int i=0;i<cuts.length();i++){
+            JSONObject cut=cuts.getJSONObject(i);int at=cut.getInt("at");
+            if(at<0)throw new IllegalArgumentException("Invalid ink cut order");
+            erase(cut.getJSONArray("path"),cut.getDouble("width"),cut.getDouble("height"),at);
+        }
+        Stroke stroke=strokes.get(update.getString("id"));JSONArray pieces=new JSONArray();
+        for(List<Node> piece:stroke.pieces){JSONArray samples=new JSONArray();for(Node node:piece)samples.put(node.json());pieces.put(samples);}
+        return new JSONObject().put("pieces",pieces).put("nibHit",!stroke.nib);
     }
 }

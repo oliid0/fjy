@@ -1,36 +1,112 @@
-import { recognitionPattern } from "./recognitionVocabulary";
+import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+
 import { visualizationInstructions } from "./visualizationPrompt";
 
 export type TeachingResourceKind = "auto" | "experiment" | "visualization";
-export type TeachingResourceFormat = "auto" | "html" | "vega";
+export type TeachingResourceFormat = "auto" | "html" | "vega" | "jsxgraph";
 
-/** A visualization describes the task, not its file format. Explicit author
- * choices win; a generic visualization can remain a free-form HTML simulation. */
-export const teachingResourceFormat = (
-  topic: string,
-  kind: TeachingResourceKind = "auto",
-): TeachingResourceFormat => {
-  if (recognitionPattern("teachingResourcePrompt_0").test(topic)) {
-    return "html";
+/** Only explicit engine directions constrain generation. A topic or generic
+ * visualization/experiment request leaves all available media to the author. */
+export const teachingResourceEngines = (topic: string) => {
+  const choices = new Map<"vega" | "jsxgraph", "required" | "excluded">();
+  for (const match of topic.matchAll(
+    /\b(?:vega(?:-lite)?|jsxgraph|jsgraph)\b/gi,
+  )) {
+    let prefix =
+      topic
+        .slice(0, match.index)
+        .split(/[，,;；。.!！?？\n]/)
+        .at(-1) || "";
+    // Coordinated declarations such as "use Vega and JSXGraph" share the verb.
+    while (
+      /(?:vega(?:-lite)?|jsxgraph|jsgraph)\s*(?:(?:and|or|nor|和|与|或者|或|及)|[、/&+])\s*$/i.test(
+        prefix,
+      )
+    ) {
+      prefix = prefix.replace(
+        /(?:vega(?:-lite)?|jsxgraph|jsgraph)\s*(?:(?:and|or|nor|和|与|或者|或|及)|[、/&+])\s*$/i,
+        "",
+      );
+    }
+    const engine = /^vega/i.test(match[0]) ? "vega" : "jsxgraph";
+    const suffix = topic.slice(match.index! + match[0].length);
+    if (
+      /(?:不要|不用|不需要|不使用|别用|禁止|without|avoid|no|not|don't|do not)\s*(?:使用|用|use|using)?\s*$/i.test(
+        prefix,
+      ) ||
+      /^\s*(?:不要|不用|不使用)/.test(suffix)
+    ) {
+      choices.set(engine, "excluded");
+    } else if (
+      !prefix.trim() ||
+      /(?:使用|用|采用|基于|通过|借助|\buse|\busing|\bwith)\s*$/i.test(prefix)
+    ) {
+      choices.set(engine, "required");
+    }
   }
-  if (kind === "experiment") {
-    return "html";
+  // "Use Vega or JSXGraph" requests one capability, not both. Preserve
+  // this choice instead of turning an alternative into a mandatory combination.
+  const anyOf: ("vega" | "jsxgraph")[] = [];
+  if (
+    /\b(?:vega(?:-lite)?|jsxgraph|jsgraph)\b\s*(?:or|或者|或)\s*\b(?:vega(?:-lite)?|jsxgraph|jsgraph)\b/i.test(
+      topic,
+    ) &&
+    choices.get("vega") === "required" &&
+    choices.get("jsxgraph") === "required"
+  ) {
+    anyOf.push("vega", "jsxgraph");
+    choices.delete("vega");
+    choices.delete("jsxgraph");
   }
-  if (kind === "visualization" || /\bvega(?:-lite)?\b/i.test(topic)) {
-    return "vega";
-  }
-  if (recognitionPattern("teachingResourcePrompt_1").test(topic)) {
-    return "html";
-  }
-  return recognitionPattern("teachingResourcePrompt_2").test(topic)
-    ? "vega"
-    : recognitionPattern("teachingResourcePrompt_3").test(topic)
-    ? "auto"
-    : "html";
+  return {
+    ...(anyOf.length ? { anyOf } : {}),
+    required: [...choices]
+      .filter(([, state]) => state === "required")
+      .map(([engine]) => engine),
+    excluded: [...choices]
+      .filter(([, state]) => state === "excluded")
+      .map(([engine]) => engine),
+  };
 };
 
+export const teachingResourceFormat = (
+  topic: string,
+): TeachingResourceFormat => {
+  const { required } = teachingResourceEngines(topic);
+  if (
+    /\b(?:html5?|canvas)\b|(?:原生|自定义)\s*svg|svg\s*(?:动画|交互)|\b(?:native|custom|use|using)\s+svg\b/i.test(
+      topic,
+    )
+  ) {
+    return "html";
+  }
+  return required.length === 1 ? required[0] : "auto";
+};
+
+export const assertResourceEngines = (
+  resource: Pick<InteractiveResource, "libraries" | "visualization">,
+  engines: ReturnType<typeof teachingResourceEngines>,
+) => {
+  const used = new Set(resource.libraries || []);
+  if (resource.visualization) {
+    used.add("vega");
+  }
+  if (
+    engines.required.some((engine) => !used.has(engine)) ||
+    engines.excluded.some((engine) => used.has(engine)) ||
+    (engines.anyOf?.length && !engines.anyOf.some((engine) => used.has(engine)))
+  ) {
+    throw new Error(
+      "The resource does not follow the explicitly requested engine choices",
+    );
+  }
+};
+
+export const graphicResourceContract = `The resource runs in a 720 by 460 resizable sandboxed iframe. Use native HTML/CSS, SVG, canvas and inline JavaScript. Two OPTIONAL offline engine capabilities are available, alongside ordinary HTML/SVG/canvas: Vega/Vega-Lite (globals vega, vegaLite, vegaEmbed) and JSXGraph 1.14.3 (global JXG). Choose or combine engines only when they serve the requested resource; no subject or format is automatically assigned an engine. Declare only engines actually used with <meta name="fc-libraries" content="jsxgraph">, content="vega", or content="vega,jsxgraph" in the head. The app injects declared installed runtimes before your scripts; do not load them yourself. JSON-wrapped HTML may alternatively use libraries:["jsxgraph"] or ["vega","jsxgraph"]. Do not reference unbundled engines such as PhET Scenery/Kite/Dot or NetLogo Web.
+For an engine-created scene, mark its sized initialization container data-fc-graphics (for example a div with a real width and height); create actual objects in your script rather than adding a placeholder graphic. JSXGraph supports its real documented 2D/3D geometry, function graphs, numerics and dependent constructions. Use a boundingbox [left,top,right,bottom], hide optional navigation/copyright when not useful, keep jc.compile=false for interpreted JessieCode in this no-eval sandbox, and compute dependencies/points with the engine. For free-form Vega HTML use vegaEmbed with inline declarative data/specs; its offline AST options are supplied by the app. Browser primitives remain fully available for layouts or interactions that need no engine. No imports, CDN scripts, external assets, network requests, nested iframes, storage, parent/window messaging, navigation, eval or host APIs. Do not use forms; standalone buttons, ranges and numeric inputs are allowed.`;
+
 const htmlInstructions = `Create a scientifically accurate interactive teaching resource suited to the requested topic and visual style. Return only one complete self-contained HTML document starting with <!doctype html>, with a short descriptive <title>. Do not wrap HTML in JSON, Markdown or explanations.
-The resource runs in a 720 by 460 resizable sandboxed iframe. Use native HTML/CSS, SVG, canvas and inline JavaScript. The app has not bundled JSXGraph, PhET Scenery/Kite/Dot or NetLogo Web: do not reference their globals, import them, or promise their engines are present. Implement the requested teaching interaction using the available browser primitives. No imports, CDN scripts, external assets, network requests, nested iframes, storage, parent/window messaging, navigation, eval or host APIs. Do not use forms; standalone buttons, ranges and numeric inputs are allowed.
+${graphicResourceContract}
 
 Design for understanding and exploration, not just a decorated chart or text page. Let the learner directly manipulate the meaningful objects when appropriate: drag a geometric point, vertex, lens, light ray, particle or circuit component. Link its position immediately to the governing equations, numerical measurements and visual construction. In y=a(x-h)^2+k, dragging the vertex should change h and k and update the actual curve and displayed equation together; do not drag only a label or show unrelated canned numbers. For calculus, connect the movable tangent and its true derivative, or the interval/subdivision count and actual Riemann-sum area. Respect real domains and break curves at poles. These are examples of teaching depth, not templates to reuse for every topic.
 
@@ -43,17 +119,22 @@ Use requestAnimationFrame and elapsed time for motion with a bounded time step, 
 export const teachingResourceInstructions = (
   format: TeachingResourceFormat,
 ) => {
-  if (format === "vega") {
-    return visualizationInstructions;
-  }
   if (format === "html") {
     return htmlInstructions;
   }
-  return `Choose the medium that best teaches this task in one response. The word "visualization" does not require a chart. Honor an explicit HTML/style request. Prefer free-form HTML/SVG/canvas for direct manipulation, dynamic geometry, laboratory experiments, simulations and agent-based models. Use Vega/Vega-Lite for data charts, mathematical comparisons and projected data maps when that is a better fit. Both are interactive; neither is intrinsically more educational. Return exactly one of the following formats, with its corresponding contract. Do not return a planning answer or mix the two response formats.
-
-HTML OPTION (only if choosing HTML):
-${htmlInstructions}
-
-VEGA OPTION (only if choosing Vega):
-${visualizationInstructions}`;
+  if (format === "jsxgraph") {
+    return `The user explicitly requested JSXGraph. Return a complete creative HTML teaching resource declaring the jsxgraph capability, with actual engine-based graphics/interaction.\n${htmlInstructions}`;
+  }
+  const choice = `Choose the medium that best teaches the task. The word "visualization" does not require a chart. Do not impose a fixed template or assign a subject to an engine. Honor explicit engine/style choices and exclusions; otherwise freely choose or combine HTML/SVG/canvas, Vega/Vega-Lite and JSXGraph.\n\nHTML OPTION (including optional combined engines):\n${htmlInstructions}\n\nDECLARATIVE VEGA OPTION (if choosing a pure Vega resource):\n${visualizationInstructions}`;
+  return format === "vega"
+    ? `The user explicitly requested Vega/Vega-Lite. Use its real declarative engine, either the JSON contract or an HTML resource declaring the vega capability.\n${choice}`
+    : choice;
 };
+
+export const quizGraphicInstructions =
+  () => `Create only the accurate textbook figure for the supplied question. Freely choose or combine SVG/canvas, Vega/Vega-Lite and JSXGraph according to the actual figure and explicit engine choices; do not assign subjects to engines or replace an explicit request with another medium. Return a complete self-contained HTML document, or the declarative Vega JSON contract below. Do not include the question text, answer, solution or interface controls in the picture.
+${graphicResourceContract}
+All meaningful labels, quantities, units, arrows and object counts must be INSIDE the SVG/canvas graphics so they survive image export; HTML may provide sized containers but not separate figure labels. Use a white background and legible labels. Draw the actual geometric dependencies, axes, data and physical relationships, not arbitrary decorative approximations. Keep every given value and do not reveal an unknown answer. The app snapshots the completed drawing and checks that actual image independently.
+For JSXGraph use renderer:'svg', showCopyright:false, showNavigation:false and text/label display:'internal', with no external MathJax/KaTeX. For Vega HTML use renderer:'svg' and await vegaEmbed before reporting ready. After the complete initial drawing is finished, dispatch document.dispatchEvent(new Event('fc-figure-ready')); this includes awaiting any asynchronous drawing. A plain static SVG needs no script. The app's pure declarative Vega path reports its own completion. No animation or unfinished initial frame.
+DECLARATIVE VEGA OPTION:
+${visualizationInstructions}`;

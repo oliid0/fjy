@@ -57,7 +57,18 @@ export const createNativeSplitInk = (
   let revision = 0;
   let viewport = "";
   let signature = "";
+  let currentToken = "";
   const tokens = new Map<string, { style: SplitStyle; bounds: DOMRect }>();
+  const activeTokens = new Map<string, string>();
+  const retireTokens = () => {
+    const retained = new Set(activeTokens.values());
+    retained.add(currentToken);
+    for (const token of tokens.keys()) {
+      if (!retained.has(token)) {
+        tokens.delete(token);
+      }
+    }
+  };
   const fail = (error: unknown) => {
     if (!alive || failed) {
       return;
@@ -74,6 +85,11 @@ export const createNativeSplitInk = (
     busy = true;
     const restoreVersion = version;
     try {
+      // Input must not hide the fallback until its contact listener is ready.
+      await listener;
+      if (!alive || failed) {
+        return;
+      }
       const bounds = canvas.getBoundingClientRect();
       if (!(bounds.width > 0 && bounds.height > 0)) {
         return;
@@ -110,7 +126,7 @@ export const createNativeSplitInk = (
         token,
         persistent: true,
         enabled: !settings.disabled,
-        multiStroke: false,
+        multiStroke: true,
         shortcutsEnabled: false,
         mode: settings.eraser ? "erase" : "pen",
         eraserMode: "stroke",
@@ -131,10 +147,13 @@ export const createNativeSplitInk = (
       };
       if (restoring) {
         await input.configure({ ...options, enabled: false });
+        if (!alive || failed) {
+          return;
+        }
         // Notifications already queued by the previous native gesture precede
         // this barrier, so the exported snapshot includes the last completed ink.
         await input.checkpoint();
-        if (!alive) {
+        if (!alive || failed) {
           return;
         }
         await input.restore({
@@ -143,13 +162,21 @@ export const createNativeSplitInk = (
           bitmap: canvas.toDataURL("image/png"),
         });
       }
-      if (!alive) {
+      if (!alive || failed) {
         return;
       }
       await input.configure(options);
-      if (!alive) {
+      if (!alive || failed) {
         return;
       }
+      currentToken = token;
+      // configure cancels previous-token contacts. Drain their notifications
+      // before releasing the style/bounds needed to mirror cancellation.
+      await input.checkpoint();
+      if (!alive || failed) {
+        return;
+      }
+      retireTokens();
       viewport = nextViewport;
       signature = nextSignature;
       installed = restoreVersion;
@@ -187,7 +214,16 @@ export const createNativeSplitInk = (
       }
       const source = tokens.get(event.token);
       if (source) {
+        if (event.phase === "start") {
+          activeTokens.set(event.id, event.token);
+        }
         contact(event, source.style, source.bounds);
+        if (event.phase === "end" || event.phase === "cancel") {
+          activeTokens.delete(event.id);
+          if (!busy) {
+            retireTokens();
+          }
+        }
       }
       if (
         event.phase === "start" ||
@@ -220,6 +256,8 @@ export const createNativeSplitInk = (
     },
     dispose() {
       alive = false;
+      tokens.clear();
+      activeTokens.clear();
       observer.disconnect();
       removeEventListener("resize", schedule);
       removeEventListener("scroll", schedule, true);

@@ -109,13 +109,19 @@ export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
   const unit = factoryInkUnit(element);
   const sampled = element.customData?.fcInk?.centerline === true;
   const subpixel = element.customData?.fcInk?.subpixel === true;
-  const node = (x: number, y: number, pressure: number) => ({
+  const node = (
+    x: number,
+    y: number,
+    pressure: number,
+    sourceIndex: number,
+  ) => ({
     x: sampled || subpixel ? x : roundInk(x, unit),
     y: sampled || subpixel ? y : roundInk(y, unit),
     pressure,
+    sourceIndex,
   });
   const nodes = element.points.map(([x, y], i) =>
-    node(x, y, element.pressures[i] ?? 0.5),
+    node(x, y, element.pressures[i] ?? 0.5, i),
   );
   if (sampled || nodes.length < 2) {
     return nodes;
@@ -131,6 +137,7 @@ export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
       (previous[0] + current[0]) / 2,
       (previous[1] + current[1]) / 2,
       (control.pressure + nodes[i].pressure) / 2,
+      i,
     );
     // Quadratic-to-chord error <= |P0 - 2P1 + P2| / (4 * steps²).
     // Keep it below 1/64 of a calibrated physical pixel, with bounded import work.
@@ -159,6 +166,7 @@ export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
           a * a * source.pressure +
           2 * a * t * control.pressure +
           t * t * end.pressure,
+        sourceIndex: i,
       });
     }
     source = end;

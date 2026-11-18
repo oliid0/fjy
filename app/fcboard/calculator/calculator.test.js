@@ -44,7 +44,7 @@ it("runs the copied offline calculator's actual buttons, keyboard and scientific
       press(key);
     }
     expect(document.getElementById("result-display").textContent).toBe("14");
-    document.getElementById("btn-scientific").click();
+    document.getElementById("mode-toggle").click();
     expect(document.getElementById("mobile-scientific-drawer")).not.toHaveClass(
       "hidden",
     );
@@ -97,13 +97,18 @@ it("changes actual calculator labels and errors without clearing the current exp
   try {
     const { document } = dom.window;
     expect(document.documentElement.lang).toBe("es-ES");
-    expect(document.getElementById("btn-basic").textContent).toBe(
-      es.fcboard.calculatorUi.basic,
+    expect(document.getElementById("mode-toggle")).toHaveAttribute(
+      "aria-label",
+      es.fcboard.calculatorUi.scientific,
+    );
+    expect(document.getElementById("mode-toggle").textContent.trim()).toBe("");
+    expect(document.querySelectorAll("#calculator-header button")).toHaveLength(
+      3,
     );
     expect(
       document.getElementById("calculator-close").getAttribute("aria-label"),
     ).toBe(es.fcboard.calculatorUi.close_calculator);
-    document.getElementById("btn-scientific").click();
+    document.getElementById("mode-toggle").click();
     for (const key of ["9", "+", "2"]) {
       document.dispatchEvent(
         new dom.window.KeyboardEvent("keydown", { key, bubbles: true }),
@@ -119,9 +124,15 @@ it("changes actual calculator labels and errors without clearing the current exp
       }),
     );
     expect(document.documentElement.lang).toBe("en");
-    expect(document.getElementById("btn-basic").textContent).toBe(
-      en.fcboard.calculatorUi.basic,
+    expect(document.getElementById("mode-toggle")).toHaveAttribute(
+      "aria-label",
+      en.fcboard.calculatorUi.scientific,
     );
+    expect(document.getElementById("mode-toggle")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(document.getElementById("mode-knob")).toHaveAttribute("cx", "23");
     expect(document.getElementById("input-display").textContent).toBe("9+2");
     expect(document.getElementById("result-display").textContent).toBe("11");
     expect(document.getElementById("mobile-scientific-drawer")).not.toHaveClass(

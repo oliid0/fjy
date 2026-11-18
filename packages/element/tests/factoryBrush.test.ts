@@ -278,6 +278,7 @@ describe("factory brush geometry", () => {
       x: 200,
       y: 0,
       width: factoryBrushWidths(input).at(-1),
+      sourceIndex: input.points.length - 1,
     });
     const path = factoryBrushPath(input);
     expect(path.startsWith("M-15.64,0a15.64,7.82 0 1 0 31.28,0")).toBe(true);

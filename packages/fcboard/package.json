@@ -57,15 +57,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "Fcboard as a React component",
-  "license": "MIT",
-  "keywords": [
-    "fcboard",
-    "fcboard-embed",
-    "react",
-    "npm",
-    "npm fcboard"
-  ],
   "browserslist": {
     "production": [
       ">0.2%",
@@ -85,13 +76,6 @@
       "last 1 safari version"
     ]
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/oliid0/fjy.git",
-    "directory": "packages/fcboard"
-  },
-  "bugs": "https://github.com/oliid0/fjy/issues",
-  "homepage": "https://github.com/oliid0/fjy/tree/main/packages/fcboard",
   "scripts": {
     "gen:types": "tsc && node ../../scripts/finalizePackage.js",
     "build:esm": "rimraf dist && node ../../scripts/buildPackage.js && npm run gen:types"
@@ -124,6 +108,7 @@
     "image-blob-reduce": "3.0.1",
     "jotai": "2.11.0",
     "jotai-scope": "0.7.2",
+    "jsxgraph": "1.14.3",
     "lodash.debounce": "4.0.8",
     "lodash.throttle": "4.1.1",
     "nanoid": "3.3.3",

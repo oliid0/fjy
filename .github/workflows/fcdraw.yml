@@ -38,6 +38,10 @@ jobs:
         run: pnpm exec eslint --max-warnings=0 services/board-share/*.mjs
       - run: pnpm test:other
       - run: pnpm test
+      - name: Verify offline teaching resource assets
+        run: |
+          pnpm exec eslint --max-warnings=0 config/resourceAssets.mjs packages/fcboard/tests/resourceAssets.test.mjs
+          node --test packages/fcboard/tests/resourceAssets.test.mjs
       - name: Verify model replacement and integrity rules
         run: python3 -m unittest discover -s scripts -p test_tts_models.py
       - name: Verify optional IndexTTS adapter

@@ -1,0 +1,58 @@
+.fc-quiz-composer {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  pointer-events: auto;
+  border-radius: 20px;
+  padding: 16px 24px 24px;
+  box-sizing: border-box;
+  header,
+  footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  header {
+    margin-bottom: 16px;
+    font-size: 18px;
+  }
+  footer {
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+  .fc-quiz-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+  }
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    font: inherit;
+    color: var(--fc-ink);
+    background: var(--fc-surface);
+    border: 1px solid var(--fc-border);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  textarea {
+    resize: vertical;
+  }
+  .fc-quiz-supplement {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 440px) {
+    .fc-quiz-fields {
+      grid-template-columns: 1fr;
+    }
+  }
+}

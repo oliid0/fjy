@@ -27,6 +27,18 @@ public class LocalInferencePlugin extends Plugin {
     private final Map<String, Pending> pending = new LinkedHashMap<>();
     private Messenger remote;
     private boolean bound, closed;
+    private long lastInkActivity;
+    private final Runnable idleDisconnect = () -> { if (pending.isEmpty()) disconnect(); };
+    @Override public void load(){((MainActivity)getActivity()).setInference(this);}
+    void inkActivity(){
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(remote==null||now-lastInkActivity<5000)return;
+        lastInkActivity=now;
+        try{remote.send(Message.obtain(null,LocalInferenceService.INK_ACTIVITY));}
+        catch(RemoteException error){lost();return;}
+        if(pending.isEmpty()) scheduleDisconnect();
+    }
+    private void scheduleDisconnect(){main.removeCallbacks(idleDisconnect);main.postDelayed(idleDisconnect,ModelPool.IDLE_MS);}
     private static final class Pending {
         final PluginCall call;
         final Bundle input;
@@ -50,6 +62,7 @@ public class LocalInferencePlugin extends Plugin {
             }
             request.call.resolve(value);
         }
+        if (pending.isEmpty()) scheduleDisconnect();
         return true;
     }));
     private final ServiceConnection connection = new ServiceConnection() {
@@ -72,6 +85,7 @@ public class LocalInferencePlugin extends Plugin {
                 call.reject("Native inference unavailable or queue full"); return;
             }
             Pending request = new Pending(call, input, () -> cancel(id, "Native inference timed out"));
+            main.removeCallbacks(idleDisconnect);
             pending.put(id, request);
             main.postDelayed(request.timeout, 90000);
             if (remote != null) send(request);
@@ -138,6 +152,7 @@ public class LocalInferencePlugin extends Plugin {
             try { remote.send(cancel); } catch (RemoteException ignored) { /* Death handled by connection. */ }
         }
         request.call.reject(reason, "NATIVE_INFERENCE_CANCELLED");
+        if (pending.isEmpty()) scheduleDisconnect();
     }
     private void lost() {
         for (Pending request : pending.values()) {
@@ -147,10 +162,12 @@ public class LocalInferencePlugin extends Plugin {
         pending.clear(); disconnect();
     }
     private void disconnect() {
+        main.removeCallbacks(idleDisconnect);
         remote = null;
         if (bound) { bound = false; getContext().unbindService(connection); }
     }
     @Override protected void handleOnDestroy() {
+        ((MainActivity)getActivity()).setInference(null);
         main.post(() -> { closed = true; for (String id : pending.keySet().toArray(new String[0])) cancel(id, "Inference closed"); disconnect(); });
     }
 }

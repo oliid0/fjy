@@ -2,7 +2,6 @@ package com.fcjy.fcboard;
 
 import android.content.Context;
 import android.graphics.*;
-import android.view.View;
 import androidx.core.graphics.PathParser;
 import java.util.*;
 import org.json.*;
@@ -71,7 +70,23 @@ final class NativeScene {
             JSONArray box=value.getJSONArray("bounds");bounds=new RectF(number(box,0),number(box,1),number(box,2),number(box,3));
             if(id.isEmpty()||!Float.isFinite(bounds.left+bounds.top+bounds.right+bounds.bottom)) throw new IllegalArgumentException("Invalid native scene bounds");
             if(value.has("bitmap")) { image=bitmap(value.getString("bitmap")); return; }
-            String svg=value.getString("path"); path=PathParser.createPathFromPathData(svg);
+            JSONObject brush=value.optJSONObject("brush");
+            if(brush!=null){
+                // The brush already consists of exact 2:1 ellipse stamps. SVG
+                // semicircles round to impossible radii in PathParser, causing
+                // recursive radius repair and thousands of warnings per second.
+                path=new Path();JSONArray stamps=brush.getJSONArray("stamps");
+                if(stamps.length()%3!=0)throw new IllegalArgumentException("Invalid native brush stamps");
+                float angle=(float)brush.optDouble("angle",0);if(!Float.isFinite(angle))throw new IllegalArgumentException("Invalid brush angle");
+                Path ellipse=new Path();Matrix position=new Matrix();
+                for(int i=0;i<stamps.length();i+=3){
+                    float x=number(stamps,i),y=number(stamps,i+1),width=number(stamps,i+2);
+                    if(width<=0)throw new IllegalArgumentException("Invalid brush width");
+                    float rx=width/2,ry=width/4;
+                    if(angle==0)path.addOval(x-rx,y-ry,x+rx,y+ry,Path.Direction.CW);
+                    else{ellipse.rewind();ellipse.addOval(-rx,-ry,rx,ry,Path.Direction.CW);position.setRotate((float)Math.toDegrees(angle));position.postTranslate(x,y);path.addPath(ellipse,position);}
+                }
+            }else path=PathParser.createPathFromPathData(value.getString("path"));
             if(path==null) throw new IllegalArgumentException("Invalid native stroke path");
             JSONArray at=value.getJSONArray("transform"); transform=new Matrix();
             transform.setTranslate(-number(at,2),-number(at,3));transform.postRotate((float)Math.toDegrees(number(at,4)));transform.postTranslate(number(at,0),number(at,1));
@@ -287,7 +302,7 @@ final class NativeScene {
 
 /** UI-owned retained layers. CLEAR operates on ink parts only, preserving
  * locked strokes and every interleaved image/text/object in its actual order. */
-final class NativeSceneView extends View {
+final class NativeSceneView extends NativeCanvasView {
     private static final class Backup { final NativeScene.Part part;final Bitmap pixels;Backup(NativeScene.Part part){this.part=part;pixels=part.pixels.copy(Bitmap.Config.ARGB_8888,true);} }
     private final Map<Long,NativeScene.Tile> tiles=new HashMap<>();
     private final Set<Long> dirty=new HashSet<>();
@@ -303,22 +318,34 @@ final class NativeSceneView extends View {
     private final Matrix selectionMatrix=new Matrix();
     private final Paint selectionPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private String selectionGesture="",selectionKey="";
-    boolean canTransform(){return selectionBounds!=null&&!selected.isEmpty();}
-    boolean canTransform(String key){return selectionKey.equals(key)&&canTransform();}
-    void transformSelection(String gesture,float scale,float dx,float dy,float anchorX,float anchorY){
+    synchronized boolean canTransform(){return selectionBounds!=null&&!selected.isEmpty();}
+    synchronized boolean canTransform(String key){return selectionKey.equals(key)&&canTransform();}
+    synchronized void transformSelection(String gesture,float scale,float dx,float dy,float anchorX,float anchorY){
         if(!canTransform())return;
-        selectionGesture=gesture;selectionMatrix.setScale(scale,scale,anchorX,anchorY);selectionMatrix.postTranslate(dx,dy);postInvalidateOnAnimation();
+        selectionGesture=gesture;selectionMatrix.setScale(scale,scale,anchorX,anchorY);selectionMatrix.postTranslate(dx,dy);requestRender();
     }
-    void cancelSelection(String gesture){if(selectionGesture.equals(gesture)){selectionGesture="";selectionMatrix.reset();postInvalidateOnAnimation();}}
+    synchronized void cancelSelection(String gesture){if(selectionGesture.equals(gesture)){selectionGesture="";selectionMatrix.reset();requestRender();}}
 
+    private NativeInkView input;
+    synchronized void setInput(NativeInkView view){input=view;requestRender();}
+    synchronized boolean hasInput(NativeInkView view){return input==view;}
     private boolean hasFrame;
-    NativeSceneView(Context context){super(context);setWillNotDraw(false);setFocusable(false);setClickable(false);clear.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));}
-    long sequence(){return sequence;}
-    List<NativeScene.Cut> erasureSamples(long through){
+    private boolean framePainted;
+    private Runnable ready;
+    synchronized void whenPresented(Runnable callback){ready=callback;}
+    @Override protected void onFramePosted(){
+        Runnable callback;
+        synchronized(this){if(!framePainted)return;callback=ready;ready=null;}
+        if(callback!=null)post(callback);
+    }
+    NativeSceneView(Context context){super(context);setFocusable(false);setClickable(false);clear.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));}
+    synchronized long sequence(){return sequence;}
+    synchronized List<NativeScene.Cut> erasureSamples(long through){
         List<NativeScene.Cut> result=new ArrayList<>();for(NativeScene.Cut cut:cuts)if(cut.sequence<=through)result.add(cut);return result;
     }
-    boolean contains(String id){return elements.contains(id);}
-    void apply(NativeScene.Frame frame){
+    synchronized boolean contains(String id){return elements.contains(id);}
+    synchronized void apply(NativeScene.Frame frame){
+        boolean repaintAll=frame.reset||frame.backgroundChanged||!selectionKey.equals(frame.selectionKey)||!selectionGesture.isEmpty();
         if(frame.reset){tiles.clear();dirty.clear();elements.clear();if(hasFrame){cuts.clear();backups.clear();}}
         hasFrame=true;
         selected=frame.selected;selectedIdle=frame.selectedIdle;selectionBounds=frame.selectionBounds;selectionKey=frame.selectionKey;
@@ -334,7 +361,8 @@ final class NativeSceneView extends View {
             tiles.put(entry.getKey(),tile);
         }
         if(frame.eraseThrough>0)cuts.removeIf(cut->cut.sequence<=frame.eraseThrough);
-        invalidate();
+        if(repaintAll)requestRender();
+        else for(NativeScene.Tile tile:frame.tiles.values())requestRender(new RectF(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE));
     }
     private void clear(NativeScene.Tile tile,NativeScene.Cut cut,boolean replay){
         for(NativeScene.Part part:tile.parts){
@@ -354,18 +382,18 @@ final class NativeSceneView extends View {
         Path path=new Path();path.moveTo(hull.get(0)[0],hull.get(0)[1]);for(int i=1;i<hull.size();i++)path.lineTo(hull.get(i)[0],hull.get(i)[1]);path.close();
         return path;
     }
-    long erase(String gesture,float x1,float y1,float x2,float y2,float width,float height){
+    synchronized long erase(String gesture,float x1,float y1,float x2,float y2,float width,float height){
         backups.computeIfAbsent(gesture,k->new IdentityHashMap<>());
         Path path=sweep(x1,y1,x2,y2,width,height);
         RectF bounds=new RectF();path.computeBounds(bounds,true);NativeScene.Cut cut=new NativeScene.Cut(gesture,++sequence,path,bounds);cuts.add(cut);
         int left=Math.max(0,(int)Math.floor(bounds.left/NativeScene.SIZE)),top=Math.max(0,(int)Math.floor(bounds.top/NativeScene.SIZE));
         int right=Math.min((getWidth()-1)/NativeScene.SIZE,(int)Math.floor(bounds.right/NativeScene.SIZE)),bottom=Math.min((getHeight()-1)/NativeScene.SIZE,(int)Math.floor(bounds.bottom/NativeScene.SIZE));
         for(int row=top;row<=bottom;row++)for(int col=left;col<=right;col++){long key=NativeScene.key(col,row);NativeScene.Tile tile=tiles.get(key);if(tile!=null){clear(tile,cut,false);dirty.add(key);}}
-        postInvalidateOnAnimation();return sequence;
+        requestRender(bounds);return sequence;
     }
     private static float cross(float[] a,float[] b,float[] c){return(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);}
-    void finishErase(String gesture){backups.remove(gesture);}
-    void cancelErase(String gesture){
+    synchronized void finishErase(String gesture){backups.remove(gesture);}
+    synchronized void cancelErase(String gesture){
         Map<NativeScene.Part,Backup> saved=backups.remove(gesture);
         cuts.removeIf(cut->cut.gesture.equals(gesture));
         if(saved!=null)for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
@@ -380,15 +408,28 @@ final class NativeSceneView extends View {
             for(NativeScene.Cut cut:cuts)if(RectF.intersects(cut.bounds,new RectF(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE)))clear(tile,cut,true);
             dirty.add(entry.getKey());
         }
-        postInvalidateOnAnimation();
+        requestRender();
     }
-    @Override protected void onDraw(Canvas canvas){
-        super.onDraw(canvas);
+    @Override protected void paintCanvas(Canvas canvas){
+        NativeInkView preview;
+        synchronized(this){preview=input;}
+        if(preview==null){synchronized(this){paintScene(canvas);}return;}
+        // Match input -> scene lock order used by real eraser dispatch. One
+        // buffer contains canonical ink, pending handoff and every live contact;
+        // translucent pens cannot double-darken across independent surfaces.
+        synchronized(preview){
+            preview.sceneCommitted(this);
+            synchronized(this){paintScene(canvas);}
+            preview.paintCanvas(canvas);
+        }
+    }
+    private void paintScene(Canvas canvas){
+        framePainted=hasFrame;
         for(long key:dirty){NativeScene.Tile tile=tiles.get(key);if(tile!=null)tile.compose();}dirty.clear();
         canvas.drawColor(backgroundColor);
         if(background!=null)canvas.drawBitmap(background,null,new RectF(0,0,getWidth(),getHeight()),image);
         for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
-            NativeScene.Tile tile=entry.getValue();Bitmap idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
+            NativeScene.Tile tile=entry.getValue();if(canvas.quickReject(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE))continue;Bitmap idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
             canvas.drawBitmap(idle==null?tile.pixels:idle,tile.x,tile.y,null);
         }
         int saved=canvas.save();canvas.concat(selectionMatrix);

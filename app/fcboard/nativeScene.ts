@@ -18,6 +18,10 @@ import {
   isNonDeletedElement,
 } from "@fcboard/element";
 import { getFreeDrawSvgPath } from "@fcboard/element/shape";
+import {
+  isFactoryBrush,
+  traceFactoryBrush,
+} from "@fcboard/element/factoryBrush";
 import { isFactoryStroke, factoryInkDashes } from "@fcboard/element/factoryInk";
 import { factoryNibPath } from "@fcboard/element/factoryNib";
 import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
@@ -46,6 +50,7 @@ type NativeNode = {
   bounds: readonly number[];
   bitmap?: string;
   path?: string;
+  brush?: { stamps: number[]; angle: number };
   nib?: string;
   transform?: number[];
   clip?: number[];
@@ -124,7 +129,7 @@ export const nativeSceneNode = (
     through,
     ink: element.type === "freedraw" && !element.locked,
     inline: !!(
-      element.customData?.fcPlot?.renderer === "vega" &&
+      element.customData?.fcPlot?.renderer === "canvas" &&
       document.getElementById(`fc-inline-function-${element.id}`)
     ),
     bounds,
@@ -140,6 +145,13 @@ export const nativeSceneNode = (
     const cx = (x1 + x2) / 2;
     const cy = (y1 + y2) / 2;
     const factory = isFactoryStroke(element);
+    const brush = isFactoryBrush(element);
+    const stamps: number[] = [];
+    if (brush) {
+      traceFactoryBrush(element, (point) => {
+        stamps.push(point.x, point.y, point.width);
+      });
+    }
     const gradient = nativeInkGradient(element);
     const rainbow = gradient ? null : rainbowInkCoordinates(element);
     const stops = gradient?.stops || (rainbow ? rainbowInkStops : undefined);
@@ -151,7 +163,14 @@ export const nativeSceneNode = (
     );
     return {
       ...base,
-      path: getFreeDrawSvgPath(element),
+      ...(brush
+        ? {
+            brush: {
+              stamps,
+              angle: element.customData?.fcInk?.brushAngle || 0,
+            },
+          }
+        : { path: getFreeDrawSvgPath(element) }),
       nib: factory ? factoryNibPath(element) : "",
       transform: [
         cx,
@@ -442,7 +461,7 @@ export const createNativeSceneRenderer = (
         if (element?.type === "image" && element.fileId) {
           const image = config.renderConfig.imageCache.get(element.fileId);
           const inline = !!(
-            element.customData?.fcPlot?.renderer === "vega" &&
+            element.customData?.fcPlot?.renderer === "canvas" &&
             document.getElementById(`fc-inline-function-${id}`)
           );
           const previous = imageStates.get(id);

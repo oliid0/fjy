@@ -292,6 +292,9 @@ it("returns actual object ids for selection, movement and erasure", async () => 
       x: initial.x + 10,
       y: initial.y + 20,
     });
+    expect(object).toMatchObject(initial);
+    expect(api.getSceneElements()[0]).not.toBe(object);
+    expect(api.mutateElement).not.toHaveBeenCalled();
     await expect(
       classroomCommands.execute({
         name: "canvas.erase",
@@ -419,9 +422,9 @@ it("routes text, shapes, selection and plots into the visible document instead o
     expect(draw).toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith({ ids: ["ink"] });
     expect(strokes).toHaveLength(1);
-    expect(strokes[0].image).toMatch(/^data:image\/svg\+xml/);
+    expect(strokes[0].image).toMatch(/^data:image\/png/);
     expect(strokes[0].resource).toBeUndefined();
-    expect(strokes[0].plot?.renderer).toBe("vega");
+    expect(strokes[0].plot?.renderer).toBe("canvas");
     await classroomCommands.execute({
       name: "canvas.action",
       args: { action: "selectAll" },

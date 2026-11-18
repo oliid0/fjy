@@ -185,21 +185,30 @@ it("coalesces dragging to one display frame and commits the final position befor
   ).toBeNull();
 });
 
-it("opens the reference color wheel and updates the mask from real pointer input", async () => {
+it("reuses the pen color wheel and updates only the spotlight mask from real pointer input", async () => {
   render(<Spotlight />);
-  await act(async () => classroomCommands.execute({ name: "tools.spotlight" }));
+  await act(async () =>
+    classroomCommands.execute({
+      name: "tools.spotlight",
+      args: { color: "#ffffff" },
+    }),
+  );
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.colour") }));
-  const wheel = screen.getByRole("slider", { name: t("fcboard.colour") });
+  const wheel = screen.getByRole("slider", {
+    name: t("fcboard.custom_colour"),
+  });
+  expect(wheel.closest(".fc-factory-color-wheel")).not.toBeNull();
   vi.spyOn(wheel, "getBoundingClientRect").mockReturnValue(
-    new DOMRect(0, 0, 300, 300),
+    new DOMRect(100, 100, 126, 126),
   );
   fireEvent(
     wheel,
     Object.assign(new Event("pointerdown", { bubbles: true }), {
-      pointerId: 1,
-      clientX: 300,
-      clientY: 150,
+      button: 0,
+      pointerId: 7,
+      clientX: 221,
+      clientY: 163,
     }),
   );
   expect(wheel).toHaveAttribute("aria-valuetext", "#ff0000");
@@ -214,4 +223,67 @@ it("opens the reference color wheel and updates the mask from real pointer input
   expect(
     Number(overlay.querySelector("svg > g")!.getAttribute("fill-opacity")),
   ).toBeCloseTo(200 / 255);
+});
+
+it("keeps a shared-picker custom color distinct from preset selection and dismisses the topmost popup first", async () => {
+  render(<Spotlight />);
+  await act(() => classroomCommands.execute({ name: "tools.spotlight" }));
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  const custom = screen.getByRole("button", { name: t("fcboard.colour") });
+  fireEvent.click(custom);
+  expect(custom).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "#000000" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  const picker = screen.getByRole("dialog", { name: t("fcboard.colour") });
+  expect(picker.querySelector(".fc-factory-color-wheel")).not.toBeNull();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.getByRole("group", { name: t("fcboard.settings") }),
+  ).toBeVisible();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(
+    screen.queryByRole("group", { name: t("fcboard.settings") }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("region", { name: t("fcboard.spotlight") }),
+  ).toBeVisible();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(
+    screen.queryByRole("region", { name: t("fcboard.spotlight") }),
+  ).toBeNull();
+});
+
+it("keeps the shared pen picker in its own portal and closes it when the settings tool changes", async () => {
+  vi.stubGlobal("innerWidth", 390);
+  vi.stubGlobal("innerHeight", 180);
+  render(<Spotlight />);
+  await act(() =>
+    classroomCommands.execute({
+      name: "tools.spotlight",
+      args: { color: "#ffffff" },
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.settings") }));
+  fireEvent.click(screen.getByRole("button", { name: t("fcboard.colour") }));
+  const picker = screen.getByRole("dialog");
+  const overlay = screen.getByRole("region", { name: t("fcboard.spotlight") });
+  expect(overlay.contains(picker)).toBe(false);
+  fireEvent.change(
+    screen.getByRole("slider", { name: t("fcboard.factorySettings.shade") }),
+    { target: { value: "128" } },
+  );
+  expect(overlay.querySelector("svg > rect")).toHaveAttribute(
+    "fill",
+    "#7f7f7f",
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.spotlight_shape") }),
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    screen.getByRole("group", { name: t("fcboard.spotlight_shape") }),
+  ).toBeVisible();
 });

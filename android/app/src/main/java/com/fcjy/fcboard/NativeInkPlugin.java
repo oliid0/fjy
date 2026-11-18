@@ -85,7 +85,8 @@ public class NativeInkPlugin extends Plugin {
     private void layer() {
         if (layer != null) return;
         layer = new FrameLayout(getActivity());
-        ((ViewGroup)getActivity().findViewById(android.R.id.content)).addView(layer, new ViewGroup.LayoutParams(-1, -1));
+        ViewGroup parent=(ViewGroup)getBridge().getWebView().getParent();
+        parent.addView(layer,parent.indexOfChild(getBridge().getWebView()),new ViewGroup.LayoutParams(-1,-1));
     }
     @PluginMethod public void configure(PluginCall call) {
         getActivity().runOnUiThread(() -> {
@@ -113,6 +114,7 @@ public class NativeInkPlugin extends Plugin {
                 view.setSelection(call.getArray("selectionBounds"),call.getString("selectionKey",""),call.getFloat("selectionMinScale",.1f),call.getBoolean("selectionResize",true));
                 view.setPersistent(call.getBoolean("persistent",false));
                 view.setMultiStroke(call.getBoolean("multiStroke", true));
+                view.setRecognitionEnabled(call.getBoolean("recognitionEnabled", false));
                 view.setRetainedScene(() -> ((MainActivity)getActivity()).nativeScene(owner), !"object".equals(call.getString("eraserMode", "stroke")));
                 shortcutSurfaces.put(owner, call.getBoolean("shortcutsEnabled", false));
                 view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
@@ -123,8 +125,16 @@ public class NativeInkPlugin extends Plugin {
                     web[0] + ((float)x + (float)width) * scale, web[1] + ((float)y + (float)height) * scale));
                 ViewGroup.LayoutParams old = view.getLayoutParams();
                 if (!(old instanceof FrameLayout.LayoutParams) || old.width != bounds.width || old.height != bounds.height || ((FrameLayout.LayoutParams)old).leftMargin != bounds.leftMargin || ((FrameLayout.LayoutParams)old).topMargin != bounds.topMargin) view.setLayoutParams(bounds);
+                ((MainActivity)getActivity()).setInkSurface(owner,view,bounds);
                 call.resolve();
             } catch (Exception error) { call.reject(error.getMessage(), error); }
+        });
+    }
+    @PluginMethod public void ready(PluginCall call){
+        getActivity().runOnUiThread(()->{
+            String owner=call.getString("owner","");boolean fallback=call.getBoolean("fallback",false);
+            if(owner.isEmpty()||!fallback&&!surfaces.containsKey(owner)){call.reject("Native input is not configured");return;}
+            ((MainActivity)getActivity()).boardReady(owner,fallback);call.resolve();
         });
     }
     @PluginMethod public void checkpoint(PluginCall call){publisher.execute(call::resolve);}
@@ -144,7 +154,7 @@ public class NativeInkPlugin extends Plugin {
         getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", ""),call.getString("elementId", ""),call.getBoolean("complete",false)); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
-        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); inputRouter.remove(view); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
+        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
     }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
     @Override protected void handleOnDestroy() {

@@ -1,5 +1,2 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Generator: visioncortex VTracer 1.0.0-alpha.4 -->
-<svg viewBox="0 0 1 44" version="1.1" xmlns="http://www.w3.org/2000/svg" width="1" height="44">
-<path d="M0,0C.33,0,.66,0,1,0C1,14.667,1,29.333,1,44c-.33,0-.66,0-1,0C0,29.333,0,14.667,0,0Z" fill="#606060"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 44" width="1" height="44"><metadata data-source="drawable-hdpi/line.png" data-source-sha256="9c35f9bee1c5a789dd6ea9cc0e554a4662367b1a3eaa4bc5fee5f55fc7142d10" data-generator="vtracer-1.0.0a4-rgba" /><path d="M0,0L0,1L0,2L0,3L0,4L0,5L0,6L0,7L0,8L0,9L0,10L0,11L0,12L0,13L0,14L0,15L0,16L0,17L0,18L0,19L0,20L0,21L0,22L0,23L0,24L0,25L0,26L0,27L0,28L0,29L0,30L0,31L0,32L0,33L0,34L0,35L0,36L0,37L0,38L0,39L0,40L0,41L0,42L0,43L0,44L1,44L1,43L1,42L1,41L1,40L1,39L1,38L1,37L1,36L1,35L1,34L1,33L1,32L1,31L1,30L1,29L1,28L1,27L1,26L1,25L1,24L1,23L1,22L1,21L1,20L1,19L1,18L1,17L1,16L1,15L1,14L1,13L1,12L1,11L1,10L1,9L1,8L1,7L1,6L1,5L1,4L1,3L1,2L1,1L1,0L0,0Z" fill="#606060" />
 </svg>

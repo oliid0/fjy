@@ -328,7 +328,7 @@ const _renderStaticScene = ({
         !(
           !isExporting &&
           canvas.classList.contains("static") &&
-          el.customData?.fcPlot?.renderer === "vega" &&
+          el.customData?.fcPlot?.renderer === "canvas" &&
           document.getElementById(`fc-inline-function-${el.id}`)
         ),
     )

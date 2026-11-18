@@ -3,15 +3,23 @@ import { validateVisualization } from "./visualizationRuntime";
 
 import type { Visualization } from "./visualizationRuntime";
 
+export const resourceLibraryNames = ["vega", "jsxgraph"] as const;
+export type ResourceLibrary = typeof resourceLibraryNames[number];
 export type InteractiveResource = {
   id: string;
   title: string;
   html: string;
   visualization?: Visualization;
+  libraries?: ResourceLibrary[];
 };
+export const resourceNeedsRuntime = (resource: InteractiveResource) =>
+  !!resource.visualization || !!resource.libraries?.length;
 
 /** Self-contained lessons run only in an opaque-origin iframe, never in the host. */
-export const interactiveHtml = (value: unknown): string => {
+export const interactiveHtml = (
+  value: unknown,
+  libraries: readonly ResourceLibrary[] = [],
+): string => {
   if (typeof value !== "string" || value.length > 120000 || !value.trim()) {
     throw new Error("Invalid interactive lesson HTML");
   }
@@ -44,10 +52,16 @@ export const interactiveHtml = (value: unknown): string => {
       styles.some((css) =>
         /(?:^|[;{])\s*(?:-webkit-)?animation(?:-name)?\s*:/i.test(css),
       ));
+  const constructed =
+    libraries.length &&
+    document.querySelector("[data-fc-graphics]") &&
+    [...document.querySelectorAll("script")].some((script) =>
+      script.textContent?.trim(),
+    );
   if (
-    (!document.querySelector("canvas,svg") && !animated) ||
+    (!document.querySelector("canvas,svg") && !animated && !constructed) ||
     document.querySelector("form") ||
-    !(document.body.textContent || "").trim()
+    (!(document.body.textContent || "").trim() && !constructed)
   ) {
     throw new Error("A lesson needs a graphical demonstration or animation");
   }
@@ -90,10 +104,42 @@ export const validateInteractiveResource = (
   ) {
     throw new Error("Invalid interactive lesson");
   }
+  const libraries: unknown[] = [];
+  if (resource.libraries !== undefined) {
+    if (!Array.isArray(resource.libraries) || resource.libraries.length > 2) {
+      throw new Error("Invalid teaching resource libraries");
+    }
+    libraries.push(...resource.libraries);
+  }
+  if (typeof resource.html === "string" && resource.html.length <= 120000) {
+    const document = new DOMParser().parseFromString(
+      resource.html,
+      "text/html",
+    );
+    for (const declaration of document.querySelectorAll(
+      'meta[name="fc-libraries"]',
+    )) {
+      libraries.push(
+        ...(declaration.getAttribute("content") || "")
+          .split(",")
+          .map((name) => name.trim())
+          .filter(Boolean),
+      );
+    }
+  }
+  if (
+    libraries.some(
+      (name) => !resourceLibraryNames.includes(name as ResourceLibrary),
+    )
+  ) {
+    throw new Error("Unsupported teaching resource library");
+  }
+  const declared = [...new Set(libraries)] as ResourceLibrary[];
   return {
     id: resource.id,
     title: resource.title.trim(),
-    html: interactiveHtml(resource.html),
+    html: interactiveHtml(resource.html, declared),
+    ...(declared.length ? { libraries: declared } : {}),
     ...(resource.visualization
       ? { visualization: validateVisualization(resource.visualization) }
       : {}),

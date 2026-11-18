@@ -7,6 +7,7 @@ import {
 import type {
   NativeEraserBackend,
   NativeEraseUpdate,
+  NativeInkClipBackend,
 } from "@fcboard/fcboard/eraser/stroke";
 import type {
   FcboardElement,
@@ -25,6 +26,10 @@ const plugin = registerPlugin<{
     patches: { id: string; pieces: number[][][]; nibHit: boolean }[];
   }>;
   release(options: { owner: string }): Promise<void>;
+  clip(options: { stroke: unknown; cuts: unknown[] }): Promise<{
+    pieces: number[][][];
+    nibHit: boolean;
+  }>;
 }>("FcboardNativeEraser");
 
 type Cached = {
@@ -39,6 +44,32 @@ type Cached = {
  * Send only version deltas; canonical rendered geometry is prepared once when
  * a stroke first enters the index, never for every eraser motion sample. */
 export const createNativeEraserBackend = (owner: string) => {
+  const clip: NativeInkClipBackend = async (element, cuts) => {
+    const geometry = prepareNativeEraseStroke(element);
+    const result = await plugin.clip({
+      stroke: {
+        id: element.id,
+        cap: geometry.cap,
+        brush: geometry.brush,
+        brushAngle: geometry.brushAngle,
+        samples: geometry.samples.map((p, i) => [
+          p.x,
+          p.y,
+          p.pressure,
+          p.distance,
+          p.brushWidth,
+          geometry.sources[i],
+        ]),
+        nibOutline: geometry.nibOutline.map((p) => [p.x, p.y]),
+        nibSource: element.points.length - 1,
+      },
+      cuts: [...cuts],
+    });
+    return restoreEraseFragments(element, decodePieces(result.pieces), {
+      ...geometry,
+      nibHit: result.nibHit,
+    });
+  };
   const cache = new Map<string, Cached>();
   const indexed = new Map<string, Cached>();
   const dirty = new Map<string, Cached>();
@@ -174,20 +205,7 @@ export const createNativeEraserBackend = (owner: string) => {
       if (cache.get(patch.id) === entry) {
         dirty.set(patch.id, entry);
       }
-      const pieces = patch.pieces.map((piece) =>
-        piece.map((p) => {
-          if (p.length !== 5 || !p.every(Number.isFinite) || p[4] < 0) {
-            throw new Error("Native eraser returned invalid geometry");
-          }
-          return {
-            x: p[0],
-            y: p[1],
-            pressure: p[2],
-            distance: p[3],
-            brushWidth: p[4],
-          };
-        }),
-      );
+      const pieces = decodePieces(patch.pieces);
       patches.push({
         source: entry.source,
         version: entry.version,
@@ -211,5 +229,24 @@ export const createNativeEraserBackend = (owner: string) => {
     removed.clear();
     return plugin.release({ owner });
   };
-  return { erase, synchronize, reset };
+  return { erase, clip, synchronize, reset };
 };
+
+const decodePieces = (pieces: number[][][]) =>
+  pieces.map((piece) => {
+    if (!piece.length) {
+      throw new Error("Native eraser returned an empty fragment");
+    }
+    return piece.map((p) => {
+      if (p.length !== 5 || !p.every(Number.isFinite) || p[4] < 0) {
+        throw new Error("Native eraser returned invalid geometry");
+      }
+      return {
+        x: p[0],
+        y: p[1],
+        pressure: p[2],
+        distance: p[3],
+        brushWidth: p[4],
+      };
+    });
+  });

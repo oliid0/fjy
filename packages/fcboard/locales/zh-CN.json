@@ -722,11 +722,6 @@
     "mmb": "鼠标滚轮"
   },
   "fcboard": {
-    "functionEditor": {
-      "edit": "编辑函数",
-      "expressions": "每行一个函数，最多四个函数共用同一坐标系",
-      "invalid": "请输入一至四个有效的 x 函数。"
-    },
     "appTitle": "Fcboard 白板",
     "appDescription": "Fcboard 教学与会议智能白板",
     "calculatorUi": {
@@ -986,6 +981,18 @@
     },
     "roll_call": "点名",
     "namelist": "名单设置",
+    "namelistImport": {
+      "importFile": "导入名单",
+      "formats": "支持 Excel（.xlsx）、CSV/TSV、文本和 Markdown；可选择工作表与姓名列。",
+      "sheet": "工作表",
+      "column": "姓名列",
+      "columnNumber": "第 {{column}} 列",
+      "header": "首行是列名",
+      "saved": "名单已自动保存",
+      "invalid": "无法导入。请使用不超过 8 MB、256 列的文件；名单最多 5,000 人，每项最多 80 个字符。",
+      "format": "支持 Excel .xlsx、CSV/TSV、文本和 Markdown。旧版 .xls 请先另存为 .xlsx。",
+      "loading": "正在读取名单…"
+    },
     "namelist_hint": "每行一个名字，也可以用逗号分隔。",
     "namelist_empty": "请先添加名单",
     "namelist_invalid": "最多5000个名字，每个名字不超过80个字符。",
@@ -993,7 +1000,6 @@
     "rollcall_start": "开始点名",
     "rollcall_stop": "停止",
     "rollcall_resume": "继续抽取",
-
     "touch_locked": "触控已锁定，按副板解锁键恢复。",
     "touch_unlocked": "触控已解锁。",
     "factorySettings": {
@@ -1198,13 +1204,10 @@
     "split_pane": "第 {{number}} 栏画布",
     "split_white": "白色画笔",
     "split_orange": "橙色画笔",
-    "split_pen_size": "{{size}}档笔宽",
     "split_pen_colors": "画笔颜色",
-    "split_pen_widths": "画笔粗细",
     "split_black": "黑笔",
     "split_blue": "蓝笔",
     "split_red": "红笔",
-    "split_small_eraser": "小橡皮",
     "split_large_eraser": "大橡皮",
     "split_background_0": "白色",
     "split_background_1": "绿色",
@@ -1476,6 +1479,31 @@
     "the_image_service_returned_no_valid_image": "图像服务未返回有效图片",
     "the_image_service_returned_an_unsupported_format": "图像服务返回了不支持的图片格式",
     "more_tools": "更多工具",
+    "quizForm": {
+      "title": "出题面板",
+      "grade": "年级",
+      "gradeAny": "根据内容匹配",
+      "gradeNumber": "{{grade}} 年级",
+      "gradeHigher": "高等教育",
+      "type": "题型",
+      "mixed": "混合题型",
+      "difficulty": "难度",
+      "easy": "简单",
+      "medium": "中等",
+      "hard": "较难",
+      "supplement": "补充内容",
+      "placeholder": "学科、知识点、题目数量或其他要求；也可使用当前白板内容。",
+      "generate": "生成题目",
+      "typeMismatch": "生成的题目不符合所选题型：{{type}}。",
+      "questionPending": "正在生成这道题…",
+      "cancelled": "生成已取消，可重新出题以补充未完成的题目。",
+      "imagePending": "正在生成并核对配图…",
+      "imageInvalid": "配图未通过题目一致性检查。",
+      "retryImage": "重试配图",
+      "imageSpecification": "需要图示的题目必须提供完整绘图要求和图注。",
+      "questionFailed": "第 {{number}} 道题生成失败：{{message}}",
+      "generatingCount": "已生成 {{ready}} / {{total}} 道题"
+    },
     "ai_questions": "AI出題",
     "could_not_read_received_files": "无法读取接收的课件",
     "storage_is_full_or_unavailable_download_the_recording_now_to_keep_it": "设备存储不足或不可用，录制尚未保存；请立即下载保留。",
@@ -1712,6 +1740,10 @@
     "coordinate_range_must_be_between_0_and_1000": "坐标范围必须在 0 到 1000 之间",
     "no_real_valued_plot_in_this_range": "当前范围内没有可绘制的实数图像",
     "no_speech_engine_is_available_connect_a_voice_service_in_settings_or_teach_with_captions": "此设备没有播报引擎，请在设置中连接语音播报；当前可使用字幕讲解",
+    "doubao_audio_generation": "豆包音频生成",
+    "study_audio_generation_help": "学习卡发音需要音频生成接口和独立的豆包语音 API Key。点击上方按钮填入接口地址，再在下方填写语音播放密钥。",
+    "audio_generation_requires_the_tts_create_endpoint": "请在语音设置中选择豆包音频生成接口，用于学习卡发音。",
+    "pronunciation_language_not_supported": "音频生成暂不支持 {{language}} 的发音。",
     "the_voice_service_returned_invalid_audio": "播报接口未返回有效音频",
     "this_file_is_encrypted_use_an_unencrypted_document": "文件已加密，请使用未加密的课件",
     "no_document_is_open": "课件尚未打开",
@@ -2187,7 +2219,11 @@
       "insert": "插入函数",
       "customName": "自定义函数{{number}}",
       "deleteNamed": "删除{{name}}",
-      "expressionNamed": "表达式：{{name}}"
+      "expressionNamed": "表达式：{{name}}",
+      "invalid": "无法绘制函数图像。",
+      "merge": "合并",
+      "mergeUnavailable": "请选择两个或三个函数表达式或图像进行合并。",
+      "intersections": "函数交点"
     },
     "resourceMenu": {
       "str_biology": "生物",
@@ -2320,7 +2356,8 @@
     "search_more": "加载更多",
     "search_inserting": "正在插入…",
     "multi_point_switch": "多点开关",
-    "geometry_tools": "尺规"
+    "geometry_tools": "尺规",
+    "resource_loading": "正在加载教学资源…"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "数量比较",

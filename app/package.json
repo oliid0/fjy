@@ -39,6 +39,7 @@
     "@web-ppt/core": "0.4.5",
     "@web-ppt/viewer-core": "0.4.5",
     "callsites": "4.2.0",
+    "fflate": "0.8.3",
     "firebase": "11.3.1",
     "i18next-browser-languagedetector": "6.1.4",
     "idb-keyval": "6.0.3",
@@ -51,6 +52,7 @@
     "points-on-curve": "1.0.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "saxes": "6.0.0",
     "socket.io-client": "4.7.2",
     "uqr": "0.1.2",
     "vite-plugin-html": "3.2.2"

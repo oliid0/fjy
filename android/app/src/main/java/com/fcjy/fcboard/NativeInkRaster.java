@@ -14,11 +14,19 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Retained, lazily allocated coverage tiles. Stable geometry is rasterized once,
  * while only tiles under the live tip are recomposited. ALPHA_8 preserves a
  * single application of pen opacity/shader even where brush stamps overlap. */
 final class NativeInkRaster {
+    private static final class Cut {
+        final Path path;final int through;
+        Cut(Path path,int through){this.path=new Path(path);this.through=through;}
+    }
+    private final List<Cut> cuts=new ArrayList<>();
+    private final Paint clear=new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final int SIZE = 256;
     private static final class Tile {
         final int x, y;
@@ -53,6 +61,7 @@ final class NativeInkRaster {
     NativeInkRaster(int width, int height) {
         this.width = Math.max(1, width); this.height = Math.max(1, height);
         mask.setColor(Color.WHITE);
+        clear.setXfermode(new android.graphics.PorterDuffXfermode(PorterDuff.Mode.CLEAR));
     }
     private RectF bounds(Path path, Paint geometry) {
         path.computeBounds(bounds, true);
@@ -70,15 +79,32 @@ final class NativeInkRaster {
         return tile;
     }
     void commit(Path path, Paint geometry) {
+        commit(path,geometry,Integer.MAX_VALUE);
+    }
+    void commit(Path path, Paint geometry,int source) {
         if (path.isEmpty()) return;
         RectF area = bounds(path, geometry); style(geometry);
         int left = Math.max(0, (int)Math.floor(area.left / SIZE)), top = Math.max(0, (int)Math.floor(area.top / SIZE));
         int right = Math.min((width - 1) / SIZE, (int)Math.floor(area.right / SIZE)), bottom = Math.min((height - 1) / SIZE, (int)Math.floor(area.bottom / SIZE));
         for (int row = top; row <= bottom; row++) for (int col = left; col <= right; col++) {
-            Tile tile = tile(col, row); tile.canvas.drawPath(path, mask); tile.revision++;
+            Tile tile = tile(col, row);int saved=tile.canvas.save();clip(tile.canvas,source);tile.canvas.drawPath(path, mask);tile.canvas.restoreToCount(saved);tile.revision++;
         }
     }
+    void erase(Path path,int through){
+        cuts.add(new Cut(path,through));RectF area=new RectF();path.computeBounds(area,true);
+        for(Tile tile:tiles.values())if(RectF.intersects(area,new RectF(tile.x,tile.y,tile.x+SIZE,tile.y+SIZE))){tile.canvas.drawPath(path,clear);tile.revision++;}
+    }
+    private void clip(Canvas canvas,int source){
+        // Cuts are ordered by the monotonically increasing source sample.
+        // Binary search avoids scanning the lifetime of an ongoing contact.
+        int low=0,high=cuts.size();
+        while(low<high){int mid=(low+high)>>>1;if(cuts.get(mid).through<source)low=mid+1;else high=mid;}
+        for(int i=low;i<cuts.size();i++)canvas.clipOutPath(cuts.get(i).path);
+    }
     void draw(Canvas target, Paint color, Path tip, long tipRevision) {
+        draw(target,color,tip,tipRevision,Integer.MAX_VALUE);
+    }
+    void draw(Canvas target, Paint color, Path tip, long tipRevision,int source) {
         RectF area = bounds(tip, color); style(color);
         int left = Math.max(0, (int)Math.floor(area.left / SIZE)), top = Math.max(0, (int)Math.floor(area.top / SIZE));
         int right = Math.min((width - 1) / SIZE, (int)Math.floor(area.right / SIZE)), bottom = Math.min((height - 1) / SIZE, (int)Math.floor(area.bottom / SIZE));
@@ -91,13 +117,14 @@ final class NativeInkRaster {
         }
         image.setColor(Color.WHITE); image.setAlpha(color.getAlpha());
         for (Tile tile : tiles.values()) {
+            if (target.quickReject(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE)) continue;
             boolean live = !tip.isEmpty() && tile.x <= area.right && tile.x + SIZE >= area.left && tile.y <= area.bottom && tile.y + SIZE >= area.top;
             if (live) {
                 if (tile.preview == null) tile.preview = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ALPHA_8);
                 if (tile.previewRevision != tile.revision || tile.tipRevision != tipRevision) {
                     tile.preview.eraseColor(Color.TRANSPARENT);
                     Canvas canvas = new Canvas(tile.preview); canvas.drawBitmap(tile.stable, 0, 0, null);
-                    canvas.translate(-tile.x, -tile.y); canvas.drawPath(tip, mask);
+                    canvas.translate(-tile.x, -tile.y);clip(canvas,source);canvas.drawPath(tip, mask);
                     tile.previewRevision = tile.revision; tile.tipRevision = tipRevision;
                 }
             } else if (tile.preview != null) {

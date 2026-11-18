@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 
 import { classroomCommands } from "./commands";
@@ -178,7 +179,7 @@ export const MagicCandidates = () => {
       innerWidth - width - 8,
     ),
   );
-  return (
+  return createPortal(
     <div
       ref={dialog}
       className="fc-magic-candidates"
@@ -252,6 +253,7 @@ export const MagicCandidates = () => {
           {t("buttons.confirm")}
         </button>
       </footer>
-    </div>
+    </div>,
+    document.body,
   );
 };

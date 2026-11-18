@@ -20,6 +20,73 @@ import static org.junit.Assert.*;
 /** Real Android Views/MotionEvent/Canvas; no WebView or mocked renderer. */
 @RunWith(AndroidJUnit4.class)
 public class NativeInputTest {
+    @Test public void broadHandbackKeepsItsActualFootprintInExplicitAndCircleEraseModes() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            for(String mode:new String[]{"erase","regionErase"}){
+                List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,mode);
+                motion(view,MotionEvent.ACTION_DOWN,11,1,100,110,80,80);
+                motion(view,MotionEvent.ACTION_UP,11,1,100,110,90,90);
+                assertEquals("erase",events.get(0).optString("mode"));
+                assertTrue(events.get(0).optBoolean("palm"));
+                assertEquals(100,events.get(0).optDouble("width"),.001);
+                assertEquals(110,events.get(0).optDouble("height"),.001);
+                assertEquals("end",events.get(events.size()-1).optString("phase"));
+            }
+        });
+    }
+    @Test public void fiveLongNarrowFingersAndOneBroadSpikeRemainIndependentPens() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
+            for(int count=1;count<=5;count++)motion(view,count==1?MotionEvent.ACTION_DOWN:MotionEvent.ACTION_POINTER_DOWN|((count-1)<<8),11,count,70,8,20,20);
+            motion(view,MotionEvent.ACTION_MOVE,11,5,70,70,50,50);
+            motion(view,MotionEvent.ACTION_MOVE,11,5,70,8,80,80);
+            for(int count=5;count>=1;count--)motion(view,count==1?MotionEvent.ACTION_UP:MotionEvent.ACTION_POINTER_UP|((count-1)<<8),11,count,70,8,100,100);
+            assertEquals(10,events.size());
+            for(JSObject event:events){assertEquals("pen",event.optString("mode"));assertNotEquals("cancel",event.optString("phase"));}
+        });
+    }
+    @Test public void anInitialBroadReportCanReturnToWritingWithoutLosingItsOrigin() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
+            motion(view,MotionEvent.ACTION_DOWN,11,1,70,20,20);
+            motion(view,MotionEvent.ACTION_MOVE,11,1,2,80,80);
+            motion(view,MotionEvent.ACTION_UP,11,1,2,120,120);
+            assertEquals(2,events.size());assertEquals("pen",events.get(0).optString("mode"));
+            assertEquals(20,events.get(1).optJSONArray("points").optJSONArray(0).optDouble(0),.001);
+            assertEquals(120,events.get(1).optJSONArray("points").optJSONArray(events.get(1).optJSONArray("points").length()-1).optDouble(0),.001);
+        });
+    }
+    @Test public void palmClearsAnUnliftedPenAndLaterWritingCanCrossTheOldErasedArea() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
+            motion(view,MotionEvent.ACTION_DOWN,22,1,2,20,60);
+            motion(view,MotionEvent.ACTION_MOVE,22,1,2,180,60);
+            motion(view,MotionEvent.ACTION_DOWN,11,1,70,70,60);
+            motion(view,MotionEvent.ACTION_MOVE,11,1,70,130,60);
+            motion(view,MotionEvent.ACTION_UP,11,1,70,130,60);
+            Bitmap pixels=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
+            try {
+                view.paintCanvas(new Canvas(pixels));assertEquals("Already produced ink is erased before the finger lifts",0,Color.alpha(pixels.getPixel(100,60)));
+                motion(view,MotionEvent.ACTION_MOVE,22,1,2,100,60);
+                pixels.eraseColor(Color.TRANSPARENT);view.paintCanvas(new Canvas(pixels));assertTrue("New ink may cross the old erase",Color.alpha(pixels.getPixel(100,60))>0);
+                motion(view,MotionEvent.ACTION_UP,22,1,2,80,60);
+                JSObject end=events.get(events.size()-1);assertEquals("pen",end.optString("mode"));
+                assertTrue(end.optJSONArray("cuts").length()>0);assertEquals(1,end.optJSONArray("cuts").optJSONObject(0).optInt("at"));
+            }finally{pixels.recycle();}
+        });
+    }
+    @Test public void cancellingAPalmRestoresOnlyItsCutsOnAnActiveWriter() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
+            motion(view,MotionEvent.ACTION_DOWN,22,1,2,20,60);motion(view,MotionEvent.ACTION_MOVE,22,1,2,180,60);
+            motion(view,MotionEvent.ACTION_DOWN,11,1,70,70,60);motion(view,MotionEvent.ACTION_MOVE,11,1,70,130,60);
+            motion(view,MotionEvent.ACTION_CANCEL,11,1,70,130,60);
+            Bitmap pixels=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
+            try{view.paintCanvas(new Canvas(pixels));assertTrue(Color.alpha(pixels.getPixel(100,60))>0);}finally{pixels.recycle();}
+            motion(view,MotionEvent.ACTION_UP,22,1,2,180,60);
+            assertEquals(0,events.get(events.size()-1).optJSONArray("cuts").length());
+        });
+    }
     @Test public void supportsTwentyContactsWithoutDroppingPendingStrokes() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<JSObject> events = new ArrayList<>(); NativeInkView view = surface(events, "pen");
@@ -45,9 +112,9 @@ public class NativeInputTest {
             assertEquals(200,completed.size());
             Bitmap pixels=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
             try {
-                view.draw(new Canvas(pixels));assertTrue(Color.alpha(pixels.getPixel(23,24))>0);
+                view.paintCanvas(new Canvas(pixels));assertTrue(Color.alpha(pixels.getPixel(23,24))>0);
                 for(String id:completed)view.acknowledge(id);
-                pixels.eraseColor(Color.TRANSPARENT);view.draw(new Canvas(pixels));
+                pixels.eraseColor(Color.TRANSPARENT);view.paintCanvas(new Canvas(pixels));
                 Bitmap empty=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
                 try{assertTrue("Every acknowledged contact releases its preview",pixels.sameAs(empty));}finally{empty.recycle();}
             }finally{pixels.recycle();}
@@ -241,10 +308,10 @@ public class NativeInputTest {
             assertTrue(events.get(1).optJSONArray("points").length() > 2);
             Bitmap pixels = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
             try {
-                view.draw(new Canvas(pixels));
+                view.paintCanvas(new Canvas(pixels));
                 assertTrue(Color.alpha(pixels.getPixel(50, 50)) > 0);
                 view.acknowledge(events.get(1).optString("id"));
-                pixels.eraseColor(Color.TRANSPARENT); view.draw(new Canvas(pixels));
+                pixels.eraseColor(Color.TRANSPARENT); view.paintCanvas(new Canvas(pixels));
                 assertEquals(Color.TRANSPARENT, pixels.getPixel(50, 50));
             } finally { pixels.recycle(); }
         });
@@ -262,7 +329,7 @@ public class NativeInputTest {
                 assertEquals(mode, events.get(1).optString("mode"));
                 Bitmap pixels = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888);
                 try {
-                    view.draw(new Canvas(pixels));
+                    view.paintCanvas(new Canvas(pixels));
                     assertEquals(mode.equals("regionErase") ? 48 : 128, Color.alpha(pixels.getPixel(100, 100)));
                 } finally { pixels.recycle(); }
             }
@@ -281,12 +348,12 @@ public class NativeInputTest {
                         motion(view, MotionEvent.ACTION_DOWN, 11, 1, major, position, position);
                         motion(view, MotionEvent.ACTION_MOVE, 11, 1, major, position + 20, position + 20);
                         pixels.eraseColor(Color.TRANSPARENT);
-                        view.draw(new Canvas(pixels));
+                        view.paintCanvas(new Canvas(pixels));
                         assertFalse("Active explicit/palm eraser has a visible cursor", pixels.sameAs(empty));
                         motion(view, MotionEvent.ACTION_UP, 11, 1, major, position + 20, position + 20);
                         assertEquals("end", events.get(events.size() - 1).optString("phase"));
                         pixels.eraseColor(Color.TRANSPARENT);
-                        view.draw(new Canvas(pixels));
+                        view.paintCanvas(new Canvas(pixels));
                         assertTrue("Lifted cursors must not wait for any WebView ACK", pixels.sameAs(empty));
                     }
                 } finally { pixels.recycle(); empty.recycle(); }
@@ -310,12 +377,15 @@ public class NativeInputTest {
         try { assertTrue(view.onTouchEvent(event)); } finally { event.recycle(); }
     }
     private static void motion(NativeInkView view, int action, int device, int count, float major, float x, float y) {
+        motion(view,action,device,count,major,major,x,y);
+    }
+    private static void motion(NativeInkView view, int action, int device, int count, float major,float minor, float x, float y) {
         MotionEvent.PointerProperties[] properties=new MotionEvent.PointerProperties[count];
         MotionEvent.PointerCoords[] coordinates=new MotionEvent.PointerCoords[count];
         for(int i=0;i<count;i++) {
             properties[i]=new MotionEvent.PointerProperties(); properties[i].id=i; properties[i].toolType=MotionEvent.TOOL_TYPE_FINGER;
             coordinates[i]=new MotionEvent.PointerCoords(); coordinates[i].x=x+i*3; coordinates[i].y=y+i*3;
-            coordinates[i].pressure=.5f; coordinates[i].touchMajor=major; coordinates[i].touchMinor=major;
+            coordinates[i].pressure=.5f; coordinates[i].touchMajor=major; coordinates[i].touchMinor=minor;
         }
         long now=SystemClock.uptimeMillis();
         if(action==MotionEvent.ACTION_DOWN) downTimes.put(device,now);

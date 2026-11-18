@@ -158,3 +158,36 @@ it("exposes fill for a closed shape-pen triangle and crop only for a single ungr
     ]).image,
   ).toBe(false);
 });
+
+it("changes a selected graph input plane even when its document z-order is already at the boundary", () => {
+  const graph: InkStroke = {
+    ...ink("g"),
+    plot: {
+      id: "g",
+      renderer: "canvas",
+      layer: "floating",
+      plot: {
+        expression: "x",
+        x: 0,
+        y: 0,
+        z: 0,
+        a: 1,
+        b: 1,
+        c: 0,
+        range: 10,
+        surface: false,
+      },
+      position: { x: 0, y: 0 },
+      origin: { x: 0, y: 0 },
+    },
+  };
+  const board = reorderDocumentSelection([graph], new Set(["g"]), "sendToBack");
+  expect(board[0].plot?.layer).toBe("board");
+  expect(reorderDocumentSelection(board, new Set(["g"]), "sendToBack")).toBe(
+    board,
+  );
+  expect(
+    reorderDocumentSelection(board, new Set(["g"]), "bringForward")[0].plot
+      ?.layer,
+  ).toBe("floating");
+});

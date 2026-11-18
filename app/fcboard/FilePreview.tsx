@@ -6,6 +6,7 @@ import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 import { newIframeElement } from "@fcboard/element";
 import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+
 import Popper from "@mui/material/Popper";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 import Slider from "@mui/material/Slider";
@@ -53,7 +54,7 @@ import type { RegionBounds, RegionHandle } from "@fcboard/fcboard/lasso/region";
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { validatedPlot } from "./mathRecognition";
-import { InlineFunctionGraph } from "./InlineFunctionGraph";
+import { FunctionGraphObject } from "./FunctionGraphObject";
 import { functionGraphImage } from "./functionVisualization";
 
 import { TransientMessage } from "./TransientMessage";
@@ -97,8 +98,9 @@ import {
 
 import { rememberPage } from "./materials";
 import { currentSettings } from "./settings";
+import { selectionPathBounds } from "./selection";
 import { answerFontSize, layoutBoardText } from "./textLayout";
-import { prepareQuestionWriting, questionStrokeStyle } from "./questionWriting";
+import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
 import { MaterialPanel } from "./MaterialPanel";
 import { documentInkElement, documentStrokeGeometry } from "./documentInk";
 import {
@@ -307,8 +309,18 @@ export const FilePreview = ({
     ? "eraser"
     : "freedraw";
   const selectedInkRef = useRef<string[]>([]);
+  const inkSurface = useRef<SVGSVGElement>(null);
   const [editingText, setEditingText] = useState<string>();
   const [lasso, setLasso] = useState<[number, number][]>([]);
+  const semanticSelection = useRef<
+    | {
+        page: number;
+        ids: string[];
+        frame: RegionBounds;
+        region: RegionBounds;
+      }
+    | undefined
+  >(undefined);
   const selectionGesture = useRef<{
     before: [number, number][];
     ids: string[];
@@ -320,6 +332,16 @@ export const FilePreview = ({
   const past = useRef<Record<number, InkStroke[][]>>({});
   const future = useRef<Record<number, InkStroke[][]>>({});
   const animationBefore = useRef(new Map<string, InkStroke[]>());
+  const plotMoving = useRef<
+    | {
+        id: string;
+        page: number;
+        before: InkStroke[];
+        last: InkStroke[];
+        scale: number;
+      }
+    | undefined
+  >(undefined);
   const gestureBefore = useRef<InkStroke[]>([]);
   const gesturePage = useRef(0);
   const tableWriting = useRef<{
@@ -1028,10 +1050,29 @@ export const FilePreview = ({
             inkRef.current[pageRef.current] || [],
             true,
           );
+          semanticSelection.current = undefined;
           selectedInkRef.current = (inkRef.current[pageRef.current] || [])
             .filter((stroke) => ids.has(stroke.id))
             .map((stroke) => stroke.id);
-          setLasso([]);
+          const selected = (inkRef.current[pageRef.current] || []).filter(
+            (stroke) => ids.has(stroke.id),
+          );
+          const boxes = selected.map(documentStrokeBounds);
+          if (selected.length) {
+            setSelecting(true);
+            setInkOn(true);
+            setErase(false);
+          }
+          setLasso(
+            boxes.length
+              ? regionPath({
+                  left: Math.min(...boxes.map((box) => box.left)),
+                  top: Math.min(...boxes.map((box) => box.top)),
+                  right: Math.max(...boxes.map((box) => box.right)),
+                  bottom: Math.max(...boxes.map((box) => box.bottom)),
+                })
+              : [],
+          );
           classroomCommands.changed("document");
           return { ids: [...ids] };
         },
@@ -1125,6 +1166,7 @@ export const FilePreview = ({
                 : stroke.fcInk,
             }),
           );
+          semanticSelection.current = undefined;
           selectedInkRef.current = copies.map((stroke) => stroke.id);
           setLasso((points) => points.map(([x, y]) => [x + dx, y + dy]));
           commitInk({ ...inkRef.current, [page]: [...all, ...copies] });
@@ -1434,6 +1476,27 @@ export const FilePreview = ({
                               },
                             }
                           : {}),
+                        ...((typeof args.color === "string" ||
+                          typeof args.width === "number" ||
+                          args.strokeStyle !== undefined) &&
+                        stroke.plot?.renderer === "canvas"
+                          ? {
+                              image: functionGraphImage(
+                                stroke.plot.plot,
+                                typeof args.color === "string"
+                                  ? args.color
+                                  : stroke.color,
+                                {
+                                  width:
+                                    typeof args.width === "number"
+                                      ? args.width
+                                      : stroke.width,
+                                  strokeStyle: (args.strokeStyle ??
+                                    stroke.strokeStyle) as InkStroke["strokeStyle"],
+                                },
+                              ),
+                            }
+                          : {}),
                         color:
                           typeof args.color === "string"
                             ? args.color
@@ -1722,32 +1785,61 @@ export const FilePreview = ({
           ...documentStrokeBounds(stroke),
         })),
       })),
-      classroomCommands.context("document", () => ({
-        configuration: canvasConfigurationSnapshot(
-          penStateRef.current,
-          deviceProfileRef.current,
-          true,
-        ),
-        id: documentId.current,
-        name: file.name,
-        page: pageRef.current + 1,
-        pages: pages.length,
-        zoom: zoomRef.current,
-        tool: documentTool.current,
-        pen: pen.current,
-        text: currentTextRef.current,
-        ink: inkRef.current[pageRef.current] || [],
-        selection: selectedInkRef.current,
-        selectionInProgress: !!activePointer.current || !!editingText,
-        region: lasso,
-        viewport: {
-          left: stage.current?.getBoundingClientRect().left || 0,
-          top: stage.current?.getBoundingClientRect().top || 0,
-          width: size.width * zoomRef.current,
-          height: size.height * zoomRef.current,
-          scroll,
-        },
-      })),
+      classroomCommands.context("document", () => {
+        const semantic = semanticSelection.current;
+        const frame = selectionPathBounds(lasso);
+        let selectionRegion: RegionBounds | undefined;
+        if (
+          semantic &&
+          frame &&
+          semantic.page === pageRef.current &&
+          semantic.ids.length === selectedInkRef.current.length &&
+          semantic.ids.every((id) => selectedInkRef.current.includes(id))
+        ) {
+          const sx =
+            (frame.right - frame.left) /
+            (semantic.frame.right - semantic.frame.left);
+          const sy =
+            (frame.bottom - frame.top) /
+            (semantic.frame.bottom - semantic.frame.top);
+          selectionRegion = {
+            left:
+              frame.left + (semantic.region.left - semantic.frame.left) * sx,
+            right:
+              frame.left + (semantic.region.right - semantic.frame.left) * sx,
+            top: frame.top + (semantic.region.top - semantic.frame.top) * sy,
+            bottom:
+              frame.top + (semantic.region.bottom - semantic.frame.top) * sy,
+          };
+        }
+        return {
+          configuration: canvasConfigurationSnapshot(
+            penStateRef.current,
+            deviceProfileRef.current,
+            true,
+          ),
+          id: documentId.current,
+          name: file.name,
+          page: pageRef.current + 1,
+          pages: pages.length,
+          zoom: zoomRef.current,
+          tool: documentTool.current,
+          pen: pen.current,
+          text: currentTextRef.current,
+          ink: inkRef.current[pageRef.current] || [],
+          selection: selectedInkRef.current,
+          selectionInProgress: !!activePointer.current || !!editingText,
+          region: lasso,
+          selectionRegion,
+          viewport: {
+            left: stage.current?.getBoundingClientRect().left || 0,
+            top: stage.current?.getBoundingClientRect().top || 0,
+            width: size.width * zoomRef.current,
+            height: size.height * zoomRef.current,
+            scroll,
+          },
+        };
+      }),
       classroomCommands.register(
         "document.snapshot",
         "@internal",
@@ -1857,7 +1949,7 @@ export const FilePreview = ({
               ),
             );
           const before = signature();
-          const elements = await prepareQuestionWriting(args, () => {
+          const elements = await prepareInkWriting(args, () => {
             const current = classroomCommands.read("document") as
               | { id?: string }
               | undefined;
@@ -1880,7 +1972,7 @@ export const FilePreview = ({
               obstacles: (inkRef.current[page] || [])
                 .filter((stroke) => !replaced.has(stroke.id))
                 .map(documentStrokeBounds),
-              inkStyle: questionStrokeStyle(
+              inkStyle: inkStrokeStyle(
                 args,
                 penStateRef.current,
                 deviceProfileRef.current,
@@ -2245,7 +2337,7 @@ export const FilePreview = ({
             typeof args.image !== "string" ||
             !current.some(
               (stroke) =>
-                ids.has(stroke.id) && stroke.plot?.renderer === "vega",
+                ids.has(stroke.id) && stroke.plot?.renderer === "canvas",
             )
           ) {
             throw new Error("The function plot was removed");
@@ -2254,21 +2346,13 @@ export const FilePreview = ({
             {
               ...inkRef.current,
               [pageRef.current]: current.map((stroke) =>
-                ids.has(stroke.id) && stroke.plot?.renderer === "vega"
+                ids.has(stroke.id) && stroke.plot?.renderer === "canvas"
                   ? {
                       ...stroke,
                       image: args.image as string,
                       plot: {
                         ...stroke.plot!,
                         plot,
-                        ...(Array.isArray(args.sourceRegions)
-                          ? {
-                              sourceRegions: args.sourceRegions as NonNullable<
-                                InkStroke["plot"]
-                              >["sourceRegions"],
-                            }
-                          : {}),
-                        renderer: "vega" as const,
                       },
                     }
                   : stroke,
@@ -2308,7 +2392,18 @@ export const FilePreview = ({
             typeof args.image === "string" ? args.image : undefined,
           ),
         );
-        selectedInkRef.current = strokes.map((stroke) => stroke.id);
+        if (args.keepTool !== true) {
+          selectedInkRef.current = strokes.map((stroke) => stroke.id);
+          const boxes = strokes.map(documentStrokeBounds);
+          setLasso(
+            regionPath({
+              left: Math.min(...boxes.map((box) => box.left)),
+              top: Math.min(...boxes.map((box) => box.top)),
+              right: Math.max(...boxes.map((box) => box.right)),
+              bottom: Math.max(...boxes.map((box) => box.bottom)),
+            }),
+          );
+        }
         commitInk({
           ...inkRef.current,
           [pageRef.current]: [
@@ -2393,7 +2488,7 @@ export const FilePreview = ({
     const pending = currentInk.filter((stroke) => {
       if (
         stroke.lesson ||
-        stroke.questionInput ||
+        stroke.generated ||
         stroke.language ||
         (stroke.insertion?.kind === "table" &&
           stroke.insertion.inkCell !== undefined) ||
@@ -2830,8 +2925,7 @@ export const FilePreview = ({
     erase ||
     (event.pointerType === "pen" &&
       (event.button === 2 || event.button === 5 || !!(event.buttons & 34))) ||
-    (!selecting &&
-      api.getAppState().palmEraser !== false &&
+    (api.getAppState().palmEraser !== false &&
       isPalmContact(
         event,
         api.getAppState().palmEraserThreshold ??
@@ -2849,12 +2943,12 @@ export const FilePreview = ({
     }
   };
   const startErasure = (
-    event: React.PointerEvent<SVGSVGElement>,
+    target: SVGSVGElement,
     position: [number, number],
-    contact = event.nativeEvent,
+    contact: PointerEvent,
   ) => {
     restoreTableWriting();
-    const scale = 1000 / event.currentTarget.getBoundingClientRect().width;
+    const scale = 1000 / target.getBoundingClientRect().width;
     const size = Math.max(
       12,
       Math.min(
@@ -3025,7 +3119,7 @@ export const FilePreview = ({
     if (!erasing.current) {
       from = events.findIndex(eraseContact);
       if (from >= 0) {
-        startErasure(event, samples[from], events[from]);
+        startErasure(event.currentTarget, samples[from], events[from]);
       } else {
         from = 0;
       }
@@ -3185,6 +3279,7 @@ export const FilePreview = ({
             )}
           </div>
           <svg
+            ref={inkSurface}
             className="fc-document-ink"
             onDoubleClick={(event) => {
               const languageId = (event.target as Element)
@@ -3260,7 +3355,7 @@ export const FilePreview = ({
               event.currentTarget.setPointerCapture(event.pointerId);
               if (eraseContact(event)) {
                 const position = point(event);
-                startErasure(event, position);
+                startErasure(event.currentTarget, position, event.nativeEvent);
                 removeAt(position);
                 setEraserPreview({ ...erasing.current!, position });
               } else {
@@ -3452,6 +3547,18 @@ export const FilePreview = ({
                     : selection.handle
                     ? bounds
                     : undefined;
+                if (!selection.handle) {
+                  const region = selectionPathBounds(draftRef.current?.points);
+                  semanticSelection.current =
+                    operation && region
+                      ? {
+                          page,
+                          ids: [...selectedInkRef.current],
+                          frame: operation,
+                          region,
+                        }
+                      : undefined;
+                }
                 setLasso(operation ? regionPath(operation) : []);
                 if (
                   selectionGesture.current.handle &&
@@ -3569,8 +3676,23 @@ export const FilePreview = ({
                 />
               </g>
             )}
-            {paths.map((stroke) =>
-              stroke.plot?.renderer === "vega" && stroke.image ? (
+            {[
+              ...paths.filter(
+                (stroke) =>
+                  !(
+                    stroke.plot?.renderer === "canvas" &&
+                    stroke.plot.layer !== "board"
+                  ),
+              ),
+              ...paths.filter(
+                (stroke) =>
+                  stroke.plot?.renderer === "canvas" &&
+                  stroke.plot.layer !== "board",
+              ),
+            ].map((stroke) =>
+              stroke.plot?.renderer === "canvas" &&
+              stroke.image &&
+              stroke.plot.layer !== "board" ? (
                 <foreignObject
                   key={stroke.id}
                   x={stroke.anchor?.x ?? stroke.points[0][0]}
@@ -3580,13 +3702,114 @@ export const FilePreview = ({
                   opacity={(stroke.opacity ?? 100) / 100}
                   style={{
                     overflow: "visible",
-                    pointerEvents: inkOn && !selecting ? "none" : "auto",
+                    pointerEvents: erase ? "none" : "auto",
                   }}
                 >
-                  <InlineFunctionGraph
+                  <FunctionGraphObject
                     id={stroke.id}
+                    selected={
+                      selecting &&
+                      selectedInkRef.current.length === 1 &&
+                      selectedInkRef.current.includes(stroke.id)
+                    }
+                    preview={stroke.image}
+                    onSelect={
+                      selecting
+                        ? () => {
+                            selectedInkRef.current = [stroke.id];
+                            setLasso(regionPath(documentStrokeBounds(stroke)));
+                            classroomCommands.changed("document");
+                          }
+                        : undefined
+                    }
                     plot={stroke.plot.plot}
                     color={stroke.color}
+                    strokeWidth={stroke.width}
+                    strokeStyle={stroke.strokeStyle}
+                    interactive={!stroke.locked && !erase}
+                    onError={setError}
+                    onErasePointer={(event) => {
+                      const target = inkSurface.current;
+                      if (!target || !eraseContact(event.nativeEvent)) {
+                        return false;
+                      }
+                      if (activePointer.current) {
+                        cancelInkGesture();
+                      }
+                      gestureBefore.current = inkRef.current[page] || [];
+                      gesturePage.current = page;
+                      activePointer.current = { id: event.pointerId, target };
+                      target.setPointerCapture(event.pointerId);
+                      const rect = target.getBoundingClientRect();
+                      const position: [number, number] = [
+                        ((event.clientX - rect.left) / rect.width) * 1000,
+                        ((event.clientY - rect.top) / rect.width) * 1000 +
+                          scroll,
+                      ];
+                      startErasure(target, position, event.nativeEvent);
+                      removeAt(position);
+                      setEraserPreview({ ...erasing.current!, position });
+                      return true;
+                    }}
+                    onTranslate={
+                      selecting
+                        ? ({ dx, dy, phase }) => {
+                            if (phase === "start") {
+                              plotMoving.current = {
+                                id: stroke.id,
+                                page,
+                                before: inkRef.current[page] || [],
+                                last: inkRef.current[page] || [],
+                                scale:
+                                  (stage.current?.getBoundingClientRect()
+                                    .width || size.width * zoom) / 1000,
+                              };
+                              return;
+                            }
+                            const gesture = plotMoving.current;
+                            if (
+                              !gesture ||
+                              gesture.page !== pageRef.current ||
+                              gesture.id !== stroke.id ||
+                              inkRef.current[page] !== gesture.last
+                            ) {
+                              plotMoving.current = undefined;
+                              return;
+                            }
+                            if (phase === "cancel") {
+                              plotMoving.current = undefined;
+                              commitInk(
+                                { ...inkRef.current, [page]: gesture.before },
+                                false,
+                              );
+                              return;
+                            }
+                            const next = gesture.before.map((item) =>
+                              item.id === stroke.id
+                                ? moveDocumentStroke(
+                                    item,
+                                    dx / gesture.scale,
+                                    dy / gesture.scale,
+                                  )
+                                : item,
+                            );
+                            gesture.last = next;
+                            if (phase === "end") {
+                              plotMoving.current = undefined;
+                              commitInk(
+                                { ...inkRef.current, [page]: gesture.before },
+                                false,
+                              );
+                              commitInk({ ...inkRef.current, [page]: next });
+                            } else {
+                              commitInk(
+                                { ...inkRef.current, [page]: next },
+                                false,
+                              );
+                            }
+                          }
+                        : undefined
+                    }
                     onCommit={(plot) => {
                       if (pageRef.current !== page) {
                         return;
@@ -3598,7 +3821,10 @@ export const FilePreview = ({
                           item.id === stroke.id && item.plot
                             ? {
                                 ...item,
-                                image: functionGraphImage(plot, item.color),
+                                image: functionGraphImage(plot, item.color, {
+                                  width: item.width,
+                                  strokeStyle: item.strokeStyle,
+                                }),
                                 plot: { ...item.plot, plot },
                               }
                             : item,

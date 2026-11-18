@@ -6,6 +6,7 @@
   padding: clamp(12px, 2vw, 48px);
   border-radius: clamp(12px, 2vw, 36px);
   display: flex;
+  pointer-events: auto;
   flex-direction: column;
   gap: clamp(12px, 2vh, 32px);
   color: #17243b;
@@ -22,9 +23,14 @@
     margin: 0;
     font-size: clamp(20px, 2vw, 48px);
   }
-  header > button {
+  .fc-rollcall-header-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .fc-rollcall-header-actions > button {
     width: clamp(32px, 3vw, 64px);
     height: clamp(32px, 3vw, 64px);
+    min-height: 0;
     padding: 6px;
   }
   button {
@@ -56,6 +62,9 @@
     border-radius: 16px;
     background: radial-gradient(ellipse, #dce8ff, #f6f8ff);
     overflow: hidden;
+    cursor: pointer;
+    color: inherit;
+    touch-action: manipulation;
   }
   .fc-rollcall-stage output {
     max-width: 95%;
@@ -66,9 +75,6 @@
     font-size: clamp(16px, 3vw, 64px);
     text-align: center;
     padding: 16px;
-  }
-  .fc-rollcall-stage[data-rolling="true"] {
-    cursor: pointer;
   }
   .fc-rollcall-editor {
     flex: 1;
@@ -85,5 +91,33 @@
     padding: 12px;
     border: 1px solid #a9b9dc;
     border-radius: 10px;
+  }
+  .fc-rollcall-import-hint,
+  .fc-rollcall-editor > p {
+    margin: 0;
+  }
+  .fc-rollcall-import-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    select {
+      max-width: 240px;
+      font: inherit;
+      padding: 8px;
+    }
+  }
+  @media (max-height: 500px) {
+    .fc-rollcall-editor {
+      overflow: auto;
+    }
+    textarea {
+      flex: 0 0 100px;
+    }
   }
 }

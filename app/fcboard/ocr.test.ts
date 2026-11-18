@@ -11,7 +11,6 @@ const backend = vi.hoisted(() => ({
 vi.mock("./digitalInk", () => ({
   hasDigitalInk: () => backend.nativeAvailable,
   recognizeDigitalInk: backend.native,
-  prepareDigitalInk: vi.fn(),
 }));
 vi.mock("./ai", () => ({
   chat: backend.cloud,
@@ -23,7 +22,6 @@ vi.mock("./ai", () => ({
 vi.mock("./localMathOcr", () => ({ recognizeLocalMath: backend.math }));
 vi.mock("./localOcr", () => ({
   recognizeLocalHandwriting: backend.local,
-  warmHandwriting: vi.fn(),
 }));
 
 describe("explicit handwriting actions", () => {

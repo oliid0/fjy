@@ -5,12 +5,7 @@ import type { LocalPoint, Radians } from "@fcboard/math";
 
 import { API } from "../tests/helpers/api";
 
-import {
-  eraseStroke,
-  eraseSceneObjects,
-  eraseSceneRegion,
-  isPalmContact,
-} from "./stroke";
+import { eraseStroke, eraseSceneRegion, isPalmContact } from "./stroke";
 
 const stroke = () => ({
   ...API.createElement({
@@ -149,75 +144,6 @@ describe("factory circle erasure", () => {
 });
 
 describe("local stroke erasure", () => {
-  it("sweeps the complete object footprint between fast samples and removes its group without touching locked contents", () => {
-    const line = API.createElement({
-      type: "line",
-      x: 100,
-      y: 100,
-      points: [pointFrom(0, 0), pointFrom(200, 0)],
-      groupIds: ["one-object"],
-    });
-    const part = API.createElement({
-      type: "line",
-      x: 100,
-      y: 400,
-      points: [pointFrom(0, 0), pointFrom(200, 0)],
-      groupIds: ["one-object"],
-    });
-    const locked = API.createElement({
-      type: "rectangle",
-      x: 200,
-      y: 100,
-      locked: true,
-      groupIds: ["one-object"],
-    });
-    const outside = API.createElement({ type: "line", x: 100, y: 500 });
-    const result = eraseSceneObjects(
-      [line, part, locked, outside],
-      { x: 0, y: 110 },
-      { x: 500, y: 110 },
-      20,
-      30,
-    );
-    expect(
-      result
-        .filter((element) => element.isDeleted)
-        .map((element) => element.id),
-    ).toEqual([line.id, part.id]);
-    expect(result.find((element) => element.id === locked.id)).toBe(locked);
-    expect(result.find((element) => element.id === outside.id)).toBe(outside);
-  });
-
-  it("does not erase the empty interior of an outline shape but erases a filled shape at the same position", () => {
-    const outline = API.createElement({
-      type: "rectangle",
-      x: 100,
-      y: 100,
-      width: 200,
-      height: 200,
-      backgroundColor: "transparent",
-    });
-    const elements = [outline];
-    expect(
-      eraseSceneObjects(
-        elements,
-        { x: 180, y: 180 },
-        { x: 220, y: 220 },
-        10,
-        10,
-      ),
-    ).toBe(elements);
-    const filled = { ...outline, backgroundColor: "#ff0000" };
-    expect(
-      eraseSceneObjects(
-        [filled],
-        { x: 180, y: 180 },
-        { x: 220, y: 220 },
-        10,
-        10,
-      )[0].isDeleted,
-    ).toBe(true);
-  });
   it("erases the visible quadratic curve rather than its raw control polygon, without smoothing surviving fragments again", () => {
     const input = {
       ...stroke(),
@@ -390,6 +316,9 @@ describe("local stroke erasure", () => {
     ).toBe(true);
     expect(
       isPalmContact({ pointerType: "touch", width: 8, height: 8 }, 36),
+    ).toBe(false);
+    expect(
+      isPalmContact({ pointerType: "touch", width: 70, height: 8 }, 36),
     ).toBe(false);
     expect(
       isPalmContact({ pointerType: "pen", width: 60, height: 60 }, 36),

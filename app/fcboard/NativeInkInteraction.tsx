@@ -41,6 +41,7 @@ type Contact = {
   palm?: boolean;
   pointerType: string;
   nativeSequence?: number;
+  cuts?: import("@fcboard/fcboard/eraser/stroke").NativeInkCut[];
 };
 type PenAppearance = {
   pen: string;
@@ -50,11 +51,13 @@ type PenAppearance = {
   gradient?: { colors: readonly string[]; size: number; x: number; y: number };
 };
 const ink = registerPlugin<{
+  ready(options: { owner: string; fallback: boolean }): Promise<void>;
   configure(options: {
     owner: string;
     token: string;
     enabled: boolean;
     multiStroke: boolean;
+    recognitionEnabled: boolean;
     shortcutsEnabled: boolean;
     eraserMode: string;
     mode: "pen" | "select" | "regionErase" | "erase";
@@ -154,6 +157,26 @@ export const NativeInkInteraction = ({
     let uiViewport = "";
     let uiBounds: number[][] = [];
     let uiBlocksInk = false;
+    let inputReady = false;
+    let startupReport: boolean | undefined;
+    const reportStartup = (fallback = false) => {
+      if (
+        !active ||
+        startupReport === true ||
+        startupReport === fallback ||
+        api.getAppState().isLoading ||
+        !document.querySelector(".fc-unified-toolbar")
+      ) {
+        return;
+      }
+      startupReport = fallback;
+      void ink.ready({ owner: api.id, fallback }).catch((error) => {
+        if (startupReport === fallback) {
+          startupReport = undefined;
+        }
+        console.error("[startup-ready]", error);
+      });
+    };
     const contacts = new Map<string, NonNullable<Contact["mode"]>>();
     const eraser = createNativeEraserBackend(api.id);
     const compositionBounds = new Map<string, readonly number[]>();
@@ -173,17 +196,14 @@ export const NativeInkInteraction = ({
             continue;
           }
           selectionElements.set(element.id, element);
-          if (
-            element.customData?.fcInsertion ||
-            element.customData?.fcQuestionInput ||
-            element.customData?.fcQuestion
-          ) {
+          if (element.customData?.fcInsertion) {
             compositionBounds.set(element.id, getCommonBounds([element]));
           } else {
             compositionBounds.delete(element.id);
           }
         }
       },
+      eraser.clip,
     );
     const selections = new Map<
       string,
@@ -195,7 +215,7 @@ export const NativeInkInteraction = ({
         >;
       }
     >();
-    let eraserQueue = Promise.resolve();
+    let contactQueue = Promise.resolve();
     let generation = 0;
     const apply = (
       contact: Contact,
@@ -359,11 +379,16 @@ export const NativeInkInteraction = ({
           errorMessage: error instanceof Error ? error.message : String(error),
         },
       });
+      requestAnimationFrame(() => reportStartup(true));
     };
     const scene = createNativeSceneRenderer(api, fail);
     const sync = () => {
       frame = 0;
-      if (!active || failed) {
+      if (!active) {
+        return;
+      }
+      if (failed) {
+        reportStartup(true);
         return;
       }
       const state = api.getAppState();
@@ -562,7 +587,9 @@ export const NativeInkInteraction = ({
         owner: api.id,
         token,
         enabled: enabled && !uiBlocksInk && blocked.length <= 512,
-        multiStroke: !state.currentItemInkAssist && state.multiStroke !== false,
+        multiStroke: state.multiStroke !== false,
+        recognitionEnabled:
+          !!state.currentItemInkAssist || compositionBounds.size > 0,
         shortcutsEnabled:
           !uiBlocksInk &&
           !state.editingTextElement &&
@@ -621,10 +648,16 @@ export const NativeInkInteraction = ({
       };
       const signature = JSON.stringify(options);
       if (signature === previous) {
+        if (inputReady) {
+          reportStartup();
+        }
         return;
       }
       previous = signature;
-      void ink.configure(options).catch(fail);
+      void ink.configure(options).then(() => {
+        inputReady = true;
+        reportStartup();
+      }, fail);
     };
     const schedule = () => {
       if (!frame) {
@@ -667,11 +700,10 @@ export const NativeInkInteraction = ({
           if (contact.phase === "start") {
             contacts.set(contact.id, contact.mode || "pen");
           }
-          const result = apply(contact);
+          const applied = apply(contact);
+          const result = applied instanceof Promise ? await applied : applied;
           if (typeof result === "string") {
             elementId = result;
-          } else if (result) {
-            await result;
           }
           if (!active || failed || received !== generation) {
             return;
@@ -722,11 +754,14 @@ export const NativeInkInteraction = ({
       }
     };
     const listener = ink.addListener("contact", (contact) => {
-      // Native eraser start/move/end share one ordered transaction, while other
-      // writers continue committing independently of the geometry worker.
-      if (contact.mode === "erase") {
+      // A crossed pen must settle between the surrounding eraser batches.
+      // Unaffected writers and selection retain their synchronous entry path.
+      if (
+        contact.mode === "erase" ||
+        (contact.phase === "end" && contact.cuts?.length)
+      ) {
         const received = generation;
-        eraserQueue = eraserQueue
+        contactQueue = contactQueue
           .then(() => handleContact(contact, received))
           .catch(fail);
       } else {
@@ -855,7 +890,7 @@ export const NativeInkInteraction = ({
       classroomCommands.watch("boards", schedule),
       classroomCommands.onInvalidate(() => {
         generation++;
-        eraserQueue = Promise.resolve();
+        contactQueue = Promise.resolve();
         token = "";
         previous = "";
         for (const [id, mode] of contacts) {

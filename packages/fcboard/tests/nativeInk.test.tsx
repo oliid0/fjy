@@ -9,6 +9,72 @@ import { Fcboard } from "../index";
 import { render } from "./test-utils";
 import { API } from "./helpers/api";
 
+it.each(["touch", "pen"])(
+  "erases ink and grouped objects with an object-mode palm (%s), preserving locked contents and cancellation",
+  async (pointerType) => {
+    await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    const api = window.h.app.api;
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 100,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(100, 0)],
+    });
+    const shape = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 10,
+      height: 10,
+      groupIds: ["inserted"],
+    });
+    const part = API.createElement({
+      type: "line",
+      x: 100,
+      y: 500,
+      groupIds: ["inserted"],
+    });
+    const locked = API.createElement({
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 10,
+      height: 10,
+      locked: true,
+      groupIds: ["inserted"],
+    });
+    API.updateScene({
+      elements: [ink, shape, part, locked],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+    act(() => {
+      api.setActiveTool({ type: "freedraw" });
+      api.updateScene({ appState: { eraserMode: "object" } });
+    });
+    const input = {
+      id: "object-palm",
+      palm: true,
+      pointerType,
+      width: 40,
+      height: 48,
+      points: [[100, 100, 0.5]] as [number, number, number][],
+    };
+    await act(async () => {
+      await api.nativeEraserGesture!({ ...input, phase: "start" });
+    });
+    expect(api.getSceneElements().map((element) => element.id)).toEqual([
+      locked.id,
+    ]);
+    act(() => api.nativeEraserGesture!({ ...input, phase: "cancel" }));
+    expect(api.getSceneElements().map((element) => element.id)).toEqual([
+      ink.id,
+      shape.id,
+      part.id,
+      locked.id,
+    ]);
+  },
+);
+
 it("applies native object erasure while dragging, records one undo, and restores cancellation", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;
@@ -111,6 +177,7 @@ it("commits a completed native contact once with real pen metadata, composition 
     });
     expect(api.getSceneElements()).toHaveLength(1);
     expect(api.getSceneElements()[0]).toMatchObject({
+      id: contact.id,
       type: "freedraw",
       points: [
         [0, 0],
@@ -128,6 +195,82 @@ it("commits a completed native contact once with real pen metadata, composition 
   } finally {
     stop();
     stopCommit();
+  }
+});
+it("waits for actual native live cuts, commits fragments in one undo and rejects a cancelled late result", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  let complete!: (
+    elements: readonly import("@fcboard/element/types").FcboardFreeDrawElement[],
+  ) => void;
+  const clip = vi.fn(
+    (
+      _element: import("@fcboard/element/types").FcboardFreeDrawElement,
+      _cuts: readonly import("../eraser/stroke").NativeInkCut[],
+    ) =>
+      new Promise<
+        readonly import("@fcboard/element/types").FcboardFreeDrawElement[]
+      >((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const unregister = api.registerNativeEraserBackend!(
+    async () => [],
+    undefined,
+    clip,
+  );
+  const input = {
+    id: "live-cut",
+    width: 2,
+    height: 2,
+    pointerType: "touch",
+    points: [
+      [100, 100, 0.5],
+      [200, 100, 0.5],
+    ] as [number, number, number][],
+    cuts: [
+      {
+        gesture: "palm",
+        at: 1,
+        path: [
+          [150, 90],
+          [150, 110],
+        ] as [number, number][],
+        width: 10,
+        height: 12,
+      },
+    ],
+  };
+  try {
+    act(() => api.nativeInk!({ ...input, phase: "start" }));
+    let pending: ReturnType<NonNullable<typeof api.nativeInk>>;
+    act(() => {
+      pending = api.nativeInk!({ ...input, phase: "end" });
+    });
+    expect(api.getSceneElements()).toHaveLength(0);
+    const element = clip.mock.calls[0][0];
+    await act(async () => {
+      complete([element]);
+      await pending;
+    });
+    expect(api.getSceneElements().map((stroke) => stroke.id)).toEqual([
+      input.id,
+    ]);
+    act(() => api.executeAction("undo"));
+    expect(api.getSceneElements()).toHaveLength(0);
+    act(() => {
+      api.nativeInk!({ ...input, id: "late", phase: "start" });
+      pending = api.nativeInk!({ ...input, id: "late", phase: "end" });
+      api.nativeInk!({ ...input, id: "late", phase: "cancel" });
+    });
+    await act(async () => {
+      complete([clip.mock.calls[1][0]]);
+      await pending;
+    });
+    expect(api.getSceneElements()).toHaveLength(0);
+  } finally {
+    unregister();
   }
 });
 it("cancels unfinished native ink without creating a saved object or undo entry", async () => {
@@ -150,6 +293,87 @@ it("cancels unfinished native ink without creating a saved object or undo entry"
     });
     expect(api.getSceneElements()).toHaveLength(0);
     expect(committed).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
+it("releases a fully erased lifted preview and restores only surviving earlier cuts if the current palm is cancelled", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  const clip = vi.fn(
+    async (
+      element: import("@fcboard/element/types").FcboardFreeDrawElement,
+      cuts: readonly import("../eraser/stroke").NativeInkCut[],
+    ) =>
+      cuts.some((cut) => cut.gesture === "palm")
+        ? []
+        : [{ ...element, x: 170, width: 30 }],
+  );
+  const stop = api.registerNativeEraserBackend!(
+    async () => [],
+    undefined,
+    clip,
+  );
+  const writer = {
+    id: "covered",
+    width: 2,
+    height: 2,
+    pointerType: "touch",
+    points: [
+      [100, 100, 0.5],
+      [200, 100, 0.5],
+    ] as [number, number, number][],
+  };
+  const palm = {
+    id: "palm",
+    width: 200,
+    height: 200,
+    palm: true,
+    points: [[150, 100, 0.5]] as [number, number, number][],
+  };
+  try {
+    act(() => api.nativeInk!({ ...writer, phase: "start" }));
+    await act(async () => {
+      await api.nativeEraserGesture!({ ...palm, phase: "start" });
+    });
+    let result: string | void;
+    await act(async () => {
+      result = await api.nativeInk!({
+        ...writer,
+        phase: "end",
+        cuts: [
+          {
+            gesture: "earlier",
+            at: 0,
+            path: [
+              [120, 100],
+              [120, 100],
+            ],
+            width: 10,
+            height: 10,
+          },
+          {
+            gesture: "palm",
+            at: 1,
+            path: [
+              [150, 100],
+              [150, 100],
+            ],
+            width: 200,
+            height: 200,
+          },
+        ],
+      });
+    });
+    expect(result).toBeUndefined();
+    expect(api.getSceneElements()).toHaveLength(0);
+    act(() => api.nativeEraserGesture!({ ...palm, phase: "cancel" }));
+    expect(api.getSceneElements()).toMatchObject([
+      { id: writer.id, x: 170, width: 30 },
+    ]);
+    expect(clip).toHaveBeenCalledTimes(2);
   } finally {
     stop();
   }

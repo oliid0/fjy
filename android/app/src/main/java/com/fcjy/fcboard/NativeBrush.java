@@ -16,7 +16,7 @@ final class NativeBrush {
     private final Paint geometry = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path tail = new Path();
     private final Path body = new Path();
-    private long revision;
+    private long revision, tailRevision = -1;
     private Node previous, current, source;
     private float lastWidth, lastVelocity;
     private int nodes;
@@ -47,9 +47,10 @@ final class NativeBrush {
         }
         previous = current; current = new Node(x, y, Math.max(unit, Math.max(base*.08f, lastWidth))); nodes++;
         if (nodes == 1) { source = current; stamp(null, current); }
-        raster.commit(body, geometry);
+        raster.commit(body, geometry, nodes==1?0:nodes-2);
     }
     void finish() { finished = true; revision++; }
+    void erase(Path path,int through){raster.erase(path,through);}
     private void stamp(Path target, Node node) {
         stamp(target, node.x, node.y, node.width);
     }
@@ -81,11 +82,14 @@ final class NativeBrush {
     }
     void draw(Canvas canvas, Paint paint) {
         if (nodes == 0 || paint.getAlpha() == 0) return;
-        tail.rewind();
-        if (nodes > 1) {
-            Node tip=finished ? new Node(current.x,current.y,0) : current;
-            Node end=curve(tail,source,previous,tip,nodes==2); line(tail,end,tip);
+        if (tailRevision != revision) {
+            tail.rewind();
+            if (nodes > 1) {
+                Node tip=finished ? new Node(current.x,current.y,0) : current;
+                Node end=curve(tail,source,previous,tip,nodes==2); line(tail,end,tip);
+            }
+            tailRevision = revision;
         }
-        raster.draw(canvas, paint, tail, revision);
+        raster.draw(canvas, paint, tail, revision, nodes-1);
     }
 }

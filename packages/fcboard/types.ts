@@ -1014,6 +1014,7 @@ export interface FcboardImperativeAPI {
   >["registerNativeSceneRenderer"];
   nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
   nativeEraserGesture?: InstanceType<typeof App>["nativeEraserGesture"];
+  eraseOverlayPointer: InstanceType<typeof App>["eraseOverlayPointer"];
   registerNativeEraserBackend?: InstanceType<
     typeof App
   >["registerNativeEraserBackend"];

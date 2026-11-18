@@ -111,6 +111,16 @@ export const duplicateElement = <TElement extends FcboardElement>(
       fcInsertion: { ...insertion, id: insertionId },
     };
   }
+  const plot = copy.customData?.fcPlot;
+  if (plot) {
+    if (!groupIdMapForOperation.has(plot.id)) {
+      groupIdMapForOperation.set(plot.id, randomId());
+    }
+    copy.customData = {
+      ...copy.customData,
+      fcPlot: { ...plot, id: groupIdMapForOperation.get(plot.id)! },
+    };
+  }
   return copy;
 };
 

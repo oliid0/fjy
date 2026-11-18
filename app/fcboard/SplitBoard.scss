@@ -1,13 +1,24 @@
-// Verified activity_multi_screen/layout_multi_screen_view and native selectors.
-// A stronger scope replaces legacy fixed-pixel split styles without changing other tools.
-.app .fc-classroom .fc-split-board {
+// BSD MultiScreen: activity_fullscreen, canvas_item_* and drawable selectors.
+.fc-classroom .fc-split-board {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
   color: #010101;
+  background: #263731;
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
+  button {
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    background: transparent;
+  }
   .fc-split-panes {
     position: relative;
     z-index: 0;
+    width: 100%;
+    height: 100%;
     min-height: 0;
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
@@ -38,103 +49,110 @@
     }
   }
   .fc-split-pane {
+    position: relative;
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
+    border-inline-end: 1px solid #fcfcfe;
+    &:last-child {
+      border: 0;
+    }
     canvas {
       position: absolute;
       inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
     }
-    border-inline-end-width: calc(2 * var(--fc-split-unit, 0.67px));
-  }
-  .fc-split-pane:first-child .fc-split-bottom {
-    left: calc(64 * var(--fc-split-unit, 0.67px));
   }
   .fc-split-bottom {
-    bottom: 0;
-    height: calc(54 * var(--fc-split-unit, 0.67px));
+    position: absolute;
+    inset: auto 0 0;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
   }
   .fc-split-penbar {
-    height: auto;
-    min-height: calc(52 * var(--fc-split-unit, 0.67px));
-    max-width: calc(100% - 12 * var(--fc-split-unit, 0.67px));
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 45px;
+    max-width: 100%;
     padding: 0;
-    border-radius: 0;
-    background: transparent;
+    border-radius: 12px;
+    background: #f3f3f3f0;
+    box-shadow: inset 0 0 0 0.333px #999;
+    overflow-x: auto;
+    scrollbar-width: none;
     overscroll-behavior: contain;
+    pointer-events: auto;
     &::-webkit-scrollbar {
       display: none;
     }
-    button:focus-visible {
-      outline-width: calc(2 * var(--fc-split-unit, 0.67px));
-      outline-offset: calc(-1 * var(--fc-split-unit, 0.67px));
-    }
-  }
-  .fc-split-erasers {
-    display: flex;
-    flex: 0 0 auto;
-    gap: 0;
     button {
-      width: calc(38 * var(--fc-split-unit, 0.67px));
-      height: calc(38 * var(--fc-split-unit, 0.67px));
-      padding: calc(3 * var(--fc-split-unit, 0.67px));
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 0 0 35px;
+      box-sizing: border-box;
+      width: 35px;
+      height: 35px;
+      margin: 6px;
+      padding: 6px;
+      border-radius: 50%;
+      cursor: pointer;
+      img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+      }
+      &[aria-pressed="true"] {
+        background: #e0e0e0;
+        box-shadow: inset 0 0 0 1px #999;
+      }
+      &:focus-visible {
+        outline: 2px solid #0368ff;
+        outline-offset: -1px;
+      }
+      &:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
     }
   }
   .fc-split-colors,
   .fc-split-erasers {
-    button > svg {
-      width: calc(26 * var(--fc-split-unit, 0.67px));
-      height: calc(26 * var(--fc-split-unit, 0.67px));
-    }
-    button[aria-pressed="true"] {
-      background: #e0e0e0;
-      border-radius: 50%;
-      outline: 1px solid #7b7b7b;
-    }
-  }
-  .fc-split-colors {
+    display: flex;
     flex: 0 0 auto;
+    align-items: center;
     gap: 0;
-    padding-left: calc(4 * var(--fc-split-unit, 0.67px));
-    button {
-      position: relative;
-      width: calc(38 * var(--fc-split-unit, 0.67px));
-      height: calc(38 * var(--fc-split-unit, 0.67px));
-      padding: calc(3 * var(--fc-split-unit, 0.67px));
-      > span {
-        position: relative;
-        width: calc(26 * var(--fc-split-unit, 0.67px));
-        height: calc(26 * var(--fc-split-unit, 0.67px));
-        border: 0;
-      }
-      &:focus-visible {
-        outline: calc(2 * var(--fc-split-unit, 0.67px)) solid #0368ff;
-      }
-    }
+    padding: 0;
   }
-  .fc-split-divider {
-    flex-basis: calc(1 * var(--fc-split-unit, 0.67px));
-    align-self: stretch;
-    height: auto;
-    margin-inline: calc(8 * var(--fc-split-unit, 0.67px));
-  }
-  .fc-split-widths {
-    flex: 0 0 auto;
-    gap: calc(6 * var(--fc-split-unit, 0.67px));
-    padding-inline: calc(8 * var(--fc-split-unit, 0.67px));
-    button {
-      width: calc(26 * var(--fc-split-unit, 0.67px));
-      height: calc(26 * var(--fc-split-unit, 0.67px));
-    }
+  .fc-split-erasers button {
+    padding: 3px;
   }
   > .fc-split-exit {
+    position: absolute;
     z-index: 2;
-    bottom: 0;
-    left: calc(20 * var(--fc-split-unit, 0.67px));
-    width: calc(52 * var(--fc-split-unit, 0.67px));
-    height: calc(52 * var(--fc-split-unit, 0.67px));
-    padding: calc(12 * var(--fc-split-unit, 0.67px));
-    border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+    bottom: 5px;
+    left: 0;
+    width: 35px;
+    height: 35px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #f3f3f3;
+    box-shadow: inset 0 0 0 0.333px #999;
     color: #010101;
+    > svg {
+      width: 100%;
+      height: 100%;
+    }
     &[aria-expanded="true"],
     &:focus-visible {
       background: #0368ff;

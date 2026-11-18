@@ -194,6 +194,9 @@ importers:
       callsites:
         specifier: 4.2.0
         version: 4.2.0
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       firebase:
         specifier: 11.3.1
         version: 11.3.1
@@ -230,6 +233,9 @@ importers:
       react-dom:
         specifier: 19.0.0
         version: 19.0.0(react@19.0.0)
+      saxes:
+        specifier: 6.0.0
+        version: 6.0.0
       socket.io-client:
         specifier: 4.7.2
         version: 4.7.2
@@ -334,6 +340,9 @@ importers:
       jotai-scope:
         specifier: 0.7.2
         version: 0.7.2(jotai@2.11.0(@types/react@19.0.10)(react@19.0.0))(react@19.0.0)
+      jsxgraph:
+        specifier: 1.14.3
+        version: 1.14.3
       lodash.debounce:
         specifier: 4.0.8
         version: 4.0.8
@@ -5760,6 +5769,10 @@ packages:
   jsx-ast-utils@3.3.5:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
     engines: {node: '>=4.0'}
+
+  jsxgraph@1.14.3:
+    resolution: {integrity: sha512-0JMGdESQnIrOZ6rN+N2qzcjM/8DQdxVNXsvTLcMhG4GvqnM0PZTU6mrrA1TsdyAgRQXiIyrowQp/PIwB41Vkig==}
+    engines: {node: '>=20.19.0'}
 
   katex@0.16.47:
     resolution: {integrity: sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg==}
@@ -13821,6 +13834,8 @@ snapshots:
       array.prototype.flat: 1.3.3
       object.assign: 4.1.7
       object.values: 1.2.1
+
+  jsxgraph@1.14.3: {}
 
   katex@0.16.47:
     dependencies:

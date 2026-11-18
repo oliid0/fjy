@@ -10,6 +10,15 @@ import static org.junit.Assert.*;
 /** Real Java worker kernel: sparse fast sweeps, brush support and retained state. */
 @RunWith(AndroidJUnit4.class)
 public class NativeStrokeEraserTest {
+    @Test public void aSweepCutsOnlyThePrefixAndKeepsLaterInkAtTheSameCoordinates() throws Exception {
+        JSONObject ink=stroke("live",0,false).put("samples",new JSONArray("[[0,0,0.2,0,0,0],[100,0,0.5,100,0,1],[0,0,0.8,200,0,2]]"));
+        JSONObject cut=new JSONObject().put("at",1).put("path",new JSONArray("[[50,-30],[50,30]]")).put("width",10).put("height",12);
+        JSONArray pieces=new NativeStrokeEraser().clip(ink,new JSONArray().put(cut)).getJSONArray("pieces");
+        assertEquals(2,pieces.length());assertEquals(43,pieces.getJSONArray(0).getJSONArray(1).getDouble(0),1e-9);
+        JSONArray later=pieces.getJSONArray(1);assertEquals(57,later.getJSONArray(0).getDouble(0),1e-9);
+        assertEquals("Later return stroke survives the same swept coordinates",0,later.getJSONArray(later.length()-1).getDouble(0),1e-9);
+        assertEquals(200,later.getJSONArray(later.length()-1).getDouble(3),1e-9);
+    }
     private static JSONObject stroke(String id, double y, boolean brush) throws Exception {
         return new JSONObject().put("id",id).put("cap",brush?0:4).put("brush",brush).put("brushAngle",0)
             .put("nibOutline",new JSONArray()).put("samples",new JSONArray("[[0,"+y+",0.2,10,10],[100,"+y+",0.8,110,10]]"));

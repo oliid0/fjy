@@ -8,10 +8,14 @@ import { selectedRegion } from "@fcboard/fcboard/lasso/region";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 
 import { NativeInkInteraction } from "./NativeInkInteraction";
+import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
+import { drawPlot } from "./board";
+import { defaultPlot } from "./math";
 import { classroomCommands } from "./commands";
 import { render } from "./test/render";
 
 const backend = vi.hoisted(() => ({
+  ready: vi.fn(),
   configure: vi.fn(),
   remove: vi.fn(),
   acknowledge: vi.fn(),
@@ -38,6 +42,7 @@ vi.mock("@capacitor/core", () => ({
   }),
 }));
 beforeEach(() => {
+  backend.ready.mockReset().mockResolvedValue(undefined);
   backend.configure.mockReset().mockResolvedValue(undefined);
   backend.remove.mockReset().mockResolvedValue(undefined);
   backend.acknowledge.mockReset().mockResolvedValue(undefined);
@@ -48,6 +53,95 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   backend.listeners.clear();
+});
+
+it.each([
+  "text",
+  "shape",
+  "magic",
+  "function",
+  "calculation",
+  "language",
+] as const)(
+  "preserves the explicit contact mode in native %s pen configuration",
+  async (mode) => {
+    await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+    const api = window.h.app.api;
+    act(() => {
+      api.updateScene({
+        appState: {
+          width: 1000,
+          height: 700,
+          currentItemInkAssist: mode,
+          multiStroke: true,
+        },
+      });
+      api.setActiveTool({ type: "freedraw" });
+    });
+    render(<NativeInkInteraction api={api} />);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+        enabled: true,
+        mode: "pen",
+        multiStroke: true,
+        recognitionEnabled: true,
+      }),
+    );
+    act(() => api.updateScene({ appState: { multiStroke: false } }));
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+        enabled: true,
+        mode: "pen",
+        multiStroke: false,
+        recognitionEnabled: true,
+      }),
+    );
+    expect(api.getAppState().currentItemInkAssist).toBe(mode);
+  },
+);
+
+it("reports toolbar readiness only after input configuration succeeds, once per owner", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  let configured!: () => void;
+  backend.configure.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        configured = resolve;
+      }),
+  );
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() => expect(backend.configure).toHaveBeenCalled());
+  expect(backend.ready).not.toHaveBeenCalled();
+  await act(async () => configured());
+  await waitFor(() =>
+    expect(backend.ready).toHaveBeenCalledWith({
+      owner: api.id,
+      fallback: false,
+    }),
+  );
+  act(() => api.updateScene({ appState: { currentItemOpacity: 60 } }));
+  expect(backend.ready).toHaveBeenCalledTimes(1);
+});
+
+it("releases startup into the visible error/fallback path when native configuration fails", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  backend.configure.mockRejectedValue(new Error("surface unavailable"));
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() =>
+    expect(api.getAppState().errorMessage).toBe("surface unavailable"),
+  );
+  await waitFor(() =>
+    expect(backend.ready).toHaveBeenCalledWith({
+      owner: api.id,
+      fallback: true,
+    }),
+  );
 });
 it("routes sideboard semantic buttons and leaves focused text input out of native shortcuts", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
@@ -702,3 +796,53 @@ it.each([false, true])(
     expect(api.getAppState().errorMessage).toBeNull();
   },
 );
+
+it("routes idle floating graph touches to its DOM plane, then restores native writing after a layer action", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  let ids: string[] = [];
+  act(() => {
+    api.updateScene({ appState: { width: 1000, height: 700 } });
+    ids = drawPlot(
+      api,
+      { ...defaultPlot, expression: "x" },
+      { x: 300, y: 250 },
+    );
+    api.setActiveTool({ type: "freedraw" });
+  });
+  render(<FunctionGraphInteraction api={api} />);
+  const surface = document.getElementById(`fc-inline-function-${ids[0]}`)!;
+  vi.spyOn(surface, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(120, 100, 300, 250),
+  );
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() =>
+    expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
+      120, 100, 420, 350,
+    ]),
+  );
+  expect(surface.querySelector("canvas")).toBeNull();
+  act(() => {
+    api.updateScene({ appState: { selectedElementIds: { [ids[0]]: true } } });
+  });
+  expect(api.getAppState().selectedElementIds[ids[0]]).toBe(true);
+  act(() => {
+    api.executeAction("sendToBack");
+    api.setActiveTool({ type: "freedraw" });
+    api.updateScene({
+      appState: { selectedElementIds: {}, selectedGroupIds: {} },
+    });
+  });
+  expect(api.getSceneElements()[0].customData?.fcPlot.layer).toBe("board");
+  expect(document.getElementById(`fc-inline-function-${ids[0]}`)).toBeNull();
+  await waitFor(() =>
+    expect(backend.configure.mock.calls.at(-1)?.[0].blocked).not.toContainEqual(
+      [120, 100, 420, 350],
+    ),
+  );
+  expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+    enabled: true,
+    mode: "pen",
+  });
+  expect(document.getElementById(`fc-inline-function-${ids[0]}`)).toBeNull();
+});

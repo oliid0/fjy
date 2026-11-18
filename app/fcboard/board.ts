@@ -29,8 +29,11 @@ import {
 import { findContentPosition, findVisibleContentPosition } from "./placement";
 import { answerFontSize, layoutBoardText } from "./textLayout";
 import { fitPlot } from "./plotLayout";
-import { functionGraphImage, plotSize } from "./functionVisualization";
-import { functionRegionMatch, compareFunctionRegion } from "./functionRegion";
+import {
+  functionColors,
+  functionGraphImage,
+  plotSize,
+} from "./functionVisualization";
 
 import type { TextPlacement } from "./textLayout";
 
@@ -634,48 +637,8 @@ export const drawPlot = (
   keepTool = false,
   sourceBounds?: ContentRect,
 ) => {
-  if (keepTool && sourceBounds && !plot.surface && !plot.relation) {
-    const doc = classroomCommands.read("document") as
-      | { ink: InkStroke[] }
-      | undefined;
-    const candidates = doc
-      ? doc.ink
-          .filter((stroke) => stroke.plot?.sourceRegions?.length)
-          .map((stroke) => ({ id: stroke.id, metadata: stroke.plot! }))
-      : api
-          .getSceneElements()
-          .filter(
-            (element) =>
-              !element.isDeleted &&
-              element.customData?.fcPlot?.sourceRegions?.length,
-          )
-          .map((element) => ({
-            id: element.id,
-            metadata: element.customData!.fcPlot as NonNullable<
-              InkStroke["plot"]
-            >,
-          }));
-    for (const candidate of candidates.reverse()) {
-      const regions = candidate.metadata.sourceRegions!;
-      if (!functionRegionMatch(regions, sourceBounds)) {
-        continue;
-      }
-      const comparison = compareFunctionRegion(candidate.metadata.plot, plot);
-      if (!comparison) {
-        continue;
-      }
-      if (
-        updateFunctionGraph(api, comparison, {
-          ids: [candidate.id],
-          sourceRegions: [...regions, sourceBounds].slice(-4),
-        })
-      ) {
-        return [candidate.id];
-      }
-    }
-  }
   if (!plot.surface && !plot.relation) {
-    const color = api.getAppState().currentItemStrokeColor || "#1e1e1e";
+    const color = functionColors[0];
     const image = functionGraphImage(plot, color);
     return insertPlot(
       api,
@@ -689,7 +652,7 @@ export const drawPlot = (
           x: position.x - plotSize.width / 2,
           y: position.y - plotSize.height / 2,
           ...plotSize,
-          strokeWidth: 0,
+          strokeWidth: 2,
           strokeColor: color,
         },
       ],
@@ -902,8 +865,7 @@ const insertPlot = (
         fcPlot: {
           id: plotId,
           plot,
-          ...(sourceBounds ? { sourceRegions: [sourceBounds] } : {}),
-          ...(image ? { renderer: "vega" } : {}),
+          ...(image ? { renderer: "canvas", layer: "floating" } : {}),
           position: fitted.center,
           origin: { x: shape.x || 0, y: shape.y || 0 },
         },
@@ -924,7 +886,7 @@ const insertPlot = (
         {
           id: shape.fileId,
           dataURL: image,
-          mimeType: "image/svg+xml",
+          mimeType: "image/png",
           created: Date.now(),
         },
       ]);
@@ -953,7 +915,7 @@ export const selectedPlot = (
       plot: stroke.plot.plot,
       resourceId: stroke.resource?.id || stroke.plot.id,
       image:
-        stroke.resource || (stroke.image && stroke.plot.renderer === "vega")
+        stroke.resource || (stroke.image && stroke.plot.renderer === "canvas")
           ? {
               x: stroke.anchor?.x ?? stroke.points[0][0],
               y: stroke.anchor?.y ?? stroke.points[0][1],
@@ -961,6 +923,8 @@ export const selectedPlot = (
               height: stroke.resource?.height ?? stroke.imageHeight!,
               angle: 0,
               color: stroke.color,
+              strokeWidth: stroke.width,
+              strokeStyle: stroke.strokeStyle,
             }
           : undefined,
       ids: document.ink
@@ -1009,7 +973,7 @@ export const selectedPlot = (
     resourceId: selected.customData?.fcInteractiveResource?.id || metadata.id,
     image:
       selected.type === "iframe" ||
-      (selected.type === "image" && metadata.renderer === "vega")
+      (selected.type === "image" && metadata.renderer === "canvas")
         ? {
             x: selected.x,
             y: selected.y,
@@ -1017,6 +981,8 @@ export const selectedPlot = (
             height: selected.height,
             angle: selected.angle,
             color: selected.strokeColor,
+            strokeWidth: selected.strokeWidth,
+            strokeStyle: selected.strokeStyle,
           }
         : undefined,
     ids: elements
@@ -1029,7 +995,86 @@ export const selectedPlot = (
   };
 };
 
-/** Parameter edits keep the object's identity, transform, selection and colour. */
+/** A graph is a normal selectable object, but its cached image must reflect
+ * ordinary stroke edits before export or native compositing. */
+export const styleFunctionPlots = (
+  api: FcboardImperativeAPI,
+  style: {
+    color?: string;
+    width?: number;
+    strokeStyle?: FcboardElement["strokeStyle"];
+  },
+) => {
+  if (
+    style.color === undefined &&
+    style.width === undefined &&
+    style.strokeStyle === undefined
+  ) {
+    return false;
+  }
+  const state = api.getAppState();
+  const replacements = new Map<string, FcboardElement>();
+  let graphs = 0;
+  for (const element of api.getSceneElements()) {
+    if (
+      element.type !== "image" ||
+      element.locked ||
+      !state.selectedElementIds[element.id] ||
+      element.customData?.fcPlot?.renderer !== "canvas"
+    ) {
+      continue;
+    }
+    graphs++;
+    const strokeColor = style.color ?? element.strokeColor;
+    const strokeWidth = style.width ?? element.strokeWidth;
+    const strokeStyle = style.strokeStyle ?? element.strokeStyle;
+    if (
+      strokeColor === element.strokeColor &&
+      strokeWidth === element.strokeWidth &&
+      strokeStyle === element.strokeStyle
+    ) {
+      continue;
+    }
+    const fileId = crypto.randomUUID() as FileId;
+    api.addFiles([
+      {
+        id: fileId,
+        dataURL: functionGraphImage(
+          element.customData.fcPlot.plot,
+          strokeColor,
+          { width: strokeWidth, strokeStyle },
+        ),
+        mimeType: "image/png",
+        created: Date.now(),
+      },
+    ]);
+    replacements.set(
+      element.id,
+      newElementWith(element, {
+        fileId,
+        strokeColor,
+        strokeWidth,
+        strokeStyle,
+      }),
+    );
+  }
+  if (replacements.size) {
+    api.updateScene({
+      elements: api
+        .getSceneElements()
+        .map((element) => replacements.get(element.id) || element),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }
+  return (
+    graphs > 0 &&
+    Object.keys(state.selectedElementIds).filter(
+      (id) => state.selectedElementIds[id],
+    ).length === graphs
+  );
+};
+
+/** Domain gestures keep the object's identity, transform, selection and style. */
 export const updateFunctionGraph = (
   api: FcboardImperativeAPI,
   plot: Plot,
@@ -1039,14 +1084,16 @@ export const updateFunctionGraph = (
     fileId?: FileId;
     before?: InkStroke[];
     onError?: (error: unknown) => void;
-    sourceRegions?: ContentRect[];
   } = {},
 ) => {
   const graph = selectedPlot(api, options.ids);
   if (!graph?.image) {
     return null;
   }
-  const image = functionGraphImage(plot, graph.image.color);
+  const image = functionGraphImage(plot, graph.image.color, {
+    width: graph.image.strokeWidth,
+    strokeStyle: graph.image.strokeStyle,
+  });
   if (classroomCommands.has("document.plot.update")) {
     void classroomCommands
       .execute({
@@ -1057,7 +1104,6 @@ export const updateFunctionGraph = (
           image,
           remember: !options.preview,
           before: options.before,
-          sourceRegions: options.sourceRegions,
         },
       })
       .catch((failure) => {
@@ -1088,7 +1134,7 @@ export const updateFunctionGraph = (
       {
         id: fileId,
         dataURL: image,
-        mimeType: "image/svg+xml",
+        mimeType: "image/png",
         created: previous?.created ?? Date.now(),
         version: (previous?.version ?? 0) + 1,
       },
@@ -1103,9 +1149,6 @@ export const updateFunctionGraph = (
                 fcPlot: {
                   ...element.customData!.fcPlot,
                   plot,
-                  ...(options.sourceRegions
-                    ? { sourceRegions: options.sourceRegions }
-                    : {}),
                 },
               },
             })

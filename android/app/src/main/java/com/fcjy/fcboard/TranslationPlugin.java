@@ -15,28 +15,34 @@ import com.google.mlkit.nl.translate.Translation;
 import com.google.mlkit.nl.translate.Translator;
 import com.google.mlkit.nl.translate.TranslatorOptions;
 import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** One native model pair, outside the WebView WASM heap. Models download once. */
+/** Per-request native clients, outside the WebView heap. Downloads remain on disk. */
 @CapacitorPlugin(name = "FcboardTranslation")
 public class TranslationPlugin extends Plugin {
-    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(task -> new Thread(() -> {
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+        task.run();
+    }, "fcboard-translation"));
     private final ArrayDeque<Request> waiting = new ArrayDeque<>();
-    private Request active;
-    private Translator translator;
-    private String pair;
-    private LanguageIdentifier identifier;
+    private final Set<Request> active = new HashSet<>();
+    private final ModelPool<Translator> clients = new ModelPool<>(2, key -> false);
+    @Override public void load() { clients.observe(getContext()); }
+    @Override protected void handleOnStop() { clients.trim(); }
     private volatile boolean destroyed;
-    private long idleRevision;
 
     private static final class Request {
         final PluginCall call;
         final String id, text, source, target;
         final AtomicBoolean settled = new AtomicBoolean();
         java.util.concurrent.ScheduledFuture<?> timeout;
+        ModelPool.Lease<Translator> translator;
+        LanguageIdentifier identifier;
         Request(PluginCall call) {
             this.call = call;
             id = call.getString("id", "");
@@ -70,10 +76,10 @@ public class TranslationPlugin extends Plugin {
         if (destroyed) { call.reject("Local translation closed"); return; }
         submit(call, () -> {
             if (destroyed) { request.fail("Local translation closed"); return; }
-            if (waiting.size() >= 8) { request.fail("Local translation queue is full"); return; }
+            if (waiting.size() + active.size() >= 8) { request.fail("Local translation queue is full"); return; }
             waiting.add(request);
             // Download failures/timeouts are visible. A timeout never closes a client
-            // still used by an SDK Task or starts another overlapping inference.
+            // still used by an SDK Task. The other request slot stays independent.
             request.timeout = worker.schedule(() -> {
                 request.fail("Local translation timed out; check the downloaded language models and network");
                 waiting.remove(request);
@@ -85,7 +91,7 @@ public class TranslationPlugin extends Plugin {
         if (destroyed) { call.resolve(); return; }
         String id = call.getString("id", "");
         submit(call, () -> {
-            if (active != null && active.id.equals(id)) active.fail("Translation cancelled");
+            for (Request request : active) if (request.id.equals(id)) request.fail("Translation cancelled");
             waiting.removeIf(request -> {
                 if (!request.id.equals(id)) return false;
                 request.fail("Translation cancelled"); return true;
@@ -98,36 +104,31 @@ public class TranslationPlugin extends Plugin {
         catch (java.util.concurrent.RejectedExecutionException error) { call.reject("Local translation closed"); }
     }
     private void pump() {
-        if (active != null || destroyed) return;
+        if (active.size() >= 2 || destroyed) return;
         Request request = waiting.poll();
         if (request == null) return;
         if (request.settled.get()) { pump(); return; }
-        active = request;
-        ++idleRevision;
+        active.add(request);
         try {
             final String target = language(request.target);
             Task<String> source;
             if (request.source.equals("auto")) {
-                if (identifier == null) identifier = LanguageIdentification.getClient();
-                source = identifier.identifyLanguage(request.text);
+                request.identifier = LanguageIdentification.getClient();
+                source = request.identifier.identifyLanguage(request.text);
             } else source = Tasks.forResult(request.source);
             Task<JSObject> actual = source.continueWithTask(worker, detected -> {
+                if (request.identifier != null) { request.identifier.close(); request.identifier = null; }
                 if (!detected.isSuccessful()) throw taskError(detected);
                 if (destroyed || request.settled.get()) throw new java.util.concurrent.CancellationException();
                 String from = language(detected.getResult());
                 if (from.equals(target)) return Tasks.forResult(new JSObject().put("language", from).put("translation", request.text));
-                String key = from + ":" + target;
-                if (!key.equals(pair)) {
-                    closeTranslator();
-                    translator = Translation.getClient(new TranslatorOptions.Builder().setSourceLanguage(from).setTargetLanguage(target).build());
-                    pair = key;
-                }
+                request.translator = clients.acquire(from + ":" + target, () -> Translation.getClient(new TranslatorOptions.Builder().setSourceLanguage(from).setTargetLanguage(target).build()));
                 // Both API and models live in this application, not another APK.
-                return translator.downloadModelIfNeeded(new DownloadConditions.Builder().build())
+                return request.translator.value().downloadModelIfNeeded(new DownloadConditions.Builder().build())
                     .continueWithTask(worker, ready -> {
                         if (!ready.isSuccessful()) throw taskError(ready);
                         if (destroyed || request.settled.get()) throw new java.util.concurrent.CancellationException();
-                        return translator.translate(request.text);
+                        return request.translator.value().translate(request.text);
                     }).continueWith(worker, translated -> {
                         if (!translated.isSuccessful()) throw taskError(translated);
                         String value = translated.getResult();
@@ -136,45 +137,46 @@ public class TranslationPlugin extends Plugin {
                     });
             });
             actual.addOnCompleteListener(worker, done -> {
+                boolean reusable = done.isSuccessful() && !destroyed && !request.settled.get();
+                if (request.translator != null) { request.translator.release(reusable); request.translator = null; }
                 if (!destroyed && !request.settled.get()) {
                     if (done.isSuccessful()) request.resolve(done.getResult().getString("language"), done.getResult().getString("translation"));
                     else request.fail("Local translation failed: " + taskError(done).getMessage());
                 }
-                finish();
+                finish(request);
             });
         } catch (Exception | LinkageError error) {
             request.fail("Local translation failed: " + error.getMessage());
-            finish();
+            finish(request);
         }
+        pump();
     }
     private static Exception taskError(Task<?> task) {
         return task.getException() != null ? task.getException() : new java.util.concurrent.CancellationException();
     }
-    private void finish() {
-        active = null;
-        if (destroyed) { closeModels(); worker.shutdown(); return; }
-        pump();
-        if (active == null) {
-            long revision = ++idleRevision;
-            worker.schedule(() -> { if (active == null && revision == idleRevision) closeModels(); }, 60, TimeUnit.SECONDS);
+    private void finish(Request request) {
+        try {
+            if (request.translator != null) request.translator.release(false);
+        } finally {
+            request.translator = null;
+            try {
+                if (request.identifier != null) request.identifier.close();
+            } finally {
+                request.identifier = null;
+                active.remove(request);
+                if (destroyed) { if (active.isEmpty()) worker.shutdown(); }
+                else pump();
+            }
         }
-    }
-    private void closeTranslator() {
-        if (translator != null) translator.close();
-        translator = null; pair = null;
-    }
-    private void closeModels() {
-        closeTranslator();
-        if (identifier != null) identifier.close();
-        identifier = null;
     }
     @Override protected void handleOnDestroy() {
         destroyed = true;
+        clients.close();
         worker.execute(() -> {
             for (Request request : waiting) request.fail("Local translation closed");
             waiting.clear();
-            if (active != null) active.fail("Local translation closed");
-            else { closeModels(); worker.shutdown(); }
+            for (Request request : active) request.fail("Local translation closed");
+            if (active.isEmpty()) worker.shutdown();
         });
     }
 }

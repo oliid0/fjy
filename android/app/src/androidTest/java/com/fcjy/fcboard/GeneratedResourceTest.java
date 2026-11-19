@@ -137,6 +137,8 @@ public class GeneratedResourceTest {
                 evaluate(scenario, "document.querySelector('[data-board-insert]').click();true");
                 until(scenario, "!!document.querySelector('[data-native-tool=resources]')");
                 evaluate(scenario, "document.querySelector('[data-native-tool=resources]').click();true");
+                until(scenario, "Array.from(document.querySelectorAll('.fc-resource-library button')).some(button=>button.textContent.trim()==='我的资源')");
+                evaluate(scenario, "Array.from(document.querySelectorAll('.fc-resource-library button')).find(button=>button.textContent.trim()==='我的资源').click();true");
                 until(scenario, "Array.from(document.querySelectorAll('.fc-generated-resource button')).some(button=>button.textContent.trim()===" + JSONObject.quote(title) + ")");
                 evaluate(scenario, "Array.from(document.querySelectorAll('.fc-generated-resource button')).find(button=>button.textContent.trim()===" + JSONObject.quote(title) + ").click();true");
                 until(scenario, "!!document.querySelector('iframe[title=\"" + title + "\"]') && !document.querySelector('.fc-resource-library')");

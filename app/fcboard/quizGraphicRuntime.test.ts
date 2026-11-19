@@ -22,7 +22,11 @@ const { JSDOM } = require("jsdom") as {
 /** Execute the real bundled engines and snapshot script on fixed fixtures.
  * jsdom lacks layout/image decoding: only those browser surfaces are supplied;
  * serialized SVG is inspected before the test-only PNG encoder stand-in. */
-const open = async (resource: InteractiveResource, white = false) => {
+const open = async (
+  resource: InteractiveResource,
+  white = false,
+  pausedFrames = false,
+) => {
   const exported: string[] = [];
   const packets: {
     type: string;
@@ -63,7 +67,7 @@ const open = async (resource: InteractiveResource, white = false) => {
         disconnect() {}
       };
       window.requestAnimationFrame = (callback) =>
-        window.setTimeout(() => callback(0), 0);
+        pausedFrames ? 0 : window.setTimeout(() => callback(0), 0);
       window.cancelAnimationFrame = (id) => window.clearTimeout(id);
       window.Element.prototype.getBoundingClientRect = function () {
         const owner = this.closest<HTMLElement>("[data-fc-graphics]");
@@ -136,36 +140,39 @@ const geometry: InteractiveResource = {
   </script></body></html>`,
 };
 
-it("exports actual JSXGraph construction paths and internal point/quantity labels without eval", async () => {
-  const frame = await open(geometry);
-  try {
-    await waitFor(() => expect(frame.packets).toHaveLength(1));
-    expect(frame.packets[0]).toEqual({
-      type: "quiz-graphic",
-      channel: "test-channel",
-      dataURL: "data:image/png;base64,YWJj",
-    });
-    expect(frame.draws).toHaveBeenCalledTimes(1);
-    const svg = new DOMParser().parseFromString(
-      frame.exported[0],
-      "image/svg+xml",
-    );
-    expect(svg.querySelector("parsererror")).toBeNull();
-    expect(svg.querySelectorAll("path").length).toBeGreaterThan(1);
-    expect(svg.documentElement.textContent).toContain("AB = 3 cm");
-    expect(svg.documentElement.textContent).toContain("A");
-    expect(svg.querySelector("foreignObject")).toBeNull();
-    expect(svg.documentElement.getAttribute("width")).toBe("1200");
-    frame.window.dispatchEvent(new frame.window.Event("pagehide"));
-    expect(
-      Object.keys(
-        (frame.window as unknown as { JXG: { boards: object } }).JXG.boards,
-      ),
-    ).toHaveLength(0);
-  } finally {
-    frame.window.close();
-  }
-});
+it.each([false, true])(
+  "exports actual JSXGraph construction paths and labels when hidden frames are paused=%s",
+  async (pausedFrames) => {
+    const frame = await open(geometry, false, pausedFrames);
+    try {
+      await waitFor(() => expect(frame.packets).toHaveLength(1));
+      expect(frame.packets[0]).toEqual({
+        type: "quiz-graphic",
+        channel: "test-channel",
+        dataURL: "data:image/png;base64,YWJj",
+      });
+      expect(frame.draws).toHaveBeenCalledTimes(1);
+      const svg = new DOMParser().parseFromString(
+        frame.exported[0],
+        "image/svg+xml",
+      );
+      expect(svg.querySelector("parsererror")).toBeNull();
+      expect(svg.querySelectorAll("path").length).toBeGreaterThan(1);
+      expect(svg.documentElement.textContent).toContain("AB = 3 cm");
+      expect(svg.documentElement.textContent).toContain("A");
+      expect(svg.querySelector("foreignObject")).toBeNull();
+      expect(svg.documentElement.getAttribute("width")).toBe("1200");
+      frame.window.dispatchEvent(new frame.window.Event("pagehide"));
+      expect(
+        Object.keys(
+          (frame.window as unknown as { JXG: { boards: object } }).JXG.boards,
+        ),
+      ).toHaveLength(0);
+    } finally {
+      frame.window.close();
+    }
+  },
+);
 
 it("waits for a real asynchronous Vega chart and exports both figures in a combined engine construction", async () => {
   const frame = await open({

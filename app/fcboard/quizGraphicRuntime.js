@@ -131,9 +131,8 @@
     let output;
     try {
       await document.fonts?.ready;
-      await new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      );
+      // The explicit engine-ready event and font readiness precede layout reads.
+      // Hidden frame animation callbacks may be suspended by the browser.
       if (finished) {
         return;
       }

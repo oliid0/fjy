@@ -376,9 +376,10 @@ test("selecting a formula creates a borderless Canvas object and internal pinch 
   await page.getByRole("button", { name: "AI", exact: true }).click();
   await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   const graph = page.locator(".fc-inline-function-object").last();
-  const surface = graph.locator(".fc-inline-function");
+  const surface = graph.locator("[data-native-resource-object-id]");
   await expect(surface).toBeVisible();
   const objectId = await surface.getAttribute("data-native-resource-object-id");
+  expect(objectId).not.toBeNull();
   await zoomFunctionGraph(page, graph);
   await expect(surface).toHaveAttribute(
     "data-native-resource-object-id",

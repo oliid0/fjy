@@ -14,6 +14,8 @@ public class MainActivity extends BridgeActivity {
     private String startupOwner = "";
     private boolean startupWebReady, startupFallback, startupReleased;
 
+    boolean isBoardUsable() { return startupReleased; }
+
     void nativeScenePresented(String owner) {
         presentedScenes.add(owner);
         releaseStartup();

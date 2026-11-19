@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -132,33 +133,87 @@ final class NativeStrokeEraser {
         }
         return winding!=0;
     }
-    private static boolean cut(Stroke stroke,Node from,Node to,double width,double height,int through) {
-        if(Math.max(from.x,to.x)+width/2<stroke.left||Math.min(from.x,to.x)-width/2>stroke.right||Math.max(from.y,to.y)+height/2<stroke.top||Math.min(from.y,to.y)-height/2>stroke.bottom) return false;
-        boolean touched=false;
-        if(stroke.nib && stroke.nibSource<=through) {
-            List<Node> nibArea=area(from,to,width,height);
-            boolean hit=contains(stroke.outline,from)||contains(stroke.outline,to);
-            for(int i=1;!hit&&i<stroke.outline.size();i++) hit=interval(stroke.outline.get(i-1),stroke.outline.get(i),nibArea,null)!=null;
-            if(hit) { touched=true; stroke.nib=false; }
+    private static final class Sweep {
+        final Node from,to;
+        final double left,top,right,bottom;
+        final List<Node> area;
+        Sweep(Node from,Node to,double width,double height){
+            this.from=from;this.to=to;
+            left=Math.min(from.x,to.x)-width/2;right=Math.max(from.x,to.x)+width/2;
+            top=Math.min(from.y,to.y)-height/2;bottom=Math.max(from.y,to.y)+height/2;
+            area=area(from,to,width,height);
         }
-        List<Node> polygon=area(from,to,width+stroke.cap,height+stroke.cap);
-        List<List<Node>> output=new ArrayList<>();
-        for(List<Node> samples:stroke.pieces) {
-            if(samples.size()==1) { if(samples.get(0).source<=through&&interval(samples.get(0),samples.get(0),polygon,stroke)!=null) touched=true; else output.add(samples); continue; }
-            List<Node> current=new ArrayList<>();
-            for(int i=1;i<samples.size();i++) {
-                Node a=samples.get(i-1),b=samples.get(i); double[] hit=b.source<=through?interval(a,b,polygon,stroke):null;
-                if(hit==null||hit[1]-hit[0]<=1e-10) {
-                    if(current.isEmpty()) current.add(a); current.add(b); continue;
-                }
-                touched=true;
-                if(hit[0]>0) { if(current.isEmpty()) current.add(a); current.add(a.mix(b,hit[0])); }
-                if(!current.isEmpty()) { output.add(current); current=new ArrayList<>(); }
-                if(hit[1]<1) { current.add(a.mix(b,hit[1])); current.add(b); }
+        boolean overlaps(double l,double t,double r,double b){return right>=l&&left<=r&&bottom>=t&&top<=b;}
+    }
+    private static boolean covers(List<Node> polygon,double x,double y){
+        Node point=new Node(x,y,0,0,0);
+        for(int i=0;i<polygon.size();i++)if(cross(polygon.get(i),polygon.get((i+1)%polygon.size()),point)<-1e-10)return false;
+        return true;
+    }
+    private static List<double[]> merged(List<double[]> intervals){
+        // Same interval union as eraser/region.ts: cut each original segment
+        // once, rather than repeatedly copying its survivors for every MOVE.
+        intervals.sort(Comparator.comparingDouble(hit->hit[0]));
+        List<double[]> result=new ArrayList<>();
+        for(double[] hit:intervals){
+            if(hit[1]-hit[0]<=1e-10)continue;
+            double[] previous=result.isEmpty()?null:result.get(result.size()-1);
+            if(previous!=null&&hit[0]<=previous[1]+1e-10)previous[1]=Math.max(previous[1],hit[1]);
+            else result.add(hit);
+        }
+        return result;
+    }
+    private static boolean cut(Stroke stroke,List<Sweep> sweeps,double width,double height,int through) {
+        List<List<Node>> polygons=new ArrayList<>();
+        for(Sweep sweep:sweeps){
+            // HCanvas quickContains/quickReject: a fully covered stroke needs
+            // neither interpolation nor reconstruction of its dense centerline.
+            if(through==Integer.MAX_VALUE&&covers(sweep.area,stroke.left,stroke.top)&&covers(sweep.area,stroke.right,stroke.top)
+                &&covers(sweep.area,stroke.right,stroke.bottom)&&covers(sweep.area,stroke.left,stroke.bottom)){
+                stroke.pieces=Collections.emptyList();stroke.nib=false;return true;
             }
-            if(!current.isEmpty()) output.add(current);
+            polygons.add(stroke.cap==0?sweep.area:area(sweep.from,sweep.to,width+stroke.cap,height+stroke.cap));
         }
-        if(touched) stroke.pieces=output;
+        boolean touched=false;
+        if(stroke.nib&&stroke.nibSource<=through)for(Sweep sweep:sweeps){
+            boolean hit=contains(stroke.outline,sweep.from)||contains(stroke.outline,sweep.to);
+            for(int i=1;!hit&&i<stroke.outline.size();i++)hit=interval(stroke.outline.get(i-1),stroke.outline.get(i),sweep.area,null)!=null;
+            if(hit){touched=true;stroke.nib=false;break;}
+        }
+        List<List<Node>> output=new ArrayList<>();
+        for(List<Node> samples:stroke.pieces){
+            if(samples.size()==1){
+                Node point=samples.get(0);boolean hit=false;
+                if(point.source<=through)for(List<Node> polygon:polygons)if(interval(point,point,polygon,stroke)!=null){hit=true;break;}
+                if(hit)touched=true;else output.add(samples);continue;
+            }
+            List<Node> current=new ArrayList<>();
+            for(int i=1;i<samples.size();i++){
+                Node a=samples.get(i-1),b=samples.get(i);List<double[]> hits=new ArrayList<>();
+                if(b.source<=through){
+                    double radius=stroke.brush?Math.max(a.width,b.width)/2:stroke.cap/2;
+                    for(int j=0;j<sweeps.size();j++){
+                        Sweep sweep=sweeps.get(j);
+                        if(!sweep.overlaps(Math.min(a.x,b.x)-radius,Math.min(a.y,b.y)-radius,Math.max(a.x,b.x)+radius,Math.max(a.y,b.y)+radius))continue;
+                        double[] hit=interval(a,b,polygons.get(j),stroke);
+                        if(hit!=null&&hit[1]-hit[0]>1e-10){
+                            hits.add(hit);
+                            if(hit[0]<=0&&hit[1]>=1){hits.clear();hits.add(hit);break;}
+                        }
+                    }
+                }
+                if(hits.isEmpty()){if(current.isEmpty())current.add(a);current.add(b);continue;}
+                touched=true;double start=0;
+                for(double[] hit:merged(hits)){
+                    if(hit[0]>start){if(current.isEmpty())current.add(start==0?a:a.mix(b,start));current.add(a.mix(b,hit[0]));}
+                    if(!current.isEmpty()){output.add(current);current=new ArrayList<>();}
+                    start=Math.max(start,hit[1]);
+                }
+                if(start<1){current.add(a.mix(b,start));current.add(b);}
+            }
+            if(!current.isEmpty())output.add(current);
+        }
+        if(touched)stroke.pieces=output;
         return touched;
     }
     JSONArray erase(JSONArray path,double width,double height) throws JSONException {
@@ -166,18 +221,27 @@ final class NativeStrokeEraser {
     }
     private JSONArray erase(JSONArray path,double width,double height,int through) throws JSONException {
         if(!Double.isFinite(width+height)||width<=0||height<=0||path.length()<2) throw new IllegalArgumentException("Invalid native sweep");
-        List<Node> points=nodes(path,false); Set<String> changed=new LinkedHashSet<>();
-        for(int i=1;i<points.size();i++) {
-            Node from=points.get(i-1),to=points.get(i);
-            for(String id:candidates(from,to,width,height)) {
-                Stroke stroke=strokes.get(id); if(stroke==null) continue;
-                if(cut(stroke,from,to,width,height,through)) { changed.add(id); unindex(stroke); index(stroke); }
+        List<Node> points=nodes(path,false);Set<String> changed=new LinkedHashSet<>();
+        // Bound temporary candidate references even when JS returns thousands
+        // of queued samples over dense ink. Every sample is processed in order.
+        for(int start=1;start<points.size();start+=32){
+            Map<String,List<Sweep>> affected=new LinkedHashMap<>();
+            for(int i=start;i<Math.min(points.size(),start+32);i++){
+                Node from=points.get(i-1),to=points.get(i);Sweep sweep=new Sweep(from,to,width,height);
+                for(String id:candidates(from,to,width,height)){
+                    Stroke stroke=strokes.get(id);
+                    if(stroke!=null&&sweep.overlaps(stroke.left,stroke.top,stroke.right,stroke.bottom))affected.computeIfAbsent(id,unused->new ArrayList<>()).add(sweep);
+                }
+            }
+            for(Map.Entry<String,List<Sweep>> entry:affected.entrySet()){
+                Stroke stroke=strokes.get(entry.getKey());
+                if(cut(stroke,entry.getValue(),width,height,through)){changed.add(stroke.id);unindex(stroke);index(stroke);}
             }
         }
         JSONArray output=new JSONArray();
-        for(String id:changed) {
-            Stroke stroke=strokes.get(id); JSONArray pieces=new JSONArray();
-            for(List<Node> piece:stroke.pieces) { JSONArray samples=new JSONArray(); for(Node node:piece) samples.put(node.json()); pieces.put(samples); }
+        for(String id:changed){
+            Stroke stroke=strokes.get(id);JSONArray pieces=new JSONArray();
+            for(List<Node> piece:stroke.pieces){JSONArray samples=new JSONArray();for(Node node:piece)samples.put(node.json());pieces.put(samples);}
             output.put(new JSONObject().put("id",id).put("pieces",pieces).put("nibHit",!stroke.nib));
         }
         return output;

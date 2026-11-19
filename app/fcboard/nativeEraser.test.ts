@@ -272,3 +272,75 @@ it("prepares committed geometry before the first erase and discards superseded o
     vi.useRealTimers();
   }
 });
+
+it("yields first-erase preparation to input and keeps a version replaced during that yield", async () => {
+  vi.useFakeTimers();
+  let tick = 0;
+  const clock = vi
+    .spyOn(performance, "now")
+    .mockImplementation(() => (tick += 5));
+  const prepare = vi.spyOn(strokeGeometry, "prepareNativeEraseStroke");
+  const backend = createNativeEraserBackend("dense");
+  const inks = Array.from({ length: 48 }, stroke);
+  const moved = newElementWith(inks[0], { x: 400 });
+  let observed = -1;
+  try {
+    backend.synchronize(inks, []);
+    setTimeout(() => {
+      observed = prepare.mock.calls.length;
+      backend.synchronize([moved], []);
+    }, 0);
+    const pending = backend.erase([], path, 10, 12);
+    expect(native.erase).not.toHaveBeenCalled();
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(observed).toBeGreaterThan(0);
+    expect(observed).toBeLessThan(inks.length);
+    expect(native.erase.mock.calls[0][0].updates).toHaveLength(47);
+    expect(
+      native.erase.mock.calls[0][0].updates.some(
+        (item: { id: string }) => item.id === moved.id,
+      ),
+    ).toBe(false);
+    const next = backend.erase([], path, 10, 12);
+    await vi.runAllTimersAsync();
+    await next;
+    expect(native.erase.mock.calls[1][0].updates).toMatchObject([
+      {
+        id: moved.id,
+        samples: [
+          [400, 0, 0.2, 10, 0],
+          [500, 0, 0.8, 110, 0],
+        ],
+      },
+    ]);
+    expect(prepare).toHaveBeenCalledTimes(49);
+  } finally {
+    await backend.reset();
+    prepare.mockRestore();
+    clock.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
+it("drops a reset page before a yielded dense first-erase can submit its old geometry", async () => {
+  vi.useFakeTimers();
+  let tick = 0;
+  const clock = vi
+    .spyOn(performance, "now")
+    .mockImplementation(() => (tick += 5));
+  const backend = createNativeEraserBackend("old-page");
+  try {
+    backend.synchronize(Array.from({ length: 48 }, stroke), []);
+    const pending = backend.erase([], path, 10, 12);
+    expect(native.erase).not.toHaveBeenCalled();
+    await backend.reset();
+    await vi.runAllTimersAsync();
+    expect(await pending).toEqual([]);
+    expect(native.erase).not.toHaveBeenCalled();
+  } finally {
+    await backend.reset();
+    clock.mockRestore();
+    vi.useRealTimers();
+  }
+});

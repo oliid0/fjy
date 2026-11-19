@@ -56,4 +56,33 @@ public class NativeStrokeEraserTest {
         kernel.synchronize(new JSONArray(),new JSONArray().put("near"));
         assertEquals(0,kernel.erase(new JSONArray("[[30,0],[30,0]]"),10,12).length());
     }
+    @Test public void oneBatchedSweepMatchesSeparateCutsForCrossingInkAndBrushes() throws Exception {
+        for(boolean brush:new boolean[]{false,true}){
+            JSONObject ink=stroke("ink",0,brush).put("brushAngle",.7).put("samples",new JSONArray("[[0,0,0.2,10,10],[200,0,0.5,210,20],[0,0,0.8,410,10]]"));
+            NativeStrokeEraser batched=new NativeStrokeEraser(),separate=new NativeStrokeEraser();
+            batched.synchronize(new JSONArray().put(ink),new JSONArray());separate.synchronize(new JSONArray().put(ink),new JSONArray());
+            JSONArray points=new JSONArray("[[30,0],[30,0],[30,80],[160,80],[160,0],[160,0]]");
+            JSONArray actual=batched.erase(points,10,12).getJSONObject(0).getJSONArray("pieces"),expected=null;
+            for(int i=1;i<points.length();i++){
+                JSONArray patches=separate.erase(new JSONArray().put(points.getJSONArray(i-1)).put(points.getJSONArray(i)),10,12);
+                if(patches.length()>0)expected=patches.getJSONObject(0).getJSONArray("pieces");
+            }
+            assertNotNull(expected);assertEquals(expected.length(),actual.length());
+            for(int i=0;i<actual.length();i++){
+                JSONArray a=actual.getJSONArray(i),b=expected.getJSONArray(i);assertEquals(b.length(),a.length());
+                for(int j=0;j<a.length();j++)for(int k=0;k<5;k++)assertEquals(b.getJSONArray(j).getDouble(k),a.getJSONArray(j).getDouble(k),1e-8);
+            }
+        }
+    }
+    @Test public void aLargeEraserClearsDenseInkWithoutRecreatingFragmentsOnRepeatedSamples() throws Exception {
+        NativeStrokeEraser kernel=new NativeStrokeEraser();JSONArray points=new JSONArray();
+        for(int i=0;i<20000;i++)points.put(new JSONArray(new double[]{i%100,(i/100)%100,.5,i,10}));
+        JSONObject ink=stroke("dense",0,true).put("samples",points);
+        kernel.synchronize(new JSONArray().put(ink),new JSONArray());
+        JSONArray sweep=new JSONArray();for(int i=0;i<128;i++)sweep.put(new JSONArray(new double[]{50,50}));
+        JSONObject patch=kernel.erase(sweep,120,120).getJSONObject(0);
+        assertEquals("The whole stroke is covered, including its brush footprint",0,patch.getJSONArray("pieces").length());
+        assertEquals("No old ink or redundant patch returns on another sweep",0,kernel.erase(sweep,120,120).length());
+    }
+
 }

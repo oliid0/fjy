@@ -1,6 +1,6 @@
 import { type GlobalPoint, type LineSegment, pointFrom } from "@fcboard/math";
 
-import { getCommonBounds } from "@fcboard/element";
+import { getCommonBounds, getWhiteboardCompositeKey } from "@fcboard/element";
 import { LinearElementEditor } from "@fcboard/element";
 import {
   isFrameLikeElement,
@@ -121,27 +121,18 @@ export class LassoTrail extends AnimatedTrail {
       }
 
       if (this.app.props.UIOptions.unifiedToolbar) {
-        const composite = (element: FcboardElement) => {
-          const data = element.customData;
-          return data?.fcWidget?.id
-            ? `widget:${data.fcWidget.id}`
-            : data?.fcInsertion?.id
-            ? `insertion:${data.fcInsertion.id}`
-            : data?.fcPlot?.id
-            ? `plot:${data.fcPlot.id}`
-            : data?.fcLanguage?.group
-            ? `language:${data.fcLanguage.group}`
-            : undefined;
-        };
         const groups = new Set(
           this.app.scene
             .getNonDeletedElements()
             .filter((element) => nextSelectedElementIds[element.id])
-            .map(composite)
+            .map(getWhiteboardCompositeKey)
             .filter(Boolean),
         );
         for (const element of this.app.scene.getNonDeletedElements()) {
-          if (!element.locked && groups.has(composite(element))) {
+          if (
+            !element.locked &&
+            groups.has(getWhiteboardCompositeKey(element))
+          ) {
             nextSelectedElementIds[element.id] = true;
           }
         }

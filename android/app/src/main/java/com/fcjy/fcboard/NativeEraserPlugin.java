@@ -18,15 +18,18 @@ public final class NativeEraserPlugin extends Plugin {
     private final Map<String,NativeStrokeEraser> scenes=new HashMap<>();
     @PluginMethod public void clip(PluginCall call) {
         worker.execute(()->{
+            android.os.Trace.beginSection("NativeEraser.clip");
             try {
                 org.json.JSONObject stroke=call.getObject("stroke");JSArray cuts=call.getArray("cuts");
                 if(stroke==null||cuts==null)throw new IllegalArgumentException("Missing live ink cuts");
                 call.resolve(JSObject.fromJSONObject(new NativeStrokeEraser().clip(stroke,cuts)));
             }catch(Exception error){call.reject(error.getMessage(),error);}
+            finally{android.os.Trace.endSection();}
         });
     }
     @PluginMethod public void erase(PluginCall call) {
         worker.execute(()->{
+            android.os.Trace.beginSection("NativeEraser.erase");
             try {
                 String owner=call.getString("owner","");
                 if(owner.isEmpty()||owner.length()>200) throw new IllegalArgumentException("Invalid native eraser owner");
@@ -37,6 +40,7 @@ public final class NativeEraserPlugin extends Plugin {
                 scene.synchronize(updates,removals);
                 call.resolve(new JSObject().put("patches",scene.erase(path,call.getDouble("width",0d),call.getDouble("height",0d))));
             } catch(Exception error) { call.reject(error.getMessage(),error); }
+            finally{android.os.Trace.endSection();}
         });
     }
     @PluginMethod public void release(PluginCall call) { worker.execute(()->{ scenes.remove(call.getString("owner","")); call.resolve(); }); }

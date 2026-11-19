@@ -75,6 +75,7 @@ public final class NativeScenePlugin extends Plugin {
                 long received=entry.view.sequence();Entry target=entry;
                 List<NativeScene.Cut> eraseSamples=entry.view.erasureSamples(call.getData().optLong("eraseThrough",0));
                 worker.execute(()->{
+                    android.os.Trace.beginSection("NativeScene.synchronize");
                     try{
                         State state=states.get(owner);if(state==null||state.epoch!=epoch){state=new State(epoch);states.put(owner,state);}
                         NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples);
@@ -83,6 +84,7 @@ public final class NativeScenePlugin extends Plugin {
                             call.resolve();
                         });
                     }catch(Exception error){call.reject("Native scene unavailable: "+error.getMessage(),error);}
+                    finally{android.os.Trace.endSection();}
                 });
             }catch(Exception error){call.reject(error.getMessage(),error);}
         });

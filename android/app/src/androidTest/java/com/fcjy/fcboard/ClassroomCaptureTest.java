@@ -23,7 +23,10 @@ public class ClassroomCaptureTest {
             for (int attempt = 0; attempt < 60 && !ready; attempt++) {
                 CountDownLatch checked = new CountDownLatch(1);
                 AtomicReference<String> result = new AtomicReference<>("false");
-                scenario.onActivity(activity -> activity.getBridge().getWebView().evaluateJavascript("!!document.querySelector('.fc-unified-toolbar')", value -> { result.set(value); checked.countDown(); }));
+                scenario.onActivity(activity -> {
+                    if (!activity.isBoardUsable()) { checked.countDown(); return; }
+                    activity.getBridge().getWebView().evaluateJavascript("!!document.querySelector('.fc-unified-toolbar')", value -> { result.set(value); checked.countDown(); });
+                });
                 assertTrue(checked.await(5, TimeUnit.SECONDS));
                 ready = "true".equals(result.get());
                 if (!ready) Thread.sleep(500);

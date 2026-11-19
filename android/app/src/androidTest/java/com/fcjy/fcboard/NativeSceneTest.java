@@ -292,4 +292,28 @@ public class NativeSceneTest {
         });
     }
 
+    @Test public void stationaryEraserUpInvalidatesTheCursorBeforeJavascriptReplies() throws Exception {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
+            try {
+                NativeSceneView view=surface();java.util.List<com.getcapacitor.JSObject> events=new java.util.ArrayList<>();
+                NativeInkView input=new NativeInkView(view.getContext(),events::add);
+                new FrameLayout(view.getContext()).addView(input);input.layout(0,0,600,200);
+                input.configure("erase",true,0,0,1,4,1,1,"#000000",false,36,java.util.Collections.emptyList(),null,0,"erase",true,60,null);
+                input.setRetainedScene(()->view,true);input.setDisplay(view);view.setInput(input);
+                android.view.MotionEvent down=android.view.MotionEvent.obtain(100,100,android.view.MotionEvent.ACTION_DOWN,100,60,0);
+                try{assertTrue(input.onTouchEvent(down));}finally{down.recycle();}
+                Bitmap cursor=pixels(view);boolean visible=false;
+                for(int y=25;y<95&&!visible;y++)for(int x=65;x<135;x++)if(Color.alpha(cursor.getPixel(x,y))>0){visible=true;break;}
+                assertTrue("The actual native eraser cursor has been drawn",visible);cursor.recycle();
+                java.lang.reflect.Field full=NativeCanvasView.class.getDeclaredField("full"),damage=NativeCanvasView.class.getDeclaredField("damage");
+                full.setAccessible(true);damage.setAccessible(true);full.setBoolean(view,false);((Rect)damage.get(view)).setEmpty();
+                android.view.MotionEvent up=android.view.MotionEvent.obtain(100,101,android.view.MotionEvent.ACTION_UP,100,60,0);
+                try{assertTrue(input.onTouchEvent(up));}finally{up.recycle();}
+                assertTrue("Unchanged UP must schedule a frame to remove the last cursor",full.getBoolean(view)||!((Rect)damage.get(view)).isEmpty());
+                Bitmap after=pixels(view);for(int y=25;y<95;y++)for(int x=65;x<135;x++)assertEquals(0,Color.alpha(after.getPixel(x,y)));after.recycle();
+                assertEquals("No JavaScript acknowledgement was required",2,events.size());
+            }catch(Exception error){throw new AssertionError(error);}
+        });
+    }
+
 }

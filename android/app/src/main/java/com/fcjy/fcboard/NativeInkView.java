@@ -249,6 +249,12 @@ final class NativeInkView extends View {
             }
             else if(contact.mode.equals("erase"))splitInk.finish(contact.id);
         }else pending.put(contact.id, contact);
+        // UP may repeat the last sample, so sample() need not invalidate. The
+        // cursor is transient input, never wait for asynchronous vector/JS ack.
+        if(contact.mode.equals("erase")){
+            float halfWidth=contact.major*scale/2+2,halfHeight=contact.minor*scale/2+2;
+            requestRender(new RectF(contact.lastX-halfWidth,contact.lastY-halfHeight,contact.lastX+halfWidth,contact.lastY+halfHeight));
+        }else requestRender(contact.bounds);
         emit(contact, "end", true);
     }
     synchronized void setRoutedInput() { routedInput = true; }

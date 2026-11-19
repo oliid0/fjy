@@ -36,7 +36,11 @@ type Cached = {
   source: FcboardFreeDrawElement;
   version: number;
   nonce: number;
-  geometry?: ReturnType<typeof prepareNativeEraseStroke>;
+  geometry?: Omit<
+    ReturnType<typeof prepareNativeEraseStroke>,
+    "samples" | "sources"
+  >;
+  payload?: unknown;
   failure?: { reason: unknown };
 };
 
@@ -76,6 +80,34 @@ export const createNativeEraserBackend = (owner: string) => {
   const removed = new Set<string>();
   let epoch = 0;
   const preparation = new Map<string, Cached>();
+  const prepare = (entry: Cached) => {
+    if (entry.failure) {
+      throw entry.failure.reason;
+    }
+    if (!entry.payload) {
+      const {
+        samples,
+        sources: _sources,
+        ...geometry
+      } = prepareNativeEraseStroke(entry.source);
+      entry.geometry = geometry;
+      entry.payload = {
+        id: entry.source.id,
+        cap: geometry.cap,
+        brush: geometry.brush,
+        brushAngle: geometry.brushAngle,
+        samples: samples.map((p) => [
+          p.x,
+          p.y,
+          p.pressure,
+          p.distance,
+          p.brushWidth,
+        ]),
+        nibOutline: geometry.nibOutline.map((p) => [p.x, p.y]),
+      };
+    }
+    return entry.payload;
+  };
   let preparationTimer: ReturnType<typeof setTimeout> | undefined;
   const schedulePreparation = () => {
     if (preparationTimer !== undefined || !preparation.size) {
@@ -90,7 +122,7 @@ export const createNativeEraserBackend = (owner: string) => {
           continue;
         }
         try {
-          entry.geometry ??= prepareNativeEraseStroke(entry.source);
+          prepare(entry);
         } catch (reason) {
           entry.failure = { reason };
         }
@@ -156,32 +188,38 @@ export const createNativeEraserBackend = (owner: string) => {
   };
   const erase: NativeEraserBackend = async (_elements, path, width, height) => {
     const stamp = epoch;
-    const updates = [...dirty.values()].map((entry) => {
-      const { source } = entry;
-      preparation.delete(source.id);
-      if (entry.failure) {
-        throw entry.failure.reason;
+    const entries = [...dirty.entries()];
+    let began = performance.now();
+    for (let i = 0; i < entries.length; i++) {
+      const [id, entry] = entries[i];
+      if (cache.get(id) !== entry) {
+        continue;
       }
-      const geometry = (entry.geometry ??= prepareNativeEraseStroke(source));
-      indexed.set(source.id, entry);
-      return {
-        id: source.id,
-        cap: geometry.cap,
-        brush: geometry.brush,
-        brushAngle: geometry.brushAngle,
-        samples: geometry.samples.map((p) => [
-          p.x,
-          p.y,
-          p.pressure,
-          p.distance,
-          p.brushWidth,
-        ]),
-        nibOutline: geometry.nibOutline.map((p) => [p.x, p.y]),
-      };
-    });
+      preparation.delete(id);
+      prepare(entry);
+      // A dense page may reach the first eraser before idle preparation. Do not
+      // turn that first gesture into one synchronous board-sized JS task.
+      if (i + 1 < entries.length && performance.now() - began >= 4) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (epoch !== stamp) {
+          return [];
+        }
+        began = performance.now();
+      }
+    }
+    const updates: unknown[] = [];
+    for (const [id, entry] of entries) {
+      if (cache.get(id) !== entry) {
+        continue;
+      }
+      updates.push(entry.payload);
+      indexed.set(id, entry);
+      if (dirty.get(id) === entry) {
+        dirty.delete(id);
+      }
+    }
     const removals = [...removed];
     removals.forEach((id) => indexed.delete(id));
-    dirty.clear();
     removed.clear();
     const result = await plugin.erase({
       owner,
@@ -195,7 +233,9 @@ export const createNativeEraserBackend = (owner: string) => {
       return [];
     }
     const patches: NativeEraseUpdate[] = [];
-    for (const patch of result.patches) {
+    began = performance.now();
+    for (let i = 0; i < result.patches.length; i++) {
+      const patch = result.patches[i];
       const entry = indexed.get(patch.id);
       if (!entry) {
         throw new Error("Native eraser returned an unknown stroke");
@@ -215,6 +255,13 @@ export const createNativeEraserBackend = (owner: string) => {
           nibHit: patch.nibHit,
         }),
       });
+      if (i + 1 < result.patches.length && performance.now() - began >= 4) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (epoch !== stamp) {
+          return [];
+        }
+        began = performance.now();
+      }
     }
     return patches;
   };

@@ -371,6 +371,9 @@ public class ClassroomPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 boolean resourceOpen = webResource != null && webResource.isShowing();
+                if (!resourceOpen && !((MainActivity)getActivity()).isBoardUsable()) {
+                    call.reject("The whiteboard is still loading; try again shortly"); return;
+                }
                 android.webkit.WebView view = resourceOpen ? webResource.web : getBridge().getWebView();
                 android.view.Window window = resourceOpen ? webResource.getWindow() : getActivity().getWindow();
                 int[] location = new int[2]; view.getLocationInWindow(location);

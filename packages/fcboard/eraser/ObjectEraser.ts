@@ -1,5 +1,6 @@
 import {
   getElementBounds,
+  getWhiteboardCompositeKey,
   getElementLineSegments,
   isPointInElement,
   newElementWith,
@@ -9,7 +10,7 @@ import {
   factoryBrushSamples,
   isFactoryBrush,
 } from "@fcboard/element/factoryBrush";
-import { pointFrom } from "@fcboard/math";
+import { pointFrom, polygonIncludesPointNonZero } from "@fcboard/math";
 
 import type { Scene } from "@fcboard/element";
 import type { FcboardElement } from "@fcboard/element/types";
@@ -140,7 +141,12 @@ export class ObjectEraser {
     const entry: Entry = {
       bounds,
       cells: cells(bounds),
-      groups: [...element.groupIds],
+      groups: [
+        ...element.groupIds.map((group) => `group:${group}`),
+        ...(getWhiteboardCompositeKey(element)
+          ? [getWhiteboardCompositeKey(element)!]
+          : []),
+      ],
       related,
     };
     this.entries.set(id, entry);
@@ -210,17 +216,27 @@ export class ObjectEraser {
     for (const id of candidates) {
       const entry = this.entries.get(id);
       const element = elementsMap.get(id);
-      if (!entry || !element || element.locked) {
+      if (!entry || !element || element.locked || hit.has(id)) {
         continue;
       }
       const inside = shouldTestInside(element);
       const touched = sweeps.some(
         ({ from, to, path, bounds }) =>
           overlaps(entry.bounds, bounds) &&
-          ((inside &&
-            path.some((point) =>
-              isPointInElement(point, element, elementsMap),
-            )) ||
+          // Like HCanvas quickContains, an enclosing footprint deletes the
+          // object directly without expanding a long centerline/curve.
+          ([
+            [entry.bounds[0], entry.bounds[1]],
+            [entry.bounds[2], entry.bounds[1]],
+            [entry.bounds[2], entry.bounds[3]],
+            [entry.bounds[0], entry.bounds[3]],
+          ].every(([x, y]) =>
+            polygonIncludesPointNonZero(pointFrom<GlobalPoint>(x, y), path),
+          ) ||
+            (inside &&
+              path.some((point) =>
+                isPointInElement(point, element, elementsMap),
+              )) ||
             (element.type === "freedraw"
               ? strokeIntersectsSweep(
                   (entry.stroke ||= prepareNativeEraseStroke(element)),
@@ -252,7 +268,11 @@ export class ObjectEraser {
       hit.add(id);
       const group = element.groupIds.at(-1);
       if (group) {
-        this.groups.get(group)?.forEach((member) => hit.add(member));
+        this.groups.get(`group:${group}`)?.forEach((member) => hit.add(member));
+      }
+      const composite = getWhiteboardCompositeKey(element);
+      if (composite) {
+        this.groups.get(composite)?.forEach((member) => hit.add(member));
       }
       element.boundElements
         ?.filter((bound) => bound.type === "text")

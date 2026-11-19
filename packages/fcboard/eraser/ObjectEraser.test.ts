@@ -68,6 +68,68 @@ describe("indexed object erasure", () => {
       scene.destroy();
     }
   });
+  it("deletes a fully covered dense stroke without preparing its centerline", () => {
+    const ink = API.createElement({
+      type: "freedraw",
+      x: 20,
+      y: 20,
+      width: 19,
+      height: 19,
+      points: Array.from({ length: 10000 }, (_, index) =>
+        pointFrom(index % 20, Math.floor(index / 20) % 20),
+      ),
+      strokeWidth: 2,
+    });
+    const prepare = vi.spyOn(strokeGeometry, "prepareNativeEraseStroke");
+    const result = eraseSceneObjects([ink], [{ x: 30, y: 30 }], 100, 100);
+    expect(result[0].isDeleted).toBe(true);
+    expect(prepare).not.toHaveBeenCalled();
+  });
+  it.each(["fcInsertion", "fcWidget", "fcPlot", "fcLanguage"])(
+    "erases every part of one semantic %s object while preserving other kinds, missing identities and locks",
+    (kind) => {
+      const meta = (key: string, id?: string) => ({
+        [key]: { ...(key === "fcLanguage" ? { group: id } : { id }) },
+      });
+      const shape = (
+        x: number,
+        data: Record<string, unknown>,
+        locked = false,
+      ) => ({
+        ...API.createElement({
+          type: "rectangle",
+          x,
+          y: 20,
+          width: 20,
+          height: 20,
+          backgroundColor: "#ff0000",
+          locked,
+        }),
+        customData: data,
+      });
+      const target = shape(20, meta(kind, "same"));
+      const part = shape(500, meta(kind, "same"));
+      const locked = shape(700, meta(kind, "same"), true);
+      const otherKind = shape(
+        900,
+        meta(kind === "fcWidget" ? "fcInsertion" : "fcWidget", "same"),
+      );
+      const noId = shape(1100, meta(kind));
+      const result = eraseSceneObjects(
+        [target, part, locked, otherKind, noId],
+        [{ x: 30, y: 30 }],
+        10,
+        10,
+      );
+      expect(result.map((element) => element.isDeleted)).toEqual([
+        true,
+        true,
+        false,
+        false,
+        false,
+      ]);
+    },
+  );
   it("hits the smoothed painted curve without deleting the empty control-point position", () => {
     const ink = {
       ...API.createElement({

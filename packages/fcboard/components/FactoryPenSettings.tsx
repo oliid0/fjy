@@ -247,6 +247,7 @@ export const FactoryPenSettings = ({
                   appState: {
                     ...switchWhiteboardPen(state, "hard"),
                     currentItemInkAssist: mode,
+                    multiStroke: false,
                   },
                 });
               } else {

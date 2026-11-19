@@ -587,7 +587,7 @@ export const NativeInkInteraction = ({
         owner: api.id,
         token,
         enabled: enabled && !uiBlocksInk && blocked.length <= 512,
-        multiStroke: state.multiStroke !== false,
+        multiStroke: !state.currentItemInkAssist && state.multiStroke !== false,
         recognitionEnabled:
           !!state.currentItemInkAssist || compositionBounds.size > 0,
         shortcutsEnabled:

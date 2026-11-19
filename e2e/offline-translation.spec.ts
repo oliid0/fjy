@@ -38,7 +38,8 @@ for (const example of [
             fontFamily: 1,
             lineHeight: 1.25,
             customData: {
-              fcInk: { version: 2, pen: "hard", assist: "language" },
+              fcInk: { version: 2, pen: "hard", assist: "language", unit: 1 },
+              fcLanguage: { group: "local-language-source", source: true },
             },
           },
         ]),
@@ -66,6 +67,15 @@ for (const example of [
     await page.keyboard.press("Escape");
     await page.keyboard.press("v");
     await page.keyboard.press("Control+a");
+    await expect(
+      page.getByRole("dialog", {
+        name: example.language === "en" ? "Language study" : "词句学习",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    // An explicit double tap on existing language writing opens its local card;
+    // ordinary selection without an API key intentionally does not auto-open.
+    await page.mouse.dblclick(240, 195);
     const started = Date.now();
     const translation = page
       .locator('[role="dialog"] p')

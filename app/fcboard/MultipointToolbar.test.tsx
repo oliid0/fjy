@@ -111,30 +111,17 @@ it("pins a real multi/single toggle and changes actual two-contact writing on ea
         appState: { currentItemInkAssist: mode, multiStroke: true },
       }),
     );
-    expect(api.getAppState().multiStroke).toBe(true);
-    draw();
-    expect(
-      api
-        .getSceneElements()
-        .slice(-2)
-        .map((item) => item.customData?.fcInk.assist),
-    ).toEqual([mode, mode]);
+    expect(api.getAppState().multiStroke).toBe(false);
   }
-  expect(api.getSceneElements()).toHaveLength(15);
-  fireEvent.click(
-    row().getByRole("button", { name: t("fcboard.multi_touch_writing") }),
-  );
-  expect(api.getAppState().multiStroke).toBe(false);
-  expect(api.getAppState().currentItemInkAssist).toBe("language");
-  draw();
-  expect(api.getSceneElements()).toHaveLength(16);
   fireEvent.click(
     row().getByRole("button", { name: t("fcboard.single_touch_writing") }),
   );
   expect(api.getAppState().multiStroke).toBe(true);
-  expect(api.getAppState().currentItemInkAssist).toBe("language");
+  expect(api.getAppState().currentItemInkAssist).toBeUndefined();
   draw();
-  expect(api.getSceneElements()).toHaveLength(18);
+  expect(
+    api.getSceneElements().filter((item) => item.type === "freedraw"),
+  ).toHaveLength(5);
   act(() => saveToolbarItems([]));
   expect(
     row().queryByRole("button", { name: t("fcboard.multi_touch_writing") }),

@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
+import { zoomFunctionGraph } from "./function-graph";
 import { installVoice, say, startVoice, voiceEndpoint } from "./voice";
 
 import type { Page } from "@playwright/test";
@@ -338,7 +339,7 @@ test("voice uses the same component actions to create a new board without a mode
   ).toBeVisible();
 });
 
-test("voice draws into the visible PPT and function controls update its transparent layer", async ({
+test("voice draws into the visible PPT and internal pinch updates its borderless function object", async ({
   page,
 }, info) => {
   await page.addInitScript(() => {
@@ -388,12 +389,7 @@ test("voice draws into the visible PPT and function controls update its transpar
   const graph = page
     .locator(".fc-document-ink foreignObject:has(.fc-inline-function)")
     .last();
-  const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
-  await expect(slider).toBeVisible();
-  await slider.focus();
-  await slider.press("ArrowRight");
-  await expect(slider).toHaveValue("1.1");
-  await expect(graph.locator(".mark-line path").first()).toBeVisible();
+  await zoomFunctionGraph(page, graph);
   await expect(
     graph.locator('.fc-inline-function[aria-label="y = a*x+1"]'),
   ).toHaveCount(1);

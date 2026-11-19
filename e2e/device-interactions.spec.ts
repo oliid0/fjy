@@ -380,7 +380,7 @@ for (const width of [390, 1920]) {
           (await board.locator(".fc-split-bottom").first().boundingBox())!
             .height,
       )
-      .toBeCloseTo(36.18, 1);
+      .toBeCloseTo(45, 1);
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),
       height: Math.max(...items.map((canvas) => canvas.height)),

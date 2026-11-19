@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { selectMenu } from "./menu";
+import { zoomFunctionGraph } from "./function-graph";
 
 import type { Page } from "@playwright/test";
 
@@ -366,7 +367,7 @@ for (const viewport of [
   });
 }
 
-test("selecting a formula creates inline SVG axes and parameter/zoom edits keep its object", async ({
+test("selecting a formula creates a borderless Canvas object and internal pinch preserves its identity", async ({
   page,
 }, testInfo) => {
   await page.goto("/");
@@ -375,30 +376,15 @@ test("selecting a formula creates inline SVG axes and parameter/zoom edits keep 
   await page.getByRole("button", { name: "AI", exact: true }).click();
   await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   const graph = page.locator(".fc-inline-function-object").last();
-  const slider = graph.getByRole("slider", { name: "调节 a", exact: true });
-  await expect(slider).toBeVisible();
-  const objectId = await graph
-    .locator(".fc-inline-function")
-    .getAttribute("data-native-resource-object-id");
-  const curve = graph.locator(".mark-line path").first();
-  const initial = await curve.getAttribute("d");
-  await slider.focus();
-  for (let i = 0; i < 10; i++) {
-    await slider.press("ArrowRight");
-  }
-  await expect(slider).toHaveValue("2");
-  await expect.poll(() => curve.getAttribute("d")).not.toBe(initial);
-  const beforeZoom = await curve.getAttribute("d");
-  await graph.locator(".fc-inline-function svg").hover();
-  await page.mouse.wheel(0, -150);
-  await expect.poll(() => curve.getAttribute("d")).not.toBe(beforeZoom);
-  await expect(graph.getByRole("spinbutton")).toHaveCount(0);
-  await expect(graph.locator(".fc-inline-function")).toHaveAttribute(
+  const surface = graph.locator(".fc-inline-function");
+  await expect(surface).toBeVisible();
+  const objectId = await surface.getAttribute("data-native-resource-object-id");
+  await zoomFunctionGraph(page, graph);
+  await expect(surface).toHaveAttribute(
     "data-native-resource-object-id",
     objectId!,
   );
   await expect(page.locator("iframe[data-resource-object-id]")).toHaveCount(0);
-  await expect(slider).toHaveValue("2");
   await page.screenshot({ path: testInfo.outputPath("selected-function.png") });
 });
 

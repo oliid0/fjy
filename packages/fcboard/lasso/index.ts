@@ -123,13 +123,13 @@ export class LassoTrail extends AnimatedTrail {
       if (this.app.props.UIOptions.unifiedToolbar) {
         const composite = (element: FcboardElement) => {
           const data = element.customData;
-          return data?.fcWidget
+          return data?.fcWidget?.id
             ? `widget:${data.fcWidget.id}`
-            : data?.fcInsertion
+            : data?.fcInsertion?.id
             ? `insertion:${data.fcInsertion.id}`
-            : data?.fcPlot
+            : data?.fcPlot?.id
             ? `plot:${data.fcPlot.id}`
-            : data?.fcLanguage
+            : data?.fcLanguage?.group
             ? `language:${data.fcLanguage.group}`
             : undefined;
         };

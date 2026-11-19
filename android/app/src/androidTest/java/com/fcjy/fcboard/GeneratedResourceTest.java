@@ -132,7 +132,14 @@ public class GeneratedResourceTest {
                 }
                 evaluate(scenario, "window.__fcBeforeReload=true;true");
                 onActivity(scenario, activity -> activity.getBridge().getWebView().reload());
-                until(scenario, "!window.__fcBeforeReload && !!document.querySelector('iframe[title=\"" + title + "\"]')");
+                until(scenario, "!window.__fcBeforeReload && !!document.querySelector('.fc-unified-toolbar')");
+                assertEquals("Ordinary native reopen starts a fresh board", "false", evaluate(scenario, "!!document.querySelector('iframe[title=\"" + title + "\"]')"));
+                evaluate(scenario, "document.querySelector('[data-board-insert]').click();true");
+                until(scenario, "!!document.querySelector('[data-native-tool=resources]')");
+                evaluate(scenario, "document.querySelector('[data-native-tool=resources]').click();true");
+                until(scenario, "Array.from(document.querySelectorAll('.fc-generated-resource button')).some(button=>button.textContent.trim()===" + JSONObject.quote(title) + ")");
+                evaluate(scenario, "Array.from(document.querySelectorAll('.fc-generated-resource button')).find(button=>button.textContent.trim()===" + JSONObject.quote(title) + ").click();true");
+                until(scenario, "!!document.querySelector('iframe[title=\"" + title + "\"]') && !document.querySelector('.fc-resource-library')");
             } finally {
                 try {
                     evaluate(scenario, "localStorage.removeItem('fcboard-settings');sessionStorage.removeItem('fcboard-keys');true");

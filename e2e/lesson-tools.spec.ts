@@ -24,7 +24,7 @@ for (const width of [1440, 3080, 390]) {
       const last = String(request.messages.at(-1).content);
       let result: unknown;
       if (
-        system.startsWith(
+        system.includes(
           "Create a scientifically accurate interactive teaching resource",
         )
       ) {

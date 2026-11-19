@@ -54,7 +54,7 @@ for (const viewport of [
                 ],
               };
         } else if (
-          !request.messages[0].content.startsWith(
+          !request.messages[0].content.includes(
             "Create a scientifically accurate interactive teaching resource",
           )
         ) {

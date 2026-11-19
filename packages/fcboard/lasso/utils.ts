@@ -98,16 +98,8 @@ export const getLassoSelectedElementIds = (input: {
       // A word circle can be wholly inside a text/image object without
       // touching its outer corners or edges (TextShape/ImageShape in x.apk).
       const inside =
-        element.type === "text" || element.type === "image"
-          ? path.some(
-              ([x, y]) =>
-                x >= elementBounds[0] &&
-                x <= elementBounds[2] &&
-                y >= elementBounds[1] &&
-                y <= elementBounds[3],
-            )
-          : shouldTestInside(element) &&
-            path.some((point) => isPointInElement(point, element, elementsMap));
+        shouldTestInside(element) &&
+        path.some((point) => isPointInElement(point, element, elementsMap));
       if (inside) {
         enclosedElements.add(element.id);
         continue;

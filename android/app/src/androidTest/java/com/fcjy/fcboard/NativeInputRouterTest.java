@@ -57,12 +57,12 @@ public class NativeInputRouterTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,0);view.setPersistent(true);
             for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_MOVE,MotionEvent.ACTION_UP}){MotionEvent sample=MotionEvent.obtain(100,110+action,action,action==0?20:280,60,0);try{assertTrue(view.onTouchEvent(sample));}finally{sample.recycle();}}
-            view.acknowledge(events.get(events.size()-1).optString("id"));Bitmap before=Bitmap.createBitmap(300,200,Bitmap.Config.ARGB_8888);view.draw(new Canvas(before));assertEquals(128,Color.alpha(before.getPixel(100,60)));before.recycle();
+            view.acknowledge(events.get(events.size()-1).optString("id"));Bitmap before=Bitmap.createBitmap(300,200,Bitmap.Config.ARGB_8888);view.paintCanvas(new Canvas(before));assertEquals(128,Color.alpha(before.getPixel(100,60)));before.recycle();
             view.configure("erase",true,0,0,1,20,1,.5f,"#ff0000",false,36,Collections.emptyList(),null,0,"erase",true,60,null);
             for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_MOVE}){MotionEvent sample=MotionEvent.obtain(200,210+action,action,action==0?100:260,action==0?60:160,0);try{assertTrue(view.onTouchEvent(sample));}finally{sample.recycle();}}
-            Bitmap erased=Bitmap.createBitmap(300,200,Bitmap.Config.ARGB_8888);view.draw(new Canvas(erased));assertEquals(0,Color.alpha(erased.getPixel(100,60)));erased.recycle();
+            Bitmap erased=Bitmap.createBitmap(300,200,Bitmap.Config.ARGB_8888);view.paintCanvas(new Canvas(erased));assertEquals(0,Color.alpha(erased.getPixel(100,60)));erased.recycle();
             MotionEvent cancel=MotionEvent.obtain(200,220,MotionEvent.ACTION_CANCEL,260,160,0);try{assertTrue(view.onTouchEvent(cancel));}finally{cancel.recycle();}
-            Bitmap restored=Bitmap.createBitmap(300,200,Bitmap.Config.ARGB_8888);view.draw(new Canvas(restored));assertEquals(128,Color.alpha(restored.getPixel(100,60)));restored.recycle();
+            Bitmap restored=Bitmap.createBitmap(300,200,Bitmap.Config.ARGB_8888);view.paintCanvas(new Canvas(restored));assertEquals(128,Color.alpha(restored.getPixel(100,60)));restored.recycle();
         });
     }
     @Test public void cancellingTileErasurePreservesAConcurrentCommittedWriter(){

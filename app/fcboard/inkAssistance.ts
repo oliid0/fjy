@@ -667,6 +667,7 @@ export const observeInkAssistance = (
                   | "calculation"
                   | "language"),
           currentItemPenMode: "hard",
+          multiStroke: false,
         },
       });
       if (classroomCommands.has("document.tool")) {

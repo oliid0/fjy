@@ -121,3 +121,33 @@ it("does not retain stale hit sets for an empty path or select locked/deleted ob
   expect(select([locked, deleted], path(20, 20, 40, 40))).toEqual([]);
   expect(select([locked, deleted], [])).toEqual([]);
 });
+
+it.each(["image", "text"] as const)(
+  "rejects empty bounding-box corners of a rotated %s while retaining its actual interior",
+  (type) => {
+    const element = API.createElement({
+      type,
+      text: "Rotated word",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+      angle: Math.PI / 4,
+    });
+    const bounds = geometry.getElementBounds(
+      element,
+      new Map([[element.id, element]]),
+    );
+    expect(
+      select(
+        [element],
+        path(bounds[0] + 1, bounds[1] + 1, bounds[0] + 3, bounds[1] + 3),
+      ),
+    ).toEqual([]);
+    const x = element.x + element.width / 2;
+    const y = element.y + element.height / 2;
+    expect(select([element], path(x - 2, y - 2, x + 2, y + 2))).toEqual([
+      element.id,
+    ]);
+  },
+);

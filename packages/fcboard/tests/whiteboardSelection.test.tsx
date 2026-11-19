@@ -933,3 +933,30 @@ it("keeps the user's inner circle separate from whole text/image operation bound
     bottom: 620,
   });
 });
+
+it("keeps imported standalone function objects independent when optional composite ids are absent", async () => {
+  await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  h.state.width = 1600;
+  h.state.height = 900;
+  const objects = [100, 700].map((x) => ({
+    ...API.createElement({ type: "image", x, y: 100, width: 200, height: 100 }),
+    customData: {
+      fcPlot: {
+        renderer: "canvas",
+        layer: "floating",
+        plot: { expression: "x" },
+      },
+    },
+  }));
+  API.updateScene({ elements: objects });
+  act(() =>
+    h.app.lassoTrail.selectPath([
+      pointFrom<import("@fcboard/math").GlobalPoint>(120, 120),
+      pointFrom<import("@fcboard/math").GlobalPoint>(150, 120),
+      pointFrom<import("@fcboard/math").GlobalPoint>(150, 150),
+      pointFrom<import("@fcboard/math").GlobalPoint>(120, 150),
+    ]),
+  );
+  expect(h.state.selectedElementIds).toEqual({ [objects[0].id]: true });
+  expect(h.state.whiteboardSelection?.elementIds).toEqual([objects[0].id]);
+});

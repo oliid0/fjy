@@ -235,7 +235,7 @@ describe("APK-style whiteboard ink", () => {
     "calculation",
     "language",
   ] as const)(
-    "retains all five simultaneous finger strokes in %s mode without panning or classifying a palm",
+    "keeps %s recognition on one committed writer when additional fingers arrive",
     async (mode) => {
       const { container } = await render(
         <Fcboard UIOptions={{ unifiedToolbar: true }} />,
@@ -255,7 +255,19 @@ describe("APK-style whiteboard ink", () => {
       const committed = vi.fn();
       const stop = h.app.api.onInkCommit(committed);
       try {
-        for (let id = 1; id <= 5; id++) {
+        pointer(canvas, "pointerdown", 100, 160, {
+          pointerId: 1,
+          pointerType: "touch",
+          width: 12,
+          height: 45,
+        });
+        pointer(canvas, "pointermove", 160, 160, {
+          pointerId: 1,
+          pointerType: "touch",
+          width: 12,
+          height: 45,
+        });
+        for (let id = 2; id <= 5; id++) {
           pointer(canvas, "pointerdown", 100, 100 + id * 60, {
             pointerId: id,
             pointerType: "touch",
@@ -263,7 +275,7 @@ describe("APK-style whiteboard ink", () => {
             height: 45,
           });
         }
-        expect(live()).toHaveLength(5);
+        expect(live()).toHaveLength(1);
         for (let id = 1; id <= 5; id++) {
           pointer(canvas, "pointermove", 260, 100 + id * 60, {
             pointerId: id,
@@ -278,9 +290,9 @@ describe("APK-style whiteboard ink", () => {
             height: 45,
           });
         }
-        expect(live()).toHaveLength(5);
-        expect(new Set(live().map((stroke) => stroke.id)).size).toBe(5);
-        expect(committed).toHaveBeenCalledTimes(5);
+        expect(live()).toHaveLength(1);
+        expect(new Set(live().map((stroke) => stroke.id)).size).toBe(1);
+        expect(committed).toHaveBeenCalledTimes(1);
         live().forEach((stroke) => {
           expect(stroke.type).toBe("freedraw");
           expect(stroke.customData?.fcInk.assist).toBe(mode);

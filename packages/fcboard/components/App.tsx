@@ -3541,6 +3541,9 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    if (this.state.currentItemInkAssist && this.state.multiStroke !== false) {
+      this.setState({ multiStroke: false });
+    }
     // must be updated *before* state change listeners are triggered below
     if (!this._initialized && !this.state.isLoading) {
       this._initialized = true;
@@ -4910,6 +4913,9 @@ class App extends React.Component<AppProps, AppState> {
         };
         this.setState((previous) => {
           const next = { ...previous, ...update };
+          if (next.currentItemInkAssist) {
+            update.multiStroke = false;
+          }
           if (
             this.props.UIOptions.unifiedToolbar &&
             update.selectedElementIds

@@ -63,7 +63,7 @@ it.each([
   "calculation",
   "language",
 ] as const)(
-  "preserves the explicit contact mode in native %s pen configuration",
+  "enforces single-contact native %s recognition and restores ordinary multipoint writing",
   async (mode) => {
     await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     const api = window.h.app.api;
@@ -83,7 +83,7 @@ it.each([
       expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
         enabled: true,
         mode: "pen",
-        multiStroke: true,
+        multiStroke: false,
         recognitionEnabled: true,
       }),
     );
@@ -97,6 +97,18 @@ it.each([
       }),
     );
     expect(api.getAppState().currentItemInkAssist).toBe(mode);
+    act(() =>
+      api.updateScene({
+        appState: { currentItemInkAssist: undefined, multiStroke: true },
+      }),
+    );
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+        mode: "pen",
+        multiStroke: true,
+        recognitionEnabled: false,
+      }),
+    );
   },
 );
 

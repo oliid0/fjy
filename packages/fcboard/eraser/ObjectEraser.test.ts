@@ -3,6 +3,7 @@ import { Scene, newElementWith, syncInvalidIndices } from "@fcboard/element";
 import { pointFrom } from "@fcboard/math";
 
 import type { FcboardElement } from "@fcboard/element/types";
+import type { LocalPoint } from "@fcboard/math";
 
 import { API } from "../tests/helpers/api";
 
@@ -76,7 +77,7 @@ describe("indexed object erasure", () => {
       width: 19,
       height: 19,
       points: Array.from({ length: 10000 }, (_, index) =>
-        pointFrom(index % 20, Math.floor(index / 20) % 20),
+        pointFrom<LocalPoint>(index % 20, Math.floor(index / 20) % 20),
       ),
       strokeWidth: 2,
     });

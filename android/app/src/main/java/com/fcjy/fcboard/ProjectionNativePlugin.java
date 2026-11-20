@@ -30,10 +30,12 @@ public class ProjectionNativePlugin extends Plugin {
     private AlertDialog castPlusConsent;
     private String consentToken = "";
 
-    private boolean canAdvertise() {
-        return Build.VERSION.SDK_INT >= 34 &&
-            getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_DIRECT) &&
-            getContext().checkSelfPermission(Manifest.permission.CONFIGURE_WIFI_DISPLAY) == PackageManager.PERMISSION_GRANTED;
+    private boolean hasWifiDirect() {
+        return getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_DIRECT);
+    }
+
+    private String p2pPermission() {
+        return Build.VERSION.SDK_INT >= 33 ? "nearby" : "castLocation";
     }
 
     @PluginMethod public void start(PluginCall call) {
@@ -49,12 +51,12 @@ public class ProjectionNativePlugin extends Plugin {
             if (!session.equals(owners.put(protocol, session))) stopEngine(protocol);
             if ("castplus".equals(protocol)) { startCastPlus(call); return; }
             if (!"miracast".equals(protocol)) { begin(call, protocol); return; }
-            if (!canAdvertise()) {
+            if (!hasWifiDirect()) {
                 call.reject("Wi-Fi Display is unavailable", "UNAVAILABLE");
                 return;
             }
-            if (getPermissionState("nearby") != PermissionState.GRANTED) {
-                requestPermissionForAlias("nearby", call, "nearbyResult");
+            if (getPermissionState(p2pPermission()) != PermissionState.GRANTED) {
+                requestPermissionForAlias(p2pPermission(), call, "nearbyResult");
                 return;
             }
             begin(call, protocol);
@@ -89,7 +91,7 @@ public class ProjectionNativePlugin extends Plugin {
 
     @PermissionCallback private void nearbyResult(PluginCall call) {
         getActivity().runOnUiThread(() -> {
-            if (getPermissionState("nearby") == PermissionState.GRANTED) begin(call, "miracast");
+            if (getPermissionState(p2pPermission()) == PermissionState.GRANTED) begin(call, "miracast");
             else call.reject("Nearby devices permission is required", "PERMISSION");
         });
     }
@@ -156,7 +158,7 @@ public class ProjectionNativePlugin extends Plugin {
             JSObject result = new JSObject();
             for (String protocol : PROTOCOLS) {
                 BoardReceiver engine = owns(call, protocol) ? engines.get(protocol) : null;
-                String idle = ("miracast".equals(protocol) && !canAdvertise() ||
+                String idle = ("miracast".equals(protocol) && !hasWifiDirect() ||
                     "castplus".equals(protocol) && !CastPlusSupport.isAvailable()) ? "unavailable" : "off";
                 result.put(protocol, new JSObject().put("state", engine == null ? idle : engine.getState())
                     .put("hasFrames", engine != null && engine.getHasFrames())

@@ -50,13 +50,7 @@ it("toggles the pen menu with real pointer-down taps and offers all twelve pens 
   );
   expect(h.state.currentItemInkAssist).toBe("calculation");
   expect(h.state.activeTool.type).toBe("freedraw");
-  expect(dialog).toBeInTheDocument();
-  tap(pen);
-  expect(
-    screen.queryByRole("dialog", {
-      name: t("fcboard.pen_and_object_properties"),
-    }),
-  ).toBeNull();
+  expect(dialog).not.toBeInTheDocument();
   tap(pen);
   dialog = screen.getByRole("dialog", {
     name: t("fcboard.pen_and_object_properties"),

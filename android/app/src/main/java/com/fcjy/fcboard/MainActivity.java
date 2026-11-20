@@ -91,7 +91,6 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(DigitalInkPlugin.class);
         registerPlugin(TranslationPlugin.class);
         registerPlugin(LocalInferencePlugin.class);
-        registerPlugin(NativeWidgetsPlugin.class);
         registerPlugin(NativeInkPlugin.class);
         registerPlugin(NativeScenePlugin.class);
         registerPlugin(NativeEraserPlugin.class);
@@ -116,6 +115,15 @@ public class MainActivity extends BridgeActivity {
             getBridge().getWebView().getSettings().setMinimumLogicalFontSize(1);
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (focused && getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            androidx.core.view.WindowInsetsControllerCompat bars =
+                androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            bars.setSystemBarsBehavior(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            bars.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+        }
     }
     @Override public void onDestroy() {
         if (startupSplash != null) { startupSplash.remove(); startupSplash = null; }

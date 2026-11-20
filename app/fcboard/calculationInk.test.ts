@@ -182,3 +182,31 @@ it("keeps unequal-height vertical operand rows out of superscript rejection", ()
   expect(hasStructuredMathInk(strokes)).toBe(true);
   expect(preservesMathInkStructure(strokes, "1\n+3")).toBe(true);
 });
+
+it("recognizes a slanted final rule below a handwritten single-digit sum", () => {
+  const strokes: InkInput = [
+    [
+      [28, 8],
+      [31, 40],
+    ],
+    [
+      [9, 60],
+      [21, 60],
+    ],
+    [
+      [15, 54],
+      [15, 66],
+    ],
+    [
+      [28, 46],
+      [31, 77],
+    ],
+    [
+      [3, 78],
+      [47, 84],
+    ],
+  ];
+  expect(columnInkRows(strokes)).toEqual([[strokes[0]], strokes.slice(1, 4)]);
+  expect(calculationInk(strokes).strokes).toEqual(strokes.slice(0, 4));
+  expect(preservesMathInkStructure(strokes, "1\n+1")).toBe(true);
+});

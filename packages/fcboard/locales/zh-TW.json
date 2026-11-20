@@ -14,11 +14,11 @@
     "disconnect": "中斷投屏",
     "networkError": "請將白板連線至 Wi-Fi 或乙太網路。",
     "startError": "無法啟動本機投屏接收。",
-    "secureUnavailable": "此白板暫不支援掃碼投影。",
-    "networkChanged": "網路已變更，重新開啟接收開關以更新 QR 碼。",
     "nativeError": "部分投影接收器無法啟動。",
     "ethernet": "乙太網路",
-    "miracastUnavailable": "此白板不支援 Miracast 接收。"
+    "miracastGroup": "Wi-Fi Direct 群組已建立，正在等候傳送端。系統尚未回報 Miracast 接收廣播。",
+    "miracastSystemManaged": "系統已開啟無線顯示，正在監聽 Wi-Fi Direct 連線。",
+    "miracastUnavailable": "目前未偵測到系統的 Wi-Fi Display 接收廣播。若裝置有無線顯示接收模式，請開啟後重試。"
   },
   "labels": {
     "paste": "貼上",

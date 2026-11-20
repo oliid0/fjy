@@ -913,12 +913,14 @@ describe("APK-style whiteboard ink", () => {
       within(types).getByRole("button", { name: t("fcboard.function_pen") }),
     );
     expect(h.state.currentItemInkAssist).toBe("function");
+    expect(types).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     fireEvent.click(
-      within(types).getByRole("button", { name: t("fcboard.fountain") }),
+      screen.getByRole("button", { name: t("fcboard.fountain") }),
     );
     expect(h.state.currentItemPenMode).toBe("brush");
     expect(h.state.currentItemInkAssist).toBeUndefined();
-    expect(document.querySelector(".fc-factory-pen-settings")).not.toBeNull();
+    expect(document.querySelector(".fc-factory-pen-settings")).toBeNull();
     expect(live()).toHaveLength(0);
   });
 

@@ -1,10 +1,6 @@
 package com.airplay.dlna
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.LinkProperties
-import android.net.Network
-import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.Looper
@@ -28,16 +24,15 @@ import com.airplay.dlna.transport.DlnaEndpoint
 import com.airplay.dlna.transport.ManualDlnaHttp
 import com.airplay.util.MediaUriPolicy
 import com.airplay.util.NetworkUtils
-import java.net.Inet4Address
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @UnstableApi
 class BoardMediaRenderer(private val context: Context, private val name: String,
                         private val state: (String) -> Unit, private val media: (Int, Int, Boolean, String) -> Unit)
     : DlnaPlayerControl {
     private val main = Handler(Looper.getMainLooper())
-    private val network = Executors.newSingleThreadExecutor()
-    private val connectivity = requireNotNull(context.getSystemService(ConnectivityManager::class.java))
+    private val network = Executors.newSingleThreadScheduledExecutor()
     private val multicast = context.getSystemService(WifiManager::class.java)?.createMulticastLock("Fcboard-DLNA")
     private var endpoint: DlnaEndpoint? = null
     private var address: String? = null
@@ -49,40 +44,27 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
     private var surface: Surface? = null
     private var player: ExoPlayer? = null
     private var volume = 1f
-    private var registered = false
-
-    private val changes = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) = refresh()
-        override fun onLost(network: Network) = refresh()
-        override fun onLinkPropertiesChanged(network: Network, props: LinkProperties) = refresh()
-    }
-
     private fun refresh() {
         if (closed) return
         try {
-            network.execute {
-                if (closed) return@execute
-                try {
-                    val current = connectivity.activeNetwork
-                    val caps = connectivity.getNetworkCapabilities(current)
-                    val lan = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ||
-                        caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
-                    val ip = if (lan) connectivity.getLinkProperties(current)?.linkAddresses
-                        ?.map { it.address }?.filterIsInstance<Inet4Address>()?.firstOrNull()?.hostAddress else null
-                    if (address == ip && endpoint != null) return@execute
-                    endpoint?.close()
-                    endpoint = null
-                    address = null
-                    ManualDlnaHttp.reset()
-                    dispatch { if (uri != null) stopItem() }
-                    if (ip != null) {
-                        endpoint = DlnaEndpoint(ip)
-                        address = ip
-                    }
-                    dispatch { if (uri == null) state(if (ip == null) "error" else "waiting") }
-                } catch (_: Exception) { dispatch { state("error") } }
+            val ip = NetworkUtils.lanLinks(context).firstOrNull()?.address?.hostAddress
+            if (address == ip && endpoint != null) return
+            if (endpoint != null) {
+                endpoint?.close()
+                endpoint = null
+                address = null
+                ManualDlnaHttp.reset()
+                dispatch { if (uri != null) stopItem() }
             }
-        } catch (_: java.util.concurrent.RejectedExecutionException) { }
+            if (ip != null) {
+                endpoint = DlnaEndpoint(ip)
+                address = ip
+            }
+            dispatch { if (uri == null) state(if (ip == null) "error" else "waiting") }
+        } catch (error: Exception) {
+            android.util.Log.w("FcboardProjection", "DLNA could not bind LAN discovery", error)
+            dispatch { state("error") }
+        }
     }
 
     fun start() {
@@ -90,9 +72,7 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
         ManualDlnaHttp.reset()
         DlnaPlayerBridge.setControl(this)
         multicast?.acquire()
-        connectivity.registerDefaultNetworkCallback(changes)
-        registered = true
-        refresh()
+        network.scheduleWithFixedDelay(::refresh, 0, 5, TimeUnit.SECONDS)
     }
 
     fun attach(target: Surface?) {
@@ -205,7 +185,6 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
 
     fun stop() {
         closed = true
-        if (registered) connectivity.unregisterNetworkCallback(changes)
         if (multicast?.isHeld == true) multicast.release()
         DlnaPlayerBridge.setControl(null)
         ManualDlnaHttp.reset()

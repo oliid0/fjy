@@ -44,7 +44,7 @@ class MirrorStreamServer(
     private val height: Int,
     private val allowHevc: Boolean,
     private val onFirstFrame: (MirrorStreamServer) -> Unit,
-    private val onStartTimeout: (MirrorStreamServer) -> Unit,
+    private val onStreamFailure: (MirrorStreamServer) -> Unit,
 ) {
     private class Config(val mime: String, val csd0: ByteArray, val csd1: ByteArray?, val width: Int, val height: Int) {
         fun matches(other: Config?): Boolean = other != null && mime == other.mime &&
@@ -85,7 +85,7 @@ class MirrorStreamServer(
             if (!hasRenderedFirstFrame) {
                 val reason = if (client == null) "sender never opened media TCP" else "media TCP opened but no first frame"
                 Log.w("FcboardProjection", "AirPlay mirror setup timed out: $reason")
-                onStartTimeout(this@MirrorStreamServer)
+                onStreamFailure(this@MirrorStreamServer)
             }
         }
         scope.launch(Dispatchers.IO) { runReader() }
@@ -161,6 +161,7 @@ class MirrorStreamServer(
         } catch (e: Exception) {
             if (running) Logger.e("Mirror reader error", e)
         } finally {
+            if (running) onStreamFailure(this)
             running = false
             runCatching { client?.close() }
             runCatching { serverSocket.close() }
@@ -291,7 +292,10 @@ class MirrorStreamServer(
                 decodeFrame(frame.annexB)
             }
         } catch (e: Exception) {
-            if (running) Log.e("FcboardProjection", "AirPlay mirror decoder failed (${configured?.mime})", e)
+            if (running) {
+                Log.e("FcboardProjection", "AirPlay mirror decoder failed (${configured?.mime})", e)
+                onStreamFailure(this)
+            }
         } finally {
             decoder?.release()
             decoder = null

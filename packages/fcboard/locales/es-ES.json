@@ -14,11 +14,11 @@
     "disconnect": "Desconectar",
     "networkError": "Conecta la pizarra a una red Wi-Fi o Ethernet.",
     "startError": "No se pudo iniciar el receptor local.",
-    "secureUnavailable": "La transmisión por código QR no está disponible en esta pizarra.",
-    "networkChanged": "La red ha cambiado. Vuelve a activar la recepción para actualizar el código.",
     "nativeError": "No se han podido iniciar algunos receptores.",
     "ethernet": "Ethernet",
-    "miracastUnavailable": "Esta pizarra no admite la recepción mediante Miracast."
+    "miracastGroup": "El grupo Wi-Fi Direct está listo y espera un emisor. El sistema aún no ha informado de un anuncio de recepción Miracast.",
+    "miracastSystemManaged": "La pantalla inalámbrica del sistema está activada. Esperando conexiones Wi-Fi Direct.",
+    "miracastUnavailable": "No se ha detectado un anuncio de recepción Wi-Fi Display. Si el dispositivo dispone de un modo receptor, actívalo y vuelve a intentarlo."
   },
   "labels": {
     "paste": "Pegar",

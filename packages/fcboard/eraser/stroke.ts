@@ -552,7 +552,9 @@ export const eraseSceneRegion = (
         ? [element.containerId]
         : []),
     ];
-    if (related.some((id) => id === protectedId || elementsMap.get(id)?.locked)) {
+    if (
+      related.some((id) => id === protectedId || elementsMap.get(id)?.locked)
+    ) {
       selected.delete(element.id);
     } else {
       related.forEach((id) => selected.add(id));

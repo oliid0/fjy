@@ -9,11 +9,6 @@ import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
 import { calculatorLocalization } from "./calculatorLocalization";
 import { classroomCommands } from "./commands";
-import {
-  hasNativeCalculator,
-  nativeCalculatorControl,
-  setNativeCalculatorTheme,
-} from "./nativeResources";
 import calculator from "./calculator/calculator.html?raw";
 
 import type { InkStroke } from "./documents";
@@ -128,13 +123,11 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
         : { type: "inspect" as const };
       const signal =
         args.signal instanceof AbortSignal ? args.signal : undefined;
-      return hasNativeCalculator()
-        ? nativeCalculatorControl(id, action, signal, current)
-        : requestResourceControl(
-            { id, surface: source.surface, html: resource.html },
-            action,
-            { signal, current },
-          );
+      return requestResourceControl(
+        { id, surface: source.surface, html: resource.html },
+        action,
+        { signal, current },
+      );
     };
     const sync = () => {
       const dark = isColorDark(
@@ -154,14 +147,6 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
           },
           "*",
         );
-      }
-      for (const node of document.querySelectorAll<HTMLElement>(
-        '[data-native-resource-id="builtin-calculator"]',
-      )) {
-        const id = node.dataset.nativeResourceObjectId;
-        if (id) {
-          setNativeCalculatorTheme(id, dark);
-        }
       }
     };
     let frame = requestAnimationFrame(sync);

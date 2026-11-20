@@ -87,10 +87,16 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       }
     };
     paint();
-    if (projection && !projection.fullscreen &&
-        !config.visibleElements.some(({ id }) => id === projection.elementId)) {
-      if ("position" in projection.video) projection.video.position(null);
-      else projection.video.style.visibility = "hidden";
+    if (
+      projection &&
+      !projection.fullscreen &&
+      !config.visibleElements.some(({ id }) => id === projection.elementId)
+    ) {
+      if ("position" in projection.video) {
+        projection.video.position(null);
+      } else {
+        projection.video.style.visibility = "hidden";
+      }
     }
     let cancelled = false;
     const background = props.appState.whiteboardBackground;
@@ -105,7 +111,6 @@ const StaticCanvas = (props: StaticCanvasProps) => {
     }
     return () => {
       cancelled = true;
-
     };
   });
 

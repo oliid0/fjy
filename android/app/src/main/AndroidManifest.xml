@@ -38,7 +38,6 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <meta-data android:name="android.content.APP_RESTRICTIONS" android:resource="@xml/projection_restrictions" />
         <service android:name=".LocalInferenceService" android:process=":ml_engine" android:exported="false" />
 
         <service android:name=".NetworkSessionService" android:foregroundServiceType="connectedDevice" android:exported="false" />

@@ -286,58 +286,61 @@ it.each([false, true])(
 );
 it("keeps nearby generated graphs independent until an explicit selection merge", async () => {
   const { api } = await setup();
-  act(() => api.updateScene({ elements: [] }));
-  const bounds = { left: 100, top: 100, right: 220, bottom: 140 };
+  const sources = [100, 200].map((y) =>
+    newFreeDrawElement({
+      type: "freedraw",
+      x: 100,
+      y,
+      points: [pointFrom(0, 0), pointFrom(80, 30)],
+      simulatePressure: true,
+      customData: { fcInk: { version: 2, pen: "hard", assist: "function" } },
+    }),
+  );
   act(() => {
-    drawPlot(
-      api,
-      { ...defaultPlot, expression: "x-1" },
-      { x: 450, y: 300 },
-      [],
-      "first",
-      true,
-      bounds,
-    );
-    drawPlot(
-      api,
-      { ...defaultPlot, expression: "x+1" },
-      { x: 450, y: 380 },
-      [],
-      "second",
-      true,
-      { ...bounds, top: 180, bottom: 220 },
-    );
+    api.updateScene({ elements: sources });
+    for (const [index, source] of sources.entries()) {
+      drawPlot(
+        api,
+        { ...defaultPlot, expression: index ? "x+1" : "x-1" },
+        { x: 450, y: source.y },
+        [],
+        undefined,
+        true,
+        undefined,
+        [source.id],
+      );
+    }
   });
-  const sources = api.getSceneElements();
-  expect(sources).toHaveLength(2);
-  expect(
-    sources.every((element) => !element.customData?.fcPlot.plot.compare),
-  ).toBe(true);
+  expect(api.getSceneElements()).toHaveLength(4);
   act(() => api.updateScene({ appState: objectSelection(sources) }));
   await act(async () => {
     await mergeFunctions(api, new AbortController().signal);
   });
-  expect(api.getSceneElements()).toHaveLength(1);
-  const merged = api.getSceneElements()[0].customData!.fcPlot.plot;
+  expect(api.getSceneElements()).toHaveLength(3);
+  const merged = api.getSceneElements().find((item) => item.customData?.fcPlot)!
+    .customData!.fcPlot.plot;
   expect(new Set([merged.expression, ...merged.compare])).toEqual(
     new Set(["x-1", "x+1"]),
   );
   act(() => api.executeAction("undo"));
-  await waitFor(() => expect(api.getSceneElements()).toHaveLength(2));
+  await waitFor(() => expect(api.getSceneElements()).toHaveLength(4));
 });
 
-it("merges handwritten functions only on request and labels the actual reciprocal/line intersections without extra graph UI", async () => {
+it("merges expressions only on request and labels the actual reciprocal/line intersections without extra graph UI", async () => {
   const { api } = await setup("1/x");
-  act(() => {
-    drawPlot(api, { ...defaultPlot, expression: "x" }, { x: 950, y: 300 });
-    api.updateScene({ appState: objectSelection(api.getSceneElements()) });
-  });
-  expect(api.getSceneElements()).toHaveLength(2);
+  const sources = convertToFcboardElements([
+    { type: "text", text: "y=1/x", x: 100, y: 100 },
+    { type: "text", text: "y=x", x: 100, y: 220 },
+  ]);
+  act(() =>
+    api.updateScene({ elements: sources, appState: objectSelection(sources) }),
+  );
   await act(async () => {
     await mergeFunctions(api, new AbortController().signal);
   });
-  expect(api.getSceneElements()).toHaveLength(1);
-  const plot = api.getSceneElements()[0].customData!.fcPlot.plot;
+  expect(api.getSceneElements()).toHaveLength(3);
+  const plot = api.getSceneElements().find((item) => item.customData?.fcPlot)!
+    .customData!.fcPlot.plot;
   expect(new Set([plot.expression, ...plot.compare])).toEqual(
     new Set(["1/x", "x"]),
   );
@@ -375,7 +378,7 @@ it("merges handwritten functions only on request and labels the actual reciproca
   ).toBeNull();
 });
 
-it("exposes the ordinary graph selection menu and an explicit Merge button, with no automatic insertion", async () => {
+it("keeps graph object actions available and hides expression merge for selected graphs", async () => {
   const { api } = await setup();
   act(() => {
     drawPlot(api, { ...defaultPlot, expression: "-x" }, { x: 950, y: 300 });
@@ -389,13 +392,9 @@ it("exposes the ordinary graph selection menu and an explicit Merge button, with
     screen.getByRole("button", { name: t("fcboard.selection_layers") }),
   ).toBeVisible();
   expect(api.getSceneElements()).toHaveLength(2);
-  fireEvent.click(
-    screen.getByRole("button", { name: t("fcboard.functionGraph.merge") }),
-  );
-  await waitFor(() => expect(api.getSceneElements()).toHaveLength(1));
-  expect(api.getSceneElements()[0].customData?.fcPlot.plot.compare).toEqual([
-    "-x",
-  ]);
+  expect(
+    screen.queryByRole("button", { name: t("fcboard.functionGraph.merge") }),
+  ).toBeNull();
 });
 
 it("moves the selected canvas object and undoes one complete drag", async () => {

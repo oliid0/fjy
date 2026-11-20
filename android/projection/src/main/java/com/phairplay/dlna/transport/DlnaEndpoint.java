@@ -38,6 +38,8 @@ public final class DlnaEndpoint implements Closeable {
             location = "http://" + address + ":" + http.getLocalPort() + ManualDlnaHttp.getBase() + "/desc";
             listeners.execute(this::accept);
             listeners.execute(this::discover);
+            timer.schedule(() -> announce(true), 150, TimeUnit.MILLISECONDS);
+            timer.schedule(() -> announce(true), 300, TimeUnit.MILLISECONDS);
             timer.scheduleWithFixedDelay(() -> announce(true), 0, 30, TimeUnit.SECONDS);
         } catch (IOException | RuntimeException error) {
             close();
@@ -132,7 +134,7 @@ public final class DlnaEndpoint implements Closeable {
                     if ("ST".equalsIgnoreCase(key)) search = line.substring(split + 1).trim();
                     if ("MAN".equalsIgnoreCase(key)) man = line.substring(split + 1).trim();
                 }
-                if (!man.equalsIgnoreCase("\"ssdp:discover\"")) continue;
+                if (!man.equalsIgnoreCase("\"ssdp:discover\"") && !man.equalsIgnoreCase("ssdp:discover")) continue;
                 for (String target : targets) {
                     if (search.equalsIgnoreCase("ssdp:all") || search.equalsIgnoreCase(target))
                         send(packet.getSocketAddress(), "HTTP/1.1 200 OK\r\nEXT:\r\nST: " + target + "\r\n" + identity(target));

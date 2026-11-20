@@ -636,6 +636,7 @@ export const drawPlot = (
   sourceSignature?: string,
   keepTool = false,
   sourceBounds?: ContentRect,
+  sourceIds?: readonly string[],
 ) => {
   if (!plot.surface && !plot.relation) {
     const color = functionColors[0];
@@ -662,6 +663,7 @@ export const drawPlot = (
       keepTool,
       sourceBounds,
       image,
+      sourceIds,
     );
   }
   const lines = samplePlot(plot);
@@ -827,6 +829,7 @@ const insertPlot = (
   keepTool = false,
   sourceBounds?: ContentRect,
   image?: DataURL,
+  sourceIds?: readonly string[],
 ) => {
   const documentLayout = classroomCommands.read("document.layout") as
     | {
@@ -864,6 +867,7 @@ const insertPlot = (
         fcSelectionSource: sourceSignature,
         fcPlot: {
           id: plotId,
+          ...(sourceIds?.length ? { sourceIds } : {}),
           plot,
           ...(image ? { renderer: "canvas", layer: "floating" } : {}),
           position: fitted.center,

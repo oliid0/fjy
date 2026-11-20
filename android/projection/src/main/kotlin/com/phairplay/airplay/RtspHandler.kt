@@ -26,7 +26,7 @@ import java.net.Socket
  */
 open class RtspHandler(
     private val context: android.content.Context,
-    private val onListening: () -> Unit,
+    private val onListening: (Int) -> Unit,
     private val onListenFailure: () -> Unit,
     private val receiverName: () -> String,
     private val displayWidth: Int = 1920,
@@ -188,38 +188,29 @@ open class RtspHandler(
         Logger.i("RTSP handler stopped")
     }
 
-    /**
-     * Binds the RTSP port with SO_REUSEADDR, retrying briefly if a just-stopped instance hasn't
-     * released it yet. A quick service stop→start (the activity being destroyed and relaunched)
-     * could otherwise fail with EADDRINUSE, leaving Airplay advertising over mDNS while port 7000
-     * was dead — macOS would discover it and try to mirror but nothing could connect ("casting but
-     * nothing shows"). SO_REUSEADDR handles TIME_WAIT; the retry covers the close/rebind race.
-     */
-    private fun bindRtspSocket(): ServerSocket {
-        var lastError: java.io.IOException? = null
-        repeat(BIND_MAX_ATTEMPTS) { attempt ->
-            if (!running) throw java.io.IOException("RTSP server stopped before bind")
-            try {
-                return ServerSocket().apply {
-                    reuseAddress = true
-                    bind(java.net.InetSocketAddress(RTSP_PORT))
-                }
-            } catch (e: java.io.IOException) {
-                lastError = e
-                Logger.w("RTSP port $RTSP_PORT busy (attempt ${attempt + 1}/$BIND_MAX_ATTEMPTS) — retrying in ${BIND_RETRY_MS}ms")
-                try { Thread.sleep(BIND_RETRY_MS) } catch (_: InterruptedException) { throw e }
-            }
+    private fun bindRtspSocket(port: Int): ServerSocket {
+        val socket = ServerSocket()
+        try {
+            socket.reuseAddress = true
+            socket.bind(java.net.InetSocketAddress(port))
+            return socket
+        } catch (error: java.io.IOException) {
+            socket.close()
+            throw error
         }
-        throw lastError ?: java.io.IOException("RTSP bind to $RTSP_PORT failed")
     }
 
     private fun runServer(scope: CoroutineScope) {
         try {
-            val listener = bindRtspSocket()
+            val listener = try {
+                bindRtspSocket(RTSP_PORT)
+            } catch (_: java.net.BindException) {
+                bindRtspSocket(0)
+            }
             serverSocket = listener
             if (!running || !scope.isActive) { listener.close(); return }
-            onListening()
-            Logger.i("RTSP server listening on port $RTSP_PORT")
+            onListening(listener.localPort)
+            Logger.i("RTSP server listening on port ${listener.localPort}")
 
             while (running && scope.isActive) {
                 val clientSocket = listener.accept()
@@ -248,6 +239,7 @@ open class RtspHandler(
 
     private fun handleClient(socket: Socket) {
         try {
+            socket.soTimeout = 60_000
             val inputStream = socket.getInputStream()
             val outputStream = socket.getOutputStream()
             pairingSession = PairingSession(PairingKeys.get(context))
@@ -259,6 +251,7 @@ open class RtspHandler(
                 currentCSeq = request.headers["CSeq"]?.toIntOrNull()
                 val response = routeRequest(request)
                 sendResponse(outputStream, response)
+                if (request.method == "SETUP" && response.statusCode == 200) socket.soTimeout = 0
 
                 // After RECORD on a legacy SDP session: a session WITH video switches to interleaved
                 // RTP (video arrives $-framed over this TCP socket). An audio-only session (e.g. Apple
@@ -1149,8 +1142,6 @@ open class RtspHandler(
         private const val PIN_DIGITS = 4
         private const val PIN_SPACE = 10_000        // 10^PIN_DIGITS
         private const val MAX_PAIR_ATTEMPTS = 10
-        private const val BIND_MAX_ATTEMPTS = 12      // ~3s total — covers a quick stop→start restart
-        private const val BIND_RETRY_MS = 250L
         private const val MAX_MESSAGE_BYTES = 65536
         private const val OCTET_STREAM = "application/octet-stream"
         private const val TIMING_PORT = 6002   // matches TimingHandler's UDP NTP port

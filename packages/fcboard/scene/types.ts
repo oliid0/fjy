@@ -41,7 +41,12 @@ export type StaticCanvasRenderConfig = {
 };
 
 export type ProjectionBounds = {
-  cx: number; cy: number; width: number; height: number; angle: number; viewport: number;
+  cx: number;
+  cy: number;
+  width: number;
+  height: number;
+  angle: number;
+  viewport: number;
 };
 
 export type NativeProjectionSurface = {

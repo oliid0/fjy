@@ -29,7 +29,7 @@ const width = (box: { left: number; right: number }) => box.right - box.left;
 /** Geometry identifies an ending, never the operands or arithmetic operation. */
 export const calculationInk = (input: InkInput) => {
   const bounds = boxes(input);
-  const letters = bounds.filter((box) => height(box) > 4);
+  const letters = bounds.slice(0, -1).filter((box) => height(box) > 4);
   const typical =
     letters.map(height).sort((a, b) => a - b)[Math.floor(letters.length / 2)] ||
     0;
@@ -60,7 +60,7 @@ export const calculationInk = (input: InkInput) => {
   const rows: { bottom: number }[] = [];
   for (const box of [...letters].sort((a, b) => a.top - b.top)) {
     const row = rows.at(-1);
-    if (row && box.top <= row.bottom + typical * 0.2) {
+    if (row && box.top <= row.bottom + typical * 0.08) {
       row.bottom = Math.max(row.bottom, box.bottom);
     } else {
       rows.push({ bottom: box.bottom });
@@ -68,11 +68,11 @@ export const calculationInk = (input: InkInput) => {
   }
   if (
     rows.length >= 2 &&
-    horizontal(last) &&
-    width(last) >= Math.max(typical * 1.5, (right - left) * 0.7) &&
+    height(last) <= Math.max(3, width(last) * 0.14) &&
+    width(last) >= Math.max(typical * 0.65, (right - left) * 0.7) &&
     last.left <= left + typical * 0.3 &&
     last.right >= right - typical * 0.3 &&
-    last.top >= bottom + typical * 0.05
+    last.top >= bottom - typical * 0.12
   ) {
     return {
       complete: true,
@@ -98,7 +98,7 @@ export const columnInkRows = (input: InkInput): InkInput[] | undefined => {
   const rows: { top: number; bottom: number; indices: number[] }[] = [];
   for (const box of letters) {
     const row = rows.at(-1);
-    if (row && box.top <= row.bottom + typical * 0.2) {
+    if (row && box.top <= row.bottom + typical * 0.08) {
       row.bottom = Math.max(row.bottom, box.bottom);
       row.indices.push(box.index);
     } else {

@@ -2771,6 +2771,7 @@ export const FilePreview = ({
               signature,
               true,
               { left, top, right, bottom },
+              sourceIds,
             );
           } else {
             const shape = recognizedShapeSkeleton(

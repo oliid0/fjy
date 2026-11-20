@@ -67,10 +67,6 @@ export const WhiteboardTools = ({
   const tunnels = useTunnels();
   const hasHostShapes = tunnels.ToolbarShapesTunnel.useHasEntries();
   const [shapesOpen, setShapesOpen] = React.useState(false);
-  const lastShape = React.useRef<
-    "rectangle" | "diamond" | "ellipse" | "arrow" | "line"
-  >("line");
-  const openingShape = React.useRef(false);
   React.useEffect(() => {
     if (!open || shapesOpen || !insertAnchor) {
       return;
@@ -124,17 +120,6 @@ export const WhiteboardTools = ({
     [app],
   );
   React.useEffect(() => {
-    if (
-      ["rectangle", "diamond", "ellipse", "arrow", "line"].includes(
-        activeTool.type,
-      )
-    ) {
-      lastShape.current = activeTool.type as typeof lastShape.current;
-    }
-    if (openingShape.current && !state.toolbarHidden) {
-      openingShape.current = false;
-      return;
-    }
     setOpen(false);
     setShapesOpen(false);
     if (activeTool.type !== "eraser" || state.toolbarHidden) {
@@ -404,22 +389,7 @@ export const WhiteboardTools = ({
             icon={<FactoryIcon name="shape" />}
             aria-label={t("fcboard.shape")}
             showAriaLabel
-            selected={
-              !(open && !shapesOpen) &&
-              [
-                "rectangle",
-                "diamond",
-                "ellipse",
-                "arrow",
-                "line",
-                "custom",
-              ].includes(activeTool.type)
-            }
             onClick={(event) => {
-              if (activeTool.type !== lastShape.current) {
-                openingShape.current = true;
-                app.setActiveTool({ type: lastShape.current });
-              }
               updateGap(event.currentTarget as HTMLElement);
               setInsertAnchor(event.currentTarget as HTMLElement);
               setShapesOpen(true);
@@ -441,7 +411,6 @@ export const WhiteboardTools = ({
             aria-label={t("fcboard.toolbox")}
             data-board-insert
             data-menu-toggle
-            selected={open && !shapesOpen}
             showAriaLabel
             onClick={(event) => {
               updateGap(event.currentTarget as HTMLElement);

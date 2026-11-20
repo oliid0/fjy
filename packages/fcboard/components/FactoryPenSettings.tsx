@@ -258,6 +258,7 @@ export const FactoryPenSettings = ({
                   },
                 });
               }
+              close();
             }}
           >
             <span

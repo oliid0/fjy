@@ -14,11 +14,11 @@
     "disconnect": "断开投屏",
     "networkError": "请将白板连接至 Wi-Fi 或以太网。",
     "startError": "无法启动本地投屏接收。",
-    "secureUnavailable": "此白板暂不可扫码投屏。",
-    "networkChanged": "网络已变化，重新打开接收开关以更新二维码。",
     "nativeError": "部分投屏接收器未能启动。",
     "ethernet": "以太网",
-    "miracastUnavailable": "此白板不支持 Miracast 接收。"
+    "miracastGroup": "Wi-Fi Direct 群组已建立，正在等待发送端。系统尚未报告 Miracast 接收广播。",
+    "miracastSystemManaged": "系统已开启无线显示，正在监听 Wi-Fi Direct 连接。",
+    "miracastUnavailable": "当前未检测到系统的 Wi‑Fi Display 接收广播。若手机有无线显示接收模式，请开启后重试。"
   },
   "labels": {
     "paste": "粘贴",

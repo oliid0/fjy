@@ -8,10 +8,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import java.net.Inet4Address;
-import java.net.NetworkInterface;
+import com.airplay.util.NetworkUtils;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -55,29 +53,9 @@ public class NetworkPlugin extends Plugin {
 
     /** Prefer real Wi-Fi/Ethernet link addresses, never a VPN or cellular interface. */
     static List<String> lanAddresses(android.content.Context context) throws Exception {
-        java.util.LinkedHashSet<String> result = new java.util.LinkedHashSet<>();
-        android.net.ConnectivityManager manager = (android.net.ConnectivityManager) context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
-        if (manager != null) {
-            for (android.net.Network network : manager.getAllNetworks()) {
-                android.net.NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
-                android.net.LinkProperties link = manager.getLinkProperties(network);
-                if (capabilities == null || link == null || capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)
-                        || !(capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
-                        || capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET))) continue;
-                for (android.net.LinkAddress linkAddress : link.getLinkAddresses()) {
-                    java.net.InetAddress address = linkAddress.getAddress();
-                    if (address instanceof Inet4Address && !address.isLoopbackAddress() && !address.isLinkLocalAddress() && !address.isAnyLocalAddress()) result.add(address.getHostAddress());
-                }
-            }
-        }
-        // Hotspot/tethering links are not always exposed as ConnectivityManager networks.
-        for (NetworkInterface network : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-            if (!network.isUp() || network.isLoopback() || !network.getName().matches("(?i)(wlan|wifi|eth|en|ap|swlan|usb|rndis)[0-9_.:-]*")) continue;
-            for (java.net.InetAddress address : Collections.list(network.getInetAddresses())) {
-                if (address instanceof Inet4Address && address.isSiteLocalAddress()) result.add(address.getHostAddress());
-            }
-        }
-        return new ArrayList<>(result);
+        List<String> addresses = new ArrayList<>();
+        for (NetworkUtils.LanLink link : NetworkUtils.lanLinks(context)) addresses.add(link.getAddress().getHostAddress());
+        return addresses;
     }
 
     private synchronized void ensureServer() throws Exception {

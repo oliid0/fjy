@@ -29,7 +29,7 @@ final class NativeMathLayout {
         List<Box> sorted = new ArrayList<>(input); sorted.sort(Comparator.comparingDouble(box -> box.top));
         List<List<Box>> rows = new ArrayList<>(); float bottom = -Float.MAX_VALUE;
         for (Box box : sorted) {
-            if (rows.isEmpty() || box.top > bottom + typical * .2f) { rows.add(new ArrayList<>()); bottom = box.bottom; }
+            if (rows.isEmpty() || box.top > bottom + typical * .08f) { rows.add(new ArrayList<>()); bottom = box.bottom; }
             else bottom = Math.max(bottom, box.bottom);
             rows.get(rows.size() - 1).add(box);
         }
@@ -51,9 +51,9 @@ final class NativeMathLayout {
         letters.sort(Comparator.comparingDouble(Box::height)); float typical = letters.get(letters.size() / 2).height();
         Box rule = null; List<List<Box>> operandRows = null;
         for (Box bar : boxes) {
-            if (bar.height() > Math.max(3, typical * .15f) || bar.width() < typical * 1.5f) continue;
+            if (bar.height() > Math.max(3, bar.width() * .14f) || bar.width() < typical * .65f) continue;
             List<Box> above = new ArrayList<>();
-            for (Box box : letters) if (box.bottom < bar.top && box.left <= bar.right && box.right >= bar.left) above.add(box);
+            for (Box box : letters) if (box != bar && box.bottom <= bar.top + typical * .12f && box.left <= bar.right && box.right >= bar.left) above.add(box);
             List<List<Box>> groups = rows(above, typical);
             if (groups.size() < 2 || groups.size() > 6) continue;
             float left = Float.POSITIVE_INFINITY, right = -left;
@@ -68,7 +68,7 @@ final class NativeMathLayout {
             for (List<Box> row : operandRows) {
                 float top = Float.POSITIVE_INFINITY, bottom = -top;
                 for (Box letter : row) { top = Math.min(top, letter.top); bottom = Math.max(bottom, letter.bottom); }
-                if (box.top >= top - typical * .2f && box.bottom <= bottom + typical * .2f) { row.add(box); break; }
+                if (box.top >= top - typical * .2f && box.bottom <= bottom + typical * .08f) { row.add(box); break; }
             }
         }
         DigitalInkModels.install(context);

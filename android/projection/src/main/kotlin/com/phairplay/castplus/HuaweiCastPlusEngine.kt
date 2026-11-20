@@ -85,8 +85,8 @@ internal class HuaweiCastPlusEngine(private val context: Context, name: String,
                     videoBitrate = if (width.toLong() * height > 1_000_000) 8_000_000 else 4_000_000
                     setIsSupportRemoteCtrl(false)
                 }
-                check(engine.setCapability(capability) && engine.setAuthMode(AuthInfo(AuthInfo.AUTH_MODE_GENERIC)) &&
-                    engine.setDiscoverable(true, receiver))
+                check(engine.setCapability(capability) && engine.setDiscoverable(true, receiver) &&
+                    engine.setAuthMode(AuthInfo(AuthInfo.AUTH_MODE_GENERIC)))
                 registered = true
                 events.state("waiting")
             }
@@ -111,24 +111,30 @@ internal class HuaweiCastPlusEngine(private val context: Context, name: String,
             }
             Constant.EVENT_ID_CONNECT_REQ -> {
                 if (remote == null || (peer != null && peer?.deviceId == remote.deviceId)) return
-                val approved = request
-                if (disconnecting || peer != null || approved == null || approved.peer.deviceId != remote.deviceId || !approved.approved) {
+                val pending = request
+                if (disconnecting || peer != null || (pending != null && pending.peer.deviceId != remote.deviceId)) {
                     engine.disconnectDevice(remote)
                     return
                 }
-                request = null
-                publishRequest(null)
                 peer = remote
                 events.state("connecting")
                 updateSize(info)
-                main.postDelayed({
-                    if (!stopped && peer === remote && !playing) sdk { disconnect(remote) }
-                }, 20_000L)
+                if (pending?.approved == true) {
+                    acceptConnection(remote)
+                } else if (pending == null) {
+                    // The SDK can resume a paired sender directly at CONNECT_REQ.
+                    // Keep the board's one-time consent before handing over its Surface.
+                    val next = Request(UUID.randomUUID().toString(), remote, "", false)
+                    request = next
+                    publishRequest(next)
+                    main.postDelayed({ expireRequest(next.token) }, 60_000L)
+                }
             }
             Constant.EVENT_ID_PAUSED -> {
                 if (peer == null || disconnecting) return
                 paused = true
                 playing = false
+                offered = null
                 playWhenReady()
             }
             Constant.EVENT_ID_CASTING -> if (!disconnecting && peer != null && offered != null) {
@@ -156,6 +162,15 @@ internal class HuaweiCastPlusEngine(private val context: Context, name: String,
         if (width in 1..8192 && height in 1..8192) events.size(width, height)
     }
 
+    private fun acceptConnection(remote: ProjectionDevice) {
+        request = null
+        publishRequest(null)
+        playWhenReady()
+        main.postDelayed({
+            if (!stopped && peer === remote && !playing && !disconnecting) sdk { disconnect(remote) }
+        }, 20_000L)
+    }
+
     private fun expireRequest(token: String) {
         answer(token, false)
     }
@@ -165,6 +180,11 @@ internal class HuaweiCastPlusEngine(private val context: Context, name: String,
 
     override fun answer(token: String, allow: Boolean) = sdk {
         val pending = request?.takeIf { it.token == token } ?: return@sdk
+        val connected = peer
+        if (connected != null && connected.deviceId == pending.peer.deviceId) {
+            if (allow) acceptConnection(connected) else disconnect(connected)
+            return@sdk
+        }
         if (pending.approved) {
             if (!allow) disconnect(pending.peer)
             return@sdk
@@ -205,7 +225,7 @@ internal class HuaweiCastPlusEngine(private val context: Context, name: String,
         val surface = target?.takeIf { it.isValid } ?: return
         val remote = peer ?: return
         val engine = client ?: return
-        if (!paused || offered != null || disconnecting) return
+        if (!paused || offered != null || disconnecting || request != null) return
         check(engine.setHiSightSurface(surface) && engine.play(TrackControl(remote.deviceId, TrackControl.TRACK_ALL)))
         offered = surface
         paused = false

@@ -1,6 +1,4 @@
 (() => {
-  "use strict";
-
   const status = document.getElementById("status");
   const start = document.getElementById("cast");
   const stop = document.getElementById("stop");
@@ -34,7 +32,9 @@
   }
 
   function gather(peer) {
-    if (peer.iceGatheringState === "complete") return Promise.resolve();
+    if (peer.iceGatheringState === "complete") {
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer);
@@ -42,7 +42,9 @@
         resolve();
       };
       const check = () => {
-        if (peer.iceGatheringState === "complete") done();
+        if (peer.iceGatheringState === "complete") {
+          done();
+        }
       };
       const timer = setTimeout(done, 4000);
       peer.addEventListener("icegatheringstatechange", check);
@@ -50,7 +52,9 @@
   }
 
   start.addEventListener("click", async () => {
-    if (active) return;
+    if (active) {
+      return;
+    }
     const session = {};
     active = session;
     start.disabled = true;
@@ -67,14 +71,20 @@
       session.stream = stream;
       stop.hidden = false;
       stream.getVideoTracks()[0].addEventListener("ended", () => {
-        if (active === session) end(strings.ended);
+        if (active === session) {
+          end(strings.ended);
+        }
       });
       const peer = new RTCPeerConnection({ iceServers: [] });
       session.peer = peer;
       for (const track of stream.getTracks()) {
         const sender = peer.addTrack(track, stream);
-        if (track.kind !== "video") continue;
-        if ("contentHint" in track) track.contentHint = "detail";
+        if (track.kind !== "video") {
+          continue;
+        }
+        if ("contentHint" in track) {
+          track.contentHint = "detail";
+        }
         const parameters = sender.getParameters();
         parameters.degradationPreference = "maintain-resolution";
         await sender.setParameters(parameters).catch(() => {});
@@ -84,7 +94,9 @@
       const socket = new WebSocket(address);
       session.socket = socket;
       session.timeout = setTimeout(() => {
-        if (active === session) end(strings.failed);
+        if (active === session) {
+          end(strings.failed);
+        }
       }, 20000);
       socket.addEventListener("close", () => {
         if (active === session) {
@@ -100,36 +112,57 @@
         await peer.setLocalDescription(offer);
         await gather(peer);
         if (active === session) {
-          socket.send(JSON.stringify({
-            kind: restart ? "restart" : "offer",
-            sdp: peer.localDescription.sdp,
-          }));
+          socket.send(
+            JSON.stringify({
+              kind: restart ? "restart" : "offer",
+              sdp: peer.localDescription.sdp,
+            }),
+          );
         }
       };
       peer.addEventListener("connectionstatechange", () => {
-        if (active !== session) return;
+        if (active !== session) {
+          return;
+        }
         if (peer.connectionState === "connected") {
           clearTimeout(session.timeout);
           clearTimeout(session.retry);
           session.retry = undefined;
           status.textContent = strings.sharing;
-        } else if (["disconnected", "failed"].includes(peer.connectionState) && !session.retry) {
+        } else if (
+          ["disconnected", "failed"].includes(peer.connectionState) &&
+          !session.retry
+        ) {
           status.textContent = strings.connecting;
           clearTimeout(session.timeout);
           session.timeout = setTimeout(() => {
-            if (active === session) end(strings.failed);
+            if (active === session) {
+              end(strings.failed);
+            }
           }, 20000);
-          session.retry = setTimeout(() => {
-            if (active !== session || socket.readyState !== WebSocket.OPEN ||
-                peer.signalingState !== "stable") return;
-            void sendOffer(true).catch(() => {
-              if (active === session) end(strings.failed);
-            });
-          }, peer.connectionState === "failed" ? 0 : 2500);
+          session.retry = setTimeout(
+            () => {
+              if (
+                active !== session ||
+                socket.readyState !== WebSocket.OPEN ||
+                peer.signalingState !== "stable"
+              ) {
+                return;
+              }
+              void sendOffer(true).catch(() => {
+                if (active === session) {
+                  end(strings.failed);
+                }
+              });
+            },
+            peer.connectionState === "failed" ? 0 : 2500,
+          );
         }
       });
       socket.addEventListener("message", async ({ data }) => {
-        if (active !== session) return;
+        if (active !== session) {
+          return;
+        }
         try {
           const signal = JSON.parse(data);
           if (signal.kind === "answer" && typeof signal.sdp === "string") {
@@ -139,7 +172,9 @@
             });
           }
         } catch {
-          if (active === session) end(strings.failed);
+          if (active === session) {
+            end(strings.failed);
+          }
         }
       });
       await new Promise((resolve, reject) => {
@@ -150,12 +185,15 @@
       await sendOffer(false);
       if (active === session) {
         session.heartbeat = setInterval(() => {
-          if (socket.readyState === WebSocket.OPEN) socket.send("ping");
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send("ping");
+          }
         }, 20000);
       }
     } catch (error) {
-      if (active === session)
+      if (active === session) {
         end(error?.name === "NotAllowedError" ? strings.ended : strings.failed);
+      }
     }
   });
   stop.addEventListener("click", () => end(strings.ended));

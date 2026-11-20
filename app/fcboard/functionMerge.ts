@@ -19,7 +19,7 @@ import type { ContentRect } from "./placement";
 type Input = {
   id: string;
   text?: string;
-  plot?: Plot;
+  linked?: { id: string; plot: Plot };
   points?: [number, number][];
   bounds: ContentRect;
 };
@@ -60,25 +60,24 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
     )) {
       if (
         stroke.locked ||
-        (!stroke.plot && !stroke.text && stroke.fcInk?.assist !== "function")
+        stroke.plot ||
+        (!stroke.text && stroke.fcInk?.assist !== "function")
       ) {
         return;
       }
       inputs.push({
         id: stroke.id,
         text: stroke.originalText || stroke.text,
-        plot: stroke.plot?.plot,
-        points: stroke.plot || stroke.text ? undefined : stroke.points,
+        points: stroke.text ? undefined : stroke.points,
         bounds: documentStrokeBounds(stroke),
       });
     }
   } else {
     for (const element of selectedBoardElements(api)) {
-      const plot = element.customData?.fcPlot?.plot as Plot | undefined;
       if (
         element.locked ||
-        (!plot &&
-          element.type !== "text" &&
+        element.customData?.fcPlot ||
+        (element.type !== "text" &&
           (element.type !== "freedraw" ||
             element.customData?.fcInk?.assist !== "function"))
       ) {
@@ -88,7 +87,6 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
       inputs.push({
         id: element.id,
         text: element.type === "text" ? element.originalText : undefined,
-        plot,
         points:
           element.type === "freedraw" ? boardInk([element])[0] : undefined,
         bounds: { left, top, right, bottom },
@@ -98,10 +96,58 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
   if (!inputs.length || inputs.length > 3000) {
     return;
   }
-  const groups = inputs
-    .filter((input) => input.text || input.plot)
-    .map((input) => [input]);
-  let raw = inputs
+  const byId = new Map(inputs.map((input) => [input.id, input]));
+  const linkedInputs = new Set<string>();
+  const groups: Input[][] = [];
+  const graphs = doc
+    ? doc.ink.map((item) => ({
+        id: item.id,
+        data: item.plot,
+        locked: item.locked,
+      }))
+    : api.getSceneElements().map((item) => {
+        const graph = item.customData?.fcPlot;
+        const signature = item.customData?.fcSelectionSource;
+        // Earlier board files recorded id:version pairs alongside the plot.
+        const legacy =
+          typeof signature === "string" &&
+          /^[^,:]+:\d+(?:,[^,:]+:\d+)*$/.test(signature)
+            ? signature
+                .split(",")
+                .map((pair) => pair.slice(0, pair.lastIndexOf(":")))
+            : undefined;
+        return {
+          id: item.id,
+          locked: item.locked,
+          data: graph && {
+            plot: graph.plot as Plot,
+            sourceIds: (graph.sourceIds ?? legacy) as
+              | readonly string[]
+              | undefined,
+          },
+        };
+      });
+  for (const graph of graphs) {
+    const ids = graph.data?.sourceIds;
+    if (!Array.isArray(ids) || !ids.length || !ids.some((id) => byId.has(id))) {
+      continue;
+    }
+    if (
+      graph.locked ||
+      !graph.data ||
+      !ids.every((id) => byId.has(id) && !linkedInputs.has(id))
+    ) {
+      return;
+    }
+    const linked = { id: graph.id, plot: graph.data.plot };
+    groups.push(ids.map((id) => ({ ...byId.get(id)!, linked })));
+    ids.forEach((id) => linkedInputs.add(id));
+  }
+  const remaining = inputs.filter((input) => !linkedInputs.has(input.id));
+  groups.push(
+    ...remaining.filter((input) => input.text).map((input) => [input]),
+  );
+  let raw = remaining
     .filter((input) => input.points)
     .sort((a, b) => b.bounds.top - a.bounds.top);
   while (raw.length && groups.filter((group) => group[0].points).length < 3) {
@@ -116,9 +162,14 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
   const chosen = groups.slice(0, 3);
   if (
     chosen.length < 2 ||
+    chosen.reduce(
+      (count, group) =>
+        count + 1 + (group[0].linked?.plot.compare?.length || 0),
+      0,
+    ) > 3 ||
     chosen.some((group) => {
-      if (group[0].plot) {
-        return group[0].plot.surface || !!group[0].plot.relation;
+      if (group[0].linked) {
+        return group[0].linked.plot.surface || !!group[0].linked.plot.relation;
       }
       if (!group[0].text) {
         return false;
@@ -140,6 +191,7 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
     token: JSON.stringify([
       doc ? [doc.id, doc.name, doc.page] : api.id,
       inputs,
+      chosen.map((group) => group[0].linked),
     ]),
   };
 };
@@ -159,8 +211,8 @@ export const mergeFunctions = async (
   const plots = await Promise.all(
     groups.map(async (group) => {
       const known = group[0];
-      if (known.plot) {
-        return known.plot;
+      if (known.linked) {
+        return known.linked.plot;
       }
       if (known.text) {
         const result = localFunctionResult(known.text);
@@ -231,22 +283,18 @@ export const mergeFunctions = async (
     compare: expressions.slice(1),
   });
   const bounds = boundsOf(source.inputs);
-  const replaceIds = source.inputs
-    .filter((input) => input.plot)
-    .map((input) => input.id);
+  const replaceIds = groups.flatMap(([input]) =>
+    input.linked ? [input.linked.id] : [],
+  );
   const ids = drawPlot(
     api,
     plot,
-    {
-      x: (bounds.left + bounds.right) / 2,
-      y: replaceIds.length
-        ? (bounds.top + bounds.bottom) / 2
-        : bounds.bottom + 236,
-    },
+    { x: (bounds.left + bounds.right) / 2, y: bounds.bottom + 236 },
     replaceIds,
-    token,
+    undefined,
     false,
-    replaceIds.length ? undefined : bounds,
+    bounds,
+    source.inputs.map((input) => input.id),
   );
   if (!source.doc) {
     api.setActiveTool({ type: "selection" });

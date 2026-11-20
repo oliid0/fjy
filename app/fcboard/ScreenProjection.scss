@@ -70,8 +70,14 @@
   pointer-events: none;
 }
 
-.fc-projection-immersive :is(.fc-unified-toolbar, .fc-editor-properties) {
-  visibility: hidden;
+.app
+  .fcboard.fc-projection-fullscreen
+  .fc-unified-toolbar
+  .fc-toolbar-visibility,
+.app
+  .fcboard.fc-projection-fullscreen
+  .fc-unified-toolbar.fc-toolbar-collapsed {
+  display: none;
 }
 
 .fc-classroom .fc-projection__controls {

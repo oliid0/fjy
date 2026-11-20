@@ -56,6 +56,10 @@ for (const viewport of [
             getComputedStyle(node).visibility !== "hidden",
         )
         .map((node) => {
+          // The center strip scrolls independently on narrow screens.
+          if (node.closest(".fc-drawing-tools")) {
+            node.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
           const { left, right, top, bottom } = node.getBoundingClientRect();
           return { left, right, top, bottom };
         }),

@@ -1,7 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="projection_tls_host">Projection TLS hostname</string>
-    <string name="projection_tls_key_alias">Projection TLS KeyChain alias</string>
     <string name="projection_castplus_title">Huawei Cast+</string>
     <string name="projection_castplus_request">%1$s wants to share its screen.</string>
     <string name="projection_castplus_pin">On the sender, enter PIN: %1$s</string>

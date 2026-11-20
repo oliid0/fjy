@@ -20,7 +20,7 @@ import com.airplay.util.NetworkUtils
  * - `_airplay._tcp` — main AirPlay service with feature flags and device info
  * - `_raop._tcp`    — audio streaming service (required even for screen mirroring)
  *
- * Both services use port [AIRPLAY_PORT] (7000), which is where [RtspHandler] listens.
+ * Both services advertise the bound port of [RtspHandler].
  *
  * The service name shown in AirPlay pickers is determined by [displayNameOverride]:
  * - If set: uses the user-configured name from Settings
@@ -35,6 +35,7 @@ import com.airplay.util.NetworkUtils
  */
 class MdnsService(
     private val context: Context,
+    private val rtspPort: Int,
     private val pinRequired: Boolean,
     private val hevc: Boolean,
     private val onStateChange: (ProtocolState) -> Unit = {},
@@ -171,7 +172,7 @@ class MdnsService(
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = displayName
             serviceType = SERVICE_TYPE_AIRPLAY
-            port = AIRPLAY_PORT
+            port = rtspPort
 
             InfoResponder.airPlayAttributes(context, pinRequired, hevc).forEach { (key, value) -> setAttribute(key, value) }
         }
@@ -210,7 +211,7 @@ class MdnsService(
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = "$macHex@$displayName"  // required RAOP format
             serviceType = SERVICE_TYPE_RAOP
-            port = AIRPLAY_PORT
+            port = rtspPort
 
             InfoResponder.raopAttributes(context, pinRequired, hevc).forEach { (key, value) -> setAttribute(key, value) }
         }
@@ -288,9 +289,6 @@ class MdnsService(
 
         /** Standard mDNS service type for RAOP (audio). Required alongside AirPlay. */
         private const val SERVICE_TYPE_RAOP = "_raop._tcp"
-
-        /** AirPlay RTSP port — [RtspHandler] must listen on this port. */
-        const val AIRPLAY_PORT = 7000
 
     }
 }

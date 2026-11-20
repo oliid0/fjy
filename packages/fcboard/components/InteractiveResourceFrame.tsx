@@ -11,8 +11,6 @@ import { interactiveHtml, resourceNeedsRuntime } from "../interactiveHtml";
 import { t } from "../i18n";
 import { attachResourceControls } from "../interactiveResourceControls";
 
-import { nativeResourceFrame } from "../nativeResourceRenderer";
-
 import { ResourceWindow } from "./ResourceWindow";
 
 import type { InteractiveResource } from "../interactiveHtml";
@@ -37,7 +35,7 @@ export type ResourceLiveUpdate = {
   message: Record<string, unknown>;
 };
 
-const WebInteractiveResourceFrame = ({
+export const InteractiveResourceFrame = ({
   resource,
   iframeRef,
   objectId,
@@ -218,8 +216,3 @@ const WebInteractiveResourceFrame = ({
     content
   );
 };
-
-/** Platform adapters can supply a real native object surface before any iframe loads. */
-export const InteractiveResourceFrame = (
-  props: InteractiveResourceFrameProps,
-) => nativeResourceFrame(props) ?? <WebInteractiveResourceFrame {...props} />;

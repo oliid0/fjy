@@ -6,16 +6,13 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.wifi.WifiInfo;
 import android.os.Build;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.IOException;
-import java.net.InetAddress;
+import com.airplay.util.LocalTlsIdentityKt;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,8 +25,6 @@ public class ProjectionPlugin extends Plugin {
     private String requestedSession;
     private String url;
     private String address;
-    private Integer priorBarsBehavior;
-    private int priorVisibleBars;
 
     @PluginMethod public synchronized void start(PluginCall call) {
         if (background) { call.reject("Board is in the background"); return; }
@@ -52,18 +47,7 @@ public class ProjectionPlugin extends Plugin {
                 call.reject("Connect the board to Wi-Fi or Ethernet", "NETWORK");
                 return;
             }
-            errorCode = "CERTIFICATE";
-            ProjectionTls tls = new ProjectionTls(getContext());
-            errorCode = "HOST";
-            String binding = null;
-            for (InetAddress resolved : InetAddress.getAllByName(tls.host)) {
-                if (addresses.contains(resolved.getHostAddress())) {
-                    binding = resolved.getHostAddress();
-                    break;
-                }
-            }
-            if (binding == null) throw new IOException("Managed projection hostname does not resolve to this board");
-
+            String binding = addresses.get(0);
             errorCode = "START";
             ProjectionServer next = new ProjectionServer(binding,
                 session,
@@ -76,7 +60,7 @@ public class ProjectionPlugin extends Plugin {
                     notifyListeners("signal", message);
                 });
             try {
-                next.makeSecure(tls.context().getServerSocketFactory(),
+                next.makeSecure(LocalTlsIdentityKt.projectionTlsContext(binding).getServerSocketFactory(),
                     android.os.Build.VERSION.SDK_INT >= 29
                         ? new String[] {"TLSv1.3", "TLSv1.2"}
                         : new String[] {"TLSv1.2"});
@@ -93,7 +77,7 @@ public class ProjectionPlugin extends Plugin {
                 }
                 server = next;
                 address = binding;
-                url = "https://" + tls.host + ":" + next.getListeningPort() + next.path;
+                url = "https://" + binding + ":" + next.getListeningPort() + next.path;
                 call.resolve(info());
             }
         } catch (Exception error) {
@@ -159,35 +143,6 @@ public class ProjectionPlugin extends Plugin {
         call.resolve();
     }
 
-    @PluginMethod public void immersive(PluginCall call) {
-        getActivity().runOnUiThread(() -> {
-            setImmersive(call.getBoolean("active", false));
-            call.resolve();
-        });
-    }
-
-    private void setImmersive(boolean active) {
-        android.view.Window window = getActivity().getWindow();
-        WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
-        if (active && priorBarsBehavior == null) {
-            WindowInsetsCompat insets = androidx.core.view.ViewCompat.getRootWindowInsets(window.getDecorView());
-            if (insets == null) return;
-            priorVisibleBars = 0;
-            for (int type : new int[] { WindowInsetsCompat.Type.statusBars(), WindowInsetsCompat.Type.navigationBars(),
-                    WindowInsetsCompat.Type.captionBar() }) {
-                if (insets.isVisible(type)) priorVisibleBars |= type;
-            }
-            priorBarsBehavior = controller.getSystemBarsBehavior();
-            controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            controller.hide(WindowInsetsCompat.Type.systemBars());
-        } else if (!active && priorBarsBehavior != null) {
-            controller.hide(WindowInsetsCompat.Type.systemBars());
-            controller.show(priorVisibleBars);
-            controller.setSystemBarsBehavior(priorBarsBehavior);
-            priorBarsBehavior = null;
-        }
-    }
-
     private boolean ownsSession(PluginCall call) {
         return server != null && server.id.equals(call.getString("session"));
     }
@@ -208,6 +163,5 @@ public class ProjectionPlugin extends Plugin {
         background = true;
         requestedSession = null;
         stopServer();
-        getActivity().runOnUiThread(() -> setImmersive(false));
     }
 }

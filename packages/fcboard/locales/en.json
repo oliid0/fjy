@@ -14,11 +14,11 @@
     "disconnect": "Disconnect",
     "networkError": "Connect the whiteboard to Wi-Fi or Ethernet.",
     "startError": "Could not start the local receiver.",
-    "secureUnavailable": "QR casting is unavailable on this board.",
-    "networkChanged": "Network changed. Turn reception off and on to refresh the code.",
     "nativeError": "Some casting receivers could not start.",
     "ethernet": "Ethernet",
-    "miracastUnavailable": "Miracast is unavailable on this board."
+    "miracastGroup": "Wi-Fi Direct group ready. Waiting for a sender. The system has not reported a Miracast receiver advertisement.",
+    "miracastSystemManaged": "System wireless display is enabled. Listening for Wi-Fi Direct connections.",
+    "miracastUnavailable": "No Wi-Fi Display receiver advertisement was detected. If your device has a wireless display receiver mode, enable it and retry."
   },
   "labels": {
     "paste": "Paste",

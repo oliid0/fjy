@@ -111,7 +111,9 @@ export class BoardBook {
     return {
       id,
       name,
-      elements: tile ? elements.filter((element) => element.id !== tile) : elements,
+      elements: tile
+        ? elements.filter((element) => element.id !== tile)
+        : elements,
       files: this.api.getFiles(),
       view: {
         scrollX,

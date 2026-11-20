@@ -1013,7 +1013,9 @@ export interface FcboardImperativeAPI {
     typeof App
   >["registerNativeSceneRenderer"];
   setSceneProjection?: InstanceType<typeof App>["setSceneProjection"];
-  getSceneProjection?: () => import("./scene/types").SceneProjection | undefined;
+  getSceneProjection?: () =>
+    | import("./scene/types").SceneProjection
+    | undefined;
   nativeRegionGesture?: InstanceType<typeof App>["nativeRegionGesture"];
   nativeEraserGesture?: InstanceType<typeof App>["nativeEraserGesture"];
   eraseOverlayPointer: InstanceType<typeof App>["eraseOverlayPointer"];

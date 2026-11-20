@@ -14,11 +14,11 @@
     "disconnect": "Déconnecter",
     "networkError": "Connectez le tableau blanc au Wi-Fi ou à Ethernet.",
     "startError": "Impossible de démarrer le récepteur local.",
-    "secureUnavailable": "La diffusion par QR code est indisponible sur ce tableau.",
-    "networkChanged": "Le réseau a changé. Réactivez la réception pour actualiser le code.",
     "nativeError": "Certains récepteurs de diffusion n’ont pas démarré.",
     "ethernet": "Ethernet",
-    "miracastUnavailable": "Ce tableau ne prend pas en charge la réception Miracast."
+    "miracastGroup": "Le groupe Wi-Fi Direct est prêt et attend un émetteur. Le système n’a pas signalé d’annonce de réception Miracast.",
+    "miracastSystemManaged": "L’affichage sans fil du système est activé. En attente de connexions Wi-Fi Direct.",
+    "miracastUnavailable": "Aucune annonce de réception Wi-Fi Display détectée. Si votre appareil dispose d’un mode récepteur, activez-le puis réessayez."
   },
   "labels": {
     "paste": "Coller",

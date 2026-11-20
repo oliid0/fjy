@@ -96,14 +96,18 @@ export const recognizeHandwriting = async (
   }
   const columnRows =
     kind === "math" && strokes ? columnInkRows(strokes) : undefined;
-  if (columnRows && hasDigitalInk()) {
+  if (columnRows) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
-      const candidates = await Promise.all(
-        columnRows.map((row) =>
-          recognizeDigitalInk(row, signal, "math", languageHint),
-        ),
-      );
+      const candidates: string[][] = [];
+      for (const row of columnRows) {
+        signal.throwIfAborted();
+        candidates.push(
+          hasDigitalInk()
+            ? await recognizeDigitalInk(row, signal, "math", languageHint)
+            : [await recognizeLocalMath(row, signal)],
+        );
+      }
       const rows = candidates.map((values, index) =>
         values.find((value) =>
           (index

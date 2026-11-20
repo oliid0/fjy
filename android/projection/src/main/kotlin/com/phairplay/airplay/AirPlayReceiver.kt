@@ -136,7 +136,7 @@ class AirPlayReceiver(
      * Starts the AirPlay receiver.
      *
      * 1. Starts mDNS advertising with the configured display name.
-     * 2. Opens the RTSP server socket (port 7000).
+     * 2. Opens the RTSP server socket.
      * 3. Emits [ProtocolState.ADVERTISING] once both mDNS services are registered.
      *
      * Non-blocking — all network work runs in background coroutines.
@@ -194,10 +194,11 @@ class AirPlayReceiver(
         Logger.d("Timing handler started on UDP port ${TimingHandler.TIMING_PORT}")
     }
 
-    @Synchronized private fun startMdnsService() {
+    @Synchronized private fun startMdnsService(port: Int) {
         if (!scope.isActive) return
         mdnsService = MdnsService(
             context = context,
+            rtspPort = port,
             pinRequired = pinAuthEnabled,
             hevc = hevc,
             onStateChange = { state -> emitState(state) },
@@ -213,7 +214,7 @@ class AirPlayReceiver(
         if (!scope.isActive) return
         rtspHandler = RtspHandler(
             context = context,
-            onListening = { if (scope.isActive) startMdnsService() },
+            onListening = ::startMdnsService,
             onListenFailure = { emitState(ProtocolState.ERROR) },
             receiverName = { registeredName.ifBlank { com.airplay.util.NetworkUtils.getDeviceName(context) } },
             displayWidth = mirrorWidth,
@@ -256,7 +257,7 @@ class AirPlayReceiver(
                 (audioServer?.lastPacketAgeMs ?: Long.MAX_VALUE) < AUDIO_ONLY_FLOWING_WITHIN_MS
             }
         ).also { it.start(scope) }
-        Logger.i("RTSP handler started on port 7000 (audioEnabled=$audioEnabled pinAuth=$pinAuthEnabled)")
+        Logger.i("RTSP handler started (audioEnabled=$audioEnabled pinAuth=$pinAuthEnabled)")
     }
 
     // ─── Private: streaming lifecycle ────────────────────────────────────────
@@ -429,9 +430,9 @@ class AirPlayReceiver(
         val server = MirrorStreamServer(
             aesKey, streamConnectionId, videoSurfaceProvider, mirrorWidth, mirrorHeight, hevc,
             onFirstFrame = { current -> emitState(ProtocolState.CONNECTED) { mirrorServer === current } },
-            onStartTimeout = { current ->
+            onStreamFailure = { current ->
                 scope.launch(Dispatchers.Main) {
-                    if (mirrorServer === current && !current.hasRenderedFirstFrame) closeControl()
+                    if (mirrorServer === current) closeControl()
                 }
             }
         )

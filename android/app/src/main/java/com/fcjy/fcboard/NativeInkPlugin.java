@@ -125,7 +125,7 @@ public class NativeInkPlugin extends Plugin {
                 FrameLayout inputLayer = overlayPreview ? overlay() : layer;
                 if (view.getParent() != inputLayer) {
                     if (overlayPreview) ((MainActivity)getActivity()).removeInkSurface(owner, view);
-                    ((ViewGroup)view.getParent()).removeView(view);
+                    detach(view);
                     inputLayer.addView(view);
                 }
                 view.setOverlayPreview(overlayPreview);
@@ -172,12 +172,15 @@ public class NativeInkPlugin extends Plugin {
         getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", ""),call.getString("elementId", ""),call.getBoolean("complete",false)); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
-        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); ((ViewGroup)view.getParent()).removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
+        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); detach(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
     }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
+    private static void detach(android.view.View view) {
+        if (view.getParent() instanceof ViewGroup) ((ViewGroup)view.getParent()).removeView(view);
+    }
     @Override protected void handleOnDestroy() {
         vendor.execute(() -> boardMode.foreground(false)); vendor.shutdown();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(devices);
-        getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } if (overlay != null) { ((ViewGroup)overlay.getParent()).removeView(overlay); overlay = null; } });
+        getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { detach(layer); layer = null; } if (overlay != null) { detach(overlay); overlay = null; } });
     }
 }

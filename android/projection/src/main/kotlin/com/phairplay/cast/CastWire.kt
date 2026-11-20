@@ -1,27 +1,9 @@
 package com.airplay.cast
 
-import org.bouncycastle.asn1.ASN1Integer
-import org.bouncycastle.asn1.DERBitString
-import org.bouncycastle.asn1.DERNull
-import org.bouncycastle.asn1.DERSequence
-import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers
-import org.bouncycastle.asn1.x500.X500Name
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import org.bouncycastle.asn1.x509.Time
-import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator
+import com.airplay.util.LocalTlsIdentity
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.math.BigInteger
-import java.security.KeyPairGenerator
-import java.security.KeyStore
-import java.security.SecureRandom
-import java.security.Signature
-import java.security.cert.CertificateFactory
-import java.util.Date
-import javax.net.ssl.KeyManagerFactory
-import javax.net.ssl.SSLContext
 
 internal const val CAST_RECEIVER = "urn:x-cast:com.google.cast.receiver"
 internal const val CAST_MEDIA = "urn:x-cast:com.google.cast.media"
@@ -124,40 +106,8 @@ internal object CastWire {
 }
 
 internal class LocalCastIdentity {
-    private val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
-    private val certificate: ByteArray
-    val tls: SSLContext
-
-    init {
-        val name = X500Name("CN=Fcboard Cast")
-        val algorithm = AlgorithmIdentifier(PKCSObjectIdentifiers.sha256WithRSAEncryption, DERNull.INSTANCE)
-        val now = System.currentTimeMillis()
-        val tbs = V3TBSCertificateGenerator().apply {
-            setSerialNumber(ASN1Integer(BigInteger(128, SecureRandom()).setBit(127)))
-            setIssuer(name)
-            setSubject(name)
-            setSignature(algorithm)
-            setStartDate(Time(Date(now - 60_000)))
-            setEndDate(Time(Date(now + 3 * 86_400_000L)))
-            setSubjectPublicKeyInfo(SubjectPublicKeyInfo.getInstance(pair.public.encoded))
-        }.generateTBSCertificate()
-        certificate = DERSequence(arrayOf(tbs, algorithm, DERBitString(sign(tbs.encoded, true)))).encoded
-        val x509 = CertificateFactory.getInstance("X.509").generateCertificate(certificate.inputStream())
-        val password = charArrayOf()
-        val store = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-            load(null, null)
-            setKeyEntry("cast", pair.private, password, arrayOf(x509))
-        }
-        val keys = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(store, password) }
-        tls = SSLContext.getInstance("TLS").apply { init(keys.keyManagers, null, null) }
-    }
-
-    private fun sign(bytes: ByteArray, sha256: Boolean): ByteArray =
-        Signature.getInstance(if (sha256) "SHA256withRSA" else "SHA1withRSA").run {
-            initSign(pair.private)
-            update(bytes)
-            sign()
-        }
+    private val identity = LocalTlsIdentity("Fcboard Cast")
+    val tls get() = identity.tls
 
     fun answer(payload: ByteArray): ByteArray {
         require(payload.size <= 4096)
@@ -169,7 +119,7 @@ internal class LocalCastIdentity {
         }
         val nonce = challenge[2] as? ByteArray ?: byteArrayOf()
         require(nonce.size <= 256)
-        return CastWire.encode(2 to CastWire.encode(1 to sign(nonce + certificate, hash == 1L),
-            2 to certificate, 4 to 1, 5 to nonce, 6 to (hash as Long)))
+        return CastWire.encode(2 to CastWire.encode(1 to identity.sign(nonce + identity.certificate, hash == 1L),
+            2 to identity.certificate, 4 to 1, 5 to nonce, 6 to (hash as Long)))
     }
 }

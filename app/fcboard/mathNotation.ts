@@ -172,7 +172,7 @@ export const mathNotation = (input: string): string => {
       .filter((row) => !/^[-_=─━]{2,}$/.test(row))
       .map((row, index) => (index ? row.replace(/^[xX](?=\s*\d)/, "*") : row));
     if (
-      !/^\d+(?:\.\d+)?$/.test(operands[0]) ||
+      !/^[+-]?\d+(?:\.\d+)?$/.test(operands[0]) ||
       operands.length < 2 ||
       operands.slice(1).some((row) => !/^[+*/-]\s*\d+(?:\.\d+)?$/.test(row))
     ) {

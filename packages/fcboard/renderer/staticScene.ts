@@ -241,10 +241,14 @@ const paintProjection = (
   const native = "position" in source;
   const sw = native ? source.width : source.videoWidth;
   const sh = native ? source.height : source.videoHeight;
-  if (!sw || !sh) return;
+  if (!sw || !sh) {
+    return;
+  }
   const scale = Math.min(width / sw, height / sh);
-  const w = sw * scale, h = sh * scale;
-  const x = (width - w) / 2, y = (height - h) / 2;
+  const w = sw * scale;
+  const h = sh * scale;
+  const x = (width - w) / 2;
+  const y = (height - h) / 2;
   context.fillStyle = "#252623";
   // Keep the letterbox opaque. Open the video area at this exact z-order;
   // higher elements (including ink) are painted over the native surface.
@@ -258,25 +262,30 @@ const paintProjection = (
   }
   const canvas = context.canvas;
   const rect = canvas.getBoundingClientRect();
-  const sx = rect.width / canvas.width, sy = rect.height / canvas.height;
+  const sx = rect.width / canvas.width;
+  const sy = rect.height / canvas.height;
   const m = context.getTransform();
   if (native) {
     source.position({
-      cx: rect.left + (m.a * width / 2 + m.c * height / 2 + m.e) * sx,
-      cy: rect.top + (m.b * width / 2 + m.d * height / 2 + m.f) * sy,
+      cx: rect.left + ((m.a * width) / 2 + (m.c * height) / 2 + m.e) * sx,
+      cy: rect.top + ((m.b * width) / 2 + (m.d * height) / 2 + m.f) * sy,
       width: w * Math.hypot(m.a * sx, m.b * sy),
       height: h * Math.hypot(m.c * sx, m.d * sy),
-      angle: Math.atan2(m.b * sy, m.a * sx) * 180 / Math.PI,
+      angle: (Math.atan2(m.b * sy, m.a * sx) * 180) / Math.PI,
       viewport: window.innerWidth,
     });
   } else {
-    if (source.parentElement !== canvas.parentElement) canvas.before(source);
+    if (source.parentElement !== canvas.parentElement) {
+      canvas.before(source);
+    }
     source.style.visibility = "visible";
     source.style.width = `${w}px`;
     source.style.height = `${h}px`;
     const left = canvas.offsetLeft + (m.a * x + m.c * y + m.e) * sx;
     const top = canvas.offsetTop + (m.b * x + m.d * y + m.f) * sy;
-    source.style.transform = `matrix(${m.a * sx},${m.b * sy},${m.c * sx},${m.d * sy},${left},${top})`;
+    source.style.transform = `matrix(${m.a * sx},${m.b * sy},${m.c * sx},${
+      m.d * sy
+    },${left},${top})`;
   }
   context.globalCompositeOperation = "destination-out";
   context.fillRect(x, y, w, h);
@@ -452,17 +461,16 @@ const _renderStaticScene = ({
           }
           context.restore();
           return;
-        } else {
-          renderElement(
-            element,
-            elementsMap,
-            allElementsMap,
-            rc,
-            context,
-            renderConfig,
-            appState,
-          );
         }
+        renderElement(
+          element,
+          elementsMap,
+          allElementsMap,
+          rc,
+          context,
+          renderConfig,
+          appState,
+        );
 
         const boundTextElement = getBoundTextElement(element, elementsMap);
         if (boundTextElement) {

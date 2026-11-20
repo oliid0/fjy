@@ -1222,6 +1222,7 @@ export const Classroom = ({
               bottom: bounds[3],
             }
           : undefined,
+        sourceIds,
       );
       const stored = api
         .getSceneElements()

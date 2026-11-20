@@ -17,7 +17,6 @@ import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 import { CloseIcon, fullscreenIcon } from "@fcboard/fcboard/components/icons";
 import { useI18n } from "@fcboard/fcboard/i18n";
 
-import type { PluginListenerHandle } from "@capacitor/core";
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { QRCode } from "../share/QRCode";
@@ -29,12 +28,20 @@ import {
   nativeProtocols,
   watchNativeProjection,
 } from "./nativeProjection";
-import type { NativeProtocol, NativeReceivers } from "./nativeProjection";
+
 import "./ScreenProjection.scss";
+
+import type { NativeProtocol, NativeReceivers } from "./nativeProjection";
+
+import type { PluginListenerHandle } from "@capacitor/core";
 
 type ProjectionSource =
   import("@fcboard/fcboard/scene/types").SceneProjection["video"];
-type Receiver = { session: string; url: string; address: string };
+type Receiver = {
+  session: string;
+  url: string;
+  address: string;
+};
 type LocalNetwork = {
   address: string;
   name: string;
@@ -50,7 +57,6 @@ const projection = registerPlugin<{
   answer(options: Sender & { sdp: string }): Promise<void>;
   disconnect(options: Sender): Promise<void>;
   stop(options: { session: string }): Promise<void>;
-  immersive(options: { active: boolean }): Promise<void>;
   addListener(
     event: "signal",
     listener: (event: Signal) => void,
@@ -64,23 +70,14 @@ type Connection = {
   tile?: string;
 };
 
-const startErrors = {
-  CERTIFICATE: "projection.secureUnavailable",
-  NETWORK: "projection.networkError",
-  HOST: "projection.secureUnavailable",
-} as const;
-
-const startErrorKey = (error: unknown) => {
-  const code = (error as { code?: keyof typeof startErrors } | null)?.code;
-  return code && Object.prototype.hasOwnProperty.call(startErrors, code)
-    ? startErrors[code]
+const startErrorKey = (error: unknown) =>
+  (error as { code?: string } | null)?.code === "NETWORK"
+    ? ("projection.networkError" as const)
     : ("projection.startError" as const);
-};
 
 type ProjectionErrorKey =
   | ReturnType<typeof startErrorKey>
-  | "projection.connectionError"
-  | "projection.networkChanged";
+  | "projection.connectionError";
 
 function gatherIce(pc: RTCPeerConnection) {
   if (pc.iceGatheringState === "complete") {
@@ -152,7 +149,9 @@ const restoreIcon = (
 function projectionWindow(api: FcboardImperativeAPI) {
   const cast = api.getSceneProjection?.();
   const bounds = api.getAppState();
-  if (!cast) return;
+  if (!cast) {
+    return;
+  }
   if (cast.fullscreen) {
     const { offsetLeft, offsetTop, width, height } = bounds;
     return {
@@ -164,7 +163,9 @@ function projectionWindow(api: FcboardImperativeAPI) {
     };
   }
   const tile = api.getSceneElementsMapIncludingDeleted().get(cast.elementId);
-  if (!tile || tile.isDeleted) return;
+  if (!tile || tile.isDeleted) {
+    return;
+  }
   const center = sceneCoordsToViewportCoords(
     { sceneX: tile.x + tile.width / 2, sceneY: tile.y + tile.height / 2 },
     bounds,
@@ -195,10 +196,15 @@ function ProjectionControls({
   const controls = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showing = useRef(true);
   const reveal = useCallback(() => {
+    showing.current = true;
     setVisible(true);
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setVisible(false), CONTROLS_TIMEOUT);
+    timer.current = setTimeout(() => {
+      showing.current = false;
+      setVisible(false);
+    }, CONTROLS_TIMEOUT);
   }, []);
 
   useLayoutEffect(() => {
@@ -206,11 +212,18 @@ function ProjectionControls({
       `.fcboard[data-fcboard-id="${CSS.escape(api.id)}"]`,
     );
     const overlay = controls.current;
-    if (!board || !overlay) return;
+    if (!board || !overlay) {
+      return;
+    }
     let pressed: { id: number; x: number; y: number } | undefined;
     const contains = (event: { clientX: number; clientY: number }) => {
+      if (fullscreen) {
+        return true;
+      }
       const frame = projectionWindow(api);
-      if (!frame) return false;
+      if (!frame) {
+        return false;
+      }
       const dx = event.clientX - frame.x;
       const dy = event.clientY - frame.y;
       const cos = Math.cos(frame.angle);
@@ -240,7 +253,9 @@ function ProjectionControls({
         frame.x - halfWidth > boardBounds.right ||
         frame.y + halfHeight < boardBounds.top ||
         frame.y - halfHeight > boardBounds.bottom;
-      if (overlay.hidden !== hidden) overlay.hidden = hidden;
+      if (overlay.hidden !== hidden) {
+        overlay.hidden = hidden;
+      }
       const rightEdge = Math.min(
         boardBounds.right,
         Math.max(boardBounds.left + overlay.offsetWidth + 12, right),
@@ -258,32 +273,50 @@ function ProjectionControls({
         overlay.style.setProperty("--cast-top", topOffset);
       }
     };
+    const tap = () => {
+      if (fullscreen && showing.current) {
+        clearTimeout(timer.current);
+        showing.current = false;
+        setVisible(false);
+      } else {
+        reveal();
+      }
+    };
     const down = (event: PointerEvent) => {
-      if (!event.isPrimary || event.button !== 0) return;
+      if (!event.isPrimary || event.button !== 0) {
+        return;
+      }
       if (
         event.target instanceof Element &&
         event.target.closest(".fc-projection__controls, .fc-unified-toolbar")
       ) {
-        if (fullscreen || overlay.contains(event.target)) reveal();
+        if (fullscreen || overlay.contains(event.target)) {
+          reveal();
+        }
         return;
       }
       if (
         event.target instanceof Element &&
         board.contains(event.target) &&
-        event.target.matches("canvas.interactive, .fcboard__canvas-wrapper") &&
+        (fullscreen ||
+          event.target.matches(
+            "canvas.interactive, .fcboard__canvas-wrapper",
+          )) &&
         contains(event)
       ) {
         pressed = { id: event.pointerId, x: event.clientX, y: event.clientY };
       }
     };
     const up = (event: PointerEvent) => {
-      if (pressed?.id !== event.pointerId) return;
+      if (pressed?.id !== event.pointerId) {
+        return;
+      }
       if (
         Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) <=
           TAP_SLOP &&
         contains(event)
       ) {
-        reveal();
+        tap();
       }
       pressed = undefined;
     };
@@ -307,11 +340,14 @@ function ProjectionControls({
           clientY: number;
         }>
       ).detail;
-      if (owner === api.id && contains({ clientX, clientY })) reveal();
+      if (owner === api.id && contains({ clientX, clientY })) {
+        tap();
+      }
     };
     const unsubscribe = api.onChange(position);
     position();
     if (fullscreen) {
+      showing.current = false;
       setVisible(false);
       clearTimeout(timer.current);
     } else {
@@ -336,13 +372,25 @@ function ProjectionControls({
   }, [api, fullscreen, reveal]);
 
   useLayoutEffect(() => {
-    if (!fullscreen || visible) return;
+    if (!fullscreen) {
+      return;
+    }
+    const prior = api.getAppState().toolbarHidden;
     const board = document.querySelector(
       `.fcboard[data-fcboard-id="${CSS.escape(api.id)}"]`,
     );
-    board?.classList.add("fc-projection-immersive");
-    return () => board?.classList.remove("fc-projection-immersive");
-  }, [api.id, fullscreen, visible]);
+    board?.classList.add("fc-projection-fullscreen");
+    return () => {
+      board?.classList.remove("fc-projection-fullscreen");
+      api.updateScene({ appState: { toolbarHidden: prior } });
+    };
+  }, [api, fullscreen]);
+
+  useLayoutEffect(() => {
+    if (fullscreen) {
+      api.updateScene({ appState: { toolbarHidden: !visible } });
+    }
+  }, [api, fullscreen, visible]);
 
   const fullscreenLabel = t(
     fullscreen ? "projection.restore" : "projection.fullscreen",
@@ -413,6 +461,7 @@ const ProjectionSession = ({
   const disconnectCurrent = useRef<() => void>(undefined);
   const [open, setOpen] = useState(true);
   const [enabled, setEnabled] = useState(false);
+  const [foreground, setForeground] = useState(() => !document.hidden);
   const [web, setWeb] = useState<Receiver>();
   const [network, setNetwork] = useState<LocalNetwork>();
   const [webError, setWebError] = useState<ProjectionErrorKey>();
@@ -421,7 +470,9 @@ const ProjectionSession = ({
   const [stage, setStage] = useState<"idle" | "connecting" | "live">("idle");
   const [fullscreen, setFullscreen] = useState(false);
   useEffect(() => {
-    if (!enabled || !supported) return;
+    if (!enabled || !foreground || !supported) {
+      return;
+    }
     const session = crypto.randomUUID();
     let disposed = false;
     let restarting: NativeProtocol | undefined;
@@ -433,8 +484,9 @@ const ProjectionSession = ({
         return;
       }
       connection.current = undefined;
-      if (nativeLive.current)
+      if (nativeLive.current) {
         document.documentElement.classList.remove("fc-native-projection");
+      }
       nativeLive.current = undefined;
       if (current) {
         clearTimeout(current.timer);
@@ -485,7 +537,9 @@ const ProjectionSession = ({
         if (nativeLive.current) {
           nativeLive.current.video = video;
           const current = api.getSceneProjection?.();
-          if (current) api.setSceneProjection?.({ ...current, video });
+          if (current) {
+            api.setSceneProjection?.({ ...current, video });
+          }
           return;
         }
         document.documentElement.classList.add("fc-native-projection");
@@ -501,7 +555,9 @@ const ProjectionSession = ({
       (protocol) => {
         if (nativeLive.current?.protocol === protocol) {
           close();
-          if (!disposed) setOpen(true);
+          if (!disposed) {
+            setOpen(true);
+          }
         }
       },
       () => setNativeError(true),
@@ -510,13 +566,17 @@ const ProjectionSession = ({
       const current = connection.current;
       const protocol = nativeLive.current?.protocol;
       close();
-      if (current) void projection.disconnect(current.sender).catch(() => {});
+      if (current) {
+        void projection.disconnect(current.sender).catch(() => {});
+      }
       if (protocol) {
         restarting = protocol;
         void nativeProjection
           .disconnect({ protocol, session })
           .catch(() => {
-            if (!disposed) setNativeError(true);
+            if (!disposed) {
+              setNativeError(true);
+            }
           })
           .finally(() => {
             restarting = undefined;
@@ -597,8 +657,9 @@ const ProjectionSession = ({
         setError(undefined);
         video.onresize = () => {
           const projection = api.getSceneProjection?.();
-          if (connection.current === active && projection?.video === video)
+          if (connection.current === active && projection?.video === video) {
             api.setSceneProjection?.({ ...projection });
+          }
         };
         const stream = new MediaStream();
         pc.ontrack = ({ track }) => {
@@ -606,7 +667,9 @@ const ProjectionSession = ({
             return;
           }
           stream.addTrack(track);
-          if (track.kind !== "video") return;
+          if (track.kind !== "video") {
+            return;
+          }
           track.addEventListener(
             "ended",
             () => {
@@ -634,7 +697,9 @@ const ProjectionSession = ({
             .catch(() => endWithError(active));
         };
         pc.onconnectionstatechange = () => {
-          if (connection.current !== active) return;
+          if (connection.current !== active) {
+            return;
+          }
           if (
             pc.connectionState === "failed" ||
             pc.connectionState === "disconnected"
@@ -658,36 +723,95 @@ const ProjectionSession = ({
         }
       }
     });
+    let networkTimer: ReturnType<typeof setTimeout>;
+    const refreshWeb = async () => {
+      try {
+        const current = receiver.current;
+        const nextNetwork = await projection.network({
+          address: current?.address,
+        });
+        if (disposed) {
+          return;
+        }
+        setNetwork(nextNetwork);
+        if (current && current.address !== nextNetwork.address) {
+          receiver.current = undefined;
+          setWeb(undefined);
+          if (connection.current) {
+            close();
+          }
+          await projection.stop(current);
+        }
+        if (disposed) {
+          return;
+        }
+        if (!nextNetwork.address) {
+          setWebError("projection.networkError");
+        } else if (!receiver.current) {
+          const next = await projection.start({ session });
+          if (disposed) {
+            await projection.stop(next);
+          } else {
+            receiver.current = next;
+            setWeb(next);
+            setWebError(undefined);
+          }
+        }
+      } catch (failure) {
+        if (!disposed) {
+          setWebError(startErrorKey(failure));
+        }
+      } finally {
+        if (!disposed) {
+          networkTimer = setTimeout(() => void refreshWeb(), 3000);
+        }
+      }
+    };
     void listener
-      .then(async () => {
-        if (disposed) return;
-        const next = await projection.start({ session });
-        if (disposed) await projection.stop(next);
-        else {
-          receiver.current = next;
-          setWeb(next);
+      .then(() => {
+        if (!disposed) {
+          void refreshWeb();
         }
       })
       .catch((failure) => {
-        if (!disposed) setWebError(startErrorKey(failure));
-      });
-    for (const protocol of nativeProtocols) {
-      void nativeProjection.start({ protocol, session }).catch((failure) => {
-        if (
-          !disposed &&
-          (failure as { code?: string })?.code !== "UNAVAILABLE"
-        ) {
-          setNativeError(true);
+        if (!disposed) {
+          setWebError(startErrorKey(failure));
         }
       });
-    }
+    const startNative = async () => {
+      // Capacitor permission requests share the foreground Activity.
+      for (const protocol of [
+        "airplay",
+        "dlna",
+        "cast",
+        "miracast",
+        "castplus",
+      ] as const) {
+        if (disposed) {
+          return;
+        }
+        try {
+          await nativeProjection.start({ protocol, session });
+        } catch (failure) {
+          if (
+            !disposed &&
+            (failure as { code?: string }).code !== "UNAVAILABLE"
+          ) {
+            setNativeError(true);
+          }
+        }
+      }
+    };
+    void startNative();
     return () => {
       disposed = true;
+      clearTimeout(networkTimer);
       disconnectCurrent.current = undefined;
       cancel();
       unwatch();
-      for (const protocol of nativeProtocols)
+      for (const protocol of nativeProtocols) {
         void nativeProjection.stop({ protocol, session }).catch(() => {});
+      }
       close();
       void listener
         .then((subscription) => subscription.remove())
@@ -695,57 +819,46 @@ const ProjectionSession = ({
       receiver.current = undefined;
       void projection.stop({ session }).catch(() => {});
     };
-  }, [api, enabled, supported]);
+  }, [api, enabled, foreground, supported]);
 
   useEffect(() => {
     setOpen(true);
   }, [request]);
 
   useEffect(() => {
-    if (!supported || (!open && !enabled)) return;
+    if (!supported || !open || enabled) {
+      return;
+    }
     let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const update = async () => {
-      const current = receiver.current;
-      try {
-        const next = await projection.network({ address: current?.address });
-        if (disposed) return;
-        setNetwork(next);
-        if (
-          current &&
-          receiver.current === current &&
-          current.address !== next.address
-        ) {
-          receiver.current = undefined;
-          setWeb(undefined);
-          setWebError("projection.networkChanged");
-          void projection.stop(current).catch(() => {});
+    void projection
+      .network({})
+      .then((next) => {
+        if (!disposed) {
+          setNetwork(next);
         }
-      } catch {
-        if (!disposed) setNetwork(undefined);
-      } finally {
-        if (!disposed) timer = setTimeout(() => void update(), 3000);
-      }
-    };
-    void update();
+      })
+      .catch(() => {
+        if (!disposed) {
+          setNetwork(undefined);
+        }
+      });
     return () => {
       disposed = true;
-      clearTimeout(timer);
     };
   }, [enabled, open, supported]);
 
-  const receiving =
-    stage !== "idle" ||
-    nativeProtocols.some((p) => native?.[p].state === "connected");
-  useEffect(() => {
-    if (!enabled || receiving) return;
-    const timeout = setTimeout(release, 5 * 60 * 1000);
-    return () => clearTimeout(timeout);
-  }, [enabled, request, receiving, release]);
-
   useEffect(() => {
     const visibility = () => {
-      if (document.hidden) release();
+      setForeground(!document.hidden);
+      if (document.hidden) {
+        setWeb(undefined);
+        setWebError(undefined);
+        setError(undefined);
+        setNative(undefined);
+        setNativeError(false);
+        setStage("idle");
+        setFullscreen(false);
+      }
     };
     document.addEventListener("visibilitychange", visibility);
     window.addEventListener("pagehide", release);
@@ -754,16 +867,6 @@ const ProjectionSession = ({
       window.removeEventListener("pagehide", release);
     };
   }, [release]);
-
-  useEffect(() => {
-    if (!fullscreen) {
-      return;
-    }
-    void projection.immersive({ active: true }).catch(() => {});
-    return () => {
-      void projection.immersive({ active: false }).catch(() => {});
-    };
-  }, [fullscreen]);
 
   const toggleReception = (active: boolean) => {
     setEnabled(active);
@@ -790,8 +893,11 @@ const ProjectionSession = ({
   };
 
   const dismiss = () => {
-    if (enabled) setOpen(false);
-    else release();
+    if (enabled) {
+      setOpen(false);
+    } else {
+      release();
+    }
   };
   const readyNames = nativeProtocols
     .map((protocol) => native?.[protocol])
@@ -902,6 +1008,12 @@ const ProjectionSession = ({
                   {t(error || "projection.nativeError")}
                 </p>
               )}
+            {enabled && native?.miracast.state === "p2pGroup" && (
+              <p>{t("projection.miracastGroup")}</p>
+            )}
+            {enabled && native?.miracast.state === "systemManaged" && (
+              <p>{t("projection.miracastSystemManaged")}</p>
+            )}
             {enabled && native?.miracast.state === "unavailable" && (
               <p>{t("projection.miracastUnavailable")}</p>
             )}

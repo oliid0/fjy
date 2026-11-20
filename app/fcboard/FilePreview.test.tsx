@@ -2601,23 +2601,48 @@ it("crops courseware images from their original pixels, persists the SVG window,
   }
 });
 
-it("merges selected document graphs through the real selection menu, preserving one-step undo", async () => {
+it("merges document expressions through the real selection menu, preserving one-step undo", async () => {
   const { api, unmount } = await setup();
   const controls = render(
     <SelectionActions api={api} onPlot={vi.fn()} onRequest={vi.fn()} />,
   );
   try {
     await act(async () => {
-      drawPlot(api, { ...defaultPlot, expression: "x-1" }, { x: 300, y: 250 });
-      drawPlot(api, { ...defaultPlot, expression: "x+1" }, { x: 700, y: 250 });
+      for (const expression of ["x-1", "x+1"]) {
+        await classroomCommands.execute({
+          name: "document.text",
+          args: {
+            text: `y=${expression}`,
+            presentation: "text",
+            sourceIds: [],
+            placement: "center",
+          },
+        });
+        const source = currentInk().find(
+          (stroke) => stroke.text === `y=${expression}`,
+        )!;
+        drawPlot(
+          api,
+          { ...defaultPlot, expression },
+          { x: 300, y: 250 },
+          [],
+          undefined,
+          true,
+          undefined,
+          [source.id],
+        );
+      }
     });
-    const before = (classroomCommands.read("document") as { ink: InkStroke[] })
-      .ink;
-    expect(before).toHaveLength(2);
+    const before = currentInk();
+    expect(before).toHaveLength(4);
     await act(async () => {
       await classroomCommands.execute({
         name: "document.select",
-        args: { ids: before.map((stroke) => stroke.id) },
+        args: {
+          ids: before
+            .filter((stroke) => stroke.text)
+            .map((stroke) => stroke.id),
+        },
       });
     });
     expect(
@@ -2629,10 +2654,11 @@ it("merges selected document graphs through the real selection menu, preserving 
     await waitFor(() =>
       expect(
         (classroomCommands.read("document") as { ink: InkStroke[] }).ink,
-      ).toHaveLength(1),
+      ).toHaveLength(3),
     );
-    const merged = (classroomCommands.read("document") as { ink: InkStroke[] })
-      .ink[0];
+    const merged = (
+      classroomCommands.read("document") as { ink: InkStroke[] }
+    ).ink.find((stroke) => stroke.plot)!;
     expect(
       new Set([merged.plot!.plot.expression, ...merged.plot!.plot.compare!]),
     ).toEqual(new Set(["x-1", "x+1"]));

@@ -1,8 +1,6 @@
 package com.airplay.cast
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
 import com.airplay.util.NetworkUtils
@@ -43,7 +41,6 @@ internal class GoogleCastReceiver(private val context: Context, private val name
         }
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val connectivity = requireNotNull(context.getSystemService(ConnectivityManager::class.java))
     private val device = NetworkUtils.getPersistentUuid(context).replace("-", "")
     private val group = InetSocketAddress("224.0.0.251", 5353)
     private val guard = Any()
@@ -92,14 +89,8 @@ internal class GoogleCastReceiver(private val context: Context, private val name
     }
 
     private fun activeLan(): Lan? {
-        val network = connectivity.activeNetwork ?: return null
-        val caps = connectivity.getNetworkCapabilities(network) ?: return null
-        if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
-            !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return null
-        val link = connectivity.getLinkProperties(network)?.linkAddresses?.firstOrNull {
-            it.address is Inet4Address && !it.address.isLinkLocalAddress && !it.address.isLoopbackAddress
-        } ?: return null
-        return Lan(link.address as Inet4Address, link.prefixLength)
+        val link = NetworkUtils.lanLinks(context).firstOrNull() ?: return null
+        return Lan(link.address, link.prefixLength)
     }
 
     fun stop() {

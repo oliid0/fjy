@@ -86,6 +86,7 @@ export type InkStroke = {
   };
   plot?: {
     id: string;
+    sourceIds?: readonly string[];
     plot: Plot;
     renderer?: "canvas";
     layer?: "floating" | "board";

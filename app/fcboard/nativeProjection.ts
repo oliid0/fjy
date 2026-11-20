@@ -1,4 +1,5 @@
 import { registerPlugin } from "@capacitor/core";
+
 import type {
   NativeProjectionSurface,
   ProjectionBounds,
@@ -20,6 +21,8 @@ type NativeReceiver = {
     | "connecting"
     | "connected"
     | "error"
+    | "p2pGroup"
+    | "systemManaged"
     | "unavailable";
   name: string;
   revision: number;
@@ -63,7 +66,9 @@ export function watchNativeProjection(
   let timer: ReturnType<typeof setTimeout>;
   let previous = "";
   const release = () => {
-    if (!active) return;
+    if (!active) {
+      return;
+    }
     const { protocol, surface } = active;
     active = undefined;
     surface.position(null);
@@ -72,7 +77,9 @@ export function watchNativeProjection(
   const tick = async () => {
     try {
       const receivers = await nativeProjection.status({ session });
-      if (cancelled) return;
+      if (cancelled) {
+        return;
+      }
       const signature = JSON.stringify(receivers);
       if (signature !== previous) {
         previous = signature;
@@ -85,8 +92,9 @@ export function watchNativeProjection(
           receivers[active.protocol].audio ||
           receivers[active.protocol].state !== "connected" ||
           !canDisplay(active.protocol))
-      )
+      ) {
         release();
+      }
       const protocol =
         active?.protocol ||
         nativeProtocols.find(
@@ -96,7 +104,9 @@ export function watchNativeProjection(
             !receivers[p].audio &&
             canDisplay(p),
         );
-      if (!protocol) return;
+      if (!protocol) {
+        return;
+      }
       const { width, height, revision } = receivers[protocol];
       if (!active) {
         let pending: ProjectionBounds | undefined;
@@ -123,7 +133,9 @@ export function watchNativeProjection(
           width: width || 16,
           height: height || 9,
           position(bounds) {
-            if (bounds && active?.surface !== surface) return;
+            if (bounds && active?.surface !== surface) {
+              return;
+            }
             const transform = bounds ?? {
               cx: 0.5,
               cy: 0.5,
@@ -133,10 +145,14 @@ export function watchNativeProjection(
               viewport: window.innerWidth,
             };
             const key = JSON.stringify(transform);
-            if (key === lastBounds) return;
+            if (key === lastBounds) {
+              return;
+            }
             lastBounds = key;
             pending = transform;
-            if (!sending) void flush();
+            if (!sending) {
+              void flush();
+            }
           },
         };
         active = { protocol, revision, surface };
@@ -156,7 +172,9 @@ export function watchNativeProjection(
         failed();
       }
     } finally {
-      if (!cancelled) timer = setTimeout(() => void tick(), 240);
+      if (!cancelled) {
+        timer = setTimeout(() => void tick(), 240);
+      }
     }
   };
   void tick();

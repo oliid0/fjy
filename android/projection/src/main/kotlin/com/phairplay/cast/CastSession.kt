@@ -53,7 +53,7 @@ internal class CastSession(private val load: (CastLoad) -> Unit,
                             val app = ids.optString(it).take(64)
                             availability.put(app, if (app == APP) "APP_AVAILABLE" else "APP_UNAVAILABLE")
                         }
-                        return reply(json("type" to "RECEIVER_ACTION", "availability" to availability))
+                        return reply(json("responseType" to "GET_APP_AVAILABILITY", "availability" to availability))
                     }
                     "LAUNCH" -> {
                         if (body.optString("appId") != APP) return reject("NOT_FOUND", "LAUNCH_ERROR")

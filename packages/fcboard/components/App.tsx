@@ -867,6 +867,8 @@ class App extends React.Component<AppProps, AppState> {
       registerNativeEraserBackend: this.registerNativeEraserBackend,
       onSceneMutation: (callback) => this.scene.onMutation(callback),
       registerNativeSceneRenderer: this.registerNativeSceneRenderer,
+      setSceneProjection: this.setSceneProjection,
+      getSceneProjection: () => this.sceneProjection,
       updateScene: this.updateScene,
       applyDeltas: this.applyDeltas,
       mutateElement: this.mutateElement,
@@ -2187,7 +2189,12 @@ class App extends React.Component<AppProps, AppState> {
         newElementId: this.state.newElement?.id,
         activeInkIds: this.activeInkIds,
       });
-    this.visibleElements = visibleElements;
+    const projectionId = this.sceneProjection?.fullscreen
+      ? this.sceneProjection.elementId
+      : undefined;
+    this.visibleElements = projectionId
+      ? visibleElements.filter(({ id }) => id !== projectionId)
+      : visibleElements;
 
     const allElementsMap = this.scene.getNonDeletedElementsMap();
 
@@ -2422,6 +2429,7 @@ class App extends React.Component<AppProps, AppState> {
                             appState={canvasAppState}
                             renderConfig={{
                               imageCache: this.imageCache,
+                              projection: this.sceneProjection,
                               isExporting: false,
                               renderGrid: isGridModeEnabled(this),
                               canvasBackgroundColor:
@@ -6335,6 +6343,12 @@ class App extends React.Component<AppProps, AppState> {
     element: FcboardElement,
     considerBoundingBox = true,
   ) {
+    if (
+      this.sceneProjection?.fullscreen &&
+      element.id === this.sceneProjection.elementId
+    ) {
+      return false;
+    }
     // if the element is selected, then hit test is done against its bounding box
     if (
       considerBoundingBox &&
@@ -8040,6 +8054,7 @@ class App extends React.Component<AppProps, AppState> {
           width / zoom,
           height / zoom,
           this.activeInkIds,
+          this.sceneProjection?.elementId,
         );
         update = nextElements !== elements;
         elements = nextElements;
@@ -8084,6 +8099,7 @@ class App extends React.Component<AppProps, AppState> {
             regionPath,
             tapped,
             0.125 / zoom,
+            this.sceneProjection?.elementId,
           );
           changed = next !== before;
           if (changed) {
@@ -9836,6 +9852,27 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private nativeEraserBackend: NativeEraserBackend | null = null;
+  private sceneProjection?: import("../scene/types").SceneProjection;
+
+  public setSceneProjection = (
+    projection?: import("../scene/types").SceneProjection,
+  ) => {
+    this.sceneProjection = projection;
+    if (
+      projection?.fullscreen &&
+      this.state.selectedElementIds[projection.elementId]
+    ) {
+      const selectedElementIds = { ...this.state.selectedElementIds };
+      delete selectedElementIds[projection.elementId];
+      this.setState({
+        selectedElementIds,
+        selectedGroupIds: {},
+        whiteboardSelection: undefined,
+      });
+    }
+    this.triggerRender(true);
+  };
+
   private nativeInkClipper?: import("../eraser/stroke").NativeInkClipBackend;
   private nativeSceneRenderer?: (
     config: import("../scene/types").StaticSceneRenderConfig,
@@ -10065,6 +10102,7 @@ class App extends React.Component<AppProps, AppState> {
           current.width,
           current.height,
           this.activeInkIds,
+          this.sceneProjection?.elementId,
         ),
       );
       return;
@@ -10185,6 +10223,7 @@ class App extends React.Component<AppProps, AppState> {
         path,
         tapped,
         0.125 / this.state.zoom.value,
+        this.sceneProjection?.elementId,
       );
       if (next !== before) {
         this.scene.replaceAllElements(next);

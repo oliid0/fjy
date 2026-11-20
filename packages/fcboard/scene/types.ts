@@ -26,6 +26,7 @@ export type RenderableElementsMap = NonDeletedElementsMap &
 
 export type StaticCanvasRenderConfig = {
   canvasBackgroundColor: AppState["viewBackgroundColor"];
+  projection?: SceneProjection;
   // extra options passed to the renderer
   // ---------------------------------------------------------------------------
   imageCache: AppClassProperties["imageCache"];
@@ -37,6 +38,22 @@ export type StaticCanvasRenderConfig = {
   elementsPendingErasure: ElementsPendingErasure;
   pendingFlowchartNodes: PendingFcboardElements | null;
   theme: AppState["theme"];
+};
+
+export type ProjectionBounds = {
+  cx: number; cy: number; width: number; height: number; angle: number; viewport: number;
+};
+
+export type NativeProjectionSurface = {
+  width: number;
+  height: number;
+  position(bounds: ProjectionBounds | null): void;
+};
+
+export type SceneProjection = {
+  elementId: string;
+  fullscreen: boolean;
+  video: HTMLVideoElement | NativeProjectionSurface;
 };
 
 export type SVGRenderConfig = {

@@ -97,6 +97,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeEraserPlugin.class);
         registerPlugin(SystemSpeechPlugin.class);
         registerPlugin(NetworkPlugin.class);
+        registerPlugin(ProjectionPlugin.class);
+        registerPlugin(ProjectionNativePlugin.class);
         registerPlugin(VotingPlugin.class);
         registerPlugin(MediaPlugin.class);
         registerPlugin(BoardFilePlugin.class);

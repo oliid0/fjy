@@ -395,6 +395,7 @@ export const createNativeSceneRenderer = (
       !config ||
       !config.appState.width ||
       !config.appState.height ||
+      !!config.renderConfig.projection ||
       classroomCommands.has("document.draw")
     ) {
       return;
@@ -485,6 +486,9 @@ export const createNativeSceneRenderer = (
         config.renderConfig.renderGrid,
       ]);
       const activate = () => {
+        if (latest?.renderConfig.projection) {
+          return;
+        }
         if (!ready) {
           ready = true;
           document.documentElement.classList.add("fc-native-scene");
@@ -590,11 +594,12 @@ export const createNativeSceneRenderer = (
     } finally {
       busy = false;
       if (
-        dirty.size ||
-        removals.size ||
-        eraseThrough ||
-        selectionThrough ||
-        latest !== config
+        !latest?.renderConfig.projection &&
+        (dirty.size ||
+          removals.size ||
+          eraseThrough ||
+          selectionThrough ||
+          latest !== config)
       ) {
         queue();
       }
@@ -603,7 +608,12 @@ export const createNativeSceneRenderer = (
   const stopRenderer = api.registerNativeSceneRenderer((config) => {
     latest = config;
     awaitingRender = false;
-    if (classroomCommands.has("document.draw")) {
+    if (
+      config.renderConfig.projection ||
+      classroomCommands.has("document.draw")
+    ) {
+      selectionWaiters.forEach((resolve) => resolve());
+      selectionWaiters.clear();
       deactivate();
       return false;
     }

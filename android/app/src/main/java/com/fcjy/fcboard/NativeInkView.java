@@ -61,9 +61,27 @@ final class NativeInkView extends View {
     private java.util.function.Supplier<NativeSceneView> retainedScene=()->null;
     private boolean strokeErase=true;
     private volatile NativeSceneView display;
+    private boolean overlayPreview;
     synchronized void setDisplay(NativeSceneView view){display=view;requestRender();}
-    private void requestRender(){NativeSceneView view=display;if(view!=null)view.requestRender();}
-    private void requestRender(RectF bounds){NativeSceneView view=display;if(view!=null)view.requestRender(bounds);}
+    synchronized void setOverlayPreview(boolean enabled) {
+        if (overlayPreview == enabled) return;
+        cancel();
+        overlayPreview = enabled;
+        setWillNotDraw(!enabled);
+        invalidate();
+    }
+    private void requestRender(){
+        if (overlayPreview) postInvalidateOnAnimation();
+        else { NativeSceneView view=display;if(view!=null)view.requestRender(); }
+    }
+    private void requestRender(RectF bounds){
+        if (overlayPreview) postInvalidateOnAnimation();
+        else { NativeSceneView view=display;if(view!=null)view.requestRender(bounds); }
+    }
+    @Override protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        if (overlayPreview) paintCanvas(canvas);
+    }
     private NativeSplitInk splitInk;
     synchronized void setPersistent(boolean enabled){if(enabled&&splitInk==null)splitInk=new NativeSplitInk();else if(!enabled)splitInk=null;}
     synchronized void restorePersistent(android.graphics.Bitmap bitmap,String expected){

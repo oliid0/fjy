@@ -60,6 +60,7 @@ import { MindMapControls } from "./MindMapControls";
 import { agentContext, runBoardCommands } from "./agent";
 
 import { LanSession } from "./LanSession";
+import { ScreenProjection } from "./ScreenProjection";
 import {
   classroomCommands,
   directCommand,
@@ -3070,6 +3071,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       <InsertMenu api={api} />
       <TeachingResources api={api} />
       <LanSession api={api} />
+      <ScreenProjection api={api} />
       <LanguagePacks
         container={languagePackContainer}
         onNavigate={() => {

@@ -512,10 +512,12 @@ export const eraseSceneRegion = (
   path: GlobalPoint[],
   tappedIds: readonly string[] = [],
   precision = 0.125,
+  protectedId?: string,
 ) => {
   const elementsMap = new Map(elements.map((element) => [element.id, element]));
   const live = elements.filter(
-    (element) => !element.isDeleted && !element.locked,
+    (element) =>
+      !element.isDeleted && !element.locked && element.id !== protectedId,
   );
   const area = getLassoBounds(path);
   const candidates = live.filter((element) => {
@@ -550,7 +552,7 @@ export const eraseSceneRegion = (
         ? [element.containerId]
         : []),
     ];
-    if (related.some((id) => elementsMap.get(id)?.locked)) {
+    if (related.some((id) => id === protectedId || elementsMap.get(id)?.locked)) {
       selected.delete(element.id);
     } else {
       related.forEach((id) => selected.add(id));

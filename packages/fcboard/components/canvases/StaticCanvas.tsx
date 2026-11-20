@@ -64,17 +64,18 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       canvas.classList.add("fcboard__canvas", "static");
     }
 
+    const config: StaticSceneRenderConfig = {
+      canvas,
+      rc: props.rc,
+      scale: props.scale,
+      elementsMap: props.elementsMap,
+      allElementsMap: props.allElementsMap,
+      visibleElements: props.visibleElements,
+      appState: props.appState,
+      renderConfig: props.renderConfig,
+    };
+    const projection = config.renderConfig.projection;
     const paint = () => {
-      const config = {
-        canvas,
-        rc: props.rc,
-        scale: props.scale,
-        elementsMap: props.elementsMap,
-        allElementsMap: props.allElementsMap,
-        visibleElements: props.visibleElements,
-        appState: props.appState,
-        renderConfig: props.renderConfig,
-      };
       if (props.nativeRenderer?.(config)) {
         renderStaticSceneThrottled.cancel();
         canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
@@ -86,6 +87,11 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       }
     };
     paint();
+    if (projection && !projection.fullscreen &&
+        !config.visibleElements.some(({ id }) => id === projection.elementId)) {
+      if ("position" in projection.video) projection.video.position(null);
+      else projection.video.style.visibility = "hidden";
+    }
     let cancelled = false;
     const background = props.appState.whiteboardBackground;
     if (background && !backgroundImage(background)) {
@@ -99,6 +105,7 @@ const StaticCanvas = (props: StaticCanvasProps) => {
     }
     return () => {
       cancelled = true;
+
     };
   });
 

@@ -170,6 +170,7 @@ export class ObjectEraser {
     width: number,
     height: number,
     live: Iterable<string> = [],
+    protectedId?: string,
   ): readonly FcboardElement[] {
     const before = this.scene.getElementsIncludingDeleted();
     if (!samples.length) {
@@ -216,7 +217,13 @@ export class ObjectEraser {
     for (const id of candidates) {
       const entry = this.entries.get(id);
       const element = elementsMap.get(id);
-      if (!entry || !element || element.locked || hit.has(id)) {
+      if (
+        !entry ||
+        !element ||
+        element.locked ||
+        hit.has(id) ||
+        id === protectedId
+      ) {
         continue;
       }
       const inside = shouldTestInside(element);
@@ -280,6 +287,9 @@ export class ObjectEraser {
       if (element.type === "text" && element.containerId) {
         hit.add(element.containerId);
       }
+    }
+    if (protectedId) {
+      hit.delete(protectedId);
     }
     if (!hit.size) {
       return before;

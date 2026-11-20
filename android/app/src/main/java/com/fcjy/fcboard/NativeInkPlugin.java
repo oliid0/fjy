@@ -20,6 +20,7 @@ import org.json.JSONArray;
 @CapacitorPlugin(name = "FcboardNativeInk")
 public class NativeInkPlugin extends Plugin {
     private FrameLayout layer;
+    private FrameLayout overlay;
     private final java.util.concurrent.ExecutorService publisher = java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "native-ink-events"));
     private final Map<String, NativeInkView> surfaces = new HashMap<>();
     private final Map<NativeInkView, RectF> inputBounds = new HashMap<>();
@@ -88,6 +89,15 @@ public class NativeInkPlugin extends Plugin {
         ViewGroup parent=(ViewGroup)getBridge().getWebView().getParent();
         parent.addView(layer,parent.indexOfChild(getBridge().getWebView()),new ViewGroup.LayoutParams(-1,-1));
     }
+    private FrameLayout overlay() {
+        if (overlay == null) {
+            overlay = new FrameLayout(getActivity());
+            ViewGroup parent = (ViewGroup) getBridge().getWebView().getParent();
+            parent.addView(overlay, parent.indexOfChild(getBridge().getWebView()) + 1,
+                new ViewGroup.LayoutParams(-1, -1));
+        }
+        return overlay;
+    }
     @PluginMethod public void configure(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             try {
@@ -111,21 +121,29 @@ public class NativeInkPlugin extends Plugin {
                         JSONArray box = boxes.getJSONArray(i); blocked.add(new RectF((float)box.getDouble(0), (float)box.getDouble(1), (float)box.getDouble(2), (float)box.getDouble(3)));
                     }
                 }
+                boolean overlayPreview = call.getBoolean("overlayPreview", false);
+                FrameLayout inputLayer = overlayPreview ? overlay() : layer;
+                if (view.getParent() != inputLayer) {
+                    if (overlayPreview) ((MainActivity)getActivity()).removeInkSurface(owner, view);
+                    ((ViewGroup)view.getParent()).removeView(view);
+                    inputLayer.addView(view);
+                }
+                view.setOverlayPreview(overlayPreview);
                 view.setSelection(call.getArray("selectionBounds"),call.getString("selectionKey",""),call.getFloat("selectionMinScale",.1f),call.getBoolean("selectionResize",true));
                 view.setPersistent(call.getBoolean("persistent",false));
                 view.setMultiStroke(call.getBoolean("multiStroke", true));
                 view.setRecognitionEnabled(call.getBoolean("recognitionEnabled", false));
-                view.setRetainedScene(() -> ((MainActivity)getActivity()).nativeScene(owner), !"object".equals(call.getString("eraserMode", "stroke")));
+                view.setRetainedScene(() -> overlayPreview ? null : ((MainActivity)getActivity()).nativeScene(owner), !"object".equals(call.getString("eraserMode", "stroke")));
                 shortcutSurfaces.put(owner, call.getBoolean("shortcutsEnabled", false));
                 view.configure(token, call.getBoolean("enabled", false), (float)x, (float)y, scale, (float)penWidth, call.getFloat("unit", 1f), (float)opacity, call.getString("color", "#000000"), call.getBoolean("dashed", false), call.getFloat("palm", 36f), blocked, call.getObject("thick"), call.getFloat("thickThreshold", 0f), call.getString("mode", "pen"), call.getBoolean("palmEnabled", true), call.getFloat("eraserSize", 60f), call.getObject("appearance"));
-                int[] web = new int[2], overlay = new int[2]; getBridge().getWebView().getLocationInWindow(web); layer.getLocationInWindow(overlay);
+                int[] web = new int[2], origin = new int[2]; getBridge().getWebView().getLocationInWindow(web); inputLayer.getLocationInWindow(origin);
                 FrameLayout.LayoutParams bounds = new FrameLayout.LayoutParams(Math.max(1, Math.round((float)width * scale)), Math.max(1, Math.round((float)height * scale)));
-                bounds.leftMargin = Math.round(web[0] - overlay[0] + (float)x * scale); bounds.topMargin = Math.round(web[1] - overlay[1] + (float)y * scale);
+                bounds.leftMargin = Math.round(web[0] - origin[0] + (float)x * scale); bounds.topMargin = Math.round(web[1] - origin[1] + (float)y * scale);
                 inputBounds.put(view, new RectF(web[0] + (float)x * scale, web[1] + (float)y * scale,
                     web[0] + ((float)x + (float)width) * scale, web[1] + ((float)y + (float)height) * scale));
                 ViewGroup.LayoutParams old = view.getLayoutParams();
                 if (!(old instanceof FrameLayout.LayoutParams) || old.width != bounds.width || old.height != bounds.height || ((FrameLayout.LayoutParams)old).leftMargin != bounds.leftMargin || ((FrameLayout.LayoutParams)old).topMargin != bounds.topMargin) view.setLayoutParams(bounds);
-                ((MainActivity)getActivity()).setInkSurface(owner,view,bounds);
+                if (!overlayPreview) ((MainActivity)getActivity()).setInkSurface(owner,view,bounds);
                 call.resolve();
             } catch (Exception error) { call.reject(error.getMessage(), error); }
         });
@@ -154,12 +172,12 @@ public class NativeInkPlugin extends Plugin {
         getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", ""),call.getString("elementId", ""),call.getBoolean("complete",false)); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
-        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); layer.removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
+        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); ((ViewGroup)view.getParent()).removeView(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
     }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
     @Override protected void handleOnDestroy() {
         vendor.execute(() -> boardMode.foreground(false)); vendor.shutdown();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(devices);
-        getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } });
+        getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { ((ViewGroup)layer.getParent()).removeView(layer); layer = null; } if (overlay != null) { ((ViewGroup)overlay.getParent()).removeView(overlay); overlay = null; } });
     }
 }

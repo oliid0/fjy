@@ -56,6 +56,7 @@ const ink = registerPlugin<{
     owner: string;
     token: string;
     enabled: boolean;
+    overlayPreview?: boolean;
     multiStroke: boolean;
     recognitionEnabled: boolean;
     shortcutsEnabled: boolean;
@@ -467,12 +468,14 @@ export const NativeInkInteraction = ({
         !state.viewModeEnabled &&
         !state.editingTextElement &&
         !classroomCommands.has("document.draw");
+      const overlayPreview = !!api.getSceneProjection?.();
       configuredSurface = surfaceStamp(api);
       token = JSON.stringify([
         api.id,
         generation,
         board,
         enabled,
+        overlayPreview,
         mode,
         state.scrollX,
         state.scrollY,
@@ -586,6 +589,7 @@ export const NativeInkInteraction = ({
       const options: Parameters<typeof ink.configure>[0] = {
         owner: api.id,
         token,
+        overlayPreview,
         enabled: enabled && !uiBlocksInk && blocked.length <= 512,
         multiStroke: !state.currentItemInkAssist && state.multiStroke !== false,
         recognitionEnabled:
@@ -745,7 +749,7 @@ export const NativeInkInteraction = ({
             })
             .catch(() => {});
         };
-        if (elementId && scene) {
+        if (elementId && scene && !api.getSceneProjection?.()) {
           // Native holds the preview until this exact canonical object is installed.
           acknowledge();
         } else {

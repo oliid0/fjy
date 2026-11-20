@@ -60,6 +60,12 @@ export const AppMainMenu: React.FC<AppMenuProps> = React.memo(() => {
         {t("fcboard.live_collaboration")}
       </MainMenu.Item>
       <MainMenu.Item
+        icon={<FactoryIcon name="media" />}
+        onSelect={() => invoke("projection.open")}
+      >
+        {t("projection.title")}
+      </MainMenu.Item>
+      <MainMenu.Item
         icon={<FactoryIcon name="settings" />}
         onSelect={() => invoke("board.settings")}
       >

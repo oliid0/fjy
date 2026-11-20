@@ -106,10 +106,12 @@ export class BoardBook {
       whiteboardBackground,
       whiteboardCustomBackground,
     } = this.api.getAppState();
+    const elements = this.api.getSceneElements();
+    const tile = this.api.getSceneProjection?.()?.elementId;
     return {
       id,
       name,
-      elements: this.api.getSceneElements(),
+      elements: tile ? elements.filter((element) => element.id !== tile) : elements,
       files: this.api.getFiles(),
       view: {
         scrollX,

@@ -1,0 +1,208 @@
+.fc-classroom .fc-projection {
+  --projection-ink: #17243c;
+  --projection-border: #dedfd1;
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: clamp(16px, 3vw, 30px);
+  gap: 18px;
+  border: 1px solid #fffffa;
+  border-radius: 24px;
+  background: rgba(253, 252, 243, 0.95);
+  backdrop-filter: blur(18px);
+  color: var(--projection-ink);
+  box-shadow: 0 24px 72px #202f3129, inset 0 1px #fff;
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 23px;
+    margin: 0;
+
+    svg {
+      width: 26px;
+      height: 26px;
+    }
+  }
+
+  header button {
+    min-width: 40px;
+    border-color: transparent;
+    background: transparent;
+    font-size: 24px;
+  }
+
+  p {
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  form {
+    display: grid;
+    gap: 12px;
+    align-items: start;
+
+    button {
+      justify-self: start;
+    }
+
+    button:enabled {
+      color: #fff;
+      background: var(--fc-blue, #0b6ff3);
+    }
+
+    button:enabled:hover {
+      background: #095cc9;
+    }
+  }
+
+  label {
+    display: grid;
+    gap: 4px;
+    font-size: 0.875rem;
+  }
+
+  input {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--projection-border);
+    border-radius: 9px;
+    color: inherit;
+    background: #fffef9;
+    font: inherit;
+  }
+}
+
+.fc-projection button,
+.fc-projection__controls button {
+  border: 1px solid #cbd5c7;
+  border-radius: 10px;
+  padding: 6px 12px;
+  min-height: 38px;
+  color: inherit;
+  background: #f5f7ee;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover:enabled {
+    background: #e4ece0;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+}
+
+.fc-projection__protocols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+
+  > div {
+    display: grid;
+    gap: 5px;
+    padding: 12px;
+    border: 1px solid var(--projection-border);
+    border-radius: 13px;
+    background: rgba(255, 255, 251, 0.7);
+  }
+
+  span,
+  small {
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: #575d52;
+  }
+
+  small {
+    align-self: end;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    &::before {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 7px;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+    }
+  }
+
+  [data-ready="true"] {
+    color: #346340;
+    font-weight: 600;
+  }
+}
+
+.fc-projection__pairing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+
+  > div + div {
+    display: grid;
+    flex: 1 1 170px;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .ShareDialog__active__qrcode {
+    width: 132px;
+    height: 132px;
+    display: grid;
+    place-items: center;
+    background: #fff;
+    border-radius: 10px;
+
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}
+
+.fc-projection__error {
+  color: #a8211b;
+  overflow-wrap: anywhere;
+}
+
+.fc-projection__video {
+  position: absolute;
+  visibility: hidden;
+  transform-origin: 0 0;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.fc-projection__controls {
+  position: fixed;
+  z-index: 19;
+  top: max(12px, env(safe-area-inset-top));
+  inset-inline-end: max(12px, env(safe-area-inset-right));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: calc(100vw - 24px);
+  padding: 5px;
+  border: 1px solid #e9e9dd;
+  border-radius: 12px;
+  background: rgba(253, 252, 243, 0.92);
+  color: #263326;
+  backdrop-filter: blur(12px);
+}

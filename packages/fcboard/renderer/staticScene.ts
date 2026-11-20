@@ -232,6 +232,56 @@ const renderLinkIcon = (
     context.restore();
   }
 };
+const paintProjection = (
+  context: CanvasRenderingContext2D,
+  source: import("../scene/types").SceneProjection["video"],
+  width: number,
+  height: number,
+) => {
+  const native = "position" in source;
+  const sw = native ? source.width : source.videoWidth;
+  const sh = native ? source.height : source.videoHeight;
+  if (!sw || !sh) return;
+  const scale = Math.min(width / sw, height / sh);
+  const w = sw * scale, h = sh * scale;
+  const x = (width - w) / 2, y = (height - h) / 2;
+  context.fillStyle = "#252623";
+  // Keep the letterbox opaque. Open the video area at this exact z-order;
+  // higher elements (including ink) are painted over the native surface.
+  if (x > 0) {
+    context.fillRect(0, 0, x, height);
+    context.fillRect(x + w, 0, x, height);
+  }
+  if (y > 0) {
+    context.fillRect(0, 0, width, y);
+    context.fillRect(0, y + h, width, y);
+  }
+  const canvas = context.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const sx = rect.width / canvas.width, sy = rect.height / canvas.height;
+  const m = context.getTransform();
+  if (native) {
+    source.position({
+      cx: rect.left + (m.a * width / 2 + m.c * height / 2 + m.e) * sx,
+      cy: rect.top + (m.b * width / 2 + m.d * height / 2 + m.f) * sy,
+      width: w * Math.hypot(m.a * sx, m.b * sy),
+      height: h * Math.hypot(m.c * sx, m.d * sy),
+      angle: Math.atan2(m.b * sy, m.a * sx) * 180 / Math.PI,
+      viewport: window.innerWidth,
+    });
+  } else {
+    if (source.parentElement !== canvas.parentElement) canvas.before(source);
+    source.style.visibility = "visible";
+    source.style.width = `${w}px`;
+    source.style.height = `${h}px`;
+    const left = canvas.offsetLeft + (m.a * x + m.c * y + m.e) * sx;
+    const top = canvas.offsetTop + (m.b * x + m.d * y + m.f) * sy;
+    source.style.transform = `matrix(${m.a * sx},${m.b * sy},${m.c * sx},${m.d * sy},${left},${top})`;
+  }
+  context.globalCompositeOperation = "destination-out";
+  context.fillRect(x, y, w, h);
+};
+
 const _renderStaticScene = ({
   canvas,
   rc,
@@ -247,6 +297,7 @@ const _renderStaticScene = ({
   }
 
   const { renderGrid = true, isExporting } = renderConfig;
+  const projection = isExporting ? undefined : renderConfig.projection;
 
   const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
     canvas,
@@ -263,11 +314,24 @@ const _renderStaticScene = ({
     viewBackgroundColor: appState.viewBackgroundColor,
   });
 
-  // Apply zoom
-  context.scale(appState.zoom.value, appState.zoom.value);
+  if (projection?.fullscreen) {
+    context.save();
+    paintProjection(
+      context,
+      projection.video,
+      normalizedWidth,
+      normalizedHeight,
+    );
+    context.restore();
+  }
 
+  context.scale(appState.zoom.value, appState.zoom.value);
   const background = appState.whiteboardBackground;
-  if (appState.viewBackgroundColor && validWhiteboardBackground(background)) {
+  if (
+    !projection?.fullscreen &&
+    appState.viewBackgroundColor &&
+    validWhiteboardBackground(background)
+  ) {
     const image = backgroundImage(background);
     if (image) {
       context.save();
@@ -284,7 +348,7 @@ const _renderStaticScene = ({
   }
 
   // Grid
-  if (renderGrid) {
+  if (renderGrid && !projection?.fullscreen) {
     strokeGrid(
       context,
       appState.gridSize,
@@ -365,15 +429,29 @@ const _renderStaticScene = ({
           ) {
             frameClip(frame, context, renderConfig, appState);
           }
-          renderElement(
-            element,
-            elementsMap,
-            allElementsMap,
-            rc,
-            context,
-            renderConfig,
-            appState,
-          );
+        }
+        if (element.id === projection?.elementId) {
+          if (
+            !projection.fullscreen &&
+            element.width > 0 &&
+            element.height > 0
+          ) {
+            context.translate(
+              element.x + appState.scrollX + element.width / 2,
+              element.y + appState.scrollY + element.height / 2,
+            );
+            context.rotate(element.angle);
+            context.translate(-element.width / 2, -element.height / 2);
+            context.globalAlpha = element.opacity / 100;
+            paintProjection(
+              context,
+              projection.video,
+              element.width,
+              element.height,
+            );
+          }
+          context.restore();
+          return;
         } else {
           renderElement(
             element,

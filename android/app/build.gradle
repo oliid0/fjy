@@ -65,7 +65,7 @@ dependencies {
     implementation 'com.google.android.material:material:1.10.0'
     implementation 'androidx.work:work-runtime:2.9.1'
     implementation files('libs/sherpa-onnx-1.13.8.aar')
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.7.20'
+    implementation project(':projection')
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
     implementation 'org.nanohttpd:nanohttpd-websocket:2.3.1'
     implementation fileTree(include: ['*.jar'], dir: 'libs')

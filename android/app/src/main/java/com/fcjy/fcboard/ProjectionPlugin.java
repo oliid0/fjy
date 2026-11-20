@@ -1,6 +1,11 @@
 package com.fcjy.fcboard;
 
-import android.util.Base64;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.wifi.WifiInfo;
+import android.os.Build;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -9,102 +14,58 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.security.KeyStore;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.List;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "FcboardProjection")
 public class ProjectionPlugin extends Plugin {
+    private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private ProjectionServer server;
     private boolean background;
+    private String requestedSession;
     private String url;
+    private String address;
     private Integer priorBarsBehavior;
     private int priorVisibleBars;
 
     @PluginMethod public synchronized void start(PluginCall call) {
         if (background) { call.reject("Board is in the background"); return; }
-        if (server != null) {
-            call.resolve(info());
-            return;
+        String session = call.getString("session", "");
+        if (session.isEmpty()) { call.reject("Projection session is required"); return; }
+        requestedSession = session;
+        worker.execute(() -> startServer(call, session));
+    }
+
+    private void startServer(PluginCall call, String session) {
+        synchronized (this) {
+            if (background || !session.equals(requestedSession)) { call.reject("Receiver session ended"); return; }
+            if (ownsSession(call)) { call.resolve(info()); return; }
+            stopServer();
         }
-        boolean resume = call.getBoolean("resume", false);
-        ProjectionIdentity configuration = new ProjectionIdentity(getContext());
-        char[] password = null;
-        byte[] pkcs12 = null;
-        String errorCode = "CERTIFICATE";
+        String errorCode = "NETWORK";
         try {
-            org.json.JSONObject identity = resume ? configuration.load() : new org.json.JSONObject()
-                .put("certificate", call.getString("certificate", ""))
-                .put("password", call.getString("password", ""))
-                .put("host", call.getString("host", "").trim());
-            if (identity == null) {
-                call.reject("Set up the sender certificate first", "NOT_CONFIGURED");
-                return;
-            }
-            String data = identity.getString("certificate");
-            if (data.isEmpty() || data.length() > 512 * 1024) throw new IOException("Invalid certificate file");
-            password = identity.getString("password").toCharArray();
-            errorCode = "NETWORK";
             List<String> addresses = NetworkPlugin.lanAddresses(getContext());
             if (addresses.isEmpty()) {
                 call.reject("Connect the board to Wi-Fi or Ethernet", "NETWORK");
                 return;
             }
-            String host = identity.getString("host");
-            errorCode = "HOST";
-            String address = addresses.get(0);
-            if (host.isEmpty()) host = address;
-            if (host.length() > 253 || !host.matches("[a-zA-Z0-9][a-zA-Z0-9.\\-]*")) {
-                call.reject("Enter the certificate's DNS name or LAN IPv4 address", "HOST");
-                return;
-            }
-            if (addresses.contains(host)) {
-                address = host;
-            } else {
-                address = null;
-                for (InetAddress resolved : InetAddress.getAllByName(host)) {
-                    if (addresses.contains(resolved.getHostAddress())) {
-                        address = resolved.getHostAddress();
-                        break;
-                    }
-                }
-                if (address == null) {
-                    call.reject("The certificate hostname must resolve to this board on the LAN", "HOST");
-                    return;
-                }
-            }
-
             errorCode = "CERTIFICATE";
-            pkcs12 = Base64.decode(data, Base64.DEFAULT);
-            KeyStore store = KeyStore.getInstance("PKCS12");
-            store.load(new ByteArrayInputStream(pkcs12), password);
-            KeyStore selected = KeyStore.getInstance("PKCS12");
-            selected.load(null, password);
-            for (String alias : java.util.Collections.list(store.aliases())) {
-                Certificate certificate = store.getCertificate(alias);
-                if (!store.isKeyEntry(alias) || !(certificate instanceof X509Certificate)) continue;
-                X509Certificate leaf = (X509Certificate) certificate;
-                if (!matchesHost(leaf, host)) continue;
-                leaf.checkValidity();
-                selected.setKeyEntry("projection", store.getKey(alias, password), password, store.getCertificateChain(alias));
-                break;
+            ProjectionTls tls = new ProjectionTls(getContext());
+            errorCode = "HOST";
+            String binding = null;
+            for (InetAddress resolved : InetAddress.getAllByName(tls.host)) {
+                if (addresses.contains(resolved.getHostAddress())) {
+                    binding = resolved.getHostAddress();
+                    break;
+                }
             }
-            if (selected.size() == 0) throw new IOException("The certificate must cover the sender URL");
-            KeyManagerFactory keys = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            keys.init(selected, password);
-            SSLContext tls = SSLContext.getInstance("TLS");
-            tls.init(keys.getKeyManagers(), null, null);
+            if (binding == null) throw new IOException("Managed projection hostname does not resolve to this board");
 
             errorCode = "START";
-            String session = java.util.UUID.randomUUID().toString();
-            ProjectionServer next = new ProjectionServer(address,
+            ProjectionServer next = new ProjectionServer(binding,
                 session,
                 name -> getContext().getAssets().open("projection/" + name), (kind, signal) -> {
                     JSObject message = new JSObject();
@@ -115,45 +76,66 @@ public class ProjectionPlugin extends Plugin {
                     notifyListeners("signal", message);
                 });
             try {
-                next.makeSecure(tls.getServerSocketFactory(),
+                next.makeSecure(tls.context().getServerSocketFactory(),
                     android.os.Build.VERSION.SDK_INT >= 29
                         ? new String[] {"TLSv1.3", "TLSv1.2"}
                         : new String[] {"TLSv1.2"});
                 next.start(120_000, true);
-                if (!resume) configuration.save(identity);
             } catch (Exception startError) {
                 next.stop();
                 throw startError;
             }
-            server = next;
-            url = "https://" + host + ":" + next.getListeningPort() + next.path;
-            call.resolve(info());
+            synchronized (this) {
+                if (background || !session.equals(requestedSession)) {
+                    next.stop();
+                    call.reject("Receiver session ended");
+                    return;
+                }
+                server = next;
+                address = binding;
+                url = "https://" + tls.host + ":" + next.getListeningPort() + next.path;
+                call.resolve(info());
+            }
         } catch (Exception error) {
-            call.reject("Could not start secure reception", errorCode);
-        } finally {
-            if (password != null) Arrays.fill(password, '\0');
-            if (pkcs12 != null) Arrays.fill(pkcs12, (byte) 0);
+            call.reject("Could not start secure reception", errorCode, error);
         }
     }
 
-    private static boolean matchesHost(X509Certificate certificate, String host) throws Exception {
-        java.util.Collection<List<?>> names = certificate.getSubjectAlternativeNames();
-        if (names == null) return false;
-        boolean ip = host.matches("[0-9.]+");
-        for (List<?> entry : names) {
-            if (entry.size() < 2 || !Integer.valueOf(ip ? 7 : 2).equals(entry.get(0)) ||
-                !(entry.get(1) instanceof String)) continue;
-            String name = (String) entry.get(1);
-            if (host.equalsIgnoreCase(name)) return true;
-            int dot = host.indexOf('.');
-            if (!ip && dot > 0 && name.startsWith("*.") && name.indexOf('.', 2) > 2 &&
-                host.substring(dot + 1).equalsIgnoreCase(name.substring(2))) return true;
+    @PluginMethod public void network(PluginCall call) {
+        try {
+            List<String> addresses = NetworkPlugin.lanAddresses(getContext());
+            String requested = call.getString("address", "");
+            String ip = addresses.contains(requested) ? requested : addresses.isEmpty() ? "" : addresses.get(0);
+            JSObject result = new JSObject().put("address", ip).put("name", "").put("transport", "");
+            ConnectivityManager manager = getContext().getSystemService(ConnectivityManager.class);
+            if (!ip.isEmpty() && manager != null) {
+                for (Network network : manager.getAllNetworks()) {
+                    LinkProperties link = manager.getLinkProperties(network);
+                    NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
+                    if (link == null || capabilities == null || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                        link.getLinkAddresses().stream().noneMatch(item -> ip.equals(item.getAddress().getHostAddress()))) continue;
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                        result.put("transport", "wifi");
+                        if (Build.VERSION.SDK_INT >= 29 && capabilities.getTransportInfo() instanceof WifiInfo) {
+                            String ssid = ((WifiInfo) capabilities.getTransportInfo()).getSSID();
+                            if (ssid != null && !ssid.equals("<unknown ssid>")) {
+                                result.put("name", ssid.replaceAll("^\"|\"$", ""));
+                            }
+                        }
+                    } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                        result.put("transport", "ethernet");
+                    }
+                    break;
+                }
+            }
+            call.resolve(result);
+        } catch (Exception failure) {
+            call.reject("Could not read the local network", "NETWORK", failure);
         }
-        return false;
     }
 
     private JSObject info() {
-        return new JSObject().put("session", server.id).put("url", url);
+        return new JSObject().put("session", server.id).put("url", url).put("address", address);
     }
 
     @PluginMethod public synchronized void answer(PluginCall call) {
@@ -172,6 +154,7 @@ public class ProjectionPlugin extends Plugin {
     }
 
     @PluginMethod public synchronized void stop(PluginCall call) {
+        if (call.getString("session", "").equals(requestedSession)) requestedSession = null;
         if (ownsSession(call)) stopServer();
         call.resolve();
     }
@@ -213,15 +196,17 @@ public class ProjectionPlugin extends Plugin {
         ProjectionServer current = server;
         server = null;
         url = null;
+        address = null;
         if (current != null) current.stop();
     }
 
     @Override protected synchronized void handleOnStart() { background = false; }
     @Override protected synchronized void handleOnStop() { releaseReception(); }
-    @Override protected synchronized void handleOnDestroy() { releaseReception(); }
+    @Override protected synchronized void handleOnDestroy() { releaseReception(); worker.shutdownNow(); }
 
     private void releaseReception() {
         background = true;
+        requestedSession = null;
         stopServer();
         getActivity().runOnUiThread(() -> setImmersive(false));
     }

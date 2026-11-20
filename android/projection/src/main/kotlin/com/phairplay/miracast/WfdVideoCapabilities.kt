@@ -4,6 +4,7 @@ package com.airplay.miracast
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.MediaCodecInfo.CodecProfileLevel
+import android.media.MediaFormat
 import android.os.Build
 import com.airplay.airplay.VideoDecoder
 import android.view.Display
@@ -77,7 +78,7 @@ internal fun chooseWfdCustomVideoMode(
 
 internal fun wfdCustomVideoMode(context: Context, extended: Boolean): WfdCustomVideoMode? {
     val decoders = runCatching {
-        VideoDecoder.regularAvcDecoders().mapNotNull { codec ->
+        VideoDecoder.regularDecoders(MediaFormat.MIMETYPE_VIDEO_AVC).mapNotNull { codec ->
             val hardware = if (Build.VERSION.SDK_INT >= 29) codec.isHardwareAccelerated
                 else !codec.name.startsWith("OMX.google.") && !codec.name.startsWith("c2.android.")
             if (hardware) runCatching { codec.getCapabilitiesForType("video/avc") }.getOrNull() else null

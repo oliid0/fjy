@@ -9,6 +9,7 @@ import android.net.wifi.p2p.*
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Surface
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -30,6 +31,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
     @Volatile private var connection: Socket? = null
     private var generation = 0
     private var addressRetries = 0
+    private var ownsGroup = false
 
     private val listener = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -39,7 +41,12 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
 
     private fun action(next: () -> Unit) = object : WifiP2pManager.ActionListener {
         override fun onSuccess() { if (!stopped) next() }
-        override fun onFailure(reason: Int) { if (!stopped) state("error") }
+        override fun onFailure(reason: Int) {
+            if (!stopped) {
+                Log.w("FcboardProjection", "Wi-Fi Display action failed: $reason")
+                state("error")
+            }
+        }
     }
 
     fun start() {
@@ -59,8 +66,12 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
         manager.setWfdInfo(ch, info, action {
             advertised = true
             manager.requestDeviceInfo(ch) { device -> device?.deviceName?.let(name) }
-            manager.discoverPeers(ch, action { state("waiting"); checkGroup() })
+            listen(ch)
         })
+    }
+
+    private fun listen(ch: WifiP2pManager.Channel) {
+        manager.startListening(ch, action { state("waiting"); checkGroup() })
     }
 
     private fun checkGroup() {
@@ -91,6 +102,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                 addressRetries = 0
                 val wfd = device.wfdInfo
                 if (wfd?.deviceType == WifiP2pWfdInfo.DEVICE_TYPE_PRIMARY_SINK) return@requestGroupInfo
+                ownsGroup = true
                 dial(peer, wfd?.controlPort?.takeIf { it in 1..65535 } ?: 7236)
             }
         }
@@ -102,7 +114,6 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
         state("connecting")
         worker.execute {
             var media: RtpReceiver? = null
-            var established = false
             try {
                 socket.connect(InetSocketAddress(peer, port), 4500)
                 DatagramSocket(InetSocketAddress(socket.localAddress, 0)).use { udp ->
@@ -112,21 +123,26 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                         it.start()
                     }
                     session.onStreamStart = {
-                        established = true
                         main.post { if (!stopped && connection === socket) state("connected") }
                     }
                     session.handleSession()
                 }
-            } catch (_: Exception) {
-                // Disconnect, refusal and interface loss all end this negotiated session.
+            } catch (error: Exception) {
+                if (!stopped) Log.w("FcboardProjection", "Wi-Fi Display session ended", error)
             } finally {
                 runCatching { socket.close() }
                 media?.stop()
                 main.post {
                     if (!stopped && connection === socket) {
                         connection = null
-                        state(if (established) "waiting" else "error")
-                        channel?.let { ch -> manager.discoverPeers(ch, action {}) }
+                        state("starting")
+                        channel?.let { ch ->
+                            ownsGroup = false
+                            manager.removeGroup(ch, object : WifiP2pManager.ActionListener {
+                                override fun onSuccess() { if (!stopped) listen(ch) }
+                                override fun onFailure(reason: Int) { if (!stopped) listen(ch) }
+                            })
+                        }
                     }
                 }
             }
@@ -139,7 +155,8 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
         worker.shutdownNow()
         if (registered) context.unregisterReceiver(listener)
         channel?.let { ch ->
-            runCatching { manager.stopPeerDiscovery(ch, null) }
+            if (ownsGroup) runCatching { manager.removeGroup(ch, null) }
+            runCatching { manager.stopListening(ch, null) }
             runCatching { manager.setWfdInfo(ch, WifiP2pWfdInfo().apply { isEnabled = false }, null) }
             ch.close()
         }

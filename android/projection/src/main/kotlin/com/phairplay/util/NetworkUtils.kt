@@ -19,7 +19,7 @@ import java.util.UUID
  *
  * Example:
  *   val name = NetworkUtils.getDeviceName(context)   // "My Android TV"
- *   val mac  = NetworkUtils.getMacAddress()           // "aa:bb:cc:dd:ee:ff"
+ *   val mac  = NetworkUtils.getReceiverId(context)    // locally administered device ID
  *   val uuid = NetworkUtils.getPersistentUuid(context) // stable UUID per device
  */
 object NetworkUtils {
@@ -55,37 +55,16 @@ object NetworkUtils {
     }
 
     /**
-     * Returns the device's Wi-Fi or Ethernet MAC address.
-     *
-     * The MAC address is used as the `deviceid` in AirPlay mDNS TXT records.
-     * It uniquely identifies this receiver to macOS senders.
-     *
-     * Tries Wi-Fi first (most TVs are Wi-Fi), then falls back to any available
-     * non-loopback interface, then uses a fake address as last resort.
-     *
-     * NOTE: On Android 10+, direct MAC access is restricted. We use NetworkInterface
-     * instead of WifiManager.getConnectionInfo() which is deprecated.
+     * AirPlay's MAC-shaped identity stays unique per installation even when Android
+     * masks hardware addresses; moving between Wi-Fi and Ethernet does not change it.
      *
      * @return MAC address in "aa:bb:cc:dd:ee:ff" format (lowercase, colon-separated).
      */
-    fun getMacAddress(): String {
-        return try {
-            // Iterate all network interfaces to find the Wi-Fi or Ethernet interface
-            val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
-
-            val mac = interfaces
-                .filter { !it.isLoopback && it.isUp && it.hardwareAddress != null }
-                .mapNotNull { iface ->
-                    iface.hardwareAddress?.let { hwAddr ->
-                        hwAddr.joinToString(":") { byte -> "%02x".format(byte) }
-                    }
-                }
-                .firstOrNull()
-
-            mac ?: FALLBACK_MAC_ADDRESS
-        } catch (e: Exception) {
-            Timber.w(e, "Could not read MAC address — using fallback")
-            FALLBACK_MAC_ADDRESS
+    fun getReceiverId(context: Context): String {
+        val bits = UUID.fromString(getPersistentUuid(context)).leastSignificantBits
+        return (5 downTo 0).joinToString(":") { index ->
+            val value = ((bits ushr (index * 8)) and 0xff).toInt()
+            "%02x".format(if (index == 5) (value and 0xfc) or 0x02 else value)
         }
     }
 
@@ -106,7 +85,7 @@ object NetworkUtils {
      * @param context Android context (needed to read/write secure settings)
      * @return A stable UUID string in standard "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" format.
      */
-    fun getPersistentUuid(context: Context): String {
+    @Synchronized fun getPersistentUuid(context: Context): String {
         // Persist the UUID in the app's own private SharedPreferences.
         // (Originally this used Settings.Secure, which requires the privileged
         // WRITE_SECURE_SETTINGS permission and threw a SecurityException on normal
@@ -258,7 +237,6 @@ object NetworkUtils {
 
     // Constants
     private const val DEFAULT_DEVICE_NAME = "Airplay"
-    private const val FALLBACK_MAC_ADDRESS = "aa:bb:cc:dd:ee:ff"
     private const val PREFS_NAME = "airplay_prefs"
     private const val PREF_KEY_DEVICE_UUID = "airplay_device_uuid"
 }

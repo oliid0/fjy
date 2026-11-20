@@ -2,7 +2,7 @@ name: Fcboard verification and Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/offline-arm-interactive-math]
     paths-ignore: [history.md, docs/README.md]
   pull_request:
   workflow_dispatch:

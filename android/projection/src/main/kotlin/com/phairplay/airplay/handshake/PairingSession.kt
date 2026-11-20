@@ -29,9 +29,11 @@ class PairingSession(private val keys: PairingKeys) {
     /** AES-128-CTR cipher spanning M1 (encrypt our sig, keystream 0..63) and M2 (decrypt theirs, 64..127). */
     private var verifyCipher: Cipher? = null
 
-    /** 32-byte X25519 shared secret, available after pair-verify M1. */
-    var sharedSecret: ByteArray? = null
+    private var ecdhSecret: ByteArray? = null
+    private var verified = false
+    var verificationStarted = false
         private set
+    val sharedSecret: ByteArray? get() = ecdhSecret.takeIf { verified }
 
     /** POST /pair-setup → our 32-byte Ed25519 public key. */
     fun pairSetup(requestBody: ByteArray): ByteArray {
@@ -50,6 +52,9 @@ class PairingSession(private val keys: PairingKeys) {
     }
 
     private fun verifyM1(body: ByteArray): ByteArray {
+        verificationStarted = true
+        verified = false
+        verifyCipher = null
         require(body.size == 4 + 32 + 32) { "pair-verify M1 wrong size: ${body.size}" }
         val theirEcdh = body.copyOfRange(4, 36)
         ecdhTheirsPublic = theirEcdh
@@ -62,7 +67,7 @@ class PairingSession(private val keys: PairingKeys) {
         val secret = ByteArray(32)
         X25519Agreement().apply { init(priv) }
             .calculateAgreement(X25519PublicKeyParameters(theirEcdh, 0), secret, 0)
-        sharedSecret = secret
+        ecdhSecret = secret
 
         // Sign (ourPub ‖ theirPub) with our Ed25519 identity, then AES-CTR-encrypt the signature.
         val signature = keys.sign(ourPub + theirEcdh)          // 64 bytes
@@ -81,6 +86,7 @@ class PairingSession(private val keys: PairingKeys) {
     private fun verifyM2(body: ByteArray): ByteArray {
         require(body.size == 4 + 64) { "pair-verify M2 wrong size: ${body.size}" }
         val cipher = verifyCipher ?: error("pair-verify M2 received before M1")
+        verifyCipher = null
         val ourPub = ecdhOursPublic ?: error("missing our ECDH public key")
         val theirPub = ecdhTheirsPublic ?: error("missing their ECDH public key")
         val theirEd = edTheirsPublic ?: error("missing their Ed25519 public key")
@@ -94,6 +100,7 @@ class PairingSession(private val keys: PairingKeys) {
             verifySignature(clientSig)
         }
         if (!ok) throw SecurityException("pair-verify signature mismatch")
+        verified = true
         return ByteArray(0)                                    // success → empty 200 OK
     }
 

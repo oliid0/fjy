@@ -3,7 +3,8 @@ package com.airplay.airplay
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import com.airplay.airplay.handshake.PairingKeys
+import android.net.wifi.WifiManager
+import com.airplay.airplay.handshake.InfoResponder
 import com.airplay.service.ProtocolState
 import com.airplay.util.Logger
 import com.airplay.util.NetworkUtils
@@ -34,6 +35,8 @@ import com.airplay.util.NetworkUtils
  */
 class MdnsService(
     private val context: Context,
+    private val pinRequired: Boolean,
+    private val hevc: Boolean,
     private val onStateChange: (ProtocolState) -> Unit = {},
     /**
      * Called with the actual mDNS service name after registration completes.
@@ -55,6 +58,10 @@ class MdnsService(
     // Android's built-in mDNS manager — handles multicast registration
     private val nsdManager: NsdManager =
         context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val multicast = runCatching {
+        context.applicationContext.getSystemService(WifiManager::class.java)
+            ?.createMulticastLock("Fcboard-AirPlay")?.apply { setReferenceCounted(false) }
+    }.getOrNull()
 
     // Listeners track registration state; held to enable unregistration later
     private var airPlayListener: NsdManager.RegistrationListener? = null
@@ -85,7 +92,7 @@ class MdnsService(
      * @param displayNameOverride User-configured display name from Settings.
      *   Pass `null` or blank to use the Android system device name.
      */
-    fun start(displayNameOverride: String? = null) {
+    @Synchronized fun start(displayNameOverride: String? = null) {
         if (isStarted) {
             Logger.w("MdnsService.start() called but already registered — ignoring")
             return
@@ -97,8 +104,14 @@ class MdnsService(
         Logger.i("Starting mDNS advertising as '$effectiveName'")
         requestedName = effectiveName
 
-        registerAirPlayService(effectiveName)
-        registerRaopService(effectiveName)
+        runCatching { multicast?.acquire() }.onFailure { Logger.e("Cannot enable AirPlay multicast", it) }
+        try {
+            registerAirPlayService(effectiveName)
+            registerRaopService(effectiveName)
+        } catch (error: Exception) {
+            stop()
+            throw error
+        }
     }
 
     /**
@@ -109,21 +122,17 @@ class MdnsService(
      *
      * Safe to call even if [start] was never called.
      */
-    fun stop() {
-        Logger.i("Stopping mDNS advertising")
-        try {
-            airPlayListener?.let { nsdManager.unregisterService(it) }
-            raopListener?.let { nsdManager.unregisterService(it) }
-        } catch (e: Exception) {
-            // Unregistration errors are non-fatal: service will expire via mDNS TTL
-            Logger.e("Error unregistering mDNS services (non-fatal)", e)
-        } finally {
-            airPlayListener = null
-            raopListener = null
-            registeredCount = 0
-            isStarted = false
-            onStateChange(ProtocolState.DISABLED)
+    @Synchronized fun stop() {
+        isStarted = false
+        for (listener in listOfNotNull(airPlayListener, raopListener)) {
+            runCatching { nsdManager.unregisterService(listener) }
+                .onFailure { Logger.e("Cannot unregister AirPlay mDNS service", it) }
         }
+        airPlayListener = null
+        raopListener = null
+        registeredCount = 0
+        runCatching { if (multicast?.isHeld == true) multicast.release() }
+            .onFailure { Logger.e("Cannot release AirPlay multicast", it) }
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────────
@@ -133,8 +142,21 @@ class MdnsService(
      * Uses [override] if non-blank; otherwise reads from the Android system.
      */
     private fun resolveDisplayName(override: String?): String {
-        val trimmed = override?.trim() ?: ""
-        return if (trimmed.isNotEmpty()) trimmed else NetworkUtils.getDeviceName(context)
+        val name = override?.takeIf { it.isNotBlank() } ?: NetworkUtils.getDeviceName(context)
+        return name.asSequence().filterNot { it.isISOControl() }.joinToString("").trim()
+            .takeWhileUtf8(50).trim().ifEmpty { "Fcboard" }
+    }
+
+    private fun String.takeWhileUtf8(maxBytes: Int): String {
+        var end = 0
+        var bytes = 0
+        while (end < length) {
+            val point = codePointAt(end)
+            bytes += when { point < 0x80 -> 1; point < 0x800 -> 2; point < 0x10000 -> 3; else -> 4 }
+            if (bytes > maxBytes) break
+            end += Character.charCount(point)
+        }
+        return substring(0, end)
     }
 
     /**
@@ -151,19 +173,7 @@ class MdnsService(
             serviceType = SERVICE_TYPE_AIRPLAY
             port = AIRPLAY_PORT
 
-            // Core identity TXT records
-            setAttribute("deviceid", NetworkUtils.getMacAddress())
-            setAttribute("features", AIRPLAY_FEATURES)
-            setAttribute("model", AIRPLAY_MODEL)
-            setAttribute("srcvers", AIRPLAY_SERVER_VERSION)
-            setAttribute("vv", "2")                             // AirPlay protocol version 2
-            setAttribute("pi", NetworkUtils.getPersistentUuid(context))
-            setAttribute("flags", "0x4")                        // Screen-mirroring receiver
-            // Pairing identity. Both were missing before: senders that look for `pk` in the
-            // TXT record (not just in GET /info) had nothing to read, and absent `pw` leaves
-            // the "needs a password" interpretation open.
-            setAttribute("pk", PairingKeys.get(context).edPublic.toHex())
-            setAttribute("pw", "0")                             // 0 = no password required
+            InfoResponder.airPlayAttributes(context, pinRequired, hevc).forEach { (key, value) -> setAttribute(key, value) }
         }
 
         airPlayListener = createRegistrationListener(
@@ -195,32 +205,14 @@ class MdnsService(
      * @param displayName The device name portion of the RAOP service name.
      */
     private fun registerRaopService(displayName: String) {
-        val macHex = NetworkUtils.getMacAddress().replace(":", "").uppercase()
+        val macHex = NetworkUtils.getReceiverId(context).replace(":", "").uppercase()
 
         val serviceInfo = NsdServiceInfo().apply {
             serviceName = "$macHex@$displayName"  // required RAOP format
             serviceType = SERVICE_TYPE_RAOP
             port = AIRPLAY_PORT
 
-            setAttribute("cn", "0,1,3")          // Cipher numbers — 2 was advertised but unsupported
-            setAttribute("da", "true")             // Digest authentication capable
-            setAttribute("et", "0,3,5")            // Encryption types supported
-            setAttribute("md", "0,1,2")            // Metadata types supported
-            setAttribute("sv", "false")            // Software volume control
-            setAttribute("tp", "UDP")              // Transport for audio RTP
-            setAttribute("vn", "3")                // RAOP version — was 65537 (0x10001), not a real value
-            setAttribute("vs", AIRPLAY_SERVER_VERSION)
-            setAttribute("am", AIRPLAY_MODEL)
-            // Audio stream description. Senders use these to pick a stream format before
-            // connecting; without them the sender has to guess.
-            setAttribute("sr", "44100")            // Sample rate
-            setAttribute("ss", "16")               // Sample size (bits)
-            setAttribute("ch", "2")                // Channels
-            setAttribute("ek", "1")                // Encryption key version
-            setAttribute("txtvers", "1")           // TXT record version
-            setAttribute("sf", "0x4")              // Same status flags as the AirPlay service
-            setAttribute("pk", PairingKeys.get(context).edPublic.toHex())
-            setAttribute("pw", "false")            // false = no password required
+            InfoResponder.raopAttributes(context, pinRequired, hevc).forEach { (key, value) -> setAttribute(key, value) }
         }
 
         raopListener = createRegistrationListener(
@@ -239,6 +231,7 @@ class MdnsService(
      */
     @Synchronized
     private fun incrementAndCheckBothRegistered() {
+        if (!isStarted) return
         registeredCount++
         if (registeredCount >= 2) {
             onStateChange(ProtocolState.ADVERTISING)
@@ -263,6 +256,7 @@ class MdnsService(
         return object : NsdManager.RegistrationListener {
 
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                if (!isStarted) return
                 // NsdManager may append " (2)" to resolve name conflicts.
                 // Log the actual name so we can debug picker-visibility issues.
                 Logger.i("mDNS registered: $serviceLabel as '${serviceInfo.serviceName}'")
@@ -271,18 +265,10 @@ class MdnsService(
             }
 
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                // Error codes from NsdManager:
-                //   FAILURE_ALREADY_ACTIVE (3) — already registered; treat as success
-                //   FAILURE_MAX_LIMIT (4)      — too many services (should not happen)
-                //   FAILURE_INTERNAL_ERROR (0) — system mDNS daemon issue
-                if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
-                    Logger.w("mDNS $serviceLabel already active — treating as success")
-                    onSuccess()
-                } else {
-                    Logger.e("mDNS registration FAILED for $serviceLabel, errorCode=$errorCode")
-                    isStarted = false
-                    onFailure()
-                }
+                if (!isStarted) return
+                Logger.e("mDNS registration FAILED for $serviceLabel, errorCode=$errorCode")
+                stop()
+                onFailure()
             }
 
             override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
@@ -297,15 +283,6 @@ class MdnsService(
     }
 
     companion object {
-        /**
-         * Lowercase hex, no separators — the form senders expect for TXT `pk`.
-         *
-         * Note the public `NsdServiceInfo.setAttribute` only has a String overload; the byte[]
-         * one is hidden, so the key cannot be published as raw bytes even though that is how
-         * the wire format carries it.
-         */
-        private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
-
         /** Standard mDNS service type for AirPlay receivers. */
         private const val SERVICE_TYPE_AIRPLAY = "_airplay._tcp"
 
@@ -315,29 +292,5 @@ class MdnsService(
         /** AirPlay RTSP port — [RtspHandler] must listen on this port. */
         const val AIRPLAY_PORT = 7000
 
-        /**
-         * AirPlay feature bitmask: advertise screen mirroring, video, and audio support.
-         *
-         * WHY THIS IS A SINGLE 32-BIT WORD AND NOT `0x5A7FFFF7,0x1E`:
-         * The old value was two comma-separated words. A second word is what marks a receiver
-         * as AirPlay 2, so senders picked the AirPlay 2 path for us — whose buffered audio
-         * stream is FairPlay-2 encrypted and cannot be decrypted by any open implementation
-         * with this receiver.
-         * Advertising one word puts us back on the AirPlay 1 path, which is the one we
-         * actually implement (RAOP/ALAC via AudioStreamServer + AlacDecoder).
-         */
-        private const val AIRPLAY_FEATURES = "0x527FFFF7"
-
-        /**
-         * Pretend to be an Apple TV so macOS uses the screen mirroring protocol.
-         *
-         * AppleTV3,1 (not 5,3) deliberately: 5,3 is a tvOS model and reinforces the AirPlay 2
-         * impression that the old feature bitmask already gave senders. 3,1 is the classic
-         * AirPlay 1 receiver, matching AIRPLAY_FEATURES above.
-         */
-        private const val AIRPLAY_MODEL = "AppleTV3,1"
-
-        /** AirPlay server version — matches a real Apple TV for maximum compatibility. */
-        private const val AIRPLAY_SERVER_VERSION = "220.68"
     }
 }

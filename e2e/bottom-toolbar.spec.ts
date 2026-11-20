@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// APK dimensions; latest requested layout removes the inter-button gap.
-for (const width of [390, 800, 1920]) {
+for (const width of [390, 800, 844, 1920]) {
   test(`original toolbar surfaces and geometry at ${width}px`, async ({
     page,
   }) => {
@@ -36,12 +35,15 @@ for (const width of [390, 800, 1920]) {
       return {
         tools: box(".fc-drawing-tools"),
         navigation: box(".fc-toolbar-leading"),
+        trailing: box(".fc-toolbar-trailing"),
+        reversed: root.classList.contains("fc-toolbar-reversed"),
+        drawingWidth: root.querySelector(".fc-drawing-tools")!.scrollWidth,
         pen: box("[data-toolbar-pen]"),
         eraser: box("[data-toolbar-eraser]"),
         undoIcon: box('[data-testid="button-undo"] svg'),
       };
     });
-    expect(metrics.tools.width).toBeCloseTo(480 * 0.67, 0);
+    expect(metrics.drawingWidth).toBeCloseTo(480 * 0.67, 0);
     expect(metrics.tools.height).toBeCloseTo(74 * 0.67, 0);
     expect(metrics.pen.width).toBeCloseTo(58 * 0.67, 0);
     expect(metrics.pen.height).toBeCloseTo(58 * 0.67, 0);
@@ -53,15 +55,14 @@ for (const width of [390, 800, 1920]) {
     );
     expect(metrics.tools.x).toBeGreaterThanOrEqual(0);
     expect(metrics.tools.x + metrics.tools.width).toBeLessThanOrEqual(width);
-    if (width <= 1000) {
-      expect(
-        metrics.tools.y - metrics.navigation.y - metrics.navigation.height,
-      ).toBeGreaterThanOrEqual(3.9);
-    } else {
-      expect(metrics.navigation.y).toBeCloseTo(metrics.tools.y, 0);
-      expect(metrics.navigation.x + metrics.navigation.width).toBeLessThan(
-        metrics.tools.x,
-      );
-    }
+    const [left, right] = metrics.reversed
+      ? [metrics.trailing, metrics.navigation]
+      : [metrics.navigation, metrics.trailing];
+    expect(left.y).toBeCloseTo(metrics.tools.y, 0);
+    expect(right.y).toBeCloseTo(metrics.tools.y, 0);
+    expect(left.x + left.width).toBeLessThanOrEqual(metrics.tools.x + 1);
+    expect(metrics.tools.x + metrics.tools.width).toBeLessThanOrEqual(
+      right.x + 1,
+    );
   });
 }

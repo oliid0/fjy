@@ -633,35 +633,6 @@ const LayerUI = ({
       }
     | undefined
   >(undefined);
-  const toolbarElement = React.useRef<HTMLDivElement>(null);
-  React.useLayoutEffect(() => {
-    const toolbar = toolbarElement.current;
-    if (!toolbar || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const update = () => {
-      toolbar.classList.remove("fc-toolbar-tight");
-      const navigation = toolbar.querySelector<HTMLElement>(
-        ".fc-toolbar-leading",
-      );
-      const tools = toolbar.querySelector<HTMLElement>(".fc-drawing-tools");
-      if (!navigation || !tools) {
-        return;
-      }
-      // DrawBoardActivity.Z: hide co-board and switch when groups no longer fit.
-      const available =
-        toolbar.clientWidth - tools.offsetWidth - navigation.offsetWidth - 10;
-      toolbar.classList.toggle("fc-toolbar-tight", available <= 0);
-    };
-    const observer = new ResizeObserver(update);
-    observer.observe(toolbar);
-    for (const child of toolbar.children) {
-      observer.observe(child);
-    }
-    update();
-    return () => observer.disconnect();
-  }, [toolbarItems, appState.toolbarReversed, toolbarHidden]);
-
   React.useEffect(() => {
     if (!showProperties || toolbarHidden) {
       return;
@@ -722,7 +693,6 @@ const LayerUI = ({
         </div>
       )}
       <div
-        ref={toolbarElement}
         className={clsx("fc-unified-toolbar", {
           "fc-toolbar-collapsed": toolbarHidden,
           "fc-toolbar-reversed": appState.toolbarReversed,

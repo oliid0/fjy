@@ -22,26 +22,24 @@ object MirrorCrypto {
     /**
      * Builds the AES-128-CTR cipher that decrypts the mirror video stream.
      *
-     * key = SHA512("AirPlayStreamKey"+id ‖ eaeskey)[:16],
-     * iv  = SHA512("AirPlayStreamIV"+id ‖ eaeskey)[:16],
-     * where eaeskey = SHA512(aesKey ‖ ecdhSecret)[:16] and id is the unsigned decimal
+     * key = SHA512("AirPlayStreamKey"+id ‖ mediaKey)[:16],
+     * iv  = SHA512("AirPlayStreamIV"+id ‖ mediaKey)[:16], where id is the unsigned decimal
      * streamConnectionID.
      */
-    fun streamCipher(aesKey: ByteArray, ecdhSecret: ByteArray, streamConnectionId: Long): Cipher {
-        val eaeskey = sha512(aesKey + ecdhSecret).copyOf(16)
+    fun streamCipher(mediaKey: ByteArray, streamConnectionId: Long): Cipher {
         val id = java.lang.Long.toUnsignedString(streamConnectionId)
-        val key = sha512("AirPlayStreamKey$id".toByteArray(Charsets.US_ASCII) + eaeskey).copyOf(16)
-        val iv = sha512("AirPlayStreamIV$id".toByteArray(Charsets.US_ASCII) + eaeskey).copyOf(16)
+        val key = sha512("AirPlayStreamKey$id".toByteArray(Charsets.US_ASCII) + mediaKey).copyOf(16)
+        val iv = sha512("AirPlayStreamIV$id".toByteArray(Charsets.US_ASCII) + mediaKey).copyOf(16)
         return Cipher.getInstance("AES/CTR/NoPadding").apply {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
         }
     }
 
     /**
-     * Converts AVCC (4-byte big-endian length-prefixed) NAL units — the format of a decrypted
+     * Converts 4-byte big-endian length-prefixed NAL units — the format of a decrypted
      * mirror video payload — into Annex-B (00 00 00 01 start codes) that MediaCodec expects.
      */
-    fun avccToAnnexB(data: ByteArray): ByteArray {
+    fun lengthPrefixedToAnnexB(data: ByteArray): ByteArray {
         val out = ByteArrayOutputStream(data.size + 16)
         var i = 0
         while (i + 4 <= data.size) {
@@ -50,19 +48,19 @@ object MirrorCrypto {
                 ((data[i + 2].toInt() and 0xFF) shl 8) or
                 (data[i + 3].toInt() and 0xFF)
             i += 4
-            if (len <= 0 || i + len > data.size) break
+            if (len <= 0 || len > data.size - i) return ByteArray(0)
             out.write(START_CODE)
             out.write(data, i, len)
             i += len
         }
-        return out.toByteArray()
+        return if (i == data.size) out.toByteArray() else ByteArray(0)
     }
 
     val START_CODE = byteArrayOf(0, 0, 0, 1)
 
-    /** Audio stream AES key: SHA-512(aesKey ‖ ecdhSecret)[:16] (the IV is the raw SETUP eiv). */
-    fun audioKey(aesKey: ByteArray, ecdhSecret: ByteArray): ByteArray =
-        sha512(aesKey + ecdhSecret).copyOf(16)
+    /** FairPlay key reused directly, or mixed with the shared secret after completed legacy pairing. */
+    fun mediaKey(aesKey: ByteArray, ecdhSecret: ByteArray?): ByteArray =
+        if (ecdhSecret == null) aesKey else sha512(aesKey + ecdhSecret).copyOf(16)
 
     private fun sha512(b: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(b)
 }

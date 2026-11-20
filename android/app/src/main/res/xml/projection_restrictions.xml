@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+    <restriction
+        android:key="projection_tls_host"
+        android:restrictionType="string"
+        android:title="@string/projection_tls_host" />
+    <restriction
+        android:key="projection_tls_key_alias"
+        android:restrictionType="string"
+        android:title="@string/projection_tls_key_alias" />
+</restrictions>

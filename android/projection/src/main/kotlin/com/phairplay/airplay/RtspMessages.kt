@@ -8,7 +8,7 @@ package com.airplay.airplay
  *
  * @param method  The RTSP method (e.g., "OPTIONS", "ANNOUNCE", "RECORD")
  * @param uri     The request URI (e.g., "rtsp://192.168.1.1/airplay")
- * @param headers All headers as a key→value map (keys are case-sensitive per RFC 2326)
+ * @param headers All headers as a key→value map, read case-insensitively on the wire
  * @param body    The request body text (empty string if Content-Length was 0 or absent)
  */
 data class RtspRequest(

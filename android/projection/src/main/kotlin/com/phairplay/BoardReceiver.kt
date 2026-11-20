@@ -17,13 +17,18 @@ import android.webkit.WebView
 import kotlin.math.roundToInt
 
 /** Only the display surface lives beside the WebView. Media never passes through the JS bridge. */
-class BoardReceiver(private val web: WebView, val protocol: String) : TextureView.SurfaceTextureListener, ServiceConnection {
+class BoardReceiver(private val web: WebView, val protocol: String,
+                    private val authorization: Authorization?) : TextureView.SurfaceTextureListener, ServiceConnection {
+    fun interface Authorization {
+        fun update(token: String, sender: String, pin: String, accepted: Boolean)
+    }
     private val context = web.context.applicationContext
     private val parent = web.parent as ViewGroup
     private val main = Handler(Looper.getMainLooper())
     private val texture = TextureView(web.context)
     private var surface: Surface? = null
     private var service: IProjectionEngine? = null
+    private var started = false
     private var closed = false
     private var bound = false
     var state = "starting"
@@ -45,6 +50,10 @@ class BoardReceiver(private val web: WebView, val protocol: String) : TextureVie
         private set
 
     private val events = object : IProjectionEvents.Stub() {
+        override fun authorization(token: String, sender: String, pin: String, accepted: Boolean) {
+            main.post { if (!closed && service != null) authorization?.update(token, sender, pin, accepted) }
+        }
+
         override fun changed(next: String, name: String, w: Int, h: Int, audio: Boolean, item: String) {
             main.post {
                 if (closed || service == null) return@post
@@ -78,7 +87,7 @@ class BoardReceiver(private val web: WebView, val protocol: String) : TextureVie
     override fun onServiceConnected(name: ComponentName, binder: IBinder) {
         if (closed) return
         service = IProjectionEngine.Stub.asInterface(binder)
-        try { service?.start(protocol, surface, events) } catch (_: RemoteException) { lost() }
+        startWhenReady()
     }
     override fun onServiceDisconnected(name: ComponentName) = lost()
     override fun onBindingDied(name: ComponentName) = lost()
@@ -86,23 +95,46 @@ class BoardReceiver(private val web: WebView, val protocol: String) : TextureVie
 
     private fun lost() {
         service = null
+        started = false
         park()
         state = "error"
         hasFrames = false
         revision = revisions.incrementAndGet()
+        authorization?.update("", "", "", false)
         if (bound) { bound = false; context.unbindService(this) }
     }
 
-    override fun onSurfaceTextureAvailable(value: SurfaceTexture, w: Int, h: Int) {
-        surface = Surface(value)
-        try { service?.attach(protocol, surface, events) } catch (_: RemoteException) { lost() }
+    fun authorize(token: String, allow: Boolean) {
+        try { service?.authorize(protocol, token, allow, events) } catch (_: RemoteException) { lost() }
     }
-    override fun onSurfaceTextureSizeChanged(value: SurfaceTexture, w: Int, h: Int) {}
+
+    override fun onSurfaceTextureAvailable(value: SurfaceTexture, w: Int, h: Int) {
+        val target = Surface(value)
+        surface = target
+        if (started) {
+            try { service?.attach(protocol, target, events) } catch (_: RemoteException) { lost() }
+        } else startWhenReady()
+    }
+
+    private fun startWhenReady() {
+        val engine = service ?: return
+        val target = surface ?: return
+        if (closed || started) return
+        try { engine.start(protocol, target, events); started = true }
+        catch (_: RemoteException) { lost() }
+    }
+    override fun onSurfaceTextureSizeChanged(value: SurfaceTexture, w: Int, h: Int) {
+        if (started && protocol == "cast") {
+            try { service?.redraw(protocol, events) } catch (_: RemoteException) { lost() }
+        }
+    }
     override fun onSurfaceTextureUpdated(value: SurfaceTexture) {
         if (!audioOnly) hasFrames = true
     }
     override fun onSurfaceTextureDestroyed(value: SurfaceTexture): Boolean {
-        try { service?.attach(protocol, null, events) } catch (_: RemoteException) { lost() }
+        if (started) {
+            try { service?.attach(protocol, null, events) } catch (_: RemoteException) { lost() }
+        }
         surface?.release()
         surface = null
         hasFrames = false
@@ -141,6 +173,7 @@ class BoardReceiver(private val web: WebView, val protocol: String) : TextureVie
     fun stop() {
         if (closed) return
         closed = true
+        authorization?.update("", "", "", false)
         try { service?.stop(protocol, events) } catch (_: RemoteException) { }
         service = null
         if (bound) { bound = false; context.unbindService(this) }

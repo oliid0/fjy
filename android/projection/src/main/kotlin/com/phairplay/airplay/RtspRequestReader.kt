@@ -2,6 +2,7 @@ package com.airplay.airplay
 
 import com.airplay.util.Logger
 import java.io.InputStream
+import java.util.TreeMap
 
 /**
  * RtspRequestReader parses RTSP/HTTP-style requests from the AirPlay control socket.
@@ -19,8 +20,8 @@ internal class RtspRequestReader(
      * Returns null on clean EOF, malformed input, or payloads over the configured limits.
      */
     fun read(inputStream: InputStream): RtspRequest? {
-        val requestLine = readLine(inputStream) ?: return null
-        if (requestLine.isBlank()) return read(inputStream)
+        var requestLine = readLine(inputStream) ?: return null
+        while (requestLine.isBlank()) requestLine = readLine(inputStream) ?: return null
 
         val parts = requestLine.split(" ")
         if (parts.size < 3) {
@@ -45,7 +46,7 @@ internal class RtspRequestReader(
     }
 
     private fun readHeaders(inputStream: InputStream, requestLineBytes: Int): Map<String, String>? {
-        val headers = mutableMapOf<String, String>()
+        val headers = TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER)
         var totalBytes = requestLineBytes
 
         while (true) {

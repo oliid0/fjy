@@ -242,12 +242,6 @@
 .app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-visibility {
   bottom: 0;
 }
-.app .fcboard .fc-unified-toolbar.fc-toolbar-tight .fc-toolbar-cloud {
-  display: none;
-}
-.app .fcboard .fc-unified-toolbar.fc-toolbar-tight .fc-toolbar-trailing {
-  visibility: hidden;
-}
 .app .fcboard .fc-unified-toolbar .fc-toolbar-cloud {
   margin-left: calc(6 * var(--fc-unit));
 }
@@ -838,18 +832,32 @@
   }
 }
 
-/* Preserve the app's existing phone support; tablet/VM uses the native row. */
 @media (max-width: 1000px) {
   .app .fcboard .fc-unified-toolbar {
-    height: calc(154 * var(--fc-unit));
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    column-gap: calc(6 * var(--fc-unit));
   }
   .app .fcboard .fc-unified-toolbar .fc-toolbar-leading,
+  .app .fcboard .fc-unified-toolbar .fc-drawing-tools,
   .app .fcboard .fc-unified-toolbar .fc-toolbar-trailing {
-    top: 0;
-    bottom: auto;
+    position: static;
   }
-  .app .fcboard .fc-unified-toolbar .fc-toolbar-visibility {
-    bottom: 100%;
+  .app .fcboard .fc-unified-toolbar .fc-drawing-tools {
+    max-width: 100%;
+    transform: none;
+    overflow-x: auto;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  .app .fcboard .fc-unified-toolbar .fc-drawing-tools button,
+  .app .fcboard .fc-unified-toolbar .fc-drawing-tools button.ToolIcon {
+    touch-action: pan-x;
+  }
+  .app .fcboard .fc-unified-toolbar .disable-view-mode {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: center;
   }
 }
 @media (max-width: 360px) {

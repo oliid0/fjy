@@ -1,12 +1,20 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
+import { sceneCoordsToViewportCoords } from "@fcboard/common";
 import {
   CaptureUpdateAction,
   newElement,
   newElementWith,
 } from "@fcboard/element";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
+import { CloseIcon, fullscreenIcon } from "@fcboard/fcboard/components/icons";
 import { useI18n } from "@fcboard/fcboard/i18n";
 
 import type { PluginListenerHandle } from "@capacitor/core";
@@ -24,18 +32,21 @@ import {
 import type { NativeProtocol, NativeReceivers } from "./nativeProjection";
 import "./ScreenProjection.scss";
 
-type ProjectionSource = import("@fcboard/fcboard/scene/types").SceneProjection["video"];
-type Receiver = { session: string; url: string };
+type ProjectionSource =
+  import("@fcboard/fcboard/scene/types").SceneProjection["video"];
+type Receiver = { session: string; url: string; address: string };
+type LocalNetwork = {
+  address: string;
+  name: string;
+  transport: "wifi" | "ethernet" | "";
+};
 type Sender = { session: string; sender: string };
-type Signal = Sender & ({ kind: "offer" | "restart"; sdp: string } | { kind: "left" });
+type Signal = Sender &
+  ({ kind: "offer" | "restart"; sdp: string } | { kind: "left" });
 
 const projection = registerPlugin<{
-  start(options: {
-    host?: string;
-    certificate?: string;
-    password?: string;
-    resume?: boolean;
-  }): Promise<Receiver>;
+  start(options: { session: string }): Promise<Receiver>;
+  network(options: { address?: string }): Promise<LocalNetwork>;
   answer(options: Sender & { sdp: string }): Promise<void>;
   disconnect(options: Sender): Promise<void>;
   stop(options: { session: string }): Promise<void>;
@@ -54,9 +65,9 @@ type Connection = {
 };
 
 const startErrors = {
-  CERTIFICATE: "projection.certificateError",
+  CERTIFICATE: "projection.secureUnavailable",
   NETWORK: "projection.networkError",
-  HOST: "projection.hostError",
+  HOST: "projection.secureUnavailable",
 } as const;
 
 const startErrorKey = (error: unknown) => {
@@ -68,19 +79,8 @@ const startErrorKey = (error: unknown) => {
 
 type ProjectionErrorKey =
   | ReturnType<typeof startErrorKey>
-  | "projection.nearbyError"
   | "projection.connectionError"
-  | "projection.certificateSize";
-
-const readCertificate = async (file: File) => {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  // Keep each spread below the WebView's argument limit.
-  for (let offset = 0; offset < bytes.length; offset += 8192) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
-  }
-  return btoa(binary);
-};
+  | "projection.networkChanged";
 
 function gatherIce(pc: RTCPeerConnection) {
   if (pc.iceGatheringState === "complete") {
@@ -102,10 +102,7 @@ function gatherIce(pc: RTCPeerConnection) {
   });
 }
 
-function attachProjection(
-  api: FcboardImperativeAPI,
-  video: ProjectionSource,
-) {
+function attachProjection(api: FcboardImperativeAPI, video: ProjectionSource) {
   const state = api.getAppState();
   const zoom = state.zoom.value;
   const ratio =
@@ -138,26 +135,265 @@ function attachProjection(
   return element.id;
 }
 
-const nativeStatusKeys = {
-  starting: "projection.starting",
-  off: "projection.off",
-  waiting: "projection.waiting",
-  connecting: "projection.connecting",
-  connected: "projection.live",
-  error: "projection.startError",
-  unavailable: "projection.unavailable",
-} as const;
+const restoreIcon = (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M4 9h5V4m6 0v5h5M4 15h5v5m11-5h-5v5" />
+  </svg>
+);
+
+function projectionWindow(api: FcboardImperativeAPI) {
+  const cast = api.getSceneProjection?.();
+  const bounds = api.getAppState();
+  if (!cast) return;
+  if (cast.fullscreen) {
+    const { offsetLeft, offsetTop, width, height } = bounds;
+    return {
+      x: offsetLeft + width / 2,
+      y: offsetTop + height / 2,
+      width,
+      height,
+      angle: 0,
+    };
+  }
+  const tile = api.getSceneElementsMapIncludingDeleted().get(cast.elementId);
+  if (!tile || tile.isDeleted) return;
+  const center = sceneCoordsToViewportCoords(
+    { sceneX: tile.x + tile.width / 2, sceneY: tile.y + tile.height / 2 },
+    bounds,
+  );
+  return {
+    ...center,
+    width: Math.abs(tile.width * bounds.zoom.value),
+    height: Math.abs(tile.height * bounds.zoom.value),
+    angle: tile.angle,
+  };
+}
+
+const CONTROLS_TIMEOUT = 3000;
+const TAP_SLOP = 10;
+
+function ProjectionControls({
+  api,
+  fullscreen,
+  onFullscreen,
+  onDisconnect,
+}: {
+  api: FcboardImperativeAPI;
+  fullscreen: boolean;
+  onFullscreen: () => void;
+  onDisconnect: () => void;
+}) {
+  const { t } = useI18n();
+  const controls = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(true);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const reveal = useCallback(() => {
+    setVisible(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setVisible(false), CONTROLS_TIMEOUT);
+  }, []);
+
+  useLayoutEffect(() => {
+    const board = document.querySelector(
+      `.fcboard[data-fcboard-id="${CSS.escape(api.id)}"]`,
+    );
+    const overlay = controls.current;
+    if (!board || !overlay) return;
+    let pressed: { id: number; x: number; y: number } | undefined;
+    const contains = (event: { clientX: number; clientY: number }) => {
+      const frame = projectionWindow(api);
+      if (!frame) return false;
+      const dx = event.clientX - frame.x;
+      const dy = event.clientY - frame.y;
+      const cos = Math.cos(frame.angle);
+      const sin = Math.sin(frame.angle);
+      return (
+        Math.abs(dx * cos + dy * sin) <= frame.width / 2 &&
+        Math.abs(dy * cos - dx * sin) <= frame.height / 2
+      );
+    };
+    const position = () => {
+      const frame = projectionWindow(api);
+      if (!frame) {
+        overlay.hidden = true;
+        return;
+      }
+      const cos = Math.cos(frame.angle);
+      const sin = Math.sin(frame.angle);
+      const right = frame.x + (frame.width * cos + frame.height * sin) / 2;
+      const top = frame.y + (frame.width * sin - frame.height * cos) / 2;
+      const halfWidth =
+        (frame.width * Math.abs(cos) + frame.height * Math.abs(sin)) / 2;
+      const halfHeight =
+        (frame.width * Math.abs(sin) + frame.height * Math.abs(cos)) / 2;
+      const boardBounds = board.getBoundingClientRect();
+      const hidden =
+        frame.x + halfWidth < boardBounds.left ||
+        frame.x - halfWidth > boardBounds.right ||
+        frame.y + halfHeight < boardBounds.top ||
+        frame.y - halfHeight > boardBounds.bottom;
+      if (overlay.hidden !== hidden) overlay.hidden = hidden;
+      const rightEdge = Math.min(
+        boardBounds.right,
+        Math.max(boardBounds.left + overlay.offsetWidth + 12, right),
+      );
+      const topEdge = Math.max(
+        boardBounds.top,
+        Math.min(top, boardBounds.bottom - overlay.offsetHeight - 12),
+      );
+      const rightOffset = `${innerWidth - rightEdge}px`;
+      const topOffset = `${topEdge}px`;
+      if (overlay.style.getPropertyValue("--cast-right") !== rightOffset) {
+        overlay.style.setProperty("--cast-right", rightOffset);
+      }
+      if (overlay.style.getPropertyValue("--cast-top") !== topOffset) {
+        overlay.style.setProperty("--cast-top", topOffset);
+      }
+    };
+    const down = (event: PointerEvent) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".fc-projection__controls, .fc-unified-toolbar")
+      ) {
+        if (fullscreen || overlay.contains(event.target)) reveal();
+        return;
+      }
+      if (
+        event.target instanceof Element &&
+        board.contains(event.target) &&
+        event.target.matches("canvas.interactive, .fcboard__canvas-wrapper") &&
+        contains(event)
+      ) {
+        pressed = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      }
+    };
+    const up = (event: PointerEvent) => {
+      if (pressed?.id !== event.pointerId) return;
+      if (
+        Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) <=
+          TAP_SLOP &&
+        contains(event)
+      ) {
+        reveal();
+      }
+      pressed = undefined;
+    };
+    const move = (event: PointerEvent) => {
+      if (
+        pressed?.id === event.pointerId &&
+        Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) >
+          TAP_SLOP
+      ) {
+        pressed = undefined;
+      }
+    };
+    const cancel = () => {
+      pressed = undefined;
+    };
+    const nativeTap = (event: Event) => {
+      const { owner, clientX, clientY } = (
+        event as CustomEvent<{
+          owner: string;
+          clientX: number;
+          clientY: number;
+        }>
+      ).detail;
+      if (owner === api.id && contains({ clientX, clientY })) reveal();
+    };
+    const unsubscribe = api.onChange(position);
+    position();
+    if (fullscreen) {
+      setVisible(false);
+      clearTimeout(timer.current);
+    } else {
+      reveal();
+    }
+    window.addEventListener("resize", position);
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", cancel, true);
+    window.addEventListener("fcboard:projection-tap", nativeTap);
+    return () => {
+      clearTimeout(timer.current);
+      unsubscribe();
+      window.removeEventListener("resize", position);
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", cancel, true);
+      window.removeEventListener("fcboard:projection-tap", nativeTap);
+    };
+  }, [api, fullscreen, reveal]);
+
+  useLayoutEffect(() => {
+    if (!fullscreen || visible) return;
+    const board = document.querySelector(
+      `.fcboard[data-fcboard-id="${CSS.escape(api.id)}"]`,
+    );
+    board?.classList.add("fc-projection-immersive");
+    return () => board?.classList.remove("fc-projection-immersive");
+  }, [api.id, fullscreen, visible]);
+
+  const fullscreenLabel = t(
+    fullscreen ? "projection.restore" : "projection.fullscreen",
+  );
+  const disconnectLabel = t("projection.disconnect");
+  return (
+    <div
+      ref={controls}
+      className={
+        visible
+          ? "fc-projection__controls fc-projection__controls--visible"
+          : "fc-projection__controls"
+      }
+    >
+      <button
+        type="button"
+        aria-label={fullscreenLabel}
+        onClick={(event) => {
+          event.currentTarget.blur();
+          onFullscreen();
+        }}
+      >
+        {fullscreen ? restoreIcon : fullscreenIcon}
+      </button>
+      <button type="button" aria-label={disconnectLabel} onClick={onDisconnect}>
+        {CloseIcon}
+      </button>
+    </div>
+  );
+}
 
 export const ScreenProjection = ({ api }: { api: FcboardImperativeAPI }) => {
   const [request, setRequest] = useState(0);
   const release = useCallback(() => setRequest(0), []);
-  useEffect(() => classroomCommands.register("projection.open", "@internal", () => {
-    setRequest((previous) => previous + 1);
-  }), []);
-  return request ? <ProjectionSession api={api} request={request} release={release} /> : null;
+  useEffect(
+    () =>
+      classroomCommands.register("projection.open", "@internal", () => {
+        setRequest((previous) => previous + 1);
+      }),
+    [],
+  );
+  return request ? (
+    <ProjectionSession api={api} request={request} release={release} />
+  ) : null;
 };
 
-const ProjectionSession = ({ api, request, release }: {
+const ProjectionSession = ({
+  api,
+  request,
+  release,
+}: {
   api: FcboardImperativeAPI;
   request: number;
   release: () => void;
@@ -165,7 +401,6 @@ const ProjectionSession = ({ api, request, release }: {
   const { t } = useI18n();
   const supported =
     Capacitor.getPlatform() === "android" && !!api.setSceneProjection;
-  const mounted = useRef(false);
   const receiver = useRef<Receiver>(undefined);
   const connection = useRef<Connection>(undefined);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -175,25 +410,21 @@ const ProjectionSession = ({ api, request, release }: {
     video: ProjectionSource;
   }>(undefined);
   const [native, setNative] = useState<NativeReceivers>();
-  const nativeStarted = useRef(false);
-  const [nativeBusy, setNativeBusy] = useState<NativeProtocol>();
-  const starting = useRef(false);
-  const activate = useRef<() => void>(undefined);
-  const choosingCertificate = useRef(false);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [url, setUrl] = useState("");
+  const disconnectCurrent = useRef<() => void>(undefined);
+  const [open, setOpen] = useState(true);
+  const [enabled, setEnabled] = useState(false);
+  const [web, setWeb] = useState<Receiver>();
+  const [network, setNetwork] = useState<LocalNetwork>();
+  const [webError, setWebError] = useState<ProjectionErrorKey>();
+  const [nativeError, setNativeError] = useState(false);
   const [error, setError] = useState<ProjectionErrorKey>();
   const [stage, setStage] = useState<"idle" | "connecting" | "live">("idle");
   const [fullscreen, setFullscreen] = useState(false);
-  const [muted, setMuted] = useState(true);
-  const [hasAudio, setHasAudio] = useState(false);
-  const [file, setFile] = useState<File>();
-  const [host, setHost] = useState("");
-  const [password, setPassword] = useState("");
-
   useEffect(() => {
-    mounted.current = true;
+    if (!enabled || !supported) return;
+    const session = crypto.randomUUID();
+    let disposed = false;
+    let restarting: NativeProtocol | undefined;
     const close = () => {
       const current = connection.current;
       const video = videoRef.current;
@@ -202,7 +433,8 @@ const ProjectionSession = ({ api, request, release }: {
         return;
       }
       connection.current = undefined;
-      if (nativeLive.current) document.documentElement.classList.remove("fc-native-projection");
+      if (nativeLive.current)
+        document.documentElement.classList.remove("fc-native-projection");
       nativeLive.current = undefined;
       if (current) {
         clearTimeout(current.timer);
@@ -229,11 +461,9 @@ const ProjectionSession = ({ api, request, release }: {
           captureUpdate: CaptureUpdateAction.NEVER,
         });
       }
-      if (mounted.current) {
+      if (!disposed) {
         setStage("idle");
         setFullscreen(false);
-        setMuted(true);
-        setHasAudio(false);
       }
     };
     const endWithError = (current: Connection) => {
@@ -244,94 +474,59 @@ const ProjectionSession = ({ api, request, release }: {
         setOpen(true);
       }
     };
-    let disposed = false;
-    let unwatch: (() => void) | undefined;
-    const enableNative = async () => {
-      try {
-        const capabilities = await nativeProjection.status();
-        if (disposed) return;
-        unwatch = watchNativeProjection(
-          setNative,
-          (protocol) =>
-            !connection.current &&
-            (!nativeLive.current || nativeLive.current.protocol === protocol),
-          (protocol, video) => {
-            if (nativeLive.current) {
-              nativeLive.current.video = video;
-              const current = api.getSceneProjection?.();
-              if (current) api.setSceneProjection?.({ ...current, video });
-              return;
-            }
-            document.documentElement.classList.add("fc-native-projection");
-            nativeLive.current = {
-              protocol,
-              video,
-              tile: attachProjection(api, video),
-            };
-            setStage("live");
-            setError(undefined);
-            setOpen(false);
-          },
-          (protocol) => {
-            if (nativeLive.current?.protocol === protocol) close();
-          },
-          () => setError("projection.connectionError"),
-        );
-        for (const protocol of nativeProtocols) {
-          if (disposed) break;
-          if (capabilities[protocol].state !== "off") continue;
-          try {
-            await nativeProjection.start({ protocol });
-            if (disposed) await nativeProjection.stop({ protocol });
-          } catch {
-            if (!disposed)
-              setError(
-                protocol === "miracast"
-                  ? "projection.nearbyError"
-                  : "projection.startError",
-              );
-          }
+    const unwatch = watchNativeProjection(
+      session,
+      setNative,
+      (protocol) =>
+        !connection.current &&
+        protocol !== restarting &&
+        (!nativeLive.current || nativeLive.current.protocol === protocol),
+      (protocol, video) => {
+        if (nativeLive.current) {
+          nativeLive.current.video = video;
+          const current = api.getSceneProjection?.();
+          if (current) api.setSceneProjection?.({ ...current, video });
+          return;
         }
-      } catch {
-        if (!disposed) setError("projection.startError");
+        document.documentElement.classList.add("fc-native-projection");
+        nativeLive.current = {
+          protocol,
+          video,
+          tile: attachProjection(api, video),
+        };
+        setStage("live");
+        setError(undefined);
+        setOpen(false);
+      },
+      (protocol) => {
+        if (nativeLive.current?.protocol === protocol) {
+          close();
+          if (!disposed) setOpen(true);
+        }
+      },
+      () => setNativeError(true),
+    );
+    const stopSender = () => {
+      const current = connection.current;
+      const protocol = nativeLive.current?.protocol;
+      close();
+      if (current) void projection.disconnect(current.sender).catch(() => {});
+      if (protocol) {
+        restarting = protocol;
+        void nativeProjection
+          .disconnect({ protocol, session })
+          .catch(() => {
+            if (!disposed) setNativeError(true);
+          })
+          .finally(() => {
+            restarting = undefined;
+          });
       }
     };
-    const resumeWeb = async () => {
-      if (starting.current || receiver.current) return;
-      starting.current = true;
-      setBusy(true);
-      try {
-        const next = await projection.start({ resume: true });
-        if (disposed) {
-          await projection.stop(next);
-        } else {
-          receiver.current = next;
-          setUrl(next.url);
-          setError(undefined);
-        }
-      } catch (failure) {
-        if (
-          !disposed &&
-          (failure as { code?: string })?.code !== "NOT_CONFIGURED"
-        ) {
-          setError(startErrorKey(failure));
-        }
-      } finally {
-        starting.current = false;
-        if (!disposed) setBusy(false);
-      }
-    };
-    activate.current = () => {
+    disconnectCurrent.current = () => {
+      stopSender();
       setOpen(true);
-      if (supported) void resumeWeb();
-      if (supported && !nativeStarted.current) {
-        nativeStarted.current = true;
-        void enableNative();
-      }
     };
-    if (!supported) {
-      return () => { mounted.current = false; activate.current = undefined; };
-    }
 
     const cancel = api.onChange((elements) => {
       const current = connection.current;
@@ -341,12 +536,7 @@ const ProjectionSession = ({ api, request, release }: {
         tile &&
         !elements.some((element) => element.id === tile && !element.isDeleted)
       ) {
-        close();
-        if (current) void projection.disconnect(current.sender).catch(() => {});
-        if (nativeSource)
-          void nativeProjection
-            .stop({ protocol: nativeSource.protocol })
-            .catch(() => {});
+        stopSender();
       }
     });
     const answerOffer = async (active: Connection, sdp: string) => {
@@ -359,12 +549,13 @@ const ProjectionSession = ({ api, request, release }: {
       }
     };
     const listener = projection.addListener("signal", async (event) => {
-      if (!mounted.current || receiver.current?.session !== event.session) {
+      if (disposed || session !== event.session) {
         return;
       }
       if (event.kind === "left") {
         if (connection.current?.sender.sender === event.sender) {
           close();
+          setOpen(true);
         }
         return;
       }
@@ -387,7 +578,6 @@ const ProjectionSession = ({ api, request, release }: {
       }
       const video = document.createElement("video");
       video.playsInline = true;
-      video.muted = true;
       video.className = "fc-projection__video";
       video.setAttribute("aria-hidden", "true");
       document.body.appendChild(video);
@@ -416,15 +606,13 @@ const ProjectionSession = ({ api, request, release }: {
             return;
           }
           stream.addTrack(track);
-          if (track.kind === "audio") {
-            setHasAudio(true);
-            return;
-          }
+          if (track.kind !== "video") return;
           track.addEventListener(
             "ended",
             () => {
               if (connection.current === active) {
                 close();
+                setOpen(true);
                 void projection.disconnect(sender).catch(() => {});
               }
             },
@@ -447,7 +635,10 @@ const ProjectionSession = ({ api, request, release }: {
         };
         pc.onconnectionstatechange = () => {
           if (connection.current !== active) return;
-          if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          if (
+            pc.connectionState === "failed" ||
+            pc.connectionState === "disconnected"
+          ) {
             clearTimeout(active.timer);
             active.timer = setTimeout(() => endWithError(active), 25000);
           } else if (pc.connectionState === "connected" && active.tile) {
@@ -467,47 +658,94 @@ const ProjectionSession = ({ api, request, release }: {
         }
       }
     });
-    void listener.catch(() => {
-      if (mounted.current) {
-        setError("projection.startError");
-      }
-    });
+    void listener
+      .then(async () => {
+        if (disposed) return;
+        const next = await projection.start({ session });
+        if (disposed) await projection.stop(next);
+        else {
+          receiver.current = next;
+          setWeb(next);
+        }
+      })
+      .catch((failure) => {
+        if (!disposed) setWebError(startErrorKey(failure));
+      });
+    for (const protocol of nativeProtocols) {
+      void nativeProjection.start({ protocol, session }).catch((failure) => {
+        if (
+          !disposed &&
+          (failure as { code?: string })?.code !== "UNAVAILABLE"
+        ) {
+          setNativeError(true);
+        }
+      });
+    }
     return () => {
-      mounted.current = false;
-      activate.current = undefined;
-      cancel();
       disposed = true;
-      unwatch?.();
-      if (nativeStarted.current) {
-        nativeStarted.current = false;
-        for (const protocol of nativeProtocols)
-          void nativeProjection.stop({ protocol }).catch(() => {});
-      }
+      disconnectCurrent.current = undefined;
+      cancel();
+      unwatch();
+      for (const protocol of nativeProtocols)
+        void nativeProjection.stop({ protocol, session }).catch(() => {});
       close();
       void listener
         .then((subscription) => subscription.remove())
         .catch(() => {});
-      const current = receiver.current;
       receiver.current = undefined;
-      if (current) {
-        void projection.stop(current).catch(() => {});
+      void projection.stop({ session }).catch(() => {});
+    };
+  }, [api, enabled, supported]);
+
+  useEffect(() => {
+    setOpen(true);
+  }, [request]);
+
+  useEffect(() => {
+    if (!supported || (!open && !enabled)) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const update = async () => {
+      const current = receiver.current;
+      try {
+        const next = await projection.network({ address: current?.address });
+        if (disposed) return;
+        setNetwork(next);
+        if (
+          current &&
+          receiver.current === current &&
+          current.address !== next.address
+        ) {
+          receiver.current = undefined;
+          setWeb(undefined);
+          setWebError("projection.networkChanged");
+          void projection.stop(current).catch(() => {});
+        }
+      } catch {
+        if (!disposed) setNetwork(undefined);
+      } finally {
+        if (!disposed) timer = setTimeout(() => void update(), 3000);
       }
     };
-  }, [api, supported]);
+    void update();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+    };
+  }, [enabled, open, supported]);
 
-  useEffect(() => { activate.current?.(); }, [request, api, supported]);
-
-  const receiving = stage !== "idle" || nativeProtocols.some((p) => native?.[p].state === "connected");
+  const receiving =
+    stage !== "idle" ||
+    nativeProtocols.some((p) => native?.[p].state === "connected");
   useEffect(() => {
-    if (receiving) return;
+    if (!enabled || receiving) return;
     const timeout = setTimeout(release, 5 * 60 * 1000);
     return () => clearTimeout(timeout);
-  }, [request, receiving, release]);
+  }, [enabled, request, receiving, release]);
 
   useEffect(() => {
     const visibility = () => {
-      if (document.hidden && !choosingCertificate.current) release();
-      if (!document.hidden) choosingCertificate.current = false;
+      if (document.hidden) release();
     };
     document.addEventListener("visibilitychange", visibility);
     window.addEventListener("pagehide", release);
@@ -527,63 +765,15 @@ const ProjectionSession = ({ api, request, release }: {
     };
   }, [fullscreen]);
 
-  const start = async () => {
-    if (!file || starting.current) {
-      return;
-    }
-    if (file.size > 384 * 1024) {
-      setError("projection.certificateSize");
-      return;
-    }
-    starting.current = true;
-    setBusy(true);
+  const toggleReception = (active: boolean) => {
+    setEnabled(active);
     setError(undefined);
-    try {
-      const certificate = await readCertificate(file);
-      if (!mounted.current) return;
-      const next = await projection.start({
-        host,
-        certificate,
-        password,
-      });
-      if (!mounted.current) {
-        await projection.stop(next);
-        return;
-      }
-      receiver.current = next;
-      setUrl(next.url);
-      setPassword("");
-      setFile(undefined);
-    } catch (failure) {
-      if (mounted.current) {
-        setError(startErrorKey(failure));
-      }
-    } finally {
-      starting.current = false;
-      if (mounted.current) {
-        setBusy(false);
-      }
-    }
-  };
-
-  const stop = async () => {
-    const current = receiver.current;
-    if (!current || starting.current) {
-      return;
-    }
-    starting.current = true;
-    setBusy(true);
-    try {
-      await projection.stop(current);
-      receiver.current = undefined;
-      setUrl("");
-      setError(undefined);
-    } catch {
-      setError("projection.connectionError");
-    } finally {
-      starting.current = false;
-      setBusy(false);
-    }
+    setWeb(undefined);
+    setWebError(undefined);
+    setNative(undefined);
+    setNativeError(false);
+    setStage("idle");
+    setFullscreen(false);
   };
 
   const toggleFullscreen = () => {
@@ -599,72 +789,46 @@ const ProjectionSession = ({ api, request, release }: {
     }
   };
 
-  const toggleNative = async (protocol: NativeProtocol, stop: boolean) => {
-    setNativeBusy(protocol);
-    setError(undefined);
-    try {
-      if (stop) await nativeProjection.stop({ protocol });
-      else await nativeProjection.start({ protocol });
-      if (mounted.current) setNative(await nativeProjection.status());
-    } catch (failure) {
-      if (mounted.current)
-        setError(
-          (failure as { code?: string })?.code === "PERMISSION"
-            ? "projection.nearbyError"
-            : "projection.startError",
-        );
-    } finally {
-      if (mounted.current) setNativeBusy(undefined);
-    }
+  const dismiss = () => {
+    if (enabled) setOpen(false);
+    else release();
   };
-
-  const disconnect = () => {
-    if (nativeLive.current) {
-      void toggleNative(nativeLive.current.protocol, true);
-      return;
-    }
-    const current = connection.current;
-    if (current) {
-      void projection.disconnect(current.sender).catch(() => {
-        setError("projection.connectionError");
-        setOpen(true);
-      });
-    }
-  };
+  const readyNames = nativeProtocols
+    .map((protocol) => native?.[protocol])
+    .filter(
+      (engine) =>
+        engine && ["waiting", "connecting", "connected"].includes(engine.state),
+    );
+  const ready = !!web || readyNames.length > 0;
+  const nativeConnecting = readyNames.some(
+    (engine) => engine?.state === "connecting",
+  );
+  const playingTitle = readyNames.find(
+    (engine) => engine?.state === "connected" && engine.audio,
+  );
+  const networkName =
+    network?.name ||
+    (network?.transport === "wifi"
+      ? "Wi-Fi"
+      : network?.transport === "ethernet"
+      ? t("projection.ethernet")
+      : "");
 
   return (
     <>
       {stage === "live" && (
-        <div
-          className="fc-projection__controls"
-          aria-label={t("projection.title")}
-        >
-          <button type="button" onClick={toggleFullscreen}>
-            {t(fullscreen ? "projection.restore" : "projection.fullscreen")}
-          </button>
-          {hasAudio && (
-            <button
-              type="button"
-              onClick={() => {
-                if (videoRef.current) {
-                  videoRef.current.muted = !muted;
-                  setMuted(!muted);
-                }
-              }}
-            >
-              {t(muted ? "projection.unmute" : "projection.mute")}
-            </button>
-          )}
-          <button type="button" onClick={disconnect}>
-            {t("projection.disconnect")}
-          </button>
-        </div>
+        <ProjectionControls
+          api={api}
+          fullscreen={fullscreen}
+          onFullscreen={toggleFullscreen}
+          onDisconnect={() => disconnectCurrent.current?.()}
+        />
       )}
       {open && (
         <MaterialPanel
           centered
-          onDismiss={() => setOpen(false)}
-          className="fc-projection"
+          onDismiss={dismiss}
+          className="fc-share-qr-dialog fc-projection"
           aria-label={t("projection.title")}
         >
           <header>
@@ -675,145 +839,73 @@ const ProjectionSession = ({ api, request, release }: {
             <button
               type="button"
               aria-label={t("buttons.close")}
-              onClick={() => setOpen(false)}
+              onClick={dismiss}
             >
               ×
             </button>
           </header>
-          <div className="fc-projection__protocols">
-            {nativeProtocols.map((protocol) => {
-              const engine = native?.[protocol];
-              const state =
-                engine?.state ?? (supported ? "starting" : "unavailable");
-              const running = [
-                "waiting",
-                "connecting",
-                "connected",
-                "starting",
-              ].includes(state);
-              return (
-                <div key={protocol}>
-                  <strong>
-                    {protocol === "airplay" ? "AirPlay 2" : protocol === "dlna" ? "DLNA" : "Miracast"}
-                  </strong>
-                  <span>
-                    {protocol === "airplay"
-                      ? "iPhone · iPad · Mac"
-                      : protocol === "dlna" ? t("projection.dlnaApps") : "Wi-Fi Direct · Win + K"}
-                  </span>
-                  {engine?.audio && <span>{engine.title || t("projection.audioPlayback")}</span>}
-                  {engine?.name && <span>{engine.name}</span>}
-                  <small
-                    role="status"
-                    data-ready={state === "waiting" || state === "connected"}
-                  >
-                    {t(
-                      state === "unavailable" &&
-                        protocol === "miracast" &&
-                        supported
-                        ? "projection.wfdUnavailable"
-                        : nativeStatusKeys[state === "connected" && !engine?.hasFrames && !engine?.audio ? "connecting" : state],
-                    )}
-                  </small>
-                  {supported && engine && state !== "unavailable" && (
-                    <button
-                      type="button"
-                      disabled={!!nativeBusy || state === "starting"}
-                      onClick={() => void toggleNative(protocol, running)}
-                    >
-                      {t(running ? "projection.stop" : "projection.start")}
-                    </button>
+          <div className="fc-qr-content">
+            <label className="fc-qr-protection">
+              <span>{t("projection.start")}</span>
+              <span className="fc-qr-switch">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={enabled}
+                  disabled={!supported}
+                  onChange={(event) => toggleReception(event.target.checked)}
+                />
+                <span className="fc-qr-switch-track" aria-hidden="true" />
+              </span>
+            </label>
+            <div className="fc-qr-image fc-projection__qr" role="status">
+              {web ? (
+                <QRCode key={web.url} value={web.url} />
+              ) : (
+                <span>
+                  {t(
+                    !supported
+                      ? "projection.androidOnly"
+                      : !enabled
+                      ? "projection.off"
+                      : webError || "projection.starting",
                   )}
-                </div>
-              );
-            })}
-            <div>
-              <strong>WebRTC</strong>
-              <span>{t("projection.browser")}</span>
-              <small data-ready={!!url} role="status">
-                {t(
-                  connection.current && stage === "live"
-                    ? "projection.live"
-                    : connection.current && stage === "connecting"
-                    ? "projection.connecting"
-                    : url
-                    ? "projection.waiting"
-                    : "projection.off",
-                )}
-              </small>
+                </span>
+              )}
             </div>
-          </div>
-          {!supported ? (
-            <p>{t("projection.androidOnly")}</p>
-          ) : url ? (
-            <div className="fc-projection__pairing">
-              <QRCode key={url} value={url} />
-              <div>
-                <p>{t("projection.scan")}</p>
-                <input
-                  aria-label={t("projection.senderUrl")}
-                  value={url}
-                  readOnly
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void stop()}
-                >
-                  {t("projection.stop")}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void start();
-              }}
-            >
-              <p>{t("projection.tls")}</p>
-              <label>
-                {t("projection.certificate")}
-                <input
-                  type="file"
-                  accept=".p12,.pfx,application/x-pkcs12"
-                  disabled={busy}
-                  onClick={() => { choosingCertificate.current = true; }}
-                  onChange={(event) => {
-                    choosingCertificate.current = false;
-                    setFile(event.target.files?.[0]);
-                  }}
-                />
-              </label>
-              <label>
-                {t("projection.host")}
-                <input
-                  value={host}
-                  disabled={busy}
-                  onChange={(event) => setHost(event.target.value)}
-                />
-              </label>
-              <label>
-                {t("projection.password")}
-                <input
-                  type="password"
-                  value={password}
-                  disabled={busy}
-                  autoComplete="off"
-                  onChange={(event) => setPassword(event.target.value)}
-                />
-              </label>
-              <button type="submit" disabled={!file || busy}>
-                {t(busy ? "projection.starting" : "projection.start")}
-              </button>
-            </form>
-          )}
-          {error && (
-            <p className="fc-projection__error" role="alert">
-              {t(error)}
+            <p className="fc-projection__network">
+              {[networkName, network?.address].filter(Boolean).join(" · ") ||
+                t("projection.networkError")}
             </p>
-          )}
+            {enabled && (ready || stage === "connecting") && (
+              <p role="status">
+                {stage === "connecting" || nativeConnecting
+                  ? t("projection.connecting")
+                  : playingTitle
+                  ? playingTitle.title || t("projection.audioPlayback")
+                  : [
+                      ...new Set(
+                        readyNames
+                          .map((engine) => engine?.name)
+                          .filter(Boolean),
+                      ),
+                    ].join(" · ") || t("projection.waiting")}
+              </p>
+            )}
+            {enabled &&
+              (error ||
+                nativeError ||
+                nativeProtocols.some(
+                  (protocol) => native?.[protocol].state === "error",
+                )) && (
+                <p className="fc-projection__error" role="alert">
+                  {t(error || "projection.nativeError")}
+                </p>
+              )}
+            {enabled && native?.miracast.state === "unavailable" && (
+              <p>{t("projection.miracastUnavailable")}</p>
+            )}
+          </div>
         </MaterialPanel>
       )}
     </>

@@ -757,7 +757,36 @@ export const NativeInkInteraction = ({
         }
       }
     };
+    const projectionTaps = new Map<string, Contact["points"][number]>();
     const listener = ink.addListener("contact", (contact) => {
+      if (contact.owner === api.id) {
+        if (
+          contact.phase === "start" &&
+          !contact.palm &&
+          contact.mode !== "transform" &&
+          contact.points[0] &&
+          api.getSceneProjection?.()
+        ) {
+          projectionTaps.set(contact.id, contact.points[0]);
+        }
+        const first = projectionTaps.get(contact.id);
+        if (
+          first &&
+          (contact.phase === "cancel" ||
+            contact.points.some(
+              ([x, y]) => Math.hypot(x - first[0], y - first[1]) > 10,
+            ))
+        ) {
+          projectionTaps.delete(contact.id);
+        } else if (first && contact.phase === "end") {
+          projectionTaps.delete(contact.id);
+          window.dispatchEvent(
+            new CustomEvent("fcboard:projection-tap", {
+              detail: { owner: api.id, clientX: first[0], clientY: first[1] },
+            }),
+          );
+        }
+      }
       // A crossed pen must settle between the surrounding eraser batches.
       // Unaffected writers and selection retain their synchronous entry path.
       if (

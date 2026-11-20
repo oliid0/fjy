@@ -1,7 +1,9 @@
 package com.airplay.airplay
 
+import android.util.Log
 import com.airplay.airplay.handshake.FairPlay
 import com.airplay.airplay.handshake.InfoResponder
+import com.airplay.airplay.handshake.MirrorCrypto
 import com.airplay.airplay.handshake.PairingKeys
 import com.airplay.airplay.handshake.PairingSession
 import com.airplay.airplay.handshake.PlistCodec
@@ -26,9 +28,11 @@ open class RtspHandler(
     private val context: android.content.Context,
     private val onListening: () -> Unit,
     private val onListenFailure: () -> Unit,
+    private val receiverName: () -> String,
     private val displayWidth: Int = 1920,
     private val displayHeight: Int = 1080,
     private val displayFps: Int = 60,
+    private val hevc: Boolean,
     private val audioEnabled: Boolean = false,
     private val videoSurfaceProvider: () -> android.view.Surface?,
     private val onStreamingStarted: (session: SessionDescription) -> Unit,
@@ -36,15 +40,15 @@ open class RtspHandler(
     private val onPhotoReceived: (bytes: ByteArray, imageType: PhotoImageType) -> Unit = { _, _ -> },
     private val onPhotoCleared: () -> Unit = {},
     /**
-     * AirPlay 2 mirror SETUP msg 1: supply decrypted AES key + pairing secret + the sender's
-     * address and timing port (so the receiver can start NTP). Returns (eventPort, timingPort).
+     * Mirror SETUP msg 1: supply the session AES key and IV plus the sender's timing endpoint.
+     * Returns the bound local UDP timing port.
      */
     private val onMirrorSetupKeys: (
-        aesKey: ByteArray, ecdhSecret: ByteArray, aesIv: ByteArray,
+        aesKey: ByteArray, aesIv: ByteArray,
         remoteAddress: java.net.InetAddress, senderTimingPort: Int
-    ) -> Pair<Int, Int> = { _, _, _, _, _ -> 0 to 0 },
+    ) -> Int = { _, _, _, _ -> 0 },
     /** AirPlay 2 mirror SETUP: start the video data server (type 110); returns its data port. */
-    private val onMirrorStreamStart: (streamConnectionId: Long) -> Int = { 0 },
+    private val onMirrorStreamStart: (streamConnectionId: Long, closeControl: () -> Unit) -> Int = { _, _ -> 0 },
     /** AirPlay 2 SETUP: start the audio server (type 96; ct 8 AAC-ELD mirror / 4 AAC-LC / 2 ALAC). spf = samples/frame. */
     private val onMirrorAudioStart: (sampleRate: Int, channels: Int, codecType: Int, framesPerPacket: Int) -> Pair<Int, Int> = { _, _, _, _ -> 0 to 0 },
     /** AirPlay 2 mirror TEARDOWN of just the audio stream (type 96) — stop audio, keep video. */
@@ -96,7 +100,7 @@ open class RtspHandler(
     /** Last volume the sender set (AirPlay dB); returned to GET_PARAMETER volume queries. */
     @Volatile private var currentVolume: Float = 0f
 
-    private var serverSocket: ServerSocket? = null
+    @Volatile private var serverSocket: ServerSocket? = null
 
     @Volatile
     private var activeClient: Socket? = null
@@ -105,7 +109,7 @@ open class RtspHandler(
     @Volatile
     internal var running = false
 
-    private var currentCSeq: Int = 0
+    private var currentCSeq: Int? = null
 
     @Volatile
     private var currentSession: SessionDescription? = null
@@ -211,12 +215,14 @@ open class RtspHandler(
 
     private fun runServer(scope: CoroutineScope) {
         try {
-            serverSocket = bindRtspSocket()
+            val listener = bindRtspSocket()
+            serverSocket = listener
+            if (!running || !scope.isActive) { listener.close(); return }
             onListening()
             Logger.i("RTSP server listening on port $RTSP_PORT")
 
             while (running && scope.isActive) {
-                val clientSocket = serverSocket!!.accept()
+                val clientSocket = listener.accept()
                 Logger.i("New client connected: ${clientSocket.inetAddress.hostAddress}")
 
                 if (activeClient != null && !activeClient!!.isClosed) {
@@ -227,6 +233,7 @@ open class RtspHandler(
                 }
 
                 activeClient = clientSocket
+                if (!running || !scope.isActive) { clientSocket.close(); return }
                 handleClient(clientSocket)
             }
         } catch (e: Exception) {
@@ -240,22 +247,16 @@ open class RtspHandler(
     }
 
     private fun handleClient(socket: Socket) {
-        val inputStream = socket.getInputStream()
-        val outputStream = socket.getOutputStream()
-
-        // Fresh pairing + FairPlay state for each control connection.
-        pairingSession = PairingSession(PairingKeys.get(context))
-        fairPlay = FairPlay()
-        // NOTE: legacyPin and pinPaired are deliberately NOT reset here. macOS runs the PIN handshake
-        // across SEPARATE TCP connections (/pair-pin-start on one, /pair-setup-pin on the next), so the
-        // PIN/verifier and the "paired" flag must survive a reconnect. They live for the receiver's
-        // lifetime — replaced by the next /pair-pin-start, set on a successful pairing.
-        currentRemoteAddress = socket.inetAddress
-
         try {
+            val inputStream = socket.getInputStream()
+            val outputStream = socket.getOutputStream()
+            pairingSession = PairingSession(PairingKeys.get(context))
+            fairPlay = FairPlay()
+            currentRemoteAddress = socket.inetAddress
+
             while (running && !socket.isClosed) {
                 val request = requestReader.read(inputStream) ?: break
-                currentCSeq = request.headers["CSeq"]?.toIntOrNull() ?: 0
+                currentCSeq = request.headers["CSeq"]?.toIntOrNull()
                 val response = routeRequest(request)
                 sendResponse(outputStream, response)
 
@@ -287,7 +288,7 @@ open class RtspHandler(
             if (running) Logger.e("Error handling RTSP client", e)
         } finally {
             Logger.i("Client disconnected")
-            socket.close()
+            runCatching { socket.close() }
             activeClient = null
             handleControlConnectionClosed()
         }
@@ -547,14 +548,11 @@ open class RtspHandler(
     /** GET /server-info — legacy XML plist of receiver identity for AirPlay video senders. */
     private fun handleServerInfo(request: RtspRequest): RtspResponse {
         val info = mapOf(
-            "deviceid" to com.airplay.util.NetworkUtils.getMacAddress(),
-            // Kept in sync with MdnsService/InfoResponder: single-word features and AppleTV3,1
-            // are what mark us as an AirPlay 1 receiver. See MdnsService.AIRPLAY_FEATURES for
-            // why claiming AirPlay 2 here sends audio down a path we cannot decrypt.
-            "features" to 0x527FFFF7L,
-            "model" to "AppleTV3,1",
+            "deviceid" to com.airplay.util.NetworkUtils.getReceiverId(context),
+            "features" to InfoResponder.features(pinAuthEnabled, hevc),
+            "model" to InfoResponder.MODEL,
             "protovers" to "1.1",
-            "srcvers" to "220.68",
+            "srcvers" to InfoResponder.SOURCE_VERSION,
         )
         return RtspResponse(
             200, "OK",
@@ -581,23 +579,32 @@ open class RtspHandler(
                 })
             }.onFailure { Logger.d("/feedback body ($n B, non-plist)") }
         }
-        // Explicit zero length: an empty 200 without Content-Length makes some iOS builds wait on
-        // the reply and then drop the control connection. Keep the body empty (no plist payload).
         return RtspResponse(
             200, "OK",
-            headers = mapOf("Content-Length" to "0"),
             protocol = request.responseProtocol()
         )
     }
 
-    /** GET /info — advertises receiver identity + capabilities (binary plist). */
-    private fun handleInfo(request: RtspRequest): RtspResponse = RtspResponse(
-        statusCode = 200,
-        statusMessage = "OK",
-        bodyBytes = InfoResponder.build(context, displayWidth, displayHeight, displayFps, pinRequired = pinAuthEnabled),
-        contentType = "application/x-apple-binary-plist",
-        protocol = request.responseProtocol()
-    )
+    /** GET /info — an initial qualified TXT query, a capabilities query, or a headerless probe. */
+    private fun handleInfo(request: RtspRequest): RtspResponse = try {
+        val hasCSeq = request.headers.containsKey("CSeq")
+        val contentType = request.headers["Content-Type"]
+        val qualifiers = when {
+            contentType?.substringBefore(';')?.trim()?.equals(PLIST_TYPE, ignoreCase = true) == true -> {
+                (PlistCodec.decode(request.bodyBytes)["qualifier"] as? List<*>).orEmpty().filterIsInstance<String>()
+            }
+            !hasCSeq -> request.uri.substringAfter('?', "").split('?', '&')
+            else -> emptyList()
+        }
+        val txt = InfoResponder.qualified(context, qualifiers, pinAuthEnabled, hevc)
+        val info = if (contentType != null) txt else InfoResponder.capabilities(
+            context, receiverName(), displayWidth, displayHeight, displayFps, pinAuthEnabled, hevc, includeMedia = hasCSeq
+        ) + txt
+        RtspResponse(200, "OK", bodyBytes = PlistCodec.encode(info), contentType = PLIST_TYPE, protocol = request.responseProtocol())
+    } catch (error: Exception) {
+        Log.w("FcboardProjection", "AirPlay GET /info failed", error)
+        RtspResponse(400, "Bad Request", protocol = request.responseProtocol())
+    }
 
     /**
      * POST /pair-setup. With PIN auth off (default) this is the anonymous Ed25519 exchange. With PIN
@@ -739,41 +746,55 @@ open class RtspHandler(
         })
         val response = mutableMapOf<String, Any?>()
 
-        isMirrorSession = true
-        // AirPlay 2 audio-only (control-centre audio output) omits BOTH the session-level
-        // isScreenMirroringSession flag and the stream-level usingScreen flag. Keep the flag sticky:
-        // the second SETUP (msg 2, streams only) does not repeat isScreenMirroringSession.
         val setupStreams = req["streams"] as? List<*>
-        val usingScreen = setupStreams.orEmpty().any { s ->
-            (s as? Map<*, *>)?.let { plistBool(it["usingScreen"]) } == true
-        }
-        val declaredScreen = plistBool(req["isScreenMirroringSession"]) || usingScreen
-        if (declaredScreen) stopAudioOnlyGrace(release = false)
-        isScreenMirroringSession = isScreenMirroringSession || declaredScreen
-        Logger.d("AirPlay SETUP: declaredScreen=$declaredScreen sticky=$isScreenMirroringSession streams=${setupStreams?.size ?: 0}")
         val ekey = req["ekey"] as? ByteArray
+        require(ekey != null || !setupStreams.isNullOrEmpty()) { "SETUP has neither FairPlay keys nor streams" }
+        val usingScreen = setupStreams.orEmpty().any { s ->
+            (s as? Map<*, *>)?.let { it["type"] == 110L || plistBool(it["usingScreen"]) } == true
+        }
         if (ekey != null) {
-            val aesKey = fairPlay!!.decrypt(ekey)
-            val ecdhSecret = pairingSession?.sharedSecret ?: error("mirror SETUP before pair-verify")
-            val aesIv = (req["eiv"] as? ByteArray) ?: ByteArray(16)
-            val senderTimingPort = (req["timingPort"] as? Long)?.toInt() ?: 0
+            val pairing = checkNotNull(pairingSession)
+            val ecdhSecret = pairing.sharedSecret
+            if ((pinAuthEnabled && (!pinPaired || ecdhSecret == null)) ||
+                (pairing.verificationStarted && ecdhSecret == null)
+            ) throw SecurityException("AirPlay pair-verify did not complete")
+            val aesIv = req["eiv"] as? ByteArray
+            require(aesIv?.size == 16) { "Invalid FairPlay IV" }
+            val timingProtocol = req["timingProtocol"] as? String
+            if (plistBool(req["isRemoteControlOnly"]) || (timingProtocol != null && timingProtocol != "NTP")) {
+                throw UnsupportedOperationException("Unsupported AirPlay timing: $timingProtocol")
+            }
+            val senderTimingPort = req["timingPort"] as? Long ?: 0L
+            require(senderTimingPort in 1..65535) { "Missing or invalid AirPlay sender timing port" }
             val remoteAddr = currentRemoteAddress ?: error("mirror SETUP without remote address")
-            val (eventPort, timingPort) = onMirrorSetupKeys(aesKey, ecdhSecret, aesIv, remoteAddr, senderTimingPort)
-            response["eventPort"] = eventPort.toLong()
+            val aesKey = checkNotNull(fairPlay).decrypt(ekey)
+            val mediaKey = MirrorCrypto.mediaKey(aesKey, ecdhSecret)
+            val timingPort = onMirrorSetupKeys(mediaKey, checkNotNull(aesIv), remoteAddr, senderTimingPort.toInt())
+            check(timingPort in 1..65535) { "AirPlay timing socket unavailable" }
+            isMirrorSession = true
+            response["eventPort"] = 0L
             response["timingPort"] = timingPort.toLong()
-            Logger.i("mirror SETUP keys OK — eventPort=$eventPort timingPort=$timingPort (sender timing $senderTimingPort)")
+            val version = (req["sourceVersion"] as? String)?.takeIf { it.length <= 20 && it.all { c -> c.isDigit() || c == '.' } }
+            Log.i("FcboardProjection", "AirPlay SETUP keys OK (sender=${version ?: "unknown"}, paired=${ecdhSecret != null}, timingPort=$timingPort)")
         }
 
-        val streams = req["streams"] as? List<*>
-        if (streams != null) {
-            val resStreams = streams.mapNotNull { s ->
+        check(isMirrorSession) { "AirPlay SETUP streams before SETUP keys" }
+        if (plistBool(req["isScreenMirroringSession"]) || usingScreen) {
+            stopAudioOnlyGrace(release = false)
+            isScreenMirroringSession = true
+        }
+
+        if (setupStreams != null) {
+            val resStreams = setupStreams.mapNotNull { s ->
                 val stream = s as? Map<*, *> ?: return@mapNotNull null
                 when ((stream["type"] as? Long)?.toInt()) {
                     110 -> {
-                        val scid = (stream["streamConnectionID"] as? Long) ?: 0L
-                        val dataPort = onMirrorStreamStart(scid)
+                        val scid = stream["streamConnectionID"] as? Long ?: error("Missing streamConnectionID")
+                        val control = activeClient
+                        val dataPort = onMirrorStreamStart(scid) { runCatching { control?.close() } }
+                        check(dataPort in 1..65535) { "AirPlay mirror data socket unavailable" }
                         activeStreamTypes.add(110)
-                        Logger.i("mirror stream type=110 streamConnectionID=$scid dataPort=$dataPort")
+                        Log.i("FcboardProjection", "AirPlay mirror SETUP OK (dataPort=$dataPort)")
                         mapOf("type" to 110L, "dataPort" to dataPort.toLong())
                     }
                     96 -> {
@@ -790,6 +811,7 @@ open class RtspHandler(
                         val ct = (stream["ct"] as? Long)?.toInt() ?: 8   // 8 = AAC-ELD (mirror), 4 = AAC-LC, 2 = ALAC
                         val spf = (stream["spf"] as? Long)?.toInt() ?: 352   // ALAC frameLength (samples/frame)
                         val (dataPort, controlPort) = onMirrorAudioStart(sr, ch, ct, spf)
+                        check(dataPort in 1..65535 && controlPort in 1..65535) { "AirPlay audio sockets unavailable" }
                         activeStreamTypes.add(96)
                         Logger.i("audio stream type=96 (ct=$ct ${sr}Hz x$ch spf=$spf) dataPort=$dataPort controlPort=$controlPort")
                         mapOf("type" to 96L, "dataPort" to dataPort.toLong(), "controlPort" to controlPort.toLong())
@@ -802,21 +824,28 @@ open class RtspHandler(
                     }
                 }
             }
-            if (streams.isNotEmpty() && resStreams.isEmpty()) throw UnsupportedOperationException("Unsupported media stream")
+            if (setupStreams.isNotEmpty() && resStreams.isEmpty()) throw UnsupportedOperationException("Unsupported media stream")
             response["streams"] = resStreams
         }
 
         RtspResponse(
             200, "OK",
             bodyBytes = PlistCodec.encode(response),
-            contentType = "application/x-apple-binary-plist",
+            contentType = PLIST_TYPE,
             protocol = request.responseProtocol()
         )
-    } catch (_: UnsupportedOperationException) {
+    } catch (error: SecurityException) {
+        Log.w("FcboardProjection", "AirPlay SETUP authorization failed", error)
+        RtspResponse(470, "Connection Authorization Required", protocol = request.responseProtocol())
+    } catch (error: UnsupportedOperationException) {
+        Log.w("FcboardProjection", "AirPlay SETUP rejected: ${error.message}")
         RtspResponse(415, "Unsupported Media Type", protocol = request.responseProtocol())
     } catch (e: Exception) {
-        Logger.e("mirror SETUP failed", e)
+        Log.w("FcboardProjection", "AirPlay SETUP failed", e)
         RtspResponse(400, "Bad Request", protocol = request.responseProtocol())
+    } catch (error: LinkageError) {
+        Log.e("FcboardProjection", "AirPlay FairPlay native decoder unavailable", error)
+        RtspResponse(500, "Internal Server Error", protocol = request.responseProtocol())
     }
 
     /** Handles OPTIONS — macOS asks what RTSP methods are supported. */
@@ -886,7 +915,7 @@ open class RtspHandler(
             Logger.i("RECORD (mirror session) — OK")
             return RtspResponse(
                 statusCode = 200, statusMessage = "OK",
-                headers = mapOf("Audio-Latency" to "0"),
+                headers = mapOf("Audio-Latency" to "0", "Audio-Jack-Status" to "connected; type=analog"),
                 protocol = request.responseProtocol()
             )
         }
@@ -924,8 +953,8 @@ open class RtspHandler(
     open fun handleTeardownInternal(request: RtspRequest): RtspResponse {
         val streamTypes = parseTeardownStreamTypes(request.bodyBytes)
         if (streamTypes != null && streamTypes.isNotEmpty()) {
-            // Stream-level teardown: stop ONLY the listed streams. Keep the session (keys, NTP,
-            // event channel) alive so the remaining stream keeps running and a stopped one can be
+            // Stream-level teardown: stop ONLY the listed streams. Keep the session (keys, NTP)
+            // alive so the remaining stream keeps running and a stopped one can be
             // re-added later — e.g. audio keeps playing with video gone, or video keeps mirroring
             // with audio stopped. But if this removes the LAST active stream (e.g. macOS names both
             // 96 and 110 to end the session), fall through to a full teardown so cleanup isn't left
@@ -941,6 +970,8 @@ open class RtspHandler(
             Logger.i("TEARDOWN (session, body=${request.bodyBytes.size}B) — streaming stopping")
         }
         activeStreamTypes.clear()
+        isMirrorSession = false
+        isScreenMirroringSession = false
         // A genuine sender-initiated TEARDOWN ends the audio-only grace without a second teardown.
         stopAudioOnlyGrace(release = false)
         onStreamingStopped()
@@ -949,8 +980,8 @@ open class RtspHandler(
 
     /** Parses the `streams` list from a TEARDOWN body, returning the stream `type`s, or null. */
     private fun parseTeardownStreamTypes(body: ByteArray): List<Int>? = runCatching {
-        if (body.isEmpty()) return null
-        val streams = PlistCodec.decode(body)["streams"] as? List<*> ?: return null
+        if (body.isEmpty()) return@runCatching null
+        val streams = PlistCodec.decode(body)["streams"] as? List<*> ?: return@runCatching null
         streams.mapNotNull { ((it as? Map<*, *>)?.get("type") as? Long)?.toInt() }
     }.getOrNull()
 
@@ -1071,15 +1102,16 @@ open class RtspHandler(
         val wire = response.wireBody()
         val head = StringBuilder()
         head.append("${response.protocol} ${response.statusCode} ${response.statusMessage}\r\n")
-        if (response.protocol.startsWith("RTSP")) {
-            head.append("CSeq: $currentCSeq\r\n")
+        if (response.protocol.startsWith("RTSP")) currentCSeq?.let { head.append("CSeq: $it\r\n") }
+        head.append("Server: AirTunes/${InfoResponder.SOURCE_VERSION}\r\n")
+        if (response.protocol.startsWith("RTSP") && currentCSeq != null && !response.headers.containsKey("Audio-Jack-Status")) {
+            head.append("Audio-Jack-Status: connected; type=digital\r\n")
         }
-        head.append("Server: AirTunes/220.68\r\n")
         response.contentType?.let { head.append("Content-Type: $it\r\n") }
         response.headers.forEach { (key, value) ->
             head.append("$key: $value\r\n")
         }
-        if (wire.isNotEmpty()) {
+        if (!response.headers.containsKey("Content-Length")) {
             head.append("Content-Length: ${wire.size}\r\n")
         }
         head.append("\r\n")
@@ -1101,6 +1133,7 @@ open class RtspHandler(
     }
 
     companion object {
+        private const val PLIST_TYPE = "application/x-apple-binary-plist"
         private const val RTSP_PORT = 7000
 
         /** Audio-only grace guard: check RTP activity every second. */

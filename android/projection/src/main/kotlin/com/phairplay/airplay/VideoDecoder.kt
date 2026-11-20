@@ -32,7 +32,10 @@ import com.airplay.util.MirrorProbe
  *   decoder.decodeNalUnit(nalUnitBytes)                    // call for each video chunk
  *   decoder.release()                                       // call when done
  */
-class VideoDecoder(private val outputSurface: Surface) {
+class VideoDecoder(
+    private val outputSurface: Surface,
+    private val mime: String = MediaFormat.MIMETYPE_VIDEO_AVC,
+) {
 
     // The underlying hardware decoder — null until initialize() is called
     private var mediaCodec: MediaCodec? = null
@@ -66,7 +69,7 @@ class VideoDecoder(private val outputSurface: Surface) {
      * Miracast uses it to detect a frozen picture (`now - lastRender`): after a lost GOP the
      * stream keeps delivering units and the codec keeps accepting them, so nothing else in
      * the pipeline can tell "decoding fine" from "nobody is looking at a moving picture".
-     * AirPlay leaves it null and is unaffected.
+     * AirPlay uses it to report the first decoded frame.
      */
     @Volatile
     var onFrameRendered: (() -> Unit)? = null
@@ -87,12 +90,12 @@ class VideoDecoder(private val outputSurface: Surface) {
      * RULE 5: If initialization fails, the exception propagates to the caller
      * (RtspHandler) which will handle it gracefully (log + return to WAITING state).
      *
-     * @param spsBytes  The SPS NAL unit bytes (from SDP "sprop-parameter-sets" field)
-     * @param ppsBytes  The PPS NAL unit bytes (from SDP "sprop-parameter-sets" field)
+     * @param csd0     Annex-B SPS for AVC, or concatenated Annex-B VPS/SPS/PPS for HEVC
+     * @param csd1     Annex-B PPS for AVC; not used for HEVC
      * @param width     Video width in pixels (from SDP)
      * @param height    Video height in pixels (from SDP)
      */
-    fun initialize(spsBytes: ByteArray, ppsBytes: ByteArray, width: Int, height: Int): Unit = synchronized(codecLock) {
+    fun initialize(csd0: ByteArray, csd1: ByteArray?, width: Int, height: Int): Unit = synchronized(codecLock) {
         if (isInitialized) {
             Logger.w("VideoDecoder.initialize() called twice — ignoring second call")
             return@synchronized
@@ -103,13 +106,12 @@ class VideoDecoder(private val outputSurface: Surface) {
         // the decoder (no input buffers, no frames). Validate the result and fall back to the hint; the
         // hardware decoder reads the true size from the SPS (csd-0) itself and reports it via
         // INFO_OUTPUT_FORMAT_CHANGED, which we use to refine the size for aspect-fit.
-        val parsed = Companion.parseSpsResolution(spsBytes)
+        val parsed = if (mime == MediaFormat.MIMETYPE_VIDEO_AVC) parseSpsResolution(csd0) else null
         val (actualWidth, actualHeight) = parsed?.takeIf { isPlausibleSize(it.first, it.second) } ?: run {
-            Logger.w("SPS resolution $parsed implausible/failed — using hint ${width}x${height}")
             Pair(width, height)
         }
 
-        Logger.i("Initializing H.264 decoder: ${actualWidth}x${actualHeight} " +
+        Logger.i("Initializing $mime decoder: ${actualWidth}x${actualHeight} " +
                  "(hint was ${width}x${height})")
 
         // Provisional size for StreamingScreen aspect-fit; replaced by the decoder's reported size.
@@ -119,17 +121,10 @@ class VideoDecoder(private val outputSurface: Surface) {
         referenceWidth = actualWidth
         referenceHeight = actualHeight
 
-        // Create the MediaFormat that describes the H.264 stream to the hardware decoder
-        val format = MediaFormat.createVideoFormat(
-            MediaFormat.MIMETYPE_VIDEO_AVC,  // AVC = Advanced Video Coding = H.264
-            actualWidth,
-            actualHeight
-        ).apply {
-            // Provide SPS and PPS so MediaCodec can configure the hardware decoder.
-            // These are wrapped in ByteBuffers as required by the MediaCodec API.
+        val format = MediaFormat.createVideoFormat(mime, actualWidth, actualHeight).apply {
             inputSizes[outputSurface]?.let { setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, it) }
-            setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(spsBytes))  // SPS
-            setByteBuffer("csd-1", java.nio.ByteBuffer.wrap(ppsBytes))  // PPS
+            setByteBuffer("csd-0", java.nio.ByteBuffer.wrap(csd0))
+            csd1?.let { setByteBuffer("csd-1", java.nio.ByteBuffer.wrap(it)) }
             // NOTE: do NOT set KEY_MAX_WIDTH/HEIGHT here — this SoC's MStar decoder rejects
             // adaptive playback (BadParameter / buffer-count failures) and produces banding.
             // Resolution changes are handled by recreating the decoder in MirrorStreamServer.
@@ -137,18 +132,18 @@ class VideoDecoder(private val outputSurface: Surface) {
 
         mediaCodec = startDecoder(format)
         isInitialized = true
-        Logger.i("H.264 decoder initialized: ${mediaCodec?.name}")
+        Logger.i("$mime decoder initialized: ${mediaCodec?.name}")
     }
 
     private fun startDecoder(format: MediaFormat): MediaCodec {
-        val candidates = regularAvcDecoders().sortedByDescending { info ->
-            runCatching { info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).isFormatSupported(format) }
+        val candidates = regularDecoders(mime).sortedByDescending { info ->
+            runCatching { info.getCapabilitiesForType(mime).isFormatSupported(format) }
                 .getOrDefault(false)
         }
         var failure: Exception? = null
         for (info in candidates) {
             val lowLatency = Build.VERSION.SDK_INT >= 30 && runCatching {
-                info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
+                info.getCapabilitiesForType(mime)
                     .isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)
             }.getOrDefault(false)
             for (enable in if (lowLatency) listOf(true, false) else listOf(false)) {
@@ -165,11 +160,11 @@ class VideoDecoder(private val outputSurface: Surface) {
                 } catch (error: Exception) {
                     runCatching { candidate?.release() }
                     failure = error
-                    Logger.w("H.264 decoder ${info.name} could not start: ${error.message}")
+                    Logger.w("$mime decoder ${info.name} could not start: ${error.message}")
                 }
             }
         }
-        throw IllegalStateException("No AVC decoder accepted the stream", failure)
+        throw IllegalStateException("No $mime decoder accepted the stream", failure)
     }
 
     /**
@@ -275,17 +270,32 @@ class VideoDecoder(private val outputSurface: Surface) {
      * render=true: the frame is rendered to the Surface (displayed on TV).
      * render=false: the frame is discarded (used to flush without displaying).
      *
-     * @param codec The active MediaCodec instance.
+     * Mirror senders can stop sending when their screen is static, even while output is pending.
      */
+    internal fun drain() = synchronized(codecLock) {
+        if (!isHealthy) return@synchronized
+        mediaCodec?.let { codec ->
+            try {
+                releaseOutputBuffers(codec)
+            } catch (error: IllegalStateException) {
+                Logger.e("VideoDecoder could not drain pending output", error)
+                isHealthy = false
+                MirrorProbe.onDecoderError()
+            }
+        }
+    }
+
     private fun releaseOutputBuffers(codec: MediaCodec) {
         val bufferInfo = MediaCodec.BufferInfo()
         var outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
 
-        while (outputBufferIndex >= 0 || outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+        while (outputBufferIndex >= 0 || outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED ||
+            outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED
+        ) {
             if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 // The decoder parsed the real size from the SPS — authoritative for aspect-fit.
                 publishOutputSize(codec.outputFormat)
-            } else {
+            } else if (outputBufferIndex >= 0) {
                 // Render immediately. We deliberately do NOT schedule a future render time for A/V sync:
                 // this Surface's BufferQueue holds only ~3 frames, so any hold quickly back-pressures the
                 // decoder → the upstream frame queue saturates → big latency + dropped (corrupt) frames.
@@ -386,12 +396,21 @@ class VideoDecoder(private val outputSurface: Surface) {
         internal const val MAX_ACCESS_UNIT_BYTES = 8 * 1024 * 1024
         private val inputSizes = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Surface, Int>())
 
-        internal fun regularAvcDecoders(): List<MediaCodecInfo> =
+        internal fun regularDecoders(mime: String): List<MediaCodecInfo> =
             MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { info ->
                 !info.isEncoder && !info.name.endsWith(".secure", true) &&
                     (Build.VERSION.SDK_INT < 29 || !info.isAlias) &&
-                    info.supportedTypes.any { it.equals(MediaFormat.MIMETYPE_VIDEO_AVC, true) }
+                    info.supportedTypes.any { it.equals(mime, true) }
             }
+
+        internal fun supportsHevc(width: Int, height: Int, fps: Int): Boolean = runCatching {
+            val mime = MediaFormat.MIMETYPE_VIDEO_HEVC
+            val format = MediaFormat.createVideoFormat(mime, width, height).apply {
+                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain)
+            }
+            regularDecoders(mime).any { runCatching { it.getCapabilitiesForType(mime).isFormatSupported(format) }.getOrDefault(false) }
+        }.getOrDefault(false)
 
         private val sizes = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Surface, PictureSize>())
         internal fun setSize(surface: Surface, width: Int, height: Int) { sizes[surface] = PictureSize(width, height) }

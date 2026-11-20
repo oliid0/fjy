@@ -13,11 +13,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
-import java.net.ServerSocket
-import java.net.Socket
 
 /**
  * AirPlayReceiver — Top-level orchestrator for the AirPlay 2 receiver pipeline.
@@ -96,6 +93,7 @@ class AirPlayReceiver(
 
     // Persistent store of paired controllers (for PIN access control / pair-verify).
     private val pairingStore = com.airplay.airplay.handshake.PairingStore(context)
+    private val hevc by lazy { VideoDecoder.supportsHevc(mirrorWidth, mirrorHeight, mirrorFps) }
 
     // SupervisorJob: child coroutine failures don't propagate to siblings.
     private val job = SupervisorJob()
@@ -111,7 +109,7 @@ class AirPlayReceiver(
     // UDP socket for receiving audio RTP packets — opened after RECORD, closed on TEARDOWN
     @Volatile private var audioSocket: DatagramSocket? = null
 
-    // AirPlay 2 mirroring: data stream server + event channel + keys (set during SETUP).
+    // AirPlay 2 mirroring: media servers and keys set during SETUP.
     @Volatile private var mirrorServer: MirrorStreamServer? = null
     @Volatile private var audioServer: AudioStreamServer? = null
     @Volatile private var urlVideoPlayer: AirPlayVideoPlayer? = null
@@ -119,11 +117,9 @@ class AirPlayReceiver(
     // Reverse remote control (TV → sender). Created lazily once a sender advertises DACP-ID.
     private val dacpClient = DacpClient(context)
     @Volatile private var ntpClient: AirPlayNtpClient? = null
-    @Volatile private var eventSocket: ServerSocket? = null
-    @Volatile private var eventClientSocket: java.net.Socket? = null
     @Volatile private var mirrorAesKey: ByteArray? = null
-    @Volatile private var mirrorEcdhSecret: ByteArray? = null
     @Volatile private var mirrorAesIv: ByteArray? = null
+    @Volatile private var registeredName = displayName
 
     // ─── Now-playing (audio-only) state ──────────────────────────────────────
     // The now-playing card shows only when audio plays WITHOUT video. We track both stream kinds
@@ -202,8 +198,13 @@ class AirPlayReceiver(
         if (!scope.isActive) return
         mdnsService = MdnsService(
             context = context,
+            pinRequired = pinAuthEnabled,
+            hevc = hevc,
             onStateChange = { state -> emitState(state) },
-            onActualNameRegistered = { actualName -> onActualNameRegistered(actualName) }
+            onActualNameRegistered = { actualName ->
+                registeredName = actualName
+                onActualNameRegistered(actualName)
+            }
         ).also { it.start(displayName.ifBlank { null }) }
         Logger.d("mDNS service started")
     }
@@ -214,19 +215,19 @@ class AirPlayReceiver(
             context = context,
             onListening = { if (scope.isActive) startMdnsService() },
             onListenFailure = { emitState(ProtocolState.ERROR) },
+            receiverName = { registeredName.ifBlank { com.airplay.util.NetworkUtils.getDeviceName(context) } },
             displayWidth = mirrorWidth,
             displayHeight = mirrorHeight,
             displayFps = mirrorFps,
+            hevc = hevc,
             audioEnabled = audioEnabled,
             videoSurfaceProvider = videoSurfaceProvider,
             onStreamingStarted = { session -> onStreamingStarted(session) },
             onStreamingStopped = { onStreamingStopped() },
             onPhotoReceived = { bytes, imageType -> onPhotoReceived(bytes, imageType) },
             onPhotoCleared = { onPhotoCleared() },
-            onMirrorSetupKeys = { aesKey, ecdhSecret, aesIv, remoteAddr, senderTimingPort ->
-                startMirrorKeys(aesKey, ecdhSecret, aesIv, remoteAddr, senderTimingPort)
-            },
-            onMirrorStreamStart = { streamConnectionId -> startMirrorStream(streamConnectionId) },
+            onMirrorSetupKeys = ::startMirrorKeys,
+            onMirrorStreamStart = ::startMirrorStream,
             onMirrorAudioStart = { sampleRate, channels, ct, spf -> startMirrorAudio(sampleRate, channels, ct, spf) },
             onMirrorAudioStop = { stopMirrorAudio() },
             onMirrorVideoStop = { stopMirrorVideo() },
@@ -402,65 +403,50 @@ class AirPlayReceiver(
 
     // ─── Private: AirPlay 2 mirroring ─────────────────────────────────────────
 
-    /**
-     * Mirror SETUP msg 1: stash the decrypted AES key + pairing secret, open the event
-     * channel (macOS connects to it), and switch the UI to the streaming surface.
-     * @return the event channel's TCP port.
-     */
+    /** Mirror SETUP msg 1: save the session media key and return the bound UDP timing port. */
     private fun startMirrorKeys(
         aesKey: ByteArray,
-        ecdhSecret: ByteArray,
         aesIv: ByteArray,
         remoteAddress: java.net.InetAddress,
         senderTimingPort: Int,
-    ): Pair<Int, Int> {
+    ): Int {
+        val ntp = AirPlayNtpClient(remoteAddress, senderTimingPort)
+        ntpClient?.stop()
+        ntpClient = ntp
+        ntp.start(scope)
         mirrorAesKey = aesKey
-        mirrorEcdhSecret = ecdhSecret
         mirrorAesIv = aesIv
-        val event = ServerSocket(0)
-        eventSocket = event
-        // Accept + drain the event connection. We don't act on events yet, but macOS expects
-        // the advertised event port to be connectable, so keep it open and readable.
-        scope.launch(Dispatchers.IO) {
-            try {
-                event.accept().use { s ->
-                    eventClientSocket = s
-                    Logger.i("Event channel: macOS connected from ${s.inetAddress.hostAddress}")
-                    val buf = ByteArray(4096)
-                    val input = s.getInputStream()
-                    while (isActive && input.read(buf) != -1) { /* drain */ }
-                }
-            } catch (e: Exception) {
-                if (eventSocket != null) Logger.d("Event channel closed")
-            } finally {
-                eventClientSocket = null
-            }
-        }
-        // AirPlay 2 NTP is receiver-initiated: poll the sender's timing port so macOS proceeds.
-        val ntp = AirPlayNtpClient(remoteAddress, senderTimingPort).also { ntpClient = it; it.start(scope) }
-        onSenderNameChanged("AirPlay")
-        emitState(ProtocolState.CONNECTED)
-        Logger.i("Mirror keys set; eventPort=${event.localPort} timingPort=${ntp.localPort}")
-        return event.localPort to ntp.localPort
+        return ntp.localPort
     }
 
     /**
      * Mirror SETUP msg 2: start the data-stream server for the requested stream.
-     * @return the data server's TCP port (macOS connects here to send H.264).
+     * @return the data server's TCP port for video.
      */
-    private fun startMirrorStream(streamConnectionId: Long): Int {
+    private fun startMirrorStream(streamConnectionId: Long, closeControl: () -> Unit): Int {
         val aesKey = mirrorAesKey ?: run { Logger.e("mirror stream start before keys set"); return 0 }
-        val ecdhSecret = mirrorEcdhSecret ?: return 0
-        return MirrorStreamServer(aesKey, ecdhSecret, streamConnectionId, videoSurfaceProvider, mirrorWidth, mirrorHeight)
-            .also { mirrorServer = it; it.start(scope); videoPlaying = true; emitNowPlaying() }
-            .dataPort
-            .also { Logger.i("Mirror data server started on port $it") }
+        mirrorServer?.stop()
+        val server = MirrorStreamServer(
+            aesKey, streamConnectionId, videoSurfaceProvider, mirrorWidth, mirrorHeight, hevc,
+            onFirstFrame = { current -> emitState(ProtocolState.CONNECTED) { mirrorServer === current } },
+            onStartTimeout = { current ->
+                scope.launch(Dispatchers.Main) {
+                    if (mirrorServer === current && !current.hasRenderedFirstFrame) closeControl()
+                }
+            }
+        )
+        mirrorServer = server
+        videoPlaying = true
+        emitNowPlaying()
+        onSenderNameChanged("AirPlay")
+        emitState(ProtocolState.CONNECTING) { mirrorServer === server && !server.hasRenderedFirstFrame }
+        server.start(scope)
+        return server.dataPort
     }
 
     /** Mirror SETUP audio stream (type 96): start the AAC-ELD / AAC-LC / ALAC audio server. @return (dataPort, controlPort). */
     private fun startMirrorAudio(sampleRate: Int, channels: Int, codecType: Int, framesPerPacket: Int): Pair<Int, Int> {
         val aesKey = mirrorAesKey ?: run { Logger.e("audio start before keys set"); return 0 to 0 }
-        val ecdhSecret = mirrorEcdhSecret ?: return 0 to 0
         val aesIv = mirrorAesIv ?: return 0 to 0
         // An audio-only sender may open a new control connection and repeat SETUP while the UDP
         // stream is still playing. Reuse the running server (same ports/keys) instead of replacing
@@ -473,13 +459,16 @@ class AirPlayReceiver(
         ) {
             Logger.i("Audio-only: re-SETUP reuses running audio server on port ${existing.dataPort} " +
                 "(recv=${existing.packetsReceived}, ageMs=${existing.lastPacketAgeMs})")
+            if (!videoPlaying) emitState(ProtocolState.CONNECTED) { !videoPlaying && audioPlaying }
             return existing.dataPort to existing.controlPort
         }
         existing?.stop()
-        val server = AudioStreamServer(aesKey, ecdhSecret, aesIv, sampleRate, channels, codecType, framesPerPacket)
+        val server = AudioStreamServer(aesKey, aesIv, sampleRate, channels, codecType, framesPerPacket)
             .also { audioServer = it; it.start(scope) }
         audioPlaying = true
         emitNowPlaying()
+        onSenderNameChanged("AirPlay")
+        if (!videoPlaying) emitState(ProtocolState.CONNECTED) { !videoPlaying && audioPlaying }
         Logger.i("Mirror audio server started: dataPort=${server.dataPort} controlPort=${server.controlPort}")
         return server.dataPort to server.controlPort
     }
@@ -500,6 +489,7 @@ class AirPlayReceiver(
         mirrorServer = null
         videoPlaying = false
         emitNowPlaying()   // audio may still be playing → now-playing card can take over
+        if (audioPlaying) emitState(ProtocolState.CONNECTED) { !videoPlaying && audioPlaying }
         Logger.i("Mirror video stream stopped (audio playback continues)")
     }
 
@@ -541,10 +531,6 @@ class AirPlayReceiver(
         urlVideoPlayer = null
         ntpClient?.stop()
         ntpClient = null
-        try { eventClientSocket?.close() } catch (e: Exception) { /* non-fatal */ }
-        eventClientSocket = null
-        try { eventSocket?.close() } catch (e: Exception) { /* non-fatal */ }
-        eventSocket = null
         // Clear the FairPlay/ECDH keys on FULL teardown only. This method runs on a genuine session
         // end (last-stream / session TEARDOWN, or control-connection close) — NOT on a per-stream
         // teardown, which goes through stopMirrorAudio/stopMirrorVideo and leaves the keys intact so
@@ -552,7 +538,6 @@ class AirPlayReceiver(
         // dynamic-readd path is why the keys must survive a stream stop). Clearing here prevents a
         // brand-new control connection from reusing a previous session's stale keys.
         mirrorAesKey = null
-        mirrorEcdhSecret = null
         mirrorAesIv = null
         videoDecoder?.release()
         videoDecoder = null
@@ -581,11 +566,9 @@ class AirPlayReceiver(
     // ─── Private: state emission ─────────────────────────────────────────────
 
     /** Dispatches [state] on the Main thread (Android UI rule). */
-    private fun emitState(state: ProtocolState) {
-        scope.launch {
-            withContext(Dispatchers.Main) {
-                onStateChanged(state)
-            }
+    private fun emitState(state: ProtocolState, isCurrent: () -> Boolean = { true }) {
+        scope.launch(Dispatchers.Main) {
+            if (isCurrent()) onStateChanged(state)
         }
     }
 

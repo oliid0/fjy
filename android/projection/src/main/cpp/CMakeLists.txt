@@ -34,3 +34,10 @@ target_compile_options(alac PRIVATE -w)
 # __android_log_print for native error logging.
 find_library(log-lib log)
 target_link_libraries(alac ${log-lib})
+
+if(ANDROID_ABI MATCHES "^(arm64-v8a|armeabi-v7a)$")
+    add_library(castplus_network_compat SHARED castplus_network_compat.c)
+    set_target_properties(castplus_network_compat PROPERTIES C_VISIBILITY_PRESET hidden)
+    target_link_options(castplus_network_compat PRIVATE "-Wl,-z,global")
+    target_link_libraries(castplus_network_compat ${log-lib})
+endif()

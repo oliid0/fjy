@@ -37,19 +37,18 @@ import javax.crypto.spec.SecretKeySpec
  *   • Playback thread: dequeue → decrypt → decode → AudioTrack.write(BLOCKING). Blocking here only
  *     paces playback to the audio clock and drops no PCM; it cannot stall the network.
  *
- * Reference: RPiPlay lib/raop_rtp.c + lib/raop_buffer.c (audio key = SHA-512(aesKey‖ecdh)[:16],
- * IV = SETUP eiv, AES-128-CBC per packet).
+ * Reference: UxPlay lib/raop_handlers.h and lib/raop_buffer.c (SETUP media key and raw eiv,
+ * AES-128-CBC per packet).
  */
 class AudioStreamServer(
     aesKey: ByteArray,
-    ecdhSecret: ByteArray,
     aesIv: ByteArray,
     private val sampleRate: Int,
     private val channels: Int,
     private val codecType: Int = CT_AAC_ELD,   // SETUP ct: 8 = AAC-ELD (mirror), 4 = AAC-LC (audio-only)
     private val framesPerPacket: Int = DEFAULT_ALAC_FRAMES,   // SETUP spf — ALAC frameLength (352)
 ) {
-    private val key = SecretKeySpec(MirrorCrypto.audioKey(aesKey, ecdhSecret), "AES")
+    private val key = SecretKeySpec(aesKey, "AES")
     private val iv = IvParameterSpec(aesIv.copyOf(16))
 
     // Playback gain (0..1), set from the sender's AirPlay volume. Applied to the AudioTrack and

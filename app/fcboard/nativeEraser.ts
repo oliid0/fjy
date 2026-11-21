@@ -181,7 +181,9 @@ export const createNativeEraserBackend = (owner: string) => {
         .finally(() => {
           if (epoch === stamp) {
             indexing = undefined;
-            if (preparation.size) schedulePreparation();
+            if (preparation.size) {
+              schedulePreparation();
+            }
           }
         });
     }, 0);
@@ -320,7 +322,9 @@ export const createNativeEraserBackend = (owner: string) => {
     const stamp = epoch;
     sweeps++;
     try {
-      if (indexing) await indexing;
+      if (indexing) {
+        await indexing;
+      }
       return stamp === epoch ? await cut(...args) : [];
     } finally {
       sweeps--;

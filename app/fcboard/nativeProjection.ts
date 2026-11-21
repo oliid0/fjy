@@ -37,6 +37,7 @@ export const nativeProjection = registerPlugin<{
   start(options: { protocol: NativeProtocol; session: string }): Promise<void>;
   stop(options: { protocol: NativeProtocol; session: string }): Promise<void>;
   disconnect(options: {
+    revision: number;
     protocol: NativeProtocol;
     session: string;
   }): Promise<void>;
@@ -50,8 +51,12 @@ export const nativeProjection = registerPlugin<{
 export function watchNativeProjection(
   session: string,
   status: (receivers: NativeReceivers) => void,
-  canDisplay: (protocol: NativeProtocol) => boolean,
-  display: (protocol: NativeProtocol, surface: NativeProjectionSurface) => void,
+  canDisplay: (protocol: NativeProtocol, revision: number) => boolean,
+  display: (
+    protocol: NativeProtocol,
+    surface: NativeProjectionSurface,
+    revision: number,
+  ) => void,
   ended: (protocol: NativeProtocol) => void,
   failed: () => void,
 ) {
@@ -91,7 +96,7 @@ export function watchNativeProjection(
           !receivers[active.protocol].hasFrames ||
           receivers[active.protocol].audio ||
           receivers[active.protocol].state !== "connected" ||
-          !canDisplay(active.protocol))
+          !canDisplay(active.protocol, active.revision))
       ) {
         release();
       }
@@ -102,7 +107,7 @@ export function watchNativeProjection(
             receivers[p].state === "connected" &&
             receivers[p].hasFrames &&
             !receivers[p].audio &&
-            canDisplay(p),
+            canDisplay(p, receivers[p].revision),
         );
       if (!protocol) {
         return;
@@ -156,7 +161,7 @@ export function watchNativeProjection(
           },
         };
         active = { protocol, revision, surface };
-        display(protocol, surface);
+        display(protocol, surface, revision);
       } else if (
         width > 0 &&
         height > 0 &&
@@ -164,7 +169,7 @@ export function watchNativeProjection(
       ) {
         active.surface.width = width;
         active.surface.height = height;
-        display(protocol, active.surface);
+        display(protocol, active.surface, revision);
       }
     } catch {
       if (!cancelled) {

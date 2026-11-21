@@ -49,7 +49,13 @@ final class NativeBrush {
         if (nodes == 1) { source = current; stamp(null, current); }
         raster.commit(body, geometry, nodes==1?0:nodes-2);
     }
-    void finish() { finished = true; revision++; }
+    java.util.Map<Long,android.graphics.Bitmap> finish() {
+        finished = true;
+        revision++;
+        updateTail();
+        return raster.finish(tail, geometry, nodes-1);
+    }
+    NativeInkRaster coverage() { return raster; }
     void erase(Path path,int through){raster.erase(path,through);}
     private void stamp(Path target, Node node) {
         stamp(target, node.x, node.y, node.width);
@@ -80,8 +86,7 @@ final class NativeBrush {
         }
         return end;
     }
-    void draw(Canvas canvas, Paint paint) {
-        if (nodes == 0 || paint.getAlpha() == 0) return;
+    private void updateTail() {
         if (tailRevision != revision) {
             tail.rewind();
             if (nodes > 1) {
@@ -90,6 +95,10 @@ final class NativeBrush {
             }
             tailRevision = revision;
         }
+    }
+    void draw(Canvas canvas, Paint paint) {
+        if (nodes == 0 || paint.getAlpha() == 0) return;
+        updateTail();
         raster.draw(canvas, paint, tail, revision, nodes-1);
     }
 }

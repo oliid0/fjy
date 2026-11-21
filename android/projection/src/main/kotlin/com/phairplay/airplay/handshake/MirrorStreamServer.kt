@@ -355,7 +355,13 @@ class MirrorStreamServer(
             Logger.i("Mirror: resynced on keyframe after a dropped frame")
         }
         if (framePtsUs == 0L) Logger.i("Mirror: first video frame fed to decoder (${annexB.size}B)")
-        d.decodeNalUnit(annexB, framePtsUs)
+        val first = renderedSurface == null && isKeyframe(annexB)
+        d.decodeNalUnit(annexB, framePtsUs, firstMirrorPicture = first)
+        if (first && !d.isHealthy && running) {
+            rebuildDecoder(liveSurface)
+            awaitingKeyframe = false
+            decoder?.decodeNalUnit(annexB, framePtsUs)
+        }
         framePtsUs += FRAME_INTERVAL_US
     }
 

@@ -104,6 +104,16 @@ open class RtspHandler(
 
     @Volatile
     private var activeClient: Socket? = null
+    @Volatile private var disconnectedClient: Socket? = null
+
+    fun disconnectSender() {
+        val socket = activeClient
+        if (socket != null) {
+            disconnectedClient = socket
+            runCatching { socket.close() }
+        }
+        stopAudioOnlyGrace(release = true)
+    }
 
     /** True while the RTSP server is accepting. `internal` so unit tests can stand it up without a socket. */
     @Volatile
@@ -251,6 +261,7 @@ open class RtspHandler(
                 currentCSeq = request.headers["CSeq"]?.toIntOrNull()
                 val response = routeRequest(request)
                 sendResponse(outputStream, response)
+                if (response.headers["Connection"] == "close") return
                 if (request.method == "SETUP" && response.statusCode == 200) socket.soTimeout = 0
 
                 // After RECORD on a legacy SDP session: a session WITH video switches to interleaved
@@ -283,7 +294,8 @@ open class RtspHandler(
             Logger.i("Client disconnected")
             runCatching { socket.close() }
             activeClient = null
-            handleControlConnectionClosed()
+            handleControlConnectionClosed(allowAudioGrace = socket !== disconnectedClient)
+            disconnectedClient = null
         }
     }
 
@@ -295,12 +307,12 @@ open class RtspHandler(
      * whole point of the fix for AirPlay 2 audio-only sessions, and it has to be unit-testable
      * without a real socket. `internal` so the test source set can drive it.
      */
-    internal fun handleControlConnectionClosed() {
+    internal fun handleControlConnectionClosed(allowAudioGrace: Boolean = true) {
         // Decide BEFORE clearing the per-connection state. AirPlay 2 "audio only" (iPhone control
         // centre → pick speaker, without screen mirroring) negotiates just one type-96 ALAC stream
         // and has no screen flag. Its control socket is closed by the sender while RTP keeps
         // flowing; keep the media pipeline alive in that case.
-        val audioOnlyKeepAlive = audioEnabled && running &&
+        val audioOnlyKeepAlive = allowAudioGrace && audioEnabled && running &&
             !isScreenMirroringSession &&
             activeStreamTypes.isNotEmpty() && activeStreamTypes.all { it == 96 }
         currentSession = null
@@ -967,8 +979,8 @@ open class RtspHandler(
         isScreenMirroringSession = false
         // A genuine sender-initiated TEARDOWN ends the audio-only grace without a second teardown.
         stopAudioOnlyGrace(release = false)
-        onStreamingStopped()
-        return RtspResponse(statusCode = 200, statusMessage = "OK", protocol = request.responseProtocol())
+        return RtspResponse(statusCode = 200, statusMessage = "OK",
+            headers = mapOf("Connection" to "close"), protocol = request.responseProtocol())
     }
 
     /** Parses the `streams` list from a TEARDOWN body, returning the stream `type`s, or null. */

@@ -188,6 +188,8 @@ class AirPlayReceiver(
     /** True once a sender has advertised DACP reverse-control (so the TV remote can drive playback). */
     fun isRemoteControlAvailable(): Boolean = dacpClient.isAvailable
 
+    fun disconnectSender() { rtspHandler?.disconnectSender() }
+
     // ─── Private: startup ────────────────────────────────────────────────────
 
     @Synchronized private fun startTimingHandler() {

@@ -171,6 +171,10 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         texture.y = web.y + (cy * density - actualH / 2.0).toFloat()
     }
 
+    fun disconnectSender() {
+        try { service?.disconnect(protocol, events) } catch (_: RemoteException) { lost() }
+    }
+
     fun stop() {
         if (closed) return
         closed = true

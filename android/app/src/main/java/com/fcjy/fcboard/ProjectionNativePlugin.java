@@ -200,8 +200,14 @@ public class ProjectionNativePlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             String protocol = call.getString("protocol", "");
             if (!owns(call, protocol) || !engines.containsKey(protocol)) { call.resolve(); return; }
-            stopEngine(protocol);
-            begin(call, protocol);
+            if ("airplay".equals(protocol) || "dlna".equals(protocol)) {
+                BoardReceiver receiver = engines.get(protocol);
+                if (receiver.getRevision() == call.getInt("revision", -1)) receiver.disconnectSender();
+                call.resolve();
+            } else {
+                stopEngine(protocol);
+                begin(call, protocol);
+            }
         });
     }
 

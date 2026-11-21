@@ -17,7 +17,15 @@ final class NativeScene {
 
     static long key(int x,int y) { return ((long)x<<32)|(y&0xffffffffL); }
     static final class Part {
-        final Bitmap pixels;
+        Bitmap pixels;
+        boolean published;
+        Bitmap writable() {
+            if (published) {
+                pixels = pixels.copy(Bitmap.Config.ARGB_8888,true);
+                published = false;
+            }
+            return pixels;
+        }
         final boolean ink;
         Bitmap originalPixels;
         final long through;
@@ -31,11 +39,16 @@ final class NativeScene {
         Tile(int x,int y) { this(x,y,Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ARGB_8888)); }
         Tile(int x,int y,Bitmap pixels) { this.x=x;this.y=y;this.pixels=pixels; }
         Tile snapshot(long through) {
-            Tile copy=new Tile(x,y,pixels.copy(Bitmap.Config.ARGB_8888,true));
+            boolean single = parts.size() == 1;
+            Bitmap composite = single ? parts.get(0).pixels : pixels;
+            Tile copy = new Tile(x,y,composite.copy(Bitmap.Config.ARGB_8888,true));
             for (Part part : parts) {
-                Bitmap original = part.pixels.copy(Bitmap.Config.ARGB_8888, true);
-                Part layer = new Part(part.ink, Math.max(part.through, through), parts.size() == 1 ? copy.pixels : original);
-                if (parts.size() == 1 && part.ink) layer.originalPixels = original;
+                Bitmap editable = single ? copy.pixels : part.pixels.copy(Bitmap.Config.ARGB_8888,true);
+                Part layer = new Part(part.ink,Math.max(part.through,through),editable);
+                if (part.ink) {
+                    layer.originalPixels = part.pixels;
+                    part.published = true;
+                }
                 copy.parts.add(layer);
             }
             return copy;
@@ -70,15 +83,33 @@ final class NativeScene {
         Shader pigment;
         int alpha;
         Bitmap image;
+        Map<Long,Bitmap> inputMasks;
         final List<Long> cells=new ArrayList<>();
         Node(JSONObject value,long received) throws JSONException {
             id=value.getString("id"); order=value.getString("order"); ink=value.getBoolean("ink");inline=value.optBoolean("inline",false);
-            through=value.optLong("through",-1);if(through<0) through=received;
+            through=value.optLong("through",-1);if(through<0) through=value.optLong("inkBirth",received);
             JSONArray box=value.getJSONArray("bounds");bounds=new RectF(number(box,0),number(box,1),number(box,2),number(box,3));
             if(id.isEmpty()||!Float.isFinite(bounds.left+bounds.top+bounds.right+bounds.bottom)) throw new IllegalArgumentException("Invalid native scene bounds");
             if(value.has("bitmap")) { image=bitmap(value.getString("bitmap")); return; }
             JSONObject brush=value.optJSONObject("brush");
-            if(brush!=null){
+            JSONArray points = value.optJSONArray("strokePoints");
+            if (points != null) {
+                path = new Path();
+                JSONArray first = points.getJSONArray(0);
+                float px=number(first,0), py=number(first,1);
+                path.moveTo(px,py);
+                boolean centerline=value.optBoolean("centerline");
+                boolean nibTail=!centerline && !value.optString("nib","").isEmpty();
+                int end=points.length()-(nibTail?1:0);
+                for (int i=1;i<end;i++) {
+                    JSONArray next=points.getJSONArray(i);
+                    float x=number(next,0), y=number(next,1);
+                    if (centerline) path.lineTo(x,y);
+                    else path.quadTo(px,py,(px+x)/2,(py+y)/2);
+                    px=x;py=y;
+                }
+                if (!nibTail) path.lineTo(px,py);
+            } else if(brush!=null){
                 // The brush already consists of exact 2:1 ellipse stamps. SVG
                 // semicircles round to impossible radii in PathParser, causing
                 // recursive radius repair and thousands of warnings per second.
@@ -160,13 +191,19 @@ final class NativeScene {
         rasterizedNodes++;
         Matrix position=matrix(tile);
         if(node.image!=null){target.save();target.concat(position);target.drawBitmap(node.image,null,node.bounds,imagePaint);target.restore();return;}
-        mask.eraseColor(Color.TRANSPARENT);Canvas coverage=new Canvas(mask);coverage.concat(position);
-        if(node.clip!=null)coverage.clipPath(node.clip);
-        coverage.drawPath(node.path,node.geometry);
-        if(node.nib!=null){Paint fill=new Paint(node.geometry);fill.setStyle(Paint.Style.FILL);fill.setPathEffect(null);coverage.drawPath(node.nib,fill);}
+        Bitmap coverageMask = mask;
+        if (node.inputMasks != null) {
+            coverageMask = node.inputMasks.get(key(tile.x/SIZE, tile.y/SIZE));
+            if (coverageMask == null) return;
+        } else {
+            mask.eraseColor(Color.TRANSPARENT);Canvas coverage=new Canvas(mask);coverage.concat(position);
+            if(node.clip!=null)coverage.clipPath(node.clip);
+            coverage.drawPath(node.path,node.geometry);
+            if(node.nib!=null){Paint fill=new Paint(node.geometry);fill.setStyle(Paint.Style.FILL);fill.setPathEffect(null);coverage.drawPath(node.nib,fill);}
+        }
         Matrix pigmentPosition=new Matrix(node.transform);pigmentPosition.postConcat(position);node.pigment.setLocalMatrix(pigmentPosition);
         Paint color=new Paint(Paint.ANTI_ALIAS_FLAG);color.setColor(Color.WHITE);color.setAlpha(node.alpha);
-        color.setShader(new ComposeShader(node.pigment,new BitmapShader(mask,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP),PorterDuff.Mode.DST_IN));
+        color.setShader(new ComposeShader(node.pigment,new BitmapShader(coverageMask,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP),PorterDuff.Mode.DST_IN));
         target.drawRect(0,0,SIZE,SIZE,color);
     }
     private Set<Long> eraseRaster(List<Cut> samples,long through){
@@ -179,13 +216,16 @@ final class NativeScene {
                 long cell=key(col,row);Tile tile=rasterTiles.get(cell);if(tile==null)continue;
                 for(Part part:tile.parts){
                     if(!part.ink||cut.sequence<=part.through)continue;
-                    Canvas canvas=new Canvas(part.pixels);canvas.translate(-tile.x,-tile.y);canvas.drawPath(cut.path,rasterClear);changed.add(cell);
+                    Canvas canvas=new Canvas(part.writable());canvas.translate(-tile.x,-tile.y);canvas.drawPath(cut.path,rasterClear);changed.add(cell);
                 }
             }
         }
         return changed;
     }
     Frame synchronize(JSONObject data,float scale,long received,List<Cut> eraseSamples) throws JSONException {
+        return synchronize(data, scale, received, eraseSamples, Collections.emptyMap());
+    }
+    Frame synchronize(JSONObject data,float scale,long received,List<Cut> eraseSamples,Map<String,Map<Long,Bitmap>> masks) throws JSONException {
         Frame frame=new Frame();frame.eraseThrough=data.optLong("eraseThrough",0);Set<Long> dirty=new HashSet<>(),rebuild=new HashSet<>();
         Map<Long,List<Node>> additions=new HashMap<>();long previousDraws=rasterizedNodes;
         // The bootstrap snapshot predates input accepted while its worker was starting.
@@ -238,6 +278,9 @@ final class NativeScene {
         for(int i=0;i<updates.length();i++){
             JSONObject update=updates.getJSONObject(i);frame.eraseThrough=Math.max(frame.eraseThrough,update.optLong("through",0));
             Node node=new Node(update,authoritative),old=nodes.put(node.id,node);
+            if (old == null && !frame.reset && node.ink && node.image == null && node.nib == null && node.clip == null) {
+                node.inputMasks = masks.get(node.id);
+            }
             boolean fragment = rasterErasure && update.optLong("through",-1) > 0;
             if(old!=null){if(!rasterErasure)rebuild.addAll(old.cells);unindex(old,vectorCells);}
             index(node,fragment ? vectorCells : dirty);frame.upserts.add(node.id);
@@ -278,7 +321,7 @@ final class NativeScene {
                     long through=Math.max(node.through,reconciledThrough);
                     Part part=tile.parts.isEmpty()?null:tile.parts.get(tile.parts.size()-1);
                     if(part==null||part.ink!=node.ink||(part.ink&&Math.max(part.through,reconciledThrough)!=through)){part=new Part(node.ink,through);tile.parts.add(part);}
-                    draw(node,tile,new Canvas(part.pixels));
+                    draw(node,tile,new Canvas(part.writable()));
                 }
             }else{
                 tile=new Tile((int)(key>>32)*SIZE,(int)key*SIZE);TreeMap<String,Node> bucket=buckets.get(key);
@@ -290,7 +333,8 @@ final class NativeScene {
                     draw(node,tile,canvas);
                 }
             }
-            tile.compose();rasterTiles.put(key,tile);
+            if (tile.parts.size() != 1) tile.compose();
+            rasterTiles.put(key,tile);
             // UI CLEAR owns a separate snapshot; it cannot modify worker pixels
             // or corrupt later appends/cancelled erasures.
             frame.tiles.put(key,tile.snapshot(reconciledThrough));
@@ -314,6 +358,9 @@ final class NativeScene {
             }
         }
         frame.selected.putAll(selectionPixels);frame.selectedIdle.putAll(selectionIdlePixels);
+        // The worker now owns composited board pixels. Future transforms,
+        // selections and viewport changes rasterize the canonical vectors.
+        for (String id : frame.upserts) nodes.get(id).inputMasks = null;
         rasterEraseThrough=Math.max(rasterEraseThrough,frame.eraseThrough);
         frame.rasterizedNodes=rasterizedNodes-previousDraws;
         return frame;
@@ -327,6 +374,7 @@ final class NativeSceneView extends NativeCanvasView {
     private final Map<Long,NativeScene.Tile> tiles=new HashMap<>();
     private final Set<String> elements=new HashSet<>();
     private final List<NativeScene.Cut> cuts=new ArrayList<>();
+    private final Map<Long,List<NativeScene.Cut>> cutsByCell = new HashMap<>();
     private final Map<String,Map<NativeScene.Part,Bitmap>> backups=new HashMap<>();
     private final Paint clear=new Paint(Paint.ANTI_ALIAS_FLAG),image=new Paint(Paint.FILTER_BITMAP_FLAG);
     private Bitmap background;
@@ -346,8 +394,9 @@ final class NativeSceneView extends NativeCanvasView {
     synchronized void cancelSelection(String gesture){if(selectionGesture.equals(gesture)){selectionGesture="";selectionMatrix.reset();requestRender();}}
 
     private NativeInkView input;
-    synchronized void setInput(NativeInkView view){input=view;requestRender();}
+    synchronized void setInput(NativeInkView view){if(input!=view){input=view;requestRender();}}
     synchronized boolean hasInput(NativeInkView view){return input==view;}
+    synchronized NativeInkView input(){return input;}
     private boolean hasFrame;
     private boolean framePainted;
     private Runnable ready;
@@ -360,12 +409,15 @@ final class NativeSceneView extends NativeCanvasView {
     NativeSceneView(Context context){super(context);setFocusable(false);setClickable(false);clear.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));}
     synchronized long sequence(){return sequence;}
     synchronized List<NativeScene.Cut> erasureSamples(long through){
-        List<NativeScene.Cut> result=new ArrayList<>();for(NativeScene.Cut cut:cuts)if(cut.sequence<=through)result.add(cut);return result;
+        if (through <= 0) return Collections.emptyList();
+        List<NativeScene.Cut> result=new ArrayList<>();
+        for(NativeScene.Cut cut:cuts){if(cut.sequence>through)break;result.add(cut);}
+        return result;
     }
     synchronized boolean contains(String id){return elements.contains(id);}
     synchronized void apply(NativeScene.Frame frame){
         boolean repaintAll=frame.reset||frame.backgroundChanged||!selectionKey.equals(frame.selectionKey)||!selectionGesture.isEmpty();
-        if(frame.reset){tiles.clear();pendingCuts.clear();elements.clear();if(hasFrame){cuts.clear();backups.clear();}}
+        if(frame.reset){tiles.clear();pendingCuts.clear();elements.clear();if(hasFrame){cuts.clear();cutsByCell.clear();backups.clear();}}
         hasFrame=true;
         selected=frame.selected;selectedIdle=frame.selectedIdle;selectionBounds=frame.selectionBounds;selectionKey=frame.selectionKey;
         if(selectionGesture.equals(frame.selectionThrough)||selectionBounds==null){selectionGesture="";selectionMatrix.reset();}
@@ -377,12 +429,18 @@ final class NativeSceneView extends NativeCanvasView {
             // across every geometry reply retains entire obsolete bitmap generations.
             pendingCuts.remove(entry.getKey());
             if(retired!=null)for(Map<NativeScene.Part,Bitmap> saved:backups.values())saved.keySet().removeAll(retired.parts);
-            for(NativeScene.Cut cut:cuts)if(RectF.intersects(cut.bounds,new RectF(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE))){queueCut(entry.getKey(), cut);}
+            List<NativeScene.Cut> localCuts = cutsByCell.get(entry.getKey());
+            if (localCuts != null) for (NativeScene.Cut cut : localCuts)
+                if (cut.sequence > frame.eraseThrough) queueCut(entry.getKey(),cut);
             tiles.put(entry.getKey(),tile);
         }
-        if(frame.eraseThrough>0)cuts.removeIf(cut->cut.sequence<=frame.eraseThrough);
+        if (frame.eraseThrough > 0) retireCuts(cut -> cut.sequence <= frame.eraseThrough);
         if(repaintAll)requestRender();
         else for(NativeScene.Tile tile:frame.tiles.values())requestRender(new RectF(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE));
+    }
+    private void retireCuts(java.util.function.Predicate<NativeScene.Cut> predicate) {
+        cuts.removeIf(predicate);
+        cutsByCell.values().removeIf(local -> { local.removeIf(predicate); return local.isEmpty(); });
     }
     private void queueCut(long key, NativeScene.Cut cut) {
         pendingCuts.computeIfAbsent(key, ignored -> new ArrayList<>()).add(cut);
@@ -443,14 +501,15 @@ final class NativeSceneView extends NativeCanvasView {
         RectF bounds=new RectF();path.computeBounds(bounds,true);NativeScene.Cut cut=new NativeScene.Cut(gesture,++sequence,path,bounds);cuts.add(cut);
         int left=Math.max(0,(int)Math.floor(bounds.left/NativeScene.SIZE)),top=Math.max(0,(int)Math.floor(bounds.top/NativeScene.SIZE));
         int right=Math.min((getWidth()-1)/NativeScene.SIZE,(int)Math.floor(bounds.right/NativeScene.SIZE)),bottom=Math.min((getHeight()-1)/NativeScene.SIZE,(int)Math.floor(bounds.bottom/NativeScene.SIZE));
-        for(int row=top;row<=bottom;row++)for(int col=left;col<=right;col++){long key=NativeScene.key(col,row);NativeScene.Tile tile=tiles.get(key);if(tile!=null){queueCut(key, cut);}}
+        for(int row=top;row<=bottom;row++)for(int col=left;col<=right;col++){long key=NativeScene.key(col,row);cutsByCell.computeIfAbsent(key, ignored -> new ArrayList<>()).add(cut);
+            if(tiles.containsKey(key)) queueCut(key, cut);}
         requestRender(bounds);return sequence;
     }
     synchronized void finishErase(String gesture){backups.remove(gesture);}
     synchronized void cancelErase(String gesture){
         paintCuts();
         Map<NativeScene.Part,Bitmap> saved=backups.remove(gesture);
-        cuts.removeIf(cut->cut.gesture.equals(gesture));
+        retireCuts(cut->cut.gesture.equals(gesture));
         if(saved!=null)for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
             NativeScene.Tile tile=entry.getValue();boolean restored=false;
             for(NativeScene.Part part:tile.parts){

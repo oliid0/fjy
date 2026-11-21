@@ -26,13 +26,15 @@ final class NativeInkRaster {
         Cut(Path path,int through){this.path=new Path(path);this.through=through;}
     }
     private final List<Cut> cuts=new ArrayList<>();
+    private final Map<String,List<Path>> pendingErasures = new HashMap<>();
     private final Paint clear=new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final int SIZE = 256;
     private static final class Tile {
         final int x, y;
         final Bitmap stable = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ALPHA_8);
         final Canvas canvas = new Canvas(stable);
-        Bitmap preview;
+        Bitmap preview, erased;
+        Shader erasedMask, erasedColor;
         Shader stableMask, previewMask, stableColor, previewColor, pigment;
         long revision, previewRevision = -1, tipRevision = -1;
         Tile(int x, int y) { this.x = x; this.y = y; canvas.translate(-x, -y); stableMask = coverage(stable); }
@@ -41,11 +43,16 @@ final class NativeInkRaster {
             Matrix position = new Matrix(); position.setTranslate(x, y); shader.setLocalMatrix(position); return shader;
         }
         Shader color(Shader paint, boolean live) {
-            if (pigment != paint) { pigment = paint; stableColor = previewColor = null; }
+            if (pigment != paint) { pigment = paint; stableColor = previewColor = erasedColor = null; }
             if (live) {
                 if (previewMask == null) previewMask = coverage(preview);
                 if (previewColor == null) previewColor = new ComposeShader(paint, previewMask, PorterDuff.Mode.DST_IN);
                 return previewColor;
+            }
+            if (erased != null) {
+                if (erasedMask == null) erasedMask = coverage(erased);
+                if (erasedColor == null) erasedColor = new ComposeShader(paint, erasedMask, PorterDuff.Mode.DST_IN);
+                return erasedColor;
             }
             if (stableColor == null) stableColor = new ComposeShader(paint, stableMask, PorterDuff.Mode.DST_IN);
             return stableColor;
@@ -88,6 +95,45 @@ final class NativeInkRaster {
         int right = Math.min((width - 1) / SIZE, (int)Math.floor(area.right / SIZE)), bottom = Math.min((height - 1) / SIZE, (int)Math.floor(area.bottom / SIZE));
         for (int row = top; row <= bottom; row++) for (int col = left; col <= right; col++) {
             Tile tile = tile(col, row);int saved=tile.canvas.save();clip(tile.canvas,source);tile.canvas.drawPath(path, mask);tile.canvas.restoreToCount(saved);tile.revision++;
+        }
+    }
+    // A lifted contact never appends geometry again. The worker may read these
+    // masks while the display still presents the pending contact.
+    Map<Long,Bitmap> finish(Path tip, Paint geometry, int source) {
+        commit(tip, geometry, source);
+        tip.rewind();
+        Map<Long,Bitmap> masks = new HashMap<>();
+        for (Map.Entry<Long,Tile> entry : tiles.entrySet()) masks.put(entry.getKey(), entry.getValue().stable);
+        return masks;
+    }
+    void eraseFinished(String gesture, Path cut, RectF area) {
+        pendingErasures.computeIfAbsent(gesture, ignored -> new ArrayList<>()).add(cut);
+        clearFinished(cut, area);
+    }
+    private void clearFinished(Path cut, RectF area) {
+        int right = Math.min((width-1)/SIZE, (int)Math.floor(area.right/SIZE));
+        int bottom = Math.min((height-1)/SIZE, (int)Math.floor(area.bottom/SIZE));
+        for (int y=Math.max(0,(int)Math.floor(area.top/SIZE)); y<=bottom; y++) {
+            for (int x=Math.max(0,(int)Math.floor(area.left/SIZE)); x<=right; x++) {
+                Tile tile = tiles.get(NativeScene.key(x,y));
+                if (tile == null) continue;
+                if (tile.erased == null) tile.erased = tile.stable.copy(Bitmap.Config.ALPHA_8,true);
+                Canvas canvas = new Canvas(tile.erased);
+                canvas.translate(-tile.x,-tile.y);
+                canvas.drawPath(cut,clear);
+            }
+        }
+    }
+    void cancelFinishedErase(String gesture) {
+        if (pendingErasures.remove(gesture) == null) return;
+        for (Tile tile : tiles.values()) {
+            tile.erased = null;
+            tile.erasedMask = tile.erasedColor = null;
+        }
+        RectF area = new RectF();
+        for (List<Path> paths : pendingErasures.values()) for (Path cut : paths) {
+            cut.computeBounds(area,true);
+            clearFinished(cut,area);
         }
     }
     void erase(Path path,int through){

@@ -201,6 +201,47 @@ public class NativeSceneTest {
         });
     }
 
+    @Test public void delayedPenHandoffKeepsTheActualSweptPixelsAfterToolChange() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            try {
+                NativeScene worker = new NativeScene();
+                NativeSceneView view = surface();
+                view.apply(worker.synchronize(update(new JSONArray(),true),1,0,java.util.Collections.emptyList()));
+                java.util.List<com.getcapacitor.JSObject> events = new java.util.ArrayList<>();
+                NativeInkView input = new NativeInkView(view.getContext(),events::add);
+                new FrameLayout(view.getContext()).addView(input);
+                input.layout(0,0,600,200);
+                input.setRetainedScene(() -> view,true);
+                view.setInput(input);
+                input.configure("pen",true,0,0,1,20,1,.5f,"#ff0000",false,36,
+                    java.util.Collections.emptyList(),null,0,"pen",true,60,null);
+                long down = android.os.SystemClock.uptimeMillis();
+                float[][] line = {{20.25f,61.5f},{160.5f,76.25f},{258.75f,52.5f},{405.25f,92.5f}};
+                for (int i=0;i<line.length;i++) {
+                    int action=i==0?android.view.MotionEvent.ACTION_DOWN:i==line.length-1?
+                        android.view.MotionEvent.ACTION_UP:android.view.MotionEvent.ACTION_MOVE;
+                    android.view.MotionEvent e=android.view.MotionEvent.obtain(down,down+i,action,line[i][0],line[i][1],0);
+                    try {input.onTouchEvent(e);} finally {e.recycle();}
+                }
+                String id=events.get(events.size()-1).getString("id");
+                input.configure("eraser",true,0,0,1,20,1,.5f,"#ff0000",false,36,
+                    java.util.Collections.emptyList(),null,0,"erase",true,60,null);
+                android.view.MotionEvent wipe=android.view.MotionEvent.obtain(down+10,down+10,android.view.MotionEvent.ACTION_DOWN,256,65,0);
+                android.view.MotionEvent lift=android.view.MotionEvent.obtain(down+10,down+11,android.view.MotionEvent.ACTION_UP,256,65,0);
+                try {input.onTouchEvent(wipe);input.onTouchEvent(lift);} finally {wipe.recycle();lift.recycle();}
+                Bitmap pending=pixels(view);
+                assertEquals(0,pending.getPixel(256,65));
+                assertTrue(Color.alpha(pending.getPixel(100,69))>0);
+                JSONObject node=ink(id,"a0","","#ff0000",true,-1).put("inkBirth",0)
+                    .put("strokePoints",new JSONArray("[[20.25,61.5],[160.5,76.25],[258.75,52.5],[405.25,92.5]]"));
+                view.apply(worker.synchronize(update(new JSONArray().put(node),false),1,view.sequence(),
+                    java.util.Collections.emptyList(), java.util.Collections.singletonMap(id,input.finishedMasks(id))));
+                Bitmap installed=pixels(view);
+                try { assertTrue("Delayed installation changes no edge or erased pixel",pending.sameAs(installed)); }
+                finally {pending.recycle();installed.recycle();}
+            } catch (Exception error) { throw new AssertionError(error); }
+        });
+    }
     @Test public void selectionPixelsMoveNativelyBeforeAnyJavascriptAndCancelRestoresThem()throws Exception{
         NativeScene scene=new NativeScene();
         JSONObject selected=ink("selected","a0","M30 60 L130 60","#ff0000",true,-1).put("bounds",new JSONArray("[20,40,140,80]"));

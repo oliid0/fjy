@@ -184,7 +184,7 @@ class VideoDecoder(
      * @param nalUnit The raw NAL unit bytes (without the RTP header).
      * @param presentationTimeUs Presentation timestamp in microseconds (for A/V sync).
      */
-    fun decodeNalUnit(nalUnit: ByteArray, presentationTimeUs: Long) {
+    fun decodeNalUnit(nalUnit: ByteArray, presentationTimeUs: Long, firstMirrorPicture: Boolean = false) {
         // Debug-only timing: how long the codec lock is held for one access unit tells us
         // whether the pipeline is back-pressured (see MirrorProbe for the full rationale).
         val probeStartNanos = System.nanoTime()
@@ -232,11 +232,26 @@ class VideoDecoder(
                         0,                 // offset: start from beginning of buffer
                         nalUnit.size,      // size: how many bytes to decode
                         presentationTimeUs,
-                        0                  // flags: 0 = normal frame (not end-of-stream)
+                        if (firstMirrorPicture) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0
                     )
                     // Start the residence clock for this frame; it stops when the frame comes
                     // back out of the codec and is handed to the Surface.
                     MirrorProbe.onFrameQueued(presentationTimeUs)
+                    if (firstMirrorPicture) {
+                        // A stationary sender may supply only one IDR. Drain that picture
+                        // as a complete sequence even on codecs with a deep reorder queue.
+                        val deadline = android.os.SystemClock.elapsedRealtime() + 1500
+                        while (!releaseOutputBuffers(codec, 20_000)) {
+                            if (android.os.SystemClock.elapsedRealtime() >= deadline) {
+                                isHealthy = false
+                                return@synchronized
+                            }
+                        }
+                        codec.flush()
+                        // Resume continuous decoding at the same independent picture.
+                        decodeNalUnit(nalUnit, presentationTimeUs)
+                        return@synchronized
+                    }
                 } else {
                     // No input buffer available — the decoder is catching up.
                     // Drop this NAL unit to avoid building up backlog (prefer low latency).
@@ -272,7 +287,7 @@ class VideoDecoder(
      *
      * Mirror senders can stop sending when their screen is static, even while output is pending.
      */
-    internal fun drain() = synchronized(codecLock) {
+    internal fun drain(): Unit = synchronized(codecLock) {
         if (!isHealthy) return@synchronized
         mediaCodec?.let { codec ->
             try {
@@ -285,9 +300,9 @@ class VideoDecoder(
         }
     }
 
-    private fun releaseOutputBuffers(codec: MediaCodec) {
+    private fun releaseOutputBuffers(codec: MediaCodec, waitUs: Long = 0): Boolean {
         val bufferInfo = MediaCodec.BufferInfo()
-        var outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
+        var outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, waitUs)
 
         while (outputBufferIndex >= 0 || outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED ||
             outputBufferIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED
@@ -304,13 +319,19 @@ class VideoDecoder(
                 // Debug probe: this call blocks while the BufferQueue is full, so its duration is the
                 // direct measure of "the picture stopped accepting frames" (a visual stutter).
                 val renderStartNanos = System.nanoTime()
-                codec.releaseOutputBuffer(outputBufferIndex, true)
-                MirrorProbe.onRenderBlock(System.nanoTime() - renderStartNanos)
-                MirrorProbe.onFrameRendered(bufferInfo.presentationTimeUs)
-                onFrameRendered?.invoke()
+                val eos = bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                val picture = bufferInfo.size > 0 && bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0
+                codec.releaseOutputBuffer(outputBufferIndex, picture)
+                if (picture) {
+                    MirrorProbe.onRenderBlock(System.nanoTime() - renderStartNanos)
+                    MirrorProbe.onFrameRendered(bufferInfo.presentationTimeUs)
+                    onFrameRendered?.invoke()
+                }
+                if (eos) return true
             }
             outputBufferIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
         }
+        return false
     }
 
     /**

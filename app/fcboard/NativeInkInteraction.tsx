@@ -123,8 +123,6 @@ const surfaceStamp = (api: FcboardImperativeAPI) => {
     (classroomCommands.read("boards") as { active?: string } | undefined)
       ?.active,
     classroomCommands.has("document.draw"),
-    state.activeTool.type,
-    state.eraserMode,
     state.scrollX,
     state.scrollY,
     state.zoom.value,
@@ -153,6 +151,7 @@ export const NativeInkInteraction = ({
     let frame = 0;
     let token = "";
     let configuredSurface = "";
+    let configuredTool = "";
     let previous = "";
     let uiDirty = true;
     let uiViewport = "";
@@ -178,7 +177,10 @@ export const NativeInkInteraction = ({
         console.error("[startup-ready]", error);
       });
     };
-    const contacts = new Map<string, NonNullable<Contact["mode"]>>();
+    const contacts = new Map<
+      string,
+      { mode: NonNullable<Contact["mode"]>; token: string; surface: string }
+    >();
     const eraser = createNativeEraserBackend(api.id);
     const compositionBounds = new Map<string, readonly number[]>();
     const selectionElements = new Map<string, FcboardElement>();
@@ -357,7 +359,7 @@ export const NativeInkInteraction = ({
       }
       failed = true;
       generation++;
-      for (const [id, mode] of contacts) {
+      for (const [id, { mode }] of contacts) {
         apply(
           {
             id,
@@ -471,6 +473,7 @@ export const NativeInkInteraction = ({
         !classroomCommands.has("document.draw");
       const overlayPreview = !!api.getSceneProjection?.();
       configuredSurface = surfaceStamp(api);
+      configuredTool = state.activeTool.type;
       token = JSON.stringify([
         api.id,
         generation,
@@ -686,38 +689,46 @@ export const NativeInkInteraction = ({
         void ink.acknowledge({ owner: api.id, id: contact.id }).catch(() => {});
         return;
       }
+      const opened = contacts.get(contact.id);
+      const surface = opened?.surface ?? configuredSurface;
+      const finishesInk = opened?.mode === "pen" || opened?.mode === "erase";
+      const current = () =>
+        contact.token === (finishesInk ? opened.token : token) &&
+        (finishesInk || configuredTool === api.getAppState().activeTool.type) &&
+        surface === surfaceStamp(api);
       let elementId: string | undefined;
       try {
-        if (
-          contact.phase === "cancel" ||
-          contact.token !== token ||
-          configuredSurface !== surfaceStamp(api)
-        ) {
-          await apply(
-            contact,
-            "cancel",
-            configuredSurface === surfaceStamp(api),
-          );
+        if (contact.phase === "cancel" || !current()) {
+          await apply(contact, "cancel", surface === surfaceStamp(api));
           contacts.delete(contact.id);
         } else {
           // Register before waiting: invalidation must be able to cancel even
           // the first geometry request, not only an acknowledged contact.
           if (contact.phase === "start") {
-            contacts.set(contact.id, contact.mode || "pen");
+            contacts.set(contact.id, {
+              mode: contact.mode || "pen",
+              token: contact.token,
+              surface,
+            });
           }
           const applied = apply(contact);
           const result = applied instanceof Promise ? await applied : applied;
           if (typeof result === "string") {
             elementId = result;
+            if (
+              contact.mode === "pen" &&
+              contact.phase === "end" &&
+              result === contact.id &&
+              !contact.cuts?.length
+            ) {
+              scene?.finishedInk(result, contact.nativeSequence ?? 0);
+            }
           }
           if (!active || failed || received !== generation) {
             return;
           }
-          if (
-            contact.token !== token ||
-            configuredSurface !== surfaceStamp(api)
-          ) {
-            apply(contact, "cancel", configuredSurface === surfaceStamp(api));
+          if (!current()) {
+            apply(contact, "cancel", surface === surfaceStamp(api));
             contacts.delete(contact.id);
             return;
           }
@@ -936,7 +947,7 @@ export const NativeInkInteraction = ({
         contactQueue = Promise.resolve();
         token = "";
         previous = "";
-        for (const [id, mode] of contacts) {
+        for (const [id, { mode }] of contacts) {
           apply(
             {
               id,
@@ -979,7 +990,7 @@ export const NativeInkInteraction = ({
       removeEventListener("scroll", scheduleUi, true);
       removeEventListener("focusin", scheduleUi);
       removeEventListener("focusout", scheduleUi);
-      for (const [id, mode] of contacts) {
+      for (const [id, { mode }] of contacts) {
         apply(
           {
             id,

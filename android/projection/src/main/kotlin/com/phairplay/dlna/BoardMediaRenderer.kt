@@ -187,6 +187,13 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
     override fun getPositionSeconds() = position
     override fun setVolumePercent(percent: Int) = dispatch { volume = percent.coerceIn(0, 100) / 100f; player?.volume = volume }
 
+    fun disconnectSender() {
+        ManualDlnaHttp.cancelPendingAutoStart()
+        stopItem()
+        ManualDlnaHttp.notifyPlaybackEnded()
+        state("waiting")
+    }
+
     fun stop() {
         closed = true
         if (multicast?.isHeld == true) multicast.release()

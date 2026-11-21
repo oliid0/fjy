@@ -101,18 +101,17 @@ final class NativeStrokeEraser {
         return result;
     }
     private static double cross(Node a,Node b,Node c) { return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x); }
-    private static List<Node> half(List<Node> input) {
-        List<Node> hull=new ArrayList<>();
-        for(Node p:input) { while(hull.size()>1&&cross(hull.get(hull.size()-2),hull.get(hull.size()-1),p)<=0) hull.remove(hull.size()-1); hull.add(p); }
-        if(!hull.isEmpty()) hull.remove(hull.size()-1); return hull;
-    }
+    private static Node corner(double x,double y) { return new Node(x,y,0,0,0); }
     private static List<Node> area(Node a,Node b,double width,double height) {
-        List<Node> corners=new ArrayList<>();
-        for(Node p:new Node[]{a,b}) for(int x:new int[]{-1,1}) for(int y:new int[]{-1,1}) corners.add(new Node(p.x+x*width/2,p.y+y*height/2,0,0,0));
-        corners.sort(Comparator.comparingDouble((Node p)->p.x).thenComparingDouble(p->p.y));
-        List<Node> distinct=new ArrayList<>();
-        for(Node p:corners) if(distinct.isEmpty() || distinct.get(distinct.size()-1).x!=p.x || distinct.get(distinct.size()-1).y!=p.y) distinct.add(p);
-        List<Node> hull=half(distinct); Collections.reverse(distinct); hull.addAll(half(distinct)); return hull;
+        double l=Math.min(a.x,b.x)-width/2, r=Math.max(a.x,b.x)+width/2;
+        double t=Math.min(a.y,b.y)-height/2, d=Math.max(a.y,b.y)+height/2;
+        if (a.x==b.x || a.y==b.y)
+            return Arrays.asList(corner(l,t),corner(r,t),corner(r,d),corner(l,d));
+        if ((a.x<b.x)==(a.y<b.y))
+            return Arrays.asList(corner(l,t),corner(l+width,t),corner(r,d-height),
+                corner(r,d),corner(r-width,d),corner(l,t+height));
+        return Arrays.asList(corner(r,t),corner(r,t+height),corner(l+width,d),
+            corner(l,d),corner(l,d-height),corner(r-width,t));
     }
     private static double[] interval(Node a,Node b,List<Node> area,Stroke stroke) {
         double enter=0,exit=1;
@@ -137,6 +136,11 @@ final class NativeStrokeEraser {
         final Node from,to;
         final double left,top,right,bottom;
         final List<Node> area;
+        final Map<Double,List<Node>> expanded = new HashMap<>();
+        List<Node> forCap(double cap,double width,double height) {
+            return cap == 0 ? area : expanded.computeIfAbsent(cap,
+                radius -> area(from,to,width+radius,height+radius));
+        }
         Sweep(Node from,Node to,double width,double height){
             this.from=from;this.to=to;
             left=Math.min(from.x,to.x)-width/2;right=Math.max(from.x,to.x)+width/2;
@@ -172,7 +176,7 @@ final class NativeStrokeEraser {
                 &&covers(sweep.area,stroke.right,stroke.bottom)&&covers(sweep.area,stroke.left,stroke.bottom)){
                 stroke.pieces=Collections.emptyList();stroke.nib=false;return true;
             }
-            polygons.add(stroke.cap==0?sweep.area:area(sweep.from,sweep.to,width+stroke.cap,height+stroke.cap));
+            polygons.add(sweep.forCap(stroke.cap,width,height));
         }
         boolean touched=false;
         if(stroke.nib&&stroke.nibSource<=through)for(Sweep sweep:sweeps){
@@ -188,13 +192,17 @@ final class NativeStrokeEraser {
                 if(hit)touched=true;else output.add(samples);continue;
             }
             List<Node> current=new ArrayList<>();
+            List<double[]> hits=new ArrayList<>();
             for(int i=1;i<samples.size();i++){
-                Node a=samples.get(i-1),b=samples.get(i);List<double[]> hits=new ArrayList<>();
+                hits.clear();
+                Node a=samples.get(i-1),b=samples.get(i);
                 if(b.source<=through){
                     double radius=stroke.brush?Math.max(a.width,b.width)/2:stroke.cap/2;
+                    double left=Math.min(a.x,b.x)-radius, right=Math.max(a.x,b.x)+radius;
+                    double top=Math.min(a.y,b.y)-radius, bottom=Math.max(a.y,b.y)+radius;
                     for(int j=0;j<sweeps.size();j++){
                         Sweep sweep=sweeps.get(j);
-                        if(!sweep.overlaps(Math.min(a.x,b.x)-radius,Math.min(a.y,b.y)-radius,Math.max(a.x,b.x)+radius,Math.max(a.y,b.y)+radius))continue;
+                        if(!sweep.overlaps(left,top,right,bottom))continue;
                         double[] hit=interval(a,b,polygons.get(j),stroke);
                         if(hit!=null&&hit[1]-hit[0]>1e-10){
                             hits.add(hit);
@@ -235,12 +243,12 @@ final class NativeStrokeEraser {
             }
             for(Map.Entry<String,List<Sweep>> entry:affected.entrySet()){
                 Stroke stroke=strokes.get(entry.getKey());
-                if(cut(stroke,entry.getValue(),width,height,through)){changed.add(stroke.id);unindex(stroke);index(stroke);}
+                if(cut(stroke,entry.getValue(),width,height,through)) changed.add(stroke.id);
             }
         }
         JSONArray output=new JSONArray();
         for(String id:changed){
-            Stroke stroke=strokes.get(id);JSONArray pieces=new JSONArray();
+            Stroke stroke=strokes.get(id);unindex(stroke);index(stroke);JSONArray pieces=new JSONArray();
             for(List<Node> piece:stroke.pieces){JSONArray samples=new JSONArray();for(Node node:piece)samples.put(node.json());pieces.put(samples);}
             output.put(new JSONObject().put("id",id).put("pieces",pieces).put("nibHit",!stroke.nib));
         }

@@ -74,11 +74,21 @@ public final class NativeScenePlugin extends Plugin {
                 if(!(old instanceof FrameLayout.LayoutParams)||old.width!=bounds.width||old.height!=bounds.height||((FrameLayout.LayoutParams)old).leftMargin!=bounds.leftMargin||((FrameLayout.LayoutParams)old).topMargin!=bounds.topMargin)entry.view.setLayoutParams(bounds);
                 long received=entry.view.sequence();Entry target=entry;
                 List<NativeScene.Cut> eraseSamples=entry.view.erasureSamples(call.getData().optLong("eraseThrough",0));
+                Map<String,Map<Long,android.graphics.Bitmap>> masks = new HashMap<>();
+                NativeInkView input = entry.view.input();
+                org.json.JSONArray updates = call.getData().getJSONArray("nodes");
+                if (input != null) for (int i=0; i<updates.length(); i++) {
+                    org.json.JSONObject update = updates.getJSONObject(i);
+                    if (!update.has("inkBirth")) continue;
+                    String id = update.getString("id");
+                    Map<Long,android.graphics.Bitmap> stroke = input.finishedMasks(id);
+                    if (stroke != null) masks.put(id, stroke);
+                }
                 worker.execute(()->{
                     android.os.Trace.beginSection("NativeScene.synchronize");
                     try{
                         State state=states.get(owner);if(state==null||state.epoch!=epoch){state=new State(epoch);states.put(owner,state);}
-                        NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples);
+                        NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples,masks);
                         getActivity().runOnUiThread(()->{
                             if(!closed&&entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);if(!target.reported){target.reported=true;MainActivity.startup("scene.installed");}((MainActivity)getActivity()).nativeSceneCommitted(owner);}
                             call.resolve();

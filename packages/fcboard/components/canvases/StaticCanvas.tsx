@@ -41,6 +41,7 @@ type StaticCanvasProps = {
 const StaticCanvas = (props: StaticCanvasProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isComponentMounted = useRef(false);
+  const nativeCanvas = useRef<HTMLCanvasElement | null>(null);
 
   useLayoutEffect(() => {
     props.canvas.style.width = `${props.appState.width}px`;
@@ -78,8 +79,12 @@ const StaticCanvas = (props: StaticCanvasProps) => {
     const paint = () => {
       if (props.nativeRenderer?.(config)) {
         renderStaticSceneThrottled.cancel();
-        canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+        if (nativeCanvas.current !== canvas) {
+          canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+          nativeCanvas.current = canvas;
+        }
       } else {
+        nativeCanvas.current = null;
         renderStaticScene(
           config,
           !props.synchronous && isRenderThrottlingEnabled(),

@@ -508,9 +508,8 @@ it("acknowledges empty native eraser batches before lift and falls back visibly 
   await act(async () =>
     backend.listeners.forEach((listener) => listener(contact)),
   );
-  await waitFor(() =>
-    expect(backend.synchronize.mock.calls.at(-1)![0].eraseThrough).toBe(1),
-  );
+  expect(backend.erase).not.toHaveBeenCalled();
+  expect(backend.synchronize.mock.calls.at(-1)![0].eraseThrough).toBe(0);
   expect(api.getSceneElements()).toHaveLength(0);
   await act(async () =>
     backend.listeners.forEach((listener) =>

@@ -453,6 +453,7 @@ const ProjectionSession = ({
   const connection = useRef<Connection>(undefined);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const nativeLive = useRef<{
+    revision: number;
     protocol: NativeProtocol;
     tile: string;
     video: ProjectionSource;
@@ -475,7 +476,7 @@ const ProjectionSession = ({
     }
     const session = crypto.randomUUID();
     let disposed = false;
-    let restarting: NativeProtocol | undefined;
+    const dismissed = new Map<NativeProtocol, number>();
     const close = () => {
       const current = connection.current;
       const video = videoRef.current;
@@ -529,11 +530,11 @@ const ProjectionSession = ({
     const unwatch = watchNativeProjection(
       session,
       setNative,
-      (protocol) =>
+      (protocol, revision) =>
         !connection.current &&
-        protocol !== restarting &&
+        dismissed.get(protocol) !== revision &&
         (!nativeLive.current || nativeLive.current.protocol === protocol),
-      (protocol, video) => {
+      (protocol, video, revision) => {
         if (nativeLive.current) {
           nativeLive.current.video = video;
           const current = api.getSceneProjection?.();
@@ -544,6 +545,7 @@ const ProjectionSession = ({
         }
         document.documentElement.classList.add("fc-native-projection");
         nativeLive.current = {
+          revision,
           protocol,
           video,
           tile: attachProjection(api, video),
@@ -564,22 +566,20 @@ const ProjectionSession = ({
     );
     const stopSender = () => {
       const current = connection.current;
-      const protocol = nativeLive.current?.protocol;
+      const source = nativeLive.current;
       close();
       if (current) {
         void projection.disconnect(current.sender).catch(() => {});
       }
-      if (protocol) {
-        restarting = protocol;
+      if (source) {
+        const { protocol, revision } = source;
+        dismissed.set(protocol, revision);
         void nativeProjection
-          .disconnect({ protocol, session })
+          .disconnect({ protocol, session, revision })
           .catch(() => {
             if (!disposed) {
               setNativeError(true);
             }
-          })
-          .finally(() => {
-            restarting = undefined;
           });
       }
     };

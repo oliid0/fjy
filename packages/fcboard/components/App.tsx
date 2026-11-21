@@ -9972,7 +9972,8 @@ class App extends React.Component<AppProps, AppState> {
       !Number.isFinite(input.width + input.height) ||
       input.width <= 0 ||
       input.height <= 0 ||
-      (this.state.activeTool.type !== "eraser" &&
+      (input.phase === "start" &&
+        this.state.activeTool.type !== "eraser" &&
         (!input.palm ||
           (this.state.palmEraser === false && input.pointerType !== "pen")))
     ) {
@@ -10274,7 +10275,7 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
     if (
-      this.state.activeTool.type !== "freedraw" ||
+      (input.phase === "start" && this.state.activeTool.type !== "freedraw") ||
       this.state.viewModeEnabled ||
       !input.points.length ||
       input.points.length > 120000 ||

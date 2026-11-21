@@ -47,9 +47,12 @@ type NativeNode = {
   through: number;
   ink: boolean;
   inline: boolean;
+  inkBirth?: number;
   bounds: readonly number[];
   bitmap?: string;
   path?: string;
+  strokePoints?: readonly (readonly number[])[];
+  centerline?: boolean;
   brush?: { stamps: number[]; angle: number };
   nib?: string;
   transform?: number[];
@@ -169,6 +172,11 @@ export const nativeSceneNode = (
               stamps,
               angle: element.customData?.fcInk?.brushAngle || 0,
             },
+          }
+        : factory && element.customData?.fcInk?.subpixel
+        ? {
+            strokePoints: element.points,
+            centerline: element.customData.fcInk.centerline === true,
           }
         : { path: getFreeDrawSvgPath(element) }),
       nib: factory ? factoryNibPath(element) : "",
@@ -335,6 +343,10 @@ export const createNativeSceneRenderer = (
   let selectionThrough = "";
   const selectionWaiters = new Map<string, () => void>();
   const sources = new Map<string, FcboardElement>();
+  const finished = new WeakMap<
+    FcboardElement,
+    { version: number; nonce: number; birth: number }
+  >();
   const dirty = new Map<string, number>();
   const removals = new Map<string, number>();
   const bitmaps = new Set<string>();
@@ -516,6 +528,17 @@ export const createNativeSceneRenderer = (
         const source = sources.get(id);
         const node = source && nativeSceneNode(source, config, through);
         if (node) {
+          const local = source && finished.get(source);
+          if (
+            local &&
+            local.version === node.version &&
+            local.nonce === node.nonce &&
+            through < 0 &&
+            !changedView &&
+            !reset
+          ) {
+            node.inkBirth = local.birth;
+          }
           nodes.push(node);
           if (node.bitmap) {
             bitmaps.add(id);
@@ -634,6 +657,16 @@ export const createNativeSceneRenderer = (
   };
   document.fonts?.addEventListener?.("loadingdone", fonts);
   return {
+    finishedInk(id: string, birth: number) {
+      const element = sources.get(id);
+      if (element) {
+        finished.set(element, {
+          version: element.version,
+          nonce: element.versionNonce,
+          birth,
+        });
+      }
+    },
     acknowledgeSelection(gesture: string) {
       selectionThrough = gesture;
       const completed = new Promise<void>((resolve) =>

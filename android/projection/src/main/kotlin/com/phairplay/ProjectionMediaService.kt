@@ -18,6 +18,7 @@ import com.airplay.miracast.wfdCustomVideoMode
 import com.airplay.service.ProtocolState
 
 /** Codec, network parsers and vendor libraries run outside the process owning the board. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ProjectionMediaService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val sessions = mutableMapOf<String, Session>()
@@ -154,6 +155,15 @@ class ProjectionMediaService : Service() {
                 s.target = target
                 try { s.dlna?.attach(target); s.cast?.attach(target); s.castPlus?.attach(target); s.air?.refreshVideoSurface() }
                 finally { previous?.release() }
+            }
+        }
+
+        override fun disconnect(protocol: String, events: IProjectionEvents) {
+            main.post {
+                val s = sessions[protocol] ?: return@post
+                if (s.events.asBinder() != events.asBinder()) return@post
+                s.air?.disconnectSender()
+                s.dlna?.disconnectSender()
             }
         }
 

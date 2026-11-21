@@ -57,7 +57,6 @@ public class MainActivity extends BridgeActivity {
     private NativeScenePlugin nativeScene;
     void setNativeScene(NativeScenePlugin scene) { nativeScene=scene; }
     NativeSceneView nativeScene(String owner) { return nativeScene==null?null:nativeScene.scene(owner); }
-    void nativeSceneCommitted(String owner) { if(inkInput!=null)inkInput.sceneCommitted(owner); }
     void setInkSurface(String owner,NativeInkView input,android.widget.FrameLayout.LayoutParams bounds){
         if(nativeScene==null)throw new IllegalStateException("Native scene unavailable");
         nativeScene.setInput(owner,input,bounds);

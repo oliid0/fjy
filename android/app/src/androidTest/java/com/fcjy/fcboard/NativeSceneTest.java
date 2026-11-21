@@ -1,5 +1,7 @@
 package com.fcjy.fcboard;
 
+import android.view.MotionEvent;
+
 import android.graphics.*;
 import android.widget.FrameLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -151,11 +153,41 @@ public class NativeSceneTest {
             }
             String id=events.get(events.size()-1).optString("id");input.acknowledge(id,"committed",true);
             Bitmap before=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);input.paintCanvas(new Canvas(before));assertEquals(128,Color.alpha(before.getPixel(100,60)));before.recycle();
-            retained.apply(canonical);input.sceneCommitted();Bitmap after=pixels(retained);input.paintCanvas(new Canvas(after));assertEquals("One opacity after preview handoff",128,Color.alpha(after.getPixel(100,60)));after.recycle();
+            retained.setInput(input);retained.apply(canonical);Bitmap after=pixels(retained);assertEquals("One opacity after preview handoff",128,Color.alpha(after.getPixel(100,60)));after.recycle();
             input.configure("erase",true,0,0,1,20,1,.5f,"#ff0000",false,36,java.util.Collections.emptyList(),null,0,"erase",true,60,null);
             android.view.MotionEvent erase=android.view.MotionEvent.obtain(down+1,down+1,android.view.MotionEvent.ACTION_DOWN,256,60,0);
             try{assertTrue(input.onTouchEvent(erase));}finally{erase.recycle();}
+            MotionEvent move = MotionEvent.obtain(down+1,down+2,MotionEvent.ACTION_MOVE,450,150,0);
+            try { assertTrue(input.onTouchEvent(move)); } finally { move.recycle(); }
             Bitmap cut=pixels(retained);assertEquals("Pixels clear before JS has acknowledged eraser start",0,Color.alpha(cut.getPixel(256,60)));cut.recycle();
+        });
+    }
+    @Test public void deletionBeforeFirstInstallationRetiresLiftedInk() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            NativeSceneView view = surface();
+            java.util.List<com.getcapacitor.JSObject> events = new java.util.ArrayList<>();
+            NativeInkView input = new NativeInkView(view.getContext(), events::add);
+            new FrameLayout(view.getContext()).addView(input);
+            input.layout(0,0,600,200);
+            input.configure("pen",true,0,0,1,20,1,1,"#ff0000",false,36,
+                java.util.Collections.emptyList(),null,0,"pen",true,60,null);
+            input.setRetainedScene(() -> view,true);
+            view.setInput(input);
+            for (int action : new int[]{MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP}) {
+                MotionEvent event = MotionEvent.obtain(100,101,action,100,60,0);
+                try { assertTrue(input.onTouchEvent(event)); } finally { event.recycle(); }
+            }
+            String id = events.get(events.size()-1).optString("id");
+            input.acknowledge(id,id,true);
+            Bitmap before = pixels(view);
+            assertTrue(Color.alpha(before.getPixel(100,60)) > 0);
+            before.recycle();
+            NativeScene.Frame frame = new NativeScene.Frame();
+            frame.removed.add(id);
+            view.apply(frame);
+            Bitmap after = pixels(view);
+            assertEquals(0,after.getPixel(100,60));
+            after.recycle();
         });
     }
     @Test public void firstCanonicalFrameReplaysAnEraseThatStartedBeforeBootstrap()throws Exception{

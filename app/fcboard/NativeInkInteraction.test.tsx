@@ -244,6 +244,61 @@ it.each(["MuiModal-root MuiModal-hidden", "MuiPaper-root"])(
     }
   },
 );
+it.each([
+  ["eraser", "erase", ".fc-eraser-settings"],
+  ["pen", "pen", ".fc-pen-properties"],
+])(
+  "captures the first board contact outside the %s palette",
+  async (tool, mode, selector) => {
+    const { container } = await editor(
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+    );
+    const api = window.h.app.api;
+    window.h.state.width = 1000;
+    window.h.state.height = 700;
+    fireEvent.click(container.querySelector(`[data-toolbar-${tool}]`)!);
+    const panel = container.querySelector(selector)!;
+    const rect = new DOMRect(300, 400, 240, 120);
+    vi.spyOn(panel, "getBoundingClientRect").mockReturnValue(rect);
+    const popper = panel.closest(".MuiPopper-root");
+    if (popper) {
+      vi.spyOn(popper, "getBoundingClientRect").mockReturnValue(rect);
+    }
+    render(<NativeInkInteraction api={api} />);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+        enabled: true,
+        mode,
+        blocked: expect.arrayContaining([[300, 400, 540, 520]]),
+      }),
+    );
+    const contact = {
+      owner: api.id,
+      id: "press-outside-panel",
+      token: backend.configure.mock.calls.at(-1)![0].token,
+      mode,
+      width: 50,
+      height: 60,
+      pointerType: "touch",
+      nativeSequence: mode === "erase" ? 1 : 0,
+      points: [[200, 150, 0.5]],
+    };
+    await act(async () =>
+      backend.listeners.forEach((listener) =>
+        listener({ ...contact, phase: "start" }),
+      ),
+    );
+    expect(panel).not.toBeInTheDocument();
+    expect(api.getAppState().cursorButton).toBe("down");
+    expect(backend.erase).not.toHaveBeenCalled();
+    await act(async () =>
+      backend.listeners.forEach((listener) =>
+        listener({ ...contact, phase: "end" }),
+      ),
+    );
+    expect(api.getAppState().cursorButton).toBe("up");
+  },
+);
 it("keeps brush and gradient previews native with the calibrated style", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;

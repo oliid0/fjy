@@ -36,6 +36,20 @@ final class NativeInkView extends View {
     private final Map<NativeInputStream, Contact> active = new HashMap<>();
     private final Set<NativeInputStream> ownedDevices = new HashSet<>();
     private final Map<String, Contact> pending = new java.util.LinkedHashMap<>();
+    private static final class LiftedInkCut {
+        final String gesture;
+        final long liftedThrough;
+        final Path path;
+        final RectF bounds;
+        LiftedInkCut(String gesture, long liftedThrough, Path path, RectF bounds) {
+            this.gesture = gesture;
+            this.liftedThrough = liftedThrough;
+            this.path = path;
+            this.bounds = bounds;
+        }
+    }
+    private long liftedSequence;
+    private final List<LiftedInkCut> liftedCuts = new ArrayList<>();
     private final List<RectF> blocked = new ArrayList<>();
     private final Paint regionFill = new Paint(Paint.ANTI_ALIAS_FLAG), selectionFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private boolean enabled, palmEnabled = true, routedInput, multiStroke = true;
@@ -99,7 +113,7 @@ final class NativeInkView extends View {
     }
     private static final class Contact {
         String id = UUID.randomUUID().toString(), token, pointerType, mode, elementId;
-        long nativeSequence, sentSequence;
+        long nativeSequence, sentSequence, liftedAt;
         final List<float[]> points = new ArrayList<>();
         NativeInkRaster coverage() { return brush == null ? raster : brush.coverage(); }
         final RectF bounds=new RectF(), tipDamage=new RectF();
@@ -277,7 +291,10 @@ final class NativeInkView extends View {
                 splitInk.commit(contact.bounds,target->draw(target,contact));
             }
             else if(contact.mode.equals("erase"))splitInk.finish(contact.id);
-        }else pending.put(contact.id, contact);
+        } else if (!contact.mode.equals("erase")) {
+            if (contact.mode.equals("pen")) contact.liftedAt = ++liftedSequence;
+            pending.put(contact.id, contact);
+        }
         // UP may repeat the last sample, so sample() need not invalidate. The
         // cursor is transient input, never wait for asynchronous vector/JS ack.
         if(contact.mode.equals("erase")){
@@ -406,10 +423,10 @@ final class NativeInkView extends View {
         if(scene!=null)contact.nativeSequence=scene.erase(contact.id,cut);
         if(splitInk!=null){splitInk.size(getWidth(),getHeight());splitInk.erase(contact.id,cut);}
         RectF area=new RectF();cut.computeBounds(area,true);
-        for (Contact preview : pending.values()) {
-            if (preview.mode.equals("pen") && RectF.intersects(preview.bounds,area))
-                preview.coverage().eraseFinished(contact.id,cut,area);
-        }
+        // A pen lifted before this sample may still be awaiting its scene frame.
+        // Defer its mask work until presentation. If the scene installs it first,
+        // the retained scene already has this sweep and no preview copy is needed.
+        if (!pending.isEmpty()) liftedCuts.add(new LiftedInkCut(contact.id,liftedSequence,cut,area));
         for(Contact writer:active.values())if(writer.mode.equals("pen")&&RectF.intersects(writer.bounds,area)){
             InkCut inkCut=new InkCut(contact.id,writer.points.size()-1,fromX,fromY,px,py,contact.major*scale,contact.minor*scale,cut);
             writer.cuts.add(inkCut);erasePreview(writer,inkCut);
@@ -496,7 +513,7 @@ final class NativeInkView extends View {
     synchronized void acknowledge(String id,String elementId,boolean complete) {
         Contact pendingContact=pending.get(id);NativeSceneView scene=retainedScene.get();
         if(pendingContact!=null&&pendingContact.mode.equals("pen")&&!elementId.isEmpty()&&scene!=null&&!scene.contains(elementId))pendingContact.elementId=elementId;
-        else if(pending.remove(id)!=null && !pendingContact.mode.equals("erase"))requestRender(pendingContact.bounds);
+        else if(pending.remove(id)!=null)requestRender(pendingContact.bounds);
         if(complete&&scene!=null)scene.finishErase(id);
         for (Contact contact : active.values()) if (contact.id.equals(id)) {
             contact.awaitingFrame = false;
@@ -508,16 +525,19 @@ final class NativeInkView extends View {
         Contact contact = pending.get(id);
         return contact == null || !contact.cuts.isEmpty() ? null : contact.finishedMasks;
     }
-    synchronized void sceneCommitted(){sceneCommitted(retainedScene.get());}
-    synchronized void sceneCommitted(NativeSceneView scene){
-        if(scene==null)return;
-        java.util.Iterator<Contact> contacts=pending.values().iterator();
-        while(contacts.hasNext()){
-            Contact contact=contacts.next();
-            if(contact.elementId!=null&&scene.contains(contact.elementId)){requestRender(contact.bounds);contacts.remove();}
+    synchronized void sceneCommitted(NativeScene.Frame frame) {
+        if (frame.upserts.isEmpty() && frame.removed.isEmpty()) return;
+        java.util.Iterator<Contact> contacts = pending.values().iterator();
+        while (contacts.hasNext()) {
+            Contact contact = contacts.next();
+            if (frame.upserts.contains(contact.elementId) || frame.removed.contains(contact.elementId)) {
+                requestRender(contact.bounds);
+                contacts.remove();
+            }
         }
     }
     private void restorePreview(String gesture){
+        liftedCuts.removeIf(cut -> cut.gesture.equals(gesture));
         if(splitInk!=null)splitInk.cancel(gesture);
         List<Contact> writers=new ArrayList<>(active.values());writers.addAll(pending.values());
         for (Contact preview : writers) {
@@ -531,7 +551,10 @@ final class NativeInkView extends View {
         NativeSceneView scene=retainedScene.get();if(scene!=null)for(Contact contact:pending.values())if(contact.mode.equals("transform"))scene.cancelSelection(contact.id);
         active.clear();
         if (keepLiftedInk) pending.values().removeIf(contact -> !contact.mode.equals("pen"));
-        else pending.clear();
+        else {
+            pending.clear();
+            liftedCuts.clear();
+        }
         ownedDevices.clear();
         requestRender();
     }
@@ -548,10 +571,15 @@ final class NativeInkView extends View {
         for(RectF box:blocked)canvas.clipOutRect((box.left-x)*scale,(box.top-y)*scale,(box.right-x)*scale,(box.bottom-y)*scale);
         if(splitInk!=null)splitInk.draw(canvas);
         for (Contact contact : pending.values()) {
-            // Erasure reconciliation may wait for JS; its cursor ends at native UP.
-            if (contact.mode.equals("erase")) continue;
+            if (contact.liftedAt > 0) {
+                for (LiftedInkCut cut : liftedCuts) {
+                    if (contact.liftedAt <= cut.liftedThrough && RectF.intersects(contact.bounds,cut.bounds))
+                        contact.coverage().eraseFinished(cut.gesture,cut.path,cut.bounds);
+                }
+            }
             draw(canvas,contact);
         }
+        liftedCuts.clear();
         for (Contact contact : active.values()) {
             draw(canvas, contact);
             if (contact.mode.equals("erase") && contact.nativeSequence == 0 && !contact.awaitingFrame && contact.points.size() > contact.sent) {

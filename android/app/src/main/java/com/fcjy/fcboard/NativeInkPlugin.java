@@ -44,7 +44,6 @@ public class NativeInkPlugin extends Plugin {
         inputManager=(android.hardware.input.InputManager)getContext().getSystemService(android.content.Context.INPUT_SERVICE);
         if(inputManager!=null)inputManager.registerInputDeviceListener(devices,new android.os.Handler(android.os.Looper.getMainLooper()));
     }
-    void sceneCommitted(String owner) { NativeInkView view=surfaces.get(owner);if(view!=null)view.sceneCommitted(); }
     /** Route the real event before ViewGroup can cancel another device's stream. */
     boolean dispatchInput(MotionEvent event,java.util.function.Consumer<MotionEvent> forward) {
         if (touchLocked && event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) return true;

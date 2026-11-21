@@ -90,7 +90,7 @@ public final class NativeScenePlugin extends Plugin {
                         State state=states.get(owner);if(state==null||state.epoch!=epoch){state=new State(epoch);states.put(owner,state);}
                         NativeScene.Frame frame=state.scene.synchronize(call.getData(),scale,received,eraseSamples,masks);
                         getActivity().runOnUiThread(()->{
-                            if(!closed&&entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);if(!target.reported){target.reported=true;MainActivity.startup("scene.installed");}((MainActivity)getActivity()).nativeSceneCommitted(owner);}
+                            if(!closed&&entries.get(owner)==target&&target.epoch==epoch){target.view.apply(frame);if(!target.reported){target.reported=true;MainActivity.startup("scene.installed");}}
                             call.resolve();
                         });
                     }catch(Exception error){call.reject("Native scene unavailable: "+error.getMessage(),error);}

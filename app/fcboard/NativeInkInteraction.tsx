@@ -541,7 +541,10 @@ export const NativeInkInteraction = ({
             box.top <= state.offsetTop + state.height
           ) {
             uiBounds.push([box.left, box.top, box.right, box.bottom]);
+            // Drawing palettes consume only their own rectangles. The first
+            // contact outside both dismisses the palette and draws on Surface.
             if (
+              !node.hasAttribute("data-native-ink-panel") &&
               node.matches(
                 '.MuiModal-root,.MuiPopper-root,.fc-editor-properties,[role="menu"],[role="dialog"]',
               )

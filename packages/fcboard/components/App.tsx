@@ -752,6 +752,7 @@ class App extends React.Component<AppProps, AppState> {
     ]
   >();
 
+  onCanvasPressEmitter = new Emitter();
   onPointerDownEmitter = new Emitter<
     [
       activeTool: AppState["activeTool"],
@@ -7916,6 +7917,7 @@ class App extends React.Component<AppProps, AppState> {
     this.onInkProgressEmitter.trigger(element, "start");
     this.setState({ selectedElementIds: {}, cursorButton: "down" });
     this.props.onPointerDown?.(tool, pointerDownState);
+    this.onCanvasPressEmitter.trigger();
     this.onPointerDownEmitter.trigger(tool, pointerDownState, event);
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", up);
@@ -8139,6 +8141,7 @@ class App extends React.Component<AppProps, AppState> {
     this.stopInkErasure = cancelAll;
     this.setState({ selectedElementIds: {}, cursorButton: "down" });
     this.props.onPointerDown?.(this.state.activeTool, pointerDownState);
+    this.onCanvasPressEmitter.trigger();
     this.onPointerDownEmitter.trigger(
       this.state.activeTool,
       pointerDownState,
@@ -8831,6 +8834,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.props?.onPointerDown?.(this.state.activeTool, pointerDownState);
+    this.onCanvasPressEmitter.trigger();
     this.onPointerDownEmitter.trigger(
       this.state.activeTool,
       pointerDownState,
@@ -9983,6 +9987,7 @@ class App extends React.Component<AppProps, AppState> {
       if (draft) {
         throw new Error("A native eraser gesture is already active");
       }
+      this.onCanvasPressEmitter.trigger();
       const first = input.points[0];
       this.nativeEraserDraft = {
         id: input.id,
@@ -10195,6 +10200,7 @@ class App extends React.Component<AppProps, AppState> {
         selectedGroupIds,
         selectedLinearElement,
       } = this.state;
+      this.onCanvasPressEmitter.trigger();
       this.nativeRegionDrafts.set(input.id, {
         mode: input.mode,
         selection: {
@@ -10287,6 +10293,7 @@ class App extends React.Component<AppProps, AppState> {
     }
     const first = input.points[0];
     if (input.phase === "start") {
+      this.onCanvasPressEmitter.trigger();
       const origin = viewportCoordsToSceneCoords(
         { clientX: first[0], clientY: first[1] },
         this.state,

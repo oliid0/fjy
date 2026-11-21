@@ -112,7 +112,7 @@ export const WhiteboardTools = ({
   };
   React.useEffect(
     () =>
-      app.onPointerDownEmitter.on(() => {
+      app.onCanvasPressEmitter.on(() => {
         setOpen(false);
         setShapesOpen(false);
         setEraserOpen(false);
@@ -261,6 +261,7 @@ export const WhiteboardTools = ({
           }}
         >
           <Popper
+            data-native-ink-panel
             open={eraserOpen}
             anchorEl={eraserAnchor}
             container={container}
@@ -278,6 +279,7 @@ export const WhiteboardTools = ({
             }}
           >
             <Paper
+              data-native-ink-panel
               className="fc-insert-tools fc-eraser-settings"
               role="dialog"
               aria-label={t("fcboard.eraser_settings")}

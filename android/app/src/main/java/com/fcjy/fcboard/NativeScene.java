@@ -415,7 +415,20 @@ final class NativeSceneView extends NativeCanvasView {
         return result;
     }
     synchronized boolean contains(String id){return elements.contains(id);}
-    synchronized void apply(NativeScene.Frame frame){
+    void apply(NativeScene.Frame frame) {
+        NativeInkView preview = input();
+        if (preview == null) {
+            install(frame);
+            return;
+        }
+        // Publish the tile delta and retire the corresponding lifted previews
+        // together, in the same input -> scene lock order as presentation.
+        synchronized (preview) {
+            install(frame);
+            preview.sceneCommitted(frame);
+        }
+    }
+    private synchronized void install(NativeScene.Frame frame){
         boolean repaintAll=frame.reset||frame.backgroundChanged||!selectionKey.equals(frame.selectionKey)||!selectionGesture.isEmpty();
         if(frame.reset){tiles.clear();pendingCuts.clear();elements.clear();if(hasFrame){cuts.clear();cutsByCell.clear();backups.clear();}}
         hasFrame=true;
@@ -532,7 +545,6 @@ final class NativeSceneView extends NativeCanvasView {
         // buffer contains canonical ink, pending handoff and every live contact;
         // translucent pens cannot double-darken across independent surfaces.
         synchronized(preview){
-            preview.sceneCommitted(this);
             synchronized(this){paintScene(canvas);}
             preview.paintCanvas(canvas);
         }

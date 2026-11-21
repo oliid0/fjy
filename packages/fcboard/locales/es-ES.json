@@ -16,9 +16,9 @@
     "startError": "No se pudo iniciar el receptor local.",
     "nativeError": "No se han podido iniciar algunos receptores.",
     "ethernet": "Ethernet",
-    "miracastGroup": "El grupo Wi-Fi Direct está listo y espera un emisor. El sistema aún no ha informado de un anuncio de recepción Miracast.",
+    "miracastGroup": "El grupo Wi-Fi Direct está listo y espera un emisor.",
     "miracastSystemManaged": "La pantalla inalámbrica del sistema está activada. Esperando conexiones Wi-Fi Direct.",
-    "miracastUnavailable": "No se ha detectado un anuncio de recepción Wi-Fi Display. Si el dispositivo dispone de un modo receptor, actívalo y vuelve a intentarlo."
+    "miracastUnavailable": "Wi-Fi Direct no está disponible en este dispositivo."
   },
   "labels": {
     "paste": "Pegar",

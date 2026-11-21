@@ -16,9 +16,9 @@
     "startError": "Impossible de démarrer le récepteur local.",
     "nativeError": "Certains récepteurs de diffusion n’ont pas démarré.",
     "ethernet": "Ethernet",
-    "miracastGroup": "Le groupe Wi-Fi Direct est prêt et attend un émetteur. Le système n’a pas signalé d’annonce de réception Miracast.",
+    "miracastGroup": "Le groupe Wi-Fi Direct est prêt et attend un émetteur.",
     "miracastSystemManaged": "L’affichage sans fil du système est activé. En attente de connexions Wi-Fi Direct.",
-    "miracastUnavailable": "Aucune annonce de réception Wi-Fi Display détectée. Si votre appareil dispose d’un mode récepteur, activez-le puis réessayez."
+    "miracastUnavailable": "Wi-Fi Direct est indisponible sur cet appareil."
   },
   "labels": {
     "paste": "Coller",

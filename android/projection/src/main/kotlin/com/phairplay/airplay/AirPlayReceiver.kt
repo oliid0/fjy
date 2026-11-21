@@ -111,6 +111,8 @@ class AirPlayReceiver(
 
     // AirPlay 2 mirroring: media servers and keys set during SETUP.
     @Volatile private var mirrorServer: MirrorStreamServer? = null
+    fun hasMirrorFrame(surface: Surface?) = surface != null && mirrorServer?.renderedSurface === surface
+
     @Volatile private var audioServer: AudioStreamServer? = null
     @Volatile private var urlVideoPlayer: AirPlayVideoPlayer? = null
 
@@ -491,6 +493,7 @@ class AirPlayReceiver(
         videoPlaying = false
         emitNowPlaying()   // audio may still be playing → now-playing card can take over
         if (audioPlaying) emitState(ProtocolState.CONNECTED) { !videoPlaying && audioPlaying }
+        else emitState(ProtocolState.ADVERTISING) { !videoPlaying && !audioPlaying }
         Logger.i("Mirror video stream stopped (audio playback continues)")
     }
 

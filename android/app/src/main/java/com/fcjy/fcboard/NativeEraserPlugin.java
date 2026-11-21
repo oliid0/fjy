@@ -27,17 +27,39 @@ public final class NativeEraserPlugin extends Plugin {
             finally{android.os.Trace.endSection();}
         });
     }
+    private NativeStrokeEraser applyUpdates(PluginCall call) throws org.json.JSONException {
+        String owner = call.getString("owner", "");
+        if (owner.isEmpty() || owner.length() > 200) throw new IllegalArgumentException("Invalid native eraser owner");
+        JSArray updates = call.getArray("updates"), removals = call.getArray("removals");
+        if (updates == null || removals == null) throw new IllegalArgumentException("Missing eraser geometry");
+        NativeStrokeEraser scene = scenes.get(owner);
+        if (scene == null) {
+            if (scenes.size() >= 4) throw new IllegalStateException("Too many native eraser scenes");
+            scene = new NativeStrokeEraser();
+            scenes.put(owner, scene);
+        }
+        scene.synchronize(updates, removals);
+        return scene;
+    }
+
+    @PluginMethod public void synchronize(PluginCall call) {
+        worker.execute(() -> {
+            try {
+                applyUpdates(call);
+                call.resolve();
+            } catch (Exception error) {
+                call.reject(error.getMessage(), error);
+            }
+        });
+    }
+
     @PluginMethod public void erase(PluginCall call) {
         worker.execute(()->{
             android.os.Trace.beginSection("NativeEraser.erase");
             try {
-                String owner=call.getString("owner","");
-                if(owner.isEmpty()||owner.length()>200) throw new IllegalArgumentException("Invalid native eraser owner");
-                NativeStrokeEraser scene=scenes.get(owner);
-                if(scene==null) { if(scenes.size()>=4) throw new IllegalStateException("Too many native eraser scenes"); scene=new NativeStrokeEraser(); scenes.put(owner,scene); }
-                JSArray updates=call.getArray("updates"),removals=call.getArray("removals"),path=call.getArray("path");
-                if(updates==null||removals==null||path==null||path.length()>120001) throw new IllegalArgumentException("Missing native eraser geometry");
-                scene.synchronize(updates,removals);
+                JSArray path = call.getArray("path");
+                if (path == null || path.length() > 120001) throw new IllegalArgumentException("Invalid eraser path");
+                NativeStrokeEraser scene = applyUpdates(call);
                 call.resolve(new JSObject().put("patches",scene.erase(path,call.getDouble("width",0d),call.getDouble("height",0d))));
             } catch(Exception error) { call.reject(error.getMessage(),error); }
             finally{android.os.Trace.endSection();}

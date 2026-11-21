@@ -99,7 +99,7 @@ final class NativeInkView extends View {
     }
     private static final class Contact {
         String id = UUID.randomUUID().toString(), token, pointerType, mode, elementId;
-        long nativeSequence;
+        long nativeSequence, sentSequence;
         final List<float[]> points = new ArrayList<>();
         final Map<String,Path> erasures = new HashMap<>();
         final RectF bounds=new RectF();
@@ -257,12 +257,17 @@ final class NativeInkView extends View {
     private void finish(Contact contact) {
         if (contact.brush != null) contact.brush.finish();
         if (contact.brush == null && contact.raster == null) contact.path.lineTo(contact.lastX, contact.lastY);
+        if (contact.mode.equals("pen")) {
+            for (Contact eraser : active.values()) {
+                if (eraser.mode.equals("erase") && (eraser.nativeSequence > eraser.sentSequence ||
+                    (splitInk != null && eraser.points.size() > eraser.sent))) emit(eraser, "move", false);
+            }
+        }
         if(splitInk!=null){
             splitInk.size(getWidth(),getHeight());
             if(contact.mode.equals("pen")){
                 // Preserve raster operation order for export/undo when a writer
                 // finishes during another contact's ongoing eraser gesture.
-                for(Contact eraser:active.values())if(eraser.mode.equals("erase")&&eraser.points.size()>eraser.sent)emit(eraser,"move",false);
                 splitInk.commit(contact.bounds,target->draw(target,contact));
             }
             else if(contact.mode.equals("erase"))splitInk.finish(contact.id);
@@ -362,8 +367,8 @@ final class NativeInkView extends View {
         NativeSceneView scene=retainedScene.get();
         if(contact.mode.equals("erase")&&strokeErase) {
             float fromX=first?px:contact.lastX,fromY=first?py:contact.lastY;
-            if(scene!=null)contact.nativeSequence=scene.erase(contact.id,fromX,fromY,px,py,contact.major*scale,contact.minor*scale);
             Path cut=NativeSceneView.sweep(fromX,fromY,px,py,contact.major*scale,contact.minor*scale);
+            if(scene!=null)contact.nativeSequence=scene.erase(contact.id,cut);
             if(splitInk!=null){splitInk.size(getWidth(),getHeight());splitInk.erase(contact.id,cut);}
             RectF area=new RectF();cut.computeBounds(area,true);
             for(Contact preview:pending.values())if(preview.mode.equals("pen")&&RectF.intersects(preview.bounds,area))preview.erasures.computeIfAbsent(contact.id,k->new Path()).addPath(cut);
@@ -435,7 +440,10 @@ final class NativeInkView extends View {
         int to = complete || phase.equals("move") ? contact.points.size() : Math.min(1, contact.points.size());
         List<float[]> values = new ArrayList<>(contact.points.subList(Math.min(from, to), to));
         if (values.isEmpty()) values.add(contact.points.get(contact.points.size() - 1));
-        if (contact.mode.equals("erase")) contact.sent = to;
+        if (contact.mode.equals("erase")) {
+            contact.sent = to;
+            if (!phase.equals("start")) contact.sentSequence = contact.nativeSequence;
+        }
         String id = contact.id, stamp = contact.token, kind = contact.mode, pointerType = contact.pointerType;
         boolean temporary = contact.palm;
         float major = contact.major, minor = contact.minor;
@@ -508,7 +516,7 @@ final class NativeInkView extends View {
         }
         for (Contact contact : active.values()) {
             draw(canvas, contact);
-            if (contact.mode.equals("erase") && !contact.awaitingFrame && contact.points.size() > contact.sent) {
+            if (contact.mode.equals("erase") && contact.nativeSequence == 0 && !contact.awaitingFrame && contact.points.size() > contact.sent) {
                 contact.awaitingFrame = true; emit(contact, "move", false);
             }
         }

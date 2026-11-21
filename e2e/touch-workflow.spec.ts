@@ -142,6 +142,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
     .getByRole("button", { name: "笔", exact: true });
   await pen.click();
   await page.getByRole("button", { name: "彩虹笔", exact: true }).click();
+  await pen.click();
   const thickness = page.getByRole("slider", { name: "书写粗细", exact: true });
   await thickness.press("Home");
   for (let i = 0; i < 10; i++) {

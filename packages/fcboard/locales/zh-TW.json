@@ -16,9 +16,9 @@
     "startError": "無法啟動本機投屏接收。",
     "nativeError": "部分投影接收器無法啟動。",
     "ethernet": "乙太網路",
-    "miracastGroup": "Wi-Fi Direct 群組已建立，正在等候傳送端。系統尚未回報 Miracast 接收廣播。",
+    "miracastGroup": "Wi-Fi Direct 群組已就緒，正在等候傳送端連線。",
     "miracastSystemManaged": "系統已開啟無線顯示，正在監聽 Wi-Fi Direct 連線。",
-    "miracastUnavailable": "目前未偵測到系統的 Wi-Fi Display 接收廣播。若裝置有無線顯示接收模式，請開啟後重試。"
+    "miracastUnavailable": "此裝置的 Wi-Fi Direct 無法使用。"
   },
   "labels": {
     "paste": "貼上",

@@ -970,6 +970,7 @@ describe("APK-style whiteboard ink", () => {
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.highlighter") }),
     );
+    fireEvent.click(screen.getByRole("button", { name: t("fcboard.pen") }));
     fireEvent.change(
       screen.getByRole("slider", { name: t("fcboard.pen_thickness") }),
       {

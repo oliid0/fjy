@@ -157,7 +157,9 @@ jobs:
           disable-animations: true
           # Headless runs reported invalid Vulkan color buffers before WebView stopped replying.
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -feature -Vulkan
-          script: bash scripts/verify-android-runtime.sh
+          script: |
+            adb shell settings put secure immersive_mode_confirmations confirmed
+            bash scripts/verify-android-runtime.sh
       - uses: actions/upload-artifact@v4
         timeout-minutes: 3
         if: always()
@@ -165,6 +167,7 @@ jobs:
           name: Fcboard-Android-verification
           path: |
             android/app/build/reports
+            android/projection/build/reports/lint-results*
             android/app/build/outputs/androidTest-results
             android/app/build/outputs/connected_android_test_additional_output
           if-no-files-found: warn

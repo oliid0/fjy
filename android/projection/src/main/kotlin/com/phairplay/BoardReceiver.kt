@@ -54,7 +54,7 @@ class BoardReceiver(private val web: WebView, val protocol: String,
             main.post { if (!closed && service != null) authorization?.update(token, sender, pin, accepted) }
         }
 
-        override fun changed(next: String, name: String, w: Int, h: Int, audio: Boolean, item: String) {
+        override fun changed(next: String, name: String, w: Int, h: Int, audio: Boolean, item: String, mirrorFrame: Boolean) {
             main.post {
                 if (closed || service == null) return@post
                 if (next != state && (state == "connected" || next == "connected")) {
@@ -64,6 +64,7 @@ class BoardReceiver(private val web: WebView, val protocol: String,
                         park()
                     }
                 }
+                if (mirrorFrame && next == "connected" && surface?.isValid == true) hasFrames = true
                 state = next
                 displayName = name
                 width = w

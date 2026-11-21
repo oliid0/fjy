@@ -63,6 +63,8 @@ class MirrorStreamServer(
     private var configured: Config? = null
     @Volatile var hasRenderedFirstFrame = false
         private set
+    @Volatile var renderedSurface: Surface? = null
+        private set
     private var startup: Job? = null
     // The Surface the current decoder was built against. The SurfaceView destroys its Surface when
     // the app backgrounds and creates a NEW one on return, so we watch for the identity changing
@@ -311,13 +313,15 @@ class MirrorStreamServer(
     private fun rebuildDecoder(surface: Surface?) {
         decoder?.release()
         decoder = null
+        renderedSurface = null
         configuredSurface = surface
         val config = configured ?: return
         if (surface == null) return                            // backgrounded — wait for the surface to return
         decoder = VideoDecoder(surface, config.mime).also {
             it.onFrameRendered = {
                 it.onFrameRendered = null
-                if (running && !hasRenderedFirstFrame) {
+                if (running) {
+                    renderedSurface = surface
                     hasRenderedFirstFrame = true
                     startup?.cancel()
                     Log.i("FcboardProjection", "AirPlay first decoded frame rendered (${config.mime})")

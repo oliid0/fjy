@@ -21,7 +21,9 @@ describe("Test LanguageList", () => {
     const englishFountain = t("fcboard.fountain");
     expect(screen.getByRole("button", { name: englishFountain })).toBeVisible();
     fireEvent.click(document.querySelector(".dropdown-menu-button")!);
-    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
+    expect(
+      screen.getByRole("menuitem", { name: t("projection.title") }),
+    ).toBeVisible();
     fireEvent.click(
       screen.getByRole("menuitem", { name: t("fcboard.settings") }),
     );

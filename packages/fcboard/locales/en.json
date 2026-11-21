@@ -16,9 +16,9 @@
     "startError": "Could not start the local receiver.",
     "nativeError": "Some casting receivers could not start.",
     "ethernet": "Ethernet",
-    "miracastGroup": "Wi-Fi Direct group ready. Waiting for a sender. The system has not reported a Miracast receiver advertisement.",
+    "miracastGroup": "Wi-Fi Direct group ready. Waiting for a sender.",
     "miracastSystemManaged": "System wireless display is enabled. Listening for Wi-Fi Direct connections.",
-    "miracastUnavailable": "No Wi-Fi Display receiver advertisement was detected. If your device has a wireless display receiver mode, enable it and retry."
+    "miracastUnavailable": "Wi-Fi Direct is unavailable on this device."
   },
   "labels": {
     "paste": "Paste",

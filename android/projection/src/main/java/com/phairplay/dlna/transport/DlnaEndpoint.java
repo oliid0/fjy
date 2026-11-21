@@ -148,6 +148,10 @@ public final class DlnaEndpoint implements Closeable {
             "\r\nCACHE-CONTROL: max-age=120\r\nSERVER: Android/1 UPnP/1.0 Fcboard/1\r\n\r\n";
     }
 
+    public void announceAvailability() {
+        if (!closed) announce(true);
+    }
+
     private void announce(boolean alive) {
         if (location == null) return;
         for (String target : targets) {

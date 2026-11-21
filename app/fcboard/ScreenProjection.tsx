@@ -903,7 +903,14 @@ const ProjectionSession = ({
     .map((protocol) => native?.[protocol])
     .filter(
       (engine) =>
-        engine && ["waiting", "connecting", "connected"].includes(engine.state),
+        engine &&
+        [
+          "waiting",
+          "connecting",
+          "connected",
+          "p2pGroup",
+          "systemManaged",
+        ].includes(engine.state),
     );
   const ready = !!web || readyNames.length > 0;
   const nativeConnecting = readyNames.some(

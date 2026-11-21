@@ -16,9 +16,9 @@
     "startError": "无法启动本地投屏接收。",
     "nativeError": "部分投屏接收器未能启动。",
     "ethernet": "以太网",
-    "miracastGroup": "Wi-Fi Direct 群组已建立，正在等待发送端。系统尚未报告 Miracast 接收广播。",
+    "miracastGroup": "Wi-Fi Direct 群组已就绪，正在等待发送端连接。",
     "miracastSystemManaged": "系统已开启无线显示，正在监听 Wi-Fi Direct 连接。",
-    "miracastUnavailable": "当前未检测到系统的 Wi‑Fi Display 接收广播。若手机有无线显示接收模式，请开启后重试。"
+    "miracastUnavailable": "此设备的 Wi-Fi Direct 不可用。"
   },
   "labels": {
     "paste": "粘贴",

@@ -9924,6 +9924,7 @@ class App extends React.Component<AppProps, AppState> {
     width: number;
     height: number;
     objectMode: boolean;
+    through: number;
     changed: boolean;
     originals: Map<string, readonly FcboardElement[]>;
     applied: Map<string, FcboardElement>;
@@ -9992,6 +9993,7 @@ class App extends React.Component<AppProps, AppState> {
         width: input.width / this.state.zoom.value,
         height: input.height / this.state.zoom.value,
         objectMode: this.state.eraserMode === "object",
+        through: 0,
         changed: false,
         originals: new Map(),
         applied: new Map(),
@@ -10006,6 +10008,15 @@ class App extends React.Component<AppProps, AppState> {
     const current = this.nativeEraserDraft;
     if (!current || current.id !== input.id) {
       throw new Error("Native eraser gesture is no longer active");
+    }
+    // The retained Android surface already cleared the footprint. Vector cuts
+    // settle at lift or immediately before a concurrent writer commits.
+    if (
+      input.nativeSequence &&
+      input.phase === "start" &&
+      !current.objectMode
+    ) {
+      return;
     }
     const before = this.scene.getElementsIncludingDeleted();
     const remember = (element: FcboardElement, original?: FcboardElement) => {
@@ -10044,6 +10055,11 @@ class App extends React.Component<AppProps, AppState> {
         this.setState({ cursorButton: "up" });
       }
     };
+    if (input.nativeSequence && input.nativeSequence <= current.through) {
+      apply(before);
+      return;
+    }
+    current.through = input.nativeSequence || 0;
     const path = [
       current.previous,
       ...input.points.map(([clientX, clientY]) =>

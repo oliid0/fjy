@@ -16,9 +16,9 @@
     "startError": "ローカル受信を開始できませんでした。",
     "nativeError": "一部の画面共有受信機を起動できませんでした。",
     "ethernet": "イーサネット",
-    "miracastGroup": "Wi-Fi Direct グループを作成しました。送信側の接続を待っています。システムから Miracast 受信の通知はまだありません。",
+    "miracastGroup": "Wi-Fi Direct グループで送信側の接続を待っています。",
     "miracastSystemManaged": "システムのワイヤレスディスプレイが有効です。Wi-Fi Direct の接続を待機しています。",
-    "miracastUnavailable": "Wi-Fi Display の受信通知を検出できません。端末にワイヤレスディスプレイ受信モードがある場合は、有効にして再試行してください。"
+    "miracastUnavailable": "この端末では Wi-Fi Direct を利用できません。"
   },
   "labels": {
     "paste": "貼り付け",

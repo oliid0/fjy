@@ -15,6 +15,11 @@ import type {
 } from "@fcboard/element/types";
 
 const plugin = registerPlugin<{
+  synchronize(options: {
+    owner: string;
+    updates: unknown[];
+    removals: string[];
+  }): Promise<void>;
   erase(options: {
     owner: string;
     updates: unknown[];
@@ -109,12 +114,24 @@ export const createNativeEraserBackend = (owner: string) => {
     return entry.payload;
   };
   let preparationTimer: ReturnType<typeof setTimeout> | undefined;
+  let indexing: Promise<void> | undefined;
+  let sweeps = 0;
   const schedulePreparation = () => {
-    if (preparationTimer !== undefined || !preparation.size) {
+    if (
+      preparationTimer !== undefined ||
+      indexing ||
+      sweeps ||
+      (!preparation.size && !removed.size)
+    ) {
       return;
     }
     preparationTimer = setTimeout(() => {
       preparationTimer = undefined;
+      if (sweeps) {
+        return;
+      }
+      const stamp = epoch;
+      const entries = new Map<string, Cached>();
       const began = performance.now();
       for (const [id, entry] of preparation) {
         preparation.delete(id);
@@ -123,16 +140,50 @@ export const createNativeEraserBackend = (owner: string) => {
         }
         try {
           prepare(entry);
+          entries.set(id, entry);
         } catch (reason) {
           entry.failure = { reason };
         }
         // Keep recognition, result placement and ordinary editor work responsive
         // while a loaded dense page prepares its existing stroke geometry.
-        if (performance.now() - began >= 4) {
+        if (entries.size >= 16 || performance.now() - began >= 4) {
           break;
         }
       }
-      schedulePreparation();
+      const removals = [...removed];
+      if (!entries.size && !removals.length) {
+        schedulePreparation();
+        return;
+      }
+      indexing = plugin
+        .synchronize({
+          owner,
+          updates: [...entries.values()].map((entry) => entry.payload),
+          removals,
+        })
+        .then(() => {
+          if (epoch === stamp) {
+            for (const id of removals) {
+              indexed.delete(id);
+              removed.delete(id);
+            }
+            for (const [id, entry] of entries) {
+              indexed.set(id, entry);
+              if (dirty.get(id) === entry) {
+                dirty.delete(id);
+              }
+            }
+          }
+        })
+        .catch(() => {
+          // The next sweep retries the authoritative deltas.
+        })
+        .finally(() => {
+          if (epoch === stamp) {
+            indexing = undefined;
+            if (preparation.size) schedulePreparation();
+          }
+        });
     }, 0);
   };
 
@@ -186,7 +237,7 @@ export const createNativeEraserBackend = (owner: string) => {
     update(elements, removals);
     schedulePreparation();
   };
-  const erase: NativeEraserBackend = async (_elements, path, width, height) => {
+  const cut: NativeEraserBackend = async (_elements, path, width, height) => {
     const stamp = epoch;
     const entries = [...dirty.entries()];
     let began = performance.now();
@@ -265,7 +316,19 @@ export const createNativeEraserBackend = (owner: string) => {
     }
     return patches;
   };
+  const erase: NativeEraserBackend = async (...args) => {
+    const stamp = epoch;
+    sweeps++;
+    try {
+      if (indexing) await indexing;
+      return stamp === epoch ? await cut(...args) : [];
+    } finally {
+      sweeps--;
+      schedulePreparation();
+    }
+  };
   const reset = () => {
+    indexing = undefined;
     epoch++;
     clearTimeout(preparationTimer);
     preparationTimer = undefined;

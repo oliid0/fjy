@@ -44,6 +44,9 @@ class ProjectionMediaService : Service() {
                 audio = false
                 title = ""
             }
+            if (protocol == "airplay" && state in listOf("connecting", "connected") && next == "waiting") {
+                sessions["dlna"]?.dlna?.announceAvailability()
+            }
             state = next
             publish()
         }
@@ -53,10 +56,11 @@ class ProjectionMediaService : Service() {
             val size = if (air != null || wfd != null) target?.let { VideoDecoder.sizeFor(it) } else null
             val w = size?.width ?: width
             val h = size?.height ?: height
-            val next = listOf(state, name, w, h, audio, title)
+            val mirrorFrame = air?.hasMirrorFrame(target) == true
+            val next = listOf(state, name, w, h, audio, title, mirrorFrame)
             if (next != last) {
                 last = next
-                try { events.changed(state, name, w, h, audio, title) }
+                try { events.changed(state, name, w, h, audio, title, mirrorFrame) }
                 catch (_: android.os.RemoteException) { main.post { drop(this) } }
             }
         }
@@ -106,6 +110,9 @@ class ProjectionMediaService : Service() {
 
     private fun drop(s: Session) {
         if (sessions[s.protocol] !== s) return
+        if (s.protocol == "airplay" && s.state in listOf("connecting", "connected")) {
+            sessions["dlna"]?.dlna?.announceAvailability()
+        }
         sessions.remove(s.protocol)
         runCatching { s.events.asBinder().unlinkToDeath(s.death, 0) }
         runCatching { s.air?.stop() }

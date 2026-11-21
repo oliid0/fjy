@@ -75,6 +75,10 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
         network.scheduleWithFixedDelay(::refresh, 0, 5, TimeUnit.SECONDS)
     }
 
+    fun announceAvailability() {
+        if (!closed) network.execute { endpoint?.announceAvailability() }
+    }
+
     fun attach(target: Surface?) {
         surface = target
         player?.setVideoSurface(target)

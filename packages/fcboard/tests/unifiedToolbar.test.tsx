@@ -45,20 +45,21 @@ describe("unified bottom toolbar", () => {
     expect(within(toolbar).queryByTestId("button-undo")).toBeNull();
     expect(within(toolbar).queryByTestId("button-redo")).toBeNull();
   });
-  it("activates the current shape before opening its picker, dismisses outside, and reopens the insertion menu", async () => {
+  it("keeps the drawing tool while browsing shapes and reopens the insertion menu", async () => {
     const { container } = await render(
       <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const insert = screen.getByRole("button", { name: t("fcboard.toolbox") });
     let clock = 1000;
     vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const previousTool = window.h.state.activeTool.type;
     fireEvent.click(insert);
     fireEvent.click(
       within(screen.getByRole("toolbar")).getByRole("button", {
         name: t("fcboard.shape"),
       }),
     );
-    expect(window.h.state.activeTool.type).toBe("line");
+    expect(window.h.state.activeTool.type).toBe(previousTool);
     const modal = container.querySelector(".MuiDialog-root")!;
     expect(modal).not.toBeNull();
     fireEvent.keyDown(

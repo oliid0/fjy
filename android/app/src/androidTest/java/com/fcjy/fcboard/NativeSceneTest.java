@@ -236,6 +236,7 @@ public class NativeSceneTest {
                 java.lang.reflect.Field field=NativeSceneView.class.getDeclaredField("backups");field.setAccessible(true);
                 for(int i=0;i<40;i++){
                     view.apply(scene.synchronize(update(new JSONArray().put(ink("ink","a0","M20 60 L580 60","#ff0000",true,0)),false),1,0,java.util.Collections.emptyList()));
+                    pixels(view).recycle();
                     java.util.Map<?,?> gestures=(java.util.Map<?,?>)field.get(view);
                     assertEquals("Obsolete worker frames must not retain bitmap generations",1,((java.util.Map<?,?>)gestures.get("slow-js")).size());
                 }
@@ -252,6 +253,35 @@ public class NativeSceneTest {
             view.cancelErase("earlier");Bitmap output=pixels(view);
             assertEquals(128,Color.alpha(output.getPixel(100,60)));assertEquals(0,Color.alpha(output.getPixel(180,60)));output.recycle();
             view.cancelErase("later");Bitmap restored=pixels(view);assertEquals(128,Color.alpha(restored.getPixel(180,60)));restored.recycle();
+        });
+    }
+
+    @Test public void newInkAcrossAnErasedTileMatchesFreshPixels() throws Exception {
+        NativeScene scene = new NativeScene();
+        JSONObject old = ink("old", "a0", "M20 55 L115 55", "#ff0000", true, -1);
+        NativeScene.Frame first = scene.synchronize(update(new JSONArray().put(old), true), 1, 0, java.util.Collections.emptyList());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            try {
+                NativeSceneView view = surface();
+                view.apply(first);
+                long through = view.erase("wipe", 80, 60, 80, 60, 160, 120);
+                Bitmap erased = pixels(view);
+                assertEquals(0, erased.getPixel(68, 55));
+                erased.recycle();
+                JSONObject fresh = ink("new", "a1", "M22.5 32.25 Q80 92.5 132 55", "#315cad", true, -1);
+                JSONObject delta = update(new JSONArray().put(fresh), false)
+                    .put("removals", new JSONArray().put("old"))
+                    .put("erasureRemovals", new JSONArray().put("old")).put("eraseThrough", through);
+                NativeScene.Frame mixed = scene.synchronize(delta, 1, through, view.erasureSamples(through));
+                view.apply(mixed);
+                NativeScene cleanScene = new NativeScene();
+                NativeSceneView cleanView = surface();
+                cleanView.apply(cleanScene.synchronize(update(new JSONArray().put(fresh), true), 1, 0, java.util.Collections.emptyList()));
+                Bitmap actual = pixels(view), expected = pixels(cleanView);
+                try {
+                    assertTrue("All pixels, including the translucent edges, must match a fresh board", expected.sameAs(actual));
+                } finally { actual.recycle(); expected.recycle(); }
+            } catch (Exception error) { throw new AssertionError(error); }
         });
     }
 

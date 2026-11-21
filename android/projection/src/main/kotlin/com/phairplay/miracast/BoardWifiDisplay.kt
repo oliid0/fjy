@@ -46,6 +46,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
     @Volatile private var connection: Socket? = null
     private var generation = 0
     private var addressRetries = 0
+    private var groupFormed = false
     private var ownsGroup = false
     private var creatingGroup = false
     private var readyForGroups = false
@@ -55,7 +56,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
 
     private val listener = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (Build.VERSION.SDK_INT < 33 && intent.action == WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION) {
+            if (intent.action == WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION) {
                 listening = intent.getIntExtra(WifiP2pManager.EXTRA_DISCOVERY_STATE, 0) == WifiP2pManager.WIFI_P2P_DISCOVERY_STARTED
                 return
             }
@@ -86,7 +87,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
         channel = ch
         val filter = IntentFilter(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION).apply {
             addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
-            if (Build.VERSION.SDK_INT < 33) addAction(WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION)
         }
         if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(listener, filter, Context.RECEIVER_EXPORTED)
         else context.registerReceiver(listener, filter)
@@ -145,8 +146,8 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
     private fun listeningState() = when {
         advertised -> "waiting"
         systemDisplayEnabled() -> "systemManaged"
-        ownsGroup -> "p2pGroup"
-        else -> "unavailable"
+        groupFormed -> "p2pGroup"
+        else -> "starting"
     }
 
     private fun listen(ch: WifiP2pManager.Channel) {
@@ -166,8 +167,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                 }
             }
         }
-        if (Build.VERSION.SDK_INT >= 33) manager.startListening(ch, listener)
-        else manager.discoverPeers(ch, listener)
+        manager.discoverPeers(ch, listener)
     }
 
     private fun checkGroup() {
@@ -176,6 +176,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
         val revision = ++generation
         manager.requestConnectionInfo(ch) { info ->
             if (stopped || generation != revision) return@requestConnectionInfo
+            groupFormed = info?.groupFormed == true
             if (info?.groupFormed != true) {
                 cancelLookup()
                 connection?.let { runCatching { it.close() } }
@@ -186,13 +187,13 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                         creatingGroup = false
                         if (!stopped) {
                             ownsGroup = true
-                            if (connection == null) state(listeningState())
                             checkGroup()
                         }
                     }
                     override fun onFailure(reason: Int) {
                         creatingGroup = false
                         if (!stopped && reason != WifiP2pManager.BUSY) {
+                            state(if (reason == WifiP2pManager.P2P_UNSUPPORTED) "unavailable" else "error")
                             Log.w("FcboardProjection", "Wi-Fi Direct group creation failed: $reason")
                         }
                     }
@@ -202,14 +203,18 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
             if (connection != null) return@requestConnectionInfo
             manager.requestGroupInfo(ch) { group ->
                 if (stopped || generation != revision || group == null || connection != null) return@requestGroupInfo
-                val device = if (info.isGroupOwner) group.clientList.firstOrNull() else group.owner
+                val device = if (info.isGroupOwner) {
+                    group.clientList.singleOrNull() ?: group.clientList.firstOrNull {
+                        Build.VERSION.SDK_INT >= 30 && it.wfdInfo?.isEnabled == true &&
+                            it.wfdInfo?.deviceType != WifiP2pWfdInfo.DEVICE_TYPE_PRIMARY_SINK
+                    }
+                } else group.owner
                 if (device == null) {
                     cancelLookup()
-                    if (ownsGroup) state(listeningState())
+                    state(listeningState())
                     return@requestGroupInfo
                 }
                 val wfd = if (Build.VERSION.SDK_INT >= 30) device.wfdInfo else null
-                if (!ownsGroup && !advertised && wfd?.isEnabled != true && !systemDisplayEnabled()) return@requestGroupInfo
                 if (wfd?.deviceType == WifiP2pWfdInfo.DEVICE_TYPE_PRIMARY_SINK) return@requestGroupInfo
                 val port = wfd?.controlPort?.takeIf { it in 1..65535 } ?: 7236
                 val peer = when {
@@ -334,8 +339,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
         channel?.let { ch ->
             if (ownsGroup) runCatching { manager.removeGroup(ch, null) }
             if (listening) runCatching {
-                if (Build.VERSION.SDK_INT >= 33) manager.stopListening(ch, null)
-                else manager.stopPeerDiscovery(ch, null)
+                manager.stopPeerDiscovery(ch, null)
             }
             if (configuredHere) runCatching { manager.setWfdInfo(ch, WifiP2pWfdInfo().apply { isEnabled = false }, null) }
             if (Build.VERSION.SDK_INT >= 27) ch.close()

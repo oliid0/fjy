@@ -217,6 +217,7 @@ export const NativeInkInteraction = ({
       }
     >();
     let contactQueue = Promise.resolve();
+    let queuedContacts = 0;
     let generation = 0;
     const apply = (
       contact: Contact,
@@ -720,7 +721,11 @@ export const NativeInkInteraction = ({
             contacts.delete(contact.id);
             return;
           }
-          if (contact.mode === "erase" && contact.nativeSequence) {
+          if (
+            contact.mode === "erase" &&
+            contact.phase !== "start" &&
+            contact.nativeSequence
+          ) {
             // Empty hits also complete vector reconciliation. Do not retain an
             // unbounded history of cuts during a long sweep over empty space.
             scene?.acknowledgeErase(contact.nativeSequence);
@@ -791,12 +796,17 @@ export const NativeInkInteraction = ({
       // Unaffected writers and selection retain their synchronous entry path.
       if (
         contact.mode === "erase" ||
-        (contact.phase === "end" && contact.cuts?.length)
+        (contact.phase === "end" &&
+          (queuedContacts > 0 || contact.cuts?.length))
       ) {
         const received = generation;
+        queuedContacts++;
         contactQueue = contactQueue
           .then(() => handleContact(contact, received))
-          .catch(fail);
+          .catch(fail)
+          .finally(() => {
+            queuedContacts--;
+          });
       } else {
         void handleContact(contact).catch(fail);
       }

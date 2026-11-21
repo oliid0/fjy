@@ -9,12 +9,14 @@ import type { LocalPoint } from "@fcboard/math";
 import { createNativeEraserBackend } from "./nativeEraser";
 
 const native = vi.hoisted(() => ({
+  synchronize: vi.fn(),
   erase: vi.fn(),
   clip: vi.fn(),
   release: vi.fn(),
 }));
 vi.mock("@capacitor/core", () => ({ registerPlugin: () => native }));
 beforeEach(() => {
+  native.synchronize.mockReset().mockResolvedValue(undefined);
   native.erase.mockReset().mockResolvedValue({ patches: [] });
   native.clip.mockReset();
   native.release.mockReset().mockResolvedValue(undefined);
@@ -259,9 +261,10 @@ it("prepares committed geometry before the first erase and discards superseded o
     expect(prepare).toHaveBeenCalledWith(moved);
     await backend.erase([], path, 10, 12);
     expect(prepare).toHaveBeenCalledTimes(1);
-    expect(native.erase.mock.calls.at(-1)![0].updates[0].samples[0][0]).toBe(
+    expect(native.synchronize.mock.calls[0][0].updates[0].samples[0][0]).toBe(
       300,
     );
+    expect(native.erase.mock.calls.at(-1)![0].updates).toEqual([]);
     backend.synchronize([newElementWith(moved, { x: 500 })], []);
     await backend.reset();
     await vi.runOnlyPendingTimersAsync();
@@ -305,7 +308,8 @@ it("yields first-erase preparation to input and keeps a version replaced during 
     const next = backend.erase([], path, 10, 12);
     await vi.runAllTimersAsync();
     await next;
-    expect(native.erase.mock.calls[1][0].updates).toMatchObject([
+    expect(native.erase.mock.calls[1][0].updates).toEqual([]);
+    expect(native.synchronize.mock.calls.at(-1)![0].updates).toMatchObject([
       {
         id: moved.id,
         samples: [

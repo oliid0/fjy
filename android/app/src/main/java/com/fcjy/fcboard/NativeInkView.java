@@ -56,7 +56,13 @@ final class NativeInkView extends View {
     private boolean inputReported;
     private final float touchSlop;
     private float eraserSize = 60;
-    private String token = "", mode = "pen";
+    private String token = "", mode = "pen", inputSpace = "";
+    synchronized void setInputSpace(String space) {
+        if (!inputSpace.equals(space)) {
+            cancel();
+            inputSpace = space;
+        }
+    }
     private boolean recognitionEnabled;
     synchronized void setRecognitionEnabled(boolean enabled){recognitionEnabled=enabled;}
     private RectF selection;
@@ -120,7 +126,7 @@ final class NativeInkView extends View {
         final Path path = new Path(), fillPath = new Path(), renderPath = new Path();
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         float major, minor, lastX, lastY, rasterX, rasterY;
-        boolean palm, awaitingFrame;
+        boolean palm, awaitingFrame, strokeErase;
         NativeInputStream stream;
         NativeBrush brush;
         java.util.function.Supplier<NativeBrush> brushFactory;
@@ -146,9 +152,9 @@ final class NativeInkView extends View {
         selectionFill.setColor(Color.argb(128,3,136,236)); regionFill.setColor(Color.argb(48, 255, 0, 0)); setFocusable(false);
     }
     synchronized void configure(String token, boolean enabled, float x, float y, float scale, float width, float unit, float opacity, String color, boolean dashed, float palm, List<RectF> blocked, org.json.JSONObject thick, float threshold, String mode, boolean palmEnabled, float eraserSize, org.json.JSONObject appearance) {
-        if (!token.equals(this.token) || !enabled) {
-            cancel(enabled && scale == this.scale && x == this.x && y == this.y && !overlayPreview);
-        }
+        // A toolbar update configures the next contact. The input router
+        // already owns existing pointers until UP/CANCEL.
+        if (scale != this.scale || x != this.x || y != this.y) cancel();
         if (!mode.equals("pen") && !mode.equals("select") && !mode.equals("regionErase") && !mode.equals("erase")) throw new IllegalArgumentException("Invalid native gesture mode");
         this.palmEnabled = palmEnabled; this.eraserSize = eraserSize;
         this.appearance = appearance;
@@ -189,6 +195,7 @@ final class NativeInkView extends View {
     private Contact start(MotionEvent event, int index, boolean erase, boolean temporary, boolean candidate, float offsetX, float offsetY, Contact deferred) {
         Contact contact = new Contact(); contact.token = token; contact.mode = candidate ? "palm" : erase ? "erase" : mode; contact.palm = temporary;
         contact.stream = new NativeInputStream(event);
+        contact.strokeErase = strokeErase;
         if(contact.mode.equals("pen"))contact.elementId=contact.id;
         int tool = event.getToolType(index);
         contact.pointerType = tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER ? "pen" : tool == MotionEvent.TOOL_TYPE_MOUSE ? "mouse" : "touch";
@@ -400,7 +407,7 @@ final class NativeInkView extends View {
             else ModelPool.inkActivity();
         }
         NativeSceneView scene=retainedScene.get();
-        if (contact.mode.equals("erase") && strokeErase)
+        if (contact.mode.equals("erase") && contact.strokeErase)
             eraseSample(contact,scene,first?px:contact.lastX,first?py:contact.lastY,px,py);
         float pad=contact.paint.getStrokeWidth()*4+12*scale;
         float padX=contact.mode.equals("erase")?Math.max(pad,contact.major*scale/2+2):pad;
@@ -545,16 +552,12 @@ final class NativeInkView extends View {
             if (preview.cuts.removeIf(cut -> cut.gesture.equals(gesture))) rebuildPreview(preview);
         }
     }
-    synchronized void cancel() { cancel(false); }
-    private void cancel(boolean keepLiftedInk) {
+    synchronized void cancel() {
         for (Contact contact : active.values()) if (!contact.mode.equals("palm")) { NativeSceneView scene=retainedScene.get();if(contact.mode.equals("transform")&&scene!=null)scene.cancelSelection(contact.id);if(contact.mode.equals("erase")){if(scene!=null)scene.cancelErase(contact.id);restorePreview(contact.id);}emit(contact, "cancel", false); }
         NativeSceneView scene=retainedScene.get();if(scene!=null)for(Contact contact:pending.values())if(contact.mode.equals("transform"))scene.cancelSelection(contact.id);
         active.clear();
-        if (keepLiftedInk) pending.values().removeIf(contact -> !contact.mode.equals("pen"));
-        else {
-            pending.clear();
-            liftedCuts.clear();
-        }
+        pending.clear();
+        liftedCuts.clear();
         ownedDevices.clear();
         requestRender();
     }
@@ -568,7 +571,7 @@ final class NativeInkView extends View {
     }
     protected synchronized void paintCanvas(Canvas canvas) {
         int scope=canvas.save();
-        for(RectF box:blocked)canvas.clipOutRect((box.left-x)*scale,(box.top-y)*scale,(box.right-x)*scale,(box.bottom-y)*scale);
+        if (overlayPreview) for(RectF box:blocked)canvas.clipOutRect((box.left-x)*scale,(box.top-y)*scale,(box.right-x)*scale,(box.bottom-y)*scale);
         if(splitInk!=null)splitInk.draw(canvas);
         for (Contact contact : pending.values()) {
             if (contact.liftedAt > 0) {

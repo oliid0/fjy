@@ -571,6 +571,38 @@ it("keeps the original calculation strokes after an evaluation failure", async (
   }
 });
 
+it("draws a committed function after switching from the function pen to the eraser", async () => {
+  vi.useFakeTimers();
+  const { api, ink, draw } = setup("function");
+  let state = api.getAppState();
+  vi.spyOn(api, "getAppState").mockImplementation(() => state);
+  vi.spyOn(ocr, "recognizeHandwriting").mockResolvedValue("y=x^2");
+  const route = vi.fn((args) =>
+    drawPlot(api, validatedPlot(args), { x: 500, y: 420 }),
+  );
+  const unregister = classroomCommands.register("math.plot", "test", route);
+  const error = vi.fn();
+  const stop = observeInkAssistance(api, vi.fn(), error);
+  try {
+    draw();
+    state = {
+      ...state,
+      activeTool: { ...state.activeTool, type: "eraser", customType: null },
+    };
+    api.updateScene({ elements: api.getSceneElements() });
+    await act(async () => vi.advanceTimersByTimeAsync(1200));
+    expect(api.getSceneElements()).toContain(ink);
+    expect(
+      api.getSceneElements().some((element) => element.customData?.fcPlot),
+    ).toBe(true);
+    expect(api.getAppState().activeTool.type).toBe("eraser");
+    expect(error).not.toHaveBeenCalled();
+  } finally {
+    stop();
+    unregister();
+  }
+});
+
 it("reports an invalid function while preserving its ink and discards late math after erasing", async () => {
   vi.useFakeTimers();
   const { api, ink, draw, erase } = setup("function");

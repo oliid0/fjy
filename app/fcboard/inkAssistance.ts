@@ -63,24 +63,13 @@ export const observeInkAssistance = (
     | readonly import("@fcboard/element/types").FcboardElement[]
     | undefined;
   let observedButton: string | undefined;
-  const configuration = () => {
-    const state = api.getAppState();
-    return JSON.stringify([
-      state.currentItemInkAssist,
-      state.currentItemPenMode,
-      state.whiteboardPenTip,
-      state.whiteboardPenTips,
-      state.whiteboardDualPen,
-      getLanguage().code,
-    ]);
-  };
-  let penConfiguration = configuration();
+  let recognitionLocale = getLanguage().code;
   const refresh = (rescan = false) => {
     if (disposed) {
       return;
     }
     const state = api.getAppState();
-    const nextConfiguration = configuration();
+    const nextLocale = getLanguage().code;
     const currentScene = api.getSceneElements();
     const present = new Set(currentScene.map((element) => element.id));
     requests.prune([...present]);
@@ -93,18 +82,17 @@ export const observeInkAssistance = (
       !rescan &&
       currentScene === observedScene &&
       state.cursorButton === observedButton &&
-      penConfiguration === nextConfiguration
+      recognitionLocale === nextLocale
     ) {
       return;
     }
     observedScene = currentScene;
     observedButton = state.cursorButton;
     if (
-      penConfiguration !== nextConfiguration ||
-      classroomCommands.has("document.draw") ||
-      state.activeTool.type !== "freedraw"
+      recognitionLocale !== nextLocale ||
+      classroomCommands.has("document.draw")
     ) {
-      penConfiguration = nextConfiguration;
+      recognitionLocale = nextLocale;
       api.getSceneElements().forEach((element) => seen.add(element.id));
       requests.cancelAll();
       onBusy(requests.busy);
@@ -112,15 +100,13 @@ export const observeInkAssistance = (
       return;
     }
     const pointerDown = state.cursorButton === "down";
+    const committedOnly = pointerDown || state.activeTool.type !== "freedraw";
     const hasCompletedInk =
       !writing.size &&
       currentScene.some(
         (element) => settled.has(element.id) && !seen.has(element.id),
       );
-    if (
-      (pointerDown && !hasCompletedInk) ||
-      state.activeTool.type !== "freedraw"
-    ) {
+    if (committedOnly && !hasCompletedInk) {
       onBusy(requests.busy);
       previous = "";
       return;
@@ -157,7 +143,7 @@ export const observeInkAssistance = (
       .filter(
         (element) =>
           element.type === "freedraw" &&
-          (!pointerDown || settled.has(element.id)),
+          (!committedOnly || settled.has(element.id)),
       )
       .filter((element) => {
         if (
@@ -523,7 +509,22 @@ export const observeInkAssistance = (
                   failure.message === "Shape incomplete"
                 )
               ) {
-                onError(failure);
+                const noOcr = t(
+                  "fcboard.no_content_recognized_select_the_area_again",
+                );
+                onError(
+                  failure instanceof Error &&
+                    failure.message === noOcr &&
+                    (mode === "function" || mode === "calculation")
+                    ? new Error(
+                        t(
+                          mode === "function"
+                            ? "fcboard.functionGraph.invalid"
+                            : "fcboard.could_not_recognize_the_expression_check_your_input_or_recognize_the_handwriting",
+                        ),
+                      )
+                    : failure,
+                );
               }
             }
           })

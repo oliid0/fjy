@@ -286,6 +286,65 @@ public class NativeSceneTest {
         });
     }
 
+    @Test public void firstEraserContactClearsTheVisibleSelectedTileAndCancelRestoresIt() throws Exception {
+        NativeScene worker = new NativeScene();
+        JSONObject unlocked = ink("chosen", "a0", "M20 60 L580 60", "#ff0000", true, 0);
+        JSONObject locked = ink("locked", "a1", "M20 75 L580 75", "#0000ff", false, 0);
+        NativeScene.Frame frame = worker.synchronize(update(new JSONArray().put(unlocked).put(locked), true)
+            .put("selectionIds", new JSONArray().put("chosen"))
+            .put("selectionBounds", new JSONArray("[20,40,580,80]")), 1, 0, java.util.Collections.emptyList());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            NativeSceneView view = surface();
+            view.apply(frame);
+            Bitmap before = pixels(view);
+            view.erase("first", 100, 60, 100, 60, 30, 40);
+            Bitmap erased = pixels(view);
+            try {
+                assertTrue(Color.alpha(before.getPixel(100, 60)) > 0);
+                assertEquals("Clear selected ink before the WebView can clear selection", 0, erased.getPixel(100, 60));
+                assertEquals("The locked stroke stays visible", before.getPixel(100, 75), erased.getPixel(100, 75));
+                view.cancelErase("first");
+                Bitmap cancelled = pixels(view);
+                try { assertTrue(before.sameAs(cancelled)); } finally { cancelled.recycle(); }
+            } finally { before.recycle(); erased.recycle(); }
+        });
+    }
+
+    @Test public void toolbarReconfigurationDoesNotInterruptTheOwnedSurfaceEraser() throws Exception {
+        NativeScene worker = new NativeScene();
+        NativeScene.Frame frame = worker.synchronize(
+            update(new JSONArray().put(ink("ink", "a0", "M20 60 L580 60", "#ff0000", true, 0)), true),
+            1, 0, java.util.Collections.emptyList());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            NativeSceneView view = surface();
+            java.util.List<com.getcapacitor.JSObject> events = new java.util.ArrayList<>();
+            NativeInkView input = new NativeInkView(view.getContext(), events::add);
+            new FrameLayout(view.getContext()).addView(input);
+            input.layout(0,0,600,200);
+            view.apply(frame);
+            view.setInput(input);
+            input.setInputSpace("board");
+            input.setRetainedScene(() -> view, true);
+            input.configure("erase",true,0,0,1,4,1,1,"#000000",false,36,
+                java.util.Collections.emptyList(),null,0,"erase",true,30,null);
+            MotionEvent down = MotionEvent.obtain(10,10,MotionEvent.ACTION_DOWN,80,60,0);
+            try { assertTrue(input.onTouchEvent(down)); } finally { down.recycle(); }
+            input.setRetainedScene(() -> view, false);
+            input.configure("toolbar",false,0,0,1,4,1,1,"#000000",false,36,
+                java.util.Collections.emptyList(),null,0,"pen",true,60,null);
+            MotionEvent up = MotionEvent.obtain(10,20,MotionEvent.ACTION_UP,400,60,0);
+            try { assertTrue(input.onTouchEvent(up)); } finally { up.recycle(); }
+            Bitmap erased = pixels(view);
+            try {
+                assertEquals(0, erased.getPixel(250,60));
+                assertTrue(Color.alpha(erased.getPixel(500,60)) > 0);
+                assertEquals(2, events.size());
+                assertEquals("end", events.get(1).optString("phase"));
+                assertEquals("erase", events.get(1).optString("token"));
+            } finally { erased.recycle(); }
+        });
+    }
+
     @Test public void unchangedLargeSelectionDoesNotReplayItsVectorsForAnAcknowledgement() throws Exception {
         NativeScene scene=new NativeScene();JSONArray nodes=new JSONArray();
         for(int i=0;i<100;i++)nodes.put(ink("stroke"+i,"a"+String.format(java.util.Locale.ROOT,"%04d",i),"M20 60 L580 60","#ff0000",true,-1));

@@ -11,6 +11,7 @@ import { pointFrom } from "@fcboard/math";
 import { API } from "@fcboard/fcboard/tests/helpers/api";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 import { t } from "@fcboard/fcboard/i18n";
+import { selectedRegion } from "@fcboard/fcboard/lasso/region";
 
 import { drawPlot, objectSelection, selectedPlot } from "./board";
 import { defaultPlot } from "./math";
@@ -511,6 +512,56 @@ it("moves the selected canvas object and undoes one complete drag", async () => 
   await waitFor(() =>
     expect(graph()).toMatchObject({ x: before.x, y: before.y }),
   );
+});
+
+it("moves a circled graph and its blue frame together without zooming the function domain", async () => {
+  const { api, graph, canvas } = await setup();
+  const before = graph();
+  const selection = selectedRegion([before], undefined, 1)!;
+  act(() => {
+    api.setActiveTool({ type: "lasso" });
+    api.updateScene({
+      appState: {
+        ...objectSelection([before]),
+        whiteboardSelection: selection,
+      },
+    });
+  });
+  fireEvent.wheel(canvas(), { clientX: 200, clientY: 200, deltaY: -180 });
+  fireEvent.pointerDown(canvas(), {
+    pointerId: 13,
+    pointerType: "touch",
+    button: 0,
+    clientX: 200,
+    clientY: 200,
+  });
+  fireEvent.pointerDown(canvas(), {
+    pointerId: 14,
+    pointerType: "touch",
+    button: 0,
+    clientX: 260,
+    clientY: 260,
+  });
+  fireEvent.pointerMove(canvas(), {
+    pointerId: 13,
+    pointerType: "touch",
+    clientX: 235,
+    clientY: 225,
+  });
+  expect(graph()).toMatchObject({ x: before.x + 35, y: before.y + 25 });
+  expect(api.getAppState().whiteboardSelection?.bounds).toEqual({
+    left: selection.bounds.left + 35,
+    right: selection.bounds.right + 35,
+    top: selection.bounds.top + 25,
+    bottom: selection.bounds.bottom + 25,
+  });
+  fireEvent.pointerUp(canvas(), {
+    pointerId: 13,
+    pointerType: "touch",
+    clientX: 235,
+    clientY: 225,
+  });
+  expect(graph().customData?.fcPlot.plot.view).toBeUndefined();
 });
 
 it("zooms the numeric range with three contacts without moving/resizing the selected object", async () => {

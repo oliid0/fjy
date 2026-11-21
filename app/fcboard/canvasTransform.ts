@@ -84,7 +84,11 @@ export const transformBoardElement = (
   if (scale !== 1 && element.customData?.fcInsertion?.kind === "table") {
     throw new Error(t("fcboard.table_zoom_instructions"));
   }
-  if (element.type === "text" && element.fontSize * scale < MIN_FONT_SIZE) {
+  if (
+    element.type === "text" &&
+    scale !== 1 &&
+    scale < MIN_FONT_SIZE / element.fontSize
+  ) {
     throw new Error(t("fcboard.invalid_style_parameters"));
   }
   const transform = (point: { x: number; y: number }) => ({
@@ -122,7 +126,14 @@ export const transformBoardElement = (
     height: element.height * scale,
     strokeWidth: element.strokeWidth * scale,
     ...(points ? { points } : {}),
-    ...(element.type === "text" ? { fontSize: element.fontSize * scale } : {}),
+    ...(element.type === "text"
+      ? {
+          fontSize:
+            scale === 1
+              ? element.fontSize
+              : Math.max(MIN_FONT_SIZE, element.fontSize * scale),
+        }
+      : {}),
     ...(isElbowArrow(element) && element.fixedSegments
       ? {
           fixedSegments: element.fixedSegments.map((segment) => ({

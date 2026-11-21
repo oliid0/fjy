@@ -65,7 +65,7 @@ export const FunctionGraphObject = ({
           onSelect?.();
           setEngaged(true);
         });
-        if (input.current?.down(event.nativeEvent)) {
+        if (input.current?.down(event.nativeEvent, graph.allowRange)) {
           event.stopPropagation();
         }
       }}

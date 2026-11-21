@@ -128,6 +128,7 @@ public class NativeInkPlugin extends Plugin {
                     inputLayer.addView(view);
                 }
                 view.setOverlayPreview(overlayPreview);
+                view.setInputSpace(call.getString("inputSpace", ""));
                 view.setSelection(call.getArray("selectionBounds"),call.getString("selectionKey",""),call.getFloat("selectionMinScale",.1f),call.getBoolean("selectionResize",true));
                 view.setPersistent(call.getBoolean("persistent",false));
                 view.setMultiStroke(call.getBoolean("multiStroke", true));

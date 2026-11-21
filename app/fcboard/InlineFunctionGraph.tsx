@@ -17,7 +17,9 @@ import {
 import type { Plot } from "./math";
 import type { Ref } from "react";
 
-export type FunctionGraphInput = { down: (event: PointerEvent) => boolean };
+export type FunctionGraphInput = {
+  down: (event: PointerEvent, allowRange?: boolean) => boolean;
+};
 
 export type GraphTranslation = {
   dx: number;
@@ -38,6 +40,7 @@ export const InlineFunctionGraph = ({
   onError,
   onTranslate,
   interactive = true,
+  allowRange = true,
   angle = 0,
   displaySize,
   inputRef,
@@ -52,6 +55,7 @@ export const InlineFunctionGraph = ({
   onError: (message: string) => void;
   onTranslate?: (change: GraphTranslation) => void;
   interactive?: boolean;
+  allowRange?: boolean;
   angle?: number;
   displaySize?: { width: number; height: number };
   inputRef?: Ref<FunctionGraphInput>;
@@ -68,6 +72,7 @@ export const InlineFunctionGraph = ({
     onError,
     onTranslate,
     interactive,
+    allowRange,
     angle,
     displaySize,
   });
@@ -80,6 +85,7 @@ export const InlineFunctionGraph = ({
     onError,
     onTranslate,
     interactive,
+    allowRange,
     angle,
     displaySize,
   };
@@ -94,6 +100,7 @@ export const InlineFunctionGraph = ({
         radius: number;
         rect: DOMRect;
         moved: boolean;
+        allowRange: boolean;
       }
     | undefined
   >(undefined);
@@ -279,6 +286,9 @@ export const InlineFunctionGraph = ({
       }
       event.preventDefault();
       event.stopPropagation();
+      if (!props.current.allowRange) {
+        return;
+      }
       const factor = Math.exp(
         -Math.max(
           -500,
@@ -314,7 +324,10 @@ export const InlineFunctionGraph = ({
       }
     };
   }, [id, redraw]);
-  const pointerDown = (event: PointerEvent) => {
+  const pointerDown = (
+    event: PointerEvent,
+    rangeAllowed = props.current.allowRange,
+  ) => {
     const target = canvas.current;
     if (!target) {
       return false;
@@ -325,6 +338,9 @@ export const InlineFunctionGraph = ({
     event.preventDefault();
     event.stopPropagation();
     clearTimeout(wheelTimer.current);
+    if (gesture.current && !gesture.current.allowRange) {
+      return true;
+    }
     contacts.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
@@ -340,6 +356,7 @@ export const InlineFunctionGraph = ({
         radius: 0,
         rect: target.getBoundingClientRect(),
         moved: false,
+        allowRange: rangeAllowed,
       };
       props.current.onTranslate?.({ dx: 0, dy: 0, phase: "start" });
     } else if (contacts.current.size >= 2) {

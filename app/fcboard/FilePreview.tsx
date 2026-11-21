@@ -337,6 +337,7 @@ export const FilePreview = ({
         page: number;
         before: InkStroke[];
         last: InkStroke[];
+        selection: typeof lasso;
         scale: number;
       }
     | undefined
@@ -3723,6 +3724,9 @@ export const FilePreview = ({
                     strokeWidth={stroke.width}
                     strokeStyle={stroke.strokeStyle}
                     interactive={!stroke.locked && !erase}
+                    allowRange={
+                      !selecting || !selectedInkRef.current.includes(stroke.id)
+                    }
                     onError={setError}
                     onErasePointer={(event) => {
                       const target = inkSurface.current;
@@ -3756,6 +3760,7 @@ export const FilePreview = ({
                                 page,
                                 before: inkRef.current[page] || [],
                                 last: inkRef.current[page] || [],
+                                selection: lasso,
                                 scale:
                                   (stage.current?.getBoundingClientRect()
                                     .width || size.width * zoom) / 1000,
@@ -3774,6 +3779,7 @@ export const FilePreview = ({
                             }
                             if (phase === "cancel") {
                               plotMoving.current = undefined;
+                              setLasso(gesture.selection);
                               commitInk(
                                 { ...inkRef.current, [page]: gesture.before },
                                 false,
@@ -3790,6 +3796,12 @@ export const FilePreview = ({
                                 : item,
                             );
                             gesture.last = next;
+                            setLasso(
+                              gesture.selection.map(([x, y]) => [
+                                x + dx / gesture.scale,
+                                y + dy / gesture.scale,
+                              ]),
+                            );
                             if (phase === "end") {
                               plotMoving.current = undefined;
                               commitInk(
@@ -3840,7 +3852,11 @@ export const FilePreview = ({
                   style={{
                     overflow: "visible",
                     pointerEvents:
-                      (inkOn && !selecting) || activePointer.current
+                      (inkOn && !selecting) ||
+                      activePointer.current ||
+                      (selecting &&
+                        selectedInkRef.current.includes(stroke.id) &&
+                        lasso.length > 0)
                         ? "none"
                         : "auto",
                   }}

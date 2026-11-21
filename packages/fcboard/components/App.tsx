@@ -1756,15 +1756,19 @@ class App extends React.Component<AppProps, AppState> {
             src = getEmbedLink(toValidURL(el.link || ""));
           }
 
+          const selectedForMove =
+            this.isRegionSelectionTool() &&
+            !!this.state.selectedElementIds[el.id];
           const isActive =
-            (this.state.activeEmbeddable?.element === el &&
+            !selectedForMove &&
+            ((this.state.activeEmbeddable?.element === el &&
               this.state.activeEmbeddable?.state === "active") ||
-            (!!this.props.UIOptions.unifiedToolbar &&
-              !!el.customData?.fcInteractiveResource &&
-              ["selection", "lasso", "hand"].includes(
-                this.state.activeTool.type,
-              ) &&
-              this.state.cursorButton !== "down");
+              (!!this.props.UIOptions.unifiedToolbar &&
+                !!el.customData?.fcInteractiveResource &&
+                ["selection", "lasso", "hand"].includes(
+                  this.state.activeTool.type,
+                ) &&
+                this.state.cursorButton !== "down"));
           const isHovered =
             this.state.activeEmbeddable?.element === el &&
             this.state.activeEmbeddable?.state === "hover";
@@ -10184,10 +10188,11 @@ class App extends React.Component<AppProps, AppState> {
       input.points.some(
         (point) => point.length !== 3 || !point.every(Number.isFinite),
       ) ||
-      (input.mode === "select"
-        ? !this.isRegionSelectionTool()
-        : this.state.activeTool.type !== "eraser" ||
-          this.state.eraserMode !== "region")
+      (input.phase === "start" &&
+        (input.mode === "select"
+          ? !this.isRegionSelectionTool()
+          : this.state.activeTool.type !== "eraser" ||
+            this.state.eraserMode !== "region"))
     ) {
       throw new Error("Invalid native region gesture");
     }

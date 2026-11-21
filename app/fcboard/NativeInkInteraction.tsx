@@ -4,6 +4,7 @@ import {
   CaptureUpdateAction,
   getCommonBounds,
   getSelectedElements,
+  isIframeLikeElement,
 } from "@fcboard/element";
 import { colorToHex, MIN_FONT_SIZE } from "@fcboard/common";
 import { t } from "@fcboard/fcboard/i18n";
@@ -55,6 +56,7 @@ const ink = registerPlugin<{
   configure(options: {
     owner: string;
     token: string;
+    inputSpace: string;
     enabled: boolean;
     overlayPreview?: boolean;
     multiStroke: boolean;
@@ -289,12 +291,22 @@ export const NativeInkInteraction = ({
             (transform.anchorY - state.offsetTop) / state.zoom.value -
             state.scrollY,
         };
+        // Android's float round-trip can fall just below the exact font-size limit.
+        const scale =
+          transform.scale === 1
+            ? 1
+            : original.ids.reduce((value, id) => {
+                const element = current.get(id);
+                return element?.type === "text"
+                  ? Math.max(value, MIN_FONT_SIZE / element.fontSize)
+                  : value;
+              }, transform.scale);
         const dx = transform.dx / state.zoom.value;
         const dy = transform.dy / state.zoom.value;
         const point = (x: number, y: number) =>
           [
-            anchor.x + (x - anchor.x) * transform.scale + dx,
-            anchor.y + (y - anchor.y) * transform.scale + dy,
+            anchor.x + (x - anchor.x) * scale + dx,
+            anchor.y + (y - anchor.y) * scale + dy,
           ] as const;
         const [left, top] = point(
           original.region.bounds.left,
@@ -309,13 +321,7 @@ export const NativeInkInteraction = ({
           api.updateScene({
             elements: elements.map((element) =>
               ids.has(element.id)
-                ? transformBoardElement(
-                    element,
-                    anchor,
-                    transform.scale,
-                    dx,
-                    dy,
-                  )
+                ? transformBoardElement(element, anchor, scale, dx, dy)
                 : element,
             ),
             appState: {
@@ -568,7 +574,7 @@ export const NativeInkInteraction = ({
       const blocked: number[][] = enabled ? [...uiBounds] : [];
       // Table, label and question surfaces retain their live composition path.
       // Only on-screen boxes can intercept a contact.
-      if (enabled && mode !== "select") {
+      if (enabled && mode === "pen") {
         for (const [left, top, right, bottom] of compositionBounds.values()) {
           const x = (left + state.scrollX) * state.zoom.value;
           const y = (top + state.scrollY) * state.zoom.value;
@@ -605,9 +611,17 @@ export const NativeInkInteraction = ({
                 state.offsetTop,
             ]
           : undefined;
+      const movesHtml = contents.some(isIframeLikeElement);
+      if (movesHtml && selectionBounds) {
+        const [left, top, right, bottom] = selectionBounds;
+        // The live iframe and blue frame must move on the same board gesture.
+        // Only this selection's handles and interior use the browser editor.
+        blocked.push([left - 20, top - 20, right + 20, bottom + 20]);
+      }
       const options: Parameters<typeof ink.configure>[0] = {
         owner: api.id,
         token,
+        inputSpace: configuredSurface,
         overlayPreview,
         enabled: enabled && !uiBlocksInk && blocked.length <= 512,
         multiStroke: !state.currentItemInkAssist && state.multiStroke !== false,
@@ -652,7 +666,7 @@ export const NativeInkInteraction = ({
           Math.min(240, state.eraserSize ?? inkProfile?.eraserSize ?? 60),
         ),
         blocked: blocked.slice(0, 512),
-        selectionBounds,
+        selectionBounds: movesHtml ? undefined : selectionBounds,
         selectionKey: contents
           .map((element) => element.id)
           .sort()
@@ -706,10 +720,9 @@ export const NativeInkInteraction = ({
       }
       const opened = contacts.get(contact.id);
       const surface = opened?.surface ?? configuredSurface;
-      const finishesInk = opened?.mode === "pen" || opened?.mode === "erase";
       const current = () =>
-        contact.token === (finishesInk ? opened.token : token) &&
-        (finishesInk || configuredTool === api.getAppState().activeTool.type) &&
+        contact.token === (opened?.token ?? token) &&
+        (opened || configuredTool === api.getAppState().activeTool.type) &&
         surface === surfaceStamp(api);
       let elementId: string | undefined;
       try {

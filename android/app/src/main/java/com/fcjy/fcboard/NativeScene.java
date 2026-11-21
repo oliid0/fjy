@@ -62,7 +62,8 @@ final class NativeScene {
     static final class Frame {
         final Map<Long,Tile> tiles=new HashMap<>();
         final Set<String> upserts=new HashSet<>(),removed=new HashSet<>();
-        final Map<Long,Bitmap> selected=new HashMap<>(),selectedIdle=new HashMap<>();
+        final Map<Long,Bitmap> selected=new HashMap<>();
+        final Map<Long,Tile> selectedIdle=new HashMap<>();
         RectF selectionBounds;
         String selectionThrough="",selectionKey="";
         boolean reset;
@@ -165,7 +166,8 @@ final class NativeScene {
     private float zoom=1,scrollX,scrollY;
     private String viewport="";
     private Set<String> selection=new HashSet<>();
-    private final Map<Long,Bitmap> selectionPixels=new HashMap<>(),selectionIdlePixels=new HashMap<>();
+    private final Map<Long,Bitmap> selectionPixels=new HashMap<>();
+    private final Map<Long,Tile> selectionIdleTiles=new HashMap<>();
     private long reconciledThrough,rasterEraseThrough;
     private final Paint rasterClear=new Paint(Paint.ANTI_ALIAS_FLAG);
     static float number(JSONArray input,int index)throws JSONException { float result=(float)input.getDouble(index);if(!Float.isFinite(result))throw new IllegalArgumentException("Invalid native scene number");return result; }
@@ -222,6 +224,23 @@ final class NativeScene {
         }
         return changed;
     }
+    private Tile rasterTile(long key, TreeMap<String,Node> bucket, boolean omitSelected) {
+        Tile tile = new Tile((int)(key >> 32) * SIZE,(int)key * SIZE);
+        if (bucket == null) return tile;
+        Part part = null;
+        Canvas canvas = null;
+        for (Node node : bucket.values()) {
+            if (node.inline || (omitSelected && selection.contains(node.id))) continue;
+            long through = Math.max(node.through, reconciledThrough);
+            if (part == null || part.ink != node.ink || (part.ink && part.through != through)) {
+                part = new Part(node.ink, through);
+                tile.parts.add(part);
+                canvas = new Canvas(part.pixels);
+            }
+            draw(node, tile, canvas);
+        }
+        return tile;
+    }
     Frame synchronize(JSONObject data,float scale,long received,List<Cut> eraseSamples) throws JSONException {
         return synchronize(data, scale, received, eraseSamples, Collections.emptyMap());
     }
@@ -236,7 +255,7 @@ final class NativeScene {
         String nextView=nextWidth+":"+nextHeight+":"+nextZoom+":"+nextX+":"+nextY;
         frame.reset=data.optBoolean("reset")||!nextView.equals(viewport);
         if(data.optBoolean("reset")){rasterEraseThrough=0;nodes.clear();buckets.clear();rasterTiles.clear();}
-        if(frame.reset){selectionPixels.clear();selectionIdlePixels.clear();rasterTiles.clear();viewport=nextView;width=nextWidth;height=nextHeight;zoom=nextZoom;scrollX=nextX;scrollY=nextY;buckets.clear();for(Node node:nodes.values()){node.cells.clear();index(node,dirty);}}
+        if(frame.reset){selectionPixels.clear();selectionIdleTiles.clear();rasterTiles.clear();viewport=nextView;width=nextWidth;height=nextHeight;zoom=nextZoom;scrollX=nextX;scrollY=nextY;buckets.clear();for(Node node:nodes.values()){node.cells.clear();index(node,dirty);}}
         Set<String> selected=new HashSet<>();JSONArray selectedIds=data.optJSONArray("selectionIds");
         if(selectedIds!=null)for(int i=0;i<selectedIds.length();i++)selected.add(selectedIds.getString(i));
         boolean selectionChanged=!selected.equals(selection);
@@ -324,14 +343,7 @@ final class NativeScene {
                     draw(node,tile,new Canvas(part.writable()));
                 }
             }else{
-                tile=new Tile((int)(key>>32)*SIZE,(int)key*SIZE);TreeMap<String,Node> bucket=buckets.get(key);
-                Part part=null;Canvas canvas=null;
-                if(bucket!=null)for(Node node:bucket.values()){
-                    if(selection.contains(node.id)||node.inline)continue;
-                    long through=Math.max(node.through,reconciledThrough);
-                    if(part==null||part.ink!=node.ink||(part.ink&&part.through!=through)){part=new Part(node.ink,through);tile.parts.add(part);canvas=new Canvas(part.pixels);}
-                    draw(node,tile,canvas);
-                }
+                tile = rasterTile(key, buckets.get(key), true);
             }
             if (tile.parts.size() != 1) tile.compose();
             rasterTiles.put(key,tile);
@@ -339,9 +351,9 @@ final class NativeScene {
             // or corrupt later appends/cancelled erasures.
             frame.tiles.put(key,tile.snapshot(reconciledThrough));
         }
-        if(frame.selectionBounds==null){selectionPixels.clear();selectionIdlePixels.clear();}
+        if(frame.selectionBounds==null){selectionPixels.clear();selectionIdleTiles.clear();}
         else for(long cell:dirty){
-            selectionPixels.remove(cell);selectionIdlePixels.remove(cell);
+            selectionPixels.remove(cell);selectionIdleTiles.remove(cell);
             TreeMap<String,Node> bucket=buckets.get(cell);if(bucket==null)continue;
             Tile tile=null;Canvas canvas=null;
             for(Node node:bucket.values())if(selection.contains(node.id)){
@@ -352,12 +364,14 @@ final class NativeScene {
                 selectionPixels.put(cell,tile.pixels);
                 // Idle selection preserves the actual interleaved scene order.
                 // Only an active transform lifts selected pixels into a preview.
-                Tile idle=new Tile(tile.x,tile.y);Canvas idleCanvas=new Canvas(idle.pixels);
-                for(Node node:bucket.values())if(!node.inline)draw(node,idle,idleCanvas);
-                selectionIdlePixels.put(cell,idle.pixels);
+                Tile idle = rasterTile(cell, bucket, false);
+                idle.compose();
+                // Only the display thread mutates this published idle tile.
+                // Future worker frames replace its reference.
+                selectionIdleTiles.put(cell, idle);
             }
         }
-        frame.selected.putAll(selectionPixels);frame.selectedIdle.putAll(selectionIdlePixels);
+        frame.selected.putAll(selectionPixels);frame.selectedIdle.putAll(selectionIdleTiles);
         // The worker now owns composited board pixels. Future transforms,
         // selections and viewport changes rasterize the canonical vectors.
         for (String id : frame.upserts) nodes.get(id).inputMasks = null;
@@ -380,7 +394,8 @@ final class NativeSceneView extends NativeCanvasView {
     private Bitmap background;
     private int backgroundColor=Color.TRANSPARENT;
     private long sequence;
-    private Map<Long,Bitmap> selected=new HashMap<>(),selectedIdle=new HashMap<>();
+    private Map<Long,Bitmap> selected=new HashMap<>();
+    private Map<Long,NativeScene.Tile> selectedIdle=new HashMap<>();
     private RectF selectionBounds;
     private final Matrix selectionMatrix=new Matrix();
     private final Paint selectionPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -432,6 +447,7 @@ final class NativeSceneView extends NativeCanvasView {
         boolean repaintAll=frame.reset||frame.backgroundChanged||!selectionKey.equals(frame.selectionKey)||!selectionGesture.isEmpty();
         if(frame.reset){tiles.clear();pendingCuts.clear();elements.clear();if(hasFrame){cuts.clear();cutsByCell.clear();backups.clear();}}
         hasFrame=true;
+        Map<Long,NativeScene.Tile> previousIdle = selectedIdle;
         selected=frame.selected;selectedIdle=frame.selectedIdle;selectionBounds=frame.selectionBounds;selectionKey=frame.selectionKey;
         if(selectionGesture.equals(frame.selectionThrough)||selectionBounds==null){selectionGesture="";selectionMatrix.reset();}
         if(frame.backgroundChanged){background=frame.background;backgroundColor=frame.backgroundColor;}
@@ -441,7 +457,13 @@ final class NativeSceneView extends NativeCanvasView {
             // A replaced tile part can never be drawn again. Keeping its backup
             // across every geometry reply retains entire obsolete bitmap generations.
             pendingCuts.remove(entry.getKey());
-            if(retired!=null)for(Map<NativeScene.Part,Bitmap> saved:backups.values())saved.keySet().removeAll(retired.parts);
+            NativeScene.Tile retiredIdle = previousIdle.get(entry.getKey());
+            for (Map<NativeScene.Part,Bitmap> saved : backups.values()) {
+                if (retired != null) saved.keySet().removeAll(retired.parts);
+                if (retiredIdle != null && retiredIdle != selectedIdle.get(entry.getKey())) {
+                    saved.keySet().removeAll(retiredIdle.parts);
+                }
+            }
             List<NativeScene.Cut> localCuts = cutsByCell.get(entry.getKey());
             if (localCuts != null) for (NativeScene.Cut cut : localCuts)
                 if (cut.sequence > frame.eraseThrough) queueCut(entry.getKey(),cut);
@@ -462,8 +484,13 @@ final class NativeSceneView extends NativeCanvasView {
     private void paintCuts() {
         for (Map.Entry<Long, List<NativeScene.Cut>> entry : pendingCuts.entrySet()) {
             NativeScene.Tile tile = tiles.get(entry.getKey());
-            for (NativeScene.Cut cut : entry.getValue()) clear(tile, cut);
+            NativeScene.Tile idle = selectedIdle.get(entry.getKey());
+            for (NativeScene.Cut cut : entry.getValue()) {
+                clear(tile, cut);
+                if (idle != null) clear(idle, cut);
+            }
             tile.compose();
+            if (idle != null) idle.compose();
         }
         pendingCuts.clear();
     }
@@ -523,19 +550,27 @@ final class NativeSceneView extends NativeCanvasView {
         paintCuts();
         Map<NativeScene.Part,Bitmap> saved=backups.remove(gesture);
         retireCuts(cut->cut.gesture.equals(gesture));
-        if(saved!=null)for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
-            NativeScene.Tile tile=entry.getValue();boolean restored=false;
-            for(NativeScene.Part part:tile.parts){
-                Bitmap backup=saved.get(part);if(backup==null)continue;
-                part.pixels.eraseColor(Color.TRANSPARENT);new Canvas(part.pixels).drawBitmap(backup,0,0,null);restored=true;
-                // Rebase other still-pending gestures on the restored pixels.
-                for(Map<NativeScene.Part,Bitmap> pending:backups.values())pending.remove(part);
-            }
-            if(!restored)continue;
-            for(NativeScene.Cut cut:cuts)if(RectF.intersects(cut.bounds,new RectF(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE)))clear(tile,cut);
-            tile.compose();
+        if (saved != null) {
+            for (NativeScene.Tile tile : tiles.values()) restore(tile, saved);
+            for (NativeScene.Tile tile : selectedIdle.values()) restore(tile, saved);
         }
         requestRender();
+    }
+    private void restore(NativeScene.Tile tile, Map<NativeScene.Part,Bitmap> saved) {
+        boolean restored = false;
+        for (NativeScene.Part part : tile.parts) {
+            Bitmap backup = saved.get(part);
+            if (backup == null) continue;
+            part.pixels.eraseColor(Color.TRANSPARENT);
+            new Canvas(part.pixels).drawBitmap(backup, 0, 0, null);
+            restored = true;
+            // Rebase other still-pending gestures on the restored pixels.
+            for (Map<NativeScene.Part,Bitmap> pending : backups.values()) pending.remove(part);
+        }
+        if (!restored) return;
+        List<NativeScene.Cut> localCuts = cutsByCell.get(NativeScene.key(tile.x / NativeScene.SIZE, tile.y / NativeScene.SIZE));
+        if (localCuts != null) for (NativeScene.Cut cut : localCuts) clear(tile, cut);
+        tile.compose();
     }
     @Override protected void paintCanvas(Canvas canvas){
         NativeInkView preview;
@@ -555,8 +590,8 @@ final class NativeSceneView extends NativeCanvasView {
         canvas.drawColor(backgroundColor);
         if(background!=null)canvas.drawBitmap(background,null,new RectF(0,0,getWidth(),getHeight()),image);
         for(Map.Entry<Long,NativeScene.Tile> entry:tiles.entrySet()){
-            NativeScene.Tile tile=entry.getValue();if(canvas.quickReject(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE,Canvas.EdgeType.AA))continue;Bitmap idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
-            canvas.drawBitmap(idle==null?tile.pixels:idle,tile.x,tile.y,null);
+            NativeScene.Tile tile=entry.getValue();if(canvas.quickReject(tile.x,tile.y,tile.x+NativeScene.SIZE,tile.y+NativeScene.SIZE,Canvas.EdgeType.AA))continue;NativeScene.Tile idle=selectionGesture.isEmpty()?selectedIdle.get(entry.getKey()):null;
+            canvas.drawBitmap(idle==null?tile.pixels:idle.pixels,tile.x,tile.y,null);
         }
         int saved=canvas.save();canvas.concat(selectionMatrix);
         if(!selectionGesture.isEmpty())for(Map.Entry<Long,Bitmap> entry:selected.entrySet()){long cell=entry.getKey();canvas.drawBitmap(entry.getValue(),(int)(cell>>32)*NativeScene.SIZE,(int)cell*NativeScene.SIZE,null);}

@@ -6,6 +6,7 @@ import { currentSettings } from "./settings";
 import {
   calculationInk,
   columnInkRows,
+  divisionOperands,
   divisionSlashInk,
   hasStructuredMathInk,
   preservesMathInkStructure,
@@ -211,6 +212,35 @@ export const recognizeHandwriting = async (
       }
     } catch {
       signal.throwIfAborted();
+    }
+  }
+  if (slashInk && hasDigitalInk() && recognitionStrokes) {
+    const operands = divisionOperands(recognitionStrokes);
+    if (operands && !operands.some(hasStructuredMathInk)) {
+      const numeric = /^[+−-]?\d+(?:\.\d+)?$/;
+      try {
+        const [dividend, divisor] = await Promise.all(
+          operands.map((operand) =>
+            recognizeDigitalInk(operand, signal, "math", languageHint).then(
+              (candidates) => candidates[0]?.trim() || "",
+            ),
+          ),
+        );
+        // A trailing equality on the right belongs to the written expression.
+        // Only use the highest-ranked transcription of each complete operand.
+        if (
+          numeric.test(dividend) &&
+          numeric.test(divisor.replace(/[=＝]$/, "").trim())
+        ) {
+          const text = `${dividend}/${divisor}`;
+          signal.throwIfAborted();
+          if (await accepted(text)) {
+            return chooseCandidate ? chooseCandidate([text]) : text;
+          }
+        }
+      } catch {
+        signal.throwIfAborted();
+      }
     }
   }
   try {

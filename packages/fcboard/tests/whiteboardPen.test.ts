@@ -75,6 +75,26 @@ it("selects profiles per contact with a measured threshold and never mutates the
   ).toBe(state.whiteboardPenTip);
 });
 
+it.each(["function", "calculation"] as const)(
+  "keeps the chosen %s pen active when contact is measured as the other nib",
+  (assist) => {
+    const state = {
+      ...getDefaultAppState(),
+      whiteboardPenTip: "thick" as const,
+      whiteboardDualPen: true,
+      whiteboardThickThreshold: 8,
+      currentItemInkAssist: assist,
+      whiteboardPenTips: {
+        fine: { mode: "hard" as const, color: "#0000ff", width: 2 },
+      },
+    };
+    const contact = { width: 2, height: 3, pointerType: "touch" };
+    const ink = whiteboardInkStyle(state, contact, undefined, 1);
+    expect(ink.strokeColor).toBe("#0000ff");
+    expect(ink.customData.fcInk).toMatchObject({ tip: "fine", assist });
+  },
+);
+
 it.each([0.5, 1, 2])(
   "uses the same physical style in board and normalized courseware at zoom %s",
   (zoom) => {

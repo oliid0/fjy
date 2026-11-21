@@ -17,6 +17,7 @@ import {
 import { Fcboard } from "../index";
 import { AnimationFrameHandler } from "../animation-frame-handler";
 import { LassoTrail } from "../lasso";
+import { selectedRegion as selectionForElements } from "../lasso/region";
 import { t } from "../i18n";
 import { actionDuplicateSelection } from "../actions/actionDuplicateSelection";
 import { actionDeleteSelected } from "../actions/actionDeleteSelected";
@@ -146,6 +147,34 @@ it("allows direct interaction with a teaching resource in the selector and gives
   expect(inner).toHaveStyle({ pointerEvents: "none" });
   regionPointer(canvas, "pointercancel", 40, 40);
   expect(inner).toHaveStyle({ pointerEvents: "all" });
+  const selection = selectionForElements([resource], undefined, 1)!;
+  act(() =>
+    h.app.api.updateScene({
+      appState: {
+        selectedElementIds: { [resource.id]: true },
+        whiteboardSelection: selection,
+      },
+    }),
+  );
+  expect(h.state.whiteboardSelection?.elementIds).toEqual([resource.id]);
+  expect(
+    getByTitle(interactiveResource.title).closest(
+      ".fcboard__embeddable-container__inner",
+    ),
+  ).toHaveStyle({
+    pointerEvents: "none",
+  });
+  regionPointer(canvas, "pointerdown", 280, 200);
+  regionPointer(canvas, "pointermove", 330, 240);
+  expect(h.app.scene.getNonDeletedElement(resource.id)).toMatchObject({
+    x: 150,
+    y: 140,
+  });
+  expect(h.state.whiteboardSelection?.bounds).toMatchObject({
+    left: selection.bounds.left + 50,
+    top: selection.bounds.top + 40,
+  });
+  regionPointer(canvas, "pointerup", 330, 240);
 });
 
 it("draws one open continuous lasso from the travelled area, clears it on lift and starts the next gesture cleanly", async () => {

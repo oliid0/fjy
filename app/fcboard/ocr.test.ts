@@ -193,6 +193,50 @@ describe("explicit handwriting actions", () => {
     );
     expect(backend.cloud).not.toHaveBeenCalled();
   });
+  it("reads verified division operands separately when neither whole-expression model sees the operator", async () => {
+    backend.nativeAvailable = true;
+    backend.math.mockResolvedValue("12-3");
+    backend.native
+      .mockResolvedValueOnce(["12-3"])
+      .mockResolvedValueOnce(["12"])
+      .mockResolvedValueOnce(["3"]);
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [10, 10],
+        [25, 50],
+      ],
+      [
+        [45, 30],
+        [65, 30],
+      ],
+      [[55, 22]],
+      [[55, 38]],
+      [
+        [85, 10],
+        [100, 50],
+      ],
+    ];
+    const signal = new AbortController().signal;
+    await expect(
+      recognizeHandwriting("", signal, vi.fn(), "math", undefined, strokes),
+    ).resolves.toBe("12/3");
+    expect(backend.native).toHaveBeenNthCalledWith(
+      2,
+      [strokes[0]],
+      signal,
+      "math",
+      undefined,
+    );
+    expect(backend.native).toHaveBeenNthCalledWith(
+      3,
+      [strokes[4]],
+      signal,
+      "math",
+      undefined,
+    );
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
+
   it("keeps the full vertical column for structured math when native rows lack an explicit operator", async () => {
     backend.native.mockResolvedValue(["11"]);
     backend.nativeAvailable = true;

@@ -6,7 +6,10 @@ import {
   newElementWith,
 } from "@fcboard/element";
 
+import { pointFrom } from "@fcboard/math";
+
 import type { FcboardElement } from "@fcboard/element/types";
+import type { GlobalPoint } from "@fcboard/math";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
@@ -25,7 +28,15 @@ export const FunctionGraphInteraction = ({
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const moving = useRef<
-    { source: FcboardElement; last: FcboardElement } | undefined
+    | {
+        source: FcboardElement;
+        last: FcboardElement;
+        region: ReturnType<
+          FcboardImperativeAPI["getAppState"]
+        >["whiteboardSelection"];
+        zoom: number;
+      }
+    | undefined
   >(undefined);
   const refresh = useCallback(() => {
     // The live canvas now owns pixels; invalidate the existing scene once so its
@@ -48,6 +59,7 @@ export const FunctionGraphInteraction = ({
         state.offsetTop,
         state.activeTool.type,
         state.selectedElementIds,
+        state.whiteboardSelection,
         state.isResizing,
         state.isRotating,
         !!classroomCommands.read("document"),
@@ -160,13 +172,20 @@ export const FunctionGraphInteraction = ({
                   height: element.height * state.zoom.value,
                 }}
                 interactive={accepts}
+                allowRange={state.activeTool.type !== "lasso"}
                 onError={setError}
                 onErasePointer={api.eraseOverlayPointer}
                 onTranslate={
                   selecting
                     ? ({ dx, dy, phase }) => {
                         if (phase === "start") {
-                          moving.current = { source: element, last: element };
+                          const current = api.getAppState();
+                          moving.current = {
+                            source: element,
+                            last: element,
+                            region: current.whiteboardSelection,
+                            zoom: current.zoom.value,
+                          };
                           return;
                         }
                         const gesture = moving.current;
@@ -176,19 +195,32 @@ export const FunctionGraphInteraction = ({
                         if (
                           !gesture ||
                           !latest ||
-                          latest !== gesture.last ||
+                          gesture.source.id !== element.id ||
+                          latest.version !== gesture.last.version ||
+                          latest.versionNonce !== gesture.last.versionNonce ||
                           latest.locked
                         ) {
                           moving.current = undefined;
                           return;
                         }
+                        const x = phase === "cancel" ? 0 : dx / gesture.zoom;
+                        const y = phase === "cancel" ? 0 : dy / gesture.zoom;
                         const position = {
-                          x:
-                            gesture.source.x +
-                            (phase === "cancel" ? 0 : dx / state.zoom.value),
-                          y:
-                            gesture.source.y +
-                            (phase === "cancel" ? 0 : dy / state.zoom.value),
+                          x: gesture.source.x + x,
+                          y: gesture.source.y + y,
+                        };
+                        const originalRegion = gesture.region;
+                        const region = originalRegion && {
+                          ...originalRegion,
+                          bounds: {
+                            left: originalRegion.bounds.left + x,
+                            top: originalRegion.bounds.top + y,
+                            right: originalRegion.bounds.right + x,
+                            bottom: originalRegion.bounds.bottom + y,
+                          },
+                          path: originalRegion.path?.map(([px, py]) =>
+                            pointFrom<GlobalPoint>(px + x, py + y),
+                          ),
                         };
                         let from = latest;
                         if (phase === "end") {
@@ -205,6 +237,13 @@ export const FunctionGraphInteraction = ({
                               .map((item) =>
                                 item.id === from.id ? from : item,
                               ),
+                            ...(originalRegion
+                              ? {
+                                  appState: {
+                                    whiteboardSelection: originalRegion,
+                                  },
+                                }
+                              : {}),
                             captureUpdate: CaptureUpdateAction.EVENTUALLY,
                           });
                         }
@@ -217,6 +256,9 @@ export const FunctionGraphInteraction = ({
                           elements: api
                             .getSceneElements()
                             .map((item) => (item.id === next.id ? next : item)),
+                          ...(region
+                            ? { appState: { whiteboardSelection: region } }
+                            : {}),
                           captureUpdate:
                             phase === "end"
                               ? CaptureUpdateAction.IMMEDIATELY

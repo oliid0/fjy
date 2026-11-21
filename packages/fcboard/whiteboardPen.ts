@@ -102,7 +102,9 @@ export const whiteboardInkStyle = (
     version: mode === "brush" ? 3 : 2,
     pen: mode,
     subpixel: true,
-    assist: pen.currentItemInkAssist,
+    // Contact size selects the nib and its styling. The user-selected
+    // recognition pen must still recognize contacts measured as the other tip.
+    assist: state.currentItemInkAssist,
     tip: pen.whiteboardPenTip || "thick",
     variation: state.whiteboardBrushVariation ?? 45,
     ...(mode === "hard"

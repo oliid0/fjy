@@ -453,7 +453,7 @@ it("uses calibrated dual-tip native styles and rejects a late completed contact 
 });
 
 it.each(["select", "regionErase"] as const)(
-  "routes the completed %s path to the actual scene without pointermove replay",
+  "completes the native %s path after switching tools without pointermove replay",
   async (mode) => {
     await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     const api = window.h.app.api;
@@ -491,6 +491,13 @@ it.each(["select", "regionErase"] as const)(
       points: [[80, 80, 0.5]],
     };
     act(() => backend.listeners.forEach((listener) => listener(contact)));
+    act(() => api.setActiveTool({ type: "freedraw" }));
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+        mode: "pen",
+        inputSpace: options.inputSpace,
+      }),
+    );
     act(() =>
       backend.listeners.forEach((listener) =>
         listener({
@@ -704,6 +711,40 @@ it("commits native selection movement and uniform scale only on release and rest
   fireEvent.click(document.querySelector('[data-testid="button-undo"]')!);
   await waitFor(() => expect(api.getSceneElements()[0].width).toBe(80));
   expect(api.getSceneElements()[0].x).toBe(100);
+});
+
+it("keeps native lasso active outside a selected calculator while its frame uses live editor movement", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  const calculator = API.createElement({
+    type: "iframe",
+    x: 100,
+    y: 150,
+    width: 220,
+    height: 200,
+  });
+  const region = selectedRegion([calculator], undefined, 1)!;
+  act(() => {
+    api.setActiveTool({ type: "lasso" });
+    api.updateScene({
+      elements: [calculator],
+      appState: {
+        width: 1000,
+        height: 700,
+        selectedElementIds: { [calculator.id]: true },
+        whiteboardSelection: region,
+      },
+    });
+  });
+  render(<NativeInkInteraction api={api} />);
+  await waitFor(() =>
+    expect(backend.configure.mock.calls.at(-1)?.[0]).toMatchObject({
+      enabled: true,
+      mode: "select",
+      selectionBounds: undefined,
+      blocked: expect.arrayContaining([[68, 118, 352, 382]]),
+    }),
+  );
 });
 
 it("does not overwrite an object edited while a native selection preview is in flight", async () => {

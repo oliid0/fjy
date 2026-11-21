@@ -190,6 +190,39 @@ export const divisionSlashInk = (input: InkInput): InkInput | undefined => {
   );
 };
 
+/** A clear inline operator permits reading each operand independently. */
+export const divisionOperands = (
+  input: InkInput,
+): [InkInput, InkInput] | undefined => {
+  const bounds = boxes(input);
+  const sizes = bounds
+    .map(height)
+    .filter((size) => size > 4)
+    .sort((a, b) => a - b);
+  const signs = divisionSigns(bounds, sizes[Math.floor(sizes.length / 2)]);
+  if (signs.length !== 1) {
+    return;
+  }
+  const { bar, top, bottom } = signs[0];
+  const sign = new Set([bar.index, top.index, bottom.index]);
+  const left: InkInput = [];
+  const right: InkInput = [];
+  const center = (bar.left + bar.right) / 2;
+  for (const box of bounds) {
+    if (sign.has(box.index)) {
+      continue;
+    }
+    if (box.right < center) {
+      left.push(input[box.index]);
+    } else if (box.left > center) {
+      right.push(input[box.index]);
+    } else {
+      return;
+    }
+  }
+  return left.length && right.length ? [left, right] : undefined;
+};
+
 /** Ordinary text recognizers must not flatten a fraction or a raised/lowered
  * operand into another valid but incorrect horizontal calculation. */
 const mathStructure = (input: InkInput) => {

@@ -5,7 +5,12 @@ import { composeEventHandlers } from "@fcboard/common";
 import { useTunnels } from "../../context/tunnels";
 import { useUIAppState } from "../../context/ui-appState";
 import { t } from "../../i18n";
-import { useAppProps, useEditorInterface, useFcboardSetAppState } from "../App";
+import {
+  useApp,
+  useAppProps,
+  useEditorInterface,
+  useFcboardSetAppState,
+} from "../App";
 import { FactoryIcon } from "../FactoryIcon";
 import { UserList } from "../UserList";
 import DropdownMenu from "../dropdownMenu/DropdownMenu";
@@ -35,12 +40,19 @@ const MainMenu = Object.assign(
       const { UIOptions } = useAppProps();
       const [gap, setGap] = React.useState(16);
       const setAppState = useFcboardSetAppState();
+      const { api } = useApp();
+      const open = appState.openMenu === "canvas";
+      React.useEffect(() => {
+        if (open && UIOptions.unifiedToolbar) {
+          return api.onCanvasPress(() => setAppState({ openMenu: null }));
+        }
+      }, [api, open, setAppState, UIOptions.unifiedToolbar]);
 
       if (UIOptions.unifiedToolbar) {
         return (
           <MainMenuTunnel.In>
             <FactoryMenu
-              open={appState.openMenu === "canvas"}
+              open={open}
               toggle={() =>
                 setAppState({
                   openMenu: appState.openMenu === "canvas" ? null : "canvas",
@@ -59,7 +71,7 @@ const MainMenu = Object.assign(
 
       return (
         <MainMenuTunnel.In>
-          <DropdownMenu open={appState.openMenu === "canvas"}>
+          <DropdownMenu open={open}>
             <DropdownMenu.Trigger
               onToggle={() => {
                 setAppState({

@@ -73,7 +73,7 @@ export const QuizPanel = ({
       open={open}
       keepMounted
       onDismiss={onClose}
-      aria-label={t("fcboard.ai_questions")}
+      aria-label={t("fcboard.quizForm.results")}
       className="fc-quiz-panel"
       style={{
         width: "min(760px, calc(100vw - 32px))",
@@ -94,7 +94,7 @@ export const QuizPanel = ({
           gap: 12,
         }}
       >
-        <strong>{t("fcboard.ai_questions")}</strong>
+        <strong>{t("fcboard.quizForm.results")}</strong>
         {busy && quiz && (
           <span role="status">
             <CircularProgress size={16} />{" "}

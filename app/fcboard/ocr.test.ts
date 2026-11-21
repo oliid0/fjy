@@ -148,6 +148,51 @@ describe("explicit handwriting actions", () => {
     expect(backend.cloud).not.toHaveBeenCalled();
     expect(capture).not.toHaveBeenCalled();
   });
+  it("recovers a dotted division as a slash when the math model reads it as minus", async () => {
+    backend.nativeAvailable = true;
+    backend.math.mockResolvedValue("12-3");
+    backend.native.mockResolvedValue(["12-3", "12/3"]);
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [10, 10],
+        [25, 50],
+      ],
+      [
+        [45, 30],
+        [65, 30],
+      ],
+      [[55, 22]],
+      [[55, 38]],
+      [
+        [85, 10],
+        [100, 50],
+      ],
+    ];
+    await expect(
+      recognizeHandwriting(
+        "",
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        strokes,
+      ),
+    ).resolves.toBe("12/3");
+    expect(backend.native).toHaveBeenCalledWith(
+      [
+        strokes[0],
+        [
+          [45, 38],
+          [65, 22],
+        ],
+        strokes[4],
+      ],
+      expect.any(AbortSignal),
+      "math",
+      undefined,
+    );
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
   it("keeps the full vertical column for structured math when native rows lack an explicit operator", async () => {
     backend.native.mockResolvedValue(["11"]);
     backend.nativeAvailable = true;

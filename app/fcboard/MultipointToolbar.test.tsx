@@ -36,7 +36,7 @@ it("pins a real multi/single toggle and changes actual two-contact writing on ea
       </Fcboard>
     );
   };
-  saveToolbarItems(["multi"]);
+  localStorage.removeItem(TOOLBAR_STORAGE);
   const view = await render(<Harness />);
   act(() => api.updateScene({ appState: { width: 1000, height: 700 } }));
   const canvas = view.container.querySelector("canvas.interactive")!;

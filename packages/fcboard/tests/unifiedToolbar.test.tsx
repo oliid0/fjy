@@ -226,6 +226,9 @@ describe("unified bottom toolbar", () => {
   it.each(["eraser", "toolbox", "shape", "aerial_view"] as const)(
     "toggles %s on every rapid repeated tap",
     async (tool) => {
+      if (tool === "aerial_view") {
+        saveToolbarItems(["aerial"]);
+      }
       await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
       vi.spyOn(Date, "now").mockReturnValue(1000);
       const trigger = screen.getByRole("button", {

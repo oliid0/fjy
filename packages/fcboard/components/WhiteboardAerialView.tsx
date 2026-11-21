@@ -222,7 +222,7 @@ export const WhiteboardAerialView = ({ app }: { app: AppClassProperties }) => {
   const [revision, setRevision] = React.useState(0);
   React.useEffect(() => {
     const close = () => setOpen(false);
-    const stop = app.onPointerDownEmitter.on(close);
+    const stop = app.api.onCanvasPress(close);
     const action = (event: Event) => {
       if (
         !(event as CustomEvent<HTMLElement>).detail.closest(

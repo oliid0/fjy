@@ -33,6 +33,15 @@ it("keeps bounded numerical arithmetic local and runs symbolic work in a module 
   expect(instance.terminate).toHaveBeenCalledTimes(1);
 });
 
+it.each(["12÷3=", "12/3=", "12∕3=", String.raw`12\div3=`])(
+  "evaluates handwritten division locally as %s",
+  async (input) => {
+    const { create } = worker();
+    await expect(calculateAsync(input)).resolves.toBe("4");
+    expect(create).not.toHaveBeenCalled();
+  },
+);
+
 it("terminates a stalled solver and rejects instead of freezing or writing an answer", async () => {
   vi.useFakeTimers();
   const { instance } = worker();
@@ -72,6 +81,16 @@ it("sends unflattened LaTeX and nontrivial scientific work to the worker", async
   expect(instance.postMessage.mock.calls[1][0]).toHaveProperty("expression");
   instance.onmessage?.({ data: { answer: "1/2" } } as MessageEvent);
   expect(await next).toBe("1/2");
+});
+
+it("preserves the structural division token in a fraction expression", async () => {
+  const { instance } = worker();
+  const result = calculateAsync(String.raw`\frac{12}{2}÷3`);
+  expect(instance.postMessage).toHaveBeenCalledWith({
+    latex: String.raw`\frac{12}{2}\div 3`,
+  });
+  instance.onmessage?.({ data: { answer: "2" } } as MessageEvent);
+  await expect(result).resolves.toBe("2");
 });
 
 it("cleans up a failed worker submission immediately", async () => {

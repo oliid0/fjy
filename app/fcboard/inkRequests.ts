@@ -27,14 +27,17 @@ const region = (ink: InkInput, mode: string) => {
       })
       .filter((size) => Number.isFinite(size) && size > 0)
       .sort((a, b) => a - b);
-    return latestFunctionInk(
-      ink,
-      0.8,
-      Math.max(8, (sizes[Math.floor(sizes.length / 2)] || 0) / 2),
-      2,
-    );
+    return latestFunctionInk(ink, {
+      rowGap: 0.8,
+      minimumGap: Math.max(8, (sizes[Math.floor(sizes.length / 2)] || 0) / 2),
+      horizontalGapScale: 2,
+      useGroupHeight: true,
+    });
   }
-  return latestFunctionInk(ink, mode === "calculation" ? 1.1 : 0.35);
+  return latestFunctionInk(ink, {
+    rowGap: mode === "calculation" ? 1.1 : 0.35,
+    useGroupHeight: mode !== "function",
+  });
 };
 
 /** Independent ink regions keep separate requests; adding to the same region revises only it. */

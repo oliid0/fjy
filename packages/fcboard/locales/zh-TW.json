@@ -1198,7 +1198,8 @@
     "the_image_service_returned_an_unsupported_format": "圖像服務返回了不支持的圖片格式",
     "more_tools": "更多工具",
     "quizForm": {
-      "title": "出題面板",
+      "title": "AI 出題",
+      "results": "出題結果",
       "grade": "年級",
       "gradeAny": "依內容匹配",
       "gradeNumber": "{{grade}} 年級",
@@ -1222,7 +1223,7 @@
       "questionFailed": "第 {{number}} 道題產生失敗：{{message}}",
       "generatingCount": "已產生 {{ready}} / {{total}} 道題"
     },
-    "ai_questions": "AI 問答",
+    "ai_questions": "AI 出題",
     "could_not_read_received_files": "無法讀取接收的課件",
     "storage_is_full_or_unavailable_download_the_recording_now_to_keep_it": "設備存儲不足或不可用，錄製尚未保存；請立即下載保留。",
     "could_not_read_local_recordings": "無法讀取本地錄製資料",
@@ -2007,7 +2008,7 @@
     },
     "selection_question": "問答",
     "selection_creative": "創作",
-    "selection_quiz": "出題",
+    "selection_quiz": "AI 出題",
     "selection_color": "顏色",
     "selection_text_color": "字色",
     "selection_border": "邊框",

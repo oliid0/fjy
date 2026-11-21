@@ -71,7 +71,6 @@ import { validImageCrop } from "./imageCropGeometry";
 import { renderInsertion } from "./insertObjects";
 import { Classroom as NativeClassroom } from "./native";
 import { useDeviceInkProfile } from "./ink";
-import { latestFunctionInk } from "./functionInk";
 import {
   latestShapeInk,
   recognizeAngleMark,
@@ -2520,10 +2519,6 @@ export const FilePreview = ({
         (stroke) => stroke.id,
         (items) => items.map((stroke) => stroke.points),
       );
-    }
-    if (!target && assistMode === "function") {
-      const included = latestFunctionInk(source.map((stroke) => stroke.points));
-      source = source.filter((_, index) => included.has(index));
     }
     if (!target && assistMode === "shape") {
       const included = latestShapeInk(source.map((stroke) => stroke.points));

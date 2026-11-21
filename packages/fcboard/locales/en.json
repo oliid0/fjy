@@ -1505,7 +1505,8 @@
     "the_image_service_returned_an_unsupported_format": "The image service returned an unsupported format",
     "more_tools": "More tools",
     "quizForm": {
-      "title": "Quiz builder",
+      "title": "AI Quiz",
+      "results": "Quiz results",
       "grade": "Grade",
       "gradeAny": "Match the content",
       "gradeNumber": "Grade {{grade}}",
@@ -1529,7 +1530,7 @@
       "questionFailed": "Question {{number}} could not be generated: {{message}}",
       "generatingCount": "{{ready}} / {{total}} questions ready"
     },
-    "ai_questions": "Quiz Master",
+    "ai_questions": "AI Quiz",
     "could_not_read_received_files": "Could not read received files",
     "storage_is_full_or_unavailable_download_the_recording_now_to_keep_it": "Storage is full or unavailable. Download the recording now to keep it.",
     "could_not_read_local_recordings": "Could not read local recordings",
@@ -2358,7 +2359,7 @@
     "laser_pen": "Laser",
     "selection_question": "Ask",
     "selection_creative": "Creative",
-    "selection_quiz": "Quiz",
+    "selection_quiz": "AI Quiz",
     "selection_color": "Color",
     "selection_text_color": "Text color",
     "selection_border": "Border",

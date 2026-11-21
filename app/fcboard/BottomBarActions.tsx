@@ -3,6 +3,8 @@ import { ToolbarExtras } from "@fcboard/fcboard";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 import { t } from "@fcboard/fcboard/i18n";
 
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
 import { classroomCommands } from "./commands";
 import { MaterialPanel } from "./MaterialPanel";
 import { useAnchoredPanel } from "./floating";
@@ -11,7 +13,7 @@ import { TransientMessage } from "./TransientMessage";
 import "./SplitBoard.scss";
 
 /** menu_bar / popupwindow_multiscreen: choose 2/3/4, then enter real canvases. */
-export const BottomBarActions = () => {
+export const BottomBarActions = ({ api }: { api: FcboardImperativeAPI }) => {
   const [split, setSplit] = useState(false);
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -35,13 +37,15 @@ export const BottomBarActions = () => {
         setSplit(false);
       }
     };
+    const stop = api.onCanvasPress(() => setSplit(false));
     window.addEventListener("pointerdown", dismiss);
     window.addEventListener("keydown", escape);
     return () => {
+      stop();
       window.removeEventListener("pointerdown", dismiss);
       window.removeEventListener("keydown", escape);
     };
-  }, [split]);
+  }, [api, split]);
   const invoke = async (command: string, args?: Record<string, unknown>) => {
     if (pending.current) {
       return;

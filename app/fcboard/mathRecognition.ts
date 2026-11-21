@@ -118,21 +118,29 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
   return plot;
 };
 
+const functionDefinition =
+  /^(y|z|f\s*x|[fgh]\s*\(\s*x(?:(?:,\s*y)|(?:\s*[+-]\s*\d+(?:\.\d+)?))?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i;
+const hasIndependentX = (text: string) =>
+  /(?:^|[^a-z_])x(?![a-z_])/i.test(text);
+
 export const localFunctionResult = (
   text: string,
 ): Extract<MathResult, { kind: "function" }> => {
   const definitions = text
-    .split(/\r?\n/)
+    .split(/\r?\n|;|\s+(?=(?:y|[fgh]\s*\(\s*x\s*\))\s*[=＝])/i)
     .map((line) => line.trim())
     .filter(Boolean);
   if (
     definitions.length > 1 &&
-    definitions.every((line) => /^(?:y|f\s*\(\s*x\s*\))\s*=/.test(line))
+    definitions.every((line) => functionDefinition.test(mathNotation(line)))
   ) {
     if (definitions.length > 3) {
       throw new Error("Compare at most three functions");
     }
     const plots = definitions.map((line) => localFunctionResult(line).plot);
+    if (plots.some((plot) => plot.surface || plot.relation)) {
+      throw new Error("Only 2D functions can share a graph");
+    }
     return {
       kind: "function",
       plot: validatedPlot({
@@ -142,28 +150,29 @@ export const localFunctionResult = (
     };
   }
   const input = mathNotation(text);
-  const definition = input.match(
-    /^(y|z|f\s*x|f\s*\(\s*x(?:(?:,\s*y)|(?:\s*[+-]\s*\d+(?:\.\d+)?))?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
-  );
+  const definition = input.match(functionDefinition);
   let expression = definition ? definition[3] : input;
   const shift = definition?.[1].match(
-    /^f\s*\(\s*x\s*([+-])\s*(\d+(?:\.\d+)?)\s*\)$/i,
+    /^[fgh]\s*\(\s*x\s*([+-])\s*(\d+(?:\.\d+)?)\s*\)$/i,
   );
   if (shift) {
     const offset = Number(`${shift[1]}${shift[2]}`);
-    expression = expression.replace(/\bx\b/g, `(x-(${offset}))`);
+    expression = expression.replace(
+      /(^|[^a-z_])x(?![a-z_])/g,
+      `$1(x-(${offset}))`,
+    );
   }
   const equation = !definition && input.match(/^([^=<>]+)=([^=<>]+)$/);
   if (equation) {
     // Plot the residual; its x-axis intersections satisfy the original equation.
     expression = `(${equation[1]})-(${equation[2]})`;
   }
-  if (!definition && !/\bx\b/.test(expression)) {
+  if (!definition && !hasIndependentX(expression)) {
     throw new Error("No explicit function");
   }
   const plot = validatedPlot({
     expression,
-    surface: !!definition && /^(z|f\s*\(\s*x\s*,)/i.test(definition[1]),
+    surface: !!definition && /^(z|[fgh]\s*\(\s*x\s*,)/i.test(definition[1]),
     ...(definition && definition[2] !== "=" ? { relation: definition[2] } : {}),
   });
   return {
@@ -202,7 +211,7 @@ export const recognizeMath = async (
       settings.mathTranscription !== "cloud" ||
       !settings.apiKey ||
       !settings.model.trim() ||
-      (mode === "function" && !/\bx\b/.test(text))
+      (mode === "function" && !hasIndependentX(text))
     ) {
       throw failure;
     }
@@ -228,7 +237,7 @@ export const recognizeMath = async (
     .replace(/≥/g, ">=")
     .replace(/≤/g, "<=")
     .match(/>=|<=|>|</)?.[0];
-  const surface = /^(?:z\s*=|f\(x,\s*y\)\s*=)/i.test(text.trim());
+  const surface = /^(?:z\s*=|[fgh]\s*\(\s*x,\s*y\s*\)\s*=)/i.test(text.trim());
   if (
     mode === "function" &&
     (result?.relation !== relation || result?.surface !== surface)

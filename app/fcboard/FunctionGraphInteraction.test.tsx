@@ -18,6 +18,7 @@ import { localFunctionResult } from "./mathRecognition";
 import { FunctionGraphInteraction } from "./FunctionGraphInteraction";
 import * as ocr from "./ocr";
 import { functionSelection, mergeFunctions } from "./functionMerge";
+import { latestFunctionInk } from "./functionInk";
 import { functionGeometry } from "./functionGeometry";
 import * as visualization from "./functionVisualization";
 import { SelectionActions } from "./SelectionActions";
@@ -284,6 +285,55 @@ it.each([false, true])(
     }
   },
 );
+it("keeps an earlier row out of a newer formula that includes a superscript", () => {
+  const ink: import("./digitalInk").InkInput = [
+    [
+      [110, 66],
+      [122, 92],
+    ],
+    [
+      [122, 108],
+      [130, 121],
+    ],
+    [
+      [100, 125],
+      [118, 160],
+    ],
+  ];
+  expect([...latestFunctionInk(ink)].sort()).toEqual([1, 2]);
+});
+
+it("merges two nearby handwritten definitions returned in one OCR line", async () => {
+  const { api } = await setup();
+  const recognize = vi
+    .spyOn(ocr, "recognizeHandwriting")
+    .mockResolvedValue("y=x g(x)=x^2");
+  const source = [100, 170].map((x) =>
+    newFreeDrawElement({
+      type: "freedraw",
+      x,
+      y: 100,
+      points: [pointFrom(0, 0), pointFrom(40, 30)],
+      simulatePressure: true,
+      customData: { fcInk: { version: 2, pen: "hard", assist: "function" } },
+    }),
+  );
+  act(() =>
+    api.updateScene({ elements: source, appState: objectSelection(source) }),
+  );
+  await act(async () => {
+    await mergeFunctions(api, new AbortController().signal);
+  });
+  expect(recognize).toHaveBeenCalledTimes(1);
+  expect(api.getSceneElements()).toHaveLength(3);
+  expect(api.getSceneElements().at(-1)?.customData?.fcPlot?.plot).toMatchObject(
+    {
+      expression: "x",
+      compare: ["x^2"],
+    },
+  );
+});
+
 it("keeps nearby generated graphs independent until an explicit selection merge", async () => {
   const { api } = await setup();
   const sources = [100, 200].map((y) =>
@@ -324,6 +374,25 @@ it("keeps nearby generated graphs independent until an explicit selection merge"
   );
   act(() => api.executeAction("undo"));
   await waitFor(() => expect(api.getSceneElements()).toHaveLength(4));
+});
+
+it("merges two selected graph objects without re-recognizing their source", async () => {
+  const { api } = await setup("x^2");
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  act(() => {
+    drawPlot(api, { ...defaultPlot, expression: "x+1" }, { x: 650, y: 120 });
+    api.updateScene({ appState: objectSelection(api.getSceneElements()) });
+  });
+  await act(async () => {
+    await mergeFunctions(api, new AbortController().signal);
+  });
+  const [graph] = api.getSceneElements();
+  expect(api.getSceneElements()).toHaveLength(1);
+  const plot = graph.customData?.fcPlot?.plot;
+  expect(new Set([plot?.expression, ...(plot?.compare || [])])).toEqual(
+    new Set(["x^2", "x+1"]),
+  );
+  expect(recognize).not.toHaveBeenCalled();
 });
 
 it("merges expressions only on request and labels the actual reciprocal/line intersections without extra graph UI", async () => {
@@ -378,7 +447,7 @@ it("merges expressions only on request and labels the actual reciprocal/line int
   ).toBeNull();
 });
 
-it("keeps graph object actions available and hides expression merge for selected graphs", async () => {
+it("keeps graph object actions available and offers merge for two selected graphs", async () => {
   const { api } = await setup();
   act(() => {
     drawPlot(api, { ...defaultPlot, expression: "-x" }, { x: 950, y: 300 });
@@ -393,8 +462,8 @@ it("keeps graph object actions available and hides expression merge for selected
   ).toBeVisible();
   expect(api.getSceneElements()).toHaveLength(2);
   expect(
-    screen.queryByRole("button", { name: t("fcboard.functionGraph.merge") }),
-  ).toBeNull();
+    screen.getByRole("button", { name: t("fcboard.functionGraph.merge") }),
+  ).toBeEnabled();
 });
 
 it("moves the selected canvas object and undoes one complete drag", async () => {

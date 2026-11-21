@@ -54,10 +54,14 @@ it("preserves native defaults and adds the user-requested optional multipoint it
     screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 26 })),
   ).toBeVisible();
   fireEvent.click(badge(t("fcboard.mind_map")));
-  expect(readToolbarItems()).toEqual([...DEFAULT_TOOLBAR_ITEMS, "mindmap"]);
+  expect(readToolbarItems()).toEqual(
+    normalizeToolbarItems([...DEFAULT_TOOLBAR_ITEMS, "mindmap"]),
+  );
   fireEvent.click(badge(t("fcboard.toolbox"), true));
   fireEvent.click(badge(t("fcboard.toolbox")));
-  expect(readToolbarItems()).toEqual([...DEFAULT_TOOLBAR_ITEMS, "mindmap"]);
+  expect(readToolbarItems()).toEqual(
+    normalizeToolbarItems([...DEFAULT_TOOLBAR_ITEMS, "mindmap"]),
+  );
   view.unmount();
   render(<ToolbarSettings />);
   expect(badge(t("fcboard.mind_map"), true)).toBeEnabled();
@@ -108,9 +112,10 @@ it("reports a real persistence failure and preserves the previous toolbar", () =
 
 it("adds and removes the optional multipoint switch through the real settings badge", () => {
   render(<ToolbarSettings />);
-  fireEvent.click(badge(t("fcboard.multi_point_switch")));
   expect(readToolbarItems()).toContain("multi");
-  expect(JSON.parse(localStorage.getItem(TOOLBAR_STORAGE)!)).toContain("multi");
+  expect(readToolbarItems()).not.toContain("aerial");
   fireEvent.click(badge(t("fcboard.multi_point_switch"), true));
   expect(readToolbarItems()).not.toContain("multi");
+  fireEvent.click(badge(t("fcboard.multi_point_switch")));
+  expect(JSON.parse(localStorage.getItem(TOOLBAR_STORAGE)!)).toContain("multi");
 });

@@ -122,6 +122,74 @@ export const columnInkRows = (input: InkInput): InkInput[] | undefined => {
   );
 };
 
+const divisionSigns = (bounds: ReturnType<typeof boxes>, typical: number) => {
+  if (!typical) {
+    return [];
+  }
+  const used = new Set<number>();
+  return bounds.flatMap((bar) => {
+    if (
+      used.has(bar.index) ||
+      width(bar) < 8 ||
+      height(bar) > Math.max(3, width(bar) * 0.15)
+    ) {
+      return [];
+    }
+    const centerX = (bar.left + bar.right) / 2;
+    const centerY = (bar.top + bar.bottom) / 2;
+    const dots = bounds.filter(
+      (dot) =>
+        dot !== bar &&
+        !used.has(dot.index) &&
+        width(dot) <= Math.max(4, typical * 0.2) &&
+        height(dot) <= Math.max(4, typical * 0.2) &&
+        Math.abs((dot.left + dot.right) / 2 - centerX) <=
+          Math.max(3, width(bar) * 0.25) &&
+        Math.abs((dot.top + dot.bottom) / 2 - centerY) <= typical * 0.65 + 3,
+    );
+    const above = dots.filter((dot) => dot.bottom < bar.top - 1);
+    const below = dots.filter((dot) => dot.top > bar.bottom + 1);
+    if (above.length !== 1 || below.length !== 1) {
+      return [];
+    }
+    const [top] = above;
+    const [bottom] = below;
+    const first = centerY - (top.top + top.bottom) / 2;
+    const second = (bottom.top + bottom.bottom) / 2 - centerY;
+    if (Math.min(first, second) < Math.max(first, second) * 0.45) {
+      return [];
+    }
+    [bar, top, bottom].forEach((box) => used.add(box.index));
+    return [{ bar, top, bottom }];
+  });
+};
+
+/** Give OCR the equivalent slash only where both detached dots identify ÷. */
+export const divisionSlashInk = (input: InkInput): InkInput | undefined => {
+  const bounds = boxes(input);
+  const heights = bounds
+    .map(height)
+    .filter((size) => size > 4)
+    .sort((a, b) => a - b);
+  const signs = divisionSigns(bounds, heights[Math.floor(heights.length / 2)]);
+  if (!signs.length) {
+    return;
+  }
+  const slashes = new Map<number, InkInput[number]>();
+  const dots = new Set<number>();
+  for (const { bar, top, bottom } of signs) {
+    slashes.set(bar.index, [
+      [bar.left, bottom.bottom],
+      [bar.right, top.top],
+    ]);
+    dots.add(top.index);
+    dots.add(bottom.index);
+  }
+  return input.flatMap((stroke, index) =>
+    dots.has(index) ? [] : [slashes.get(index) || stroke],
+  );
+};
+
 /** Ordinary text recognizers must not flatten a fraction or a raised/lowered
  * operand into another valid but incorrect horizontal calculation. */
 const mathStructure = (input: InkInput) => {
@@ -138,30 +206,7 @@ const mathStructure = (input: InkInput) => {
     .filter((size) => size > 4)
     .sort((a, b) => a - b);
   const typical = sizes[Math.floor(sizes.length / 2)] || 0;
-  // A division bar and its two detached dots must reach the math model
-  // together. Text OCR can otherwise return a plausible minus expression.
-  const division =
-    typical > 0 &&
-    bounds.some((bar) => {
-      if (width(bar) < 8 || height(bar) > Math.max(3, width(bar) * 0.15)) {
-        return false;
-      }
-      const centerX = (bar.left + bar.right) / 2;
-      const centerY = (bar.top + bar.bottom) / 2;
-      const dots = bounds.filter(
-        (dot) =>
-          dot !== bar &&
-          width(dot) <= Math.max(4, typical * 0.2) &&
-          height(dot) <= Math.max(4, typical * 0.2) &&
-          Math.abs((dot.left + dot.right) / 2 - centerX) <=
-            Math.max(3, width(bar) * 0.25) &&
-          Math.abs((dot.top + dot.bottom) / 2 - centerY) <= typical * 0.8 + 3,
-      );
-      return (
-        dots.some((dot) => dot.bottom < bar.top - 1) &&
-        dots.some((dot) => dot.top > bar.bottom + 1)
-      );
-    });
+  const division = divisionSigns(bounds, typical).length > 0;
   const fraction = bounds.some((bar) => {
     if (width(bar) < 12 || height(bar) > Math.max(3, width(bar) * 0.05)) {
       return false;
@@ -214,7 +259,7 @@ export const preservesMathInkStructure = (input: InkInput, text: string) => {
   const { fraction, script, division } = mathStructure(input);
   return (
     (!fraction || /\\(?:d?frac|over)\b|\//.test(text)) &&
-    (!division || /÷|\/|\\(?:div|d?frac|over)(?![A-Za-z])/.test(text)) &&
+    (!division || /[÷/∕／]|\\(?:div|d?frac|over)(?![A-Za-z])/.test(text)) &&
     (!script || /[_^⁰¹²³⁴⁵⁶⁷⁸⁹₀-₉°]|\\sqrt\b/.test(text))
   );
 };

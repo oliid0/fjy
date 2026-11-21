@@ -78,9 +78,8 @@ it("submits builder controls through the shared generation/cards flow without cr
       screen.getByRole("combobox", { name: t("fcboard.quizForm.type") }),
       { target: { value: "calculation" } },
     );
-    fireEvent.change(
-      screen.getByRole("combobox", { name: t("fcboard.quizForm.difficulty") }),
-      { target: { value: "easy" } },
+    fireEvent.click(
+      screen.getByRole("radio", { name: t("fcboard.quizForm.easy") }),
     );
     fireEvent.change(
       screen.getByRole("textbox", { name: t("fcboard.quizForm.supplement") }),
@@ -125,7 +124,7 @@ it("cancels pending builder inference from the visible loading panel and ignores
     );
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
     const result = screen.getByRole("dialog", {
-      name: t("fcboard.ai_questions"),
+      name: t("fcboard.quizForm.results"),
     });
     expect(within(result).getByRole("status")).toBeVisible();
     fireEvent.click(
@@ -536,7 +535,7 @@ it("immediately stops visible native-style pending work, ignores its late progre
   const channel = post.mock.calls.at(-1)![0].channel;
   fireEvent.click(
     within(
-      screen.getByRole("dialog", { name: t("fcboard.ai_questions") }),
+      screen.getByRole("dialog", { name: t("fcboard.quizForm.results") }),
     ).getByRole("button", { name: t("buttons.close") }),
   );
   expect(classroomCommands.read("quiz")).toMatchObject({

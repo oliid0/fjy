@@ -1,36 +1,58 @@
-.fc-quiz-composer {
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
+.MuiPaper-root.fc-quiz-composer {
+  --quiz-panel: #f6f6f8;
+  --quiz-accent: #0368ff;
+  --quiz-neutral: #ebebeb;
+  --quiz-selected: #e7efff;
+  width: min(570px, calc(100vw - 24px));
+  max-height: calc(var(--fc-viewport-height, 100vh) - 24px);
+  margin: 12px;
   overflow: auto;
-  pointer-events: auto;
-  border-radius: 20px;
-  padding: 16px 24px 24px;
+  padding: clamp(16px, 4vw, 30px);
   box-sizing: border-box;
+  border: 1px solid var(--fc-border);
+  border-radius: 24px;
+  background: var(--quiz-panel);
+  color: var(--fc-ink);
+
   header,
-  footer {
+  h2 {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
   }
   header {
-    margin-bottom: 16px;
-    font-size: 18px;
+    justify-content: space-between;
+    margin-bottom: 20px;
   }
-  footer {
-    justify-content: flex-end;
-    margin-top: 20px;
+  h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 650;
+
+    img {
+      width: 32px;
+      height: 32px;
+    }
+  }
+  header button {
+    min-width: 44px;
+    min-height: 44px;
+    color: inherit;
   }
   .fc-quiz-fields {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: 18px 16px;
   }
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  label,
+  legend {
     font-size: 14px;
+    font-weight: 600;
+  }
+  .fc-quiz-fields > label {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
   }
   select,
   textarea {
@@ -38,21 +60,107 @@
     min-width: 0;
     box-sizing: border-box;
     font: inherit;
-    color: var(--fc-ink);
+    font-size: 16px;
+    font-weight: 400;
+    color: inherit;
     background: var(--fc-surface);
     border: 1px solid var(--fc-border);
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  select {
+    min-height: 46px;
   }
   textarea {
+    min-height: 104px;
     resize: vertical;
   }
+  fieldset,
   .fc-quiz-supplement {
     grid-column: 1 / -1;
   }
-  @media (max-width: 440px) {
+  fieldset {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 4px;
+    border: 1px solid var(--fc-border);
+    border-radius: 12px;
+    background: var(--fc-surface);
+  }
+  legend {
+    margin: 0 0 6px -5px;
+    padding: 0 5px;
+  }
+  .fc-quiz-level {
+    position: relative;
+    display: grid;
+    cursor: pointer;
+
+    input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: inherit;
+    }
+    span {
+      display: grid;
+      min-height: 40px;
+      padding: 4px;
+      box-sizing: border-box;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      text-align: center;
+    }
+    input:checked + span {
+      color: var(--fc-ink);
+      background: var(--quiz-selected);
+      border-color: var(--quiz-accent);
+    }
+  }
+  footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+
+    button {
+      min-height: 46px;
+      padding: 8px 14px;
+      border: 0;
+      border-radius: 24px;
+      background: var(--quiz-neutral);
+      color: inherit;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .fc-primary {
+      background: var(--quiz-accent);
+      color: white;
+    }
+  }
+  :is(button, select, textarea):focus-visible,
+  .fc-quiz-level input:focus-visible + span {
+    outline: 2px solid var(--quiz-accent);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 400px) {
     .fc-quiz-fields {
       grid-template-columns: 1fr;
     }
   }
+}
+
+.fc-theme-dark .MuiPaper-root.fc-quiz-composer {
+  --quiz-panel: #252a35;
+  --quiz-neutral: #393f4d;
+  --quiz-selected: #203c67;
 }

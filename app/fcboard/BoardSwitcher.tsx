@@ -363,9 +363,13 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
         close();
       }
     };
+    const stop = api.onCanvasPress(close);
     window.addEventListener("pointerdown", dismiss);
-    return () => window.removeEventListener("pointerdown", dismiss);
-  }, [open, close]);
+    return () => {
+      stop();
+      window.removeEventListener("pointerdown", dismiss);
+    };
+  }, [api, open, close]);
   useEffect(() => {
     const action = (event: Event) => {
       if (

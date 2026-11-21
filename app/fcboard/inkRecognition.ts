@@ -159,10 +159,7 @@ export async function recognizeInkContent(
         targetLanguage,
       };
     }
-    const calculations = new Map<
-      string,
-      Extract<MathResult, { kind: "calculation" }>
-    >();
+    const results = new Map<string, MathResult>();
     const recognitionOptions: [
       language?: string,
       choose?: (candidates: readonly string[]) => Promise<string>,
@@ -198,13 +195,13 @@ export async function recognizeInkContent(
                 ) {
                   return false;
                 }
-                calculations.set(candidate, {
+                results.set(candidate, {
                   kind: "calculation",
                   expression: latex ? candidate : mathNotation(candidate),
                   answer: await calculateAsync(candidate, signal),
                 });
               } else {
-                localFunctionResult(candidate);
+                results.set(candidate, localFunctionResult(candidate));
               }
               return true;
             } catch {
@@ -240,7 +237,7 @@ export async function recognizeInkContent(
       };
     }
     return {
-      ...(calculations.get(text) || (await recognizeMath(text, mode, signal))),
+      ...(results.get(text) || (await recognizeMath(text, mode, signal))),
       text,
       ...(mode === "calculation"
         ? { layout: columnCalculation(strokes, text) }

@@ -878,6 +878,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           .map(() => (
             <GizmoPicker
               key="gizmos"
+              api={api}
               onInsert={(kind) => attempt(() => insert(kind))}
             />
           ))}
@@ -896,7 +897,10 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           toolId={entry[0] as "ruler" | "compass" | "protractor" | "setSquare"}
         >
           {entry[0] === "ruler" ? (
-            <GizmoPicker onInsert={(kind) => attempt(() => insert(kind))} />
+            <GizmoPicker
+              api={api}
+              onInsert={(kind) => attempt(() => insert(kind))}
+            />
           ) : (
             gizmoButton(entry)
           )}

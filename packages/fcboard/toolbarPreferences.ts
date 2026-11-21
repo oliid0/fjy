@@ -71,7 +71,7 @@ export const DEFAULT_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   "toolbox",
   "undo",
   "redo",
-  "aerial",
+  "multi",
 ];
 const defaults = DEFAULT_TOOLBAR_ITEMS;
 let raw: string | null | undefined;

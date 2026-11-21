@@ -362,7 +362,11 @@ it("requires selected pages and saves PDF through the original file browser inst
     ),
   );
   expect(Classroom.sharePages).not.toHaveBeenCalled();
-  expect(screen.getByRole("status")).toHaveTextContent(t("fcboard.file_saved"));
+  await waitFor(() =>
+    expect(screen.getByRole("status")).toHaveTextContent(
+      t("fcboard.file_saved"),
+    ),
+  );
   close();
 });
 

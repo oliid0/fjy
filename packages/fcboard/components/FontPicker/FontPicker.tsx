@@ -86,7 +86,7 @@ export const FontPicker = React.memo(
     return (
       <div
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
         className={clsx("FontPicker__container", {
           "FontPicker__container--compact": compactMode,
         })}

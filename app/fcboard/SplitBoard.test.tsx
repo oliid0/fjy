@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
+import { useApp } from "@fcboard/fcboard/components/App";
 import { t } from "@fcboard/fcboard/i18n";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 
@@ -73,11 +74,12 @@ it("toggles the original anchored split launcher on every real toolbar tap and e
     }),
   );
   try {
+    const Launcher = () => <BottomBarActions api={useApp().api} />;
     await renderEditor(
       <div className="app">
         <div className="fc-classroom">
           <Fcboard UIOptions={{ unifiedToolbar: true }}>
-            <BottomBarActions />
+            <Launcher />
           </Fcboard>
           <SplitBoard />
         </div>

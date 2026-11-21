@@ -16,9 +16,8 @@ it("submits the selected grade, actual quiz type, difficulty and supplementary r
     screen.getByRole("combobox", { name: t("fcboard.quizForm.type") }),
     { target: { value: "calculation" } },
   );
-  fireEvent.change(
-    screen.getByRole("combobox", { name: t("fcboard.quizForm.difficulty") }),
-    { target: { value: "hard" } },
+  fireEvent.click(
+    screen.getByRole("radio", { name: t("fcboard.quizForm.hard") }),
   );
   fireEvent.change(
     screen.getByRole("textbox", { name: t("fcboard.quizForm.supplement") }),

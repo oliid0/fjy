@@ -273,7 +273,7 @@ const LayerUI = ({
       return;
     }
     const close = () => setShowProperties(false);
-    const unsubscribe = app.onCanvasPressEmitter.on(close);
+    const unsubscribe = app.api.onCanvasPress(close);
     const outside = (event: PointerEvent) => {
       if (
         !propertiesTrigger.current?.contains(event.target as Node) &&
@@ -659,9 +659,6 @@ const LayerUI = ({
       <WhiteboardScale app={app} />
       {showProperties && !toolbarHidden && !appState.viewModeEnabled && (
         <div
-          data-native-ink-panel={
-            appState.activeTool.type === "freedraw" || undefined
-          }
           className={`fc-editor-properties${
             appState.activeTool.type === "freedraw" ? " fc-pen-properties" : ""
           }`}

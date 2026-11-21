@@ -139,7 +139,11 @@ export const Picker = React.forwardRef(
     }, []);
 
     return (
-      <div role="dialog" aria-modal="true" aria-label={t("labels.colorPicker")}>
+      <div
+        role="dialog"
+        aria-modal="false"
+        aria-label={t("labels.colorPicker")}
+      >
         <div
           ref={pickerRef}
           onKeyDown={(event) => {

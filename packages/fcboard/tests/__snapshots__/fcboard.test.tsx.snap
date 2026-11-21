@@ -568,7 +568,7 @@ exports[`<Fcboard/> > Test UIOptions prop > Test canvasActions > should render m
       >
         <div>
           <div
-            aria-modal="true"
+            aria-modal="false"
             class="color-picker-container"
             role="dialog"
           >

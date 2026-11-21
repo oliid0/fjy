@@ -1067,6 +1067,8 @@ export interface FcboardImperativeAPI {
   onIncrement: (
     callback: (event: DurableIncrement | EphemeralIncrement) => void,
   ) => UnsubscribeCallback;
+  /** A canvas contact from either browser or Android input. */
+  onCanvasPress: (callback: () => void) => UnsubscribeCallback;
   onPointerDown: (
     callback: (
       activeTool: AppState["activeTool"],

@@ -112,7 +112,7 @@ export const WhiteboardTools = ({
   };
   React.useEffect(
     () =>
-      app.onCanvasPressEmitter.on(() => {
+      app.api.onCanvasPress(() => {
         setOpen(false);
         setShapesOpen(false);
         setEraserOpen(false);
@@ -261,7 +261,6 @@ export const WhiteboardTools = ({
           }}
         >
           <Popper
-            data-native-ink-panel
             open={eraserOpen}
             anchorEl={eraserAnchor}
             container={container}
@@ -279,7 +278,6 @@ export const WhiteboardTools = ({
             }}
           >
             <Paper
-              data-native-ink-panel
               className="fc-insert-tools fc-eraser-settings"
               role="dialog"
               aria-label={t("fcboard.eraser_settings")}
@@ -485,7 +483,9 @@ export const WhiteboardTools = ({
         open={open && shapesOpen}
         // Preserve the fade, but release the first drawing contact immediately.
         style={{ pointerEvents: "none" }}
+        aria-modal={false}
         disableEnforceFocus
+        disableScrollLock
         container={container}
         maxWidth={false}
         onClose={() => {

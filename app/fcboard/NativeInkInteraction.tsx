@@ -116,6 +116,9 @@ const nativeColor = (value: string) => {
     : hex || value;
 };
 
+const boardControls =
+  'button,input,textarea,select,[aria-modal="true"],[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.fc-editor-properties,.fc-properties-popover,.fc-factory-color-wheel,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]';
+
 const surfaceStamp = (api: FcboardImperativeAPI) => {
   const state = api.getAppState();
   return JSON.stringify([
@@ -520,57 +523,66 @@ export const NativeInkInteraction = ({
         uiBounds = [];
         uiBlocksInk = false;
         for (const node of document.querySelectorAll<HTMLElement>(
-          'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.MuiPopper-root,.fc-editor-properties,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]',
+          boardControls,
         )) {
-          // Kept-mounted MUI dialogs retain viewport bounds while hidden.
-          // They must neither disable native input nor exclude the whole board.
           const visibility = getComputedStyle(node);
           if (
             visibility.display === "none" ||
-            visibility.visibility !== "visible"
+            visibility.visibility !== "visible" ||
+            visibility.pointerEvents === "none" ||
+            node.closest(".MuiModal-hidden,[hidden]")
           ) {
             continue;
           }
           const box = node.getBoundingClientRect();
           if (
-            box.width > 0 &&
-            box.height > 0 &&
-            box.right >= state.offsetLeft &&
-            box.left <= state.offsetLeft + state.width &&
-            box.bottom >= state.offsetTop &&
-            box.top <= state.offsetTop + state.height
+            box.width <= 0 ||
+            box.height <= 0 ||
+            box.right <= state.offsetLeft ||
+            box.left >= state.offsetLeft + state.width ||
+            box.bottom <= state.offsetTop ||
+            box.top >= state.offsetTop + state.height
+          ) {
+            continue;
+          }
+          // MUI Modal also powers Menu and Popover, whose viewport layer
+          // handles outside clicks. Popper has no such layer.
+          if (node.matches('[aria-modal="true"],.MuiModal-root')) {
+            uiBlocksInk = true;
+          }
+          // A panel's rectangle already covers its controls, including large
+          // scrollable lists. Keep portalled or overflowing controls separately.
+          if (
+            !uiBounds.some(
+              ([left, top, right, bottom]) =>
+                left <= box.left &&
+                top <= box.top &&
+                right >= box.right &&
+                bottom >= box.bottom,
+            )
           ) {
             uiBounds.push([box.left, box.top, box.right, box.bottom]);
-            // Drawing palettes consume only their own rectangles. The first
-            // contact outside both dismisses the palette and draws on Surface.
-            if (
-              !node.hasAttribute("data-native-ink-panel") &&
-              node.matches(
-                '.MuiModal-root,.MuiPopper-root,.fc-editor-properties,[role="menu"],[role="dialog"]',
-              )
-            ) {
-              uiBlocksInk = true;
-            }
           }
         }
       }
       const blocked: number[][] = enabled ? [...uiBounds] : [];
-      // Table/label/question surfaces keep their existing live composition path.
-      const exclusions = mode === "select" ? [] : compositionBounds.values();
-      for (const [left, top, right, bottom] of enabled ? exclusions : []) {
-        const padding = mode === "select" ? 12 : 0;
-        blocked.push([
-          (left + state.scrollX) * state.zoom.value +
-            state.offsetLeft -
-            padding,
-          (top + state.scrollY) * state.zoom.value + state.offsetTop - padding,
-          (right + state.scrollX) * state.zoom.value +
-            state.offsetLeft +
-            padding,
-          (bottom + state.scrollY) * state.zoom.value +
-            state.offsetTop +
-            padding,
-        ]);
+      // Table, label and question surfaces retain their live composition path.
+      // Only on-screen boxes can intercept a contact.
+      if (enabled && mode !== "select") {
+        for (const [left, top, right, bottom] of compositionBounds.values()) {
+          const x = (left + state.scrollX) * state.zoom.value;
+          const y = (top + state.scrollY) * state.zoom.value;
+          const endX = (right + state.scrollX) * state.zoom.value;
+          const endY = (bottom + state.scrollY) * state.zoom.value;
+          if (endX > 0 && x < state.width && endY > 0 && y < state.height) {
+            blocked.push([
+              x + state.offsetLeft,
+              y + state.offsetTop,
+              endX + state.offsetLeft,
+              endY + state.offsetTop,
+            ]);
+          }
+        }
       }
       const selected = state.whiteboardSelection?.bounds;
       const contents =
@@ -903,8 +915,6 @@ export const NativeInkInteraction = ({
       schedule();
     };
     const observer = new MutationObserver((records) => {
-      const controls =
-        'button,input,textarea,select,[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.MuiPopper-root,.fc-editor-properties,.fc-properties-popover,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]';
       if (
         records.some((record) => {
           const target = record.target;
@@ -916,19 +926,27 @@ export const NativeInkInteraction = ({
           }
           if (record.type === "attributes") {
             return (
-              ["style", "class", "hidden", "open", "aria-hidden"].includes(
-                record.attributeName || "",
-              ) &&
+              [
+                "style",
+                "class",
+                "hidden",
+                "open",
+                "aria-hidden",
+                "aria-modal",
+              ].includes(record.attributeName || "") &&
               target instanceof HTMLElement &&
-              (!!target.closest(controls) || !!target.querySelector(controls))
+              (!!target.closest(boardControls) ||
+                !!target.querySelector(boardControls))
             );
           }
           return (
-            (target instanceof HTMLElement && !!target.closest(controls)) ||
+            (target instanceof HTMLElement &&
+              !!target.closest(boardControls)) ||
             [...record.addedNodes, ...record.removedNodes].some(
               (node) =>
                 node instanceof HTMLElement &&
-                (node.matches(controls) || !!node.querySelector(controls)),
+                (node.matches(boardControls) ||
+                  !!node.querySelector(boardControls)),
             )
           );
         })

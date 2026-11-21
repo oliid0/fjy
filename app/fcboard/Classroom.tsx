@@ -3065,7 +3065,7 @@ Tools and controls depend on the current interface; open the relevant surface be
       <IntegratedSearch api={api} />
       <BoardSwitcher api={api} />
       <FunctionGraphInteraction api={api} />
-      <BottomBarActions />
+      <BottomBarActions api={api} />
       <NativeInkInteraction api={api} inkProfile={inkProfile} />
       <SkizzePen api={api} />
       <BoardShare />

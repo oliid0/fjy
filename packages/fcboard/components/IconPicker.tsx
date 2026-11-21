@@ -167,7 +167,7 @@ function Picker<T>({
       <div
         className={`picker`}
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
         aria-label={label}
       >
         {renderOptions(alwaysVisibleOptions)}

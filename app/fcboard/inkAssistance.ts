@@ -26,7 +26,6 @@ import { languageInkSignature } from "./languageStudy";
 import { LiveTableWriting } from "./liveTableWriting";
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { renderInsertion } from "./insertObjects";
-import { latestFunctionInk } from "./functionInk";
 import {
   latestShapeInk,
   recognizeAngleMark,
@@ -196,10 +195,6 @@ export const observeInkAssistance = (
     );
     if (mode) {
       source = requests.source(source, mode, (element) => element.id, boardInk);
-    }
-    if (!target && mode === "function") {
-      const included = latestFunctionInk(boardInk(source));
-      source = source.filter((_, index) => included.has(index));
     }
     if (!target && mode === "shape") {
       const included = latestShapeInk(boardInk(source));

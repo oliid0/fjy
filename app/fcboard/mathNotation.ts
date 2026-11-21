@@ -28,7 +28,7 @@ export const mathNotation = (input: string): string => {
     .replace(/＋/g, "+")
     .replace(/[＝]/g, "=")
     .replace(/[×·]/g, "*")
-    .replace(/÷/g, "/")
+    .replace(/[÷∕／]/g, "/")
     .replace(/[－−–]/g, "-")
     .replace(/π/g, "pi")
     .replace(
@@ -58,7 +58,7 @@ export const mathNotation = (input: string): string => {
     .replace(/^\$|\$$/g, "")
     .replace(/\\(?:left|right)\b/g, "")
     .replace(/\\(?:cdot|times)\b/g, "*")
-    .replace(/\\div\b/g, "/")
+    .replace(/\\div(?![A-Za-z])/g, "/")
     .replace(/\\pi\b/g, "pi")
     .replace(/\\(?:,|;|!|quad\b|qquad\b)/g, " ")
     .replace(/\\(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|log|exp)\b/g, "$1")

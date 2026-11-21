@@ -84,6 +84,7 @@ const setup = async () => {
   const listeners = new Set<
     (elements: readonly FcboardElement[], state: AppState) => void
   >();
+  const canvasPress = new Set<() => void>();
   const api = {
     getAppState: () => state,
     getSceneElements: () => elements,
@@ -108,6 +109,10 @@ const setup = async () => {
       }
       listeners.forEach((listener) => listener(elements, state));
     },
+    onCanvasPress: (listener: () => void) => {
+      canvasPress.add(listener);
+      return () => canvasPress.delete(listener);
+    },
     onChange: (
       listener: (elements: readonly FcboardElement[], state: AppState) => void,
     ) => {
@@ -125,11 +130,25 @@ const setup = async () => {
     screen.getByRole("button", { name: t("fcboard.switch_board") }),
   );
   await screen.findByRole("dialog");
-  return { api, view };
+  return {
+    api,
+    view,
+    pressCanvas: () => canvasPress.forEach((listener) => listener()),
+  };
 };
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("dismisses the page picker when Android reports a canvas press", async () => {
+  const { pressCanvas, view } = await setup();
+  try {
+    act(pressCanvas);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  } finally {
+    view.unmount();
+  }
 });
 
 it("shows original edit controls only in selection mode, defaults to all pages and forwards only chosen IDs in page order", async () => {

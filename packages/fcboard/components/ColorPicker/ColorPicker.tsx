@@ -301,7 +301,7 @@ export const ColorPicker = ({
     <div>
       <div
         role="dialog"
-        aria-modal="true"
+        aria-modal="false"
         className={clsx("color-picker-container", {
           "color-picker-container--no-top-picks": isCompactMode,
         })}

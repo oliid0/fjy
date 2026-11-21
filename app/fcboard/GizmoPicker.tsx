@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ButtonBase from "@mui/material/ButtonBase";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
 import Paper from "@mui/material/Paper";
@@ -6,11 +6,14 @@ import Popper from "@mui/material/Popper";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 import { t } from "@fcboard/fcboard/i18n";
 
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
 import ruler from "./factory-gizmo-icons/pick-ruler.svg";
 import protractor from "./factory-gizmo-icons/pick-protractor.svg";
 import triangle from "./factory-gizmo-icons/pick-triangle.svg";
 import compass from "./factory-gizmo-icons/pick-compass.svg";
 import "./GizmoPicker.scss";
+
 export type GizmoKind = "ruler" | "protractor" | "setSquare" | "compass";
 const choices = [
   { kind: "ruler", label: "ruler", icon: ruler },
@@ -20,11 +23,18 @@ const choices = [
 ] as const;
 /** popupwindow_insert_ruler: anchored icon picker; the existing gizmo owns all drawing/undo. */
 export const GizmoPicker = ({
+  api,
   onInsert,
 }: {
+  api: FcboardImperativeAPI;
   onInsert: (kind: GizmoKind) => void;
 }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (anchor) {
+      return api.onCanvasPress(() => setAnchor(null));
+    }
+  }, [anchor, api]);
   return (
     <ClickAwayListener onClickAway={() => setAnchor(null)}>
       <div className="fc-gizmo-launcher">

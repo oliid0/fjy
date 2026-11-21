@@ -3,9 +3,12 @@ import type { InkInput } from "./digitalInk";
 /** Failed ink on an earlier row must not poison the next independent function. */
 export const latestFunctionInk = (
   input: InkInput,
-  rowGap = 0.35,
-  minimumGap = 8,
-  horizontalGapScale = 6,
+  {
+    rowGap = 0.35,
+    minimumGap = 8,
+    horizontalGapScale = 6,
+    useGroupHeight = false,
+  } = {},
 ) => {
   const bounds = input.map((points) =>
     points.reduce(
@@ -22,12 +25,14 @@ export const latestFunctionInk = (
   if (!latest) {
     return new Set<number>();
   }
+  const latestHeight = latest.bottom - latest.top;
   let top = latest.top;
   let bottom = latest.bottom;
   let left = latest.left;
   let right = latest.right;
   const included = new Set<number>([bounds.length - 1]);
-  // Connected vertical extents include superscripts and tall parentheses.
+  // Connect superscripts without letting their combined height pull a
+  // separate function row into the request.
   for (let pass = 0; pass < bounds.length; pass++) {
     let changed = false;
     for (let index = 0; index < bounds.length; index++) {
@@ -37,7 +42,10 @@ export const latestFunctionInk = (
       }
       const gap = Math.max(
         minimumGap,
-        Math.max(bottom - top, box.bottom - box.top) * rowGap,
+        Math.max(
+          useGroupHeight ? bottom - top : latestHeight,
+          box.bottom - box.top,
+        ) * rowGap,
       );
       const horizontalGap = Math.max(60, gap * horizontalGapScale);
       if (

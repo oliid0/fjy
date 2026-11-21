@@ -901,6 +901,7 @@ class App extends React.Component<AppProps, AppState> {
       toggleSidebar: this.toggleSidebar,
       onChange: (cb) => this.onChangeEmitter.on(cb),
       onIncrement: (cb) => this.store.onStoreIncrementEmitter.on(cb),
+      onCanvasPress: (cb) => this.onCanvasPressEmitter.on(cb),
       onPointerDown: (cb) => this.onPointerDownEmitter.on(cb),
       onPointerUp: (cb) => this.onPointerUpEmitter.on(cb),
       onInkCommit: (cb) => this.onInkCommitEmitter.on(cb),

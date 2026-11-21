@@ -11,14 +11,18 @@ export const calculateAsync = async (
   signal?: AbortSignal,
 ): Promise<string> => {
   signal?.throwIfAborted();
+  const normalized = input.replace(/[÷∕／]|\\div(?![A-Za-z])/g, "/");
   const latex =
-    /\\[A-Za-z]+/.test(input) && !/^\s*\\begin\{(?:array|aligned)\}/.test(input)
+    /\\[A-Za-z]+/.test(normalized) &&
+    !/^\s*\\begin\{(?:array|aligned)\}/.test(normalized)
       ? input
           .trim()
+          .replace(/[÷∕／]/g, "\\div ")
           .replace(/^\$\$?|\$\$?$/g, "")
           .replace(/\s*[=＝]\s*$/, "")
       : undefined;
-  const parsed = latex === undefined ? prepareCalculation(input) : undefined;
+  const parsed =
+    latex === undefined ? prepareCalculation(normalized) : undefined;
   if (
     parsed &&
     !parsed.symbolic &&

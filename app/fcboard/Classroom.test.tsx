@@ -212,6 +212,7 @@ describe("selection-driven classroom controls", () => {
       addFiles: vi.fn(),
       setActiveTool: vi.fn(),
       onPointerDown: () => () => {},
+      onCanvasPress: () => () => {},
       onPointerUp: () => () => {},
       updateScene: vi.fn((update) => {
         if (update.elements) {

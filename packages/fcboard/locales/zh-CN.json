@@ -1501,7 +1501,8 @@
     "the_image_service_returned_an_unsupported_format": "图像服务返回了不支持的图片格式",
     "more_tools": "更多工具",
     "quizForm": {
-      "title": "出题面板",
+      "title": "AI 出题",
+      "results": "出题结果",
       "grade": "年级",
       "gradeAny": "根据内容匹配",
       "gradeNumber": "{{grade}} 年级",
@@ -1525,7 +1526,7 @@
       "questionFailed": "第 {{number}} 道题生成失败：{{message}}",
       "generatingCount": "已生成 {{ready}} / {{total}} 道题"
     },
-    "ai_questions": "AI出題",
+    "ai_questions": "AI 出题",
     "could_not_read_received_files": "无法读取接收的课件",
     "storage_is_full_or_unavailable_download_the_recording_now_to_keep_it": "设备存储不足或不可用，录制尚未保存；请立即下载保留。",
     "could_not_read_local_recordings": "无法读取本地录制资料",
@@ -2354,7 +2355,7 @@
     "laser_pen": "激光笔",
     "selection_question": "问答",
     "selection_creative": "创作",
-    "selection_quiz": "出题",
+    "selection_quiz": "AI 出题",
     "selection_color": "颜色",
     "selection_text_color": "字色",
     "selection_border": "边框",

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { IconButton } from "@mui/material";
 import { CloseIcon } from "@fcboard/fcboard/components/icons";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 
 import { MaterialPanel } from "./MaterialPanel";
 import { quizTypes } from "./quiz";
+
+import quizIcon from "./factory-selection-icons/quiz-default.svg?url";
 
 import "./QuizComposer.scss";
 
@@ -20,6 +22,7 @@ export const QuizComposer = ({
   onSubmit: (prompt: string, type?: QuizQuestion["type"]) => void;
 }) => {
   useI18n();
+  const difficultyGroup = useId();
   const [grade, setGrade] = useState("any");
   const [type, setType] = useState<QuizQuestion["type"] | "mixed">("mixed");
   const [difficulty, setDifficulty] = useState("medium");
@@ -34,7 +37,10 @@ export const QuizComposer = ({
       className="fc-quiz-composer"
     >
       <header>
-        <strong>{t("fcboard.quizForm.title")}</strong>
+        <h2>
+          <img src={quizIcon} alt="" />
+          {t("fcboard.quizForm.title")}
+        </h2>
         <IconButton aria-label={t("buttons.close")} onClick={onClose}>
           {CloseIcon}
         </IconButton>
@@ -98,19 +104,21 @@ export const QuizComposer = ({
               ))}
             </select>
           </label>
-          <label>
-            {t("fcboard.quizForm.difficulty")}
-            <select
-              value={difficulty}
-              onChange={(event) => setDifficulty(event.target.value)}
-            >
-              {(["easy", "medium", "hard"] as const).map((value) => (
-                <option key={value} value={value}>
-                  {t(`fcboard.quizForm.${value}`)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <fieldset>
+            <legend>{t("fcboard.quizForm.difficulty")}</legend>
+            {(["easy", "medium", "hard"] as const).map((value) => (
+              <label key={value} className="fc-quiz-level">
+                <input
+                  type="radio"
+                  name={difficultyGroup}
+                  value={value}
+                  checked={difficulty === value}
+                  onChange={() => setDifficulty(value)}
+                />
+                <span>{t(`fcboard.quizForm.${value}`)}</span>
+              </label>
+            ))}
+          </fieldset>
           <label className="fc-quiz-supplement">
             {t("fcboard.quizForm.supplement")}
             <textarea

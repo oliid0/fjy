@@ -7,8 +7,8 @@ import type { Page } from "@playwright/test";
 /** Use the actual composer; only provider transport is mocked by each test. */
 export const submitQuiz = async (page: Page, requirements: string) => {
   await openToolbox(page);
-  await page.getByRole("button", { name: "出题面板", exact: true }).click();
-  const composer = page.getByRole("dialog", { name: "出题面板", exact: true });
+  await page.getByRole("button", { name: "AI 出题", exact: true }).click();
+  const composer = page.getByRole("dialog", { name: "AI 出题", exact: true });
   await expect(composer).toBeVisible();
   await composer
     .getByRole("combobox", { name: "年级", exact: true })

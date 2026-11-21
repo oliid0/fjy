@@ -6,6 +6,7 @@ import { currentSettings } from "./settings";
 import {
   calculationInk,
   columnInkRows,
+  divisionSlashInk,
   hasStructuredMathInk,
   preservesMathInkStructure,
 } from "./calculationInk";
@@ -192,6 +193,24 @@ export const recognizeHandwriting = async (
     } catch (error) {
       signal.throwIfAborted();
       mathFailure = error;
+    }
+  }
+  const slashInk =
+    structured && recognitionStrokes && divisionSlashInk(recognitionStrokes);
+  if (slashInk) {
+    try {
+      const candidates =
+        hasDigitalInk() && !hasStructuredMathInk(slashInk)
+          ? await recognizeDigitalInk(slashInk, signal, "math", languageHint)
+          : [await recognizeLocalMath(slashInk, signal)];
+      for (const candidate of candidates) {
+        signal.throwIfAborted();
+        if (await accepted(candidate)) {
+          return chooseCandidate ? chooseCandidate([candidate]) : candidate;
+        }
+      }
+    } catch {
+      signal.throwIfAborted();
     }
   }
   try {

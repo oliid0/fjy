@@ -1,5 +1,16 @@
-import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { Fcboard } from "@fcboard/fcboard";
+import {
+  saveToolbarItems,
+  TOOLBAR_STORAGE,
+} from "@fcboard/fcboard/toolbarPreferences";
+import { t } from "@fcboard/fcboard/i18n";
 import { CaptureUpdateAction } from "@fcboard/element";
 import { render as editor } from "@fcboard/fcboard/tests/test-utils";
 
@@ -42,6 +53,7 @@ vi.mock("@capacitor/core", () => ({
   }),
 }));
 beforeEach(() => {
+  localStorage.removeItem(TOOLBAR_STORAGE);
   backend.ready.mockReset().mockResolvedValue(undefined);
   backend.configure.mockReset().mockResolvedValue(undefined);
   backend.remove.mockReset().mockResolvedValue(undefined);
@@ -208,7 +220,7 @@ it("routes sideboard semantic buttons and leaves focused text input out of nativ
   }
 });
 it.each(["MuiModal-root MuiModal-hidden", "MuiPaper-root"])(
-  "ignores hidden %s and lets outside touches dismiss visible dialogs",
+  "ignores hidden %s and pauses native input for a visible modal",
   async (className) => {
     await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
     const api = window.h.app.api;
@@ -218,6 +230,9 @@ it.each(["MuiModal-root MuiModal-hidden", "MuiPaper-root"])(
     const modal = document.createElement("div");
     modal.className = className;
     modal.setAttribute("role", "dialog");
+    if (className === "MuiPaper-root") {
+      modal.setAttribute("aria-modal", "true");
+    }
     modal.style.visibility = "hidden";
     vi.spyOn(modal, "getBoundingClientRect").mockReturnValue(
       new DOMRect(0, 0, 1000, 700),
@@ -231,6 +246,7 @@ it.each(["MuiModal-root MuiModal-hidden", "MuiPaper-root"])(
       expect(
         backend.configure.mock.calls.at(-1)![0].blocked,
       ).not.toContainEqual([0, 0, 1000, 700]);
+      modal.classList.remove("MuiModal-hidden");
       modal.style.visibility = "visible";
       await waitFor(() =>
         expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(false),
@@ -245,18 +261,26 @@ it.each(["MuiModal-root MuiModal-hidden", "MuiPaper-root"])(
   },
 );
 it.each([
-  ["eraser", "erase", ".fc-eraser-settings"],
-  ["pen", "pen", ".fc-pen-properties"],
-])(
+  ["fcboard.eraser", "erase", ".fc-eraser-settings"],
+  ["fcboard.pen", "pen", ".fc-pen-properties"],
+  ["fcboard.toolbox", "pen", ".fc-combined-toolbox"],
+  ["fcboard.shape", "pen", ".fc-insert-picker-expanded"],
+  ["fcboard.aerial_view", "pen", ".fc-aerial-view"],
+  ["buttons.menu", "pen", ".fc-material-menu"],
+] as const)(
   "captures the first board contact outside the %s palette",
   async (tool, mode, selector) => {
+    if (tool === "fcboard.aerial_view") {
+      saveToolbarItems(["aerial"]);
+    }
     const { container } = await editor(
       <Fcboard UIOptions={{ unifiedToolbar: true }} />,
     );
     const api = window.h.app.api;
     window.h.state.width = 1000;
     window.h.state.height = 700;
-    fireEvent.click(container.querySelector(`[data-toolbar-${tool}]`)!);
+    act(() => api.setActiveTool({ type: "freedraw" }));
+    fireEvent.click(screen.getByRole("button", { name: t(tool) }));
     const panel = container.querySelector(selector)!;
     const rect = new DOMRect(300, 400, 240, 120);
     vi.spyOn(panel, "getBoundingClientRect").mockReturnValue(rect);
@@ -288,7 +312,7 @@ it.each([
         listener({ ...contact, phase: "start" }),
       ),
     );
-    expect(panel).not.toBeInTheDocument();
+    await waitFor(() => expect(panel).not.toBeInTheDocument());
     expect(api.getAppState().cursorButton).toBe("down");
     expect(backend.erase).not.toHaveBeenCalled();
     await act(async () =>

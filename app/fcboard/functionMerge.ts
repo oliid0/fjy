@@ -19,7 +19,7 @@ import type { ContentRect } from "./placement";
 type Input = {
   id: string;
   text?: string;
-  linked?: { id: string; plot: Plot };
+  linked?: { id: string; plot: Plot; sourceIds?: readonly string[] };
   points?: [number, number][];
   bounds: ContentRect;
 };
@@ -60,24 +60,29 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
     )) {
       if (
         stroke.locked ||
-        stroke.plot ||
-        (!stroke.text && stroke.fcInk?.assist !== "function")
+        (!stroke.plot && !stroke.text && stroke.fcInk?.assist !== "function")
       ) {
         return;
       }
       inputs.push({
         id: stroke.id,
         text: stroke.originalText || stroke.text,
-        points: stroke.text ? undefined : stroke.points,
+        linked: stroke.plot && {
+          id: stroke.id,
+          plot: stroke.plot.plot,
+          sourceIds: stroke.plot.sourceIds,
+        },
+        points: stroke.text || stroke.plot ? undefined : stroke.points,
         bounds: documentStrokeBounds(stroke),
       });
     }
   } else {
     for (const element of selectedBoardElements(api)) {
+      const graph = element.customData?.fcPlot;
       if (
         element.locked ||
-        element.customData?.fcPlot ||
-        (element.type !== "text" &&
+        (!graph &&
+          element.type !== "text" &&
           (element.type !== "freedraw" ||
             element.customData?.fcInk?.assist !== "function"))
       ) {
@@ -87,6 +92,11 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
       inputs.push({
         id: element.id,
         text: element.type === "text" ? element.originalText : undefined,
+        linked: graph && {
+          id: element.id,
+          plot: graph.plot,
+          sourceIds: graph.sourceIds,
+        },
         points:
           element.type === "freedraw" ? boardInk([element])[0] : undefined,
         bounds: { left, top, right, bottom },
@@ -98,7 +108,17 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
   }
   const byId = new Map(inputs.map((input) => [input.id, input]));
   const linkedInputs = new Set<string>();
-  const groups: Input[][] = [];
+  const groups: Input[][] = inputs
+    .filter((input) => input.linked)
+    .map((input) => {
+      linkedInputs.add(input.id);
+      for (const id of input.linked!.sourceIds || []) {
+        if (byId.has(id)) {
+          linkedInputs.add(id);
+        }
+      }
+      return [input];
+    });
   const graphs = doc
     ? doc.ink.map((item) => ({
         id: item.id,
@@ -129,7 +149,12 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
       });
   for (const graph of graphs) {
     const ids = graph.data?.sourceIds;
-    if (!Array.isArray(ids) || !ids.length || !ids.some((id) => byId.has(id))) {
+    if (
+      linkedInputs.has(graph.id) ||
+      !Array.isArray(ids) ||
+      !ids.length ||
+      !ids.some((id) => byId.has(id))
+    ) {
       continue;
     }
     if (
@@ -139,7 +164,7 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
     ) {
       return;
     }
-    const linked = { id: graph.id, plot: graph.data.plot };
+    const linked = { id: graph.id, plot: graph.data.plot, sourceIds: ids };
     groups.push(ids.map((id) => ({ ...byId.get(id)!, linked })));
     ids.forEach((id) => linkedInputs.add(id));
   }
@@ -161,7 +186,9 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
   );
   const chosen = groups.slice(0, 3);
   if (
-    chosen.length < 2 ||
+    !chosen.length ||
+    (chosen.length === 1 &&
+      (!chosen[0][0].points || chosen[0][0].linked || chosen[0].length < 2)) ||
     chosen.reduce(
       (count, group) =>
         count + 1 + (group[0].linked?.plot.compare?.length || 0),
@@ -262,17 +289,22 @@ export const mergeFunctions = async (
   if (functionSelection(api)?.token !== token) {
     throw new DOMException("Selection changed", "AbortError");
   }
-  const expressions = plots
-    .flatMap((plot) =>
-      [plot.expression, ...(plot.compare || [])].map((expression) => {
-        const resolved = expression.replace(
-          /\b[abc]\b/g,
-          (key) => `(${plot[key as "a"]})`,
-        );
-        return plot.z ? `(${resolved})+(${plot.z})` : resolved;
-      }),
-    )
-    .slice(0, 3);
+  const expressions = plots.flatMap((plot) =>
+    [plot.expression, ...(plot.compare || [])].map((expression) => {
+      const resolved = expression.replace(
+        /\b[abc]\b/g,
+        (key) => `(${plot[key as "a"]})`,
+      );
+      return plot.z ? `(${resolved})+(${plot.z})` : resolved;
+    }),
+  );
+  if (
+    expressions.length < 2 ||
+    expressions.length > 3 ||
+    plots.some((plot) => plot.surface || plot.relation)
+  ) {
+    throw new Error(t("fcboard.functionGraph.mergeUnavailable"));
+  }
   const plot = validatedPlot({
     ...plots[0],
     a: 1,
@@ -294,7 +326,14 @@ export const mergeFunctions = async (
     undefined,
     false,
     bounds,
-    source.inputs.map((input) => input.id),
+    [
+      ...new Set(
+        source.inputs.flatMap(
+          (input) =>
+            input.linked?.sourceIds ?? (input.linked ? [] : [input.id]),
+        ),
+      ),
+    ],
   );
   if (!source.doc) {
     api.setActiveTool({ type: "selection" });

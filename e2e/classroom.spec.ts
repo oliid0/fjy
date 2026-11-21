@@ -21,6 +21,33 @@ const enterText = async (page: Page, text: string, select = true) => {
   }
 };
 
+test("opens the React calculator and keeps chaining separate calculations", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "工具箱", exact: true }).click();
+  await page.getByRole("button", { name: "打开计算器", exact: true }).click();
+  const calculator = page.getByRole("group", { name: "计算器", exact: true });
+  await expect(calculator).toBeVisible();
+  await expect(calculator.locator("iframe")).toHaveCount(0);
+  const floating = calculator.getByRole("region", { name: "计算器" });
+  await expect(floating).toHaveCSS("border-top-width", "0px");
+  await calculator.getByRole("button", { name: "1", exact: true }).click();
+  await page.keyboard.type("+1+");
+  const display = calculator.getByRole("status");
+  await expect(display).toHaveText("1+1+");
+  await page.keyboard.type("1*2");
+  await page.keyboard.press("Enter");
+  await expect(display).toHaveText("4");
+  await page.keyboard.type("+1");
+  await expect(display).toHaveText("4+1");
+  await page.keyboard.press("Enter");
+  await expect(display).toHaveText("5");
+  await calculator.getByRole("button", { name: "关闭计算器" }).click();
+  await expect(calculator).toHaveCount(0);
+});
+
 for (const viewport of [
   { width: 3840, height: 2160 },
   { width: 3080, height: 1240 },

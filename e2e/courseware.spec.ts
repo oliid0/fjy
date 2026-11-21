@@ -389,6 +389,10 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
   const graph = page
     .locator(".fc-document-ink foreignObject:has(.fc-inline-function)")
     .last();
+  await page.getByRole("button", { name: "板书开关", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "圈选课件板书", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
   await zoomFunctionGraph(page, graph);
   await expect(
     graph.locator('.fc-inline-function[aria-label="y = a*x+1"]'),

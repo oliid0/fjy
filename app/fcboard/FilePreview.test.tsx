@@ -1,4 +1,10 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { getDefaultAppState } from "@fcboard/fcboard/appState";
 import { defaultLang, languages, setLanguage, t } from "@fcboard/fcboard/i18n";
 import { factoryBrushWidths } from "@fcboard/element/factoryBrush";
@@ -3048,6 +3054,14 @@ it("owns a compact calculator on the visible courseware page and keeps its selec
     const original = read().ink[0];
     expect(original.resource?.id).toBe("builtin-calculator");
     expect(original.resource!.height).toBeLessThan(250);
+    const panel = screen.getByRole("group", {
+      name: t("fcboard.calculatorUi.title"),
+    });
+    expect(panel.querySelector("iframe")).toBeNull();
+    for (const key of ["4", "/", "2", "Enter", "+", "1", "Enter"]) {
+      fireEvent.keyDown(panel, { key });
+    }
+    expect(within(panel).getByRole("status")).toHaveTextContent(/^3$/);
     await act(() =>
       classroomCommands.execute({
         name: "canvas.select",
@@ -3062,6 +3076,7 @@ it("owns a compact calculator on the visible courseware page and keeps its selec
       }),
     );
     expect(read().ink[0].points[0][0]).toBeCloseTo(original.points[0][0] + 35);
+    expect(within(panel).getByRole("status")).toHaveTextContent(/^3$/);
     await act(() => classroomCommands.execute({ name: "document.undo" }));
     expect(read().ink[0].points).toEqual(original.points);
     await act(() =>

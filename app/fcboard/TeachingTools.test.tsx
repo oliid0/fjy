@@ -1,7 +1,13 @@
 import { t } from "@fcboard/fcboard/i18n";
 import { getDefaultAppState } from "@fcboard/fcboard/appState";
 import { Capacitor } from "@capacitor/core";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 
@@ -10,6 +16,7 @@ import { Fcboard } from "@fcboard/fcboard";
 import type { FcboardElement } from "@fcboard/element/types";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { ResourceControlState } from "@fcboard/fcboard/interactiveResourceControls";
 
 import { TeachingTools } from "./TeachingTools";
 import { classroomCommands } from "./commands";
@@ -66,13 +73,12 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
         name: t("fcboard.open_name", { name: t("fcboard.calculator") }),
       }),
     );
-    await waitFor(() =>
-      expect(screen.getByTitle(t("fcboard.calculator"))).toBeInTheDocument(),
-    );
-    expect(screen.getByTitle(t("fcboard.calculator"))).toHaveAttribute(
-      "sandbox",
-      "allow-scripts",
-    );
+    const calculatorPanel = await screen.findByRole("group", {
+      name: t("fcboard.calculatorUi.title"),
+    });
+    const keypad = within(calculatorPanel);
+    expect(calculatorPanel.querySelector("iframe")).toBeNull();
+    expect(keypad.getByRole("status")).toHaveTextContent("0");
     expect(
       screen.queryByRole("dialog", { name: t("fcboard.toolbox") }),
     ).not.toBeInTheDocument();
@@ -85,14 +91,40 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
     const calculator = api.getSceneElements()[0];
     const originalX = calculator.x;
     const originalWidth = calculator.width;
-    const calculatorFrame = screen.getByTitle(t("fcboard.calculator"));
     expect(calculator.type).toBe("iframe");
     expect(calculator.customData?.fcInteractiveResource.id).toBe(
       "builtin-calculator",
     );
     expect(calculator.height).toBeLessThan(350);
     expect(calculator.width).toBeLessThan(200);
-    expect(document.querySelector(".fc-floating-calculator")).toBeNull();
+    expect(calculator.customData?.fcInteractiveResource.html).toBe("");
+    for (const name of ["1", "+", "1", "+"]) {
+      fireEvent.click(keypad.getByRole("button", { name }));
+    }
+    expect(keypad.getByRole("status")).toHaveTextContent(/^1\+1\+$/);
+    for (const name of ["1", "×", "2", "="]) {
+      fireEvent.click(keypad.getByRole("button", { name }));
+    }
+    expect(keypad.getByRole("status")).toHaveTextContent(/^4$/);
+    const inspection = (await classroomCommands.execute({
+      name: "calculator.inspect",
+    })) as ResourceControlState;
+    expect(inspection.outputs).toEqual(["4"]);
+    for (const label of ["+", "1", "="]) {
+      await act(() =>
+        classroomCommands.execute({
+          name: "calculator.press",
+          args: {
+            version: inspection.version,
+            control: inspection.controls.find((item) => item.label === label)!
+              .id,
+          },
+        }),
+      );
+      expect(keypad.getByRole("status")).toHaveTextContent(
+        label === "+" ? /^4\+$/ : label === "1" ? /^4\+1$/ : /^5$/,
+      );
+    }
     await act(() => classroomCommands.execute({ name: "tools.calculator" }));
     expect(api.getSceneElements()).toHaveLength(1);
     await act(() =>
@@ -136,7 +168,12 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
       );
     }
     expect(api.getSceneElements()[0].width).toBeCloseTo(originalWidth + 30);
-    expect(screen.getByTitle(t("fcboard.calculator"))).toBe(calculatorFrame);
+    expect(
+      screen.getByRole("group", {
+        name: t("fcboard.calculatorUi.title"),
+      }),
+    ).toBe(calculatorPanel);
+    expect(keypad.getByRole("status")).toHaveTextContent(/^5$/);
     await act(() =>
       classroomCommands.execute({
         name: "canvas.action",

@@ -1,38 +1,17 @@
 import { useEffect } from "react";
-import { isColorDark } from "@fcboard/common";
-import { t, useI18n } from "@fcboard/fcboard/i18n";
+import { t } from "@fcboard/fcboard/i18n";
 import { requestResourceControl } from "@fcboard/fcboard/interactiveResourceControls";
-import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import { calculatorResourceId } from "@fcboard/fcboard/interactiveHtml";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import type { InteractiveResource } from "@fcboard/fcboard/interactiveHtml";
 
-import { calculatorLocalization } from "./calculatorLocalization";
 import { classroomCommands } from "./commands";
-import calculator from "./calculator/calculator.html?raw";
 
 import type { InkStroke } from "./documents";
 
-const calculatorId = "builtin-calculator";
-export const calculatorResource = (dark: boolean) =>
-  validateInteractiveResource({
-    id: calculatorId,
-    title: t("fcboard.calculator"),
-    html: calculator
-      .replace(
-        "__FCBOARD_CALCULATOR_I18N__",
-        JSON.stringify(calculatorLocalization()).replace(/</g, "\\u003c"),
-      )
-      .replace(
-        '<html lang="en">',
-        `<html lang="en" data-board-theme="${dark ? "dark" : "light"}">`,
-      ),
-  });
-
-/** The calculator is an ordinary resource object on the visible surface. Its
- * existing scene/document owner supplies selection, size, layers and history. */
+/** Commands address the mounted calculator on the visible board or courseware. */
 export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
-  const { langCode } = useI18n();
   useEffect(() => {
     const visible = () => {
       const doc = classroomCommands.read("document") as
@@ -46,7 +25,7 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
         | undefined;
       const objects = doc
         ? doc.ink.flatMap((stroke) =>
-            stroke.resource?.id === calculatorId
+            stroke.resource?.id === calculatorResourceId
               ? [
                   {
                     id: stroke.id,
@@ -57,7 +36,8 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
           )
         : api.getSceneElements().flatMap((element) =>
             !element.isDeleted &&
-            element.customData?.fcInteractiveResource?.id === calculatorId
+            element.customData?.fcInteractiveResource?.id ===
+              calculatorResourceId
               ? [
                   {
                     id: element.id,
@@ -129,37 +109,6 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
         { signal, current },
       );
     };
-    const sync = () => {
-      const dark = isColorDark(
-        api.getAppState().viewBackgroundColor || "#ffffff",
-      );
-      for (const frame of document.querySelectorAll<HTMLIFrameElement>(
-        'iframe[data-resource-id="builtin-calculator"]',
-      )) {
-        frame.contentWindow?.postMessage(
-          { channel: "fc-calculator-theme", dark },
-          "*",
-        );
-        frame.contentWindow?.postMessage(
-          {
-            channel: "fc-calculator-language",
-            localization: calculatorLocalization(),
-          },
-          "*",
-        );
-      }
-    };
-    let frame = requestAnimationFrame(sync);
-    let background = api.getAppState().viewBackgroundColor;
-    const loaded = (event: Event) => {
-      if (
-        event.target instanceof HTMLIFrameElement &&
-        event.target.dataset.resourceId === calculatorId
-      ) {
-        sync();
-      }
-    };
-    document.addEventListener("load", loaded, true);
     const stops = [
       classroomCommands.register(
         "tools.calculator",
@@ -186,16 +135,14 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
             : await classroomCommands.execute({
                 name: "canvas.resource",
                 args: {
-                  resource: calculatorResource(
-                    isColorDark(
-                      api.getAppState().viewBackgroundColor || "#ffffff",
-                    ),
-                  ),
+                  resource: {
+                    id: calculatorResourceId,
+                    title: t("fcboard.calculator"),
+                    html: "",
+                  },
                   signal: args.signal,
                 },
               });
-          cancelAnimationFrame(frame);
-          frame = requestAnimationFrame(sync);
           return { open: true, ...(result as { ids: string[] }) };
         },
       ),
@@ -209,19 +156,8 @@ export const Calculator = ({ api }: { api: FcboardImperativeAPI }) => {
         "Press an actual calculator key from calculator.inspect; args.version/control required, optional args.id identifies its scene object.",
         (args) => operate(args, true),
       ),
-      api.onChange(() => {
-        const next = api.getAppState().viewBackgroundColor;
-        if (next !== background) {
-          background = next;
-          sync();
-        }
-      }),
     ];
-    return () => {
-      stops.forEach((stop) => stop());
-      cancelAnimationFrame(frame);
-      document.removeEventListener("load", loaded, true);
-    };
-  }, [api, langCode]);
+    return () => stops.forEach((stop) => stop());
+  }, [api]);
   return null;
 };

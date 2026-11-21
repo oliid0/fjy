@@ -1,8 +1,12 @@
+import { isColorDark } from "@fcboard/common";
 import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
 
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { InteractiveResourceFrame } from "@fcboard/fcboard/components/InteractiveResourceFrame";
-import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import {
+  calculatorResourceId,
+  validateInteractiveResource,
+} from "@fcboard/fcboard/interactiveHtml";
 import { newIframeElement } from "@fcboard/element";
 import { getLanguage, t, useI18n } from "@fcboard/fcboard/i18n";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -2140,7 +2144,7 @@ export const FilePreview = ({
         const position = resourcePlacement(
           viewport,
           scale,
-          resource.id === "builtin-calculator",
+          resource.id === calculatorResourceId,
         );
         const element = newIframeElement({
           type: "iframe",
@@ -3865,6 +3869,9 @@ export const FilePreview = ({
                     resource={stroke.resource}
                     objectId={stroke.id}
                     surface="document"
+                    dark={isColorDark(
+                      penState.viewBackgroundColor || "#ffffff",
+                    )}
                     window={{
                       bounds: {
                         x: stroke.points[0][0],

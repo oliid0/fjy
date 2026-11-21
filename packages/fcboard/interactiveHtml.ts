@@ -3,6 +3,8 @@ import { validateVisualization } from "./visualizationRuntime";
 
 import type { Visualization } from "./visualizationRuntime";
 
+export const calculatorResourceId = "builtin-calculator";
+
 export const resourceLibraryNames = ["vega", "jsxgraph"] as const;
 export type ResourceLibrary = typeof resourceLibraryNames[number];
 export type InteractiveResource = {
@@ -103,6 +105,11 @@ export const validateInteractiveResource = (
     resource.title.length > 160
   ) {
     throw new Error("Invalid interactive lesson");
+  }
+  // Saved boards already identify the built-in calculator by this id.
+  // Its behavior comes from the app, so an old document's HTML is discarded.
+  if (resource.id === calculatorResourceId) {
+    return { id: resource.id, title: resource.title.trim(), html: "" };
   }
   const libraries: unknown[] = [];
   if (resource.libraries !== undefined) {

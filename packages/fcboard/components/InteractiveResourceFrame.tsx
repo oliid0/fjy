@@ -7,10 +7,15 @@ import {
   useState,
 } from "react";
 
-import { interactiveHtml, resourceNeedsRuntime } from "../interactiveHtml";
+import {
+  calculatorResourceId,
+  interactiveHtml,
+  resourceNeedsRuntime,
+} from "../interactiveHtml";
 import { t } from "../i18n";
 import { attachResourceControls } from "../interactiveResourceControls";
 
+import { CalculatorPanel } from "./CalculatorPanel";
 import { ResourceWindow } from "./ResourceWindow";
 
 import type { InteractiveResource } from "../interactiveHtml";
@@ -24,6 +29,7 @@ export type InteractiveResourceFrameProps = {
   surface: ResourceSurface;
   iframeRef?: Ref<HTMLIFrameElement>;
   live?: ResourceLiveUpdate;
+  dark?: boolean;
   window?: Omit<
     ComponentProps<typeof ResourceWindow>,
     "title" | "children" | "onReload"
@@ -35,7 +41,24 @@ export type ResourceLiveUpdate = {
   message: Record<string, unknown>;
 };
 
-export const InteractiveResourceFrame = ({
+export const InteractiveResourceFrame = (
+  props: InteractiveResourceFrameProps,
+) =>
+  props.resource.id === calculatorResourceId ? (
+    <CalculatorPanel
+      target={{
+        id: props.objectId,
+        surface: props.surface,
+        html: props.resource.html,
+      }}
+      dark={props.dark ?? false}
+      window={props.window}
+    />
+  ) : (
+    <SandboxedResourceFrame {...props} />
+  );
+
+const SandboxedResourceFrame = ({
   resource,
   iframeRef,
   objectId,
@@ -202,9 +225,7 @@ export const InteractiveResourceFrame = ({
     <ResourceWindow
       {...window}
       title={resource.title}
-      embeddedHeader={
-        resource.id === "builtin-calculator" || !!resource.visualization
-      }
+      embeddedHeader={!!resource.visualization}
       onReload={() => {
         loaded.current = false;
         setRevision((value) => value + 1);

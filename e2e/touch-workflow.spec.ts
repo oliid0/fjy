@@ -263,7 +263,7 @@ test("two touchscreen contacts write and undo independently in multi-point mode"
   await page.getByRole("button", { name: "笔", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "多点书写", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveAttribute("aria-pressed", "true");
   const input = await page.context().newCDPSession(page);
   const contacts = (x: number) => [
     { id: 1, x, y: 200, radiusX: 2, radiusY: 2 },

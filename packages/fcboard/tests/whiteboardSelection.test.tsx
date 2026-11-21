@@ -117,65 +117,68 @@ it("gives an agent-selected cylinder the blue operation frame immediately and re
   }
 });
 
-it("allows direct interaction with a teaching resource in the selector and gives drawing gestures the canvas", async () => {
-  const { container, getByTitle } = await render(
-    <Fcboard UIOptions={{ unifiedToolbar: true }} />,
-  );
-  h.state.width = 1600;
-  h.state.height = 900;
-  const resource = {
-    ...API.createElement({
-      type: "iframe",
-      x: 100,
-      y: 100,
-      width: 400,
-      height: 300,
-    }),
-    customData: { fcInteractiveResource: interactiveResource },
-  };
-  API.updateScene({ elements: [resource] });
-  act(() => h.app.setActiveTool({ type: "lasso" }));
-  const frame = getByTitle(interactiveResource.title);
-  const inner = frame.closest(".fcboard__embeddable-container__inner")!;
-  expect(inner).toHaveStyle({ pointerEvents: "all" });
-  expect(h.state.activeEmbeddable).toBeNull();
-  act(() => h.app.setActiveTool({ type: "freedraw" }));
-  expect(inner).toHaveStyle({ pointerEvents: "none" });
-  act(() => h.app.setActiveTool({ type: "lasso" }));
-  const canvas = container.querySelector("canvas.interactive")!;
-  regionPointer(canvas, "pointerdown", 40, 40);
-  expect(inner).toHaveStyle({ pointerEvents: "none" });
-  regionPointer(canvas, "pointercancel", 40, 40);
-  expect(inner).toHaveStyle({ pointerEvents: "all" });
-  const selection = selectionForElements([resource], undefined, 1)!;
-  act(() =>
-    h.app.api.updateScene({
-      appState: {
-        selectedElementIds: { [resource.id]: true },
-        whiteboardSelection: selection,
-      },
-    }),
-  );
-  expect(h.state.whiteboardSelection?.elementIds).toEqual([resource.id]);
-  expect(
-    getByTitle(interactiveResource.title).closest(
-      ".fcboard__embeddable-container__inner",
-    ),
-  ).toHaveStyle({
-    pointerEvents: "none",
-  });
-  regionPointer(canvas, "pointerdown", 280, 200);
-  regionPointer(canvas, "pointermove", 330, 240);
-  expect(h.app.scene.getNonDeletedElement(resource.id)).toMatchObject({
-    x: 150,
-    y: 140,
-  });
-  expect(h.state.whiteboardSelection?.bounds).toMatchObject({
-    left: selection.bounds.left + 50,
-    top: selection.bounds.top + 40,
-  });
-  regionPointer(canvas, "pointerup", 330, 240);
-});
+it.each([
+  interactiveResource,
+  { id: "builtin-calculator", title: "Calculator", html: "" },
+])(
+  "routes $id keys and selected movement without intercepting drawing",
+  async (content) => {
+    const { container, getByRole, getByTitle } = await render(
+      <Fcboard UIOptions={{ unifiedToolbar: true }} />,
+    );
+    h.state.width = 1600;
+    h.state.height = 900;
+    const resource = {
+      ...API.createElement({
+        type: "iframe",
+        x: 100,
+        y: 100,
+        width: 400,
+        height: 300,
+      }),
+      customData: { fcInteractiveResource: content },
+    };
+    API.updateScene({ elements: [resource] });
+    act(() => h.app.setActiveTool({ type: "lasso" }));
+    const panel =
+      content.id === "builtin-calculator"
+        ? getByRole("group", { name: content.title })
+        : getByTitle(content.title);
+    const inner = panel.closest(".fcboard__embeddable-container__inner")!;
+    expect(inner).toHaveStyle({ pointerEvents: "all" });
+    expect(h.state.activeEmbeddable).toBeNull();
+    act(() => h.app.setActiveTool({ type: "freedraw" }));
+    expect(inner).toHaveStyle({ pointerEvents: "none" });
+    act(() => h.app.setActiveTool({ type: "lasso" }));
+    const canvas = container.querySelector("canvas.interactive")!;
+    regionPointer(canvas, "pointerdown", 40, 40);
+    expect(inner).toHaveStyle({ pointerEvents: "none" });
+    regionPointer(canvas, "pointercancel", 40, 40);
+    expect(inner).toHaveStyle({ pointerEvents: "all" });
+    const selection = selectionForElements([resource], undefined, 1)!;
+    act(() =>
+      h.app.api.updateScene({
+        appState: {
+          selectedElementIds: { [resource.id]: true },
+          whiteboardSelection: selection,
+        },
+      }),
+    );
+    expect(h.state.whiteboardSelection?.elementIds).toEqual([resource.id]);
+    expect(inner).toHaveStyle({ pointerEvents: "none" });
+    regionPointer(canvas, "pointerdown", 280, 200);
+    regionPointer(canvas, "pointermove", 330, 240);
+    expect(h.app.scene.getNonDeletedElement(resource.id)).toMatchObject({
+      x: 150,
+      y: 140,
+    });
+    expect(h.state.whiteboardSelection?.bounds).toMatchObject({
+      left: selection.bounds.left + 50,
+      top: selection.bounds.top + 40,
+    });
+    regionPointer(canvas, "pointerup", 330, 240);
+  },
+);
 
 it("draws one open continuous lasso from the travelled area, clears it on lift and starts the next gesture cleanly", async () => {
   await render(<Fcboard UIOptions={{ unifiedToolbar: true }} />);

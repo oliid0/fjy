@@ -81,6 +81,7 @@ import {
   updateObject,
   updateActiveTool,
   isTransparent,
+  isColorDark,
   easeToValuesRAF,
   muteFSAbortError,
   isTestEnv,
@@ -1851,6 +1852,9 @@ class App extends React.Component<AppProps, AppState> {
                       resource={el.customData.fcInteractiveResource}
                       objectId={el.id}
                       surface="whiteboard"
+                      dark={isColorDark(
+                        this.state.viewBackgroundColor || "#ffffff",
+                      )}
                       iframeRef={(ref) => this.cacheEmbeddableRef(el, ref)}
                       window={
                         this.props.UIOptions.unifiedToolbar

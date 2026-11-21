@@ -45,11 +45,12 @@ export type ResourceControlTarget = {
   html: string;
 };
 
-type Frame = ResourceControlTarget & {
-  node: HTMLIFrameElement;
-  ready: boolean;
-};
-const frames = new Set<Frame>();
+type View = ResourceControlTarget &
+  (
+    | { node: HTMLIFrameElement; ready: boolean }
+    | { operate: (request: ResourceControlRequest) => ResourceControlState }
+  );
+const views = new Set<View>();
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((listener) => listener());
 
@@ -59,7 +60,7 @@ export const attachResourceControls = (
   node: HTMLIFrameElement,
 ) => {
   const frame = { ...target, node, ready: false };
-  frames.add(frame);
+  views.add(frame);
   changed();
   return {
     loaded: () => {
@@ -70,9 +71,22 @@ export const attachResourceControls = (
       changed();
     },
     dispose: () => {
-      frames.delete(frame);
+      views.delete(frame);
       changed();
     },
+  };
+};
+
+export const attachLocalResourceControls = (
+  target: ResourceControlTarget,
+  operate: (request: ResourceControlRequest) => ResourceControlState,
+) => {
+  const view = { ...target, operate };
+  views.add(view);
+  changed();
+  return () => {
+    views.delete(view);
+    changed();
   };
 };
 
@@ -157,7 +171,7 @@ const isState = (value: unknown): value is ResourceControlState => {
   );
 };
 
-/** Wait for React/iframe load, then transfer one reply port into the opaque sandbox. */
+/** Wait for the mounted resource and use its controls on the visible surface. */
 export const requestResourceControl = (
   target: ResourceControlTarget,
   request: ResourceControlRequest,
@@ -165,7 +179,7 @@ export const requestResourceControl = (
 ): Promise<ResourceControlState> =>
   new Promise((resolve, reject) => {
     let channel: MessageChannel | undefined;
-    let active: Frame | undefined;
+    let active: View | undefined;
     let finished = false;
     const finish = (error?: Error, state?: ResourceControlState) => {
       if (finished) {
@@ -196,7 +210,7 @@ export const requestResourceControl = (
         abort();
         return;
       }
-      const matches = Array.from(frames).filter(
+      const matches = Array.from(views).filter(
         (frame) =>
           frame.surface === target.surface &&
           frame.id === target.id &&
@@ -207,12 +221,29 @@ export const requestResourceControl = (
         return;
       }
       if (active) {
-        if (matches[0] !== active || !active.ready) {
+        if (matches[0] !== active || ("node" in active && !active.ready)) {
           abort();
         }
         return;
       }
       const frame = matches[0];
+      if (frame && "operate" in frame) {
+        try {
+          const state = frame.operate(request);
+          if (options.signal?.aborted || !options.current()) {
+            abort();
+          } else {
+            finish(undefined, state);
+          }
+        } catch (error) {
+          finish(
+            error instanceof Error
+              ? error
+              : new Error("RESOURCE_INVALID_RESPONSE"),
+          );
+        }
+        return;
+      }
       if (!frame?.ready || !frame.node.contentWindow) {
         return;
       }

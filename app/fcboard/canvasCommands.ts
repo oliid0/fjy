@@ -4,7 +4,10 @@ import {
   convertToFcboardElements,
 } from "@fcboard/fcboard";
 import { getCommonBounds, newIframeElement } from "@fcboard/element";
-import { validateInteractiveResource } from "@fcboard/fcboard/interactiveHtml";
+import {
+  calculatorResourceId,
+  validateInteractiveResource,
+} from "@fcboard/fcboard/interactiveHtml";
 import { FONT_FAMILY } from "@fcboard/common";
 import { switchWhiteboardPen } from "@fcboard/fcboard/whiteboardPen";
 
@@ -809,7 +812,7 @@ export const registerCanvasCommands = (
         const position = resourcePlacement(
           viewport,
           scale,
-          resource.id === "builtin-calculator",
+          resource.id === calculatorResourceId,
         );
         const ids = insertElements(api, [
           newIframeElement({
@@ -818,7 +821,9 @@ export const registerCanvasCommands = (
             strokeWidth: 0,
             customData: {
               fcInteractiveResource: resource,
-              generationData: { status: "done", html: resource.html },
+              ...(resource.id !== calculatorResourceId && {
+                generationData: { status: "done", html: resource.html },
+              }),
             },
           }),
         ]);

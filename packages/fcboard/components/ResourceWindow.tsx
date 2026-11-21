@@ -31,6 +31,7 @@ export const ResourceWindow = ({
   onReload,
   children,
   embeddedHeader = false,
+  headerActions,
 }: {
   title: string;
   bounds: ResourceWindowBounds;
@@ -38,14 +39,16 @@ export const ResourceWindow = ({
   viewport?: { left: number; top: number; right: number; bottom: number };
   onCommit: (bounds: ResourceWindowBounds) => void;
   onClose: () => void;
-  onReload: () => void;
+  onReload?: () => void;
   children: ReactNode;
   embeddedHeader?: boolean;
+  headerActions?: ReactNode;
 }) => {
   const section = useRef<HTMLElement>(null);
-  const minimum = embeddedHeader
-    ? { width: 72, height: 144 }
-    : { width: 240, height: 180 };
+  const minimum =
+    embeddedHeader || headerActions
+      ? { width: 72, height: 144 }
+      : { width: 240, height: 180 };
   const embeddedMove = useRef<
     | {
         x: number;
@@ -253,11 +256,28 @@ export const ResourceWindow = ({
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
   }, [embeddedHeader, bounds, scale, bounded, onClose, onCommit]);
+  const dragHandle = !embeddedHeader && (
+    <div
+      className="fc-resource-window-drag"
+      role="button"
+      tabIndex={0}
+      aria-label={title}
+      onPointerDown={(event) => start(event, "move")}
+      onPointerMove={move}
+      onPointerUp={finish}
+      onPointerCancel={cancel}
+      onLostPointerCapture={cancel}
+      onKeyDown={(event) => key(event, "move")}
+    >
+      {title}
+    </div>
+  );
   return (
     <section
       ref={section}
       className="fc-resource-window"
       data-embedded-header={embeddedHeader || undefined}
+      data-custom-header={!!headerActions || undefined}
       aria-label={title}
       style={
         {
@@ -276,24 +296,16 @@ export const ResourceWindow = ({
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {!embeddedHeader && (
-        <div
-          className="fc-resource-window-drag"
-          role="button"
-          tabIndex={0}
-          aria-label={title}
-          onPointerDown={(event) => start(event, "move")}
-          onPointerMove={move}
-          onPointerUp={finish}
-          onPointerCancel={cancel}
-          onLostPointerCapture={cancel}
-          onKeyDown={(event) => key(event, "move")}
-        >
-          {title}
+      {headerActions ? (
+        <div className="fc-resource-window-header">
+          {dragHandle}
+          {headerActions}
         </div>
+      ) : (
+        dragHandle
       )}
       <div className="fc-resource-window-content">{children}</div>
-      {!embeddedHeader && (
+      {!embeddedHeader && onReload && (
         <footer>
           <button type="button" disabled aria-label={t("fcboard.previous")}>
             <FactoryWebIcon name="back" />

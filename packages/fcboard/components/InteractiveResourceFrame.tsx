@@ -1,6 +1,13 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-import { interactiveHtml } from "../interactiveHtml";
+import { interactiveHtml, resourceNeedsRuntime } from "../interactiveHtml";
 import { t } from "../i18n";
 import { attachResourceControls } from "../interactiveResourceControls";
 
@@ -11,23 +18,81 @@ import type { Ref } from "react";
 import type { ResourceSurface } from "../interactiveResourceControls";
 import type { ComponentProps } from "react";
 
+export type InteractiveResourceFrameProps = {
+  resource: InteractiveResource;
+  objectId: string;
+  surface: ResourceSurface;
+  iframeRef?: Ref<HTMLIFrameElement>;
+  live?: ResourceLiveUpdate;
+  window?: Omit<
+    ComponentProps<typeof ResourceWindow>,
+    "title" | "children" | "onReload"
+  >;
+};
+
+export type ResourceLiveUpdate = {
+  key: string;
+  message: Record<string, unknown>;
+};
+
 export const InteractiveResourceFrame = ({
   resource,
   iframeRef,
   objectId,
   surface,
   window,
-}: {
-  resource: InteractiveResource;
-  objectId: string;
-  surface: ResourceSurface;
-  iframeRef?: Ref<HTMLIFrameElement>;
-  window?: Omit<
-    ComponentProps<typeof ResourceWindow>,
-    "title" | "children" | "onReload"
-  >;
-}) => {
+  live,
+}: InteractiveResourceFrameProps) => {
   const [revision, setRevision] = useState(0);
+  const identity = live ? `${resource.id}:${live.key}` : resource;
+  const [documentSnapshot, setDocumentSnapshot] = useState({
+    identity,
+    resource,
+  });
+  const loaded = useRef(false);
+  if (documentSnapshot.identity !== identity) {
+    loaded.current = false;
+    setDocumentSnapshot({ identity, resource });
+  }
+  const documentResource =
+    documentSnapshot.identity === identity
+      ? documentSnapshot.resource
+      : resource;
+  const liveMessage = useRef(live?.message);
+  liveMessage.current = live?.message;
+  const liveSignature = JSON.stringify(live?.message);
+
+  const [preparedDocument, setPreparedDocument] = useState<{
+    source: InteractiveResource;
+    html?: string;
+    error?: string;
+  }>();
+  useEffect(() => {
+    if (!resourceNeedsRuntime(documentResource)) {
+      return;
+    }
+    let active = true;
+    void import("../resourceHtml")
+      .then(({ resourceHtml }) => resourceHtml(documentResource))
+      .then(
+        (html) => {
+          if (active) {
+            setPreparedDocument({ source: documentResource, html });
+          }
+        },
+        (error) => {
+          if (active) {
+            setPreparedDocument({
+              source: documentResource,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [documentResource, revision]);
   const controls = useRef<ReturnType<typeof attachResourceControls> | null>(
     null,
   );
@@ -42,9 +107,18 @@ export const InteractiveResourceFrame = ({
             node,
           )
         : null;
+      if (node && loaded.current) {
+        controls.current?.loaded();
+      }
     },
     [surface, objectId, resource.html],
   );
+  const sendLive = useCallback(() => {
+    if (liveMessage.current) {
+      frame.current?.contentWindow?.postMessage(liveMessage.current, "*");
+    }
+  }, []);
+  useEffect(sendLive, [sendLive, liveSignature, revision]);
   useLayoutEffect(() => {
     if (typeof iframeRef === "function") {
       iframeRef(frame.current);
@@ -58,29 +132,66 @@ export const InteractiveResourceFrame = ({
         iframeRef.current = null;
       }
     };
-  }, [iframeRef, resource.html, revision]);
+  }, [iframeRef, resource.html, revision, preparedDocument]);
   const html = useMemo(() => {
     try {
-      return interactiveHtml(resource.html);
+      const html = interactiveHtml(
+        documentResource.html,
+        documentResource.libraries,
+      );
+      if (!resourceNeedsRuntime(documentResource)) {
+        return html;
+      }
+      const preview = new DOMParser().parseFromString(html, "text/html");
+      preview.querySelectorAll("script").forEach((script) => script.remove());
+      for (const element of preview.querySelectorAll("*")) {
+        for (const attribute of [...element.attributes]) {
+          if (/^on/i.test(attribute.name)) {
+            element.removeAttribute(attribute.name);
+          }
+        }
+      }
+      preview.body.style.pointerEvents = "none";
+      const status = preview.createElement("p");
+      status.setAttribute("role", "status");
+      status.style.cssText =
+        "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 18px;background:#fff;color:#17243c;border-radius:12px";
+      status.textContent = t("fcboard.resource_loading");
+      preview.body.append(status);
+      return `<!doctype html>${preview.documentElement.outerHTML}`;
     } catch {
       return undefined;
     }
-  }, [resource.html]);
-  if (!html) {
-    return (
-      <p role="alert">
-        {t("fcboard.the_generated_teaching_resource_is_invalid")}
-      </p>
-    );
-  }
-  const content = (
+  }, [documentResource]);
+  const visual =
+    preparedDocument?.source === documentResource
+      ? preparedDocument
+      : undefined;
+  const error =
+    visual?.error ||
+    (!html
+      ? t("fcboard.the_generated_teaching_resource_is_invalid")
+      : undefined);
+  const content = error ? (
+    <p role="alert">{error}</p>
+  ) : (
     <iframe
       key={revision}
       ref={ref}
-      onLoad={() => controls.current?.loaded()}
+      onLoad={() => {
+        if (resourceNeedsRuntime(documentResource) && !visual?.html) {
+          return;
+        }
+        loaded.current = true;
+        controls.current?.loaded();
+        sendLive();
+      }}
       className="fcboard__embeddable"
       title={resource.title}
-      srcDoc={html}
+      data-resource-object-id={objectId}
+      data-resource-id={resource.id}
+      srcDoc={visual?.html || html}
+      aria-busy={resourceNeedsRuntime(documentResource) && !visual?.html}
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
       allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'"
@@ -91,7 +202,13 @@ export const InteractiveResourceFrame = ({
     <ResourceWindow
       {...window}
       title={resource.title}
-      onReload={() => setRevision((value) => value + 1)}
+      embeddedHeader={
+        resource.id === "builtin-calculator" || !!resource.visualization
+      }
+      onReload={() => {
+        loaded.current = false;
+        setRevision((value) => value + 1);
+      }}
     >
       {content}
     </ResourceWindow>

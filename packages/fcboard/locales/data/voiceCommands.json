@@ -1,0 +1,400 @@
+{
+  "compound": [
+    "(?:然后|接着|随后|并且|之后|同时(?:打开|使用|开始|插入|录制))",
+    "(?:然后|接着|随后|并且|并(?:写|插|用|生成|开始|录))",
+    "(?:然后|接着|随后|并且|之后|并讲解|同时(?:打开|使用|开始|插入|录制))",
+    "\\b(?:then|afterwards|and then|and (?:start|open|insert|explain|generate))\\b"
+  ],
+  "rules": [
+    {
+      "patterns": ["^(?:(?:please\\s+)?(?:stop|cancel|stop talking)|(?:请)?(?:停止|取消|别说了|停下|停一下|等一下))[。.!！?？\\s]*$", "^(?:please\\s+)?(?:stop|cancel|stop talking)[.!?\\s]*$"],
+      "compact": false,
+      "command": {
+        "name": "voice.interrupt"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:画|插入|生成|创建)(?:一个|个|一|标准|线条|的|\\s)*(?:立方体|正方体)[吧。！!\\s]*$", "^(?:please\\s+)?(?:draw|insert|generate|create)\\s+(?:a\\s+|one\\s+|standard\\s+|wireframe\\s+)*cube[.!?\\s]*$"],
+      "compact": false,
+      "command": {
+        "name": "tools.insert",
+        "args": {
+          "kind": "cube"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:用(?:画笔|钢笔))?(?:手写|板书|写下?|写一个)(?:一个)?(?:标题|题目)\\s*[:：]?\\s*(.+)$", "^(?:please\\s+)?(?:handwrite|write|write down)\\s+(?:a\\s+|the\\s+)?(?:title|heading)\\s*[:]?\\s*(.+)$"],
+      "compact": false,
+      "kind": "title",
+      "rejectCompound": true
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|切换到)(?:课件|文档|文件)\\s*[:：]?\\s*[“\"「]?(.+?)[”\"」]?[。！!]*$", "^(?:please\\s+)?(?:open|switch to)\\s+(?:the\\s+)?(?:document|file|presentation)\\s*[:]?\\s*[\"\\u201c]?(.+?)[\"\\u201d]?[.!]*$"],
+      "compact": false,
+      "kind": "file",
+      "rejectCompound": true
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:生成|制作|创建).*(?:html|动画|交互(?:实验|图形|资源)|可交互|教学资源)", "^(?:please\\s+)?(?:generate|make|create)\\b.*(?:html|animation|interactive|teaching resource)"],
+      "compact": false,
+      "kind": "resource",
+      "rejectCompound": true
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:写下|写上|写一个|写个|写[：:])\\s*([\\s\\S]+)$", "^(?:please\\s+)?(?:write down|write|handwrite)\\s+([\\s\\S]+)$"],
+      "compact": false,
+      "kind": "write"
+    },
+    {
+      "patterns": [
+        "^(?:请|帮我)?(?:换成|切换到|切换为|改用|换|使用|选择|用)?(?:一支)?(画笔|钢笔|荧光笔|虚线笔|文字笔|图形笔|彩虹笔|魔术笔|算式笔|函数笔|语言笔)$",
+        "^(?:please)?(?:switchto|use|select|choose)?(?:the)?(pen|brush|highlighter|dashedpen|textpen|shapepen|rainbowpen|magicpen|calculationpen|functionpen|languagepen)$"
+      ],
+      "compact": true,
+      "kind": "pen"
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:换成|切换到|使用|选择)?(?:选择|圈选|选择工具|套索)$", "^(?:please)?(?:switchto|use|choose|select)?(?:selectiontool|selection|lasso)$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.tool",
+        "args": {
+          "tool": "lasso"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:换成|切换到|使用|选择|打开)?(局部|对象)?(?:橡皮擦?|擦除)$", "^(?:please)?(?:switchto|use|choose|select|open)?(stroke|object)?eraser$"],
+      "compact": true,
+      "kind": "eraser"
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:清屏|清空画布|擦掉全部内容)$", "^(?:please)?(?:clearscreen|clearcanvas|clearboard|eraseeverything)$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.clear"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:全选|选择全部|选中全部)$", "^(?:please)?selectall$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.action",
+        "args": {
+          "action": "selectAll"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:取消选择|取消圈选)$", "^(?:please)?(?:deselect|clearselection)$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.select",
+        "args": {
+          "ids": []
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:复制)(?:圈中|选中|所选|选区)(?:的)?(?:内容|部分|对象)?$", "^(?:please)?(?:copy|duplicate)(?:the)?(?:selection|selectedobjects|selectedcontent)$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.action",
+        "args": {
+          "action": "duplicateSelection"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:开始|开启|打开)?录制$", "^(?:please)?(?:start|begin|open)?recording$"],
+      "compact": true,
+      "command": {
+        "name": "record.start"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?暂停录制$", "^(?:please)?pauserecording$"],
+      "compact": true,
+      "command": {
+        "name": "record.pause"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?继续录制$", "^(?:please)?resumerecording$"],
+      "compact": true,
+      "command": {
+        "name": "record.resume"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|查看)(?:课件|文档|文件)$", "^(?:please)?(?:open|view)(?:the)?(?:document|file|presentation)$"],
+      "compact": true,
+      "command": {
+        "name": "files.open"
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:打开|开启|使用)聚光灯$", "^(?:please)?(?:open|enable|use)spotlight$"],
+      "compact": true,
+      "command": {
+        "name": "tools.spotlight",
+        "args": {
+          "open": true
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:关闭|结束)聚光灯$", "^(?:please)?(?:close|disable)spotlight$"],
+      "compact": true,
+      "command": {
+        "name": "tools.spotlight",
+        "args": {
+          "open": false
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:插入|添加|创建|打开|使用)(?:一个|一把|个)?(直尺|量角器|圆规|三角板)$", "^(?:please)?(?:insert|add|create|open|use)(?:a|one|the)?(ruler|protractor|compass|setsquare)$"],
+      "compact": true,
+      "kind": "gizmo"
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?(?:思维导图|思维图)$", "^(?:please)?(?:insert|create|add)(?:a|one)?mindmap$"],
+      "compact": true,
+      "command": {
+        "name": "insert.object",
+        "args": {
+          "kind": "mindmap"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?表格$", "^(?:please)?(?:insert|create|add)(?:a|one)?table$"],
+      "compact": true,
+      "command": {
+        "name": "insert.object",
+        "args": {
+          "kind": "table"
+        }
+      }
+    },
+    {
+      "patterns": [
+        "^(?:请|帮我)?(?:插入|创建|添加)(?:一个|个)?([\\d一二三四五六七八九十]+)行([\\d一二三四五六七八九十]+)列(?:的)?表格$",
+        "^(?:please)?(?:insert|create|add)(?:a|one)?(?:tablewith)?(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)rows?(?:and)?(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)columns?(?:table)?$"
+      ],
+      "compact": true,
+      "kind": "table"
+    },
+    {
+      "patterns": ["^(?:帮我)?(?:新建|创建)$", "^(?:please)?(?:new|create)$"],
+      "compact": true,
+      "command": {
+        "name": "board.new"
+      }
+    },
+    {
+      "patterns": ["^(?:清空|擦净)(?:当前|这块)?白板$", "^(?:clear|erase)(?:the|current)?board$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.clear"
+      }
+    },
+    {
+      "patterns": ["^(?:停止|结束)录制$", "^(?:stop|end)recording$"],
+      "compact": true,
+      "command": {
+        "name": "record.stop"
+      }
+    },
+    {
+      "patterns": ["^(?:开启|打开)(?:快传|一键上屏|局域网快传)$", "^(?:enable|open|start)(?:lan)?filereception$"],
+      "compact": true,
+      "command": {
+        "name": "files.receive",
+        "args": {
+          "enabled": true
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:关闭|停止)(?:快传|一键上屏|局域网快传)$", "^(?:disable|close|stop)(?:lan)?filereception$"],
+      "compact": true,
+      "command": {
+        "name": "files.receive",
+        "args": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:关闭浮层|关闭总结|关闭设置)$", "^close(?:overlay|summary|settings)$"],
+      "compact": true,
+      "command": {
+        "name": "panel.close"
+      }
+    },
+    {
+      "patterns": ["^(?:帮我)?放大$", "^zoomin$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.action",
+        "args": {
+          "action": "zoomIn"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:帮我)?缩小$", "^zoomout$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.action",
+        "args": {
+          "action": "zoomOut"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:帮我)?(?:新建|创建|新增)(?:一[块张个])?(?:白板|板)$", "^(?:please)?(?:new|create|add)(?:a|one)?(?:whiteboard|board)$"],
+      "compact": true,
+      "command": {
+        "name": "board.new"
+      }
+    },
+    {
+      "patterns": ["^(?:下一页|下一张|往后翻)$", "^(?:nextpage|nextslide)$"],
+      "compact": true,
+      "command": {
+        "name": "document.next"
+      }
+    },
+    {
+      "patterns": ["^(?:上一页|上一张|往前翻)$", "^(?:previouspage|previousslide)$"],
+      "compact": true,
+      "command": {
+        "name": "document.previous"
+      }
+    },
+    {
+      "patterns": ["^(?:开启|打开|开始)板书$", "^(?:enable|open|start)(?:annotation|annotations)$"],
+      "compact": true,
+      "command": {
+        "name": "document.ink",
+        "args": {
+          "enabled": true
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:关闭|结束)板书$", "^(?:disable|close|stop)(?:annotation|annotations)$"],
+      "compact": true,
+      "command": {
+        "name": "document.ink",
+        "args": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:撤销|撤回)$", "^undo$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.action",
+        "args": {
+          "action": "undo"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:重做|恢复上一步)$", "^redo$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.action",
+        "args": {
+          "action": "redo"
+        }
+      }
+    },
+    {
+      "patterns": ["^(?:擦掉|删除|消除)(?:圈中|选中|所选|选区)(?:的)?(?:内容|部分|对象)?$", "^(?:erase|delete|remove)(?:the)?(?:selection|selectedobjects|selectedcontent)$"],
+      "compact": true,
+      "command": {
+        "name": "canvas.erase"
+      }
+    },
+    {
+      "patterns": ["^(?:关闭课件|关闭预览|返回白板)$", "^(?:closedocument|closepreview|returntoboard)$"],
+      "compact": true,
+      "command": {
+        "name": "document.close"
+      }
+    },
+    {
+      "patterns": ["^(?:保存白板|保存这块板)$", "^save(?:the|this)?board$"],
+      "compact": true,
+      "command": {
+        "name": "board.save"
+      }
+    }
+  ],
+  "words": {
+    "画笔": "hard",
+    "钢笔": "brush",
+    "荧光笔": "highlighter",
+    "虚线笔": "dashed",
+    "文字笔": "text",
+    "图形笔": "shape",
+    "彩虹笔": "rainbow",
+    "魔术笔": "magic",
+    "算式笔": "calculation",
+    "函数笔": "function",
+    "语言笔": "language",
+    "直尺": "ruler",
+    "量角器": "protractor",
+    "圆规": "compass",
+    "三角板": "setSquare",
+    "pen": "hard",
+    "brush": "brush",
+    "highlighter": "highlighter",
+    "dashedpen": "dashed",
+    "textpen": "text",
+    "shapepen": "shape",
+    "rainbowpen": "rainbow",
+    "magicpen": "magic",
+    "calculationpen": "calculation",
+    "functionpen": "function",
+    "languagepen": "language",
+    "ruler": "ruler",
+    "protractor": "protractor",
+    "compass": "compass",
+    "setsquare": "setSquare"
+  },
+  "numbers": {
+    "一": 1,
+    "二": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+    "十": 10,
+    "十一": 11,
+    "十二": 12,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12
+  },
+  "objectEraser": ["对象", "object"]
+}

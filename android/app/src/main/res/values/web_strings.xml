@@ -9,4 +9,6 @@
     <string name="web_load_failed">Could not load this page. Check your network and reload.</string>
     <string name="web_move">Move webpage</string>
     <string name="web_resize">Resize webpage</string>
+    <string name="web_renderer_stopped">The webpage stopped unexpectedly and was closed. You can open it again.</string>
+    <string name="webview_recovery_message">The whiteboard display stopped. Reload to recover the most recently saved whiteboard content.</string>
 </resources>

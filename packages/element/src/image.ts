@@ -52,25 +52,37 @@ export const updateImageCache = async ({
         updatedFiles.set(fileId, true);
         return promises.concat(
           (async () => {
+            let loading: ReturnType<AppClassProperties["imageCache"]["get"]>;
             try {
               if (fileData.mimeType === MIME_TYPES.binary) {
                 throw new Error("Only images can be added to ImageCache");
               }
 
               const imagePromise = loadHTMLImageElement(fileData.dataURL);
+              const previous = imageCache.get(fileId)?.image;
               const data = {
-                image: imagePromise,
+                image:
+                  previous && !(previous instanceof Promise)
+                    ? previous
+                    : imagePromise,
                 mimeType: fileData.mimeType,
               } as const;
-              // store the promise immediately to indicate there's an in-progress
-              // initialization
+              loading = data;
+              // Reserve this generation, retaining the last decoded image while
+              // a newer file version loads so an interactive edit cannot flicker.
               imageCache.set(fileId, data);
 
               const image = await imagePromise;
 
-              imageCache.set(fileId, { ...data, image });
+              if (imageCache.get(fileId) === data) {
+                imageCache.set(fileId, { ...data, image });
+              }
             } catch (error: any) {
-              erroredFiles.set(fileId, true);
+              // A replaced or removed load must not overwrite newer pixels or
+              // mark their element as failed when it settles out of order.
+              if (!loading || imageCache.get(fileId) === loading) {
+                erroredFiles.set(fileId, true);
+              }
             }
           })(),
         );

@@ -1,0 +1,88 @@
+.app .fc-classroom .fc-curtain {
+  button {
+    width: 33.333px;
+    height: 33.333px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background-color: transparent;
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+  .fc-curtain-left {
+    left: 3.333px;
+    top: calc(50% - 16.667px);
+  }
+  .fc-curtain-right {
+    right: 0;
+    top: calc(50% - 16.667px);
+  }
+  .fc-curtain-top {
+    top: 3.333px;
+    left: calc(50% - 16.667px);
+  }
+  .fc-curtain-bottom {
+    bottom: 0;
+    left: calc(50% - 16.667px);
+  }
+  .fc-curtain-move {
+    left: calc(50% - 16.667px);
+    top: calc(50% - 16.667px);
+  }
+  .fc-curtain-actions {
+    position: absolute;
+    bottom: 40px;
+    left: calc(50% - 43.333px);
+    right: auto;
+    display: flex;
+    gap: 20px;
+  }
+  .fc-curtain-actions button {
+    position: relative;
+    inset: auto;
+  }
+  .fc-curtain-left {
+    background-image: url("./assets/curtain/about_btn.svg");
+  }
+  .fc-curtain-left:active {
+    background-image: url("./assets/curtain/about_btn_focus.svg");
+  }
+  .fc-curtain-right {
+    background-image: url("./assets/curtain/about_btn.svg");
+  }
+  .fc-curtain-right:active {
+    background-image: url("./assets/curtain/about_btn_focus.svg");
+  }
+  .fc-curtain-top {
+    background-image: url("./assets/curtain/up_down_btn.svg");
+  }
+  .fc-curtain-top:active {
+    background-image: url("./assets/curtain/up_down_btn_focus.svg");
+  }
+  .fc-curtain-bottom {
+    background-image: url("./assets/curtain/up_down_btn.svg");
+  }
+  .fc-curtain-bottom:active {
+    background-image: url("./assets/curtain/up_down_btn_focus.svg");
+  }
+  .fc-curtain-move {
+    background-image: url("./assets/curtain/core_btn.svg");
+  }
+  .fc-curtain-move:active {
+    background-image: url("./assets/curtain/core_btn_focus.svg");
+  }
+  .fc-curtain-background {
+    background-image: url("./assets/curtain/bg_btn.svg");
+  }
+  .fc-curtain-background:active {
+    background-image: url("./assets/curtain/bg_btn_focus.svg");
+  }
+  .fc-curtain-close {
+    background-image: url("./assets/curtain/close_app.svg");
+  }
+  .fc-curtain-close:active {
+    background-image: url("./assets/curtain/close_app_focus.svg");
+  }
+}

@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { transferableAbortController } from "node:util";
-import { execFileSync } from "node:child_process";
 
 import { it } from "vitest";
 
@@ -11,44 +10,8 @@ import protractor from "./factory-gizmo-icons/protractor.json";
 import { recognizeInkContent } from "./inkRecognition";
 import { insertGeneratedImage } from "./imageGeneration";
 import { sceneAPI } from "./test/scene";
-import * as transparent from "./transparentInkImage";
 import { registerCanvasCommands } from "./canvasCommands";
 import { agentResponsesEndpoint, runResponsesAgent } from "./responsesAgent";
-
-// Only the browser host is adapted: execute the actual compositor with real
-// decoded PNG alpha and Canvas, without starting an app server or building.
-const canvasHost = `
-import { readFileSync } from "node:fs";
-import { chromium } from "@playwright/test";
-const input = JSON.parse(readFileSync(0, "utf8"));
-const browser = await chromium.launch({ headless: true, executablePath: chromium.executablePath() });
-try {
-  const page = await browser.newPage();
-  await page.addScriptTag({ content: "globalThis.composeSubject = " + input.compose });
-  const output = await page.evaluate(async (sources) => {
-    const layers = await Promise.all(sources.map(async (source) => {
-      const image = new Image();
-      image.src = source.image;
-      await image.decode();
-      return { ...source, image };
-    }));
-    const result = globalThis.composeSubject(layers);
-    const image = new Image(); image.src = result.dataURL; await image.decode();
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-    const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-    let transparentPixels = 0; let visiblePixels = 0;
-    for (let i = 3; i < pixels.length; i += 4) {
-      if (pixels[i] === 0) transparentPixels++;
-      if (pixels[i] > 0) visiblePixels++;
-    }
-    if (!transparentPixels || !visiblePixels) throw new Error("Invalid subject alpha");
-    return { ...result, transparentPixels, visiblePixels };
-  }, input.layers);
-  process.stdout.write(JSON.stringify(output));
-} finally { await browser.close(); }
-`;
 
 /** Opt-in only: never sends requests during ordinary tests or without a supplied key. */
 const live = process.env.FCBOARD_LIVE === "1" && !!process.env.hs_apikey;
@@ -374,12 +337,8 @@ it.runIf(live).each(["text", "drawing"])(
     if (recognized.kind !== "magic") {
       throw new Error("Magic recognition failed");
     }
-    if (kind === "text") {
-      expect(recognized.image).toBeUndefined();
-      expect(recognized.prompt).toContain("二次元女孩");
-    } else {
-      expect(recognized.image).toBe(input);
-    }
+    expect(recognized.image).toBe(input);
+    expect(recognized.prompt).toContain("若没有文字要求，仅按图生图");
     vi.stubGlobal(
       "Image",
       class {
@@ -396,33 +355,7 @@ it.runIf(live).each(["text", "drawing"])(
       },
     );
     const api = sceneAPI();
-    const compositor = transparent.transparentInkImage;
-    let alpha: { transparentPixels: number; visiblePixels: number } | undefined;
-    vi.spyOn(transparent, "transparentInkImage").mockImplementation(
-      (layers) => {
-        const input = JSON.stringify({
-          compose: compositor.toString(),
-          layers: layers.map((layer) => ({ ...layer, image: layer.image.src })),
-        });
-        writeFileSync(`/tmp/fjy-magic-${kind}-layers.json`, input);
-        const result = JSON.parse(
-          execFileSync(
-            process.execPath,
-            ["--input-type=module", "-e", canvasHost],
-            {
-              input,
-              maxBuffer: 40_000_000,
-              timeout: 30000,
-            },
-          ).toString(),
-        );
-        alpha = {
-          transparentPixels: result.transparentPixels,
-          visiblePixels: result.visiblePixels,
-        };
-        return result;
-      },
-    );
+    const requestCount = traces.length;
     const source = api.getSceneElements().map((element) => element.id);
     await insertGeneratedImage(
       api,
@@ -440,6 +373,8 @@ it.runIf(live).each(["text", "drawing"])(
         replaceIds: source,
       },
     );
+    expect(traces.length - requestCount).toBe(1);
+    expect(traces.at(-1)?.decomposition).toBe(false);
     const inserted = api.getSceneElements()[0];
     expect(api.getSceneElements()).toHaveLength(1);
     expect(inserted.type).toBe("image");
@@ -455,7 +390,6 @@ it.runIf(live).each(["text", "drawing"])(
       reference: !!recognized.image,
       width: inserted.width,
       height: inserted.height,
-      alpha,
     };
   },
   120000,

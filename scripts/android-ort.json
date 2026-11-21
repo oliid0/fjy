@@ -1,0 +1,12 @@
+{
+  "version": "1.23.2",
+  "url": "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.23.2/onnxruntime-android-1.23.2.aar",
+  "size": 30241654,
+  "sha1": "6c74a76bb284681c2d73288095c7320f1f7079b2",
+  "sharedX86Runtime": "1.28.2",
+  "moonshine": {
+    "url": "https://repo.maven.apache.org/maven2/ai/moonshine/moonshine-voice/0.1.5/moonshine-voice-0.1.5.aar",
+    "size": 24321396,
+    "sha256": "ee2d95c21150683c743db8f3aef66281fd5408bcefc94be3ca1d2545ada1f571"
+  }
+}

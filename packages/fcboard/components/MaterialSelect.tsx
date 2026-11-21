@@ -72,6 +72,11 @@ export const MaterialSelect = ({
       }}
       onPointerDown={(event) => event.stopPropagation()}
       MenuProps={{
+        // React events from a portal still bubble through its owning label and
+        // picker. Keep parent toggles/dismiss handlers out of a choice click.
+        className: "fc-material-select-menu",
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation(),
         // A dialog's backdrop-filter creates a containing block for fixed
         // descendants. Keep the menu in the editor root, outside that block.
         container: () => root.current?.closest(".fcboard") || document.body,

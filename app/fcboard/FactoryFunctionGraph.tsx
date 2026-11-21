@@ -83,8 +83,11 @@ export const FactoryFunctionGraph = ({
     };
   }, []);
   const samples = useMemo(
-    () => functions.map(sampleSourceFunction),
-    [functions],
+    () =>
+      functions.map((item) =>
+        sampleSourceFunction(item, { ...size, ...view, functions }),
+      ),
+    [functions, size, view],
   );
   const nodes = useMemo(
     () => functionGraphNodes({ ...size, ...view }, samples),

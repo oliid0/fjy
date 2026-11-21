@@ -584,7 +584,11 @@ export const convertToFcboardElements = (
         const normalizedText = normalizeText(text);
         const metrics = measureText(
           normalizedText,
-          getFontString({ fontFamily, fontSize }),
+          getFontString({
+            fontFamily,
+            fontSize,
+            fontWeight: element.fontWeight,
+          }),
           lineHeight,
         );
 

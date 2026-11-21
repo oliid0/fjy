@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="com.huawei.permission.HISIGHT_ACCESS" />
+    <uses-permission android:name="com.huawei.hms.kitframework.permission.BIND_ENGINE_FRAMEWORK_SERVICE" />
+    <uses-permission android:name="com.huawei.hms.kitframework.permission.REQUEST_AUTHENTICATION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <application>
+        <service android:name="com.airplay.ProjectionMediaService"
+            android:exported="false" android:process=":projection_media" />
+        <service android:name="com.huawei.hisight.service.PlayerSinkService" android:exported="false" android:process=":projection_media" />
+        <service android:name="com.huawei.connection.service.NearFieldManagerService" android:exported="false" android:process=":castplus_nearby" />
+        <meta-data android:name="version" android:value="1" />
+    </application>
+</manifest>

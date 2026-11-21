@@ -1,5 +1,6 @@
+import { calculateLocal as calculate } from "./mathCalculation";
+
 import {
-  calculate,
   compileExpression,
   defaultPlot,
   normalizeExpression,

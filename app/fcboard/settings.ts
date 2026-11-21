@@ -13,7 +13,10 @@ export type Settings = {
   textModel: string;
   imageModel: string;
   ocr: "auto" | "local" | "cloud";
-  inkLanguage: "auto" | "zh-Hani-CN" | "en-US";
+  inkLanguage: "auto" | import("./languagePacks").HandwritingPack["tag"];
+  mathTranscription: "local" | "cloud";
+  translationProvider: "local" | "cloud";
+  handwritingGeneration: "local" | "cloud";
   apiKey: string;
   speechRoutingVersion?: number;
   speech: "cloud" | "local" | "system" | "custom";
@@ -39,6 +42,9 @@ export const defaults: Settings = {
   imageModel: "doubao-seedream-5-0-flash-260915",
   ocr: "auto",
   inkLanguage: "auto",
+  mathTranscription: "local",
+  translationProvider: "local",
+  handwritingGeneration: "local",
   apiKey: "",
   speech: "system",
   assistantVoice: "agent",
@@ -80,6 +86,8 @@ export const loadSettings = (): Settings => {
   }
 };
 
+export const SETTINGS_CHANGED = "fc-settings-changed";
+
 export const saveSettings = (settings: Settings, rememberKey: boolean) => {
   sessionStorage.setItem(
     "fcboard-keys",
@@ -99,6 +107,7 @@ export const saveSettings = (settings: Settings, rememberKey: boolean) => {
       ttsKey: rememberKey ? settings.ttsKey : "",
     }),
   );
+  window.dispatchEvent(new Event(SETTINGS_CHANGED));
 };
 
 export const currentSettings = (): Settings => {

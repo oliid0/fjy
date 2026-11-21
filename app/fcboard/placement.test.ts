@@ -10,7 +10,7 @@ import {
   drawPlot,
   selectedPlot,
 } from "./board";
-import { localMathResult, validatedPlot } from "./mathRecognition";
+import { localFunctionResult, validatedPlot } from "./mathRecognition";
 import {
   insertionDefaults,
   readInsertions,
@@ -527,22 +527,70 @@ it("places a function beside its source rather than at the old distant lower-rig
   expect(graph[3]).toBeLessThanOrEqual(816);
 });
 
-it("retains the original equation and its actual residual label through the public plot validator", () => {
-  const result = localMathResult("x^2+1/x-1=0", "function");
+it("retains the original equation and its actual residual in the saved function object", () => {
+  const result = localFunctionResult("x^2+1/x-1=0");
   if (result.kind !== "function") {
     throw new Error("Expected equation graph");
   }
   const api = sceneAPI();
   const plot = validatedPlot(result.plot);
   drawPlot(api, plot, { x: 500, y: 400 });
-  const label = api
+  const graph = api
     .getSceneElements()
-    .find(
-      (element) =>
-        element.type === "text" && element.originalText.includes("=0"),
-    );
-  expect(label).toMatchObject({
-    originalText: `x^2+1/x-1=0\ny = ${plot.expression}`,
+    .find((element) => element.customData?.fcPlot);
+  expect(graph).toMatchObject({
+    type: "image",
+    customData: {
+      fcPlot: {
+        renderer: "canvas",
+        plot: { equation: "x^2+1/x-1=0", expression: plot.expression },
+      },
+    },
   });
   expect(validatedPlot({ ...plot, equation: "x=9" }).equation).toBeUndefined();
+});
+
+it("replaces ink at its exact original origin and line-box height beside nearby objects", () => {
+  const api = sceneAPI();
+  const source = newFreeDrawElement({
+    type: "freedraw",
+    x: 200,
+    y: 180,
+    points: [pointFrom(0, 0), pointFrom(100, 40)],
+    strokeColor: "#dc2626",
+    simulatePressure: true,
+  });
+  const neighbor = newFreeDrawElement({
+    type: "freedraw",
+    simulatePressure: source.simulatePressure,
+    points: source.points,
+    strokeColor: source.strokeColor,
+    strokeWidth: source.strokeWidth,
+    x: 200,
+    y: 225,
+  });
+  api.updateScene({ elements: [source, neighbor] });
+  const ids = insertText(
+    api,
+    "hello",
+    { x: source.x, y: source.y },
+    undefined,
+    [source],
+    "text",
+    { mode: "replace", sourceLines: 1 },
+  );
+  const result = api
+    .getSceneElements()
+    .find((element) => ids.includes(element.id))!;
+  expect(result).toMatchObject({
+    type: "text",
+    x: 200,
+    y: 180,
+    height: 40,
+    text: "hello",
+    strokeColor: "#dc2626",
+  });
+  expect(
+    api.getSceneElements().find((element) => element.id === neighbor.id),
+  ).toBe(neighbor);
 });

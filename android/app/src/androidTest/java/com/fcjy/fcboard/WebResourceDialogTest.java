@@ -17,6 +17,52 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class WebResourceDialogTest {
+    @Test public void hiddenBrowserDisposesSynchronouslyAndCannotBeResurrected() {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            onActivity(scenario, activity -> {
+                WebResourceDialog browser = new WebResourceDialog(activity, "https://example.test/", "en");
+                browser.show();
+                android.webkit.WebView original = browser.web;
+                browser.hide();
+                assertFalse(browser.isShowing());
+                assertNotNull(original.getParent());
+                browser.dismiss();
+                assertNull(browser.web);
+                assertNull(original.getParent());
+                // The same path is called by a delayed cancelled image drag.
+                browser.show();
+                assertFalse(browser.isShowing());
+                browser.dismiss();
+            });
+        }
+    }
+
+    @Test public void rendererTerminationReleasesOnlyTheAffectedBrowser() {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            onActivity(scenario, activity -> {
+                android.webkit.WebView board = activity.getBridge().getWebView();
+                WebResourceDialog browser = new WebResourceDialog(activity, "https://example.test/", "en");
+                browser.show();
+                android.webkit.WebView original = browser.web;
+                android.webkit.WebViewClient client = original.getWebViewClient();
+                android.webkit.RenderProcessGoneDetail stopped = new android.webkit.RenderProcessGoneDetail() {
+                    @Override public boolean didCrash() { return false; }
+                    @Override public int rendererPriorityAtExit() { return android.webkit.WebView.RENDERER_PRIORITY_IMPORTANT; }
+                };
+                assertTrue(client.onRenderProcessGone(original, stopped));
+                assertTrue(client.onRenderProcessGone(original, stopped));
+                assertNull(browser.web);
+                assertNull(original.getParent());
+                assertFalse(browser.isShowing());
+                assertSame(board, activity.getBridge().getWebView());
+                assertNotNull(board.getParent());
+                client.onPageFinished(original, "https://example.test/late");
+                browser.show();
+                assertFalse(browser.isShowing());
+            });
+        }
+    }
+
     /** Active WebView animations need not make the whole UI queue idle before every read. */
     private void onActivity(ActivityScenario<MainActivity> scenario, ActivityScenario.ActivityAction<MainActivity> action) {
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
@@ -90,7 +136,10 @@ public class WebResourceDialogTest {
                 android.graphics.Bitmap image=android.graphics.BitmapFactory.decodeByteArray(decoded,0,decoded.length);
                 assertNotNull(image);assertEquals(20,image.getWidth());assertEquals(10,image.getHeight());assertEquals(android.graphics.Color.RED,image.getPixel(10,5));image.recycle();
             } finally {
-                onActivity(scenario, activity->{if(dialog.get()!=null)dialog.get().dismiss();});
+                // CI120 passed image/drop assertions, then waited90s in
+                // ActivityScenario.close's global-idle barrier. Finish the live
+                // WebView owner first so its animation loop cannot block teardown.
+                onActivity(scenario, activity->{if(dialog.get()!=null)dialog.get().dismiss();activity.finish();});
             }
         }
     }

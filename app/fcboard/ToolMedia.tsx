@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { nativeErrorMessage } from "./nativeErrorMessage";
+
 import { classroomCommands } from "./commands";
 import { FloatingToolPanel } from "./FloatingToolPanel";
 import { Media } from "./builtinNative";
@@ -196,7 +198,7 @@ export const ToolMedia = () => {
             />
           </>
         )}
-        {error && <p role="alert">{error}</p>}
+        {error && <p role="alert">{nativeErrorMessage(error)}</p>}
       </div>
     </FloatingToolPanel>
   ) : null;

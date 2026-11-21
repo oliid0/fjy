@@ -38,6 +38,29 @@ const assertCloneObjects = (source: any, clone: any) => {
 };
 
 describe("duplicating single elements", () => {
+  it("gives duplicated graph metadata its own consistent object identity", () => {
+    const source = {
+      ...API.createElement({ type: "image", groupIds: ["graph-source"] }),
+      customData: { fcPlot: { id: "graph-source", plot: { expression: "x" } } },
+    };
+    const groups = new Map<string, string>();
+    const first = duplicateElement(null, groups, source);
+    const second = duplicateElement(null, groups, {
+      ...source,
+      id: "another-part",
+    });
+    expect(first.customData.fcPlot.id).not.toBe(source.customData.fcPlot.id);
+    expect(first.customData.fcPlot.id).toBe(first.groupIds[0]);
+    expect(second.customData.fcPlot.id).toBe(first.customData.fcPlot.id);
+    expect(source.customData.fcPlot.id).toBe("graph-source");
+    const ungrouped = duplicateElement(null, new Map(), {
+      ...source,
+      groupIds: [],
+    });
+    expect(ungrouped.customData.fcPlot.id).not.toBe(
+      source.customData.fcPlot.id,
+    );
+  });
   it("clones arrow element", () => {
     const element = API.createElement({
       type: "arrow",

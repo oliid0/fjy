@@ -323,8 +323,9 @@ it("inserts original pentagon and star through the AI command with real style, g
   try {
     act(() =>
       API.setAppState({
-        currentItemStrokeColor: "#f90000",
-        currentItemBackgroundColor: "#f90000",
+        currentItemStrokeColor: "#123456",
+        currentItemBackgroundColor: "transparent",
+        whiteboardShapeStyle: { color: "#f90000", fill: true },
         currentItemStrokeWidth: 6,
         currentItemOpacity: 70,
       }),
@@ -342,6 +343,8 @@ it("inserts original pentagon and star through the AI command with real style, g
       })) as typeof pentagon;
     });
     expect(pentagon.coordinates).toBe("scene");
+    expect(api.getAppState().currentItemStrokeColor).toBe("#123456");
+    expect(api.getAppState().currentItemBackgroundColor).toBe("transparent");
     const parts = api
       .getSceneElements()
       .filter((element) => pentagon.ids.includes(element.id));
@@ -438,6 +441,11 @@ it("rejects invalid, stale or cancelled AI shape insertions before changing the 
 
 it("awaits real visible-document shape commits, returns their ids and never reads the covered board", async () => {
   const { api, close } = await setup();
+  act(() =>
+    API.setAppState({
+      whiteboardShapeStyle: { color: "#ee1234", fill: false },
+    }),
+  );
   let ink: InkStroke[] = [];
   const hidden = vi.spyOn(api, "getSceneElements").mockImplementation(() => {
     throw new Error("covered board");
@@ -496,7 +504,7 @@ it("awaits real visible-document shape commits, returns their ids and never read
     expect(created.coordinates).toBe("document");
     expect(created.ids).toEqual(ink.map((stroke) => stroke.id));
     expect(ink[0]).toMatchObject({
-      color: "#123456",
+      color: "#ee1234",
       width: 3,
       opacity: 80,
       widget: { id: created.id, params: { shape: { kind: "star" } } },

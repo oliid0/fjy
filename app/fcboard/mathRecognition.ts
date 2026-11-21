@@ -1,7 +1,6 @@
 import { chat, parseJSON } from "./ai";
 import { currentSettings } from "./settings";
 import {
-  calculate,
   compileExpression,
   defaultPlot,
   plotExpression,
@@ -64,6 +63,32 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
       plot[key] = number;
     }
   }
+  if (value.view !== undefined) {
+    const view = value.view as NonNullable<Plot["view"]> | null;
+    if (
+      surface ||
+      relation ||
+      !view ||
+      ![view.left, view.right, view.bottom, view.top].every(
+        (number) =>
+          typeof number === "number" &&
+          Number.isFinite(number) &&
+          Math.abs(number) <= 1e6,
+      ) ||
+      view.right - view.left < 0.0001 ||
+      view.right - view.left > 2000 ||
+      view.top - view.bottom < 0.0001 ||
+      view.top - view.bottom > 2000
+    ) {
+      throw new Error("Invalid function viewport");
+    }
+    plot.view = {
+      left: view.left,
+      right: view.right,
+      bottom: view.bottom,
+      top: view.top,
+    };
+  }
   if (typeof value.equation === "string" && value.equation.length <= 500) {
     const equation = mathNotation(value.equation);
     const sides = equation.match(/^([^=<>]+)=([^=<>]+)$/);
@@ -71,18 +96,52 @@ export const validatedPlot = (value: Record<string, unknown>): Plot => {
       plot.equation = equation;
     }
   }
+  if (value.compare !== undefined) {
+    if (
+      !Array.isArray(value.compare) ||
+      !value.compare.length ||
+      value.compare.length > 2 ||
+      surface ||
+      relation
+    ) {
+      throw new Error("Invalid function comparison");
+    }
+    plot.compare = value.compare.map((expression) => {
+      if (typeof expression !== "string") {
+        throw new Error("Invalid comparison expression");
+      }
+      return validatedPlot({ ...plot, compare: undefined, expression })
+        .expression;
+    });
+  }
   samplePlot(plot);
   return plot;
 };
 
-export const localMathResult = (
+export const localFunctionResult = (
   text: string,
-  mode: MathPenMode,
-): MathResult => {
-  const input = mathNotation(text);
-  if (mode === "calculation") {
-    return { kind: mode, expression: input, answer: calculate(input) };
+): Extract<MathResult, { kind: "function" }> => {
+  const definitions = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (
+    definitions.length > 1 &&
+    definitions.every((line) => /^(?:y|f\s*\(\s*x\s*\))\s*=/.test(line))
+  ) {
+    if (definitions.length > 3) {
+      throw new Error("Compare at most three functions");
+    }
+    const plots = definitions.map((line) => localFunctionResult(line).plot);
+    return {
+      kind: "function",
+      plot: validatedPlot({
+        ...plots[0],
+        compare: plots.slice(1).map((plot) => plot.expression),
+      }),
+    };
   }
+  const input = mathNotation(text);
   const definition = input.match(
     /^(y|z|f\s*x|f\s*\(\s*x(?:(?:,\s*y)|(?:\s*[+-]\s*\d+(?:\.\d+)?))?\s*\))\s*(>=|<=|>|<|=)\s*(.+)$/i,
   );
@@ -108,7 +167,7 @@ export const localMathResult = (
     ...(definition && definition[2] !== "=" ? { relation: definition[2] } : {}),
   });
   return {
-    kind: mode,
+    kind: "function",
     plot: { ...plot, ...(equation ? { equation: input } : {}) },
   };
 };
@@ -125,17 +184,22 @@ export const recognizeMath = async (
   signal.throwIfAborted();
   try {
     if (mode === "calculation") {
-      const expression = mathNotation(text);
+      // Keep two-dimensional LaTeX intact for the structural parser. Flattening
+      // before parsing loses limits, fractional bases and nested scripts.
+      const expression = /\\[A-Za-z]+/.test(text)
+        ? text.trim()
+        : mathNotation(text);
       return {
         kind: mode,
         expression,
         answer: await calculateAsync(expression, signal),
       };
     }
-    return localMathResult(text, mode);
+    return localFunctionResult(text);
   } catch (failure) {
     const settings = currentSettings();
     if (
+      settings.mathTranscription !== "cloud" ||
       !settings.apiKey ||
       !settings.model.trim() ||
       (mode === "function" && !/\bx\b/.test(text))

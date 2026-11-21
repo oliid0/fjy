@@ -1,0 +1,47 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+def castPlusSdk = file('castplus-sdk')
+def castPlusJar = new File(castPlusSdk, 'HuaweiCastPlusEngine.jar')
+if (!castPlusJar.isFile()) throw new GradleException("Cast+ SDK JAR is missing")
+def castPlusLibraries = ['securec', 'HwKeystoreSDK', 'HwDeviceAuthSDK', 'ConnectAuthNative', 'nstackx_util',
+    'nstackx_dmsg', 'nstackx_ctrl', 'nf_onehop', 'near_field_onehop_jni', 'jniFtSocketSink', 'native_codec_jni']
+['arm64-v8a', 'armeabi-v7a'].each { abi ->
+    castPlusLibraries.each { name ->
+        if (!new File(castPlusSdk, "jniLibs/$abi/lib${name}.so").isFile()) {
+            throw new GradleException("Cast+ SDK missing $abi/lib${name}.so")
+        }
+    }
+}
+
+android {
+    namespace 'com.airplay'
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig { minSdk rootProject.ext.minSdkVersion }
+    sourceSets.main.jniLibs.srcDir(new File(castPlusSdk, 'jniLibs'))
+    buildFeatures { buildConfig true; aidl true }
+    externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt') } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+dependencies {
+    implementation files(castPlusJar)
+    implementation 'androidx.media3:media3-exoplayer:1.11.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.11.1'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.11.1'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.11.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    implementation 'com.jakewharton.timber:timber:5.0.1'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+    implementation 'com.googlecode.plist:dd-plist:1.28'
+}

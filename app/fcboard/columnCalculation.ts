@@ -1,53 +1,38 @@
+import { columnInkRows } from "./calculationInk";
+
 import type { InkInput } from "./digitalInk";
 
-/** A calculation bar spans two explicit operand rows; a minus or equals alone does not. */
+/** The same rule that completes recognition also anchors its result. */
 export const columnCalculation = (input: InkInput, text: string) => {
   const division = /^\s*\d+(?:\.\d+)?\s*[)⟌]\s*\d+(?:\.\d+)?\s*$/.test(text);
-  if (!division && !/[+\-xX×*÷/]/.test(text)) {
-    return;
-  }
-  const boxes = input
-    .filter((stroke) => stroke.length)
-    .map((stroke) =>
-      stroke.reduce(
-        (box, [x, y]) => ({
-          left: Math.min(box.left, x),
-          top: Math.min(box.top, y),
-          right: Math.max(box.right, x),
-          bottom: Math.max(box.bottom, y),
-        }),
-        { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
-      ),
-    );
-  const letters = boxes.filter((box) => box.bottom - box.top > 4);
-  if (letters.length < 2) {
-    return;
-  }
-  const height = letters
-    .map((box) => box.bottom - box.top)
-    .sort((a, b) => a - b)[Math.floor(letters.length / 2)];
-  const left = Math.min(...letters.map((box) => box.left));
-  const right = Math.max(...letters.map((box) => box.right));
-  const bottom = Math.max(...letters.map((box) => box.bottom));
-  const bar = boxes.find(
-    (box) =>
-      box.bottom - box.top <= Math.max(3, height * 0.15) &&
-      box.right - box.left >= Math.max(height * 1.5, (right - left) * 0.7) &&
-      (division || box.top >= bottom - height * 0.15),
-  );
-  if (!bar) {
-    return;
-  }
-  const rows: { top: number; bottom: number }[] = [];
-  for (const box of letters.sort((a, b) => a.top - b.top)) {
-    const row = rows.at(-1);
-    if (row && box.top <= row.bottom + height * 0.2) {
-      row.bottom = Math.max(row.bottom, box.bottom);
-    } else {
-      rows.push({ top: box.top, bottom: box.bottom });
+  if (division) {
+    // Long division has an overbar above the dividend instead of a sum rule.
+    const line = input.find((stroke) => {
+      if (stroke.length < 2) {
+        return false;
+      }
+      const xs = stroke.map(([x]) => x);
+      const ys = stroke.map(([, y]) => y);
+      const left = Math.min(...xs);
+      const right = Math.max(...xs);
+      const bottom = Math.max(...ys);
+      const width = right - left;
+      return (
+        width >= 8 &&
+        bottom - Math.min(...ys) <= Math.max(3, width * 0.14) &&
+        input.some(
+          (other) =>
+            other !== stroke &&
+            other.some(([x, y]) => x >= left && x <= right && y > bottom),
+        )
+      );
+    });
+    if (line) {
+      return { mode: "column" as const, lines: 2 };
     }
   }
-  return rows.length >= 2 || division
-    ? { mode: "column" as const, lines: Math.max(2, rows.length) }
-    : undefined;
+  const rows = columnInkRows(input);
+  if (rows && /[+＋−－×÷*/xX-]|\\(?:times|div|cdot)/.test(text)) {
+    return { mode: "column" as const, lines: rows.length };
+  }
 };

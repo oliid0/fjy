@@ -31,6 +31,8 @@ final class DigitalInkModels {
         if (!context.getPackageName().equals(manifest.getString("package")) || !"18.1.0".equals(manifest.getString("sdk"))) {
             throw new IllegalStateException("Digital Ink model registry does not match this application");
         }
+        android.content.SharedPreferences verified = context.getSharedPreferences("offline-ink-verified-v1", Context.MODE_PRIVATE);
+        android.content.SharedPreferences.Editor fingerprints = verified.edit();
         JSONArray files = manifest.getJSONArray("files");
         for (int index = 0; index < files.length(); index++) {
             JSONObject item = files.getJSONObject(index);
@@ -39,7 +41,13 @@ final class DigitalInkModels {
             if (!output.getCanonicalPath().startsWith(context.getFilesDir().getCanonicalPath() + File.separator)) {
                 throw new IllegalArgumentException("Invalid Digital Ink model path");
             }
-            if (valid(output, item)) { continue; }
+            String expected = item.getString("sha256");
+            if (output.isFile() && output.length() == item.getLong("size") &&
+                fingerprint(output, expected).equals(verified.getString(path, ""))) continue;
+            if (valid(output, item)) {
+                fingerprints.putString(path, fingerprint(output, expected));
+                continue;
+            }
             File parent = output.getParentFile();
             if (!parent.isDirectory() && !parent.mkdirs()) { throw new IllegalStateException("Cannot create model directory"); }
             File pending = new File(output.getPath() + ".pending");
@@ -54,16 +62,23 @@ final class DigitalInkModels {
                 pending.delete();
                 throw new IllegalStateException("Offline handwriting model is incomplete: " + output.getName());
             }
+            fingerprints.putString(path, fingerprint(output, expected));
         }
+        fingerprints.apply();
         // The original archive's registry is package-scoped (zzfx/zzwa/zzwe).
-        // Only model metadata is seeded, once; preserve later SDK state.
+        // Own the manifest's bundled file/group keys during versioned installation.
+        // A prior download may leave a key pointing to a removed directory even
+        // though isModelDownloaded() returns true. Re-register the verified APK
+        // files on upgrade; keys for other downloaded languages remain intact.
         SharedPreferences seed = context.getSharedPreferences("fcboard-digital-ink", 0);
-        if (seed.getInt("version", 0) != 1) {
+        int version = manifest.optInt("version", 1);
+        if (seed.getInt("version", 0) != version) {
             JSONObject preferences = manifest.getJSONObject("preferences");
             Iterator<String> names = preferences.keys();
             while (names.hasNext()) {
                 String name = names.next();
-                SharedPreferences.Editor edit = context.getSharedPreferences(name, 0).edit();
+                SharedPreferences registered = context.getSharedPreferences(name, 0);
+                SharedPreferences.Editor edit = registered.edit();
                 JSONObject values = preferences.getJSONObject(name);
                 Iterator<String> keys = values.keys();
                 while (keys.hasNext()) { String key = keys.next(); edit.putString(key, values.getString(key)); }
@@ -73,13 +88,16 @@ final class DigitalInkModels {
                     .edit().putBoolean("mdd_migrated_to_offroad", true).commit()
                 || !context.getSharedPreferences("gms_icing_mdd_migrations", 0)
                     .edit().putBoolean("migrated_to_new_file_key", true).putInt("mdd_file_key_version", 2).commit()
-                || !seed.edit().putInt("version", 1).commit()) {
+                || !seed.edit().putInt("version", version).commit()) {
                 throw new IllegalStateException("Cannot save handwriting model registration");
             }
         }
         ready = true;
     }
 
+    private static String fingerprint(File file, String checksum) {
+        return checksum + ":" + file.length() + ":" + file.lastModified();
+    }
     private static boolean valid(File file, JSONObject item) throws Exception {
         if (!file.isFile() || file.length() != item.getLong("size")) { return false; }
         MessageDigest digest = MessageDigest.getInstance("SHA-256");

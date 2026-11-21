@@ -47,7 +47,7 @@ final class DoubaoSpeechProtocol {
 
     static Response parse(byte[] bytes) throws Exception {
         if (bytes.length < 8 || bytes.length > MAX_PAYLOAD || (bytes[0] >>> 4 & 15) != 1) {
-            throw new IOException("无效的语音响应帧");
+            throw new IOException("Invalid speech response frame");
         }
         int header = (bytes[0] & 15) * 4;
         int type = bytes[1] >>> 4 & 15;
@@ -55,33 +55,33 @@ final class DoubaoSpeechProtocol {
         int compression = bytes[2] & 15;
         if (header < 4 || header > bytes.length - 4 || (type != 9 && type != 15)
                 || (compression != 0 && compression != 1)) {
-            throw new IOException("不支持的语音响应协议");
+            throw new IOException("Unsupported speech response protocol");
         }
         ByteBuffer input = ByteBuffer.wrap(bytes); input.position(header);
         int extra = ((flags & 1) != 0 ? 4 : 0) + ((flags & 4) != 0 ? 4 : 0);
-        if (input.remaining() < extra + (type == 15 ? 8 : 4)) { throw new IOException("语音响应不完整"); }
+        if (input.remaining() < extra + (type == 15 ? 8 : 4)) { throw new IOException("Incomplete speech response"); }
         input.position(input.position() + extra);
         int code = type == 15 ? input.getInt() : 0;
         int length = input.getInt();
-        if (length < 0 || length != input.remaining()) { throw new IOException("语音响应长度错误"); }
+        if (length < 0 || length != input.remaining()) { throw new IOException("Incorrect speech response length"); }
         byte[] payload = new byte[length]; input.get(payload);
         if (compression == 1) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             try (GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(payload))) {
                 byte[] block = new byte[4096]; int size;
                 while ((size = gzip.read(block)) != -1) {
-                    if (output.size() + size > MAX_PAYLOAD) { throw new IOException("语音响应过大"); }
+                    if (output.size() + size > MAX_PAYLOAD) { throw new IOException("Speech response is too large"); }
                     output.write(block, 0, size);
                 }
             }
             payload = output.toByteArray();
         }
-        if (code != 0) { throw new IOException("豆包语音错误 (" + code + ")"); }
-        if ((bytes[2] >>> 4 & 15) != 1) { throw new IOException("语音响应不是 JSON"); }
+        if (code != 0) { throw new IOException("Speech service error (" + code + ")"); }
+        if ((bytes[2] >>> 4 & 15) != 1) { throw new IOException("Speech response is not JSON"); }
         JSONObject body = new JSONObject(new String(payload, StandardCharsets.UTF_8));
         int status = body.optInt("code", 0);
         if (status != 0) {
-            throw new IOException("豆包语音错误 (" + status + ")");
+            throw new IOException("Speech service error (" + status + ")");
         }
         return new Response(body, (flags & 2) != 0);
     }

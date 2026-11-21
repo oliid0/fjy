@@ -1,7 +1,24 @@
+import { t } from "@fcboard/fcboard/i18n";
+
 /** Seeduplex official web demo's PCM16 / 24 kHz WebAudio scheduling.
  * Keep sources so barge-in can stop queued audio without recreating a context. */
 export const createDuplexPlayer = (changed: (playing: boolean) => void) => {
-  const context = new AudioContext({ sampleRate: 24000 });
+  let context: AudioContext;
+  try {
+    context = new AudioContext({ sampleRate: 24000 });
+  } catch (failure) {
+    if (
+      !failure ||
+      typeof failure !== "object" ||
+      !("name" in failure) ||
+      failure.name !== "NotSupportedError"
+    ) {
+      throw failure;
+    }
+    // The source buffers retain the protocol's 24 kHz rate; WebAudio resamples
+    // them to a device context when its output cannot open at that rate.
+    context = new AudioContext();
+  }
   const ready = context.resume();
   void ready.catch(() => {});
   const sources = new Set<AudioBufferSourceNode>();
@@ -47,7 +64,7 @@ export const createDuplexPlayer = (changed: (playing: boolean) => void) => {
         return;
       }
       if (next - context.currentTime > 120) {
-        throw new Error("实时语音播放缓冲过长，请打断后重试");
+        throw new Error(t("fcboard.aiMessages.voiceBufferFull"));
       }
       const buffer = context.createBuffer(1, samples, 24000);
       const channel = buffer.getChannelData(0);

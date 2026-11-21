@@ -1,4 +1,6 @@
 import { convertToFcboardElements } from "@fcboard/fcboard";
+import { newFreeDrawElement } from "@fcboard/element";
+import { pointFrom } from "@fcboard/math";
 
 import type { FcboardImperativeAPI, DataURL } from "@fcboard/fcboard/types";
 
@@ -7,6 +9,8 @@ import type { FcboardElement } from "@fcboard/element/types";
 import { BoardBook } from "./boards";
 
 import { classroomCommands } from "./commands";
+
+import type { Board } from "./boards";
 
 describe("persistent whiteboard book", () => {
   afterEach(() => localStorage.removeItem("fcboard-board-recovery"));
@@ -30,6 +34,7 @@ describe("persistent whiteboard book", () => {
         elements = [];
       }),
       addFiles: vi.fn(),
+      setActiveTool: vi.fn(),
       history: { clear: vi.fn() },
       updateScene: (value: {
         elements?: readonly FcboardElement[];
@@ -62,10 +67,9 @@ describe("persistent whiteboard book", () => {
     const resets = vi.mocked(api.resetScene).mock.calls.length;
     await book.reorder([second, first]);
     expect(book.value.boards.map((board) => board.id)).toEqual([second, first]);
-    expect(save.mock.lastCall?.[0].boards.map((board) => board.id)).toEqual([
-      second,
-      first,
-    ]);
+    expect(
+      save.mock.lastCall?.[0].boards.map((board: Board) => board.id),
+    ).toEqual([second, first]);
     expect(book.value.active).toBe(second);
     expect(api.getSceneElements()).toBe(canvas);
     expect(api.resetScene).toHaveBeenCalledTimes(resets);
@@ -94,6 +98,7 @@ describe("persistent whiteboard book", () => {
     await book.create("几何课");
     const second = book.value.active;
     expect(api.getSceneElements()).toHaveLength(0);
+    expect(api.setActiveTool).toHaveBeenLastCalledWith({ type: "freedraw" });
     const shapes = convertToFcboardElements([
       { type: "rectangle", x: 20, y: 30, width: 80, height: 60 },
     ]);
@@ -138,6 +143,53 @@ describe("persistent whiteboard book", () => {
       reloaded.value.boards.find((page) => page.id === first)?.elements[0].type,
     ).toBe("text");
     expect(localStorage.getItem("fcboard-board-recovery")).toBeNull();
+    reloaded.dispose();
+  });
+  it("preserves first-frame writing while the saved workspace opens", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    await book.create("second");
+    const stored = structuredClone(book.value);
+    book.dispose();
+    let finish!: (value: typeof stored) => void;
+    const loading = new Promise<typeof stored>((resolve) => (finish = resolve));
+    const reloaded = new BoardBook(api, vi.fn(), () => loading, save);
+    const initialized = reloaded.initialize();
+    const ink = [
+      newFreeDrawElement({
+        type: "freedraw",
+        x: 20,
+        y: 30,
+        points: [pointFrom(0, 0), pointFrom(20, 30)],
+        simulatePressure: true,
+      }),
+    ];
+    api.updateScene({ elements: ink });
+    const resets = vi.mocked(api.resetScene).mock.calls.length;
+    finish(stored);
+    await initialized;
+    expect(api.getSceneElements()).toEqual(ink);
+    expect(api.resetScene).toHaveBeenCalledTimes(resets);
+    expect(
+      reloaded.value.boards.find((page) => page.id === stored.active)?.elements,
+    ).toEqual(ink);
+    expect(reloaded.value.boards[0]).toEqual(stored.boards[0]);
+    const saved = save.mock.calls.at(-1)![0] as BoardBook["value"];
+    expect(saved.active).toBe(stored.active);
+    expect(
+      saved.boards.find((page) => page.id === stored.active)?.elements[0].id,
+    ).toBe(ink[0].id);
+    reloaded.dispose();
+  });
+  it("adopts an already-visible saved page without clearing input or undo", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const stored = structuredClone(book.value);
+    book.dispose();
+    const reloaded = new BoardBook(api, vi.fn(), async () => stored, save);
+    await reloaded.initialize();
+    expect(api.resetScene).not.toHaveBeenCalled();
+    expect(api.history.clear).not.toHaveBeenCalled();
     reloaded.dispose();
   });
   it("keeps edits received during an awaited page switch on the visible source board", async () => {
@@ -271,6 +323,107 @@ describe("persistent whiteboard book", () => {
     await expect(book.discard("missing")).rejects.toThrow();
     expect(book.value).toBe(initial);
     expect(book.value.boards).toHaveLength(1);
+    book.dispose();
+  });
+  it("deletes a selection atomically, keeps surviving ink undo intact and restores actual deleted pages", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const first = book.value.active;
+    await book.create("second");
+    const second = book.value.active;
+    await book.create("third");
+    const third = book.value.active;
+    const originalFirst = book.value.boards[0];
+    const resets = vi.mocked(api.resetScene).mock.calls.length;
+    save.mockClear();
+    await book.discardMany([first, second]);
+    expect(book.value.boards.map((board) => board.id)).toEqual([third]);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(
+      save.mock.calls.at(-1)![0].boards.map((board: Board) => board.id),
+    ).toEqual([third]);
+    expect(api.resetScene).toHaveBeenCalledTimes(resets);
+    expect(book.canRestoreDiscarded).toBe(true);
+    const ink = convertToFcboardElements([
+      { type: "rectangle", x: 8, y: 9, width: 90, height: 70 },
+    ]);
+    api.updateScene({ elements: ink });
+    await book.restoreDiscarded();
+    expect(book.value.boards.map((board) => board.id)).toEqual([
+      first,
+      second,
+      third,
+    ]);
+    expect(book.value.boards[0]).toEqual(originalFirst);
+    expect(book.value.boards[2].elements[0].id).toBe(ink[0].id);
+    expect(book.value.active).toBe(third);
+    expect(api.getSceneElements()).toBe(ink);
+    expect(api.resetScene).toHaveBeenCalledTimes(resets);
+    expect(book.canRestoreDiscarded).toBe(false);
+    book.dispose();
+  });
+  it("replaces deletion of every page in the same transaction and undoes without retaining an untouched temporary page", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const previous = book.value;
+    save.mockClear();
+    await book.discardMany(previous.boards.map((board) => board.id));
+    expect(book.value.boards).toHaveLength(1);
+    expect(book.value.active).not.toBe(previous.active);
+    expect(api.getSceneElements()).toHaveLength(0);
+    expect(
+      save.mock.calls.every(([workspace]) => workspace.boards.length > 0),
+    ).toBe(true);
+    expect(save).toHaveBeenCalledTimes(2);
+    await book.restoreDiscarded();
+    expect(book.value.boards).toEqual(previous.boards);
+    expect(book.value.active).toBe(previous.active);
+    expect(api.getSceneElements()[0].type).toBe("text");
+    book.dispose();
+  });
+  it("preserves writing added to the replacement page when undoing a remove-all operation", async () => {
+    const { book, api } = setup();
+    await book.initialize();
+    const first = book.value.active;
+    await book.discardMany([first]);
+    const replacement = book.value.active;
+    const ink = convertToFcboardElements([
+      { type: "ellipse", x: 1, y: 1, width: 30, height: 30 },
+    ]);
+    api.updateScene({ elements: ink });
+    await book.restoreDiscarded();
+    expect(book.value.boards.map((board) => board.id)).toEqual([
+      first,
+      replacement,
+    ]);
+    expect(book.value.boards[1].elements[0].id).toBe(ink[0].id);
+    book.dispose();
+  });
+  it("rolls back a failed batch deletion and a cancelled durable deletion without clearing the current canvas", async () => {
+    const { book, api, save } = setup();
+    await book.initialize();
+    const previous = book.value;
+    const canvas = api.getSceneElements();
+    save
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Storage full"));
+    await expect(book.discardMany([previous.active])).rejects.toThrow(
+      "Storage full",
+    );
+    expect(book.value).toBe(previous);
+    expect(book.canRestoreDiscarded).toBe(false);
+    expect(api.getSceneElements()).toBe(canvas);
+    const request = new AbortController();
+    save
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(async () => request.abort());
+    await expect(
+      book.discardMany([previous.active], request.signal),
+    ).rejects.toThrow();
+    expect(book.value).toBe(previous);
+    expect(save.mock.calls.at(-1)![0].active).toBe(previous.active);
+    expect(api.getSceneElements()).toBe(canvas);
+    expect(api.resetScene).not.toHaveBeenCalled();
     book.dispose();
   });
 });

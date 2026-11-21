@@ -17,7 +17,7 @@ import org.junit.runner.RunWith;
 
 @RunWith(AndroidJUnit4.class)
 public class DebugSettingsTest {
-    @Test public void opensDeveloperWirelessEntryOrAboutDeviceAccordingToActualSystemState() throws Exception {
+    @Test public void opensDeveloperWirelessEntryOrNativeSettingsHomeAccordingToActualSystemState() throws Exception {
         Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
         android.content.ContentResolver resolver = instrumentation.getTargetContext().getContentResolver();
         int original = Settings.Global.getInt(resolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0);
@@ -25,7 +25,7 @@ public class DebugSettingsTest {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             for (boolean enabled : new boolean[] {false, true}) {
                 assertTrue(Settings.Global.putInt(resolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, enabled ? 1 : 0));
-                String action = enabled ? Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS : Settings.ACTION_DEVICE_INFO_SETTINGS;
+                String action = enabled ? Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS : Settings.ACTION_SETTINGS;
                 Instrumentation.ActivityMonitor monitor = instrumentation.addMonitor(new IntentFilter(action), null, true);
                 try {
                     CountDownLatch done = new CountDownLatch(1);
@@ -48,4 +48,35 @@ public class DebugSettingsTest {
             instrumentation.getUiAutomation().dropShellPermissionIdentity();
         }
     }
+    @Test public void unavailableDeveloperPageFallsBackToNativeSettingsHome() throws Exception {
+        Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+        android.content.ContentResolver resolver=instrumentation.getTargetContext().getContentResolver();
+        int original=Settings.Global.getInt(resolver,Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,0);
+        instrumentation.getUiAutomation().adoptShellPermissionIdentity(android.Manifest.permission.WRITE_SECURE_SETTINGS);
+        java.util.List<String> actions=new java.util.ArrayList<>();
+        Instrumentation.ActivityMonitor monitor=new Instrumentation.ActivityMonitor(){
+            @Override public Instrumentation.ActivityResult onStartActivity(android.content.Intent intent){
+                if(!"com.android.settings".equals(intent.getPackage()))return null;
+                actions.add(intent.getAction());
+                if(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS.equals(intent.getAction()))throw new android.content.ActivityNotFoundException("Developer page hidden by firmware");
+                assertEquals(Settings.ACTION_SETTINGS,intent.getAction());
+                return new Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null);
+            }
+        };
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            Settings.Global.putInt(resolver,Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,1);
+            instrumentation.addMonitor(monitor);
+            CountDownLatch done=new CountDownLatch(1);AtomicReference<String> failure=new AtomicReference<>();
+            scenario.onActivity(activity->{
+                ClassroomPlugin plugin=(ClassroomPlugin)activity.getBridge().getPlugin("FcboardClassroom").getInstance();
+                plugin.openDebugSettings(new PluginCall(null,"FcboardClassroom","fallback","openDebugSettings",new JSObject()){
+                    @Override public void resolve(JSObject result){done.countDown();}
+                    @Override public void reject(String message,String code,Exception error,JSObject data){failure.set(message);done.countDown();}
+                });
+            });
+            assertTrue(done.await(5,TimeUnit.SECONDS));assertNull(failure.get());
+            assertEquals(java.util.Arrays.asList(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS,Settings.ACTION_SETTINGS),actions);
+        }finally{instrumentation.removeMonitor(monitor);Settings.Global.putInt(resolver,Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,original);instrumentation.getUiAutomation().dropShellPermissionIdentity();}
+    }
+
 }

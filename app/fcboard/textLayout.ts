@@ -13,6 +13,7 @@ export type TextPlacement = {
   role?: "title";
   bounds?: ContentRect;
   sourceLines?: number;
+  allowShrink?: boolean;
 };
 
 /** AI answers use half the source size and a screen-space cap. Local arithmetic,
@@ -45,6 +46,26 @@ export const layoutBoardText = (
   const source = placement.bounds;
   const centered = placement.mode === "center";
   const lineHeight = getLineHeight(fontFamily);
+  if (placement.mode === "replace" && source) {
+    // Replacement owns the ink's original location. Nearby objects and viewport
+    // edges must never relocate it or introduce new wrapping/line breaks.
+    const metrics = measureText(
+      text,
+      getFontString({ fontFamily, fontSize }),
+      lineHeight,
+    );
+    return {
+      x: source.left,
+      y: source.top,
+      text,
+      originalText: text,
+      fontSize,
+      fontFamily,
+      lineHeight,
+      ...metrics,
+      autoResize: false as const,
+    };
+  }
   const fullWidth = viewport.right - viewport.left;
   const fullHeight = viewport.bottom - viewport.top;
   if (fullWidth <= 0 || fullHeight <= 0) {
@@ -77,7 +98,11 @@ export const layoutBoardText = (
     candidates.push({ x: viewport.left, y: source.bottom + gap });
     candidates.push({ x: source.left, y: source.top, nearby: true });
   }
-  for (let attempt = 0; attempt < 48; attempt++) {
+  for (
+    let attempt = 0;
+    attempt < (placement.allowShrink === false ? 1 : 48);
+    attempt++
+  ) {
     const size = fontSize * 0.9 ** attempt;
     if (size < Math.min(fontSize, (gap * 6) / 16)) {
       break;

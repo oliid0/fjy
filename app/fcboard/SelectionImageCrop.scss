@@ -1,0 +1,31 @@
+.fc-selection-crop {
+  position: fixed;
+  z-index: 26;
+  overflow: visible;
+  touch-action: none;
+  user-select: none;
+  pointer-events: none;
+  transform-origin: center;
+  rect {
+    pointer-events: auto;
+  }
+  [data-crop-handle="move"] {
+    cursor: move;
+  }
+  [data-crop-handle="n"],
+  [data-crop-handle="s"] {
+    cursor: ns-resize;
+  }
+  [data-crop-handle="e"],
+  [data-crop-handle="w"] {
+    cursor: ew-resize;
+  }
+  [data-crop-handle="nw"],
+  [data-crop-handle="se"] {
+    cursor: nwse-resize;
+  }
+  [data-crop-handle="ne"],
+  [data-crop-handle="sw"] {
+    cursor: nesw-resize;
+  }
+}

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
+import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
 import { MaterialPanel } from "./MaterialPanel";
 
@@ -7,6 +8,8 @@ import { classroomCommands } from "./commands";
 import first from "./assets/curtain/mubu01.jpg";
 import second from "./assets/curtain/mubu02.jpg";
 import third from "./assets/curtain/mubu03.jpg";
+
+import "./Curtain.scss";
 
 const themes = [first, second, third];
 // DataTools.bgList and the original colors.xml.
@@ -66,6 +69,23 @@ export const Curtain = () => {
   const [theme, setTheme] = useState(0);
   const [color, setColor] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
+  const [controls, setControls] = useState(true);
+  const hideControls = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const reveal = useCallback(() => {
+    setControls(true);
+    clearTimeout(hideControls.current);
+    if (!settings) {
+      hideControls.current = setTimeout(() => setControls(false), 3000);
+    }
+  }, [settings]);
+  useEffect(() => {
+    if (open) {
+      reveal();
+    }
+    return () => clearTimeout(hideControls.current);
+  }, [open, reveal]);
   const [tab, setTab] = useState<"color" | "theme">("color");
   const [rect, setRect] = useState<Bounds>({
     left: 0,
@@ -161,6 +181,9 @@ export const Curtain = () => {
       <section
         className="fc-curtain"
         aria-label={t("fcboard.curtain")}
+        data-controls={controls}
+        onPointerDownCapture={reveal}
+        onKeyDownCapture={reveal}
         style={{
           left: rect.left,
           top: rect.top,
@@ -232,29 +255,21 @@ export const Curtain = () => {
                 );
               }
             }}
-          >
-            {edge === "move"
-              ? "✥"
-              : ["left", "right"].includes(edge)
-              ? "↔"
-              : "↕"}
-          </button>
+          ></button>
         ))}
         <div className="fc-curtain-actions">
           <button
             type="button"
+            className="fc-curtain-background"
             onClick={() => setSettings(true)}
             aria-label={t("fcboard.curtain_theme")}
-          >
-            ◐
-          </button>
+          ></button>
           <button
             type="button"
+            className="fc-curtain-close"
             onClick={() => setOpen(false)}
             aria-label={t("buttons.close")}
-          >
-            ×
-          </button>
+          ></button>
         </div>
       </section>
       {settings && (
@@ -289,7 +304,7 @@ export const Curtain = () => {
               onClick={() => setSettings(false)}
               aria-label={t("buttons.close")}
             >
-              ×
+              {CloseIcon}
             </button>
           </header>
           <div

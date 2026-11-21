@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 
 import { createNarrator, isNarrationEcho } from "./narration";
 import { OfflineTts, narrationChunks } from "./nativeNarration";
+import * as studyAudio from "./studyAudio";
 
 vi.mock("./nativeNarration", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./nativeNarration")>()),
@@ -232,6 +233,45 @@ describe("one audible teacher", () => {
     await expect(narrator.finished).rejects.toThrow(
       t("fcboard.the_voice_service_returned_invalid_audio"),
     );
+    narrator.stop();
+  });
+  it("plays an owned generated clip through the same audible owner without calling a speech command or generic endpoint", async () => {
+    const narrator = createNarrator();
+    const audio = vi
+      .fn()
+      .mockResolvedValue(new Blob(["mp3"], { type: "audio/mpeg" }));
+    await narrator.speak("こんにちは", { language: "ja", audio });
+    expect(audio).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(fetch).not.toHaveBeenCalled();
+    expect(OfflineTts.synthesize).not.toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(1);
+    narrator.stop();
+    expect((audio.mock.calls[0][0] as AbortSignal).aborted).toBe(true);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:voice");
+  });
+  it("recognizes the configured PDF audio endpoint and uses its adapter instead of the generic speech schema", async () => {
+    localStorage.setItem(
+      "fcboard-settings",
+      JSON.stringify({
+        ttsEndpoint: studyAudio.AUDIO_GENERATION_ENDPOINT,
+        ttsKey: "speech-key",
+      }),
+    );
+    const generate = vi
+      .fn()
+      .mockResolvedValue(new Blob(["mp3"], { type: "audio/mpeg" }));
+    vi.spyOn(studyAudio, "createStudyAudio").mockReturnValue({
+      generate,
+      clear: vi.fn(),
+    });
+    const narrator = createNarrator();
+    await narrator.speak("Good morning", { language: "en" });
+    expect(generate).toHaveBeenCalledWith(
+      "Good morning",
+      "en",
+      expect.any(AbortSignal),
+    );
+    expect(fetch).not.toHaveBeenCalled();
     narrator.stop();
   });
 });

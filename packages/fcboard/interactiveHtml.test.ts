@@ -1,6 +1,27 @@
 import { interactiveHtml } from "./interactiveHtml";
+import { resourceFrame } from "./tests/resourceFrame";
 
 const lesson = `<h1>Acceleration</h1><input type="range"><svg viewBox="0 0 400 100"><rect width="40" height="40" /></svg><output>2 m/s²</output><script>document.querySelector('input').oninput=()=>{};</script>`;
+
+it("preserves an authored HTML theme instead of overriding it with lesson defaults", () => {
+  const source = `<html><head><style>body{background:rgb(10,20,30);color:rgb(240,220,180);font-family:Georgia}</style></head><body>${lesson}</body></html>`;
+  const html = interactiveHtml(source);
+  expect(interactiveHtml(html)).toBe(html);
+  const frame = resourceFrame({
+    id: "styled-lesson",
+    surface: "whiteboard",
+    html,
+  });
+  try {
+    const style = frame.window.getComputedStyle(frame.window.document.body);
+    expect(style.backgroundColor).toBe("rgb(10, 20, 30)");
+    expect(style.color).toBe("rgb(240, 220, 180)");
+    expect(style.fontFamily).toContain("Georgia");
+  } finally {
+    frame.dispose();
+    vi.unstubAllGlobals();
+  }
+});
 
 it("retains local interaction and prepends the network-free document policy", () => {
   const html = interactiveHtml(lesson);

@@ -1,6 +1,6 @@
 import { columnCalculation } from "./columnCalculation";
 import { latestFunctionInk } from "./functionInk";
-import { localMathResult } from "./mathRecognition";
+import { calculateAsync } from "./mathComputation";
 
 import type { InkInput } from "./digitalInk";
 
@@ -11,8 +11,8 @@ it.each([
   ["12\nx3\n----", "36"],
   ["144\n÷12\n----", "12"],
   ["12⟌144", "12"],
-])("locally verifies vertical arithmetic %s", (input, answer) => {
-  expect(localMathResult(input, "calculation")).toMatchObject({ answer });
+])("locally verifies vertical arithmetic %s", async (input, answer) => {
+  expect(await calculateAsync(input)).toBe(answer);
 });
 it("places a calculation under its real bar even if OCR flattened its rows", () => {
   const input: [number, number][][] = [
@@ -92,15 +92,15 @@ it.each([
   ["12\n÷3\n---", "4"],
 ])(
   "calculates explicit vertical %s with a separate below-bar result layout",
-  (text, answer) => {
+  async (text, answer) => {
     expect(columnCalculation(vertical, text)).toEqual({
       mode: "column",
       lines: 2,
     });
-    expect(localMathResult(text, "calculation")).toMatchObject({ answer });
+    expect(await calculateAsync(text)).toBe(answer);
   },
 );
-it("recognizes explicit long division and does not turn an ordinary minus into a column", () => {
+it("recognizes explicit long division and does not turn an ordinary minus into a column", async () => {
   const division: InkInput = [
     [
       [20, 30],
@@ -119,7 +119,7 @@ it("recognizes explicit long division and does not turn an ordinary minus into a
     mode: "column",
     lines: 2,
   });
-  expect(localMathResult("3⟌12", "calculation")).toMatchObject({ answer: "4" });
+  expect(await calculateAsync("3⟌12")).toBe("4");
   expect(
     columnCalculation(
       [
@@ -131,4 +131,22 @@ it("recognizes explicit long division and does not turn an ordinary minus into a
       "12-3",
     ),
   ).toBeUndefined();
+});
+
+it.each([
+  [String.raw`\begin{array}{r}123\\+45\\\hline\end{array}`, "168"],
+  [String.raw`\begin{aligned}12\\&\times 3\\\hline\end{aligned}`, "36"],
+])(
+  "calculates exact vision column notation locally: %s",
+  async (text, answer) => {
+    expect(await calculateAsync(text)).toBe(answer);
+  },
+);
+it("does not guess a missing operator or accept an already written answer in a column", async () => {
+  await expect(
+    calculateAsync(String.raw`\begin{array}{r}12\\3\\\hline\end{array}`),
+  ).rejects.toThrow();
+  await expect(
+    calculateAsync(String.raw`\begin{array}{r}12\\+3\\\hline15\end{array}`),
+  ).rejects.toThrow();
 });

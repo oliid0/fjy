@@ -8,13 +8,16 @@ import {
   playerPlayIcon,
   TextIcon,
   microphoneIcon,
-  questionCircle,
 } from "@fcboard/fcboard/components/icons";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
+
+import { useToolbarItems } from "@fcboard/fcboard/toolbarPreferences";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { TransientMessage } from "./TransientMessage";
+
+import { NativeToolbarItems } from "./NativeToolbarItems";
 
 import { MaterialPanel } from "./MaterialPanel";
 
@@ -24,6 +27,7 @@ import { classroomCommands } from "./commands";
 import { animateSolid } from "./solidAnimation";
 import { adaptGizmo, gizmoViewport } from "./adaptiveGizmo";
 import { FactoryGizmos } from "./FactoryGizmos";
+import { GizmoPicker } from "./GizmoPicker";
 import { FactoryShapes } from "./FactoryShapes";
 import { Calculator } from "./Calculator";
 import { ToolTimer } from "./ToolTimer";
@@ -31,7 +35,6 @@ import { Curtain } from "./Curtain";
 import { SplitBoard } from "./SplitBoard";
 import { Voting } from "./Voting";
 import { ToolMedia } from "./ToolMedia";
-import curtainIcon from "./assets/curtain/icon.png";
 
 import "./BuiltinTools.scss";
 import {
@@ -45,7 +48,6 @@ import {
   renderWidget,
   teachingTools,
   widgetDefaults,
-  widgetShapes,
   widgetTime,
   solidWidgetKinds,
 } from "./widgets";
@@ -62,7 +64,7 @@ const factoryTools = {
   timer: { label: "timer", icon: <FactoryIcon name="timer" /> },
   curtain: {
     label: "curtain",
-    icon: <img src={curtainIcon} alt="" width={40} height={40} />,
+    icon: <FactoryIcon name="curtain" />,
   },
 } as const;
 
@@ -98,10 +100,12 @@ const labels = {
 
 export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
-  const setOpen = (value: boolean) =>
+  const pinned = useToolbarItems();
+  const setOpen = (value: boolean) => {
     window.dispatchEvent(
       new Event(value ? "fcboard:toolbox-open" : "fcboard:toolbox-close"),
     );
+  };
   const [selected, setSelected] = useState<Widget | null>(null);
   const [lassoActive, setLassoActive] = useState(false);
   const selectedRef = useRef<Widget | null>(null);
@@ -389,9 +393,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
               ? "#ffffff"
               : api.getAppState().viewBackgroundColor || "#ffffff",
           )
-        : document?.pen?.color ||
-          api.getAppState().currentItemStrokeColor ||
-          "#17243c";
+        : api.getAppState().whiteboardShapeStyle?.color || "#000000";
     }
     if (kind === "ruler" || kind === "setSquare") {
       const state = api.getAppState();
@@ -564,16 +566,22 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   };
   useEffect(() => {
     const registrations = [
-      classroomCommands.register("tools.open", "展开教学工具", () => {
-        if (classroomCommands.has("panel.close")) {
-          void classroomCommands.execute({ name: "panel.close" });
-        }
-        api.updateScene({ appState: { toolbarHidden: false } });
-        setOpen(true);
-      }),
+      classroomCommands.register(
+        "tools.open",
+        "Open the current toolbox.",
+        () => {
+          if (classroomCommands.has("panel.close")) {
+            void classroomCommands.execute({ name: "panel.close" });
+          }
+          api.updateScene({ appState: { toolbarHidden: false } });
+          setOpen(true);
+        },
+      ),
       classroomCommands.register(
         "tools.insert",
-        `插入原生教学工具，args.kind=${Object.keys(teachingTools).join("|")}`,
+        `Insert a native teaching object; args.kind=${Object.keys(
+          teachingTools,
+        ).join("|")}`,
         (args) => {
           if (!(String(args.kind) in teachingTools)) {
             throw new Error(t("fcboard.this_teaching_tool_is_unavailable"));
@@ -583,13 +591,13 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.configure",
-        "修改选中教学工具或args.id指定工具；参数 args.rotation,size,length,gravity,angle,vx,vy,duration(秒),names；图形可带solid:{stroke:十六进制颜色,border:boolean}；仅立方体/圆柱另支持solid:{unfold:0|1,net:从0开始的网格索引,colors:{面id:十六进制颜色}}；展开/合起有动画，颜色绑定物理面",
+        "Configure the selected teaching object or args.id: rotation,size,length,gravity,angle,vx,vy,duration (seconds),names. Solids accept solid:{stroke:hex,border:boolean}; cube/cylinder also accept solid:{unfold:0|1,net:zero-based index,colors:{faceId:hex}}. Folding animates and colors stay attached to physical faces.",
         (args) =>
           change(args, typeof args.id === "string" ? args.id : undefined),
       ),
       classroomCommands.register(
         "tools.delete",
-        "删除args.id指定的整个教学对象，包含全部面和边",
+        "Delete the entire teaching object identified by args.id, including all faces and edges.",
         async (args) => {
           const id =
             typeof args.id === "string" ? args.id : selectedRef.current?.id;
@@ -618,7 +626,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.duplicate",
-        "复制args.id指定的整个教学对象及逐面颜色，保留原对象",
+        "Duplicate the entire object identified by args.id, preserving face colors and the original object.",
         async (args) => {
           const id =
             typeof args.id === "string" ? args.id : selectedRef.current?.id;
@@ -652,7 +660,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.play",
-        "开始或暂停计时器、实验；args.enabled 布尔值，可带args.id",
+        "Start or pause a timer or experiment; optional boolean args.enabled and args.id.",
         (args) =>
           play(
             typeof args.enabled === "boolean" ? args.enabled : undefined,
@@ -661,7 +669,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "tools.random",
-        "掷骰子或随机抽取，可带args.id",
+        "Roll dice or make a random selection; optional args.id.",
         (args) => random(typeof args.id === "string" ? args.id : undefined),
       ),
       classroomCommands.context("tools", () => ({
@@ -673,11 +681,11 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
         ? [
             classroomCommands.register(
               "tools.factory",
-              `打开应用内置教学工具，不依赖外部APK，args.tool=${factory.join(
+              `Open a built-in tool without an external APK; args.tool=${factory.join(
                 "|",
-              )}，依次对应 ${factory
+              )}; corresponding current UI labels: ${factory
                 .map((tool) => t(`fcboard.${factoryTools[tool].label}`))
-                .join("、")}`,
+                .join(", ")}`,
               async (args) => {
                 const tool = args.tool as FactoryTool;
                 if (!(factory as readonly string[]).includes(tool)) {
@@ -728,10 +736,11 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       setError(String(failure));
     }
   };
-  const widgetButton = ([kind, name]: [WidgetKind, string]) => (
+  const gizmoButton = ([kind]: [WidgetKind, string]) => (
     <ButtonBase
       key={kind}
       data-close-insert
+      data-native-tool={kind}
       aria-label={t("fcboard.insert_name", {
         name: t(`fcboard.${teachingTools[kind]}`),
       })}
@@ -742,65 +751,14 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
             compass: 4,
             protractor: 5,
             setSquare: 6,
-            timer: 9,
           } as Partial<Record<WidgetKind, number>>
         )[kind],
       }}
       onClick={() => attempt(() => insert(kind))}
     >
-      {factoryGizmoKinds.has(kind) ? (
-        <FactoryIcon
-          name={
-            kind === "setSquare"
-              ? "setSquare"
-              : (kind as "ruler" | "protractor" | "compass")
-          }
-        />
-      ) : (
-        <svg viewBox="-10 -20 380 280" aria-hidden="true">
-          {widgetShapes({
-            id: "preview",
-            kind,
-            params: { ...widgetDefaults(), duration: 180 },
-            position: { x: 0, y: 0 },
-          }).map((shape, index) =>
-            shape.type === "line" && shape.points ? (
-              <polyline
-                key={index}
-                points={shape.points
-                  .map(
-                    ([x, y]) => `${x + (shape.x || 0)},${y + (shape.y || 0)}`,
-                  )
-                  .join(" ")}
-                stroke="#245bd6"
-                strokeWidth="3"
-                fill="none"
-              />
-            ) : shape.type === "ellipse" || shape.type === "rectangle" ? (
-              <rect
-                key={index}
-                x={shape.x}
-                y={shape.y}
-                width={shape.width}
-                height={shape.height}
-                rx={shape.type === "ellipse" ? (shape.width || 0) / 2 : 4}
-                stroke="#245bd6"
-                strokeWidth="3"
-                fill="none"
-              />
-            ) : shape.type === "text" ? (
-              <text
-                key={index}
-                x={shape.x}
-                y={(shape.y || 0) + (shape.fontSize || 18)}
-                fontSize={shape.fontSize}
-              >
-                {shape.text}
-              </text>
-            ) : null,
-          )}
-        </svg>
-      )}
+      <FactoryIcon
+        name={kind as "ruler" | "protractor" | "compass" | "setSquare"}
+      />
       <span>{t(`fcboard.${teachingTools[kind]}`)}</span>
     </ButtonBase>
   );
@@ -812,6 +770,19 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
     <ButtonBase
       key={command}
       data-close-insert
+      data-native-tool={
+        command === "canvas.summary"
+          ? "summary"
+          : command === "record.open"
+          ? "record"
+          : command === "voice.toggle"
+          ? "voice"
+          : command === "files.open"
+          ? "files"
+          : command === "assistant.open"
+          ? "questions"
+          : undefined
+      }
       type="button"
       style={{
         order:
@@ -835,15 +806,19 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       <span>{label}</span>
     </ButtonBase>
   );
-  const entries = Object.entries(teachingTools).filter(
-    ([kind]) => kind !== "shape",
+  const entries = Object.entries(teachingTools).filter(([kind]) =>
+    factoryGizmoKinds.has(kind as WidgetKind),
   ) as [WidgetKind, string][];
   const actions = [
     [t("fcboard.file_transfer"), "files.open", <FactoryIcon name="transfer" />],
     [t("fcboard.ai_summary"), "canvas.summary", TextIcon],
     [t("fcboard.recording"), "record.open", microphoneIcon],
-    [t("fcboard.ai_questions"), "assistant.open", questionCircle],
     [t("fcboard.voice_commands"), "voice.toggle", microphoneIcon],
+    [
+      t("fcboard.quizForm.title"),
+      "assistant.open",
+      <FactoryIcon name="questions" />,
+    ],
   ] as const;
   const actionIds = {
     "files.open": "files",
@@ -857,6 +832,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       key={tool}
       type="button"
       data-close-insert
+      data-native-tool={tool}
       aria-label={t("fcboard.open_name", {
         name: t(`fcboard.${factoryTools[tool].label}`),
       })}
@@ -878,9 +854,10 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
   );
   return (
     <>
+      <NativeToolbarItems api={api} />
       <FactoryGizmos api={api} />
       <FactoryShapes api={api} />
-      <Calculator />
+      <Calculator api={api} />
       <ToolTimer />
       <Curtain />
       <SplitBoard />
@@ -892,30 +869,39 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
           role="group"
           aria-label={t("fcboard.display_tools")}
         >
-          {factory.map((tool) => factoryButton(tool))}
+          {factory
+            .filter((tool) => tool !== "split" && !pinned.includes(tool))
+            .map((tool) => factoryButton(tool))}
         </div>
         {entries
-          .filter(([kind]) => factoryGizmoKinds.has(kind))
-          .map(widgetButton)}
-        {actions.map(actionButton)}
+          .filter(([kind]) => kind === "ruler" && !pinned.includes("ruler"))
+          .map(() => (
+            <GizmoPicker
+              key="gizmos"
+              onInsert={(kind) => attempt(() => insert(kind))}
+            />
+          ))}
+        {actions
+          .filter((entry) => !pinned.includes(actionIds[entry[1]]))
+          .map(actionButton)}
       </ToolbarExtras>
       {factory.map((tool) => (
         <ToolbarExtras key={tool} toolId={tool}>
           {factoryButton(tool)}
         </ToolbarExtras>
       ))}
-      {entries
-        .filter(([kind]) => factoryGizmoKinds.has(kind))
-        .map((entry) => (
-          <ToolbarExtras
-            key={entry[0]}
-            toolId={
-              entry[0] as "ruler" | "compass" | "protractor" | "setSquare"
-            }
-          >
-            {widgetButton(entry)}
-          </ToolbarExtras>
-        ))}
+      {entries.map((entry) => (
+        <ToolbarExtras
+          key={entry[0]}
+          toolId={entry[0] as "ruler" | "compass" | "protractor" | "setSquare"}
+        >
+          {entry[0] === "ruler" ? (
+            <GizmoPicker onInsert={(kind) => attempt(() => insert(kind))} />
+          ) : (
+            gizmoButton(entry)
+          )}
+        </ToolbarExtras>
+      ))}
       {actions.map((entry) => (
         <ToolbarExtras key={entry[1]} toolId={actionIds[entry[1]]}>
           {actionButton(entry)}

@@ -237,6 +237,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
     prompt: string,
     signal?: AbortSignal,
     prepare = false,
+    kind: "auto" | "experiment" | "visualization" = "auto",
   ) => {
     signal?.throwIfAborted();
     const controller = new AbortController();
@@ -276,6 +277,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
         prompt,
         controller.signal,
         context,
+        kind,
       );
       controller.signal.throwIfAborted();
       setGenerated(await generatedResources());
@@ -605,8 +607,18 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
   useEffect(() => {
     const stops = [
       classroomCommands.register(
+        "visualizations.generate",
+        "Generate and insert a teaching visualization from args.prompt. Honor explicit engine/medium choices and exclusions; otherwise freely choose or combine HTML/Canvas/SVG, offline Vega/Vega-Lite and JSXGraph. Do not assign a subject to an engine. Save to My resources and preserve other content. args.signal cancels generation.",
+        (args) =>
+          generate(
+            typeof args.prompt === "string" ? args.prompt : "",
+            args.signal instanceof AbortSignal ? args.signal : undefined,
+            false,
+          ),
+      ),
+      classroomCommands.register(
         "resources.generate",
-        "Generate a scientifically grounded interactive HTML teaching experiment from args.prompt, save it to My resources and embed its iframe in the visible whiteboard or courseware. Preserve existing content.",
+        "Generate a scientifically grounded teaching resource from args.prompt: honor explicit engine/medium choices and exclusions; otherwise freely choose or combine HTML/Canvas/SVG, offline Vega/Vega-Lite and JSXGraph according to the resource. Save to My resources and insert in the visible whiteboard or courseware, preserving existing content.",
         (args) =>
           generate(
             typeof args.prompt === "string" ? args.prompt : "",
@@ -615,7 +627,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.prepare",
-        "Prepare and save a reusable interactive teaching resource from args.prompt without inserting it. Return its real id and title; call resources.use at the intended lesson step.",
+        "Prepare and save a reusable teaching resource from args.prompt without inserting: honor explicit engine/medium choices and exclusions; otherwise freely choose or combine interactive HTML/Canvas/SVG, offline Vega/Vega-Lite and JSXGraph. Return its real id/title; call resources.use at the intended lesson step.",
         (args) =>
           generate(
             typeof args.prompt === "string" ? args.prompt : "",
@@ -643,7 +655,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.list",
-        "查找教学资源，args.query 搜索名称，args.category 可筛选学科；返回最多40项真实id、名称和类型，使用前先查询",
+        "Find teaching resources by args.query and optional args.category. Return at most 40 real IDs, names and types; inspect before use.",
         async (args) =>
           [
             ...teachingResources,
@@ -681,7 +693,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "resources.use",
-        "使用教学资源，args.id 必须来自 resources 清单；或args.taskId等待真实后台准备任务并插入它的资源。只传id或taskId其中之一。本地图示插入可编辑白板对象，在线实验在应用内打开",
+        "Use a real resource from resources.list via args.id, or wait for a real preparation task via args.taskId and insert its result. Supply exactly one. Local diagrams become editable objects; online experiments open inside the app.",
         async (args) => {
           if (args.taskId === undefined) {
             return insertResource(args.id, args);
@@ -707,7 +719,7 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "web.open",
-        "在白板内打开网页，args.url 必填 http/https 地址",
+        "Open a web page inside the whiteboard; args.url must be an HTTP/HTTPS URL.",
         (args) => openWeb(args.url),
       ),
       classroomCommands.context("resources", () => ({

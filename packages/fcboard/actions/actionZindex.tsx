@@ -1,6 +1,8 @@
 import { KEYS, CODES, isDarwin } from "@fcboard/common";
 
 import {
+  getSelectedElements,
+  newElementWith,
   moveOneLeft,
   moveOneRight,
   moveAllLeft,
@@ -8,6 +10,8 @@ import {
 } from "@fcboard/element";
 
 import { CaptureUpdateAction } from "@fcboard/element";
+
+import type { FcboardElement } from "@fcboard/element/types";
 
 import {
   BringForwardIcon,
@@ -20,6 +24,32 @@ import { getShortcutKey } from "../shortcut";
 
 import { register } from "./register";
 
+import type { AppState } from "../types";
+
+/** Function objects cross the floating input plane through the same ordinary
+ * layer actions used for z-order. Metadata and order share one undo step. */
+const functionLayer = (
+  elements: readonly FcboardElement[],
+  state: AppState,
+  layer: "board" | "floating",
+) => {
+  const selected = new Set(
+    getSelectedElements(elements, state).map((element) => element.id),
+  );
+  return elements.map((element) =>
+    selected.has(element.id) &&
+    element.customData?.fcPlot?.renderer === "canvas" &&
+    element.customData.fcPlot.layer !== layer
+      ? newElementWith(element, {
+          customData: {
+            ...element.customData,
+            fcPlot: { ...element.customData.fcPlot, layer },
+          },
+        })
+      : element,
+  );
+};
+
 export const actionSendBackward = register({
   name: "sendBackward",
   label: "labels.sendBackward",
@@ -28,7 +58,11 @@ export const actionSendBackward = register({
   trackEvent: { category: "element" },
   perform: (elements, appState, value, app) => {
     return {
-      elements: moveOneLeft(elements, appState, app.scene),
+      elements: functionLayer(
+        moveOneLeft(elements, appState, app.scene),
+        appState,
+        "board",
+      ),
       appState,
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -58,7 +92,11 @@ export const actionBringForward = register({
   trackEvent: { category: "element" },
   perform: (elements, appState, value, app) => {
     return {
-      elements: moveOneRight(elements, appState, app.scene),
+      elements: functionLayer(
+        moveOneRight(elements, appState, app.scene),
+        appState,
+        "floating",
+      ),
       appState,
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -88,7 +126,11 @@ export const actionSendToBack = register({
   trackEvent: { category: "element" },
   perform: (elements, appState) => {
     return {
-      elements: moveAllLeft(elements, appState),
+      elements: functionLayer(
+        moveAllLeft(elements, appState),
+        appState,
+        "board",
+      ),
       appState,
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -126,7 +168,11 @@ export const actionBringToFront = register({
 
   perform: (elements, appState) => {
     return {
-      elements: moveAllRight(elements, appState),
+      elements: functionLayer(
+        moveAllRight(elements, appState),
+        appState,
+        "floating",
+      ),
       appState,
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };

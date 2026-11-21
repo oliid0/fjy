@@ -56,7 +56,7 @@ export const FactoryMenu = ({
         rect.top,
         toolbar?.getBoundingClientRect().top ?? rect.top,
       );
-      const gap = 16 * Math.min(1, rect.height / 48);
+      const gap = (10 * rect.height) / 58;
       setPlacement({
         gap: rect.top - top + gap,
         maxHeight: Math.max(0, top - gap - 12),
@@ -99,9 +99,16 @@ export const FactoryMenu = ({
         }}
       >
         <FactoryIcon name="menu" />
+        <span>{t("buttons.menu")}</span>
       </button>
       {open && (
-        <ClickAwayListener onClickAway={finish}>
+        <ClickAwayListener
+          onClickAway={(event) => {
+            if (!trigger.current?.contains(event.target as Node)) {
+              finish();
+            }
+          }}
+        >
           <Popper
             open
             anchorEl={anchor || trigger.current}

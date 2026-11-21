@@ -1,0 +1,117 @@
+.fc-classroom .fc-share-qr-dialog.fc-projection {
+  min-height: 0;
+  gap: 0;
+
+  > header {
+    display: flex;
+    align-items: center;
+    padding-bottom: 16px;
+  }
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 22px;
+    font-weight: 400;
+
+    svg {
+      width: 24px;
+      height: 24px;
+    }
+  }
+
+  header button {
+    position: absolute;
+    inset-inline-end: -12px;
+    min-width: 40px;
+    min-height: 40px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font-size: 24px;
+    cursor: pointer;
+  }
+
+  p {
+    margin: 8px 0 0;
+    text-align: center;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .fc-projection__qr {
+    display: grid;
+    place-items: center;
+    text-align: center;
+    font-size: 13px;
+    color: #565b63;
+  }
+
+  .fc-projection__network {
+    color: #333;
+  }
+
+  .fc-projection__error {
+    color: #a8211b;
+  }
+}
+
+.fc-projection__video {
+  position: absolute;
+  visibility: hidden;
+  transform-origin: 0 0;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.app
+  .fcboard.fc-projection-fullscreen
+  .fc-unified-toolbar
+  .fc-toolbar-visibility,
+.app
+  .fcboard.fc-projection-fullscreen
+  .fc-unified-toolbar.fc-toolbar-collapsed {
+  display: none;
+}
+
+.fc-classroom .fc-projection__controls {
+  position: fixed;
+  z-index: 19;
+  top: max(calc(var(--cast-top) + 6px), env(safe-area-inset-top));
+  right: max(calc(var(--cast-right) + 6px), env(safe-area-inset-right));
+  display: flex;
+  gap: 4px;
+  opacity: 0.5;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &:not(.fc-projection__controls--visible):not(:focus-within) {
+    visibility: hidden;
+  }
+
+  button:not(.MuiButtonBase-root) {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: #202020;
+    color: #fff;
+
+    svg {
+      width: 17px;
+      height: 17px;
+    }
+  }
+}

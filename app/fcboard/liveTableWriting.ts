@@ -210,11 +210,7 @@ export class LiveTableWriting {
       return;
     }
     if (phase === "start") {
-      if (
-        element.customData?.fcGenerated ||
-        element.customData?.fcQuestionInput ||
-        element.customData?.fcInsertion
-      ) {
+      if (element.customData?.fcGenerated || element.customData?.fcInsertion) {
         return;
       }
       const scene = this.restore(this.api.getSceneElements());

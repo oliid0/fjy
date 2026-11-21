@@ -26,14 +26,14 @@ export const documentInkElement = (stroke: InkStroke) => {
         simulatePressure: stroke.simulatePressure !== false,
         strokeWidth: stroke.width,
         strokeColor: stroke.color,
+        backgroundColor: stroke.fill || "transparent",
         opacity: stroke.opacity ?? 100,
         strokeStyle:
-          stroke.fcInk?.pen === "dashed"
-            ? "dashed"
-            : stroke.strokeStyle || "solid",
+          stroke.strokeStyle ||
+          (stroke.fcInk?.pen === "dashed" ? "dashed" : "solid"),
         customData: {
           fcInk: stroke.fcInk || { pen: "hard" },
-          ...(stroke.questionFrame ? { fcQuestionFrame: true } : {}),
+          ...(stroke.generated ? { fcGenerated: true } : {}),
         },
       }),
       id: stroke.id,
@@ -51,10 +51,8 @@ const createGeometry = (stroke: InkStroke) => ({
     : `M${stroke.points.map((point) => point.join(",")).join(" L")}`,
   filled: stroke.fcInk?.pen === "brush",
   dashes:
-    stroke.fcInk?.pen === "dashed"
+    documentInkElement(stroke).strokeStyle !== "solid"
       ? factoryInkDashes(documentInkElement(stroke))
-      : stroke.strokeStyle === "dashed"
-      ? [8, 8]
       : undefined,
   dashOffset: stroke.fcInk?.dashOffset || 0,
 });

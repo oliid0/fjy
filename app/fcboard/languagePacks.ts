@@ -58,3 +58,16 @@ export const openLanguagePacks = (tag?: string, required = false) =>
   window.dispatchEvent(
     new CustomEvent(languagePacksEvent, { detail: { tag, required } }),
   );
+
+/** Older Android WebViews may lack Intl.DisplayNames. */
+export const handwritingLanguageName = (tag: string, locale: string) => {
+  try {
+    return (
+      new Intl.DisplayNames([locale], { type: "language" }).of(
+        tag.split("-")[0],
+      ) || tag
+    );
+  } catch {
+    return tag;
+  }
+};

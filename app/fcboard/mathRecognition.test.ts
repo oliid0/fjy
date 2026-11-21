@@ -1,11 +1,8 @@
+import { calculateLocal as calculate } from "./mathCalculation";
+
+import { compileExpression, samplePlot, sampleInequality } from "./math";
 import {
-  calculate,
-  compileExpression,
-  samplePlot,
-  sampleInequality,
-} from "./math";
-import {
-  localMathResult,
+  localFunctionResult,
   recognizeMath,
   validatedPlot,
 } from "./mathRecognition";
@@ -20,6 +17,16 @@ afterEach(() => {
 
 it.each([
   ["6+7=", "13"],
+  ["12÷3=", "4"],
+  ["11\n+11\n----", "22"],
+  ["11\n-2\n----", "9"],
+  ["11\n×2\n----", "22"],
+  ["12\n÷3\n----", "4"],
+  ["sin30度=", "0.5"],
+  ["1.2+1.3=", "2.5"],
+  ["1/2+1/2=", "1"],
+  ["log2 4=", "2"],
+  ["2^2=", "4"],
   ["6x3=", "18"],
   ["0.25 x 4", "1"],
   ["12\nx3\n----", "36"],
@@ -115,7 +122,7 @@ it.each([
   String.raw`y=\sqrt{x}`,
   "f(x,y)=sin(x)*cos(y)",
 ])("generates finite local geometry for %s", (input) => {
-  const result = localMathResult(input, "function");
+  const result = localFunctionResult(input);
   expect(result.kind).toBe("function");
   if (result.kind === "function") {
     const lines = samplePlot(result.plot);
@@ -143,7 +150,7 @@ it.each([
 ])(
   "preserves the mathematical value of function pen input %s",
   (input, x, expected) => {
-    const result = localMathResult(input as string, "function");
+    const result = localFunctionResult(input as string);
     expect(result.kind).toBe("function");
     if (result.kind === "function") {
       expect(
@@ -164,7 +171,7 @@ it("shades the requested side of an inequality using local coordinates", () => {
     const edge = polygons[0][polygons[0].length - 2][1];
     expect(edge).toBe(relation.startsWith(">") ? -10 : 10);
   }
-  expect(localMathResult("y ≥ 2x+1", "function")).toMatchObject({
+  expect(localFunctionResult("y ≥ 2x+1")).toMatchObject({
     kind: "function",
     plot: { relation: ">=", expression: "2x+1" },
   });
@@ -180,7 +187,10 @@ it("never calls AI for a supported local formula", async () => {
 });
 
 it("accepts only source-matching JSON, locally draws it and rejects invented values/images/points", async () => {
-  saveSettings({ ...defaults, apiKey: "key", model: "parser" }, false);
+  saveSettings(
+    { ...defaults, apiKey: "key", model: "parser", mathTranscription: "cloud" },
+    false,
+  );
   const text = "y = sine(x) + 2";
   const json = {
     version: 1,
@@ -214,4 +224,32 @@ it("accepts only source-matching JSON, locally draws it and rejects invented val
       recognizeMath(text, "function", new AbortController().signal),
     ).rejects.toThrow();
   }
+});
+
+it("transcribes a calculation without requiring function-only surface metadata", async () => {
+  saveSettings(
+    { ...defaults, apiKey: "key", model: "parser", mathTranscription: "cloud" },
+    false,
+  );
+  const text = "2 plus 3";
+  vi.spyOn(ai, "chat").mockResolvedValue(
+    JSON.stringify({
+      version: 1,
+      kind: "calculation",
+      source: text,
+      expression: "2+3",
+    }),
+  );
+  await expect(
+    recognizeMath(text, "calculation", new AbortController().signal),
+  ).resolves.toEqual({ kind: "calculation", expression: "2+3", answer: "5" });
+});
+
+it("does not turn a configured AI key into an implicit math dependency", async () => {
+  saveSettings({ ...defaults, apiKey: "configured" }, false);
+  const cloud = vi.spyOn(ai, "chat");
+  await expect(
+    recognizeMath("unreadable", "function", new AbortController().signal),
+  ).rejects.toThrow();
+  expect(cloud).not.toHaveBeenCalled();
 });

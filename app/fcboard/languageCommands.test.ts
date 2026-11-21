@@ -335,3 +335,125 @@ it("validates all explicit sources and input before making a translation request
     stop();
   }
 });
+
+it("sends a cropped courseware learning card screenshot directly to AI without transcription", async () => {
+  const host = setup();
+  const ink: InkStroke[] = [
+    {
+      id: "sentence",
+      text: "A sentence with inertia",
+      points: [[100, 100]],
+      color: "#000000",
+      width: 2,
+    },
+  ];
+  const unread = classroomCommands.context("document", () => ({
+    id: "lesson",
+    page: 1,
+    ink,
+  }));
+  const snapshot = vi
+    .spyOn(documents, "inkSnapshot")
+    .mockResolvedValue("data:image/png;base64,source" as DataURL);
+  const crop = vi
+    .spyOn(ai, "cropImage")
+    .mockResolvedValue("data:image/png;base64,cropped");
+  try {
+    await classroomCommands.execute({
+      name: "language.translate",
+      args: {
+        sourceIds: ["sentence"],
+        region: { left: 100, top: 100, right: 200, bottom: 140 },
+        insert: false,
+        study: true,
+        targetLanguage: "ja-JP",
+      },
+    });
+    expect(host.recognize).not.toHaveBeenCalled();
+    expect(snapshot).toHaveBeenCalledWith(ink, 40, undefined, 100);
+    expect(crop).toHaveBeenCalledWith(
+      "data:image/png;base64,source",
+      { left: 0.1, top: 0, right: 0.2, bottom: 1 },
+      expect.any(AbortSignal),
+    );
+    expect(host.explain).toHaveBeenCalledWith(
+      "",
+      expect.any(AbortSignal),
+      "ja-JP",
+      "data:image/png;base64,cropped",
+      true,
+    );
+    expect(host.api.updateScene).not.toHaveBeenCalled();
+  } finally {
+    unread();
+    host.stop();
+  }
+});
+
+it("releases a stalled translation at its deadline while an independent source completes", async () => {
+  vi.useFakeTimers();
+  const host = setup();
+  const [second] = convertToFcboardElements([
+    { type: "text", text: "second word", x: 450, y: 100 },
+  ]);
+  let finish!: (study: language.LanguageStudy) => void;
+  host.explain.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  try {
+    host.api.updateScene({ elements: [host.source, second] });
+    const first = classroomCommands.execute({
+      name: "language.translate",
+      args: { sourceIds: [host.source.id] },
+    });
+    const rejected = expect(first).rejects.toThrow();
+    const result = await classroomCommands.execute({
+      name: "language.translate",
+      args: { sourceIds: [second.id] },
+    });
+    expect(result).toMatchObject({ translation: languageStudy.translation });
+    expect((host.explain.mock.calls[0][1] as AbortSignal).aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30000);
+    await rejected;
+    expect((host.explain.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
+    const completed = host.api.getSceneElements();
+    finish(languageStudy);
+    await Promise.resolve();
+    expect(host.api.getSceneElements()).toEqual(completed);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    host.stop();
+    vi.useRealTimers();
+  }
+});
+
+it.each(["erase", "unmount"])(
+  "settles an ignored-abort language backend immediately after %s",
+  async (change) => {
+    vi.useFakeTimers();
+    const host = setup();
+    host.explain.mockImplementationOnce(() => new Promise(() => {}));
+    try {
+      const result = classroomCommands.execute({
+        name: "language.translate",
+        args: { sourceIds: [host.source.id] },
+      });
+      const rejected = expect(result).rejects.toMatchObject({
+        name: "AbortError",
+      });
+      if (change === "erase") {
+        host.api.updateScene({ elements: [] });
+      } else {
+        host.stop();
+      }
+      await rejected;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      host.stop();
+      vi.useRealTimers();
+    }
+  },
+);

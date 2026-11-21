@@ -23,7 +23,10 @@ public class ClassroomCaptureTest {
             for (int attempt = 0; attempt < 60 && !ready; attempt++) {
                 CountDownLatch checked = new CountDownLatch(1);
                 AtomicReference<String> result = new AtomicReference<>("false");
-                scenario.onActivity(activity -> activity.getBridge().getWebView().evaluateJavascript("!!document.querySelector('.fc-unified-toolbar')", value -> { result.set(value); checked.countDown(); }));
+                scenario.onActivity(activity -> {
+                    if (!activity.isBoardUsable()) { checked.countDown(); return; }
+                    activity.getBridge().getWebView().evaluateJavascript("!!document.querySelector('.fc-unified-toolbar')", value -> { result.set(value); checked.countDown(); });
+                });
                 assertTrue(checked.await(5, TimeUnit.SECONDS));
                 ready = "true".equals(result.get());
                 if (!ready) Thread.sleep(500);
@@ -48,6 +51,14 @@ public class ClassroomCaptureTest {
             assertNotNull(bitmap);
             assertTrue(bitmap.getWidth() > 100 && bitmap.getWidth() <= 1280);
             assertTrue(bitmap.getHeight() > 100);
+            int firstPixel = bitmap.getPixel(0, 0);
+            boolean varied = false;
+            for (int y = 0; y < bitmap.getHeight() && !varied; y += 8) {
+                for (int x = 0; x < bitmap.getWidth(); x += 8) {
+                    if (bitmap.getPixel(x, y) != firstPixel) { varied = true; break; }
+                }
+            }
+            assertTrue("Capture must contain actual app pixels, not an empty software frame", varied);
             bitmap.recycle();
         }
     }

@@ -1,11 +1,16 @@
 import { t } from "@fcboard/fcboard/i18n";
 import { all, create } from "mathjs";
 
+import { sampleCurve } from "./curveSampling";
+
 import { mathNotation } from "./mathNotation";
 import { allowedFunctions } from "./mathFunctions";
 import { continuousMathRange } from "./mathDomain";
 
-const math = create(all);
+import type { CurveView } from "./curveSampling";
+
+let math: ReturnType<typeof create>;
+const parser = () => (math ||= create(all));
 
 export const normalizeExpression = (text: string) =>
   text
@@ -19,13 +24,25 @@ export const normalizeExpression = (text: string) =>
     .replace(/³/g, "^3")
     .replace(/\s*=\s*$/, "");
 
-export const compileExpression = (expression: string) => {
+const compiledFunctions = new Map<
+  string,
+  {
+    node: import("mathjs").MathNode;
+    compiled: ReturnType<import("mathjs").MathNode["compile"]>;
+  }
+>();
+const functionDefinition = (expression: string) => {
   if (!expression || expression.length > 500) {
     throw new Error(
       t("fcboard.enter_a_mathematical_expression_of_up_to_500_characters"),
     );
   }
-  const node = math.parse(mathNotation(expression));
+  const normalized = mathNotation(expression);
+  const cached = compiledFunctions.get(normalized);
+  if (cached) {
+    return cached;
+  }
+  const node = parser().parse(normalized);
   let count = 0;
   node.traverse((child) => {
     count++;
@@ -63,17 +80,22 @@ export const compileExpression = (expression: string) => {
       throw new Error(t("fcboard.unknown_variable_supported_x_y_z_a_b_c"));
     }
   });
-  return node.compile();
+  const definition = { node, compiled: node.compile() };
+  if (compiledFunctions.size >= 64) {
+    compiledFunctions.delete(compiledFunctions.keys().next().value!);
+  }
+  compiledFunctions.set(normalized, definition);
+  return definition;
 };
+export const compileExpression = (expression: string) =>
+  functionDefinition(expression).compiled;
 
-export {
-  calculateLocal as calculate,
-  prepareCalculation,
-} from "./mathCalculation";
+export { prepareCalculation } from "./calculationSyntax";
 
 export type Plot = {
   expression: string;
   equation?: string;
+  compare?: string[];
   surface: boolean;
   x: number;
   y: number;
@@ -83,6 +105,7 @@ export type Plot = {
   c: number;
   range: number;
   relation?: ">" | ">=" | "<" | "<=";
+  view?: { left: number; right: number; bottom: number; top: number };
 };
 export const defaultPlot: Plot = {
   expression: "x+1",
@@ -104,9 +127,69 @@ export const project3D = (x: number, y: number, z: number) => [
   (x + y) * 0.3 - z,
 ];
 
+export const functionView = (plot: Plot) =>
+  plot.view || {
+    left: plot.x - plot.range,
+    right: plot.x + plot.range,
+    bottom: -plot.range,
+    top: plot.range,
+  };
+
+export const sampleFunctionCurve = (
+  expression: string,
+  view: CurveView,
+  scope: Record<string, number> = {},
+) => {
+  const compiled = compileExpression(expression);
+  const domain = functionDefinition(expression).node;
+  const evaluate = (x: number) => {
+    try {
+      const value = compiled.evaluate({ ...scope, x });
+      return typeof value === "number" && Number.isFinite(value)
+        ? value + (scope.z || 0)
+        : NaN;
+    } catch {
+      return NaN;
+    }
+  };
+  return sampleCurve(
+    evaluate,
+    (left, right) => {
+      const bounds = continuousMathRange(domain, {
+        ...Object.fromEntries(
+          Object.entries(scope).map(([key, value]) => [
+            key,
+            [value, value] as [number, number],
+          ]),
+        ),
+        x: [left, right],
+      });
+      return bounds
+        ? [bounds[0] + (scope.z || 0), bounds[1] + (scope.z || 0)]
+        : undefined;
+    },
+    view,
+  );
+};
+
 export const samplePlot = (plot: Plot): number[][][] => {
+  if (!Number.isFinite(plot.range) || plot.range <= 0 || plot.range > 1000) {
+    throw new Error(t("fcboard.coordinate_range_must_be_between_0_and_1000"));
+  }
+  if (!plot.surface) {
+    const lines = sampleFunctionCurve(
+      plotExpression(plot.expression),
+      functionView(plot),
+      { x: plot.x, y: plot.y, z: plot.z, a: plot.a, b: plot.b, c: plot.c },
+    );
+    if (!lines.length && !plot.relation && !plot.view) {
+      throw new Error(t("fcboard.no_real_valued_plot_in_this_range"));
+    }
+    return lines.map((line) => line.map(([x, y]) => [x, -y]));
+  }
+
   const compiled = compileExpression(plotExpression(plot.expression));
-  const domain = math.parse(mathNotation(plotExpression(plot.expression)));
+  const domain = functionDefinition(plotExpression(plot.expression)).node;
   const lines: number[][][] = [];
   const value = (x: number, y: number) => {
     try {
@@ -182,7 +265,7 @@ export const sampleInequality = (plot: Plot): number[][][] => {
     return [];
   }
   const compiled = compileExpression(plot.expression);
-  const domain = math.parse(mathNotation(plot.expression));
+  const domain = functionDefinition(plot.expression).node;
   const polygons: number[][][] = [];
   let boundary: number[][] = [];
   const edge = plot.relation.startsWith(">") ? -plot.range : plot.range;

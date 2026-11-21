@@ -148,7 +148,7 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
       visibleElements: props.visibleElements,
       selectedElements: props.selectedElements,
       allElementsMap: props.allElementsMap,
-      scale: window.devicePixelRatio,
+      scale: props.scale,
       appState: props.appState,
       renderConfig: {
         remotePointerViewportCoords,

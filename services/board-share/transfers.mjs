@@ -36,6 +36,56 @@ const validXml = (xml) =>
 const hash = (salt, password) =>
   createHash("sha256").update(salt).update(password).digest("hex");
 
+const validateLocalization = (value) => {
+  const required = [
+    "shareTitle",
+    "password",
+    "confirm",
+    "incorrectPassword",
+    "pageShareTitle",
+    "shareExpiry",
+    "page",
+    "downloadPage",
+    "boardPage",
+  ];
+  if (
+    !value ||
+    typeof value.language !== "string" ||
+    !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value.language) ||
+    !value.strings ||
+    typeof value.strings !== "object" ||
+    Array.isArray(value.strings) ||
+    Object.keys(value.strings).length > 100 ||
+    !required.every(
+      (key) =>
+        typeof value.strings[key] === "string" && value.strings[key].length > 0,
+    ) ||
+    Object.entries(value.strings).some(
+      ([key, text]) =>
+        !/^[A-Za-z][A-Za-z0-9_]*$/.test(key) ||
+        typeof text !== "string" ||
+        text.length > 4000,
+    )
+  ) {
+    throw fail(400, "Invalid page localization");
+  }
+  return { language: value.language, strings: { ...value.strings } };
+};
+const escapeHTML = (value) =>
+  String(value).replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+        character
+      ]),
+  );
+const pageText = (localization, key, values = {}) =>
+  escapeHTML(
+    localization.strings[key].replace(/\{\{(\w+)\}\}/g, (_all, name) =>
+      String(values[name]),
+    ),
+  );
+
 /** ChooseServerPopu / BoardShareServer and ChooseBzdPopu / ExtraCodePopu are separate transfers. */
 export class Transfers {
   pages = new Map();
@@ -108,7 +158,10 @@ export class Transfers {
     const document = /^\/documents(?:\/([a-zA-Z0-9]{4}|[a-f0-9]{32}))?$/.exec(
       path,
     );
-    const pages = /^\/shares(?:\/([a-f0-9]{32})(\/password)?)?$/.exec(path);
+    const pages =
+      /^\/shares(?:\/([a-f0-9]{32})(\/(?:password|localization))?)?$/.exec(
+        path,
+      );
     const publicPage =
       /^\/share\/([a-f0-9]{32})(?:\/(?:page-(\d+)\.png)?)?$/.exec(path);
     if (!document && !pages && !publicPage) {
@@ -184,6 +237,7 @@ export class Transfers {
           id: input.id,
           key: input.key,
           pages: input.pages,
+          localization: validateLocalization(input.localization),
           expires: Date.now() + PAGE_LIFETIME,
         };
       }
@@ -232,7 +286,20 @@ export class Transfers {
       if (!bearer(request, value.key)) {
         throw fail(401, "Invalid transfer-owner key");
       }
-      if (pages?.[2] && request.method === "PUT") {
+      if (pages?.[2] === "/localization" && request.method === "PUT") {
+        const input = await body(request);
+        const localization = validateLocalization(input?.localization);
+        const delta =
+          Buffer.byteLength(JSON.stringify(localization)) -
+          Buffer.byteLength(JSON.stringify(value.localization));
+        if (delta > availableBytes()) {
+          throw fail(413, "Transfer exceeds the storage budget");
+        }
+        value.localization = localization;
+        value.size += delta;
+        this.size += delta;
+        json(response, 200, { updated: true });
+      } else if (pages?.[2] === "/password" && request.method === "PUT") {
         const input = await body(request);
         if (
           typeof input?.password !== "string" ||
@@ -258,6 +325,8 @@ export class Transfers {
       throw fail(410, "Sharing has expired; scan a new QR code");
     }
     const root = `/share/${value.id}/`;
+    const locale = value.localization;
+    const text = (key, values) => pageText(locale, key, values);
     const index = publicPage[2] === undefined;
     if (!["GET", "HEAD", ...(index ? ["POST"] : [])].includes(request.method)) {
       throw fail(405, "Read only");
@@ -305,8 +374,16 @@ export class Transfers {
           "default-src 'none'; form-action 'self'; frame-ancestors 'none'",
       });
       response.end(
-        `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>白板分享</title><form method="post" action="${root}"><label>请输入密码<input name="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required></label><button>确定</button>${
-          incorrect ? '<p role="alert">密码错误，请重新输入</p>' : ""
+        `<!doctype html><html lang="${
+          locale.language
+        }"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${text(
+          "shareTitle",
+        )}</title><form method="post" action="${root}"><label>${text(
+          "password",
+        )}<input name="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" required></label><button>${text(
+          "confirm",
+        )}</button>${
+          incorrect ? `<p role="alert">${text("incorrectPassword")}</p>` : ""
         }</form></html>`,
       );
       return true;
@@ -331,13 +408,25 @@ export class Transfers {
       const images = value.pages
         .map(
           (_, page) =>
-            `<section><h2>第 ${page + 1} 页</h2><a download="Fcboard-${
+            `<section><h2>${text("page", {
+              number: page + 1,
+            })}</h2><a download="Fcboard-${
               page + 1
-            }.png" href="${root}page-${page}.png?download=1">下载本页</a><img alt="白板页面" src="${root}page-${page}.png"></section>`,
+            }.png" href="${root}page-${page}.png?download=1">${text(
+              "downloadPage",
+            )}</a><img alt="${text(
+              "boardPage",
+            )}" src="${root}page-${page}.png"></section>`,
         )
         .join("");
       response.end(
-        `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fcboard 页面分享</title><style>body{margin:24px;font:18px system-ui;background:#f5f7fa;color:#17243c}img{display:block;max-width:100%;margin:16px 0;background:white}a{display:inline-block;padding:12px;color:#245bd6}section{margin-bottom:32px}</style><h1>Fcboard 页面分享</h1><p>本次分享有效期十分钟，请及时下载。</p>${images}</html>`,
+        `<!doctype html><html lang="${
+          locale.language
+        }"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${text(
+          "pageShareTitle",
+        )}</title><style>body{margin:24px;font:18px system-ui;background:#f5f7fa;color:#17243c}img{display:block;max-width:100%;margin:16px 0;background:white}a{display:inline-block;padding:12px;color:#245bd6}section{margin-bottom:32px}</style><h1>${text(
+          "pageShareTitle",
+        )}</h1><p>${text("shareExpiry")}</p>${images}</html>`,
       );
     } else {
       const image = value.pages[Number(publicPage[2])];

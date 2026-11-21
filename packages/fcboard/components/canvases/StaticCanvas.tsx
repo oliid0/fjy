@@ -8,17 +8,22 @@ import type {
 } from "@fcboard/element/types";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
-import { renderStaticScene } from "../../renderer/staticScene";
+import {
+  renderStaticScene,
+  renderStaticSceneThrottled,
+} from "../../renderer/staticScene";
 import { loadBackground, backgroundImage } from "../../whiteboardBackground";
 
 import type {
   RenderableElementsMap,
   StaticCanvasRenderConfig,
+  StaticSceneRenderConfig,
 } from "../../scene/types";
 import type { AppState, StaticCanvasAppState } from "../../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 
 type StaticCanvasProps = {
+  nativeRenderer?: (config: StaticSceneRenderConfig) => boolean;
   canvas: HTMLCanvasElement;
   /** The upstream whiteboard gesture already coalesces to animation frames. */
   synchronous?: boolean;
@@ -36,6 +41,7 @@ type StaticCanvasProps = {
 const StaticCanvas = (props: StaticCanvasProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isComponentMounted = useRef(false);
+  const nativeCanvas = useRef<HTMLCanvasElement | null>(null);
 
   useLayoutEffect(() => {
     props.canvas.style.width = `${props.appState.width}px`;
@@ -59,21 +65,44 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       canvas.classList.add("fcboard__canvas", "static");
     }
 
-    const paint = () =>
-      renderStaticScene(
-        {
-          canvas,
-          rc: props.rc,
-          scale: props.scale,
-          elementsMap: props.elementsMap,
-          allElementsMap: props.allElementsMap,
-          visibleElements: props.visibleElements,
-          appState: props.appState,
-          renderConfig: props.renderConfig,
-        },
-        !props.synchronous && isRenderThrottlingEnabled(),
-      );
+    const config: StaticSceneRenderConfig = {
+      canvas,
+      rc: props.rc,
+      scale: props.scale,
+      elementsMap: props.elementsMap,
+      allElementsMap: props.allElementsMap,
+      visibleElements: props.visibleElements,
+      appState: props.appState,
+      renderConfig: props.renderConfig,
+    };
+    const projection = config.renderConfig.projection;
+    const paint = () => {
+      if (props.nativeRenderer?.(config)) {
+        renderStaticSceneThrottled.cancel();
+        if (nativeCanvas.current !== canvas) {
+          canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+          nativeCanvas.current = canvas;
+        }
+      } else {
+        nativeCanvas.current = null;
+        renderStaticScene(
+          config,
+          !props.synchronous && isRenderThrottlingEnabled(),
+        );
+      }
+    };
     paint();
+    if (
+      projection &&
+      !projection.fullscreen &&
+      !config.visibleElements.some(({ id }) => id === projection.elementId)
+    ) {
+      if ("position" in projection.video) {
+        projection.video.position(null);
+      } else {
+        projection.video.style.visibility = "hidden";
+      }
+    }
     let cancelled = false;
     const background = props.appState.whiteboardBackground;
     if (background && !backgroundImage(background)) {
@@ -131,6 +160,7 @@ const areEqual = (
 ) => {
   if (
     prevProps.synchronous !== nextProps.synchronous ||
+    prevProps.nativeRenderer !== nextProps.nativeRenderer ||
     prevProps.sceneNonce !== nextProps.sceneNonce ||
     prevProps.scale !== nextProps.scale ||
     // we need to memoize on elementsMap because they may have renewed

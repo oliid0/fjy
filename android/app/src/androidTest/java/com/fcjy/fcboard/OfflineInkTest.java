@@ -59,7 +59,7 @@ public class OfflineInkTest {
     @Test public void bundledModelsRegisterForOurPackageAndRecognizeChineseAndLatinInk() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         DigitalInkModels.install(context);
-        for (String tag : new String[]{"zh-Hani-CN", "en-US", "zxx-Zsym-x-shapes"}) {
+        for (String tag : new String[]{"zh-Hani-CN", "en-US", "zxx-Zsym-x-shapes", "zxx-Zsye-x-emoji"}) {
             DigitalInkRecognitionModelIdentifier id = DigitalInkRecognitionModelIdentifier.fromLanguageTag(tag);
             assertNotNull(id);
             assertTrue("Offline model missing: " + tag, Tasks.await(RemoteModelManager.getInstance().isModelDownloaded(
@@ -74,6 +74,33 @@ public class OfflineInkTest {
         assertRecognition("zh-Hani-CN", chinese, "十");
         Ink one = Ink.builder().addStroke(vertical.build()).build();
         assertRecognition("en-US", one, "1");
+    }
+
+    @Test public void bundledEmojiModelRecognizesASmilingFaceWithoutDownloading() throws Exception {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        DigitalInkModels.install(context);
+        assertEquals(3, context.getSharedPreferences("fcboard-digital-ink", 0).getInt("version", 0));
+        Ink.Stroke.Builder outline = Ink.Stroke.builder(), mouth = Ink.Stroke.builder();
+        for (int i = 0; i <= 64; i++) {
+            double angle = 2 * Math.PI * i / 64;
+            outline.addPoint(Ink.Point.create((float)(100 + 80 * Math.cos(angle)), (float)(100 + 80 * Math.sin(angle))));
+        }
+        for (int i = 0; i <= 32; i++) {
+            double angle = Math.PI * i / 32;
+            mouth.addPoint(Ink.Point.create((float)(100 + 40 * Math.cos(angle)), (float)(110 + 40 * Math.sin(angle))));
+        }
+        Ink smile = Ink.builder().addStroke(outline.build())
+            .addStroke(line(70, 75, 70, 85)).addStroke(line(130, 75, 130, 85))
+            .addStroke(mouth.build()).build();
+        DigitalInkRecognitionModel model = DigitalInkRecognitionModel.builder(
+            DigitalInkRecognitionModelIdentifier.fromLanguageTag("zxx-Zsye-x-emoji")).build();
+        try (DigitalInkRecognizer recognizer = DigitalInkRecognition.getClient(DigitalInkRecognizerOptions.builder(model).build())) {
+            RecognitionResult result = Tasks.await(recognizer.recognize(smile), 30, TimeUnit.SECONDS);
+            assertTrue("No face candidates: " + result.getCandidates(), result.getCandidates().stream().anyMatch(candidate -> {
+                int point = candidate.getText().codePointAt(0);
+                return (point >= 0x1f600 && point <= 0x1f64f) || point == 0x263a;
+            }));
+        }
     }
 
     private void assertRecognition(String tag, Ink ink, String expected) throws Exception {
@@ -161,7 +188,8 @@ public class OfflineInkTest {
                 }
                 @Override public Task<RecognitionResult> recognize(Ink ink, RecognitionContext context) { return actual.recognize(ink, context); }
                 @Override public void close() {
-                    actual.close(); closes.incrementAndGet();
+                    actual.close();
+                    synchronized(closes){closes.incrementAndGet();closes.notifyAll();}
                     if (first) firstClosed.countDown();
                 }
             };
@@ -186,6 +214,17 @@ public class OfflineInkTest {
         assertEquals("mlkit-digital-ink-18.1.0", call.result.get().getString("engine"));
         assertEquals("十", call.result.get().getJSONArray("candidates").getString(0).trim());
         assertEquals(1, call.completions.get());
+    }
+    private void awaitCloses(ControlledInkPlugin plugin, int expected) throws Exception {
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+        synchronized(plugin.closes){
+            while(plugin.closes.get()<expected){
+                long remaining=deadline-System.nanoTime();
+                assertTrue("Idle SDK clients were not released",remaining>0);
+                TimeUnit.NANOSECONDS.timedWait(plugin.closes,remaining);
+            }
+        }
+        assertEquals(expected,plugin.closes.get());
     }
 
     @Test public void pendingModelCheckDoesNotBlockLaterRecognitionAndRetainsTheMissingPackCode() throws Exception {
@@ -235,6 +274,10 @@ public class OfflineInkTest {
             } finally {
                 plugin.firstRecognition.trySetException(new IllegalStateException("test cleanup"));
                 plugin.handleOnDestroy();
+                // CI121 completed the timeout/client-lifetime assertions before
+                // Scenario.close blocked on the live board's idle barrier.
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                    () -> scenario.onActivity(MainActivity::finish));
             }
         }
     }
@@ -291,6 +334,59 @@ public class OfflineInkTest {
                 plugin.firstRecognition.trySetException(new IllegalStateException("test cleanup"));
                 plugin.handleOnDestroy();
             }
+        }
+    }
+
+    @Test public void alternatingLanguagesReuseOnlyTwoClientsAndRetireDeletedPacks() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(false, false);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            try {
+                for (String language : new String[]{"zh-Hani-CN", "en-US", "zh-Hani-CN", "en-US"}) {
+                    InkCall call = new InkCall("recognize", chineseSelection().put("language", language));
+                    plugin.recognize(call);
+                    assertTrue(call.done.await(30, TimeUnit.SECONDS));
+                    assertNull(call.error.get(), call.error.get());
+                    assertTrue(call.result.get().getJSONArray("candidates").length() > 0);
+                }
+                assertEquals(2, plugin.clients.get());
+                assertEquals(0, plugin.closes.get());
+                plugin.retireLanguage("zh-Hani-CN");
+                awaitCloses(plugin,1);
+                InkCall english = new InkCall("recognize", chineseSelection().put("language", "en-US"));
+                plugin.recognize(english);
+                assertTrue(english.done.await(30, TimeUnit.SECONDS));
+                assertNull(english.error.get(), english.error.get());
+                assertEquals(2, plugin.clients.get());
+            } finally {
+                plugin.handleOnDestroy();
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                    () -> scenario.onActivity(MainActivity::finish));
+            }
+            awaitCloses(plugin,2);
+        }
+    }
+
+    @Test public void completedInkClientsReuseWithinTheIdleWindow() throws Exception {
+        try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+            ControlledInkPlugin plugin = new ControlledInkPlugin(false, false);
+            scenario.onActivity(activity -> plugin.setBridge(activity.getBridge()));
+            try {
+                for (int index = 0; index < 2; index++) {
+                    InkCall call = new InkCall("recognize", chineseSelection());
+                    plugin.recognize(call);
+                    assertChineseResult(call);
+                }
+                assertEquals(1, plugin.clients.get());
+                assertEquals(0, plugin.closes.get());
+                plugin.retireLanguage("zh-Hani-CN");
+                awaitCloses(plugin,1);
+                InkCall later = new InkCall("recognize", chineseSelection());
+                plugin.recognize(later);
+                assertChineseResult(later);
+                assertEquals(2, plugin.clients.get());
+            } finally { plugin.handleOnDestroy(); }
+            awaitCloses(plugin,2);
         }
     }
 

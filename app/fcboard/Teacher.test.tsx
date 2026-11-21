@@ -1,31 +1,24 @@
-import { act, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { t } from "@fcboard/fcboard/i18n";
 import { getDefaultAppState } from "@fcboard/fcboard/appState";
-import { convertToFcboardElements } from "@fcboard/fcboard";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { DataURL } from "@fcboard/fcboard/types";
 
 import { Teacher } from "./Teacher";
 import { render } from "./test/render";
 import { classroomCommands } from "./commands";
-import { TeachingEngine } from "./teaching";
 import * as ai from "./ai";
+import * as quizzes from "./quiz";
+import * as quizRequests from "./quizRequests";
 import { defaults, saveSettings } from "./settings";
 
-vi.mock("./materials", () => ({ searchMaterials: async () => [] }));
-vi.mock("./lessonObserver", () => ({
-  observeTeachingStep: async () => undefined,
-}));
-
-const lesson = (
-  tools: { name: string; args?: Record<string, unknown> }[] = [],
-) => ({
-  action: "lesson",
-  lesson: {
-    title: "visible lesson",
-    steps: [{ say: "", tools, commands: [] }],
-    quiz: [],
-  },
-});
 const setup = () => {
   let pointer = () => {};
   const api = {
@@ -51,9 +44,133 @@ const setup = () => {
     image: undefined,
   });
   const chat = vi.spyOn(ai, "chat");
-  const view = render(<Teacher api={api} onCommand={vi.fn()} />);
+  const view = render(<Teacher api={api} />);
   return { api, chat, view, pointer: () => pointer() };
 };
+
+const builderQuiz = () => ({
+  title: "Builder quiz",
+  questions: [
+    {
+      type: "calculation" as const,
+      question: "2+3=?",
+      answer: ["5"],
+      explanation: "Add two and three.",
+    },
+  ],
+  sources: [],
+});
+
+it("submits builder controls through the shared generation/cards flow without creating board ink", async () => {
+  const { api, view } = setup();
+  const generate = vi
+    .spyOn(quizzes, "generateQuiz")
+    .mockResolvedValue(builderQuiz());
+  try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: t("fcboard.quizForm.grade") }),
+      { target: { value: "5" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: t("fcboard.quizForm.type") }),
+      { target: { value: "calculation" } },
+    );
+    fireEvent.change(
+      screen.getByRole("combobox", { name: t("fcboard.quizForm.difficulty") }),
+      { target: { value: "easy" } },
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: t("fcboard.quizForm.supplement") }),
+      { target: { value: "分数加减法" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+    );
+    await waitFor(() => expect(view.getByTitle("Builder quiz")).toBeVisible());
+    expect(generate).toHaveBeenCalledWith(
+      expect.stringContaining("Grade 5"),
+      expect.any(AbortSignal),
+      "question",
+      undefined,
+      "calculation",
+      expect.any(Function),
+    );
+    expect(generate.mock.calls[0][0]).toContain("Difficulty: easy");
+    expect(generate.mock.calls[0][0]).toContain("分数加减法");
+    expect(api.updateScene).not.toHaveBeenCalled();
+    expect(classroomCommands.has("question.cancel")).toBe(false);
+  } finally {
+    view.unmount();
+  }
+});
+
+it("cancels pending builder inference from the visible loading panel and ignores late completion", async () => {
+  const { view } = setup();
+  let finish!: (value: ReturnType<typeof builderQuiz>) => void;
+  const generate = vi.spyOn(quizzes, "generateQuiz").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+    );
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    const result = screen.getByRole("dialog", {
+      name: t("fcboard.ai_questions"),
+    });
+    expect(within(result).getByRole("status")).toBeVisible();
+    fireEvent.click(
+      within(result).getByRole("button", { name: t("buttons.cancel") }),
+    );
+    expect(generate.mock.calls[0][1].aborted).toBe(true);
+    await act(async () => {
+      finish(builderQuiz());
+    });
+    expect(view.queryByTitle("Builder quiz")).toBeNull();
+  } finally {
+    view.unmount();
+  }
+});
+
+it("shows a real generation error and preserves the editable request for retry", async () => {
+  const { view } = setup();
+  vi.spyOn(quizzes, "generateQuiz").mockRejectedValue(
+    new Error("provider busy"),
+  );
+  try {
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
+    fireEvent.change(
+      screen.getByRole("textbox", { name: t("fcboard.quizForm.supplement") }),
+      { target: { value: "Retry these requirements" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("provider busy"),
+    );
+    await act(async () => {
+      await classroomCommands.execute({ name: "assistant.close" });
+      await classroomCommands.execute({ name: "assistant.open" });
+    });
+    expect(
+      screen.getByRole("textbox", { name: t("fcboard.quizForm.supplement") }),
+    ).toHaveValue("Retry these requirements");
+  } finally {
+    view.unmount();
+  }
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -61,144 +178,22 @@ afterEach(() => {
   saveSettings(defaults, false);
 });
 
-it.each([false, true])(
-  "respects selected lesson screenshot attachment setting=%s",
-  async (selectionImages) => {
-    saveSettings({ ...defaults, selectionImages }, false);
-    const { api, chat, view } = setup();
-    const source = convertToFcboardElements([
-      { type: "text", text: "selected question", x: 100, y: 100 },
-    ]);
-    vi.spyOn(api, "getSceneElements").mockReturnValue(source);
-    vi.mocked(ai.boardContext).mockResolvedValue({
-      elements: source,
-      text: "selected question",
-      image: "data:image/png;base64,selected",
-    });
-    chat.mockResolvedValue(JSON.stringify(lesson()));
-    try {
-      await act(async () => {
-        await classroomCommands.execute({
-          name: "lesson.teach",
-          args: { prompt: "teach selected", sourceIds: [source[0].id] },
-        });
-      });
-      const content = chat.mock.calls[0][0][1].content;
-      expect(ai.boardContext).toHaveBeenCalledWith(
-        api,
-        false,
-        source,
-        undefined,
-        selectionImages,
-      );
-      expect(Array.isArray(content)).toBe(selectionImages);
-      expect(
-        JSON.stringify(content).includes("data:image/png;base64,selected"),
-      ).toBe(selectionImages);
-    } finally {
-      view.unmount();
-    }
-  },
-);
-
-it("keeps only its own synthetic pointer interaction from pausing a lesson", async () => {
-  const { chat, view, pointer } = setup();
-  chat.mockResolvedValue(JSON.stringify(lesson([{ name: "ui.interact" }])));
-  const pause = vi.spyOn(TeachingEngine.prototype, "pause");
-  let tested = false;
-  const stop = classroomCommands.register("ui.interact", "interact", (args) => {
-    if (tested) {
-      return;
-    }
-    tested = true;
-    const calls = pause.mock.calls.length;
-    const owner = args.signal as AbortSignal;
-    classroomCommands.withInteraction(owner, pointer);
-    expect(pause).toHaveBeenCalledTimes(calls);
-    classroomCommands.withInteraction(new AbortController().signal, pointer);
-    expect(pause).toHaveBeenCalledTimes(calls + 1);
-    void classroomCommands.execute({ name: "lesson.resume" });
-    pointer();
-    expect(pause).toHaveBeenCalledTimes(calls + 2);
-    void classroomCommands.execute({ name: "lesson.resume" });
-    expect(owner.aborted).toBe(true);
-  });
+it("does not register the removed lesson player or its panels", () => {
+  const { view } = setup();
   try {
-    await act(async () => {
-      await classroomCommands.execute({
-        name: "lesson.teach",
-        args: { prompt: "teach" },
-      });
-    });
-    await waitFor(() =>
-      expect(classroomCommands.read("teacher")).toMatchObject({
-        mode: "complete",
-      }),
-    );
+    for (const name of [
+      "lesson.ask",
+      "lesson.teach",
+      "lesson.resume",
+      "lesson.audio",
+      "lesson.reopen",
+    ]) {
+      expect(classroomCommands.has(name)).toBe(false);
+    }
+    expect(classroomCommands.read("teacher")).toBeUndefined();
+    expect(view.container.querySelector(".fc-teacher")).toBeNull();
   } finally {
     view.unmount();
-    stop();
-  }
-});
-
-it("continues teacher preparation across its planned transition, while a manual transition cancels the next request", async () => {
-  const { chat, view } = setup();
-  const owners: AbortSignal[] = [];
-  const stop = classroomCommands.register("files.open", "open", (args) => {
-    const owner = args.signal as AbortSignal;
-    owners.push(owner);
-    classroomCommands.invalidate(owner);
-    expect(owner.aborted).toBe(false);
-  });
-  chat
-    .mockResolvedValueOnce(
-      JSON.stringify({
-        action: "commands",
-        commands: [{ name: "files.open", args: { name: "lesson.pdf" } }],
-        continue: true,
-      }),
-    )
-    .mockResolvedValueOnce(JSON.stringify(lesson()));
-  try {
-    await act(async () => {
-      await classroomCommands.execute({
-        name: "lesson.teach",
-        args: { prompt: "open then teach" },
-      });
-    });
-    await waitFor(() =>
-      expect(classroomCommands.read("teacher")).toMatchObject({
-        mode: "complete",
-      }),
-    );
-    expect(owners).toHaveLength(1);
-    expect(chat).toHaveBeenCalledTimes(2);
-    let finish!: (value: string) => void;
-    chat.mockImplementationOnce(
-      () =>
-        new Promise<string>((resolve) => {
-          finish = resolve;
-        }),
-    );
-    let pending!: Promise<unknown>;
-    act(() => {
-      pending = classroomCommands.execute({
-        name: "lesson.teach",
-        args: { prompt: "wait" },
-      });
-    });
-    await waitFor(() => expect(chat).toHaveBeenCalledTimes(3));
-    const current = chat.mock.calls[2][1]!;
-    act(() => classroomCommands.invalidate());
-    expect(current.aborted).toBe(true);
-    await act(async () => {
-      finish(JSON.stringify(lesson()));
-      await pending;
-    });
-    expect(classroomCommands.read("teacher")).toMatchObject({ mode: "idle" });
-  } finally {
-    view.unmount();
-    stop();
   }
 });
 
@@ -219,8 +214,16 @@ it("lets the voice agent generate a real quiz, inspect its answers, and reopen t
     sources: [{ title: "教材", url: "https://www.moe.gov.cn/" }],
   };
   chat
-    .mockResolvedValueOnce("实际检索：https://www.moe.gov.cn/")
-    .mockResolvedValueOnce(JSON.stringify(quiz));
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        title: quiz.title,
+        sources: quiz.sources,
+        tasks: [{ type: "single", focus: "一加一" }],
+      }),
+    )
+    .mockResolvedValueOnce(
+      JSON.stringify({ ...quiz.questions[0], needsImage: false }),
+    );
   try {
     await expect(
       classroomCommands.execute({ name: "quiz.open" }),
@@ -239,7 +242,7 @@ it("lets the voice agent generate a real quiz, inspect its answers, and reopen t
         name: "quiz.inspect",
         args: { index: 0 },
       }),
-    ).toEqual(quiz.questions[0]);
+    ).toMatchObject(quiz.questions[0]);
     const frame = view.getByTitle(quiz.title);
     await act(async () => {
       await classroomCommands.execute({ name: "quiz.open" });
@@ -318,8 +321,18 @@ it("keeps quiz jobs independent and returns each job's own result when they fini
           finishSecond = resolve;
         }),
     )
-    .mockResolvedValueOnce(JSON.stringify(makeQuiz("数学测验")))
-    .mockResolvedValueOnce(JSON.stringify(makeQuiz("力学测验")));
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        ...makeQuiz("数学测验").questions[0],
+        needsImage: false,
+      }),
+    )
+    .mockResolvedValueOnce(
+      JSON.stringify({
+        ...makeQuiz("力学测验").questions[0],
+        needsImage: false,
+      }),
+    );
   const release = classroomCommands.register(
     "canvas.snapshot",
     "@internal",
@@ -347,12 +360,24 @@ it("keeps quiz jobs independent and returns each job's own result when they fini
       "data:image/png;base64,visible-equation",
     );
     await act(async () => {
-      finishSecond("数学资料 https://www.moe.gov.cn/");
+      finishSecond(
+        JSON.stringify({
+          title: "数学测验",
+          sources: makeQuiz("数学测验").sources,
+          tasks: [{ type: "short", focus: "数学知识" }],
+        }),
+      );
       await expect(second).resolves.toEqual({ title: "数学测验", count: 1 });
     });
     expect(chat.mock.calls[0][1]?.aborted).toBe(false);
     await act(async () => {
-      finishFirst("物理资料 https://www.moe.gov.cn/");
+      finishFirst(
+        JSON.stringify({
+          title: "力学测验",
+          sources: makeQuiz("力学测验").sources,
+          tasks: [{ type: "short", focus: "力学知识" }],
+        }),
+      );
       await expect(first).resolves.toEqual({ title: "力学测验", count: 1 });
     });
     expect(
@@ -364,4 +389,198 @@ it("keeps quiz jobs independent and returns each job's own result when they fini
     view.unmount();
     release();
   }
+});
+
+it("uses the supplied selected PNG for Quiz without recapturing the whole canvas", async () => {
+  const { view } = setup();
+  const generate = vi.spyOn(quizzes, "generateQuiz").mockResolvedValue({
+    title: "Selection quiz",
+    questions: [
+      {
+        type: "short",
+        question: "What is shown?",
+        answer: ["A dog"],
+        explanation: "The selection shows a dog.",
+      },
+    ],
+    sources: [],
+  });
+  const snapshot = vi.fn();
+  const stop = classroomCommands.register(
+    "canvas.snapshot",
+    "@internal",
+    snapshot,
+  );
+  const controller = new AbortController();
+  try {
+    await act(async () => {
+      expect(
+        await classroomCommands.execute({
+          name: "quiz.generate",
+          args: {
+            prompt: "出题",
+            context: { text: "", image: "data:image/png;base64,selected" },
+            signal: controller.signal,
+          },
+        }),
+      ).toEqual({ title: "Selection quiz", count: 1 });
+    });
+    expect(generate).toHaveBeenCalledWith(
+      "出题",
+      expect.any(AbortSignal),
+      "",
+      "data:image/png;base64,selected",
+      undefined,
+      expect.any(Function),
+    );
+    expect(snapshot).not.toHaveBeenCalled();
+    expect(ai.boardContext).not.toHaveBeenCalled();
+  } finally {
+    stop();
+    view.unmount();
+  }
+});
+
+it("publishes the latest partial quiz immediately while preserving its iframe through final completion", async () => {
+  const { view } = setup();
+  let publish!: NonNullable<Parameters<typeof quizzes.generateQuiz>[5]>;
+  let finish!: (quiz: quizzes.Quiz) => void;
+  vi.spyOn(quizzes, "generateQuiz").mockImplementation(
+    (_prompt, _signal, _context, _image, _type, onProgress) => {
+      publish = onProgress!;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    },
+  );
+  let job!: Promise<unknown>;
+  act(() => {
+    job = classroomCommands.execute({
+      name: "quiz.generate",
+      args: { prompt: "出2道题" },
+    });
+  });
+  await waitFor(() => expect(typeof publish).toBe("function"));
+  const partial: quizzes.Quiz = {
+    ...builderQuiz(),
+    id: "partial",
+    plannedCount: 2,
+    generating: true,
+  };
+  act(() => publish(partial));
+  const frame = view.getByTitle(partial.title);
+  expect(frame).toBeVisible();
+  expect(classroomCommands.read("quiz")).toMatchObject({
+    count: 1,
+    generating: true,
+  });
+  expect(
+    await classroomCommands.execute({
+      name: "quiz.inspect",
+      args: { index: 0 },
+    }),
+  ).toEqual(partial.questions[0]);
+  await act(async () => {
+    finish({ ...partial, generating: false });
+    await job;
+  });
+  expect(view.getByTitle(partial.title)).toBe(frame);
+  expect(classroomCommands.read("quiz")).toMatchObject({
+    count: 1,
+    generating: false,
+  });
+  view.unmount();
+});
+
+it("immediately stops visible native-style pending work, ignores its late progress and can retry the same image after reopen", async () => {
+  const { view } = setup();
+  let publish!: NonNullable<Parameters<typeof quizzes.generateQuiz>[5]>;
+  let finish!: (quiz: quizzes.Quiz) => void;
+  vi.spyOn(quizzes, "generateQuiz").mockImplementation(
+    (_prompt, _signal, _context, _image, _type, onProgress) => {
+      publish = onProgress!;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    },
+  );
+  let job!: Promise<unknown>;
+  act(() => {
+    job = classroomCommands
+      .execute({ name: "quiz.generate", args: { prompt: "出2道题" } })
+      .catch(() => undefined);
+  });
+  await waitFor(() => expect(typeof publish).toBe("function"));
+  const partial: quizzes.Quiz = {
+    ...builderQuiz(),
+    id: "cancel-images",
+    plannedCount: 2,
+    generating: true,
+    questions: [
+      {
+        ...builderQuiz().questions[0],
+        id: "image-1",
+        image: {
+          method: "generate",
+          prompt: "two apples",
+          caption: "两个苹果",
+          status: "pending",
+        },
+      },
+    ],
+  };
+  act(() => publish(partial));
+  const frame = view.getByTitle(partial.title) as HTMLIFrameElement;
+  const post = vi.spyOn(frame.contentWindow!, "postMessage");
+  fireEvent.load(frame);
+  const channel = post.mock.calls.at(-1)![0].channel;
+  fireEvent.click(
+    within(
+      screen.getByRole("dialog", { name: t("fcboard.ai_questions") }),
+    ).getByRole("button", { name: t("buttons.close") }),
+  );
+  expect(classroomCommands.read("quiz")).toMatchObject({
+    open: false,
+    generating: false,
+  });
+  act(() => publish({ ...partial, title: "late stale title" }));
+  expect(classroomCommands.read("quiz")).toMatchObject({
+    title: partial.title,
+  });
+  await act(async () => {
+    await classroomCommands.execute({ name: "quiz.open" });
+  });
+  expect(view.getByTitle(partial.title)).toBe(frame);
+  expect(
+    await classroomCommands.execute({
+      name: "quiz.inspect",
+      args: { index: 0 },
+    }),
+  ).toMatchObject({ image: { status: "error" } });
+  await act(async () => {
+    finish(partial);
+    await job;
+  });
+  const retry = vi
+    .spyOn(quizRequests, "generateQuizImage")
+    .mockResolvedValue("data:image/png;base64,aGVsbG8=" as DataURL);
+  await act(async () => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: { type: "quiz-retry-image", channel, id: "image-1" },
+      }),
+    );
+  });
+  expect(retry).toHaveBeenCalledTimes(1);
+  expect(
+    await classroomCommands.execute({
+      name: "quiz.inspect",
+      args: { index: 0 },
+    }),
+  ).toMatchObject({
+    image: { status: "ready", dataURL: "data:image/png;base64,aGVsbG8=" },
+  });
+  expect(view.getByTitle(partial.title)).toBe(frame);
+  view.unmount();
 });

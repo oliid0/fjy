@@ -1,5 +1,6 @@
 package com.fcjy.fcboard;
 
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -54,15 +55,13 @@ public class ClassroomPlugin extends Plugin {
                     android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
                 String[] actions = enabled ? new String[] {
                     android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS,
-                    android.provider.Settings.ACTION_DEVICE_INFO_SETTINGS,
                     android.provider.Settings.ACTION_SETTINGS
                 } : new String[] {
-                    android.provider.Settings.ACTION_DEVICE_INFO_SETTINGS,
                     android.provider.Settings.ACTION_SETTINGS
                 };
                 for (String action : actions) {
                     android.content.Intent intent = android.content.Intent.parseUri(
-                        "intent:#Intent;action=" + action + ";end", android.content.Intent.URI_INTENT_SCHEME);
+                        "intent:#Intent;action=" + action + ";package=com.android.settings;end", android.content.Intent.URI_INTENT_SCHEME);
                     if (android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS.equals(action)) {
                         // AOSP DevelopmentSettingsDashboardFragment scrolls to/highlights this preference.
                         // Android exposes no public action for the nested WirelessDebuggingFragment.
@@ -110,6 +109,31 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public void cancelAIStream(PluginCall call) { aiTransport.cancel(call.getString("id")); call.resolve(); }
 
+    @PluginMethod public void agentCapabilities(PluginCall call) { call.resolve(new JSObject().put("nativeStep", true)); }
+
+    @PluginMethod public void postAgentStep(PluginCall call) {
+        try {
+            JSObject inputHeaders = call.getObject("headers", new JSObject());
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            headers.put("Content-Type", "application/json");
+            headers.put("Authorization", inputHeaders.getString("Authorization", ""));
+            NativeAgentResponse response = new NativeAgentResponse();
+            aiTransport.start(call.getString("id"), call.getString("url"), headers, call.getString("body"), new AIStreamTransport.Callback() {
+                public void chunk(String text) {
+                    try { response.accept(text); }
+                    catch (Exception error) { throw new IllegalStateException(error.getMessage(), error); }
+                }
+                public void complete(int status, String data, boolean stream) {
+                    try {
+                        String result = stream ? response.finish().toString() : data;
+                        call.resolve(new JSObject().put("status", status).put("data", result).put("stream", false));
+                    } catch (Exception error) { call.reject("Agent response failed", error); }
+                }
+                public void failed(Exception error) { call.reject("Agent request failed", error); }
+            });
+        } catch (Exception error) { call.reject("Agent request unavailable", error); }
+    }
+
     private WebResourceDialog webResource;
 
     @PluginMethod
@@ -117,18 +141,18 @@ public class ClassroomPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 String url = WebResourceDialog.checkedUrl(call.getString("url"));
-                if (webResource != null && webResource.isShowing()) webResource.dismiss();
+                if (webResource != null) webResource.dismiss();
                 webResource = new WebResourceDialog(getActivity(), url, call.getString("language", java.util.Locale.getDefault().toLanguageTag()), selected -> notifyListeners("webSelection", selected), call.getBoolean("teaching", false));
                 webResource.show();
                 call.resolve();
-            } catch (Exception error) { call.reject("无法打开教学网页：" + error.getMessage(), error); }
+            } catch (Exception error) { call.reject("Unable to open the teaching page: " + error.getMessage(), error); }
         });
     }
 
     @PluginMethod
     public void webResourceAction(PluginCall call) {
         getActivity().runOnUiThread(() -> {
-            if (webResource == null || !webResource.isShowing()) { call.reject("请先打开教学网页"); return; }
+            if (webResource == null || !webResource.isShowing()) { call.reject("Open a teaching page first"); return; }
             webResource.action(call.getData(), call);
         });
     }
@@ -144,7 +168,7 @@ public class ClassroomPlugin extends Plugin {
             JSArray embedded = new JSArray();
             if (embeddedSignal) embedded.put("signal");
             JSObject result = new JSObject(); result.put("available", available); result.put("embedded", embedded); call.resolve(result);
-        } catch (Exception error) { call.reject("无法读取插入应用", error); }
+        } catch (Exception error) { call.reject("Unable to read available insertion apps", error); }
     }
 
     @PluginMethod
@@ -159,8 +183,8 @@ public class ClassroomPlugin extends Plugin {
                     JSObject result = new JSObject(); result.put("embedded", true); call.resolve(result);
                     return;
                 }
-                call.reject("当前设备没有可用的信号输入，请检查电视输入服务及硬件连接");
-            } catch (Exception error) { closeSignalResource(); call.reject("无法打开插入应用：" + error.getMessage(), error); }
+                call.reject("No signal input is available; check the TV input service and hardware connection");
+            } catch (Exception error) { closeSignalResource(); call.reject("Unable to open the insertion app: " + error.getMessage(), error); }
         });
     }
 
@@ -197,21 +221,22 @@ public class ClassroomPlugin extends Plugin {
     public synchronized void startShare(PluginCall call) {
         try {
             JSArray pages = call.getArray("pages");
-            if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("请选择 1 至 20 页分享");
+            if (pages == null || pages.length() < 1 || pages.length() > 20) throw new IOException("Choose 1 to 20 pages to share");
             List<byte[]> images = new ArrayList<>();
             int total = 0;
             for (int index = 0; index < pages.length(); index++) {
                 String value = pages.getString(index);
-                if (!value.startsWith("data:image/png;base64,") || value.length() > 14000000) throw new IOException("分享页面格式或大小无效");
+                if (!value.startsWith("data:image/png;base64,") || value.length() > 14000000) throw new IOException("Invalid shared page format or size");
                 byte[] image = Base64.decode(value.substring(22), Base64.DEFAULT);
-                if (image.length < 8 || image[0] != (byte)137 || image[1] != 80 || image[2] != 78 || image[3] != 71) throw new IOException("分享页面必须是 PNG 图片");
+                if (image.length < 8 || image[0] != (byte)137 || image[1] != 80 || image[2] != 78 || image[3] != 71) throw new IOException("Shared pages must be PNG images");
                 total += image.length;
-                if (total > 20000000) throw new IOException("分享图片总大小超过 20 MB，请减少页数");
+                if (total > 20000000) throw new IOException("Shared images exceed 20 MB; select fewer pages");
                 images.add(image);
             }
             List<String> addresses = NetworkPlugin.lanAddresses(getContext());
-            if (addresses.isEmpty()) throw new IOException("请先连接局域网后再分享");
+            if (addresses.isEmpty()) throw new IOException("Connect to a LAN before sharing");
             stopBoardShare();
+            PageLocalization.configure(call.getObject("localization"));
             boardShare = new BoardShareServer(images, 600000);
             boardShare.start(15000, true);
             JSArray urls = new JSArray();
@@ -233,7 +258,7 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public synchronized void setSharePassword(PluginCall call) {
         try {
-            if (boardShare == null) throw new IOException("分享已结束，请重新生成二维码");
+            if (boardShare == null) throw new IOException("Sharing ended; generate a new QR code");
             boardShare.setPassword(call.getString("password", "")); call.resolve();
         } catch (Exception error) { call.reject(error.getMessage()); }
     }
@@ -245,9 +270,9 @@ public class ClassroomPlugin extends Plugin {
             android.content.Intent intent = BoardAttachments.create(getContext(), call.getArray("pages"), call.getString("format", "png"));
             getActivity().runOnUiThread(() -> {
                 try {
-                    getActivity().startActivity(android.content.Intent.createChooser(intent, "邮件发送 / 分享白板"));
+                    getActivity().startActivity(android.content.Intent.createChooser(intent, "Email / share whiteboard"));
                     call.resolve();
-                } catch (Exception error) { call.reject("无法打开邮件或分享应用", error); }
+                } catch (Exception error) { call.reject("Unable to open an email or sharing app", error); }
             });
         } catch (Exception error) { call.reject(error.getMessage(), error); }
     }
@@ -346,6 +371,9 @@ public class ClassroomPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             try {
                 boolean resourceOpen = webResource != null && webResource.isShowing();
+                if (!resourceOpen && !((MainActivity)getActivity()).isBoardUsable()) {
+                    call.reject("The whiteboard is still loading; try again shortly"); return;
+                }
                 android.webkit.WebView view = resourceOpen ? webResource.web : getBridge().getWebView();
                 android.view.Window window = resourceOpen ? webResource.getWindow() : getActivity().getWindow();
                 int[] location = new int[2]; view.getLocationInWindow(location);
@@ -355,25 +383,42 @@ public class ClassroomPlugin extends Plugin {
                 double w = region == null ? 1 : region.optDouble("width", 1);
                 double h = region == null ? 1 : region.optDouble("height", 1);
                 if (!Double.isFinite(x + y + w + h) || x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > 1.001 || y + h > 1.001 || view.getWidth() == 0 || view.getHeight() == 0) {
-                    call.reject("截图范围无效"); return;
+                    call.reject("Invalid capture area"); return;
                 }
                 Rect area = new Rect(location[0] + (int)(x * view.getWidth()), location[1] + (int)(y * view.getHeight()), location[0] + (int)((x + w) * view.getWidth()), location[1] + (int)((y + h) * view.getHeight()));
                 double scale = Math.min(1, 1280.0 / Math.max(area.width(), area.height()));
                 Bitmap bitmap = Bitmap.createBitmap(Math.max(1, (int)(area.width() * scale)), Math.max(1, (int)(area.height() * scale)), Bitmap.Config.ARGB_8888);
-                PixelCopy.request(window, area, bitmap, status -> {
+                java.util.function.IntConsumer captured = status -> {
                     if (imageEncoder.isShutdown()) { bitmap.recycle(); return; }
-                    if (status != PixelCopy.SUCCESS) { bitmap.recycle(); call.reject("当前画面尚未准备好，请稍后重试"); return; }
+                    if (status != PixelCopy.SUCCESS) { bitmap.recycle(); call.reject("The screen is not ready; try again shortly"); return; }
                     imageEncoder.execute(() -> {
                         try {
                             ByteArrayOutputStream output = new ByteArrayOutputStream();
                             bitmap.compress(Bitmap.CompressFormat.JPEG, 85, output);
                             JSObject result = new JSObject(); result.put("image", "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
                             call.resolve(result);
-                        } catch (Exception error) { call.reject("画面捕获失败", error); }
+                        } catch (Exception error) { call.reject("Screen capture failed", error); }
                         finally { bitmap.recycle(); }
                     });
-                }, new Handler(Looper.getMainLooper()));
-            } catch (Exception error) { call.reject("画面捕获失败", error); }
+                };
+                if (view.isHardwareAccelerated()) {
+                    PixelCopy.request(window, area, bitmap, captured::accept, new Handler(Looper.getMainLooper()));
+                } else {
+                    // Software WebViews have no GPU surface for PixelCopy. Capture
+                    // the same bounded region through the actual View drawing path.
+                    try {
+                        android.graphics.Canvas frame = new android.graphics.Canvas(bitmap);
+                        frame.scale((float) scale, (float) scale);
+                        frame.translate(-(area.left - location[0]), -(area.top - location[1]));
+                        view.draw(frame);
+                        captured.accept(PixelCopy.SUCCESS);
+                    } catch (RuntimeException | OutOfMemoryError error) {
+                        bitmap.recycle();
+                        call.reject("This screen cannot be captured; try a smaller area");
+                    }
+                }
+            } catch (OutOfMemoryError error) { call.reject("Insufficient device memory; try a smaller capture area"); }
+            catch (Exception error) { call.reject("Screen capture failed", error); }
         });
     }
     private File directory() {
@@ -382,19 +427,27 @@ public class ClassroomPlugin extends Plugin {
         return dir;
     }
 
+    @PluginMethod public void setPageLocalization(PluginCall call) {
+        try { PageLocalization.configure(call.getObject("localization")); call.resolve(); }
+        catch (Exception error) { call.reject(error.getMessage(), error); }
+    }
+
     @PluginMethod
     public synchronized void startReceiver(PluginCall call) {
         try {
+            PageLocalization.configure(call.getObject("localization"));
             List<String> addresses = NetworkPlugin.lanAddresses(getContext());
-            if (addresses.isEmpty()) { call.reject("未连接局域网，请先连接 Wi-Fi 或有线网络"); return; }
+            if (addresses.isEmpty()) { call.reject("Connect to a LAN using Wi-Fi or Ethernet"); return; }
             if (receiver == null) {
+                String transferPage;
+                try (InputStream input = getContext().getAssets().open("transfer.html")) { java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream(); byte[] buffer = new byte[8192]; int count; while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count); transferPage = bytes.toString("UTF-8"); }
                 receiver = new Receiver(directory(), (item) -> {
                     JSObject file = new JSObject();
                     file.put("id", item.getName().substring(0, 36));
                     file.put("name", item.getName().substring(37));
                     file.put("path", item.getAbsolutePath()); file.put("size", item.length());
                     notifyListeners("fileReceived", file, true);
-                });
+                }, transferPage);
                 receiver.start(15000, true);
             }
             JSArray urls = new JSArray();
@@ -402,7 +455,7 @@ public class ClassroomPlugin extends Plugin {
             JSObject result = new JSObject(); result.put("urls", urls); call.resolve(result);
         } catch (Exception error) {
             if (receiver != null) { receiver.stop(); receiver = null; }
-            call.reject("无法开启局域网接收：" + error.getMessage());
+            call.reject("Unable to start LAN file reception: " + error.getMessage());
         }
     }
 
@@ -431,11 +484,11 @@ public class ClassroomPlugin extends Plugin {
     @PluginMethod
     public void deleteUpload(PluginCall call) {
         String id = call.getString("id", "");
-        if (!id.matches("[a-f0-9-]{36}")) { call.reject("文件 ID 无效"); return; }
+        if (!id.matches("[a-f0-9-]{36}")) { call.reject("Invalid file ID"); return; }
         File[] files = directory().listFiles();
         if (files != null) {
             for (File file : files) {
-                if (file.getName().startsWith(id + "_") && !file.delete()) { call.reject("文件删除失败"); return; }
+                if (file.getName().startsWith(id + "_") && !file.delete()) { call.reject("Unable to delete the file"); return; }
             }
         }
         call.resolve();
@@ -458,7 +511,7 @@ public class ClassroomPlugin extends Plugin {
         closeSignalResource();
         WebResourceDialog resource = webResource;
         webResource = null;
-        if (resource != null) getActivity().runOnUiThread(() -> { if (resource.isShowing()) resource.dismiss(); });
+        if (resource != null) getActivity().runOnUiThread(resource::dismiss);
         stopBoardShare();
         imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }
@@ -469,9 +522,9 @@ public class ClassroomPlugin extends Plugin {
         private final File directory;
         private final AtomicInteger receiving = new AtomicInteger();
         private final java.util.function.Consumer<File> onReceived;
-        Receiver(File directory) { this(directory, null); }
-        Receiver(File directory, java.util.function.Consumer<File> onReceived) {
-            super("0.0.0.0", 0); this.directory = directory; this.onReceived = onReceived;
+        private final String page;
+        Receiver(File directory, java.util.function.Consumer<File> onReceived, String page) {
+            super("0.0.0.0", 0); this.directory = directory; this.onReceived = onReceived; this.page = page;
         }
 
         private Response reply(Response.Status status, String mime, String body) {
@@ -485,18 +538,18 @@ public class ClassroomPlugin extends Plugin {
         @Override
         public Response serve(IHTTPSession session) {
             String base = "/" + token + "/";
-            if (!session.getUri().equals(base) && !session.getUri().equals(base + "upload")) { return reply(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "接收地址无效或已关闭"); }
+            if (!session.getUri().equals(base) && !session.getUri().equals(base + "upload")) { return reply(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "The reception address is invalid or closed"); }
             if (session.getMethod() == Method.GET && session.getUri().equals(base)) {
-                return reply(Response.Status.OK, "text/html; charset=utf-8", "<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>快传</title><style>body{font:18px system-ui;max-width:560px;margin:60px auto;padding:24px;color:#17243c}button,input{font:inherit;padding:16px;max-width:100%}button{background:#245bd6;color:white;border:0;border-radius:10px}p{line-height:1.8}</style><h1>Fcboard</h1><h2>局域网课件快传</h2><p>手机与白板连同一网络，选好课件立即上屏。支持 PowerPoint、Word、Excel、PDF 和图片，单个文件上限 100 MB。</p><input id='files' type='file' hidden multiple accept='.ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif'><p><button id='send'>选择文件上屏</button></p><p id='status' role='status'></p><script>const button=document.getElementById('send');const picker=document.getElementById('files');button.onclick=()=>picker.click();picker.onchange=async()=>{const files=picker.files;const status=document.getElementById('status');if(!files.length){status.textContent='请先选择文件';return;}button.disabled=true;try{for(const file of files){if(file.size>104857600)throw Error('文件超过 100 MB');status.textContent='正在发送 '+file.name;const response=await fetch('upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw Error(await response.text());}status.textContent='已发送到白板，课件将自动上屏';}catch(error){status.textContent='发送失败：'+error.message;}finally{button.disabled=false;picker.value='';}};</script></html>");
+                return reply(Response.Status.OK, "text/html; charset=utf-8", PageLocalization.render(page));
             }
-            if (session.getMethod() != Method.POST || !session.getUri().equals(base + "upload")) { return reply(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "不支持此操作"); }
+            if (session.getMethod() != Method.POST || !session.getUri().equals(base + "upload")) { return reply(Response.Status.METHOD_NOT_ALLOWED, MIME_PLAINTEXT, "Unsupported operation"); }
             String name = session.getParms().get("name");
-            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(ppt|pptx|pps|ppsx|doc|docx|xls|xlsx|csv|odt|ods|odp|rtf|txt|pdf|png|jpg|jpeg|webp|gif)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件名或格式不支持"); }
+            if (name == null || name.length() > 160 || !name.toLowerCase(java.util.Locale.ROOT).matches(".+\\.(ppt|pptx|pps|ppsx|doc|docx|xls|xlsx|csv|odt|ods|odp|rtf|txt|pdf|png|jpg|jpeg|webp|gif)") || name.contains("/") || name.contains("\\") || name.chars().anyMatch(c -> c < 32)) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Unsupported filename or file format"); }
             long length;
             try { length = Long.parseLong(session.getHeaders().getOrDefault("content-length", "0")); } catch (NumberFormatException error) { length = 0; }
-            if (length <= 0 || length > 104857600) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "文件为空或超过 100 MB"); }
-            if (directory.getUsableSpace() < length + 52428800) { return reply(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "白板存储空间不足"); }
-            if (!receiving.compareAndSet(0, 1)) { return reply(Response.Status.SERVICE_UNAVAILABLE, MIME_PLAINTEXT, "白板正在接收文件，请稍后重试"); }
+            if (length <= 0 || length > 104857600) { return reply(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "The file is empty or exceeds 100 MB"); }
+            if (directory.getUsableSpace() < length + 52428800) { return reply(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Insufficient whiteboard storage"); }
+            if (!receiving.compareAndSet(0, 1)) { return reply(Response.Status.SERVICE_UNAVAILABLE, MIME_PLAINTEXT, "The board is receiving a file; try again shortly"); }
             File target = new File(directory, UUID.randomUUID().toString() + "_" + name);
             try {
                 File pending = new File(directory, ".pending-" + UUID.randomUUID());
@@ -506,7 +559,7 @@ public class ClassroomPlugin extends Plugin {
                     long remaining = length;
                     while (remaining > 0) {
                         int read = input.read(buffer, 0, (int) Math.min(buffer.length, remaining));
-                        if (read < 0) { throw new IOException("文件传输不完整"); }
+                        if (read < 0) { throw new IOException("Incomplete file transfer"); }
                         output.write(buffer, 0, read);
                         remaining -= read;
                     }
@@ -514,12 +567,12 @@ public class ClassroomPlugin extends Plugin {
                     pending.delete();
                     throw error;
                 }
-                if (!pending.renameTo(target)) { pending.delete(); throw new IOException("无法保存文件"); }
+                if (!pending.renameTo(target)) { pending.delete(); throw new IOException("Unable to save the file"); }
                 if (onReceived != null) { onReceived.accept(target); }
-                return reply(Response.Status.OK, MIME_PLAINTEXT, "上传成功");
+                return reply(Response.Status.OK, MIME_PLAINTEXT, "Upload complete");
             } catch (IOException error) {
                 target.delete();
-                return reply(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "上传失败，请重试");
+                return reply(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Upload failed; retry");
             } finally { receiving.set(0); }
         }
     }

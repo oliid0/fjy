@@ -34,6 +34,8 @@ import { getLassoSelectedElementIds } from "../lasso/utils";
 
 import { act, render } from "./test-utils";
 
+import { API } from "./helpers/api";
+
 const { h } = window;
 
 beforeEach(async () => {
@@ -1801,4 +1803,36 @@ describe("Special cases", () => {
     expect(selectedElements.length).toBe(16);
     expect(h.app.state.selectedGroupIds["-9NzH7Fa5JaHu4ArEFpa_"]).toBe(true);
   });
+});
+
+it("refreshes a live gesture's cached geometry when the same object changes inside unchanged bounds", () => {
+  const line = API.createElement({
+    type: "line",
+    x: 0,
+    y: 0,
+    width: 200,
+    height: 100,
+    roughness: 0,
+    points: [pointFrom(0, 0), pointFrom(100, 100), pointFrom(200, 0)],
+  });
+  API.updateScene({ elements: [line] });
+  act(() => {
+    h.app.lassoTrail.startPath(90, 80);
+    h.app.lassoTrail.addPointToPath(110, 80);
+    h.app.lassoTrail.addPointToPath(110, 110);
+    h.app.lassoTrail.addPointToPath(90, 110);
+  });
+  expect(h.state.selectedElementIds).toEqual({ [line.id]: true });
+  act(() => {
+    h.app.scene.mutateElement(line, {
+      points: [
+        pointFrom<LocalPoint>(0, 100),
+        pointFrom<LocalPoint>(100, 0),
+        pointFrom<LocalPoint>(200, 100),
+      ],
+    });
+    h.app.lassoTrail.addPointToPath(89, 110);
+  });
+  expect(h.state.selectedElementIds).toEqual({});
+  h.app.lassoTrail.endPath();
 });

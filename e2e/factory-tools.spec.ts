@@ -1,14 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+import { openToolbox } from "./menu";
+
 for (const width of [390, 800, 1920]) {
   test(`built-in toolbox works without OEM packages and remains reachable at ${width}px`, async ({
     page,
   }, info) => {
     await page.setViewportSize({ width, height: 720 });
     await page.goto("/");
-    await page.getByRole("button", { name: "工具箱", exact: true }).click();
+    await openToolbox(page);
     const group = page.getByRole("group", { name: "大屏工具", exact: true });
-    await expect(group.getByRole("button")).toHaveCount(6);
+    await expect(group.getByRole("button")).toHaveCount(5);
     await expect(
       page
         .getByRole("dialog", { name: "工具箱", exact: true })
@@ -37,7 +39,7 @@ for (const width of [390, 800, 1920]) {
     expect(box.x + box.width).toBeLessThanOrEqual(width);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(720);
-    expect(controls).toHaveLength(6);
+    expect(controls).toHaveLength(5);
     for (const control of controls) {
       expect(control.x).toBeGreaterThanOrEqual(box.x);
       expect(control.x + control.width).toBeLessThanOrEqual(box.x + box.width);
@@ -63,15 +65,26 @@ for (const width of [390, 800, 1920]) {
     await expect(
       page.getByRole("dialog", { name: "工具箱" }),
     ).not.toBeVisible();
-    await page
-      .getByRole("dialog", { name: "计算器", exact: true })
-      .getByRole("button", { name: "关闭", exact: true })
+    await frame
+      .getByRole("button", { name: "关闭计算器", exact: true })
       .click();
-    await page.getByRole("button", { name: "工具箱", exact: true }).click();
+    await openToolbox(page);
     await group
       .getByRole("button", { name: "打开计时器", exact: true })
       .click();
-    await page.getByLabel("时长（秒）", { exact: true }).fill("2");
+    const timer = page.getByRole("dialog", { name: "计时器", exact: true });
+    await timer.getByRole("button", { name: "设置", exact: true }).click();
+    for (const unit of ["HH", "MM", "SS"]) {
+      await timer
+        .getByRole("spinbutton", { name: unit, exact: true })
+        .press("Home");
+    }
+    await timer
+      .getByRole("spinbutton", { name: "SS", exact: true })
+      .press("ArrowUp");
+    await timer
+      .getByRole("spinbutton", { name: "SS", exact: true })
+      .press("ArrowUp");
     await page.getByRole("button", { name: "播放工具", exact: true }).click();
     await expect(page.getByRole("timer")).toHaveText("00:00:00", {
       timeout: 5000,

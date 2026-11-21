@@ -84,7 +84,9 @@ public class MediaPlaybackTest {
                 assertTrue("Closing the old window must not release the replacement player", replacement.getBoolean("open"));
                 assertEquals(1, replacement.getJSONArray("items").length());
             } finally {
-                assertFalse(invoke(scenario, "close", new JSObject().put("action", "close"), null).getBoolean("open"));
+                try {
+                    assertFalse(invoke(scenario, "close", new JSObject().put("action", "close"), null).getBoolean("open"));
+                } finally { onActivity(scenario, MainActivity::finish); }
             }
         } finally { assertTrue(audio.delete()); }
     }

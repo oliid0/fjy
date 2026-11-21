@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { Fcboard } from "@fcboard/fcboard";
 
@@ -211,6 +211,20 @@ it("keeps the original fourteen pattern choices and applies the preset and custo
   expect(
     document.querySelectorAll(".fc-background-picker button"),
   ).toHaveLength(14);
+  const swatches = within(
+    screen.getByRole("group", { name: t("fcboard.background") }),
+  ).getAllByRole("button");
+  expect(swatches).toHaveLength(7);
+  expect(swatches[1]).toHaveAccessibleName(
+    `${t("fcboard.background")} #fffff9`,
+  );
+  expect(swatches[1].querySelector("svg path")).toHaveAttribute(
+    "fill",
+    "#fffff9",
+  );
+  fireEvent.click(swatches[1]);
+  expect(change).toHaveBeenLastCalledWith({ backgroundColor: "#fffff9" });
+  expect(swatches[1]).toHaveAttribute("aria-pressed", "true");
   fireEvent.click(
     screen.getByRole("button", { name: `${t("fcboard.background")} #253a35` }),
   );

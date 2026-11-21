@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { t } from "../i18n";
 
@@ -30,6 +30,7 @@ export const ResourceWindow = ({
   onClose,
   onReload,
   children,
+  embeddedHeader = false,
 }: {
   title: string;
   bounds: ResourceWindowBounds;
@@ -39,7 +40,21 @@ export const ResourceWindow = ({
   onClose: () => void;
   onReload: () => void;
   children: ReactNode;
+  embeddedHeader?: boolean;
 }) => {
+  const section = useRef<HTMLElement>(null);
+  const minimum = embeddedHeader
+    ? { width: 72, height: 144 }
+    : { width: 240, height: 180 };
+  const embeddedMove = useRef<
+    | {
+        x: number;
+        y: number;
+        before: ResourceWindowBounds;
+        next: ResourceWindowBounds;
+      }
+    | undefined
+  >(undefined);
   const [preview, setPreview] = useState<ResourceWindowBounds>();
   const gesture = useRef<
     | {
@@ -64,29 +79,32 @@ export const ResourceWindow = ({
       window.removeEventListener("resize", cancel);
     };
   }, []);
-  const bounded = (box: ResourceWindowBounds): ResourceWindowBounds => {
-    if (!viewport) {
+  const bounded = useCallback(
+    (box: ResourceWindowBounds): ResourceWindowBounds => {
+      if (!viewport) {
+        return {
+          ...box,
+          width: Math.max(minimum.width / scale, box.width),
+          height: Math.max(minimum.height / scale, box.height),
+        };
+      }
+      const width = Math.max(
+        Math.min(minimum.width / scale, viewport.right - viewport.left),
+        Math.min(box.width, viewport.right - viewport.left),
+      );
+      const height = Math.max(
+        Math.min(minimum.height / scale, viewport.bottom - viewport.top),
+        Math.min(box.height, viewport.bottom - viewport.top),
+      );
       return {
-        ...box,
-        width: Math.max(240 / scale, box.width),
-        height: Math.max(180 / scale, box.height),
+        x: Math.max(viewport.left, Math.min(viewport.right - width, box.x)),
+        y: Math.max(viewport.top, Math.min(viewport.bottom - height, box.y)),
+        width,
+        height,
       };
-    }
-    const width = Math.max(
-      Math.min(240 / scale, viewport.right - viewport.left),
-      Math.min(box.width, viewport.right - viewport.left),
-    );
-    const height = Math.max(
-      Math.min(180 / scale, viewport.bottom - viewport.top),
-      Math.min(box.height, viewport.bottom - viewport.top),
-    );
-    return {
-      x: Math.max(viewport.left, Math.min(viewport.right - width, box.x)),
-      y: Math.max(viewport.top, Math.min(viewport.bottom - height, box.y)),
-      width,
-      height,
-    };
-  };
+    },
+    [viewport, scale, minimum.width, minimum.height],
+  );
   const start = (event: PointerEvent, mode: "move" | "resize") => {
     event.stopPropagation();
     if (gesture.current || event.isPrimary === false || event.button > 0) {
@@ -167,9 +185,79 @@ export const ResourceWindow = ({
       ),
     );
   };
+  useEffect(() => {
+    if (!embeddedHeader) {
+      return;
+    }
+    const receive = (event: MessageEvent) => {
+      const frame = section.current?.querySelector("iframe");
+      const data = event.data;
+      if (
+        !frame?.contentWindow ||
+        event.source !== frame.contentWindow ||
+        data?.channel !== "fc-resource-window"
+      ) {
+        return;
+      }
+      if (data.type === "close") {
+        onClose();
+        return;
+      }
+      if (data.type === "move-cancel") {
+        embeddedMove.current = undefined;
+        setPreview(undefined);
+        return;
+      }
+      if (
+        !["move-start", "move", "move-end"].includes(data.type) ||
+        ![data.x, data.y].every(
+          (value) =>
+            typeof value === "number" &&
+            Number.isFinite(value) &&
+            Math.abs(value) < 1e7,
+        )
+      ) {
+        return;
+      }
+      if (data.type === "move-start") {
+        embeddedMove.current = {
+          x: data.x,
+          y: data.y,
+          before: bounds,
+          next: bounds,
+        };
+        return;
+      }
+      const start = embeddedMove.current;
+      if (!start) {
+        return;
+      }
+      start.next = bounded({
+        ...start.before,
+        x: start.before.x + (data.x - start.x) / scale,
+        y: start.before.y + (data.y - start.y) / scale,
+      });
+      if (data.type === "move-end") {
+        embeddedMove.current = undefined;
+        setPreview(undefined);
+        if (
+          start.next.x !== start.before.x ||
+          start.next.y !== start.before.y
+        ) {
+          onCommit(start.next);
+        }
+      } else {
+        setPreview(start.next);
+      }
+    };
+    window.addEventListener("message", receive);
+    return () => window.removeEventListener("message", receive);
+  }, [embeddedHeader, bounds, scale, bounded, onClose, onCommit]);
   return (
     <section
+      ref={section}
       className="fc-resource-window"
+      data-embedded-header={embeddedHeader || undefined}
       aria-label={title}
       style={
         {
@@ -188,43 +276,47 @@ export const ResourceWindow = ({
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <div
-        className="fc-resource-window-drag"
-        role="button"
-        tabIndex={0}
-        aria-label={title}
-        onPointerDown={(event) => start(event, "move")}
-        onPointerMove={move}
-        onPointerUp={finish}
-        onPointerCancel={cancel}
-        onLostPointerCapture={cancel}
-        onKeyDown={(event) => key(event, "move")}
-      >
-        {title}
-      </div>
+      {!embeddedHeader && (
+        <div
+          className="fc-resource-window-drag"
+          role="button"
+          tabIndex={0}
+          aria-label={title}
+          onPointerDown={(event) => start(event, "move")}
+          onPointerMove={move}
+          onPointerUp={finish}
+          onPointerCancel={cancel}
+          onLostPointerCapture={cancel}
+          onKeyDown={(event) => key(event, "move")}
+        >
+          {title}
+        </div>
+      )}
       <div className="fc-resource-window-content">{children}</div>
-      <footer>
-        <button type="button" disabled aria-label={t("fcboard.previous")}>
-          <FactoryWebIcon name="back" />
-        </button>
-        <button type="button" disabled aria-label={t("fcboard.next")}>
-          <FactoryWebIcon name="back" forward />
-        </button>
-        <button
-          type="button"
-          aria-label={t("fcboard.reset")}
-          onClick={onReload}
-        >
-          <FactoryWebIcon name="reload" />
-        </button>
-        <button
-          type="button"
-          aria-label={t("fcboard.close_website")}
-          onClick={onClose}
-        >
-          <FactoryWebIcon name="close" />
-        </button>
-      </footer>
+      {!embeddedHeader && (
+        <footer>
+          <button type="button" disabled aria-label={t("fcboard.previous")}>
+            <FactoryWebIcon name="back" />
+          </button>
+          <button type="button" disabled aria-label={t("fcboard.next")}>
+            <FactoryWebIcon name="back" forward />
+          </button>
+          <button
+            type="button"
+            aria-label={t("fcboard.reset")}
+            onClick={onReload}
+          >
+            <FactoryWebIcon name="reload" />
+          </button>
+          <button
+            type="button"
+            aria-label={t("fcboard.close_website")}
+            onClick={onClose}
+          >
+            <FactoryWebIcon name="close" />
+          </button>
+        </footer>
+      )}
       <button
         type="button"
         className="fc-resource-window-resize"

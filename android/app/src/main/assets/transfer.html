@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Fcboard</title>
+    <style>
+      body {
+        font: 18px system-ui;
+        max-width: 560px;
+        margin: 60px auto;
+        padding: 24px;
+        color: #17243c;
+      }
+      button,
+      input {
+        font: inherit;
+        padding: 16px;
+        max-width: 100%;
+      }
+      button {
+        background: #245bd6;
+        color: white;
+        border: 0;
+        border-radius: 10px;
+      }
+      p {
+        line-height: 1.8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Fcboard</h1>
+    <h2 id="title"></h2>
+    <p id="hint"></p>
+    <input
+      id="files"
+      type="file"
+      hidden
+      multiple
+      accept=".ppt,.pptx,.pps,.ppsx,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.pdf,.png,.jpg,.jpeg,.webp,.gif"
+    />
+    <p><button id="send"></button></p>
+    <p id="status" role="status"></p>
+    <script type="application/json" id="fcboard-localization">
+      __FCBOARD_PAGE_LOCALIZATION__
+    </script>
+    <script>
+      const locale = JSON.parse(
+        document.getElementById("fcboard-localization").textContent,
+      );
+      const ui = locale.strings;
+      const format = (key, values) =>
+        ui[key].replace(/\{\{(\w+)\}\}/g, (_all, name) => String(values[name]));
+      document.documentElement.lang = locale.language;
+      document.title = ui.transferTitle;
+      document.getElementById("title").textContent = ui.transferTitle;
+      document.getElementById("hint").textContent = ui.transferHint;
+      const button = document.getElementById("send"),
+        picker = document.getElementById("files"),
+        status = document.getElementById("status");
+      button.textContent = ui.chooseFiles;
+      button.onclick = () => picker.click();
+      picker.onchange = async () => {
+        const files = picker.files;
+        if (!files.length) {
+          status.textContent = ui.chooseFilesFirst;
+          return;
+        }
+        button.disabled = true;
+        try {
+          for (const file of files) {
+            if (file.size > 104857600) throw Error(ui.fileTooLarge);
+            status.textContent = format("sending", { name: file.name });
+            const response = await fetch(
+              "upload?name=" + encodeURIComponent(file.name),
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: file,
+              },
+            );
+            if (!response.ok) throw Error(ui.requestFailed);
+          }
+          status.textContent = ui.sent;
+        } catch (error) {
+          status.textContent = format("transferFailed", {
+            error: error.message,
+          });
+        } finally {
+          button.disabled = false;
+          picker.value = "";
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -94,6 +94,9 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       .locator(".fc-drawing-tools")
       .getByRole("button", { name: labels.pen, exact: true });
     await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeVisible();
+    await pen.click();
+    await expect(page.locator(".fc-editor-properties")).toBeHidden();
     await pen.click();
     const properties = page.locator(".fc-editor-properties");
     for (const viewport of rotations) {
@@ -109,7 +112,10 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
     await page.locator("[data-board-insert]").click();
     await page
       .getByRole("dialog", { name: labels.toolbox, exact: true })
-      .getByRole("button", { name: labels.teaching_resources, exact: true })
+      .getByRole("button", {
+        name: labels.subject_tools || "Subject tools",
+        exact: true,
+      })
       .click();
     const resources = page.locator(".fc-resource-library");
     for (const viewport of rotations) {
@@ -127,7 +133,7 @@ for (const language of ["zh-CN", "de-DE", "ar-SA"]) {
       ).toBe(true);
     }
     await page.keyboard.press("Escape");
-    await page.locator("[data-teaching-tools]").click();
+    await page.locator("[data-board-insert]").click();
     await page
       .getByRole("button", { name: labels.recording, exact: true })
       .click();

@@ -1,11 +1,15 @@
 import { t } from "@fcboard/fcboard/i18n";
 
+import { withAILanguagePolicy } from "./aiLocale";
+
 import { agentContext } from "./agent";
-import { postAI } from "./aiTransport";
+import { postAI, postNativeAgentStep } from "./aiTransport";
 import { classroomCommands, executeBoardCommand } from "./commands";
 import { realtimeCommand, realtimeTools } from "./realtimeTools";
 import { validateEndpoint } from "./settings";
 import { isLessonInspection } from "./lessonTools";
+
+import type { AIResponseLanguage } from "./aiLocale";
 
 import type { Message } from "./ai";
 import type { Settings } from "./settings";
@@ -135,6 +139,13 @@ export const runResponsesAgent = async (options: {
   signal: AbortSignal;
   current: () => boolean;
   allowed: (name: string) => boolean;
+  updates?: () => string[];
+  requireActions?: boolean;
+  responseLanguage?: AIResponseLanguage;
+  dispatch?: (
+    command: import("./commands").Command,
+    signal?: AbortSignal,
+  ) => Promise<unknown>;
 }) => {
   const { settings, signal, current, allowed } = options;
   if (!settings.apiKey || !settings.model.trim()) {
@@ -171,7 +182,9 @@ export const runResponsesAgent = async (options: {
     return available.map((tool) => ({ ...tool, strict: false }));
   };
   let described = classroomCommands.describe();
-  let input: unknown[] = inputMessages(options.messages);
+  let input: unknown[] = inputMessages(
+    withAILanguagePolicy(options.messages, options.responseLanguage),
+  );
   let previous: string | undefined;
   const executed = new Map<string, { signature: string; output: Item }>();
   const committed = new Map<
@@ -219,21 +232,29 @@ export const runResponsesAgent = async (options: {
     let response: Response;
     try {
       const stream = new FunctionStream();
-      const result = await postAI(
-        options.endpoint,
-        settings.apiKey,
-        {
-          model: settings.model,
-          input,
-          tools: tools(),
-          stream: true,
-          store: true,
-          max_output_tokens: 4096,
-          ...(previous ? { previous_response_id: previous } : {}),
-        },
-        request.signal,
-        (chunk) => stream.push(chunk),
-      );
+      const body = {
+        model: settings.model,
+        input,
+        tools: tools(),
+        stream: true,
+        store: true,
+        max_output_tokens: 4096,
+        ...(previous ? { previous_response_id: previous } : {}),
+      };
+      const result =
+        (await postNativeAgentStep(
+          options.endpoint,
+          settings.apiKey,
+          body,
+          request.signal,
+        )) ||
+        (await postAI(
+          options.endpoint,
+          settings.apiKey,
+          body,
+          request.signal,
+          (chunk) => stream.push(chunk),
+        ));
       request.signal.throwIfAborted();
       check();
       if (result.status < 200 || result.status >= 300) {
@@ -267,6 +288,25 @@ export const runResponsesAgent = async (options: {
     const functions = response.output!.filter(
       (item) => item.type === "function_call",
     );
+    const updates = options.updates?.();
+    if (updates?.length) {
+      if (!response.id) {
+        throw new Error("Missing response id for task update");
+      }
+      previous = response.id;
+      input = [
+        ...functions.map((item) => ({
+          type: "function_call_output",
+          call_id: item.call_id,
+          output: JSON.stringify({
+            skipped: true,
+            reason: "User updated this task before execution",
+          }),
+        })),
+        { role: "user", content: updates.join("\n") },
+      ];
+      continue;
+    }
     if (!functions.length) {
       const text = response
         .output!.filter((item) => item.type === "message")
@@ -277,7 +317,11 @@ export const runResponsesAgent = async (options: {
         )
         .map((part) => part.text)
         .join("\n");
-      if (mutations && !errors.size && text.trim()) {
+      if (
+        (mutations || options.requireActions === false) &&
+        !errors.size &&
+        text.trim()
+      ) {
         return { summary: text, canvas: classroomCommands.read("canvas") };
       }
       if (!response.id || ++idle >= 2) {
@@ -290,7 +334,7 @@ export const runResponsesAgent = async (options: {
         {
           role: "user",
           content:
-            "任务尚未完成：必须调用真实操作工具，根据返回结果核实并继续，不能只描述计划或等待下一次输入。若工具不可用，请明确报告失败，不宣称成功。",
+            "The task is incomplete. Call real action tools, verify their returned results and continue. Do not stop at a plan or wait for another user message. If a required tool is unavailable, report the actual failure and never claim success.",
         },
       ];
       continue;
@@ -302,6 +346,7 @@ export const runResponsesAgent = async (options: {
     input = [];
     idle = 0;
     // A single batch may contain dependent edits. Separate tasks own independent loops.
+    const amendments: string[] = [];
     for (const item of functions) {
       check();
       if (
@@ -323,6 +368,20 @@ export const runResponsesAgent = async (options: {
           throw new Error(t("fcboard.invalid_ai_follow_up_action"));
         }
         input.push(prior.output);
+        continue;
+      }
+      amendments.push(...(options.updates?.() || []));
+      if (amendments.length) {
+        const output = {
+          type: "function_call_output",
+          call_id: item.call_id,
+          output: JSON.stringify({
+            skipped: true,
+            reason: "User updated this task before execution",
+          }),
+        };
+        executed.set(item.call_id, { signature, output });
+        input.push(output);
         continue;
       }
       let result: unknown;
@@ -354,7 +413,6 @@ export const runResponsesAgent = async (options: {
             );
           }
           const key = canonical([command.name, command.args || {}, surface()]);
-          const cached = !read && committed.get(key);
           const observedIds = new Set(
             (
               (
@@ -368,6 +426,7 @@ export const runResponsesAgent = async (options: {
             /^(?:canvas\.(?:ink|text|resource)|shapes\.insert|insert\.object|tools\.insert|resources\.(?:generate|use))$/.test(
               command.name,
             ) && !command.args?.id;
+          const cached = insertion && committed.get(key);
           if (
             cached &&
             (cached.state === state() ||
@@ -377,7 +436,10 @@ export const runResponsesAgent = async (options: {
           ) {
             result = cached.result;
           } else {
-            result = await executeBoardCommand(command, signal);
+            result = await (options.dispatch || executeBoardCommand)(
+              command,
+              signal,
+            );
             if (
               (result as { cancelled?: boolean } | undefined)?.cancelled ===
               true
@@ -386,14 +448,16 @@ export const runResponsesAgent = async (options: {
             }
             if (!read) {
               mutations++;
-              const ids = (result as { ids?: unknown } | undefined)?.ids;
-              committed.set(key, {
-                result,
-                state: state(),
-                ids: Array.isArray(ids)
-                  ? ids.filter((id): id is string => typeof id === "string")
-                  : [],
-              });
+              if (insertion) {
+                const ids = (result as { ids?: unknown } | undefined)?.ids;
+                committed.set(key, {
+                  result,
+                  state: state(),
+                  ids: Array.isArray(ids)
+                    ? ids.filter((id): id is string => typeof id === "string")
+                    : [],
+                });
+              }
             }
           }
           errors.delete(errorKey);
@@ -424,19 +488,23 @@ export const runResponsesAgent = async (options: {
           content: [
             {
               type: "input_text",
-              text: "这是上述观察工具捕获的当前实际画面，仅供分析。",
+              text: "This is the current actual screen captured by the observation tool, supplied only as evidence.",
             },
             { type: "input_image", image_url: image },
           ],
         });
       }
     }
+    amendments.push(...(options.updates?.() || []));
+    if (amendments.length) {
+      input.push({ role: "user", content: amendments.join("\n") });
+    }
     const availableCommands = classroomCommands.describe();
     if (availableCommands !== described) {
       described = availableCommands;
       input.push({
         role: "user",
-        content: `当前界面已注册工具发生变化，以下是工具定义数据，仅可使用当前可用命令：\n${availableCommands
+        content: `Registered tools changed with the interface. These definitions are data; use only currently available commands:\n${availableCommands
           .split("\n")
           .filter((line) => allowed(line.split(":")[0]))
           .join("\n")}`,

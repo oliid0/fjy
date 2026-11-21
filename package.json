@@ -105,9 +105,9 @@
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "7.0.1",
-    "@capacitor/android": "8.2.0",
-    "@capacitor/cli": "8.2.0",
-    "@capacitor/core": "8.2.0"
+    "@capacitor/android": "8.6.0",
+    "@capacitor/cli": "8.6.0",
+    "@capacitor/core": "8.6.0"
   },
   "pnpm": {
     "overrides": {

@@ -1,190 +1,43 @@
-.fc-classroom .fc-spotlight {
+.app .fc-classroom .fc-spotlight {
   .fc-spotlight-ring {
     position: absolute;
     box-sizing: border-box;
-    border: 2px solid #fff;
-    border-radius: 50%;
     pointer-events: none;
   }
-  .fc-spotlight-controls {
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 10px 8px;
-    border-radius: 32px;
-    background: url("./assets/spotlight/dazzle_spotlight_menu_bg.png") center /
-      50px 100% no-repeat;
-  }
-  button,
-  .fc-spotlight-color {
-    position: relative;
+  button {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-sizing: border-box;
-    width: 44px;
-    height: 44px;
     min-height: 0;
-    padding: 7px;
-    border: 2px solid #fff;
-    border-radius: 50%;
+    padding: 0;
+    border: 0;
     background: transparent;
     color: #fff;
-    cursor: pointer;
-    svg {
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-    input {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
-    }
   }
-  .fc-spotlight-popup {
-    position: fixed;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    width: max-content;
-    max-width: calc(100vw - 24px);
-    padding: 16px;
-    border-radius: 16px;
-    background: #f8f8f8;
-    color: #333;
-    box-shadow: 0 4px 20px #0004;
-    &[data-shapes="true"] {
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    button[aria-pressed="true"] {
-      outline: 2px solid #80b6ff;
-      outline-offset: 2px;
-    }
-  }
-  .fc-spotlight-swatches {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .fc-spotlight-alpha {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: #333;
-    input {
-      min-width: 0;
-      width: 100%;
-    }
-  }
-  .fc-spotlight-resize {
-    position: absolute;
-    background: transparent;
-    cursor: nwse-resize;
-  }
-}
-
-// Original MarkSizeView menu sprites; 50px at hdpi = 33⅓ CSS px within the touch target.
-.fc-classroom .fc-spotlight {
-  .fc-spotlight-shape-button,
-  .fc-spotlight-settings-button,
-  .fc-spotlight-close-button,
-  .fc-spotlight-resize {
-    border: 0;
-    background-position: center;
-    background-size: 33.333px 33.333px;
-    background-repeat: no-repeat;
-  }
-  .fc-spotlight-shape-button {
-    background-image: url("./assets/spotlight/dazzle_spotlight_shape_normal.png");
-  }
-  .fc-spotlight-shape-button:active,
-  .fc-spotlight-shape-button[aria-expanded="true"] {
-    background-image: url("./assets/spotlight/dazzle_spotlight_shape_pressed.png");
-  }
-  .fc-spotlight-settings-button {
-    background-image: url("./assets/spotlight/dazzle_spotlight_picture_normal.png");
-  }
-  .fc-spotlight-settings-button:active,
-  .fc-spotlight-settings-button[aria-expanded="true"] {
-    background-image: url("./assets/spotlight/dazzle_spotlight_picture_pressed.png");
-  }
-  .fc-spotlight-close-button {
-    background-image: url("./assets/spotlight/dazzle_spotlight_quit_normal.png");
-  }
-  .fc-spotlight-close-button:active {
-    background-image: url("./assets/spotlight/dazzle_spotlight_quit_presse.png");
-  }
-  .fc-spotlight-resize {
-    background-image: url("./assets/spotlight/zoom_normal.png");
-  }
-  .fc-spotlight-resize:active {
-    background-image: url("./assets/spotlight/zoom_pressed.png");
-  }
-  .fc-spotlight-color {
-    border: 0;
-    background: url("./assets/spotlight/custom_normal.png") center / 24px auto
-      no-repeat;
-    svg {
-      visibility: hidden;
-    }
-  }
-  [data-shape] {
-    border: 0;
-    background-position: center;
-    background-size: 23px auto;
-    background-repeat: no-repeat;
-  }
-}
-.fc-classroom .fc-spotlight [data-shape="circle"] {
-  background-image: url("./assets/spotlight/circular_normal.png");
-}
-.fc-classroom .fc-spotlight [data-shape="circle"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/circular_pressed.png");
-}
-.fc-classroom .fc-spotlight [data-shape="rectangle"] {
-  background-image: url("./assets/spotlight/square_normal.png");
-}
-.fc-classroom .fc-spotlight [data-shape="rectangle"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/square_pressed.png");
-}
-.fc-classroom .fc-spotlight [data-shape="triangle"] {
-  background-image: url("./assets/spotlight/triangle_normal.png");
-}
-.fc-classroom .fc-spotlight [data-shape="triangle"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/triangle_pressed.png");
-}
-.fc-classroom .fc-spotlight [data-shape="star"] {
-  background-image: url("./assets/spotlight/star_normal.png");
-}
-.fc-classroom .fc-spotlight [data-shape="star"][aria-pressed="true"] {
-  background-image: url("./assets/spotlight/star_pressed.png");
-}
-
-.fc-classroom .fc-spotlight .fc-spotlight-color:active {
-  background-image: url("./assets/spotlight/custom_pressed.png");
-}
-
-// MarkSizeView.showMenu and the original 208x60 / 218x98 popup layouts.
-.fc-classroom .fc-spotlight {
+  // MarkSizeView draws the translucent original menu bitmap after the icons.
   .fc-spotlight-controls {
-    display: block;
+    position: absolute;
     width: 50px;
     height: 173.333px;
     padding: 0;
-    border-radius: 0;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      background: url("./assets/spotlight/dazzle_spotlight_menu_bg.svg") center /
+        100% 100% no-repeat;
+    }
     > button {
       position: absolute;
       left: 0.333px;
       width: 49.333px;
       height: 49.333px;
+      border-radius: 0;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: 33.333px 33.333px;
     }
     .fc-spotlight-shape-button {
       top: 13.667px;
@@ -196,95 +49,227 @@
       top: 110.333px;
     }
   }
+  .fc-spotlight-resize {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    border-radius: 0;
+    cursor: ns-resize;
+    background-position: center;
+    background-size: 33.333px 33.333px;
+    background-repeat: no-repeat;
+  }
   .fc-spotlight-popup {
+    position: fixed;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
     height: 98px;
-    padding: 0 5px 0 8px;
+    max-width: calc(100vw - 24px);
+    padding: 0;
     gap: 0;
     border: 0;
     border-radius: 0;
-    background: url("./assets/spotlight/background_pop_bg.png") center / 100%
+    color: #333;
+    background: url("./assets/spotlight/background_pop_bg.svg") center / 100%
       100% no-repeat;
-    box-shadow: none;
     &[data-left="true"] {
-      background-image: url("./assets/spotlight/background_pop_bg_left.png");
+      background-image: url("./assets/spotlight/background_pop_bg_left.svg");
     }
     &[data-shapes="true"] {
+      flex-direction: row;
       height: 60px;
-      gap: 0;
-      flex-wrap: nowrap;
+      padding: 0 0 0 8px;
     }
-    button,
-    .fc-spotlight-color {
+    &[data-shapes="true"][data-left="true"] {
+      padding: 0 8px 0 0;
+    }
+    button {
+      position: relative;
       flex: 0 0 50px;
       width: 50px;
       height: 60px;
       padding: 0;
       border: 0;
       border-radius: 0;
+      outline: none;
+      background-position: center;
       background-size: 22px 22px;
-      &[aria-pressed="true"] {
-        outline: none;
-      }
+      background-repeat: no-repeat;
       &:not(:last-child)::before {
         content: "";
         position: absolute;
         right: 0;
         width: 2px;
         height: 28px;
-        background: url("./assets/spotlight/line.png") center / 100% 100%;
+        background: url("./assets/spotlight/line.svg") center / 100% 100%;
+      }
+      &:focus-visible {
+        outline: 2px solid #0368ff;
+        outline-offset: -4px;
       }
     }
   }
+  .fc-spotlight-popup[data-left="true"] .fc-spotlight-swatches {
+    padding-left: 0;
+  }
   .fc-spotlight-swatches {
+    padding-left: 8px;
+    display: flex;
+    flex: 0 0 60px;
     height: 60px;
     gap: 0;
-    flex-wrap: nowrap;
-    [data-color] {
-      background-position: center;
-      background-repeat: no-repeat;
-      &[aria-pressed="true"]::after {
-        content: "";
-        width: 22px;
-        height: 22px;
-        background: url("./assets/spotlight/selection.png") center / contain
-          no-repeat;
-      }
+    [data-color][aria-pressed="true"]::after,
+    .fc-spotlight-custom-chip::after {
+      content: "";
+      width: 22px;
+      height: 22px;
+      background: url("./assets/spotlight/selection.svg") center / contain
+        no-repeat;
     }
     [data-color="#000000"] {
-      background-image: url("./assets/spotlight/black.png");
+      background-image: url("./assets/spotlight/black.svg");
     }
     [data-color="#ff0000"] {
-      background-image: url("./assets/spotlight/red.png");
+      background-image: url("./assets/spotlight/red.svg");
     }
     [data-color="#00a1ea"] {
-      background-image: url("./assets/spotlight/blue.png");
+      background-image: url("./assets/spotlight/blue.svg");
+    }
+    .fc-spotlight-custom-chip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: url("./assets/spotlight/custom_normal.svg") center / contain
+        no-repeat;
+      &::after {
+        display: none;
+      }
+    }
+    .fc-spotlight-color:active:not([aria-pressed="true"])
+      .fc-spotlight-custom-chip,
+    .fc-spotlight-color:focus-visible:not([aria-pressed="true"])
+      .fc-spotlight-custom-chip {
+      background-image: url("./assets/spotlight/custom_pressed.svg");
+    }
+    .fc-spotlight-color[aria-pressed="true"] .fc-spotlight-custom-chip {
+      background-image: none;
+      &::after {
+        display: block;
+      }
     }
   }
   .fc-spotlight-alpha {
+    display: flex;
+    align-items: center;
     align-self: center;
+    flex: 0 0 32px;
     width: 182px;
     height: 32px;
-    border-top: 2px solid transparent;
-    border-image: url("./assets/spotlight/horizontal_line.png") 1 stretch;
+    margin: 0;
     font-size: 0;
+    border-top: 2px solid transparent;
+    border-image: url("./assets/spotlight/horizontal_line.svg") 1 stretch;
     input {
       appearance: none;
+      position: static;
       width: 100%;
+      min-width: 0;
       height: 6px;
+      min-height: 6px;
+      opacity: 1;
+      padding: 0;
+      margin: 0;
+      border: 0;
       border-radius: 5px;
-      background: #ccc;
-      cursor: pointer;
+      touch-action: none;
       &::-webkit-slider-thumb {
         appearance: none;
         width: 18px;
         height: 18px;
         border: 0;
-        background: url("./assets/spotlight/seekbar_click_normal.png") center /
+        background: url("./assets/spotlight/seekbar_click_normal.svg") center /
           contain no-repeat;
       }
-      &:active::-webkit-slider-thumb {
-        background-image: url("./assets/spotlight/seekbar_click_focus.png");
+      &:active::-webkit-slider-thumb,
+      &:focus-visible::-webkit-slider-thumb {
+        background-image: url("./assets/spotlight/seekbar_click_focus.svg");
       }
     }
   }
+}
+
+// Popper uses the same body portal as the pen picker.
+.fc-spotlight-picker {
+  z-index: 1400;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.app .fc-classroom .fc-spotlight [data-shape="circle"] {
+  background-image: url("./assets/spotlight/circular_normal.svg");
+}
+.app .fc-classroom .fc-spotlight [data-shape="circle"]:active,
+.app .fc-classroom .fc-spotlight [data-shape="circle"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/circular_pressed.svg");
+}
+
+.app .fc-classroom .fc-spotlight [data-shape="rectangle"] {
+  background-image: url("./assets/spotlight/square_normal.svg");
+}
+.app .fc-classroom .fc-spotlight [data-shape="rectangle"]:active,
+.app .fc-classroom .fc-spotlight [data-shape="rectangle"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/square_pressed.svg");
+}
+
+.app .fc-classroom .fc-spotlight [data-shape="triangle"] {
+  background-image: url("./assets/spotlight/triangle_normal.svg");
+}
+.app .fc-classroom .fc-spotlight [data-shape="triangle"]:active,
+.app .fc-classroom .fc-spotlight [data-shape="triangle"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/triangle_pressed.svg");
+}
+
+.app .fc-classroom .fc-spotlight [data-shape="star"] {
+  background-image: url("./assets/spotlight/star_normal.svg");
+}
+.app .fc-classroom .fc-spotlight [data-shape="star"]:active,
+.app .fc-classroom .fc-spotlight [data-shape="star"][aria-pressed="true"] {
+  background-image: url("./assets/spotlight/star_pressed.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-shape-button {
+  background-image: url("./assets/spotlight/dazzle_spotlight_shape_normal.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-shape-button:active,
+.app
+  .fc-classroom
+  .fc-spotlight
+  .fc-spotlight-shape-button[aria-expanded="true"] {
+  background-image: url("./assets/spotlight/dazzle_spotlight_shape_pressed.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-settings-button {
+  background-image: url("./assets/spotlight/dazzle_spotlight_picture_normal.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-settings-button:active,
+.app
+  .fc-classroom
+  .fc-spotlight
+  .fc-spotlight-settings-button[aria-expanded="true"] {
+  background-image: url("./assets/spotlight/dazzle_spotlight_picture_pressed.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-close-button {
+  background-image: url("./assets/spotlight/dazzle_spotlight_quit_normal.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-close-button:active {
+  background-image: url("./assets/spotlight/dazzle_spotlight_quit_presse.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-resize {
+  background-image: url("./assets/spotlight/zoom_normal.svg");
+}
+.app .fc-classroom .fc-spotlight .fc-spotlight-resize:active {
+  background-image: url("./assets/spotlight/zoom_pressed.svg");
 }

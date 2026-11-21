@@ -96,13 +96,18 @@ export const createUndoAction: ActionCreator = (history) => ({
             UndoIcon
           )
         }
-        aria-label={t("buttons.undo")}
+        aria-label={t(
+          app.props.UIOptions.unifiedToolbar ? "fcboard.undo" : "buttons.undo",
+        )}
+        showAriaLabel={app.props.UIOptions.unifiedToolbar}
         onClick={updateData}
         size={data?.size || "medium"}
         disabled={isUndoStackEmpty}
         data-testid="button-undo"
         style={{
-          ...(isMobile ? MOBILE_ACTION_BUTTON_BG : {}),
+          ...(isMobile && !app.props.UIOptions.unifiedToolbar
+            ? MOBILE_ACTION_BUTTON_BG
+            : {}),
         }}
       />
     );
@@ -142,13 +147,18 @@ export const createRedoAction: ActionCreator = (history) => ({
             RedoIcon
           )
         }
-        aria-label={t("buttons.redo")}
+        aria-label={t(
+          app.props.UIOptions.unifiedToolbar ? "fcboard.redo" : "buttons.redo",
+        )}
+        showAriaLabel={app.props.UIOptions.unifiedToolbar}
         onClick={updateData}
         size={data?.size || "medium"}
         disabled={isRedoStackEmpty}
         data-testid="button-redo"
         style={{
-          ...(isMobile ? MOBILE_ACTION_BUTTON_BG : {}),
+          ...(isMobile && !app.props.UIOptions.unifiedToolbar
+            ? MOBILE_ACTION_BUTTON_BG
+            : {}),
         }}
       />
     );

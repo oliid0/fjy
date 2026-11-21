@@ -4,7 +4,6 @@ import { getElementAbsoluteCoords } from "@fcboard/element";
 
 import type { FcboardElement } from "@fcboard/element/types";
 
-import { currentSettings } from "./settings";
 import { packForLocale, openLanguagePacks } from "./languagePacks";
 
 import type { PluginListenerHandle } from "@capacitor/core";
@@ -19,11 +18,12 @@ export type InkRegion = {
   bottom: number;
 };
 export const digitalInkEngine = registerPlugin<{
-  prepare(): Promise<void>;
   recognize(options: {
     strokes: InkInput;
     language: string;
+    id?: string;
   }): Promise<{ candidates: string[]; engine: string }>;
+  cancel(options: { id: string }): Promise<void>;
   listPacks(): Promise<HandwritingPacks>;
   downloadPack(options: { tag: string }): Promise<HandwritingPacks>;
   deletePack(options: { tag: string }): Promise<HandwritingPacks>;
@@ -32,6 +32,34 @@ export const digitalInkEngine = registerPlugin<{
     listener: (state: HandwritingPacks) => void,
   ): Promise<PluginListenerHandle>;
 }>("FcboardDigitalInk");
+
+export const recognizeNativeInk = (
+  options: { strokes: InkInput; language: string },
+  signal: AbortSignal,
+) => {
+  signal.throwIfAborted();
+  const id = crypto.randomUUID();
+  return new Promise<{ candidates: string[]; engine: string }>(
+    (resolve, reject) => {
+      const abort = () => {
+        void digitalInkEngine.cancel({ id }).catch(() => {});
+        reject(
+          signal.reason ||
+            new DOMException("Handwriting changed", "AbortError"),
+        );
+      };
+      signal.addEventListener("abort", abort, { once: true });
+      void digitalInkEngine
+        .recognize({ ...options, id })
+        .then((result) => {
+          signal.throwIfAborted();
+          resolve(result);
+        })
+        .catch(reject)
+        .finally(() => signal.removeEventListener("abort", abort));
+    },
+  );
+};
 
 // Clip each sampled segment to the selected rectangle, without connecting gaps
 // or admitting handwriting outside the selection. Coordinates remain in scene units.
@@ -127,29 +155,42 @@ export const boardInk = (
   );
 
 export const hasDigitalInk = () => Capacitor.isNativePlatform();
-let preparation: Promise<void> | undefined;
-export const prepareDigitalInk = () => {
-  preparation ||= digitalInkEngine.prepare().catch((error) => {
-    preparation = undefined;
-    throw error;
-  });
-  return preparation;
+/** The original EMOJI_PEN uses this classifier rather than text OCR. */
+export const recognizeEmojiInk = async (
+  strokes: InkInput,
+  signal: AbortSignal,
+) => {
+  signal.throwIfAborted();
+  if (!hasDigitalInk() || !strokes.length) {
+    return [];
+  }
+  const result = await recognizeNativeInk(
+    {
+      strokes,
+      language: "zxx-Zsye-x-emoji",
+    },
+    signal,
+  );
+  signal.throwIfAborted();
+  return result.candidates;
 };
-
 export const recognizeDigitalInk = async (
   strokes: InkInput,
   signal: AbortSignal,
   kind: "text" | "math",
-  languageHint?: "en-US",
+  languageHint?: string,
 ) => {
   signal.throwIfAborted();
   const language = languageHint || currentTextInkLanguage();
   let result;
   try {
-    result = await digitalInkEngine.recognize({
-      strokes,
-      language: kind === "math" ? "en-US" : language,
-    });
+    result = await recognizeNativeInk(
+      {
+        strokes,
+        language: kind === "math" ? "en-US" : language,
+      },
+      signal,
+    );
   } catch (error) {
     signal.throwIfAborted();
     if (
@@ -165,7 +206,4 @@ export const recognizeDigitalInk = async (
     (text) => typeof text === "string" && text.trim(),
   );
 };
-export const currentTextInkLanguage = () => {
-  const language = currentSettings().inkLanguage;
-  return language === "auto" ? packForLocale(getLanguage().code) : language;
-};
+export const currentTextInkLanguage = () => packForLocale(getLanguage().code);

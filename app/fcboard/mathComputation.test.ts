@@ -58,3 +58,62 @@ it("does not fall back to synchronous symbolic execution when workers are unavai
   vi.stubGlobal("Worker", undefined);
   await expect(calculateAsync("diff(x^2,x)")).rejects.toThrow();
 });
+
+it("sends unflattened LaTeX and nontrivial scientific work to the worker", async () => {
+  const { instance, create } = worker();
+  const result = calculateAsync(String.raw`\sin(30^\circ)=`);
+  expect(instance.postMessage).toHaveBeenCalledWith({
+    latex: String.raw`\sin(30^\circ)`,
+  });
+  instance.onmessage?.({ data: { answer: "1/2" } } as MessageEvent);
+  expect(await result).toBe("1/2");
+  const next = calculateAsync("sin30°");
+  expect(create).toHaveBeenCalledTimes(2);
+  expect(instance.postMessage.mock.calls[1][0]).toHaveProperty("expression");
+  instance.onmessage?.({ data: { answer: "1/2" } } as MessageEvent);
+  expect(await next).toBe("1/2");
+});
+
+it("cleans up a failed worker submission immediately", async () => {
+  vi.useFakeTimers();
+  const { instance } = worker();
+  instance.postMessage.mockImplementation(() => {
+    throw new Error("Worker unavailable");
+  });
+  await expect(calculateAsync(String.raw`\sqrt{2}`)).rejects.toThrow(
+    "Worker unavailable",
+  );
+  expect(instance.terminate).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("finishes another symbolic expression while the first stalls, then cancels only the removed first source", async () => {
+  vi.useFakeTimers();
+  const instances: ReturnType<typeof worker>["instance"][] = [];
+  vi.stubGlobal(
+    "Worker",
+    vi.fn(() => {
+      const instance = {
+        onmessage: undefined,
+        onerror: undefined,
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      };
+      instances.push(instance);
+      return instance;
+    }),
+  );
+  const source = new AbortController();
+  const first = calculateAsync("integrate(sin(x),x)", source.signal);
+  const rejected = expect(first).rejects.toMatchObject({ name: "AbortError" });
+  const second = calculateAsync("diff(x^2,x)");
+  expect(instances).toHaveLength(2);
+  instances[1].onmessage?.({ data: { answer: "2*x" } } as MessageEvent);
+  await expect(second).resolves.toBe("2*x");
+  expect(instances[0].terminate).not.toHaveBeenCalled();
+  source.abort();
+  await rejected;
+  expect(instances[0].terminate).toHaveBeenCalledTimes(1);
+  expect(instances[1].terminate).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});

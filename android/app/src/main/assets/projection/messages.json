@@ -1,0 +1,79 @@
+{
+  "en": {
+    "title": "Screen casting",
+    "choose": "Choose what to share",
+    "stop": "Stop casting",
+    "ready": "Choose a screen, window or tab to show on the whiteboard.",
+    "connecting": "Connecting to the whiteboard…",
+    "sharing": "Your screen is being shared.",
+    "ended": "Screen sharing ended.",
+    "unsupported": "Open this link in a desktop browser that supports screen sharing.",
+    "failed": "Connection failed. Check that the board is receiving and both devices are on the same local network."
+  },
+  "zh-cn": {
+    "title": "一键投屏",
+    "choose": "选择屏幕",
+    "stop": "停止投屏",
+    "ready": "请选择要投到白板上的屏幕、窗口或标签页。",
+    "connecting": "正在连接白板…",
+    "sharing": "正在投屏。",
+    "ended": "投屏已结束。",
+    "unsupported": "请用支持屏幕共享的桌面浏览器打开此链接。",
+    "failed": "投屏连接失败。请确认白板正在接收，并且两台设备在同一局域网。"
+  },
+  "zh-tw": {
+    "title": "一鍵投屏",
+    "choose": "選擇螢幕",
+    "stop": "停止投屏",
+    "ready": "請選擇要投放到白板上的螢幕、視窗或分頁。",
+    "connecting": "正在連線至白板…",
+    "sharing": "正在投屏。",
+    "ended": "投屏已結束。",
+    "unsupported": "請用支援螢幕分享的桌面瀏覽器開啟此連結。",
+    "failed": "投屏連線失敗。請確認白板正在接收，且兩台裝置位於同一區域網路。"
+  },
+  "ja": {
+    "title": "画面共有",
+    "choose": "共有する画面を選択",
+    "stop": "共有を停止",
+    "ready": "ホワイトボードに表示する画面、ウィンドウ、タブを選んでください。",
+    "connecting": "ホワイトボードに接続中…",
+    "sharing": "画面を共有しています。",
+    "ended": "画面共有を終了しました。",
+    "unsupported": "画面共有に対応したパソコンのブラウザーでこのリンクを開いてください。",
+    "failed": "接続できませんでした。両方の端末が同じネットワークに接続していることを確認してください。"
+  },
+  "es": {
+    "title": "Proyección de pantalla",
+    "choose": "Elige qué compartir",
+    "stop": "Detener la proyección",
+    "ready": "Elige la pantalla, ventana o pestaña que quieres mostrar en la pizarra.",
+    "connecting": "Conectando con la pizarra…",
+    "sharing": "Estás compartiendo la pantalla.",
+    "ended": "La pantalla ya no se está compartiendo.",
+    "unsupported": "Abre el enlace en un navegador de escritorio compatible con la función de compartir pantalla.",
+    "failed": "Comprueba que la pizarra esté recibiendo y que ambos dispositivos estén en la misma red."
+  },
+  "fr": {
+    "title": "Diffusion d’écran",
+    "choose": "Choisir le contenu à partager",
+    "stop": "Arrêter la diffusion",
+    "ready": "Choisissez le contenu à afficher sur le tableau blanc.",
+    "connecting": "Connexion au tableau blanc…",
+    "sharing": "Votre écran est partagé.",
+    "ended": "Le partage d’écran est terminé.",
+    "unsupported": "Ouvrez ce lien dans un navigateur de bureau compatible avec le partage d’écran.",
+    "failed": "Vérifiez que le tableau reçoit les diffusions et que les deux appareils sont sur le même réseau."
+  },
+  "zh-hk": {
+    "title": "一鍵投屏",
+    "choose": "選擇共享內容",
+    "stop": "停止投屏",
+    "ready": "選擇要在白板上顯示的螢幕、視窗或分頁。",
+    "connecting": "正在連接白板…",
+    "sharing": "正在共享螢幕。",
+    "ended": "螢幕共享已結束。",
+    "unsupported": "請使用支援螢幕共享的桌面瀏覽器開啟此連結。",
+    "failed": "無法連接白板。請確認白板已開啟接收功能，而且兩部裝置已連接至同一個區域網絡。"
+  }
+}

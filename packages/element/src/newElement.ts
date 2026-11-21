@@ -242,6 +242,7 @@ export const newTextElement = (
     originalText?: string;
     fontSize?: number;
     fontFamily?: FontFamilyValues;
+    fontWeight?: FcboardTextElement["fontWeight"];
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
     containerId?: FcboardTextContainer["id"] | null;
@@ -255,7 +256,7 @@ export const newTextElement = (
   const text = normalizeText(opts.text);
   const metrics = measureText(
     text,
-    getFontString({ fontFamily, fontSize }),
+    getFontString({ fontFamily, fontSize, fontWeight: opts.fontWeight }),
     lineHeight,
   );
   const textAlign = opts.textAlign || DEFAULT_TEXT_ALIGN;
@@ -270,6 +271,7 @@ export const newTextElement = (
     text,
     fontSize,
     fontFamily,
+    ...(opts.fontWeight ? { fontWeight: opts.fontWeight } : {}),
     textAlign,
     verticalAlign,
     x: opts.x - offsets.x,
@@ -532,9 +534,11 @@ export const newImageElement = (
 ): NonDeleted<FcboardImageElement> => {
   return {
     ..._newElementBase<FcboardImageElement>("image", opts),
-    // in the future we'll support changing stroke color for some SVG elements,
-    // and `transparent` will likely mean "use original colors of the image"
-    strokeColor: "transparent",
+    // Semantic graph images use this color for their live view/backing pixels.
+    // Ordinary photos keep their original image colors.
+    strokeColor: opts.customData?.fcPlot
+      ? opts.strokeColor ?? "#2563eb"
+      : "transparent",
     status: opts.status ?? "pending",
     fileId: opts.fileId ?? null,
     scale: opts.scale ?? [1, 1],

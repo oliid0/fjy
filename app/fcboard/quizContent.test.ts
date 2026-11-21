@@ -37,9 +37,9 @@ it("keeps problem and solution diagrams distinct and renders math in choices and
   };
   validateQuiz(value);
   const doc = new DOMParser().parseFromString(quizDocument(value), "text/html");
-  expect(doc.querySelector(".card > figure img")?.getAttribute("alt")).toBe(
-    diagram.caption,
-  );
+  expect(
+    doc.querySelector(".card .problem > figure img")?.getAttribute("alt"),
+  ).toBe(diagram.caption);
   expect(doc.querySelector(".answer figure img")).not.toBeNull();
   expect(doc.querySelectorAll(".steps .formula")).toHaveLength(2);
   expect(doc.querySelector("input,textarea")).toBeNull();

@@ -10,6 +10,11 @@ import type {
 } from "@fcboard/fcboard/types";
 import type { FcboardElement } from "@fcboard/element/types";
 
+import {
+  isNativeBoardSession,
+  shouldRestoreBoardSession,
+} from "../data/boardSession";
+
 import { classroomCommands } from "./commands";
 
 export type Board = {
@@ -36,9 +41,37 @@ export type Workspace = {
 };
 const storage = createStore("fcboard-boards", "workspace");
 const recoveryKey = "fcboard-board-recovery";
-export const readWorkspace = async () => get<Workspace>("workspace", storage);
-export const writeWorkspace = (value: Workspace) =>
-  set("workspace", value, storage);
+let sessionWorkspace: Workspace | undefined;
+export const readWorkspace = async () => {
+  if (isNativeBoardSession()) {
+    if (sessionWorkspace || !shouldRestoreBoardSession()) {
+      return sessionWorkspace;
+    }
+    sessionWorkspace = await get<Workspace>("workspace", storage);
+    return sessionWorkspace;
+  }
+  return get<Workspace>("workspace", storage);
+};
+export const writeWorkspace = (value: Workspace, persist = false) => {
+  if (isNativeBoardSession()) {
+    sessionWorkspace = value;
+    if (!persist) {
+      return Promise.resolve();
+    }
+  }
+  return set("workspace", value, storage);
+};
+
+const sameSceneVersions = (
+  left: readonly Pick<FcboardElement, "id" | "versionNonce">[],
+  right: readonly Pick<FcboardElement, "id" | "versionNonce">[],
+) =>
+  left.length === right.length &&
+  left.every(
+    (element, index) =>
+      element.id === right[index].id &&
+      element.versionNonce === right[index].versionNonce,
+  );
 
 /** Save before switching, keep binary assets, and keep undo from crossing boards. */
 export class BoardBook {
@@ -50,6 +83,10 @@ export class BoardBook {
   private switching = false;
   private pendingActive?: string;
   private disposed = false;
+  private discarded?: { previous: Workspace; replacement?: Board };
+  get canRestoreDiscarded() {
+    return !!this.discarded;
+  }
   get visibleActive() {
     return this.pendingActive ?? this.value.active;
   }
@@ -69,10 +106,14 @@ export class BoardBook {
       whiteboardBackground,
       whiteboardCustomBackground,
     } = this.api.getAppState();
+    const elements = this.api.getSceneElements();
+    const tile = this.api.getSceneProjection?.()?.elementId;
     return {
       id,
       name,
-      elements: this.api.getSceneElements(),
+      elements: tile
+        ? elements.filter((element) => element.id !== tile)
+        : elements,
       files: this.api.getFiles(),
       view: {
         scrollX,
@@ -86,6 +127,12 @@ export class BoardBook {
     };
   }
   async initialize() {
+    const before = this.capture("", "");
+    const versions = before.elements.map(({ id, versionNonce }) => ({
+      id,
+      versionNonce,
+    }));
+    let needsSave = false;
     const stored = await this.load();
     if (this.disposed) {
       return;
@@ -97,37 +144,67 @@ export class BoardBook {
       this.value = stored;
       // An IndexedDB transaction started by pagehide can be abandoned by reload.
       // Recover only the matching page, never replace the other saved boards.
-      try {
-        const recovery = JSON.parse(
-          localStorage.getItem(recoveryKey) || "null",
-        ) as Board | null;
-        const page =
-          recovery && stored.boards.find((board) => board.id === recovery.id);
-        if (
-          page &&
-          recovery &&
-          recovery.updated > page.updated &&
-          Array.isArray(recovery.elements) &&
-          recovery.view
-        ) {
-          this.value = {
-            ...stored,
-            active: page.id,
-            boards: stored.boards.map((board) =>
-              board.id === page.id
-                ? {
-                    ...recovery,
-                    files: { ...board.files, ...recovery.files },
-                  }
-                : board,
-            ),
-          };
-          await this.flush();
+      if (!isNativeBoardSession()) {
+        try {
+          const recovery = JSON.parse(
+            localStorage.getItem(recoveryKey) || "null",
+          ) as Board | null;
+          const page =
+            recovery && stored.boards.find((board) => board.id === recovery.id);
+          if (
+            page &&
+            recovery &&
+            recovery.updated > page.updated &&
+            Array.isArray(recovery.elements) &&
+            recovery.view
+          ) {
+            this.value = {
+              ...stored,
+              active: page.id,
+              boards: stored.boards.map((board) =>
+                board.id === page.id
+                  ? {
+                      ...recovery,
+                      files: { ...board.files, ...recovery.files },
+                    }
+                  : board,
+              ),
+            };
+            needsSave = true;
+          }
+        } catch (error) {
+          this.onError(error);
         }
-      } catch (error) {
-        this.onError(error);
       }
-      this.restore(this.value.active);
+      const active = this.value.boards.find(
+        (board) => board.id === this.value.active,
+      )!;
+      const current = this.capture(active.name, active.id);
+      const edited =
+        !sameSceneVersions(versions, current.elements) ||
+        JSON.stringify(before.view) !== JSON.stringify(current.view) ||
+        this.api.getAppState().cursorButton === "down";
+      if (edited) {
+        // First-frame input belongs to the visible active page. A late IDB read
+        // must never reset that stroke or replace edits already made by the user.
+        current.files = { ...active.files, ...current.files };
+        current.updated = Math.max(current.updated, active.updated + 1);
+        this.value = {
+          ...this.value,
+          boards: this.value.boards.map((board) =>
+            board.id === active.id ? current : board,
+          ),
+        };
+        this.api.addFiles(Object.values(active.files));
+        needsSave = true;
+      } else if (
+        sameSceneVersions(active.elements, current.elements) &&
+        JSON.stringify(active.view) === JSON.stringify(current.view)
+      ) {
+        this.api.addFiles(Object.values(active.files));
+      } else {
+        this.restore(this.value.active);
+      }
     } else {
       const first = this.capture(`${t("fcboard.board")} 1`);
       this.value = {
@@ -135,7 +212,7 @@ export class BoardBook {
         boards: [first],
         customBackground: first.view.whiteboardCustomBackground,
       };
-      await this.flush();
+      needsSave = true;
     }
     if (this.disposed) {
       return;
@@ -184,6 +261,9 @@ export class BoardBook {
       }, 1200);
     });
     this.emit();
+    if (needsSave) {
+      await this.flush();
+    }
   }
   subscribe(listener: () => void) {
     this.listeners.add(listener);
@@ -194,13 +274,21 @@ export class BoardBook {
   private emit() {
     this.listeners.forEach((listener) => listener());
   }
-  async flush() {
+  async flush(persist = false) {
     clearTimeout(this.timer);
     this.timer = undefined;
     // Clone now: live element mutations must not change an in-flight persistence operation.
-    const snapshot = JSON.parse(JSON.stringify(this.value)) as Workspace;
-    this.writing = this.writing.catch(() => {}).then(() => this.save(snapshot));
+    const snapshot =
+      isNativeBoardSession() && !persist
+        ? this.value
+        : (JSON.parse(JSON.stringify(this.value)) as Workspace);
+    this.writing = this.writing
+      .catch(() => {})
+      .then(() => (persist ? this.save(snapshot, true) : this.save(snapshot)));
     await this.writing;
+    if (isNativeBoardSession()) {
+      return;
+    }
     try {
       const recovery = JSON.parse(
         localStorage.getItem(recoveryKey) || "null",
@@ -220,6 +308,9 @@ export class BoardBook {
   }
   /** Serialize once when leaving, rather than delaying ink with per-stroke JSON. */
   checkpoint() {
+    if (isNativeBoardSession()) {
+      return;
+    }
     const page = this.value.boards.find(
       (board) => board.id === this.visibleActive,
     );
@@ -266,6 +357,7 @@ export class BoardBook {
       },
     });
     this.api.history.clear();
+    this.api.setActiveTool({ type: "freedraw" });
     this.switching = false;
   }
   /** Persist the destination while in-flight edits still belong to the visible source page. */
@@ -408,25 +500,76 @@ export class BoardBook {
     this.emit();
   }
   async discard(id: string, source?: AbortSignal) {
+    await this.discardMany([id], source);
+  }
+  /** Delete the chosen pages in one durable transaction; never expose an empty book. */
+  async discardMany(ids: readonly string[], source?: AbortSignal) {
     source?.throwIfAborted();
-    if (!this.value.boards.some((board) => board.id === id)) {
+    const selected = new Set(ids);
+    if (
+      !selected.size ||
+      selected.size !== ids.length ||
+      ids.some((id) => !this.value.boards.some((board) => board.id === id))
+    ) {
       throw new Error(t("fcboard.board_does_not_exist"));
     }
     await this.flush();
     source?.throwIfAborted();
-    if (this.value.boards.length === 1) {
-      await this.create(undefined, source);
-    }
-    source?.throwIfAborted();
     const previous = this.value;
-    const boards = previous.boards.filter((board) => board.id !== id);
-    if (boards.length === previous.boards.length) {
-      throw new Error(t("fcboard.board_does_not_exist"));
+    const boards = previous.boards.filter((board) => !selected.has(board.id));
+    let replacement: Board | undefined;
+    if (!boards.length) {
+      replacement = {
+        ...this.capture(`${t("fcboard.board")} 1`),
+        elements: [],
+        files: {},
+        view: { ...this.capture("").view, scrollX: 0, scrollY: 0 },
+      };
+      boards.push(replacement);
     }
-    const active = previous.active === id ? boards[0].id : previous.active;
-    const next = { ...previous, active, boards };
-    await this.commitWorkspace(next, source);
+    const oldIndex = previous.boards.findIndex(
+      (board) => board.id === previous.active,
+    );
+    const active = selected.has(previous.active)
+      ? boards[Math.min(oldIndex, boards.length - 1)].id
+      : previous.active;
+    await this.commitWorkspace({ ...previous, active, boards }, source);
+    this.discarded = { previous, replacement };
     if (active !== previous.active) {
+      this.restore(active, source);
+    }
+    this.emit();
+  }
+  /** Restore the last removal without overwriting ink written on surviving pages. */
+  async restoreDiscarded(source?: AbortSignal) {
+    source?.throwIfAborted();
+    const removal = this.discarded;
+    if (!removal) {
+      return;
+    }
+    await this.flush();
+    source?.throwIfAborted();
+    const current = this.value;
+    const boards = removal.previous.boards.map(
+      (previous) =>
+        current.boards.find((board) => board.id === previous.id) ?? previous,
+    );
+    for (const board of current.boards) {
+      const untouchedReplacement =
+        board.id === removal.replacement?.id &&
+        board.updated === removal.replacement.updated &&
+        !board.elements.length;
+      if (
+        !untouchedReplacement &&
+        !boards.some((previous) => previous.id === board.id)
+      ) {
+        boards.push(board);
+      }
+    }
+    const active = removal.previous.active;
+    await this.commitWorkspace({ ...current, active, boards }, source);
+    this.discarded = undefined;
+    if (active !== current.active) {
       this.restore(active, source);
     }
     this.emit();

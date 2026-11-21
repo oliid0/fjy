@@ -57,15 +57,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "Fcboard as a React component",
-  "license": "MIT",
-  "keywords": [
-    "fcboard",
-    "fcboard-embed",
-    "react",
-    "npm",
-    "npm fcboard"
-  ],
   "browserslist": {
     "production": [
       ">0.2%",
@@ -85,13 +76,6 @@
       "last 1 safari version"
     ]
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/oliid0/fjy.git",
-    "directory": "packages/fcboard"
-  },
-  "bugs": "https://github.com/oliid0/fjy/issues",
-  "homepage": "https://github.com/oliid0/fjy/tree/main/packages/fcboard",
   "scripts": {
     "gen:types": "tsc && node ../../scripts/finalizePackage.js",
     "build:esm": "rimraf dist && node ../../scripts/buildPackage.js && npm run gen:types"
@@ -115,6 +99,7 @@
     "@mui/material": "9.5.0",
     "browser-fs-access": "0.38.0",
     "canvas-roundrect-polyfill": "0.0.1",
+    "clipper-lib": "6.4.2",
     "clsx": "1.1.1",
     "cross-env": "7.0.3",
     "es6-promise-pool": "2.5.0",
@@ -123,6 +108,7 @@
     "image-blob-reduce": "3.0.1",
     "jotai": "2.11.0",
     "jotai-scope": "0.7.2",
+    "jsxgraph": "1.14.3",
     "lodash.debounce": "4.0.8",
     "lodash.throttle": "4.1.1",
     "nanoid": "3.3.3",
@@ -138,13 +124,18 @@
     "roughjs": "4.6.4",
     "sass": "1.51.0",
     "tinycolor2": "1.6.0",
-    "tunnel-rat": "0.1.2"
+    "tunnel-rat": "0.1.2",
+    "vega": "6.4.0",
+    "vega-embed": "7.3.0",
+    "vega-interpreter": "2.3.2",
+    "vega-lite": "6.5.0"
   },
   "devDependencies": {
     "@size-limit/preset-big-lib": "9.0.0",
     "@testing-library/dom": "10.4.0",
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "16.2.0",
+    "@types/clipper-lib": "6.4.0",
     "@types/lodash.debounce": "4.0.8",
     "@types/pako": "2.0.3",
     "@types/pica": "5.1.3",

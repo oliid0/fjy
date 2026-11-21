@@ -33,3 +33,36 @@ export const allowedFunctions = new Set([
   "nthRoot",
   "mod",
 ]);
+
+/** Scalar scientific calculator and bounded statistics/combinatorics. Keep
+ * these separate from plotting's continuous-function contract. */
+export const scientificFunctions = new Set([
+  ...allowedFunctions,
+  "cot",
+  "sec",
+  "csc",
+  "acot",
+  "asec",
+  "acsc",
+  "asinh",
+  "acosh",
+  "atanh",
+  "acoth",
+  "asech",
+  "acsch",
+  "coth",
+  "sech",
+  "csch",
+  "expm1",
+  "log1p",
+  "hypot",
+  "gcd",
+  "lcm",
+  "combinations",
+  "permutations",
+  "combinationsWithRep",
+  "mean",
+  "median",
+  "std",
+  "variance",
+]);

@@ -1,10 +1,12 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ToolbarExtras } from "@fcboard/fcboard";
-import { TrashIcon, save, CloseIcon } from "@fcboard/fcboard/components/icons";
+import { UndoIcon } from "@fcboard/fcboard/components/icons";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import { LocalData } from "../data/LocalData";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -23,7 +25,12 @@ import { BoardOpen } from "./BoardOpen";
 import { readCloudBzd } from "./cloudTransfers";
 import { loadCloudShare } from "./cloudShare";
 
-import type { PointerEvent } from "react";
+import "./BoardSwitcher.scss";
+
+import type { PointerEvent as ReactPointerEvent } from "react";
+
+const boardIcon = (name: string) =>
+  new URL(`./factory-board-icons/${name}.svg`, import.meta.url).href;
 
 export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
@@ -62,8 +69,20 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   const [chosen, setChosen] = useState<string[]>([]);
   const [dragging, setDragging] = useState<string>();
   const drag = useRef<
-    { id: string; pointer: number; before: string[] } | undefined
+    | {
+        id: string;
+        pointer: number;
+        before: string[];
+        order: string[];
+        x: number;
+        y: number;
+      }
+    | undefined
   >(undefined);
+  const list = useRef<HTMLDivElement>(null);
+  const dragFrame = useRef<number | undefined>(undefined);
+  const operation = useRef<AbortController | undefined>(undefined);
+  const running = useRef(false);
   const panel = useRef<HTMLElement>(null);
   const panelStyle = useAnchoredPanel(
     panel,
@@ -121,14 +140,18 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
     });
     boot();
     const registrations = [
-      classroomCommands.register("board.list", "打开白板列表", () => {
-        api.updateScene({ appState: { toolbarHidden: false } });
-        setValue({ ...controller.value });
-        setOpen(true);
-      }),
+      classroomCommands.register(
+        "board.list",
+        "Open the whiteboard list.",
+        () => {
+          api.updateScene({ appState: { toolbarHidden: false } });
+          setValue({ ...controller.value });
+          setOpen(true);
+        },
+      ),
       classroomCommands.register(
         "board.new",
-        "新建并切换白板，args.name 可选；原板自动保存",
+        "Create and switch to a new board; optional args.name. Save the previous board automatically.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -143,7 +166,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.switch",
-        "切换白板，args.id 或 args.name，或从1开始的 args.index",
+        "Switch by args.id, args.name, or one-based args.index.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -164,13 +187,13 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.rename",
-        "重命名当前白板，args.name 必填",
+        "Rename the current board; args.name is required.",
         async (args) =>
           controller.rename(controller.value.active, String(args.name || "")),
       ),
       classroomCommands.register(
         "board.discard",
-        "丢弃白板，仅在用户明确要求丢弃时调用，args.id 省略为当前板",
+        "Discard a board only when explicitly requested. Omitted args.id means the current board.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -183,12 +206,27 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
           await controller.discard(id, source);
         },
       ),
-      classroomCommands.register("board.save", "保存当前白板到本机", () =>
-        controller.flush(),
+      classroomCommands.register(
+        "board.save",
+        "Save the current board on this device.",
+        async (args) => {
+          const savedExit = args.preserveForExit === true;
+          await controller.flush(savedExit);
+          if (savedExit) {
+            await LocalData.saveForExit(
+              api.getSceneElements(),
+              api.getAppState(),
+              api.getFiles(),
+            );
+            if (args.signal instanceof AbortSignal) {
+              args.signal.throwIfAborted();
+            }
+          }
+        },
       ),
       classroomCommands.register(
         "board.reorder",
-        "按args.ids完整白板ID列表调整顺序，保留当前白板与笔迹",
+        "Reorder using the complete board ID list in args.ids; preserve the active board and its ink.",
         (args) => {
           if (
             !Array.isArray(args.ids) ||
@@ -206,7 +244,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.export",
-        "将全部白板保存为原厂 BZD 文件。显示实际文件保存位置选择；返回 saved=false 表示取消，不能声称成功。",
+        "Save all boards to a native BZD file using the actual save-location picker. saved=false means cancellation, never success.",
         async (args) => {
           await controller.flush();
           const source =
@@ -225,7 +263,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "board.open",
-        "打开原厂 BZD 白板文件，保留已有页面并导入全部页。args.code 为四位云端提取码，args.endpoint 可选；省略则打开本地文件窗。",
+        "Import every page from a native BZD file, preserving existing boards. args.code is a four-digit cloud retrieval code; args.endpoint is optional. Omit them to open the local file picker.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -288,13 +326,30 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       controller.dispose();
     };
   }, [api]);
+  const stopDrag = useCallback((restore = false) => {
+    if (dragFrame.current !== undefined) {
+      cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = undefined;
+    }
+    if (restore && drag.current) {
+      setOrder(drag.current.before);
+    }
+    drag.current = undefined;
+    setDragging(undefined);
+  }, []);
+  const close = useCallback(() => {
+    operation.current?.abort();
+    stopDrag(true);
+    setOpen(false);
+    setError("");
+  }, [stopDrag]);
   useEffect(() => {
     if (!open) {
       return;
     }
     setEditing(false);
-    setOrder(book.current?.value.boards.map((board) => board.id) || []);
-    setChosen(book.current?.value.active ? [book.current.value.active] : []);
+    setOrder([]);
+    setChosen([]);
     panel.current
       ?.querySelector<HTMLButtonElement>(
         ".fc-board-select[aria-pressed='true']",
@@ -305,88 +360,182 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
         !panel.current?.contains(event.target as Node) &&
         !(event.target as Element).closest?.("[data-board-switcher]")
       ) {
-        setOpen(false);
+        close();
       }
     };
     window.addEventListener("pointerdown", dismiss);
     return () => window.removeEventListener("pointerdown", dismiss);
-  }, [open]);
-  const run = async (operation: (source?: AbortSignal) => Promise<void>) => {
-    const source = classroomCommands.interactionSource;
-    if (busy) {
+  }, [open, close]);
+  useEffect(() => {
+    const action = (event: Event) => {
+      if (
+        !(event as CustomEvent<HTMLElement>).detail.closest(
+          "[data-board-switcher]",
+        )
+      ) {
+        close();
+      }
+    };
+    window.addEventListener("fcboard:toolbar-action", action);
+    return () => {
+      window.removeEventListener("fcboard:toolbar-action", action);
+      operation.current?.abort();
+      if (dragFrame.current !== undefined) {
+        cancelAnimationFrame(dragFrame.current);
+      }
+    };
+  }, [close]);
+  const run = async (task: (source: AbortSignal) => Promise<void>) => {
+    if (running.current) {
       return;
     }
+    running.current = true;
+    const request = new AbortController();
+    const release = classroomCommands.registerOwner(
+      request.signal,
+      classroomCommands.interactionSource,
+    );
+    operation.current = request;
     setBusy(true);
     setError("");
     try {
-      source?.throwIfAborted();
-      await operation(source);
+      request.signal.throwIfAborted();
+      await task(request.signal);
     } catch (failure) {
-      setError(String(failure));
+      if (!request.signal.aborted) {
+        setError(String(failure));
+      }
     } finally {
+      release();
+      if (operation.current === request) {
+        operation.current = undefined;
+      }
+      running.current = false;
       setBusy(false);
     }
   };
-  const download = async () => {
-    await book.current!.flush();
-    const board = book.current!.value.boards.find(
-      (item) => item.id === value.active,
-    )!;
-    await saveBoardFile([board], board.name);
-  };
   const beginEdit = () => {
-    setOrder(value.boards.map((board) => board.id));
-    setChosen([value.active]);
+    stopDrag(true);
+    setChosen(value.boards.map((board) => board.id));
     setEditing(true);
   };
+  const toggleChosen = (id: string) =>
+    setChosen((previous) =>
+      previous.includes(id)
+        ? previous.filter((selected) => selected !== id)
+        : [...previous, id],
+    );
   const move = (id: string, target: string) => {
-    setOrder((previous) => {
-      const next = [...previous];
-      const from = next.indexOf(id);
-      const to = next.indexOf(target);
-      if (from < 0 || to < 0 || from === to) {
-        return previous;
-      }
-      next.splice(from, 1);
-      next.splice(to, 0, id);
-      return next;
-    });
+    const current = drag.current;
+    if (!current) {
+      return;
+    }
+    const next = [...current.order];
+    const from = next.indexOf(id);
+    const to = next.indexOf(target);
+    if (from < 0 || to < 0 || from === to) {
+      return;
+    }
+    next.splice(from, 1);
+    next.splice(to, 0, id);
+    current.order = next;
+    setOrder(next);
   };
-  const dragMove = (event: PointerEvent) => {
-    if (drag.current?.pointer !== event.pointerId) {
+  const updateDrag = () => {
+    const current = drag.current;
+    if (!current) {
       return;
     }
     const card = document
-      .elementFromPoint(event.clientX, event.clientY)
+      .elementFromPoint(current.x, current.y)
       ?.closest<HTMLElement>("[data-board-id]");
-    if (card?.dataset.boardId) {
-      move(drag.current.id, card.dataset.boardId);
-    }
-    // Keep long lists reachable while a contact is captured by the handle.
-    const list = panel.current;
-    const bounds = list?.getBoundingClientRect();
-    if (list && bounds) {
-      if (event.clientY < bounds.top + 48) {
-        list.scrollTop -= 16;
-      }
-      if (event.clientY > bounds.bottom - 72) {
-        list.scrollTop += 16;
-      }
+    if (card?.dataset.boardId && list.current?.contains(card)) {
+      move(current.id, card.dataset.boardId);
     }
   };
-  const sharePages = (command: "board.share" | "board.saveFile") =>
-    void run(async () => {
-      await classroomCommands.execute({
-        name: command,
-        args: { ids: editing ? chosen : [value.active] },
-      });
-      setOpen(false);
+  const scrollDrag = () => {
+    const current = drag.current;
+    const container = list.current;
+    if (!current || !container) {
+      return;
+    }
+    const bounds = container.getBoundingClientRect();
+    if (current.y < bounds.top + 40) {
+      container.scrollTop -= Math.max(
+        2,
+        Math.min(12, (bounds.top + 40 - current.y) / 4),
+      );
+    } else if (current.y > bounds.bottom - 40) {
+      container.scrollTop += Math.max(
+        2,
+        Math.min(12, (current.y - bounds.bottom + 40) / 4),
+      );
+    }
+    updateDrag();
+    dragFrame.current = requestAnimationFrame(scrollDrag);
+  };
+  const dragMove = (event: ReactPointerEvent) => {
+    if (drag.current?.pointer !== event.pointerId) {
+      return;
+    }
+    drag.current.x = event.clientX;
+    drag.current.y = event.clientY;
+    updateDrag();
+  };
+  const finishDrag = () => {
+    const current = drag.current;
+    stopDrag();
+    if (
+      !current ||
+      current.order.every((id, index) => id === current.before[index])
+    ) {
+      setOrder([]);
+      return;
+    }
+    void run(async (source) => {
+      try {
+        await book.current!.reorder(current.order, source);
+      } finally {
+        setOrder([]);
+      }
     });
-  const visibleBoards = editing
+  };
+  const removePages = (ids: string[]) =>
+    void run(async (source) => {
+      if (ids.includes(book.current!.value.active)) {
+        await leavePresentation(source);
+      }
+      await book.current!.discardMany(ids, source);
+      setChosen([]);
+      setEditing(false);
+    });
+  const sharePages = (command: "board.share" | "board.saveFile") =>
+    void run(async (source) => {
+      await executeBoardCommand(
+        {
+          name: command,
+          args: {
+            ids: value.boards
+              .filter((board) => chosen.includes(board.id))
+              .map((board) => board.id),
+            signal: source,
+          },
+        },
+        source,
+      );
+      if (!source.aborted) {
+        setOpen(false);
+      }
+    });
+  const visibleBoards = order.length
     ? order
         .map((id) => value.boards.find((board) => board.id === id))
         .filter((board): board is NonNullable<typeof board> => !!board)
     : value.boards;
+  const allChosen =
+    value.boards.length > 0 &&
+    value.boards.every((board) => chosen.includes(board.id));
+  const validExportSelection = chosen.length > 0 && chosen.length <= 20;
   return (
     <>
       <PageNavigation />
@@ -414,17 +563,21 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
           >
             <FactoryIcon name="previous" />
           </button>
-
           <button
             data-board-switcher
+            data-menu-toggle
             aria-label={t("fcboard.switch_board")}
             title={t("fcboard.switch_board")}
             aria-expanded={open}
             onClick={() => {
-              if (book.current) {
-                setValue({ ...book.current.value });
+              if (open) {
+                close();
+              } else {
+                if (book.current) {
+                  setValue({ ...book.current.value });
+                }
+                setOpen(true);
               }
-              setOpen(!open);
             }}
           >
             <span className="fc-board-count">
@@ -460,12 +613,12 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
             aria-label={t("fcboard.new_board")}
             title={t("fcboard.new_board")}
             disabled={busy || !value.active}
-            onClick={() => {
+            onClick={() =>
               void run(async (source) => {
                 await leavePresentation(source);
                 await book.current!.create(undefined, source);
-              });
-            }}
+              })
+            }
           >
             <FactoryIcon name="add" />
           </button>
@@ -474,248 +627,263 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
       {(open || error) && (
         <MaterialPanel
           ref={panel}
-          className="fc-board-picker fc-board-preview-list fc-surface"
+          className="fc-board-picker fc-board-preview-list fc-board-panel fc-surface"
           style={panelStyle}
           role="dialog"
           aria-label={t("fcboard.my_boards")}
+          aria-busy={busy}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
-              setOpen(false);
+              if (drag.current) {
+                stopDrag(true);
+                setOrder([]);
+              } else if (editing) {
+                setEditing(false);
+                setChosen([]);
+              } else {
+                close();
+              }
             }
           }}
         >
-          <header>
-            <strong>{t("fcboard.board")}</strong>
-            <button
-              aria-label={t("fcboard.close_board_list")}
-              onClick={() => {
-                setOpen(false);
-                setError("");
-              }}
-            >
-              {CloseIcon}
-            </button>
-          </header>
           <TransientMessage message={error} role="alert" />
-          <div className="fc-board-list">
+          <div
+            ref={list}
+            className="fc-board-list"
+            role="list"
+            aria-label={t("fcboard.my_boards")}
+          >
             {visibleBoards.map((board, index) => (
               <div
                 key={board.id}
                 data-board-id={board.id}
+                role="listitem"
                 className={`fc-board-card ${
                   board.id === value.active ? "is-active" : ""
-                }`}
+                } ${dragging === board.id ? "is-dragging" : ""}`}
               >
-                <button
-                  type="button"
-                  className="fc-board-drag"
-                  disabled={busy}
-                  aria-label={t("fcboard.board_drag_page", { page: index + 1 })}
-                  aria-pressed={dragging === board.id}
-                  onPointerDown={(event) => {
-                    if (event.button !== 0) {
-                      return;
-                    }
-                    if (!editing) {
-                      beginEdit();
-                    }
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    drag.current = {
-                      id: board.id,
-                      pointer: event.pointerId,
-                      before: editing
-                        ? [...order]
-                        : value.boards.map((page) => page.id),
-                    };
-                    setDragging(board.id);
-                  }}
-                  onPointerMove={dragMove}
-                  onPointerUp={() => {
-                    drag.current = undefined;
-                    setDragging(undefined);
-                  }}
-                  onPointerCancel={() => {
-                    if (drag.current) {
-                      setOrder(drag.current.before);
-                    }
-                    drag.current = undefined;
-                    setDragging(undefined);
-                  }}
-                  onKeyDown={(event) => {
-                    if (["ArrowUp", "ArrowDown"].includes(event.key)) {
-                      event.preventDefault();
-                      if (!editing) {
-                        beginEdit();
-                      }
-                      const next =
-                        visibleBoards[
-                          index + (event.key === "ArrowUp" ? -1 : 1)
-                        ];
-                      if (next) {
-                        move(board.id, next.id);
-                      }
-                    }
-                  }}
-                >
-                  ⠿
-                </button>
-                {editing && (
-                  <input
-                    className="fc-board-check"
-                    type="checkbox"
-                    aria-label={t("fcboard.board_select_page", {
+                {!editing && (
+                  <button
+                    type="button"
+                    className="fc-board-drag"
+                    disabled={busy}
+                    aria-label={t("fcboard.board_drag_page", {
                       page: index + 1,
                     })}
-                    checked={chosen.includes(board.id)}
-                    disabled={
-                      busy ||
-                      (!chosen.includes(board.id) && chosen.length >= 20)
-                    }
-                    onChange={(event) =>
-                      setChosen((previous) =>
-                        event.target.checked
-                          ? [...previous, board.id]
-                          : previous.filter((id) => id !== board.id),
-                      )
-                    }
-                  />
+                    aria-pressed={dragging === board.id}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0 || busy) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      const before = value.boards.map((page) => page.id);
+                      drag.current = {
+                        id: board.id,
+                        pointer: event.pointerId,
+                        before,
+                        order: [...before],
+                        x: event.clientX,
+                        y: event.clientY,
+                      };
+                      setOrder(before);
+                      setDragging(board.id);
+                      dragFrame.current = requestAnimationFrame(scrollDrag);
+                    }}
+                    onPointerMove={dragMove}
+                    onPointerUp={finishDrag}
+                    onPointerCancel={() => {
+                      stopDrag(true);
+                      setOrder([]);
+                    }}
+                    onLostPointerCapture={() => {
+                      if (drag.current) {
+                        stopDrag(true);
+                        setOrder([]);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (["ArrowUp", "ArrowDown"].includes(event.key)) {
+                        event.preventDefault();
+                        const next = index + (event.key === "ArrowUp" ? -1 : 1);
+                        if (next < 0 || next >= value.boards.length) {
+                          return;
+                        }
+                        const ids = value.boards.map((page) => page.id);
+                        ids.splice(index, 1);
+                        ids.splice(next, 0, board.id);
+                        void run((source) =>
+                          book.current!.reorder(ids, source),
+                        );
+                      }
+                    }}
+                  >
+                    <img src={boardIcon("drag")} alt="" draggable={false} />
+                  </button>
                 )}
-                <button
-                  className="fc-board-select"
-                  disabled={busy}
-                  aria-label={t("fcboard.switch_to_name", {
-                    name: board.name,
-                  })}
-                  aria-pressed={board.id === value.active}
-                  onClick={() => {
-                    if (editing) {
-                      setChosen((previous) =>
-                        previous.includes(board.id)
-                          ? previous.filter((id) => id !== board.id)
-                          : previous.length < 20
-                          ? [...previous, board.id]
-                          : previous,
-                      );
-                      return;
+                <div className="fc-board-preview">
+                  <button
+                    type="button"
+                    className="fc-board-select"
+                    disabled={busy}
+                    aria-label={t(
+                      editing
+                        ? "fcboard.board_select_page"
+                        : "fcboard.switch_to_name",
+                      editing ? { page: index + 1 } : { name: board.name },
+                    )}
+                    aria-pressed={
+                      editing
+                        ? chosen.includes(board.id)
+                        : board.id === value.active
                     }
-                    void run(async (source) => {
-                      await leavePresentation(source);
-                      await book.current!.switch(board.id, source);
-                      setOpen(false);
-                    });
-                  }}
-                >
-                  <small>{index + 1}</small>
-                  <BoardThumbnail
-                    board={board}
-                    canvasSize={boardCanvasSize(api.getAppState())}
-                  />
-                  <span>
-                    {board.elements
-                      .filter((el) => el.type === "text")
-                      .map((el) => (el.type === "text" ? el.text : ""))
-                      .join(" · ")
-                      .slice(0, 90) ||
-                      (board.elements.length
-                        ? t("fcboard.ink_and_shapes")
-                        : t("fcboard.empty"))}
-                  </span>
-                </button>
-                <input
-                  aria-label={t("fcboard.board_page_name", {
-                    page: index + 1,
-                  })}
-                  defaultValue={board.name}
-                  disabled={busy || editing}
-                  key={`${board.id}:${board.name}`}
-                  onBlur={(event) => {
-                    if (event.target.value !== board.name) {
-                      void run(() =>
-                        book.current!.rename(board.id, event.target.value),
-                      );
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur();
-                    }
-                  }}
-                />
-                <button
-                  className="fc-board-delete"
-                  aria-label={t("fcboard.discard_name", { name: board.name })}
-                  title={t("fcboard.discard")}
-                  disabled={busy || editing}
-                  onClick={() => {
-                    void run((source) =>
-                      book.current!.discard(board.id, source),
-                    );
-                  }}
-                >
-                  {TrashIcon}
-                </button>
+                    onClick={() => {
+                      if (editing) {
+                        toggleChosen(board.id);
+                      } else if (board.id !== value.active) {
+                        void run(async (source) => {
+                          await leavePresentation(source);
+                          await book.current!.switch(board.id, source);
+                        });
+                      }
+                    }}
+                  >
+                    <BoardThumbnail
+                      board={board}
+                      canvasSize={boardCanvasSize(api.getAppState())}
+                    />
+                    <small>{String(index + 1).padStart(2, "0")}</small>
+                  </button>
+                  {editing ? (
+                    <input
+                      className="fc-board-check"
+                      type="checkbox"
+                      aria-label={t("fcboard.board_select_page", {
+                        page: index + 1,
+                      })}
+                      checked={chosen.includes(board.id)}
+                      disabled={busy}
+                      onChange={() => toggleChosen(board.id)}
+                      style={{
+                        backgroundImage: `url("${boardIcon(
+                          chosen.includes(board.id) ? "checked" : "unchecked",
+                        )}")`,
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="fc-board-delete"
+                      aria-label={t("fcboard.discard_name", {
+                        name: board.name,
+                      })}
+                      title={t("fcboard.discard")}
+                      disabled={busy}
+                      onClick={() => removePages([board.id])}
+                    >
+                      <img src={boardIcon("remove")} alt="" draggable={false} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
-          {editing && <p>{t("fcboard.board_sort_hint")}</p>}
           <footer>
-            <button
-              type="button"
-              disabled={busy || (editing ? !chosen.length : !value.active)}
-              onClick={() => sharePages("board.share")}
-            >
-              <FactoryIcon name="qr" />
-              <span>{t("fcboard.share_selected")}</span>
-            </button>
-            <button
-              type="button"
-              disabled={busy || (editing ? !chosen.length : !value.active)}
-              onClick={() => sharePages("board.saveFile")}
-            >
-              <FactoryIcon name="save" />
-              <span>{t("fcboard.save_selected")}</span>
-            </button>
             {editing ? (
-              <>
+              <div className="fc-board-edit-actions">
                 <button
                   type="button"
+                  aria-label={t("labels.selectAll")}
+                  title={t("labels.selectAll")}
+                  aria-pressed={allChosen}
+                  disabled={busy}
+                  onClick={() =>
+                    setChosen(
+                      allChosen ? [] : value.boards.map((board) => board.id),
+                    )
+                  }
+                >
+                  <img
+                    src={boardIcon(allChosen ? "all-active" : "all")}
+                    alt=""
+                  />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("fcboard.save_selected")}
+                  title={
+                    validExportSelection
+                      ? t("fcboard.save_selected")
+                      : t("fcboard.select_1_to_20_pages")
+                  }
+                  disabled={busy || !validExportSelection}
+                  onClick={() => sharePages("board.saveFile")}
+                >
+                  <img src={boardIcon("save")} alt="" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("fcboard.share_selected")}
+                  title={
+                    validExportSelection
+                      ? t("fcboard.share_selected")
+                      : t("fcboard.select_1_to_20_pages")
+                  }
+                  disabled={busy || !validExportSelection}
+                  onClick={() => sharePages("board.share")}
+                >
+                  <img src={boardIcon("share")} alt="" />
+                </button>
+                {chosen.length > 0 && (
+                  <button
+                    type="button"
+                    aria-label={t("labels.delete")}
+                    title={t("labels.delete")}
+                    disabled={busy}
+                    onClick={() => removePages(chosen)}
+                  >
+                    <img src={boardIcon("delete")} alt="" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={t("buttons.cancel")}
+                  title={t("buttons.cancel")}
                   disabled={busy}
                   onClick={() => {
                     setEditing(false);
-                    setDragging(undefined);
-                    drag.current = undefined;
+                    setChosen([]);
                   }}
                 >
-                  {t("buttons.cancel")}
+                  <img src={boardIcon("cancel")} alt="" />
                 </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async (source) => {
-                      await book.current!.reorder(order, source);
-                      setEditing(false);
-                    })
-                  }
-                >
-                  {t("buttons.confirm")}
-                </button>
-              </>
+              </div>
             ) : (
-              <button type="button" disabled={busy} onClick={beginEdit}>
-                {t("fcboard.board_edit")}
+              <button
+                type="button"
+                className="fc-board-edit"
+                disabled={busy}
+                onClick={beginEdit}
+              >
+                <img src={boardIcon("edit")} alt="" />
+                <span>{t("fcboard.board_edit")}</span>
               </button>
             )}
-            <button
-              disabled={busy || !value.active}
-              onClick={() => {
-                void run(download);
-              }}
-            >
-              {save}
-              <span>{t("fcboard.save_a_copy")}</span>
-            </button>
+            {book.current?.canRestoreDiscarded && (
+              <button
+                type="button"
+                className="fc-board-restore"
+                disabled={busy}
+                aria-label={t("buttons.undo")}
+                onClick={() =>
+                  void run((source) => book.current!.restoreDiscarded(source))
+                }
+              >
+                {UndoIcon}
+                <span>{t("buttons.undo")}</span>
+              </button>
+            )}
           </footer>
         </MaterialPanel>
       )}

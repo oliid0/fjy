@@ -1,6 +1,7 @@
+import { Popper } from "@mui/material";
+
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { useEffect, useId, useRef, useState } from "react";
-import { palette } from "@fcboard/fcboard/components/icons";
 
 import { classroomCommands } from "./commands";
 import {
@@ -8,6 +9,8 @@ import {
   spotlightMenu,
   spotlightStar,
 } from "./spotlightGeometry";
+
+import { FactoryColorWheel } from "./FactoryColorWheel";
 
 import "./Spotlight.scss";
 
@@ -19,6 +22,11 @@ export const Spotlight = () => {
   const [shape, setShape] = useState<keyof typeof shapes>("circle");
   const [popup, setPopup] = useState<"shape" | "settings" | null>(null);
   const [alpha, setAlpha] = useState(0);
+  const [picker, setPicker] = useState(false);
+  const [backdrop, setBackdrop] = useState("#000000");
+  const pickerAnchor = useRef<HTMLSpanElement>(null);
+  const popupState = useRef({ popup, picker });
+  popupState.current = { popup, picker };
   const [state, setState] = useState({
     open: false,
     x: window.innerWidth / 2,
@@ -59,7 +67,7 @@ export const Spotlight = () => {
   useEffect(() => {
     const release = classroomCommands.register(
       "tools.spotlight",
-      "聚光灯：args.open=true|false，args.x/y 为屏幕坐标，args.radius=48..600，args.shape=circle|rectangle|triangle|star，args.color=#RRGGBB，args.alpha=0..255（光圈内白色遮罩）；从光圈内按住拖动",
+      "Spotlight: args.open=true|false, x/y in screen coordinates, radius=48..600, shape=circle|rectangle|triangle|star, color=#RRGGBB, alpha=0..255 for the inner white overlay. Drag from inside the aperture.",
       (args) => {
         if (
           (args.shape !== undefined &&
@@ -93,8 +101,15 @@ export const Spotlight = () => {
         pending.current = undefined;
         dragging.current = undefined;
         setPopup(null);
+        setPicker(false);
         if (typeof args.color === "string") {
-          setMaskColor(args.color);
+          const color = args.color.toLowerCase();
+          setMaskColor(color);
+          setBackdrop(
+            ["#000000", "#ff0000", "#00a1ea"].includes(color)
+              ? color
+              : "custom",
+          );
         }
         if (typeof args.alpha === "number") {
           setAlpha(args.alpha);
@@ -116,9 +131,15 @@ export const Spotlight = () => {
     );
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        cancel();
-        setPopup(null);
-        setState((previous) => ({ ...previous, open: false }));
+        event.preventDefault();
+        if (popupState.current.picker) {
+          setPicker(false);
+        } else if (popupState.current.popup) {
+          setPopup(null);
+        } else {
+          cancel();
+          setState((previous) => ({ ...previous, open: false }));
+        }
       }
     };
     const cancel = () => {
@@ -206,6 +227,7 @@ export const Spotlight = () => {
         }
         event.stopPropagation();
         setPopup(null);
+        setPicker(false);
         // MarkSizeView only moves an existing mark when the press starts inside it.
         if (
           dragging.current ||
@@ -351,14 +373,20 @@ export const Spotlight = () => {
           className="fc-spotlight-shape-button"
           aria-label={t("fcboard.spotlight_shape")}
           aria-expanded={popup === "shape"}
-          onClick={() => setPopup(popup === "shape" ? null : "shape")}
+          onClick={() => {
+            setPicker(false);
+            setPopup(popup === "shape" ? null : "shape");
+          }}
         />
         <button
           type="button"
           className="fc-spotlight-settings-button"
           aria-label={t("fcboard.settings")}
           aria-expanded={popup === "settings"}
-          onClick={() => setPopup(popup === "settings" ? null : "settings")}
+          onClick={() => {
+            setPicker(false);
+            setPopup(popup === "settings" ? null : "settings");
+          }}
         />
         {popup && (
           <div
@@ -411,23 +439,35 @@ export const Spotlight = () => {
                       key={color}
                       type="button"
                       aria-label={color}
-                      aria-pressed={maskColor.toLowerCase() === color}
+                      aria-pressed={backdrop === color}
                       data-color={color}
-                      onClick={() => setMaskColor(color)}
+                      onClick={() => {
+                        setPicker(false);
+                        setBackdrop(color);
+                        setMaskColor(color);
+                      }}
                     />
                   ))}
-                  <label
+                  <button
+                    type="button"
                     className="fc-spotlight-color"
-                    title={t("fcboard.colour")}
+                    aria-label={t("fcboard.colour")}
+                    aria-expanded={picker}
+                    aria-pressed={backdrop === "custom"}
+                    onClick={() => {
+                      setBackdrop("custom");
+                      setPicker(!picker);
+                    }}
                   >
-                    {palette}
-                    <input
-                      type="color"
-                      aria-label={t("fcboard.colour")}
-                      value={maskColor}
-                      onChange={(event) => setMaskColor(event.target.value)}
+                    <span
+                      ref={pickerAnchor}
+                      className="fc-spotlight-custom-chip"
+                      style={{
+                        backgroundColor:
+                          backdrop === "custom" ? maskColor : undefined,
+                      }}
                     />
-                  </label>
+                  </button>
                 </div>
                 <label className="fc-spotlight-alpha">
                   {t("labels.opacity")}
@@ -436,12 +476,40 @@ export const Spotlight = () => {
                     min={0}
                     max={255}
                     value={alpha}
+                    aria-label={t("labels.opacity")}
+                    style={{
+                      background: `linear-gradient(to right, #e6e6e6 ${
+                        (alpha / 255) * 100
+                      }%, #8a8a8a ${(alpha / 255) * 100}%)`,
+                    }}
+                    onInput={(event) =>
+                      setAlpha(Number(event.currentTarget.value))
+                    }
                     onChange={(event) => setAlpha(Number(event.target.value))}
                   />
                 </label>
               </>
             )}
           </div>
+        )}
+        {picker && popup === "settings" && (
+          <Popper
+            open
+            anchorEl={pickerAnchor.current}
+            placement="left-start"
+            modifiers={[
+              {
+                name: "flip",
+                options: { fallbackPlacements: ["top-end", "right-start"] },
+              },
+              { name: "preventOverflow", options: { padding: 12 } },
+            ]}
+            className="fc-spotlight-picker"
+            role="dialog"
+            aria-label={t("fcboard.colour")}
+          >
+            <FactoryColorWheel value={maskColor} onChange={setMaskColor} />
+          </Popper>
         )}
         <button
           className="fc-spotlight-close-button"

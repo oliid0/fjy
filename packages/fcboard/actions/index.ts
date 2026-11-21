@@ -15,6 +15,7 @@ export {
   actionChangeSloppiness,
   actionChangeOpacity,
   actionChangeFontSize,
+  actionChangeFontWeight,
   actionChangeFontFamily,
   actionChangeTextAlign,
   actionChangeVerticalAlign,

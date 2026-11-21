@@ -10,6 +10,50 @@ const ink = (x: number): InkInput => [
     [x + 100, 160],
   ],
 ];
+it.each(["text", "language"])(
+  "keeps detached %s strokes in one writing region and leaves a distant word independent",
+  (mode) => {
+    const requests = new InkRequests();
+    const stem = {
+      id: "stem",
+      points: [
+        [100, 140],
+        [100, 180],
+      ] as [number, number][],
+    };
+    const dot = { id: "dot", points: [[100, 120]] as [number, number][] };
+    const distant = new AbortController();
+    const first = new AbortController();
+    requests.reserve(first, [stem.id], [stem.points], mode);
+    requests.reserve(distant, ["distant"], ink(500), mode);
+    requests.revise([dot.points], mode);
+    expect(first.signal.aborted).toBe(true);
+    expect(distant.signal.aborted).toBe(false);
+    expect(
+      requests.source(
+        [stem, dot],
+        mode,
+        (item) => item.id,
+        (items) => items.map((item) => item.points),
+      ),
+    ).toEqual([stem, dot]);
+    const bars = [100, 140, 180].map((y, index) => ({
+      id: String(index),
+      points: [
+        [100, y],
+        [200, y],
+      ] as [number, number][],
+    }));
+    expect(
+      requests.source(
+        bars,
+        mode,
+        (item) => item.id,
+        (items) => items.map((item) => item.points),
+      ),
+    ).toEqual(bars);
+  },
+);
 it("revises only a nearby contact while another pending region keeps its own deadline", () => {
   const requests = new InkRequests();
   const first = new AbortController();
@@ -79,3 +123,18 @@ it("releases relocated ink IDs for a new request while an independent region kee
   expect(staleWork).not.toHaveBeenCalled();
   expect(otherWork).toHaveBeenCalledTimes(1);
 });
+
+it.each(["text", "language"])(
+  "keeps nearby words together but separates adjacent writers in %s",
+  (mode) => {
+    const requests = new InkRequests();
+    const a = { id: "a", points: ink(100)[0] };
+    const b = { id: "b", points: ink(240)[0] };
+    const other = { id: "other", points: ink(650)[0] };
+    const id = (item: typeof a) => item.id;
+    const strokes = (items: readonly typeof a[]) =>
+      items.map((item) => item.points);
+    expect(requests.source([a, b], mode, id, strokes)).toEqual([a, b]);
+    expect(requests.source([a, b, other], mode, id, strokes)).toEqual([other]);
+  },
+);

@@ -1,3 +1,5 @@
+import { t } from "@fcboard/fcboard/i18n";
+
 import { formulaSvg } from "./formula";
 
 export const escapeQuizHTML = (text: string) =>
@@ -54,7 +56,7 @@ export const quizDiagram = (diagram: QuizDiagram) => {
     diagram.caption.length > 500 ||
     /<!DOCTYPE|<!ENTITY/i.test(diagram.svg)
   ) {
-    throw new Error("题目示意图不完整或格式不支持");
+    throw new Error(t("fcboard.aiMessages.quizDiagramIncomplete"));
   }
   const doc = new DOMParser().parseFromString(diagram.svg, "image/svg+xml");
   const root = doc.documentElement;
@@ -102,7 +104,7 @@ export const quizDiagram = (diagram: QuizDiagram) => {
         ),
     )
   ) {
-    throw new Error("题目示意图包含不支持的绘图内容");
+    throw new Error(t("fcboard.aiMessages.quizDiagramUnsupported"));
   }
   return `<figure class="quiz-diagram"><img alt="${escapeQuizHTML(
     diagram.caption,

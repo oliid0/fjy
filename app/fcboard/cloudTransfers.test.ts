@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { transferableAbortController } from "node:util";
 
+import { defaultLang, setLanguage, t } from "@fcboard/fcboard/i18n";
+
 import { convertToFcboardElements } from "@fcboard/fcboard";
 
 import { createShareServer } from "../../services/board-share/server.mjs";
@@ -203,4 +205,27 @@ it("removes a real upload if cancellation arrives after server acceptance but be
     CloudPageShare.start({ endpoint, key }, [image], controller.signal),
   ).rejects.toMatchObject({ name: "AbortError" });
   await vi.waitFor(async () => expect((await realFetch(url)).status).toBe(410));
+});
+
+it("serves Spanish share/password labels and updates the same live share after the board language changes", async () => {
+  await setLanguage({ code: "es-ES", label: "Spanish" });
+  try {
+    const share = await CloudPageShare.start({ endpoint, key }, [image]);
+    const gallery = await (await fetch(share.url)).text();
+    expect(gallery).toContain('lang="es-ES"');
+    expect(gallery).toContain(t("fcboard.remotePages.downloadPage"));
+    await share.setPassword("1234");
+    expect(await (await fetch(share.url)).text()).toContain(
+      t("fcboard.remotePages.password"),
+    );
+    await setLanguage({ code: "zh-CN", label: "Chinese" });
+    await share.setLocalization();
+    const changed = await (await fetch(share.url)).text();
+    expect(changed).toContain('lang="zh-CN"');
+    expect(changed).toContain(t("fcboard.remotePages.password"));
+    expect((await fetch(`${share.url}page-0.png`)).status).toBe(403);
+    await share.end();
+  } finally {
+    await setLanguage(defaultLang);
+  }
 });

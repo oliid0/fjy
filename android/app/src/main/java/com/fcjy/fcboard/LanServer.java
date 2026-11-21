@@ -39,9 +39,9 @@ final class LanServer extends NanoWSD {
 
     /** QRHttpPopu.syncPhotoPwdIfReady / disablePhotoPwd; keep the existing room and QR. */
     synchronized void setPassword(String password) throws Exception {
-        if (room == null) throw new IllegalStateException("协作已结束");
+        if (room == null) throw new IllegalStateException("Collaboration ended");
         if (password == null || (!password.isEmpty() && !password.matches("[0-9]{4}"))) {
-            throw new IllegalArgumentException("密码须为四位数字");
+            throw new IllegalArgumentException("The password must contain four digits");
         }
         if (password.isEmpty()) {
             passwordSalt = null; passwordHash = null;
@@ -60,7 +60,7 @@ final class LanServer extends NanoWSD {
         peers.clear();
     }
     synchronized JSONObject snapshotRoom() throws Exception {
-        if (room == null) throw new IllegalStateException("协作已结束");
+        if (room == null) throw new IllegalStateException("Collaboration ended");
         return room.snapshot();
     }
 
@@ -91,11 +91,11 @@ final class LanServer extends NanoWSD {
     }
 
     synchronized void publish(String text, WebSocket sender) throws Exception {
-        if (text.length() > 20 * 1024 * 1024) throw new IllegalArgumentException("单次同步图片超过 20 MB，请缩小图片");
+        if (text.length() > 20 * 1024 * 1024) throw new IllegalArgumentException("A synchronized image exceeds 20 MB; use a smaller image");
         LanRoom current = room;
-        if (current == null) throw new IllegalStateException("协作未开启");
+        if (current == null) throw new IllegalStateException("Collaboration is not active");
         JSONObject value = new JSONObject(text);
-        if (!"scene".equals(value.optString("kind"))) throw new IllegalArgumentException("同步消息无效");
+        if (!"scene".equals(value.optString("kind"))) throw new IllegalArgumentException("Invalid synchronization message");
         String resolved = current.resolve(value, sender == null).toString();
         for (WebSocket peer : peers) {
             enqueue(peer, resolved);
@@ -116,7 +116,7 @@ final class LanServer extends NanoWSD {
             private void join() throws Exception {
                 synchronized (LanServer.this) {
                     if (room == null || !path.equals("/board/" + roomToken) || peers.size() >= 32) {
-                        closeSocket(this, "会话已结束或人数已满"); return;
+                        closeSocket(this, "The session ended or reached its participant limit"); return;
                     }
                     if (joined) return;
                     writers.put(this, new java.util.concurrent.ThreadPoolExecutor(1, 1, 0, java.util.concurrent.TimeUnit.MILLISECONDS,
@@ -134,19 +134,19 @@ final class LanServer extends NanoWSD {
             }
             @Override protected void onOpen() {
                 if (!sameOrigin(request) || !board || !path.equals("/board/" + roomToken)) {
-                    closeSocket(this, "会话无效或已结束"); return;
+                    closeSocket(this, "The session is invalid or ended"); return;
                 }
                 try {
                     synchronized (LanServer.this) {
                         if (passwordHash == null) join();
                         else {
                             waiting.put(this, () -> {
-                                try { join(); } catch (Exception error) { closeSocket(this, "连接失败"); }
+                                try { join(); } catch (Exception error) { closeSocket(this, "Connection failed"); }
                             });
                             requestPassword(false);
                         }
                     }
-                } catch (Exception error) { closeSocket(this, "连接失败"); }
+                } catch (Exception error) { closeSocket(this, "Connection failed"); }
             }
             @Override protected void onMessage(WebSocketFrame message) {
                 try {
@@ -172,7 +172,7 @@ final class LanServer extends NanoWSD {
                 if (board) { abortSocket(this); notifyPeers(); }
             }
             @Override protected void onPong(WebSocketFrame pong) { }
-            @Override protected void onException(IOException error) { abortSocket(this); closeSocket(this, "连接已断开"); }
+            @Override protected void onException(IOException error) { abortSocket(this); closeSocket(this, "Connection closed"); }
         };
     }
 

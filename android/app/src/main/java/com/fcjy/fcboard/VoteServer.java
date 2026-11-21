@@ -21,10 +21,10 @@ final class VoteServer extends NanoHTTPD {
     private final Map<String, Set<Integer>> ballots = new HashMap<>();
     VoteServer(String page, String topic, JSONArray options, boolean multiple) throws Exception {
         super("0.0.0.0", 0);
-        if (topic == null || topic.trim().isEmpty() || topic.length() > 200 || options == null || options.length() < 2 || options.length() > 8) throw new IllegalArgumentException("请填写主题和2–8个选项");
+        if (topic == null || topic.trim().isEmpty() || topic.length() > 200 || options == null || options.length() < 2 || options.length() > 8) throw new IllegalArgumentException("Enter a topic and 2-8 options");
         for (int i = 0; i < options.length(); i++) {
             Object item = options.get(i);
-            if (!(item instanceof String) || ((String) item).trim().isEmpty() || ((String) item).length() > 120) throw new IllegalArgumentException("每个选项须为1–120字");
+            if (!(item instanceof String) || ((String) item).trim().isEmpty() || ((String) item).length() > 120) throw new IllegalArgumentException("Each option must contain 1-120 characters");
         }
         this.page = page; this.topic = topic.trim(); this.options = new JSONArray(options.toString()); this.multiple = multiple;
     }
@@ -32,21 +32,21 @@ final class VoteServer extends NanoHTTPD {
     synchronized JSONObject snapshot(String voter) throws Exception {
         JSONArray counts = new JSONArray();
         for (int i = 0; i < options.length(); i++) { int count = 0; for (Set<Integer> ballot : ballots.values()) if (ballot.contains(i)) count++; counts.put(count); }
-        return new JSONObject().put("topic", topic).put("options", options).put("multiple", multiple).put("accepting", accepting)
+        return new JSONObject().put("localization", PageLocalization.snapshot()).put("topic", topic).put("options", options).put("multiple", multiple).put("accepting", accepting)
             .put("participants", ballots.size()).put("counts", counts).put("selection", new JSONArray(ballots.getOrDefault(voter, java.util.Collections.emptySet())));
     }
     synchronized void submit(String voter, JSONArray choices) throws Exception {
-        if (!accepting) throw new IllegalStateException("投票已结束");
-        if (voter == null || !voter.matches("[a-f0-9]{32}")) throw new IllegalArgumentException("请重新打开投票页面");
-        if (choices == null || choices.length() < 1 || choices.length() > options.length() || (!multiple && choices.length() != 1)) throw new IllegalArgumentException("请选择有效选项");
+        if (!accepting) throw new IllegalStateException("Voting ended");
+        if (voter == null || !voter.matches("[a-f0-9]{32}")) throw new IllegalArgumentException("Reopen the voting page");
+        if (choices == null || choices.length() < 1 || choices.length() > options.length() || (!multiple && choices.length() != 1)) throw new IllegalArgumentException("Choose valid options");
         Set<Integer> result = new HashSet<>();
         for (int i = 0; i < choices.length(); i++) {
             Object value = choices.get(i);
-            if (!(value instanceof Number)) throw new IllegalArgumentException("选项无效");
+            if (!(value instanceof Number)) throw new IllegalArgumentException("Invalid option");
             int choice = ((Number) value).intValue();
-            if (((Number) value).doubleValue() != choice || choice < 0 || choice >= options.length() || !result.add(choice)) throw new IllegalArgumentException("选项无效");
+            if (((Number) value).doubleValue() != choice || choice < 0 || choice >= options.length() || !result.add(choice)) throw new IllegalArgumentException("Invalid option");
         }
-        if (!ballots.containsKey(voter) && ballots.size() >= 5000) throw new IllegalStateException("参与人数已达上限");
+        if (!ballots.containsKey(voter) && ballots.size() >= 5000) throw new IllegalStateException("The participant limit was reached");
         ballots.put(voter, result);
     }
     private Response json(Response.Status status, JSONObject value) {
@@ -66,7 +66,7 @@ final class VoteServer extends NanoHTTPD {
             String voter = cookie(session);
             String path = session.getUri().substring(root.length());
             if ((path.isEmpty() || path.equals("/")) && session.getMethod() == Method.GET) {
-                Response response = newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", page);
+                Response response = newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", PageLocalization.render(page));
                 if (voter == null) response.addHeader("Set-Cookie", "fcvote=" + UUID.randomUUID().toString().replace("-", "") + "; Path=" + root + "; HttpOnly; SameSite=Strict");
                 response.addHeader("Cache-Control", "no-store");
                 response.addHeader("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
@@ -75,11 +75,11 @@ final class VoteServer extends NanoHTTPD {
             if (path.equals("/api") && session.getMethod() == Method.GET) return json(Response.Status.OK, snapshot(voter));
             if (path.equals("/vote") && session.getMethod() == Method.POST) {
                 String origin = session.getHeaders().get("origin");
-                if (origin != null && !origin.equals("http://" + session.getHeaders().get("host"))) throw new IllegalArgumentException("请求来源无效");
+                if (origin != null && !origin.equals("http://" + session.getHeaders().get("host"))) throw new IllegalArgumentException("Invalid request origin");
                 int length = Integer.parseInt(session.getHeaders().getOrDefault("content-length", "0"));
-                if (length < 1 || length > 4096) throw new IllegalArgumentException("请求大小无效");
+                if (length < 1 || length > 4096) throw new IllegalArgumentException("Invalid request size");
                 byte[] body = new byte[length]; int offset = 0;
-                while (offset < length) { int count = session.getInputStream().read(body, offset, length - offset); if (count < 0) throw new IllegalArgumentException("请求不完整"); offset += count; }
+                while (offset < length) { int count = session.getInputStream().read(body, offset, length - offset); if (count < 0) throw new IllegalArgumentException("Incomplete request"); offset += count; }
                 submit(voter, new JSONObject(new String(body, StandardCharsets.UTF_8)).getJSONArray("choices"));
                 return json(Response.Status.OK, snapshot(voter));
             }

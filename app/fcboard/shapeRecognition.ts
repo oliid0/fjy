@@ -142,6 +142,35 @@ export const fitInkShape = (strokes: InkInput): RecognizedShape | undefined => {
   const input = strokes.map(
     (stroke) => simplify(stroke, diagonal * 0.012) as InkPoint[],
   );
+  // A tilted square/rectangle is still a rectangle. Preserve its measured
+  // corners rather than choosing between equivalent rotated diamond templates.
+  const contour = input.length === 1 ? input[0] : undefined;
+  if (contour?.length === 5 && isShapeClosed(strokes)) {
+    const corners = contour.slice(0, -1);
+    const edges = corners.map(
+      (point, index): InkPoint => [
+        corners[(index + 1) % 4][0] - point[0],
+        corners[(index + 1) % 4][1] - point[1],
+      ],
+    );
+    if (
+      edges.every(([x, y], index) => {
+        const next = edges[(index + 1) % 4];
+        const length = Math.hypot(x, y);
+        return (
+          length > diagonal * 0.1 &&
+          Math.abs(x * next[0] + y * next[1]) <
+            length * Math.hypot(...next) * 0.15
+        );
+      })
+    ) {
+      return {
+        kind: "shape",
+        shape: "rectangle",
+        points: [...corners, corners[0]],
+      };
+    }
+  }
   const inkSegments = segments(input);
   const inkSamples = samples(inkSegments, diagonal / 48);
   if (!inkSamples.length) {
@@ -225,11 +254,7 @@ export const fitInkShape = (strokes: InkInput): RecognizedShape | undefined => {
       paths.push([0, 2, 4, 1, 3, 0].map((i) => tips[i]));
     }
     for (const candidate of paths) {
-      for (
-        let rotation = 0;
-        rotation < (kind === "rectangle" ? 1 : 24);
-        rotation++
-      ) {
+      for (let rotation = 0; rotation < 24; rotation++) {
         const angle = (rotation * Math.PI) / 12;
         const rotated = candidate.map(
           ([x, y]): InkPoint => [
@@ -280,6 +305,12 @@ export const recognizedShapeSkeleton = (
   if (result.shape === "line" || result.shape === "arrow") {
     const first = strokes[0][0];
     const last = strokes.at(-1)!.at(-1)!;
+    if (
+      Math.hypot(last[0] - first[0], last[1] - first[1]) <
+      Math.hypot(box.width, box.height) * 0.5
+    ) {
+      throw new Error("Shape endpoints do not describe a line or arrow");
+    }
     return {
       type: result.shape,
       x: first[0],

@@ -1,8 +1,13 @@
-import { factoryInkUnit } from "./factoryInk";
+import { factoryInkDashes, factoryInkUnit } from "./factoryInk";
 
 import type { FcboardFreeDrawElement } from "./types";
 
-export type BrushSample = { x: number; y: number; width: number };
+export type BrushSample = {
+  x: number;
+  y: number;
+  width: number;
+  sourceIndex?: number;
+};
 
 export const isFactoryBrush = (element: FcboardFreeDrawElement) =>
   element.customData?.fcInk?.version === 3 &&
@@ -165,6 +170,7 @@ export const factoryBrushSamples = (
       x,
       y,
       width: widths[index],
+      sourceIndex: index,
     }));
   }
   const mid = (a: BrushSample, b: BrushSample): BrushSample => ({
@@ -195,6 +201,7 @@ export const factoryBrushSamples = (
       x: element.points[index][0],
       y: element.points[index][1],
       width: widths[index],
+      sourceIndex: index,
     });
   }
   const from = Math.max(1, shared);
@@ -225,6 +232,7 @@ export const factoryBrushSamples = (
         x: a * a * source.x + 2 * a * t * control.x + t * t * destination.x,
         y: a * a * source.y + 2 * a * t * control.y + t * t * destination.y,
         width: source.width + (destination.width - source.width) * t,
+        sourceIndex: i,
       });
     }
     source = destination;
@@ -248,16 +256,31 @@ export const traceFactoryBrush = (
   const angle = Number.isFinite(element.customData?.fcInk?.brushAngle)
     ? element.customData!.fcInk.brushAngle
     : 0;
-  if (end && !from && samples[0].width > 0) {
+  const pattern =
+    element.strokeStyle === "solid" ? undefined : factoryInkDashes(element);
+  const dash = pattern ? pattern[0] || 2 * unit : 0;
+  const cycle = pattern ? dash + pattern[1] : 1;
+  let distance = element.customData?.fcInk?.dashOffset || 0;
+  const visible = (position: number) =>
+    !pattern || ((position % cycle) + cycle) % cycle <= dash;
+  // Solid writing keeps its existing incremental hot path. Only styled brushes
+  // need the prefix distance to preserve dash phase in Canvas and SVG alike.
+  if (pattern) {
+    for (let i = 1; i < Math.max(1, from); i++) {
+      distance += Math.hypot(
+        samples[i].x - samples[i - 1].x,
+        samples[i].y - samples[i - 1].y,
+      );
+    }
+  }
+  if (end && !from && samples[0].width > 0 && visible(distance)) {
     stamp(samples[0], angle);
   }
   for (let i = Math.max(1, from); i < end; i++) {
     const a = samples[i - 1];
     const b = samples[i];
-    const steps = Math.min(
-      4096,
-      Math.floor(Math.hypot(b.x - a.x, b.y - a.y) / (2 * unit)) + 1,
-    );
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.min(4096, Math.floor(length / (2 * unit)) + 1);
     for (let step = 1; step <= steps; step++) {
       const t = step / steps;
       const point = {
@@ -265,9 +288,12 @@ export const traceFactoryBrush = (
         y: a.y + (b.y - a.y) * t,
         width: a.width + (b.width - a.width) * t,
       };
-      if (point.width > 0) {
+      if (point.width > 0 && visible(distance + length * t)) {
         stamp(point, angle);
       }
+    }
+    if (pattern) {
+      distance += length;
     }
   }
 };

@@ -1,6 +1,6 @@
 import { type GlobalPoint, type LineSegment, pointFrom } from "@fcboard/math";
 
-import { getElementLineSegments, getCommonBounds } from "@fcboard/element";
+import { getCommonBounds, getWhiteboardCompositeKey } from "@fcboard/element";
 import { LinearElementEditor } from "@fcboard/element";
 import {
   isFrameLikeElement,
@@ -13,7 +13,7 @@ import { selectGroupsForSelectedElements } from "@fcboard/element";
 
 import { getContainerElement } from "@fcboard/element";
 
-import { arrayToMap, easeOut, isShallowEqual } from "@fcboard/common";
+import { easeOut } from "@fcboard/common";
 
 import type {
   FcboardElement,
@@ -33,18 +33,12 @@ import type { RegionBounds } from "./region";
 import type App from "../components/App";
 import type { AppState } from "../types";
 
-type CanvasTranslate = {
-  scrollX: number;
-  scrollY: number;
-  zoom: number;
-};
-
 export class LassoTrail extends AnimatedTrail {
   private intersectedElements: Set<FcboardElement["id"]> = new Set();
   private enclosedElements: Set<FcboardElement["id"]> = new Set();
   private elementsSegments: Map<string, LineSegment<GlobalPoint>[]> | null =
     null;
-  private canvasTranslate: CanvasTranslate | null = null;
+  private stopGeometry?: () => void;
   private keepPreviousSelection: boolean = false;
 
   constructor(animationFrameHandler: AnimationFrameHandler, app: App) {
@@ -78,6 +72,22 @@ export class LassoTrail extends AnimatedTrail {
     this.endPath();
 
     super.startPath(x, y);
+    this.elementsSegments = new Map();
+    this.stopGeometry = this.app.scene.onMutation((updated, removed) => {
+      if (!this.elementsSegments?.size) {
+        return;
+      }
+      removed.forEach((id) => this.elementsSegments?.delete(id));
+      for (const element of updated) {
+        this.elementsSegments?.delete(element.id);
+        element.boundElements?.forEach((bound) =>
+          this.elementsSegments?.delete(bound.id),
+        );
+        if (element.type === "text" && element.containerId) {
+          this.elementsSegments?.delete(element.containerId);
+        }
+      }
+    });
     this.intersectedElements.clear();
     this.enclosedElements.clear();
 
@@ -111,27 +121,18 @@ export class LassoTrail extends AnimatedTrail {
       }
 
       if (this.app.props.UIOptions.unifiedToolbar) {
-        const composite = (element: FcboardElement) => {
-          const data = element.customData;
-          return data?.fcWidget
-            ? `widget:${data.fcWidget.id}`
-            : data?.fcInsertion
-            ? `insertion:${data.fcInsertion.id}`
-            : data?.fcPlot
-            ? `plot:${data.fcPlot.id}`
-            : data?.fcLanguage
-            ? `language:${data.fcLanguage.group}`
-            : undefined;
-        };
         const groups = new Set(
           this.app.scene
             .getNonDeletedElements()
             .filter((element) => nextSelectedElementIds[element.id])
-            .map(composite)
+            .map(getWhiteboardCompositeKey)
             .filter(Boolean),
         );
         for (const element of this.app.scene.getNonDeletedElements()) {
-          if (!element.locked && groups.has(composite(element))) {
+          if (
+            !element.locked &&
+            groups.has(getWhiteboardCompositeKey(element))
+          ) {
             nextSelectedElementIds[element.id] = true;
           }
         }
@@ -250,34 +251,31 @@ export class LassoTrail extends AnimatedTrail {
           lassoPath: path,
           elements: this.app.visibleElements,
           elementsMap,
-          elementsSegments: new Map(
-            this.app.visibleElements.map((element) => [
-              element.id,
-              getElementLineSegments(element, elementsMap),
-            ]),
-          ),
+          elementsSegments: new Map(),
           intersectedElements: new Set(),
           enclosedElements: new Set(),
         });
     this.selectElementsFromIds(selectedElementIds, bounds, path);
   };
 
+  /** Native input supplies the completed path without replaying move events. */
+  selectPath = (path: GlobalPoint[]) => {
+    const bounds = circleRegion(
+      path,
+      this.getViewport(),
+      this.app.state.zoom.value,
+    );
+    if (bounds) {
+      this.selectRegion(bounds, path);
+    }
+  };
+
   finishPath = () => {
     const path = super.getCurrentTrail()?.originalPoints;
     if (path && this.app.props.UIOptions.unifiedToolbar) {
-      const bounds = circleRegion(
-        path,
-        this.getViewport(),
-        this.app.state.zoom.value,
-      );
-      if (bounds) {
-        // SelectCacheLayer closes the actual gesture on lift. The padded
-        // rectangle is the operation frame, never the selection geometry.
-        this.selectRegion(
-          bounds,
-          path.map(([x, y]) => pointFrom<GlobalPoint>(x, y)),
-        );
-      }
+      // SelectCacheLayer closes the actual gesture on lift. The padded
+      // rectangle is the operation frame, never the selection geometry.
+      this.selectPath(path.map(([x, y]) => pointFrom<GlobalPoint>(x, y)));
     }
     this.endPath();
   };
@@ -287,24 +285,7 @@ export class LassoTrail extends AnimatedTrail {
       .getCurrentTrail()
       ?.originalPoints?.map((p) => pointFrom<GlobalPoint>(p[0], p[1]));
 
-    const currentCanvasTranslate: CanvasTranslate = {
-      scrollX: this.app.state.scrollX,
-      scrollY: this.app.state.scrollY,
-      zoom: this.app.state.zoom.value,
-    };
-
-    if (
-      !this.elementsSegments ||
-      !isShallowEqual(currentCanvasTranslate, this.canvasTranslate ?? {})
-    ) {
-      this.canvasTranslate = currentCanvasTranslate;
-      this.elementsSegments = new Map();
-      const visibleElementsMap = arrayToMap(this.app.visibleElements);
-      for (const element of this.app.visibleElements) {
-        const segments = getElementLineSegments(element, visibleElementsMap);
-        this.elementsSegments.set(element.id, segments);
-      }
-    }
+    this.elementsSegments ||= new Map();
 
     if (lassoPath) {
       const { selectedElementIds } = getLassoSelectedElementIds({
@@ -332,6 +313,8 @@ export class LassoTrail extends AnimatedTrail {
   };
 
   endPath(): void {
+    this.stopGeometry?.();
+    this.stopGeometry = undefined;
     super.endPath();
     super.clearTrails();
     this.intersectedElements.clear();

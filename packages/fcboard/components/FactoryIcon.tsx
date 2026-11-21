@@ -1,11 +1,29 @@
+import { memo, useId } from "react";
+import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
+
+import type { NativeInkPalette } from "@fcboard/element/nativeInkColor";
+
 import { xbhToolbarIcons } from "./xbhToolbarIcons";
-import multiPoint from "./xbh-toolbar-assets/multi.png";
-import singlePoint from "./xbh-toolbar-assets/single.png";
+
+import type { CSSProperties } from "react";
 
 /** HWhiteBoard 5.42 vector drawables, decoded from the intact device APK.
  * Keep viewport/path geometry; Android bottom_bar_icon_tint becomes currentColor.
  * Source and device measurements: docs/apk-alignment.md. */
 const icons = {
+  curtain: {
+    viewBox: "0 0 52 52",
+    paths: [
+      {
+        d: "M5 9h42M8 9v34l10-6 8 6 8-6 10 6V9M18 10v25M26 10v31M34 10v25",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "3.25",
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+      },
+    ],
+  },
   pen: {
     viewBox: "0 0 52.0 52.0",
     paths: [
@@ -526,7 +544,7 @@ const icons = {
     ],
   },
   spotlight: {
-    viewBox: "0 0 36.0 36.0",
+    viewBox: "0.206 -0.735 36 36",
     paths: [
       {
         fill: "none",
@@ -1453,38 +1471,59 @@ const icons = {
   },
 } as const;
 
-export const FactoryIcon = ({
-  name,
-}: {
-  name: keyof typeof icons | keyof typeof xbhToolbarIcons;
-}) => {
-  if (name === "multi" || name === "single") {
-    return (
-      <img
-        className="fc-toolbar-icon"
-        src={name === "multi" ? multiPoint : singlePoint}
-        alt=""
-        aria-hidden="true"
-      />
-    );
-  }
-  const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
-  if (original) {
+export const FactoryIcon = memo(
+  ({
+    name,
+    className,
+    style,
+    gradient,
+  }: {
+    name: keyof typeof icons | keyof typeof xbhToolbarIcons;
+    className?: string;
+    style?: CSSProperties;
+    gradient?: NativeInkPalette;
+  }) => {
+    const id = useId().replace(/:/g, "");
+    const original = xbhToolbarIcons[name as keyof typeof xbhToolbarIcons];
+    if (original) {
+      const colors = gradient && nativeInkPalettes[gradient];
+      const body = colors
+        ? `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">${colors
+            .map(
+              (color, index) =>
+                `<stop offset="${
+                  index / (colors.length - 1)
+                }" stop-color="${color}"/>`,
+            )
+            .join("")}</linearGradient></defs>${original.body.replace(
+            /currentColor/g,
+            `url(#${id})`,
+          )}`
+        : original.body;
+      return (
+        <svg
+          className={className}
+          style={style}
+          viewBox={original.viewBox}
+          aria-hidden="true"
+          focusable="false"
+          dangerouslySetInnerHTML={{ __html: body }}
+        />
+      );
+    }
+    const icon = icons[name as keyof typeof icons];
     return (
       <svg
-        viewBox={original.viewBox}
+        className={className}
+        style={style}
+        viewBox={icon.viewBox}
         aria-hidden="true"
         focusable="false"
-        dangerouslySetInnerHTML={{ __html: original.body }}
-      />
+      >
+        {icon.paths.map((path, index) => (
+          <path key={index} {...path} />
+        ))}
+      </svg>
     );
-  }
-  const icon = icons[name as keyof typeof icons];
-  return (
-    <svg viewBox={icon.viewBox} aria-hidden="true" focusable="false">
-      {icon.paths.map((path, index) => (
-        <path key={index} {...path} />
-      ))}
-    </svg>
-  );
-};
+  },
+);

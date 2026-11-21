@@ -13,12 +13,18 @@ export const FloatingToolPanel = ({
   children,
   fullscreen = false,
   onClose,
+  className,
+  headerActions,
+  hideHeader = false,
 }: {
   title: string;
   width: number;
   fullscreen?: boolean;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
+  headerActions?: ReactNode;
+  hideHeader?: boolean;
 }) => {
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<
@@ -58,7 +64,7 @@ export const FloatingToolPanel = ({
   return (
     <MaterialPanel
       ref={panel}
-      className="fc-floating-tool"
+      className={`fc-floating-tool ${className || ""}`}
       role="dialog"
       aria-label={title}
       style={{
@@ -81,77 +87,80 @@ export const FloatingToolPanel = ({
         }
       }}
     >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "4px 12px",
-          touchAction: "none",
-          cursor: "move",
-        }}
-        onPointerDown={(event) => {
-          if ((event.target as Element).closest("button")) {
-            return;
-          }
-          const rect = panel.current!.getBoundingClientRect();
-          drag.current = {
-            id: event.pointerId,
-            x: event.clientX,
-            y: event.clientY,
-            left: rect.left,
-            top: rect.top,
-          };
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-          event.stopPropagation();
-        }}
-        onPointerMove={(event) => {
-          const start = drag.current;
-          if (start?.id !== event.pointerId || !panel.current) {
-            return;
-          }
-          const rect = panel.current.getBoundingClientRect();
-          panel.current.style.left = `${Math.max(
-            8,
-            Math.min(
-              innerWidth - rect.width - 8,
-              start.left + event.clientX - start.x,
-            ),
-          )}px`;
-          panel.current.style.top = `${Math.max(
-            8,
-            Math.min(
-              innerHeight - rect.height - 8,
-              start.top + event.clientY - start.y,
-            ),
-          )}px`;
-        }}
-        onPointerUp={() => {
-          drag.current = undefined;
-        }}
-        onPointerCancel={() => {
-          drag.current = undefined;
-        }}
-        onLostPointerCapture={() => {
-          drag.current = undefined;
-        }}
-      >
-        <strong>{title}</strong>
-        <button
-          type="button"
-          aria-label={t("buttons.close")}
-          onClick={onClose}
+      {!hideHeader && (
+        <header
           style={{
-            width: 44,
-            height: 44,
-            background: "transparent",
-            border: 0,
-            color: "inherit",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "4px 12px",
+            touchAction: "none",
+            cursor: "move",
+          }}
+          onPointerDown={(event) => {
+            if ((event.target as Element).closest("button")) {
+              return;
+            }
+            const rect = panel.current!.getBoundingClientRect();
+            drag.current = {
+              id: event.pointerId,
+              x: event.clientX,
+              y: event.clientY,
+              left: rect.left,
+              top: rect.top,
+            };
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            event.stopPropagation();
+          }}
+          onPointerMove={(event) => {
+            const start = drag.current;
+            if (start?.id !== event.pointerId || !panel.current) {
+              return;
+            }
+            const rect = panel.current.getBoundingClientRect();
+            panel.current.style.left = `${Math.max(
+              8,
+              Math.min(
+                innerWidth - rect.width - 8,
+                start.left + event.clientX - start.x,
+              ),
+            )}px`;
+            panel.current.style.top = `${Math.max(
+              8,
+              Math.min(
+                innerHeight - rect.height - 8,
+                start.top + event.clientY - start.y,
+              ),
+            )}px`;
+          }}
+          onPointerUp={() => {
+            drag.current = undefined;
+          }}
+          onPointerCancel={() => {
+            drag.current = undefined;
+          }}
+          onLostPointerCapture={() => {
+            drag.current = undefined;
           }}
         >
-          {CloseIcon}
-        </button>
-      </header>
+          <strong>{title}</strong>
+          {headerActions}
+          <button
+            type="button"
+            aria-label={t("buttons.close")}
+            onClick={onClose}
+            style={{
+              width: 44,
+              height: 44,
+              background: "transparent",
+              border: 0,
+              color: "inherit",
+            }}
+          >
+            {CloseIcon}
+          </button>
+        </header>
+      )}
       {children}
     </MaterialPanel>
   );

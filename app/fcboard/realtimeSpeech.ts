@@ -1,5 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
+import { recognitionPattern } from "./recognitionVocabulary";
+
 import { startCloudSpeech } from "./cloudSpeech";
 import { startLocalSpeech } from "./localSpeech";
 import { currentSettings } from "./settings";
@@ -58,7 +60,7 @@ export const startRealtimeSpeech = async (
         // or configuration failures fall back immediately and remain visible.
         const retryCloud =
           reconnects++ < 1 &&
-          !/key|密钥|权限|resource|资源|HTTP [4]|unavailable|unsupported|not installed|missing/i.test(
+          !recognitionPattern("realtimeSpeech_0").test(
             error instanceof Error ? error.message : String(error),
           );
         try {
@@ -125,7 +127,9 @@ export const startRealtimeSpeech = async (
         },
       );
     });
-    return attempt.opening.then(() => {});
+    return attempt.opening.then(async (handle) => {
+      await handle.ready;
+    });
   };
   const cloud =
     currentSettings().speech === "cloud" && navigator.onLine !== false;

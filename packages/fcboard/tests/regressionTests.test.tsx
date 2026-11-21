@@ -177,6 +177,8 @@ describe("regression tests", () => {
     UI.clickOnTestId("color-blue");
     expect(API.getSelectedElement().backgroundColor).toBe("#ffc9c9");
     expect(API.getSelectedElement().strokeColor).toBe("#1971c2");
+    expect(h.state.currentItemBackgroundColor).toBe("transparent");
+    expect(h.state.currentItemStrokeColor).toBe("#1e1e1e");
   });
 
   it("click on an element and drag it", () => {

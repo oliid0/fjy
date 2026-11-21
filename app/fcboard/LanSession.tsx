@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import { recognitionVocabulary } from "./recognitionVocabulary";
+
 import { TransientMessage } from "./TransientMessage";
 
 import { MaterialPanel } from "./MaterialPanel";
@@ -19,11 +21,17 @@ import {
 } from "./cloudShare";
 import cloudIcon from "./factory-share-icons/cloud.svg";
 import localIcon from "./factory-share-icons/local.svg";
-import closeIcon from "./factory-setting-icons/close.svg";
+import closeIcon from "./native-toolbar-assets/dialog-close.svg";
 import "./LiveShare.scss";
 
 import { classroomCommands } from "./commands";
-import { collaborationAddress } from "./collaborationAddress";
+import {
+  collaborationAddress,
+  isLocalCollaborationCode,
+} from "./collaborationAddress";
+import { createLanSocket } from "./lanSocket";
+
+import type { LanSocket } from "./lanSocket";
 
 import type { ScenePacket } from "./sceneSync";
 
@@ -68,15 +76,17 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
+  const [roomCode, setRoomCode] = useState("");
   const [sharing, setSharing] = useState(false);
   const [peers, setPeers] = useState(0);
   const [connection, setConnection] = useState("");
   const [authentication, setAuthentication] = useState(false);
   const [guestPassword, setGuestPassword] = useState("");
   const guestCode = useRef("");
+  const guestRoomCode = useRef("");
   const awaitingPassword = useRef(false);
   const sync = useRef<LiveSceneSync | null>(null);
-  const socket = useRef<WebSocket | null>(null);
+  const socket = useRef<LanSocket | null>(null);
   const retry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const alive = useRef(true);
   const joined = useRef(false);
@@ -107,6 +117,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
     setView("entry");
     setJoinAddress(undefined);
     setUrls([]);
+    setRoomCode("");
     setConnection("");
     setPeers(0);
     setAuthentication(false);
@@ -224,6 +235,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
         request.signal.throwIfAborted();
         hosted.current = true;
         setUrls(result.urls);
+        setRoomCode(result.code || "");
       }
       setMode(nextMode);
       lifetime.current = request;
@@ -303,6 +315,14 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
       if (cloud.current) {
         cloud.current.snapshot();
       } else if (native && hosted.current) {
+        void Network.collaborationInfo()
+          .then((info) => {
+            if (alive.current && hosted.current && info.sharing) {
+              setUrls(info.urls);
+              setRoomCode(info.code || "");
+            }
+          })
+          .catch((error) => setError(failureMessage(error)));
         void Network.getScene()
           .then((packet) => sync.current?.receive(packet))
           .catch((error) => setError(failureMessage(error)));
@@ -351,7 +371,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   }, [api, native, leave]);
 
   useEffect(() => {
-    const destination = new URL(joinAddress || location.href);
+    let destination = new URL(joinAddress || location.href);
     const token = /^#lan=([a-f0-9]{32})$/.exec(destination.hash)?.[1];
     if (!token || (native && !joinAddress)) {
       return;
@@ -421,7 +441,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
           const address = new URL(`board/${token}`, destination);
           address.protocol = destination.protocol === "https:" ? "wss:" : "ws:";
           address.hash = "";
-          const transport = new WebSocket(address.href);
+          const transport = createLanSocket(address.href);
           socket.current = transport;
           const heartbeat = setInterval(() => {
             if (transport.readyState === WebSocket.OPEN) {
@@ -468,6 +488,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
               }
               if (packet.kind === "initial") {
                 setAuthentication(false);
+                setPanel(null);
                 if (awaitingPassword.current) {
                   awaitingPassword.current = false;
                   setPanel(null);
@@ -486,7 +507,10 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
             if (!joined.current || cancelled) {
               return;
             }
-            if (event.code === 1000 && !["连接已断开"].includes(event.reason)) {
+            if (
+              event.code === 1000 &&
+              !recognitionVocabulary.normalCloseReasons.includes(event.reason)
+            ) {
               joined.current = false;
               controller.dispose();
               setSharing(false);
@@ -497,8 +521,45 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
               return;
             }
             setConnection("connection_interrupted_reconnecting");
+            const reconnect = async () => {
+              if (native && guestRoomCode.current) {
+                const id = crypto.randomUUID();
+                const cancel = () => {
+                  void Network.cancelCollaborationLookup({ id }).catch(
+                    () => {},
+                  );
+                };
+                request.signal.addEventListener("abort", cancel, {
+                  once: true,
+                });
+                try {
+                  const resolved = await Network.resolveCollaborationCode({
+                    id,
+                    code: guestRoomCode.current,
+                  });
+                  if (cancelled || request.signal.aborted) {
+                    return;
+                  }
+                  const next = new URL(
+                    collaborationAddress(resolved.url, destination.href),
+                  );
+                  if (next.hash !== destination.hash) {
+                    throw new Error(t("fcboard.collab_code_invalid"));
+                  }
+                  destination = next;
+                } catch (error) {
+                  if (cancelled || request.signal.aborted) {
+                    return;
+                  }
+                  setError(failureMessage(error));
+                } finally {
+                  request.signal.removeEventListener("abort", cancel);
+                }
+              }
+              connect();
+            };
             retry.current = setTimeout(
-              connect,
+              () => void reconnect(),
               Math.min(10000, 500 * 2 ** Math.min(attempts++, 5)),
             );
           };
@@ -535,7 +596,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
     if (starting.current) {
       starting.current.abort();
     }
-    if (joinAddress && !sharing) {
+    if (!sharing) {
       guestRequest.current?.abort();
       setJoinAddress(undefined);
       setBusy(false);
@@ -552,7 +613,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
     const registrations = [
       classroomCommands.register(
         "network.panel",
-        "打开白板实时协作浮层，args.panel=collab",
+        "Open the live board collaboration panel; args.panel=collab.",
         (args) => {
           if (args.panel !== undefined && args.panel !== "collab") {
             throw new Error(t("fcboard.this_panel_does_not_exist"));
@@ -562,11 +623,21 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
           }
           setPanel("collab");
           setError("");
+          if (native && hosted.current) {
+            void Network.collaborationInfo()
+              .then((info) => {
+                if (alive.current && hosted.current && info.sharing) {
+                  setUrls(info.urls);
+                  setRoomCode(info.code || "");
+                }
+              })
+              .catch((failure) => setError(failureMessage(failure)));
+          }
         },
       ),
       classroomCommands.register(
         "collaboration.start",
-        "开启白板实时协作，args.mode=local|cloud（默认 local）；cloud 先用 collaboration.configure 设置实际服务地址与密钥。两种模式都使用原二维码密码开关及双向场景编辑。",
+        "Start live collaboration; args.mode=local|cloud, default local. Configure the actual cloud endpoint/key with collaboration.configure first. Both modes preserve QR/password controls and bidirectional scene editing.",
         (args) => {
           const mode = args.mode === undefined ? "local" : args.mode;
           if (mode !== "local" && mode !== "cloud") {
@@ -580,12 +651,12 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
       ),
       classroomCommands.register(
         "collaboration.stop",
-        "结束或离开当前白板协作，保留本机内容",
+        "End or leave collaboration, preserving local content.",
         leave,
       ),
       classroomCommands.register(
         "collaboration.configure",
-        "配置实时分享云端连接：args.endpoint 和 args.key，自动保存；密钥只保留当前会话，不进入公开上下文。",
+        "Configure the cloud live-share connection with args.endpoint and args.key; save automatically. Keep the key in this session only and out of public context.",
         (args) => {
           if (
             starting.current ||
@@ -617,6 +688,7 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
         urls: sharing ? urls : [],
         collaborating: hosted.current || !!cloud.current || joined.current,
         hosting: hosted.current || !!cloud.current,
+        code: roomCode || undefined,
         peers,
         connection,
       })),
@@ -625,7 +697,10 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
   });
   let joinCandidate = "";
   try {
-    joinCandidate = collaborationAddress(joinInput, config.endpoint);
+    joinCandidate =
+      native && isLocalCollaborationCode(joinInput)
+        ? joinInput.trim()
+        : collaborationAddress(joinInput, config.endpoint);
   } catch {
     /* Keep Join disabled until valid. */
   }
@@ -719,14 +794,15 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
                       protection={protection}
                     />
                   )}
-                  {urls[0] &&
-                    /^#lan=[a-f0-9]{32}$/.test(new URL(urls[0]).hash) && (
-                      <p className="fc-collab-room">
-                        {t("fcboard.collab_room", {
-                          code: new URL(urls[0]).hash.slice(5),
-                        })}
-                      </p>
-                    )}
+                  {(roomCode ||
+                    (urls[0] &&
+                      /^#lan=[a-f0-9]{32}$/.test(new URL(urls[0]).hash))) && (
+                    <p className="fc-collab-room">
+                      {t("fcboard.collab_room", {
+                        code: roomCode || new URL(urls[0]).hash.slice(5),
+                      })}
+                    </p>
+                  )}
                   <button disabled={busy} onClick={() => void run(leave)}>
                     {hosted.current || cloud.current
                       ? t("fcboard.end_collaboration")
@@ -761,7 +837,51 @@ export const LanSession = ({ api }: { api: FcboardImperativeAPI }) => {
                     if (joinCandidate && !busy && !sharing) {
                       setError("");
                       setConnection("joining");
-                      setJoinAddress(joinCandidate);
+                      guestRoomCode.current = isLocalCollaborationCode(
+                        joinCandidate,
+                      )
+                        ? joinCandidate
+                        : "";
+                      if (!isLocalCollaborationCode(joinCandidate)) {
+                        setJoinAddress(joinCandidate);
+                      } else {
+                        void run(async () => {
+                          const request = new AbortController();
+                          const id = crypto.randomUUID();
+                          guestRequest.current?.abort();
+                          guestRequest.current = request;
+                          const abort = () => {
+                            void Network.cancelCollaborationLookup({
+                              id,
+                            }).catch(() => {});
+                          };
+                          request.signal.addEventListener("abort", abort, {
+                            once: true,
+                          });
+                          try {
+                            const resolved =
+                              await Network.resolveCollaborationCode({
+                                id,
+                                code: joinCandidate,
+                              });
+                            request.signal.throwIfAborted();
+                            setJoinAddress(
+                              collaborationAddress(
+                                resolved.url,
+                                config.endpoint,
+                              ),
+                            );
+                          } catch (failure) {
+                            request.signal.throwIfAborted();
+                            throw failure;
+                          } finally {
+                            request.signal.removeEventListener("abort", abort);
+                            if (guestRequest.current === request) {
+                              guestRequest.current = undefined;
+                            }
+                          }
+                        });
+                      }
                     }
                   }}
                 >

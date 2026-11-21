@@ -1,17 +1,55 @@
-/** A deliberately small notation grammar: unsupported/ambiguous layouts stay ink. */
+import { recognitionPattern } from "./recognitionVocabulary";
+import { scientificNotation } from "./scientificNotation";
+
+/** Unsupported or ambiguous layouts stay ink; numerical work belongs to the engine. */
 export const mathNotation = (input: string): string => {
   if (input.length > 500) {
     throw new Error("Math input is too long");
   }
+  const column = input
+    .trim()
+    .match(
+      /^\\begin\{(array|aligned)\}(?:\{[rlc ]+\})?([\s\S]*?)\\end\{\1\}\s*=?$/,
+    );
+  // Vision models commonly retain a written column as a LaTeX array. Only its
+  // explicit rows/bar are normalized; the existing operand/operator checks below
+  // still reject missing signs, matrices, answers and ambiguous arrangements.
+  if (column) {
+    input = column[2]
+      .replace(/\\hline\b/g, "\n----\n")
+      .replace(/\\\\/g, "\n")
+      .replace(/&/g, "");
+  }
   let text = input
     .trim()
+    .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10))
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/＋/g, "+")
     .replace(/[＝]/g, "=")
     .replace(/[×·]/g, "*")
     .replace(/÷/g, "/")
-    .replace(/[−–]/g, "-")
+    .replace(/[－−–]/g, "-")
     .replace(/π/g, "pi")
-    .replace(/²/g, "^2")
-    .replace(/³/g, "^3")
+    .replace(
+      /[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g,
+      (power) =>
+        `^(${[...power]
+          .map((digit) => {
+            const index = "⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(digit);
+            return index < 0 ? (digit === "⁺" ? "+" : "-") : String(index);
+          })
+          .join("")})`,
+    )
+    .replace(
+      /log([₀-₉]+)/gi,
+      (_, base: string) =>
+        `log_(${[...base]
+          .map((digit) => "₀₁₂₃₄₅₆₇₈₉".indexOf(digit))
+          .join("")})`,
+    )
+    .replace(/\^\s*(?:\{\s*\\circ\s*\}|\\circ(?![A-Za-z]))/g, "°")
+    .replace(recognitionPattern("mathNotation_0"), "°")
     .replace(/\*\*/g, "^")
     .replace(/∞/g, "Infinity")
     .replace(/≥|\\geq?\b/g, ">=")
@@ -28,7 +66,7 @@ export const mathNotation = (input: string): string => {
   // A handwritten unary function need not include parentheses. Its variable's
   // power belongs to the argument: sin x² means sin(x²), not sin(x)².
   text = text.replace(
-    /(^|[^A-Za-z])(arcsin|arccos|arctan|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sqrt|exp|log|ln)\s*([xyz](?:\s*\^\s*\(?[+-]?\d+(?:\.\d+)?\)?)?)(?=$|[^A-Za-z])/gi,
+    /(^|[^A-Za-z])(arcsin|arccos|arctan|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sqrt|exp|log|ln)\s*([xyz](?:\s*\^\s*\(?[+-]?\d+(?:\.\d+)?\)?)?(?:\s*°)?)(?=$|[^A-Za-z])/gi,
     (_, prefix: string, name: string, argument: string) =>
       `${prefix}${name.toLowerCase()}(${argument})`,
   );
@@ -85,6 +123,7 @@ export const mathNotation = (input: string): string => {
       break;
     }
   }
+  text = scientificNotation(text);
   // Only an explicit differential closes an integral; no guessed variable/bounds.
   const integral = text.match(
     /^\\int(?:_\(([^()]+)\)\^\(([^()]+)\)|_([\w.+-]+)\^([\w.+-]+))?\s*(.+?)\s*(?:\\mathrm\{d\}|d)\s*([xyz])\s*=?$/,
@@ -133,7 +172,7 @@ export const mathNotation = (input: string): string => {
       .filter((row) => !/^[-_=─━]{2,}$/.test(row))
       .map((row, index) => (index ? row.replace(/^[xX](?=\s*\d)/, "*") : row));
     if (
-      !/^\d+(?:\.\d+)?$/.test(operands[0]) ||
+      !/^[+-]?\d+(?:\.\d+)?$/.test(operands[0]) ||
       operands.length < 2 ||
       operands.slice(1).some((row) => !/^[+*/-]\s*\d+(?:\.\d+)?$/.test(row))
     ) {

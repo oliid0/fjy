@@ -9,7 +9,7 @@ import { SkizzePen as nativePen } from "./skizze";
 import { classroomCommands } from "./commands";
 import { boardCanvasSize, boardPageExportOptions } from "./boardExport";
 import { TransientMessage } from "./TransientMessage";
-import pointerArrow from "./factory-skizze-icons/pointer-arrow.png";
+import pointerArrow from "./factory-skizze-icons/pointer-arrow.svg";
 import white from "./factory-skizze-icons/ffffff.svg?url";
 import red from "./factory-skizze-icons/ff0000.svg?url";
 import green from "./factory-skizze-icons/00ff00.svg?url";
@@ -352,7 +352,7 @@ export const SkizzePen = ({ api }: { api: FcboardImperativeAPI }) => {
       }),
       classroomCommands.register(
         "skizze.mode",
-        "设置已连接智能笔悬浮层，args.mode=laser|mouse|spotlight|magnifier，args.visible=false 收起",
+        "Configure the connected smart-pen overlay; args.mode=laser|mouse|spotlight|magnifier, args.visible=false hides it.",
         (args) => {
           if (!connected) {
             throw new Error(t("fcboard.smart_pen_error"));

@@ -20,6 +20,20 @@ import type {
   ElementsMap,
 } from "./types";
 
+/** Semantic classroom objects retain one identity across their scene parts. */
+export const getWhiteboardCompositeKey = (element: FcboardElement) => {
+  const data = element.customData;
+  return data?.fcWidget?.id
+    ? `widget:${data.fcWidget.id}`
+    : data?.fcInsertion?.id
+    ? `insertion:${data.fcInsertion.id}`
+    : data?.fcPlot?.id
+    ? `plot:${data.fcPlot.id}`
+    : data?.fcLanguage?.group
+    ? `language:${data.fcLanguage.group}`
+    : undefined;
+};
+
 export const selectGroup = (
   groupId: GroupId,
   appState: InteractiveCanvasAppState,

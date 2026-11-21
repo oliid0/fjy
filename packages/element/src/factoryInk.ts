@@ -1,6 +1,7 @@
 import { factoryNibControls } from "./factoryNib";
 
 import type { FcboardFreeDrawElement } from "./types";
+import type { NativeInkPalette } from "./nativeInkColor";
 
 export type FactoryInkData = {
   version: 2 | 3;
@@ -14,10 +15,13 @@ export type FactoryInkData = {
   nibPath?: [number, number][];
   assist?: "text" | "shape" | "magic" | "function" | "calculation" | "language";
   centerline?: boolean;
+  /** New ink retains contact precision; older saved strokes keep their geometry. */
+  subpixel?: boolean;
   brushWidths?: number[];
   brushAngle?: number;
   dashOffset?: number;
   rainbow?: { x: number; width: number };
+  gradient?: { palette: NativeInkPalette; size: number };
 };
 
 /** Pointer-up is distinct from a live sample; HBezierObject.onUp tapers to zero. */
@@ -66,7 +70,10 @@ export const traceFactoryInk = (
   }
   const unit = factoryInkUnit(element);
   const nib = factoryNibControls(element);
-  const round = (coordinate: number) => roundInk(coordinate, unit);
+  const round = (coordinate: number) =>
+    element.customData?.fcInk?.subpixel
+      ? coordinate
+      : roundInk(coordinate, unit);
   if (!from) {
     target.moveTo(round(points[0][0]), round(points[0][1]));
   }
@@ -101,13 +108,20 @@ export const factoryInkPath = (element: FcboardFreeDrawElement) => {
 export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
   const unit = factoryInkUnit(element);
   const sampled = element.customData?.fcInk?.centerline === true;
-  const node = (x: number, y: number, pressure: number) => ({
-    x: sampled ? x : roundInk(x, unit),
-    y: sampled ? y : roundInk(y, unit),
+  const subpixel = element.customData?.fcInk?.subpixel === true;
+  const node = (
+    x: number,
+    y: number,
+    pressure: number,
+    sourceIndex: number,
+  ) => ({
+    x: sampled || subpixel ? x : roundInk(x, unit),
+    y: sampled || subpixel ? y : roundInk(y, unit),
     pressure,
+    sourceIndex,
   });
   const nodes = element.points.map(([x, y], i) =>
-    node(x, y, element.pressures[i] ?? 0.5),
+    node(x, y, element.pressures[i] ?? 0.5, i),
   );
   if (sampled || nodes.length < 2) {
     return nodes;
@@ -123,6 +137,7 @@ export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
       (previous[0] + current[0]) / 2,
       (previous[1] + current[1]) / 2,
       (control.pressure + nodes[i].pressure) / 2,
+      i,
     );
     // Quadratic-to-chord error <= |P0 - 2P1 + P2| / (4 * steps²).
     // Keep it below 1/64 of a calibrated physical pixel, with bounded import work.
@@ -151,6 +166,7 @@ export const factoryInkSamples = (element: FcboardFreeDrawElement) => {
           a * a * source.pressure +
           2 * a * t * control.pressure +
           t * t * end.pressure,
+        sourceIndex: i,
       });
     }
     source = end;

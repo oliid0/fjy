@@ -1,0 +1,12 @@
+// The scene is behind WebView; HTML UI and selection handles remain above it.
+html:is(.fc-native-scene, .fc-native-projection),
+html:is(.fc-native-scene, .fc-native-projection) body,
+html:is(.fc-native-scene, .fc-native-projection) #root,
+html:is(.fc-native-scene, .fc-native-projection) .app,
+html:is(.fc-native-scene, .fc-native-projection) .app .fcboard {
+  background-color: transparent !important;
+}
+
+html.fc-native-selection-transform .fcboard__canvas.interactive {
+  visibility: hidden;
+}

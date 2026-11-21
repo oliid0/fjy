@@ -7,7 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:; base-uri 'none'; form-action 'none'"
     />
-    <title>Calculator</title>
+    <title>Fcboard</title>
     <style>
       :root {
         /* Default Theme: Sky Blue (Matching Index) */
@@ -339,31 +339,6 @@
         font-size: 2.4rem;
       }
 
-      #btn-basic,
-      #btn-scientific {
-        padding: 1px 18px;
-        padding-right: 24px;
-        color: #8b8b92;
-      }
-
-      #btn-basic.mode-selected,
-      #btn-scientific.mode-selected {
-        color: #1b1b1d;
-      }
-
-      .dark #btn-basic.mode-selected,
-      .dark #btn-scientific.mode-selected {
-        color: #fff;
-      }
-
-      #mode-indicator {
-        background: #fff;
-      }
-
-      .dark #mode-indicator {
-        background: #4a4a4e;
-      }
-
       #scientific-panel {
         background: transparent;
         height: min(78dvh, 680px);
@@ -603,17 +578,6 @@
         > div {
         background: #333336;
       }
-      #mode-indicator {
-        display: none;
-      }
-      #btn-basic,
-      #btn-scientific {
-        border-radius: 24px;
-        min-height: 36px;
-        padding: 8px 12px;
-        background: none;
-        font-size: 13px;
-      }
       #theme-toggle {
         width: 36px;
         height: 36px;
@@ -629,13 +593,6 @@
       }
       #theme-toggle i {
         font-style: normal;
-      }
-      #icon-moon,
-      .dark #icon-sun {
-        display: none;
-      }
-      .dark #icon-moon {
-        display: inline;
       }
       #result_display_container {
         text-align: right;
@@ -703,9 +660,155 @@
           min-height: 110px !important;
         }
       }
+
+      /* The object supplies both dimensions; controls reflow in its full viewport. */
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      #calculator-wrapper,
+      #calculator-wrapper.scientific-open {
+        position: absolute;
+        inset: 0;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: none !important;
+        margin: 0;
+        transform: none;
+      }
+      #calculator-wrapper > .glass-panel {
+        width: 100%;
+        height: 100% !important;
+        max-height: none !important;
+        box-sizing: border-box;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: hidden;
+      }
+      #calculator-wrapper > .glass-panel > .flex-1 {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        box-sizing: border-box;
+        padding: clamp(3px, 2vmin, 14px) !important;
+        gap: clamp(2px, 1vmin, 8px);
+      }
+      #calculator-wrapper #calculator-header {
+        display: flex;
+        flex: 0 0 clamp(22px, 5vh, 36px);
+        align-items: center;
+        gap: 2px;
+        margin: 0;
+        touch-action: none;
+      }
+      #calculator-title {
+        flex: 1;
+        min-width: 12px;
+        font: clamp(9px, 3.5vw, 16px) system-ui;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: move;
+      }
+      #calculator-header button {
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        min-width: 0;
+        min-height: 20px;
+        height: 20px;
+        padding: 2px 3px;
+        font: clamp(9px, 3vw, 14px) system-ui;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+      }
+      #calculator-header #theme-toggle,
+      #calculator-header #calculator-close {
+        width: 20px;
+        height: 20px;
+      }
+      #calculator-header svg {
+        width: 14px;
+        height: 14px;
+      }
+      #calculator-title {
+        min-width: 0;
+      }
+      #calculator-header #mode-toggle {
+        width: 26px;
+      }
+      #calculator-header #mode-toggle svg {
+        width: 26px;
+        height: 16px;
+      }
+      #calculator-header button.mode-selected {
+        color: #ff9f0a;
+        background: #8882;
+      }
+      #calculator-wrapper #result_display_container {
+        flex: 0 1 23%;
+        min-height: 0 !important;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      #calculator-wrapper #result-display {
+        font-size: clamp(16px, min(12vw, 8vh), 64px) !important;
+        line-height: 1.15;
+        min-height: 0;
+        height: auto;
+        white-space: nowrap;
+      }
+      #input-display,
+      #history-display {
+        min-height: 0;
+        height: auto;
+        flex-shrink: 1;
+        font: clamp(9px, min(4vw, 3vh), 22px) / 1.15 monospace;
+      }
+      #calculator-wrapper .grid.grid-cols-4.gap-3 {
+        flex: 1;
+        min-height: 0;
+        gap: clamp(2px, 1.4vmin, 10px) !important;
+        grid-template-rows: repeat(5, minmax(0, 1fr));
+        grid-auto-rows: minmax(0, 1fr);
+        align-content: stretch;
+      }
+      #calculator-wrapper .grid.grid-cols-4.gap-3 > button {
+        height: 100% !important;
+        min-height: 0 !important;
+        min-width: 0;
+        padding: 2px !important;
+        font-size: clamp(11px, min(8vw, 5vh), 40px) !important;
+        border-radius: clamp(4px, 4vmin, 22px) !important;
+      }
+      #mobile-scientific-drawer {
+        flex: 1 1 43%;
+        min-height: 0;
+        overflow: auto;
+        padding: clamp(3px, 1.5vmin, 10px);
+        gap: clamp(2px, 1vmin, 6px);
+        grid-auto-rows: minmax(0, 1fr);
+      }
+      #mobile-scientific-drawer button {
+        min-height: 20px;
+        font-size: clamp(9px, min(4vw, 3vh), 20px);
+        padding: 2px;
+      }
+      #calculator-wrapper * {
+        transition-property: background-color, color, transform;
+      }
     </style>
   </head>
   <body>
+    <script type="application/json" id="calculator-localization">
+      __FCBOARD_CALCULATOR_I18N__
+    </script>
     <!-- Calculator Container -->
     <div
       class="w-full max-w-[400px] md:max-w-[800px] transition-all duration-500 ease-in-out"
@@ -716,66 +819,63 @@
       >
         <!-- Main Calculator Section -->
         <div class="flex-1 flex flex-col px-3 py-3 relative">
-          <!-- Header / Mode Toggle -->
-          <div class="flex justify-between items-center mb-6 pl-2.5">
-            <div class="flex items-center gap-2">
-              <div class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-red-500"></div>
-              <div
-                class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-amber-400"
-              ></div>
-              <div
-                class="md:w-4 md:h-4 w-3 h-3 rounded-full bg-emerald-500"
-              ></div>
-            </div>
-
-            <div class="flex gap-2">
-              <button
-                id="theme-toggle"
-                aria-label="Toggle color theme"
-                title="Toggle color theme"
-                class="w-9 h-9 rounded-full glass-panel flex items-center justify-center text-brand-600 dark:text-brand-400 hover:scale-110 active:scale-95 relative overflow-hidden group shadow-2xl border-2 border-gray-300 dark:border-2 dark:border-brand-600"
-                style="border-radius: 100vh !important"
+          <header id="calculator-header">
+            <span
+              id="calculator-title"
+              tabindex="0"
+              data-i18n-text="title"
+            ></span>
+            <button
+              id="theme-toggle"
+              data-i18n-aria-label="toggle_color_theme"
+              data-i18n-title="toggle_color_theme"
+            >
+              <svg
+                id="icon-sun"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
               >
-                <div
-                  class="absolute inset-0 bg-brand-500/10 dark:bg-brand-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                ></div>
-                <i
-                  id="icon-sun"
-                  class="fas fa-sun text-xl absolute transition-all duration-500 rotate-0 scale-100 opacity-100 dark:rotate-180 dark:scale-0 dark:opacity-0"
-                  >☀</i
-                >
-                <i
-                  id="icon-moon"
-                  class="fas fa-moon text-xl absolute transition-all duration-500 rotate-180 scale-0 opacity-0 dark:rotate-0 dark:scale-100 dark:opacity-100"
-                  >☾</i
-                >
-              </button>
-
-              <!-- Mode Switcher -->
-              <div
-                class="bg-slate-200 dark:bg-slate-800/50 p-1 rounded-full flex relative"
+                <circle cx="12" cy="12" r="4" />
+                <path
+                  d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"
+                />
+              </svg>
+            </button>
+            <button
+              id="mode-toggle"
+              role="switch"
+              aria-checked="false"
+              data-i18n-aria-label="scientific"
+              onclick="setMode(mode === 'basic' ? 'scientific' : 'basic')"
+            >
+              <svg viewBox="0 0 32 20" fill="currentColor" aria-hidden="true">
+                <rect
+                  x="1"
+                  y="2"
+                  width="30"
+                  height="16"
+                  rx="8"
+                  opacity="0.25"
+                />
+                <circle id="mode-knob" cx="9" cy="10" r="6" />
+              </svg>
+            </button>
+            <button
+              id="calculator-close"
+              data-i18n-aria-label="close_calculator"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
               >
-                <div
-                  id="mode-indicator"
-                  class="absolute top-1 left-1 w-[calc(50%-4px)] h-[calc(100%-8px)] bg-white dark:bg-slate-700 rounded-full shadow-sm transition-all duration-300"
-                ></div>
-                <button
-                  onclick="setMode('basic')"
-                  class="relative z-10 px-2 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-colors duration-300 text-brand-600 dark:text-brand-400"
-                  id="btn-basic"
-                >
-                  Basic
-                </button>
-                <button
-                  onclick="setMode('scientific')"
-                  class="relative z-10 px-3 py-4 text-xs font-bold uppercase tracking-wider rounded-full transition-colors duration-300 text-slate-500 dark:text-slate-400"
-                  id="btn-scientific"
-                >
-                  Sci
-                </button>
-              </div>
-            </div>
-          </div>
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </header>
 
           <!-- Display Screen -->
           <div
@@ -823,7 +923,7 @@
             <button
               data-key="%"
               onclick="appendOperator('%')"
-              title="Remainder (modulo)"
+              data-i18n-title="remainder_modulo"
               class="btn-press h-14 rounded-2xl bg-brand-100 dark:bg-slate-800 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-500/20 font-semibold text-xl"
             >
               %
@@ -967,14 +1067,15 @@
               <h3
                 class="text-lg font-bold text-slate-500 uppercase tracking-wider"
               >
-                Scientific
+                <span data-i18n-text="scientific"></span>
               </h3>
               <button
                 onclick="toggleInverse()"
                 id="btn-inv"
                 class="px-2 py-1 text-md font-bold rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-brand-100 dark:hover:bg-brand-900 transition-colors"
-                aria-label="Toggle inverse trigonometric functions"
-                title="Toggle inverse sine, cosine, and tangent"
+                data-i18n-aria-label="toggle_inverse_trigonometric_functions"
+                data-i18n-title="toggle_inverse_sine_cosine_and_tangent"
+                data-i18n-text="inverse"
               >
                 2nd
               </button>
@@ -984,8 +1085,8 @@
                 id="deg-rad-toggle"
                 onclick="toggleAngleMode()"
                 class="btn-press h-12 rounded-xl bg-brand-100 dark:bg-slate-700 text-brand-600 dark:text-brand-400 font-semibold text-sm"
-                aria-label="Switch angle unit"
-                title="Toggle degrees and radians"
+                data-i18n-aria-label="switch_angle_unit"
+                data-i18n-title="toggle_degrees_and_radians"
               >
                 DEG
               </button>
@@ -994,7 +1095,7 @@
                 data-key="s"
                 id="btn-sin"
                 onclick="appendFunc('sin(')"
-                title="Sine (angle uses DEG/RAD mode)"
+                data-i18n-title="sine_angle_uses_deg_rad_mode"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 sin
@@ -1003,7 +1104,7 @@
                 data-key="c"
                 id="btn-cos"
                 onclick="appendFunc('cos(')"
-                title="Cosine (angle uses DEG/RAD mode)"
+                data-i18n-title="cosine_angle_uses_deg_rad_mode"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 cos
@@ -1012,7 +1113,7 @@
                 data-key="t"
                 id="btn-tan"
                 onclick="appendFunc('tan(')"
-                title="Tangent (angle uses DEG/RAD mode)"
+                data-i18n-title="tangent_angle_uses_deg_rad_mode"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 tan
@@ -1022,21 +1123,21 @@
               <button
                 data-key="l"
                 onclick="appendFunc('log(')"
-                title="Base-10 logarithm; input must be positive"
+                data-i18n-title="base_10_logarithm_input_must_be_positive"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 log
               </button>
               <button
                 onclick="appendFunc('ln(')"
-                title="Natural logarithm; input must be positive"
+                data-i18n-title="natural_logarithm_input_must_be_positive"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 ln
               </button>
               <button
                 onclick="appendFunc('sqrt(')"
-                title="Square root; input must be non-negative"
+                data-i18n-title="square_root_input_must_be_non_negative"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 √
@@ -1046,7 +1147,7 @@
               <button
                 data-key="^"
                 onclick="appendOperator('^')"
-                title="Raise a value to a power"
+                data-i18n-title="raise_a_value_to_a_power"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 x^y
@@ -1054,7 +1155,7 @@
               <button
                 data-key="p"
                 onclick="appendConstant('PI')"
-                title="Insert pi (π)"
+                data-i18n-title="insert_pi"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 π
@@ -1062,7 +1163,7 @@
               <button
                 data-key="e"
                 onclick="appendConstant('E')"
-                title="Insert Euler's number (e)"
+                data-i18n-title="insert_euler_s_number_e"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
               >
                 e
@@ -1086,96 +1187,96 @@
               <button
                 onclick="appendFunc('fact(')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Factorial"
-                title="Factorial of a non-negative integer"
+                data-i18n-aria-label="factorial"
+                data-i18n-title="factorial_of_a_non_negative_integer"
               >
                 n!
               </button>
               <button
                 onclick="appendUnaryFunction('square')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Square"
-                title="Square the current value"
+                data-i18n-aria-label="square"
+                data-i18n-title="square_the_current_value"
               >
                 x²
               </button>
               <button
                 onclick="appendUnaryFunction('cube')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Cube"
-                title="Cube the current value"
+                data-i18n-aria-label="cube"
+                data-i18n-title="cube_the_current_value"
               >
                 x³
               </button>
               <button
                 onclick="appendUnaryFunction('cbrt')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Cube root"
-                title="Cube root"
+                data-i18n-aria-label="cube_root"
+                data-i18n-title="cube_root"
               >
                 ∛x
               </button>
               <button
                 onclick="appendUnaryFunction('reciprocal')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Reciprocal"
-                title="Reciprocal (1 divided by the current value)"
+                data-i18n-aria-label="reciprocal"
+                data-i18n-title="reciprocal_1_divided_by_the_current_value"
               >
                 1/x
               </button>
               <button
                 onclick="appendUnaryFunction('exp')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Exponential e to the x"
-                title="Exponential function e to the x"
+                data-i18n-aria-label="exponential_e_to_the_x"
+                data-i18n-title="exponential_function_e_to_the_x"
               >
                 eˣ
               </button>
               <button
                 onclick="appendUnaryFunction('pow10')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Ten to the x"
-                title="Ten raised to the current value"
+                data-i18n-aria-label="ten_to_the_x"
+                data-i18n-title="ten_raised_to_the_current_value"
               >
                 10ˣ
               </button>
               <button
                 onclick="appendUnaryFunction('pct')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Percent of value"
-                title="Divide the current value by 100"
+                data-i18n-aria-label="percent_of_value"
+                data-i18n-title="divide_the_current_value_by_100"
               >
                 x%
               </button>
               <button
                 onclick="appendUnaryFunction('abs')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Absolute value"
-                title="Absolute value"
+                data-i18n-aria-label="absolute_value"
+                data-i18n-title="absolute_value"
               >
                 |x|
               </button>
               <button
                 onclick="appendUnaryFunction('round')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Round"
-                title="Round to the nearest integer"
+                data-i18n-aria-label="round"
+                data-i18n-title="round_to_the_nearest_integer"
               >
                 round
               </button>
               <button
                 onclick="appendUnaryFunction('floor')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Round down"
-                title="Round down to the nearest integer"
+                data-i18n-aria-label="round_down"
+                data-i18n-title="round_down_to_the_nearest_integer"
               >
                 floor
               </button>
               <button
                 onclick="appendUnaryFunction('ceil')"
                 class="btn-press h-12 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-lg"
-                aria-label="Round up"
-                title="Round up to the nearest integer"
+                data-i18n-aria-label="round_up"
+                data-i18n-title="round_up_to_the_nearest_integer"
               >
                 ceil
               </button>
@@ -1192,16 +1293,17 @@
             id="mobile-deg-rad-toggle"
             onclick="toggleAngleMode()"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold"
-            aria-label="Switch angle unit"
-            title="Toggle degrees and radians"
+            data-i18n-aria-label="switch_angle_unit"
+            data-i18n-title="toggle_degrees_and_radians"
           >
             DEG
           </button>
           <button
             id="mobile-btn-inv"
             onclick="toggleInverse()"
-            aria-label="Toggle inverse trigonometric functions"
-            title="Toggle inverse sine, cosine, and tangent"
+            data-i18n-aria-label="toggle_inverse_trigonometric_functions"
+            data-i18n-title="toggle_inverse_sine_cosine_and_tangent"
+            data-i18n-text="inverse"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold"
           >
             2nd
@@ -1209,7 +1311,7 @@
           <button
             id="mobile-btn-sin"
             onclick="appendFunc('sin(')"
-            title="Sine (angle uses DEG/RAD mode)"
+            data-i18n-title="sine_angle_uses_deg_rad_mode"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             sin
@@ -1217,7 +1319,7 @@
           <button
             id="mobile-btn-cos"
             onclick="appendFunc('cos(')"
-            title="Cosine (angle uses DEG/RAD mode)"
+            data-i18n-title="cosine_angle_uses_deg_rad_mode"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             cos
@@ -1225,28 +1327,28 @@
           <button
             id="mobile-btn-tan"
             onclick="appendFunc('tan(')"
-            title="Tangent (angle uses DEG/RAD mode)"
+            data-i18n-title="tangent_angle_uses_deg_rad_mode"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             tan
           </button>
           <button
             onclick="appendFunc('sqrt(')"
-            title="Square root; input must be non-negative"
+            data-i18n-title="square_root_input_must_be_non_negative"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             √
           </button>
           <button
             onclick="appendFunc('log(')"
-            title="Base-10 logarithm; input must be positive"
+            data-i18n-title="base_10_logarithm_input_must_be_positive"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             log
           </button>
           <button
             onclick="appendFunc('ln(')"
-            title="Natural logarithm; input must be positive"
+            data-i18n-title="natural_logarithm_input_must_be_positive"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             ln
@@ -1283,95 +1385,95 @@
           </button>
           <button
             onclick="appendFunc('fact(')"
-            title="Factorial of an integer from 0 to 170"
+            data-i18n-title="factorial_of_an_integer_from_0_to_170"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             !
           </button>
           <button
             onclick="appendUnaryFunction('square')"
-            aria-label="Square"
-            title="Square the current value"
+            data-i18n-aria-label="square"
+            data-i18n-title="square_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             x²
           </button>
           <button
             onclick="appendUnaryFunction('cube')"
-            aria-label="Cube"
-            title="Cube the current value"
+            data-i18n-aria-label="cube"
+            data-i18n-title="cube_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             x³
           </button>
           <button
             onclick="appendUnaryFunction('cbrt')"
-            aria-label="Cube root"
-            title="Cube root"
+            data-i18n-aria-label="cube_root"
+            data-i18n-title="cube_root"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             ∛x
           </button>
           <button
             onclick="appendUnaryFunction('reciprocal')"
-            aria-label="Reciprocal"
-            title="1 divided by the current value"
+            data-i18n-aria-label="reciprocal"
+            data-i18n-title="1_divided_by_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             1/x
           </button>
           <button
             onclick="appendUnaryFunction('exp')"
-            aria-label="Exponential e to the x"
-            title="e raised to the current value"
+            data-i18n-aria-label="exponential_e_to_the_x"
+            data-i18n-title="e_raised_to_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             eˣ
           </button>
           <button
             onclick="appendUnaryFunction('pow10')"
-            aria-label="Ten to the x"
-            title="10 raised to the current value"
+            data-i18n-aria-label="ten_to_the_x"
+            data-i18n-title="10_raised_to_the_current_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             10ˣ
           </button>
           <button
             onclick="appendUnaryFunction('pct')"
-            aria-label="Percent of value"
-            title="Divide the current value by 100"
+            data-i18n-aria-label="percent_of_value"
+            data-i18n-title="divide_the_current_value_by_100"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             x%
           </button>
           <button
             onclick="appendUnaryFunction('abs')"
-            aria-label="Absolute value"
-            title="Absolute value"
+            data-i18n-aria-label="absolute_value"
+            data-i18n-title="absolute_value"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             |x|
           </button>
           <button
             onclick="appendUnaryFunction('round')"
-            aria-label="Round"
-            title="Round to the nearest integer"
+            data-i18n-aria-label="round"
+            data-i18n-title="round_to_the_nearest_integer"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             round
           </button>
           <button
             onclick="appendUnaryFunction('floor')"
-            aria-label="Round down"
-            title="Round down to the nearest integer"
+            data-i18n-aria-label="round_down"
+            data-i18n-title="round_down_to_the_nearest_integer"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             floor
           </button>
           <button
             onclick="appendUnaryFunction('ceil')"
-            aria-label="Round up"
-            title="Round up to the nearest integer"
+            data-i18n-aria-label="round_up"
+            data-i18n-title="round_up_to_the_nearest_integer"
             class="btn-press h-10 rounded-lg bg-white dark:bg-slate-700 text-xs font-medium"
           >
             ceil
@@ -1381,6 +1483,29 @@
     </div>
 
     <script>
+      let calculatorLocale = JSON.parse(
+        document.getElementById("calculator-localization").textContent,
+      );
+      const calculatorText = (key, values = {}) =>
+        calculatorLocale.strings[key].replace(/\{\{(\w+)\}\}/g, (_all, name) =>
+          String(values[name]),
+        );
+      function applyCalculatorLanguage() {
+        document.documentElement.lang = calculatorLocale.language;
+        document.title = calculatorText("title");
+        for (const [attribute, target] of [
+          ["data-i18n-text", "textContent"],
+          ["data-i18n-title", "title"],
+          ["data-i18n-aria-label", "aria-label"],
+        ]) {
+          document.querySelectorAll("[" + attribute + "]").forEach((node) => {
+            const value = calculatorText(node.getAttribute(attribute));
+            if (target === "textContent") node.textContent = value;
+            else node.setAttribute(target, value);
+          });
+        }
+      }
+
       const html = document.documentElement;
       const themeToggle = document.getElementById("theme-toggle");
       const resultDisplay = document.getElementById("result-display");
@@ -1392,9 +1517,8 @@
         "mobile-scientific-drawer",
       );
       const calculatorWrapper = document.getElementById("calculator-wrapper");
-      const modeIndicator = document.getElementById("mode-indicator");
-      const btnBasic = document.getElementById("btn-basic");
-      const btnScientific = document.getElementById("btn-scientific");
+      const modeToggle = document.getElementById("mode-toggle");
+      const modeKnob = document.getElementById("mode-knob");
       const degRadToggle = document.getElementById("deg-rad-toggle");
       const mobileDegRadToggle = document.getElementById(
         "mobile-deg-rad-toggle",
@@ -1421,7 +1545,11 @@
         ).matches;
         html.classList.toggle(
           "dark",
-          savedTheme ? savedTheme === "dark" : prefersDark,
+          html.dataset.boardTheme
+            ? html.dataset.boardTheme === "dark"
+            : savedTheme
+            ? savedTheme === "dark"
+            : prefersDark,
         );
       }
 
@@ -1434,6 +1562,57 @@
         } catch {}
       });
 
+      addEventListener("message", (event) => {
+        if (
+          event.source === parent &&
+          event.data?.channel === "fc-calculator-theme" &&
+          typeof event.data.dark === "boolean"
+        ) {
+          html.dataset.boardTheme = event.data.dark ? "dark" : "light";
+          html.classList.toggle("dark", event.data.dark);
+        }
+      });
+      const windowMessage = (type, event) =>
+        parent.postMessage(
+          {
+            channel: "fc-resource-window",
+            type,
+            x: event?.screenX,
+            y: event?.screenY,
+          },
+          "*",
+        );
+      document
+        .getElementById("calculator-close")
+        .addEventListener("click", () => windowMessage("close"));
+      const handle = document.getElementById("calculator-title");
+      let moving = false;
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.isPrimary === false || event.button > 0) return;
+        event.preventDefault();
+        moving = true;
+        handle.setPointerCapture(event.pointerId);
+        windowMessage("move-start", event);
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (moving) windowMessage("move", event);
+      });
+      handle.addEventListener("pointerup", (event) => {
+        if (moving) {
+          moving = false;
+          windowMessage("move-end", event);
+        }
+      });
+      handle.addEventListener("pointercancel", () => {
+        moving = false;
+        windowMessage("move-cancel");
+      });
+      handle.addEventListener("lostpointercapture", () => {
+        if (moving) {
+          moving = false;
+          windowMessage("move-cancel");
+        }
+      });
       function getExpression() {
         return expression + currentInput;
       }
@@ -1642,10 +1821,12 @@
       function updateDisplay() {
         const fullExpression = getExpression();
         clearButton.textContent = currentInput || hasError ? "C" : "AC";
-        inputDisplay.textContent = expression
+        inputDisplay.textContent = (shouldResetDisplay ? "" : fullExpression)
           .replace(/\*/g, "×")
           .replace(/\//g, "÷");
-        resultDisplay.textContent = hasError ? "Error" : currentInput || "0";
+        resultDisplay.textContent = hasError
+          ? calculatorText("error")
+          : currentInput || "0";
 
         if (
           !hasError &&
@@ -1687,12 +1868,13 @@
         mobileDegRadToggle.textContent = label;
         degRadToggle.setAttribute(
           "aria-label",
-          `Switch angle unit (currently ${label})`,
+          calculatorText("angleMode", { unit: label }),
         );
         mobileDegRadToggle.setAttribute(
           "aria-label",
-          `Switch angle unit (currently ${label})`,
+          calculatorText("angleMode", { unit: label }),
         );
+        updateInverseButtons();
         updateDisplay();
       }
 
@@ -1711,11 +1893,16 @@
             button.setAttribute("onclick", `appendFunc('${fn}(')`);
             button.setAttribute(
               "aria-label",
-              isInverse ? `Inverse ${description}` : description,
+              calculatorText(
+                isInverse ? "inverse_" + description : description,
+              ),
             );
-            button.title = isInverse
-              ? `Inverse ${description}; result uses DEG/RAD mode`
-              : `${description} (angle uses DEG/RAD mode)`;
+            button.title = calculatorText("trigDescription", {
+              function: calculatorText(
+                isInverse ? "inverse_" + description : description,
+              ),
+              unit: isDegrees ? "DEG" : "RAD",
+            });
           });
         });
       }
@@ -1941,7 +2128,7 @@
         } catch {
           hasError = true;
           currentInput = "";
-          historyDisplay.textContent = "Check your expression";
+          historyDisplay.textContent = calculatorText("checkExpression");
           shouldResetDisplay = false;
         }
         updateDisplay();
@@ -1950,11 +2137,9 @@
       function setMode(newMode) {
         mode = newMode;
         const scientific = mode === "scientific";
-        modeIndicator.style.transform = scientific
-          ? "translateX(100%)"
-          : "translateX(0)";
-        btnBasic.classList.toggle("mode-selected", !scientific);
-        btnScientific.classList.toggle("mode-selected", scientific);
+        modeToggle.setAttribute("aria-checked", String(scientific));
+        modeToggle.classList.toggle("mode-selected", scientific);
+        modeKnob.setAttribute("cx", scientific ? "23" : "9");
         scientificPanel.classList.toggle("hidden", !scientific);
         scientificPanel.classList.toggle("w-0", !scientific);
         scientificPanel.classList.toggle("opacity-0", !scientific);
@@ -2021,6 +2206,21 @@
         }
       });
 
+      applyCalculatorLanguage();
+      addEventListener("message", (event) => {
+        if (
+          event.source === parent &&
+          event.data?.channel === "fc-calculator-language" &&
+          event.data.localization?.strings
+        ) {
+          calculatorLocale = event.data.localization;
+          applyCalculatorLanguage();
+          updateInverseButtons();
+          updateDisplay();
+          if (hasError)
+            historyDisplay.textContent = calculatorText("checkExpression");
+        }
+      });
       setMode("basic");
       updateDisplay();
     </script>

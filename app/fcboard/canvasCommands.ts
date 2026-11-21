@@ -20,7 +20,10 @@ import {
   validateShapes,
   contentViewport,
   objectSelection,
+  styleFunctionPlots,
 } from "./board";
+import { currentSettings } from "./settings";
+import { insertGeneratedImage } from "./imageGeneration";
 import { documentStrokeBounds } from "./documents";
 import {
   alignmentOffset,
@@ -29,7 +32,7 @@ import {
 } from "./canvasTransform";
 import { classroomCommands, commandObjectIds } from "./commands";
 import { LessonCanvas, validateLesson } from "./lesson";
-import { prepareQuestionWriting, questionStrokeStyle } from "./questionWriting";
+import { prepareInkWriting, inkStrokeStyle } from "./inkWriting";
 import { resourcePlacement } from "./resourcePlacement";
 import { registerResourceCommands } from "./resourceControls";
 import { registerLanguageCommands } from "./languageCommands";
@@ -234,8 +237,16 @@ export const registerCanvasCommands = (
           })
         : await boardContext(
             api,
-            true,
-            undefined,
+            !Array.isArray(args.sourceIds) || !args.sourceIds.length,
+            Array.isArray(args.sourceIds) && args.sourceIds.length
+              ? api
+                  .getSceneElements()
+                  .filter(
+                    (element) =>
+                      args.sourceIds &&
+                      (args.sourceIds as string[]).includes(element.id),
+                  )
+              : undefined,
             contentViewport(api),
             args.capture !== false,
           );
@@ -273,12 +284,12 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.inspect",
-      "读取当前可见白板或课件层的真实对象、选区、画笔、可书写视口和缩放；bounds 顺序为左上右下，坐标使用返回的 coordinates；操作前读取，操作后再次检查结果，不使用背后白板对象",
+      "Inspect actual objects, selection, pen, writable viewport and zoom on the visible board/document layer. bounds=[left,top,right,bottom]; use the returned coordinates. Inspect before/after changes; never operate on a hidden board.",
       inspect,
     ),
     classroomCommands.register(
       "canvas.toolbar",
-      "显示或隐藏原白板工具栏，args.visible 必须是布尔值；隐藏会收起工具属性和菜单",
+      "Show or hide the original board toolbar; boolean args.visible is required. Hiding also closes properties and menus.",
       (args) => {
         if (typeof args.visible !== "boolean") {
           throw new Error(t("fcboard.specify_whether_to_show_the_toolbar"));
@@ -290,7 +301,9 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.action",
-      `执行原白板动作，args.action 仅限 ${Array.from(actions).join(",")}`,
+      `Perform an existing board action; args.action must be ${Array.from(
+        actions,
+      ).join(",")}`,
       (args) => {
         if (classroomCommands.has("document.draw")) {
           if (
@@ -303,6 +316,17 @@ export const registerCanvasCommands = (
             ].includes(String(args.action))
           ) {
             return classroomCommands.execute({ name: "document.zoom", args });
+          }
+          if (
+            [
+              "bringForward",
+              "sendBackward",
+              "bringToFront",
+              "sendToBack",
+              "toggleElementLock",
+            ].includes(String(args.action))
+          ) {
+            return classroomCommands.execute({ name: "document.action", args });
           }
           if (args.action === "duplicateSelection") {
             return classroomCommands.execute({ name: "document.duplicate" });
@@ -392,9 +416,22 @@ export const registerCanvasCommands = (
         return { tool: api.getAppState().activeTool };
       },
     ),
+    classroomCommands.register("canvas.editText", "@internal", () => {
+      if (classroomCommands.has("document.editText")) {
+        return classroomCommands.execute({ name: "document.editText" });
+      }
+      const selected = selectedBoardElements(api);
+      if (
+        selected.length !== 1 ||
+        selected[0].type !== "text" ||
+        !api.editTextElement(selected[0].id)
+      ) {
+        throw new Error(t("fcboard.this_board_action_is_unavailable"));
+      }
+    }),
     classroomCommands.register(
       "canvas.style",
-      "修改画笔或选区：args.color/background 十六进制色，background可transparent；width=1..30,fontSize=8..200,fontFamily=1/2/3/5/6/7/8/9/10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted；pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language 设置白板后续书写笔型",
+      "Style the pen or selection: args.color/background are hex (background also transparent); width=1..30,fontSize=8..200,fontWeight=400|700,fontFamily=1|2|3|5|6|7|8|9|10,opacity=0..100,roughness=0..2,textAlign=left|center|right,fillStyle=hachure|cross-hatch|solid|zigzag,strokeStyle=solid|dashed|dotted. pen=hard|brush|highlighter|dashed|rainbow|text|shape|magic|function|calculation|language controls future handwriting.",
       (args) => {
         if (classroomCommands.has("document.style")) {
           return classroomCommands.execute({ name: "document.style", args });
@@ -405,6 +442,7 @@ export const registerCanvasCommands = (
           "width",
           "fontSize",
           "fontFamily",
+          "fontWeight",
           "opacity",
           "roughness",
           "textAlign",
@@ -473,6 +511,21 @@ export const registerCanvasCommands = (
           throw new Error(t("fcboard.unknown_font"));
         }
         if (
+          args.fontWeight !== undefined &&
+          args.fontWeight !== 400 &&
+          args.fontWeight !== 700
+        ) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const textIds = new Set(
+          (args.fontWeight !== undefined ? selectedBoardElements(api) : [])
+            .filter((element) => element.type === "text" && !element.locked)
+            .map((element) => element.id),
+        );
+        if (args.fontWeight !== undefined && !textIds.size) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        if (
           args.width !== undefined &&
           (typeof args.width !== "number" ||
             !Number.isFinite(args.width) ||
@@ -493,17 +546,28 @@ export const registerCanvasCommands = (
             },
           });
         }
+        const graphsOnly = styleFunctionPlots(api, {
+          color: args.color as string | undefined,
+          width: args.width as number | undefined,
+          strokeStyle: args.strokeStyle as
+            | "solid"
+            | "dashed"
+            | "dotted"
+            | undefined,
+        });
         if (args.color) {
-          api.executeAction("changeStrokeColor", {
-            currentItemStrokeColor: args.color,
-          });
+          if (!graphsOnly) {
+            api.executeAction("changeStrokeColor", {
+              currentItemStrokeColor: args.color,
+            });
+          }
         }
         if (args.background) {
           api.executeAction("changeBackgroundColor", {
             currentItemBackgroundColor: args.background,
           });
         }
-        if (args.width) {
+        if (args.width && !graphsOnly) {
           api.executeAction("changeStrokeWidth", args.width);
         }
         for (const [key, [, , action]] of Object.entries(numeric)) {
@@ -512,9 +576,15 @@ export const registerCanvasCommands = (
           }
         }
         for (const [key, [, action]] of Object.entries(choices)) {
-          if (args[key] !== undefined) {
+          if (
+            args[key] !== undefined &&
+            !(graphsOnly && key === "strokeStyle")
+          ) {
             api.executeAction(action, args[key]);
           }
+        }
+        if (args.fontWeight !== undefined) {
+          api.executeAction("changeFontWeight", args.fontWeight);
         }
         if (args.fontFamily !== undefined) {
           api.executeAction("changeFontFamily", {
@@ -525,7 +595,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.ink",
-      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional per-command pen=hard|brush|highlighter|dashed|rainbow, color (hex), width=1..30 and opacity=0..100 use real pen effects without changing the global pen. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces a previous question. Returns actual object ids.",
+      "Insert editable ink on the visible surface. args.strokes contains [[x,y],...] trajectories. Optional per-command pen=hard|brush|highlighter|dashed|rainbow, color (hex), width=1..30 and opacity=0..100 use real pen effects without changing the global pen. Optional args.text is dictated text; also supply args.bounds={left,top,right,bottom} to wrap handwriting within that visible area. args.replaceIds atomically replaces the specified source objects. Returns actual object ids.",
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -547,7 +617,7 @@ export const registerCanvasCommands = (
             api.getSceneElements().filter((item) => replaced.has(item.id)),
           );
         const before = signature();
-        const elements = await prepareQuestionWriting(args, () => {
+        const elements = await prepareInkWriting(args, () => {
           if (
             classroomCommands.has("document.draw") ||
             board() !== target ||
@@ -566,7 +636,7 @@ export const registerCanvasCommands = (
                 return { left, top, right, bottom };
               }),
             scale: state.zoom.value,
-            inkStyle: questionStrokeStyle(
+            inkStyle: inkStrokeStyle(
               args,
               state,
               inkProfile(),
@@ -603,7 +673,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.text",
-      '插入或修改可编辑文本；args.text 必填；args.id 可指向现有文本；不指定id时在选区旁插入并跟随选区颜色和字号；args.presentation=match|handwritten|text；args.placement=center 可在当前可见画布中央找空位，不依附旧选区。板书标题用 {"text":"完整标题","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}，标题按36屏幕像素排版，正文仍按邻近笔迹排版。',
+      'Insert or update editable text; args.text is required. args.id updates existing text. Without id, insert beside the selection using its color/size. args.presentation=match|handwritten|text; placement=center finds space in the current visible canvas independently of previous selection. For titles use {"text":"complete title","role":"title","presentation":"handwritten","placement":"center","sourceIds":[]}, laid out at 36 screen pixels; body text follows nearby handwriting.',
       async (args) => {
         if (args.signal instanceof AbortSignal) {
           args.signal.throwIfAborted();
@@ -623,6 +693,33 @@ export const registerCanvasCommands = (
         }
         if (args.role !== undefined && args.role !== "title") {
           throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        if (
+          !args.id &&
+          args.presentation === "handwritten" &&
+          currentSettings().handwritingGeneration === "cloud" &&
+          currentSettings().apiKey.trim()
+        ) {
+          const signal =
+            args.signal instanceof AbortSignal
+              ? args.signal
+              : AbortSignal.timeout(90000);
+          try {
+            await insertGeneratedImage(
+              api,
+              `Render only this exact text as clear handwritten board writing, preserving every character, mathematical symbol and line break. No extra text, illustrations or decorations. Text: ${JSON.stringify(
+                args.text,
+              )}`,
+              signal,
+            );
+            return;
+          } catch (error) {
+            signal.throwIfAborted();
+            if (error instanceof DOMException && error.name === "AbortError") {
+              throw error;
+            }
+          }
+          // A failed optional output provider cannot disable local text writing.
         }
         if (classroomCommands.has("document.draw")) {
           return classroomCommands.execute({ name: "document.text", args });
@@ -709,7 +806,11 @@ export const registerCanvasCommands = (
         }
         const viewport = contentViewport(api);
         const scale = api.getAppState().zoom.value;
-        const position = resourcePlacement(viewport, scale);
+        const position = resourcePlacement(
+          viewport,
+          scale,
+          resource.id === "builtin-calculator",
+        );
         const ids = insertElements(api, [
           newIframeElement({
             type: "iframe",
@@ -727,7 +828,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.shapes",
-      "插入可编辑图形，args.shapes 为 rectangle|ellipse|diamond|line|arrow|text 数组，坐标相对选区，包含 x,y,width,height，文本带text",
+      "Insert editable shapes: args.shapes contains rectangle|ellipse|diamond|line|arrow|text with x,y,width,height relative to the selection; text shapes also need text.",
       async (args) => {
         const origin = insertionPoint(api);
         if (classroomCommands.has("document.draw")) {
@@ -763,7 +864,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.animate",
-      '逐步板书，args.commands 是扁平命令数组，例如 {"commands":[{"type":"write_text","id":"note","text":"板书内容","x":0,"y":0,"duration":0.8}]}。内部命令使用 type，不使用 name/args 嵌套。type支持 write_text/draw_path/draw_arrow 等，支持id、x,y,width,height,text,points,color,duration。返回 lessonId 与真实对象；更正已写内容须从 canvas.inspect 读取 lessonId 和 tutorId，传 args.lessonId 并复用 command.id=tutorId，原位置/字号/颜色会保留。独立标题用canvas.text的role=title。',
+      'Animate incremental board writing using a flat args.commands array, for example {"commands":[{"type":"write_text","id":"note","text":"board text","x":0,"y":0,"duration":0.8}]}. Internal commands use type, never nested name/args. Types include write_text/draw_path/draw_arrow with id,x,y,width,height,text,points,color,duration. Returns lessonId and real objects. Inspect lessonId/tutorId before correcting, pass args.lessonId and reuse command.id=tutorId to preserve position/size/color. Use canvas.text role=title for independent titles.',
       async (args) => {
         const signal =
           args.signal instanceof AbortSignal ? args.signal : undefined;
@@ -781,7 +882,7 @@ export const registerCanvasCommands = (
           );
         }
         const lesson = validateLesson({
-          title: "白板操作",
+          title: t("fcboard.aiMessages.boardActions"),
           steps: [{ say: "", commands: args.commands }],
           quiz: [],
         });
@@ -815,7 +916,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.erase",
-      "擦除 args.ids 指定的对象；省略时仅擦除圈选对象",
+      "Erase objects identified by args.ids, or only the current selection when omitted.",
       (args) => {
         if (classroomCommands.has("document.erase")) {
           return classroomCommands.execute({ name: "document.erase", args });
@@ -835,7 +936,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.clear",
-      "清空当前白板，仅在用户明确要求清空当前白板时使用",
+      "Clear the current whiteboard only when the user explicitly requests it.",
       () =>
         classroomCommands.has("document.clearInk")
           ? classroomCommands.execute({ name: "document.clearInk" })
@@ -850,7 +951,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.select",
-      "选择已存在的对象，args.ids 为对象id数组",
+      "Select existing objects using the ID array in args.ids.",
       async (args) => {
         if (classroomCommands.has("document.select")) {
           const result = await classroomCommands.execute({
@@ -889,7 +990,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.resize",
-      "等比例放大/缩小选区或args.ids指定对象，支持真实手写笔迹与文本；args.scale=0.1..10，args.anchor=center（默认）|top-left。先canvas.inspect查真实id，完整选择标题所有笔画/组合及绑定文字。保留位置关系、笔型和可编辑参数，返回实际bounds。",
+      "Uniformly scale selected objects or args.ids, including real handwriting/text. args.scale=0.1..10; args.anchor=center (default)|top-left. Inspect real IDs and include all title strokes/groups/bound text. Preserve relative layout, pen style and editable parameters; return actual bounds.",
       (args) => {
         if (classroomCommands.has("document.resize")) {
           return classroomCommands.execute({ name: "document.resize", args });
@@ -925,7 +1026,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.align",
-      "把选区或args.ids指定对象作为整体对齐可见画布，保留内部布局。args.horizontal=left|center|right，args.vertical=top|center|bottom，至少一项；返回真实位移与bounds。",
+      "Align selected objects or args.ids as a group inside the visible canvas, preserving internal layout. args.horizontal=left|center|right; args.vertical=top|center|bottom; provide at least one. Return actual displacement/bounds.",
       (args) => {
         if (classroomCommands.has("document.align")) {
           return classroomCommands.execute({ name: "document.align", args });
@@ -967,7 +1068,7 @@ export const registerCanvasCommands = (
     ),
     classroomCommands.register(
       "canvas.move",
-      "移动选区或args.ids指定对象，args.dx/dy为有限位移；保留对象类型与参数",
+      "Move the selection or args.ids by finite args.dx/dy; preserve object types and parameters.",
       (args) => {
         if (classroomCommands.has("document.move")) {
           return classroomCommands.execute({ name: "document.move", args });
@@ -989,16 +1090,19 @@ export const registerCanvasCommands = (
             : args.ids,
           elements,
         );
-        elements
-          .filter((el) => ids.has(el.id))
-          .forEach((el) =>
-            api.mutateElement(el, {
-              x: el.x + (args.dx as number),
-              y: el.y + (args.dy as number),
-            }),
-          );
+        const next = elements.map((element) =>
+          ids.has(element.id)
+            ? transformBoardElement(
+                element,
+                { x: 0, y: 0 },
+                1,
+                args.dx as number,
+                args.dy as number,
+              )
+            : element,
+        );
         api.updateScene({
-          elements,
+          elements: next,
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         });
         return { ids: [...ids], dx: args.dx, dy: args.dy };

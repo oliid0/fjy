@@ -61,7 +61,7 @@ const precompile = (source, sourcePath) => {
 };
 
 // excludes all external dependencies and bundles only the source code
-const getConfig = (outdir) => ({
+const getConfig = (outdir, resourceAssetPlugin) => ({
   outdir,
   bundle: true,
   splitting: true,
@@ -69,42 +69,7 @@ const getConfig = (outdir) => ({
   packages: "external",
   define: { "process.env.NODE_ENV": "process.env.NODE_ENV" },
   plugins: [
-    {
-      name: "fcboard-asset-queries",
-      setup(context) {
-        context.onResolve({ filter: /\?(raw|url)$/ }, (args) => ({
-          path: path.relative(
-            __dirname,
-            path.resolve(
-              args.resolveDir,
-              args.path.replace(/\?(raw|url)$/, ""),
-            ),
-          ),
-          namespace: args.path.endsWith("?raw")
-            ? "fcboard-raw"
-            : "fcboard-asset",
-        }));
-        context.onLoad(
-          { filter: /.*/, namespace: "fcboard-raw" },
-          async (args) => ({
-            contents: await fs.promises.readFile(
-              path.resolve(__dirname, args.path),
-              "utf8",
-            ),
-            loader: "text",
-          }),
-        );
-        context.onLoad(
-          { filter: /.*/, namespace: "fcboard-asset" },
-          async (args) => ({
-            contents: await fs.promises.readFile(
-              path.resolve(__dirname, args.path),
-            ),
-            loader: "file",
-          }),
-        );
-      },
-    },
+    resourceAssetPlugin,
     sassPlugin({
       precompile,
     }),
@@ -154,6 +119,7 @@ function buildProd(config) {
 }
 
 const createESMRawBuild = async () => {
+  const { resourceAssetPlugin } = await import("../config/resourceAssets.mjs");
   const entryPoints = [];
   const entries = (directory, prefix) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -193,13 +159,13 @@ const createESMRawBuild = async () => {
 
   // development unminified build with source maps
   await buildDev({
-    ...getConfig("dist/dev"),
+    ...getConfig("dist/dev", resourceAssetPlugin),
     ...chunksConfig,
   });
 
   // production minified buld without sourcemaps
   await buildProd({
-    ...getConfig("dist/prod"),
+    ...getConfig("dist/prod", resourceAssetPlugin),
     ...chunksConfig,
   });
 };

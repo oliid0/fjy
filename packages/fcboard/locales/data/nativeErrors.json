@@ -1,0 +1,490 @@
+[
+  {
+    "source": "No signal input is available; check the TV input service and hardware connection",
+    "key": "no_signal_input_is_available_check_a66515"
+  },
+  {
+    "source": "The offline model is incomplete; check the installed package and free storage",
+    "key": "the_offline_model_is_incomplete_check_f5f8bd"
+  },
+  {
+    "source": "Enter an enabled Doubao Speech API key and resource ID in voice settings",
+    "key": "enter_an_enabled_doubao_speech_api_e396d0"
+  },
+  {
+    "source": "Collaboration code not found; verify both devices are on the same LAN",
+    "key": "collaboration_code_not_found_verify_both_88cb0b"
+  },
+  {
+    "source": "Live audio upload is backed up; check the network and restart",
+    "key": "live_audio_upload_is_backed_up_a9d082"
+  },
+  {
+    "source": "Connect both devices to the same LAN using Wi-Fi or Ethernet",
+    "key": "connect_both_devices_to_the_same_fd3ad3"
+  },
+  {
+    "source": "A synchronized image exceeds 20 MB; use a smaller image",
+    "key": "a_synchronized_image_exceeds_20_mb_1a02ab"
+  },
+  {
+    "source": "Insufficient device memory; try a smaller capture area",
+    "key": "insufficient_device_memory_try_a_smaller_d87d8f"
+  },
+  {
+    "source": "Enter a Doubao Speech API key with Seeduplex enabled",
+    "key": "enter_a_doubao_speech_api_key_e51a22"
+  },
+  {
+    "source": "Unable to prepare the offline speech model directory",
+    "key": "unable_to_prepare_the_offline_speech_ff2188"
+  },
+  {
+    "source": "This screen cannot be captured; try a smaller area",
+    "key": "this_screen_cannot_be_captured_try_809e90"
+  },
+  {
+    "source": "The session ended or reached its participant limit",
+    "key": "the_session_ended_or_reached_its_bd9d67"
+  },
+  {
+    "source": "The bundled Chinese speech model is unavailable: ",
+    "key": "the_bundled_chinese_speech_model_is_0e1c79"
+  },
+  {
+    "source": "The board is receiving a file; try again shortly",
+    "key": "the_board_is_receiving_a_file_637738"
+  },
+  {
+    "source": "); check the speech key and resource permissions",
+    "key": "check_the_speech_key_and_resource_895722"
+  },
+  {
+    "source": "Live speech connection failed; check the network",
+    "key": "live_speech_connection_failed_check_the_188cd0"
+  },
+  {
+    "source": "Speech upload is too slow; check the connection",
+    "key": "speech_upload_is_too_slow_check_4cbf74"
+  },
+  {
+    "source": "Timed out while finalizing the cloud transcript",
+    "key": "timed_out_while_finalizing_the_cloud_cc2feb"
+  },
+  {
+    "source": "Shared images exceed 20 MB; select fewer pages",
+    "key": "shared_images_exceed_20_mb_select_3591c6"
+  },
+  {
+    "source": "Speech connection failed; check the network",
+    "key": "speech_connection_failed_check_the_network_f4b47a"
+  },
+  {
+    "source": "The audio segment is too long or incomplete",
+    "key": "the_audio_segment_is_too_long_3123ec"
+  },
+  {
+    "source": "The screen is not ready; try again shortly",
+    "key": "the_screen_is_not_ready_try_cb41d9"
+  },
+  {
+    "source": "The reception address is invalid or closed",
+    "key": "the_reception_address_is_invalid_or_f1270b"
+  },
+  {
+    "source": "); check the key and Seeduplex permissions",
+    "key": "check_the_key_and_seeduplex_permissions_80880d"
+  },
+  {
+    "source": "Unable to publish the collaboration code: ",
+    "key": "unable_to_publish_the_collaboration_code_251125"
+  },
+  {
+    "source": "The speech task ended; start a new session",
+    "key": "the_speech_task_ended_start_a_2c848c"
+  },
+  {
+    "source": "Speech transcript consumption is too slow",
+    "key": "speech_transcript_consumption_is_too_slow_d740d7"
+  },
+  {
+    "source": "The live speech service returned an error",
+    "key": "the_live_speech_service_returned_an_a12597"
+  },
+  {
+    "source": "Each option must contain 1-120 characters",
+    "key": "each_option_must_contain_1_120_a3f2d3"
+  },
+  {
+    "source": "Connect to a LAN using Wi-Fi or Ethernet",
+    "key": "connect_to_a_lan_using_wi_aefd9c"
+  },
+  {
+    "source": "A live speech session is already running",
+    "key": "a_live_speech_session_is_already_36cdae"
+  },
+  {
+    "source": "Unable to send live speech configuration",
+    "key": "unable_to_send_live_speech_configuration_60df93"
+  },
+  {
+    "source": "Unable to start bundled Chinese speech: ",
+    "key": "unable_to_start_bundled_chinese_speech_7b0dfe"
+  },
+  {
+    "source": "Unable to read available insertion apps",
+    "key": "unable_to_read_available_insertion_apps_e51d80"
+  },
+  {
+    "source": "Cloud speech ended; start a new session",
+    "key": "cloud_speech_ended_start_a_new_0f90b0"
+  },
+  {
+    "source": "Enter the four-digit collaboration code",
+    "key": "enter_the_four_digit_collaboration_code_15704b"
+  },
+  {
+    "source": "Unable to open an email or sharing app",
+    "key": "unable_to_open_an_email_or_3ca1ba"
+  },
+  {
+    "source": "A cloud speech task is already running",
+    "key": "a_cloud_speech_task_is_already_89253f"
+  },
+  {
+    "source": "Cloud speech requires 16 kHz PCM audio",
+    "key": "cloud_speech_requires_16_khz_pcm_c4201d"
+  },
+  {
+    "source": "Unable to finish offline recognition: ",
+    "key": "unable_to_finish_offline_recognition_6c3ec4"
+  },
+  {
+    "source": "Unable to prepare sharing attachments",
+    "key": "unable_to_prepare_sharing_attachments_0cda00"
+  },
+  {
+    "source": "Sharing ended; generate a new QR code",
+    "key": "sharing_ended_generate_a_new_qr_d52ecb"
+  },
+  {
+    "source": "The password must contain four digits",
+    "key": "the_password_must_contain_four_digits_6268fa"
+  },
+  {
+    "source": "Unable to start LAN file reception: ",
+    "key": "unable_to_start_lan_file_reception_40058e"
+  },
+  {
+    "source": "Unsupported speech response protocol",
+    "key": "unsupported_speech_response_protocol_49a8a6"
+  },
+  {
+    "source": "Live speech connection failed (HTTP ",
+    "key": "live_speech_connection_failed_http_bb0de7"
+  },
+  {
+    "source": "LAN service discovery is unavailable",
+    "key": "lan_service_discovery_is_unavailable_2ee9cc"
+  },
+  {
+    "source": "Unsupported filename or file format",
+    "key": "unsupported_filename_or_file_format_a4878a"
+  },
+  {
+    "source": "The file is empty or exceeds 100 MB",
+    "key": "the_file_is_empty_or_exceeds_a9576c"
+  },
+  {
+    "source": "Unable to send speech configuration",
+    "key": "unable_to_send_speech_configuration_e29788"
+  },
+  {
+    "source": "Cloud speech connection interrupted",
+    "key": "cloud_speech_connection_interrupted_f4d6a9"
+  },
+  {
+    "source": "Invalid shared page format or size",
+    "key": "invalid_shared_page_format_or_size_cbfe66"
+  },
+  {
+    "source": "Unable to open the teaching page: ",
+    "key": "unable_to_open_the_teaching_page_2633ce"
+  },
+  {
+    "source": "Unable to open the insertion app: ",
+    "key": "unable_to_open_the_insertion_app_9eee53"
+  },
+  {
+    "source": "Live speech connection interrupted",
+    "key": "live_speech_connection_interrupted_2153ee"
+  },
+  {
+    "source": "Unable to configure Doubao speech",
+    "key": "unable_to_configure_doubao_speech_1594ec"
+  },
+  {
+    "source": "Live speech response is too large",
+    "key": "live_speech_response_is_too_large_1167e0"
+  },
+  {
+    "source": "The participant limit was reached",
+    "key": "the_participant_limit_was_reached_dd43a9"
+  },
+  {
+    "source": "Sharing ended; scan a new QR code",
+    "key": "sharing_ended_scan_a_new_qr_7fcc95"
+  },
+  {
+    "source": "Incorrect speech response length",
+    "key": "incorrect_speech_response_length_8a7b76"
+  },
+  {
+    "source": "Live speech connection timed out",
+    "key": "live_speech_connection_timed_out_06615e"
+  },
+  {
+    "source": "Invalid shared document contents",
+    "key": "invalid_shared_document_contents_04dc1b"
+  },
+  {
+    "source": "Invalid shared document viewport",
+    "key": "invalid_shared_document_viewport_c9db89"
+  },
+  {
+    "source": "A speech task is already running",
+    "key": "a_speech_task_is_already_running_2f17fc"
+  },
+  {
+    "source": "Shared pages must be PNG images",
+    "key": "shared_pages_must_be_png_images_ab2bed"
+  },
+  {
+    "source": "Connect to a LAN before sharing",
+    "key": "connect_to_a_lan_before_sharing_09328c"
+  },
+  {
+    "source": "Insufficient whiteboard storage",
+    "key": "insufficient_whiteboard_storage_9a4090"
+  },
+  {
+    "source": "Speech connection failed (HTTP ",
+    "key": "speech_connection_failed_http_74abda"
+  },
+  {
+    "source": "Live speech requires 16 kHz PCM",
+    "key": "live_speech_requires_16_khz_pcm_579952"
+  },
+  {
+    "source": "Invalid synchronization message",
+    "key": "invalid_synchronization_message_389203"
+  },
+  {
+    "source": "The session is invalid or ended",
+    "key": "the_session_is_invalid_or_ended_d9a033"
+  },
+  {
+    "source": "Unable to start collaboration: ",
+    "key": "unable_to_start_collaboration_363f22"
+  },
+  {
+    "source": "Live speech upload is too slow",
+    "key": "live_speech_upload_is_too_slow_2faff3"
+  },
+  {
+    "source": "LAN service discovery failed: ",
+    "key": "lan_service_discovery_failed_9711ad"
+  },
+  {
+    "source": "Choose 1 to 20 pages to share",
+    "key": "choose_1_to_20_pages_to_8b16db"
+  },
+  {
+    "source": "Invalid speech response frame",
+    "key": "invalid_speech_response_frame_62363f"
+  },
+  {
+    "source": "The live speech session ended",
+    "key": "the_live_speech_session_ended_65b8fb"
+  },
+  {
+    "source": "Enter a topic and 2-8 options",
+    "key": "enter_a_topic_and_2_8_1335a1"
+  },
+  {
+    "source": "Invalid speech audio segment",
+    "key": "invalid_speech_audio_segment_57a7f3"
+  },
+  {
+    "source": "Speech response is too large",
+    "key": "speech_response_is_too_large_1f4cbe"
+  },
+  {
+    "source": "Too many whiteboard elements",
+    "key": "too_many_whiteboard_elements_87bbc5"
+  },
+  {
+    "source": "Invalid audio segment format",
+    "key": "invalid_audio_segment_format_fb8646"
+  },
+  {
+    "source": "Offline recognition failed: ",
+    "key": "offline_recognition_failed_0f0125"
+  },
+  {
+    "source": "Speech connection timed out",
+    "key": "speech_connection_timed_out_a451f1"
+  },
+  {
+    "source": "The cloud speech task ended",
+    "key": "the_cloud_speech_task_ended_73b1cb"
+  },
+  {
+    "source": "Speech response is not JSON",
+    "key": "speech_response_is_not_json_2004ce"
+  },
+  {
+    "source": "Collaboration is not active",
+    "key": "collaboration_is_not_active_178a27"
+  },
+  {
+    "source": "Open a teaching page first",
+    "key": "open_a_teaching_page_first_c3e4d0"
+  },
+  {
+    "source": "Incomplete speech response",
+    "key": "incomplete_speech_response_0cfa29"
+  },
+  {
+    "source": "Invalid live audio segment",
+    "key": "invalid_live_audio_segment_1c10a3"
+  },
+  {
+    "source": "Unable to delete the file",
+    "key": "unable_to_delete_the_file_30e6ac"
+  },
+  {
+    "source": "Invalid live speech event",
+    "key": "invalid_live_speech_event_8e505e"
+  },
+  {
+    "source": "Email / share whiteboard",
+    "key": "email_share_whiteboard_978b78"
+  },
+  {
+    "source": "Incomplete file transfer",
+    "key": "incomplete_file_transfer_14d876"
+  },
+  {
+    "source": "Synchronization failed: ",
+    "key": "synchronization_failed_6ab299"
+  },
+  {
+    "source": "Unable to save the file",
+    "key": "unable_to_save_the_file_043be3"
+  },
+  {
+    "source": "Collaboration cancelled",
+    "key": "collaboration_cancelled_d99b82"
+  },
+  {
+    "source": "Invalid shared document",
+    "key": "invalid_shared_document_a147fc"
+  },
+  {
+    "source": "Invalid whiteboard page",
+    "key": "invalid_whiteboard_page_dac7e2"
+  },
+  {
+    "source": "Invalid whiteboard data",
+    "key": "invalid_whiteboard_data_7a1f66"
+  },
+  {
+    "source": "Invalid password format",
+    "key": "invalid_password_format_fdadc5"
+  },
+  {
+    "source": "Speech service error (",
+    "key": "speech_service_error_3a7c77"
+  },
+  {
+    "source": "Reopen the voting page",
+    "key": "reopen_the_voting_page_c255db"
+  },
+  {
+    "source": "Invalid request origin",
+    "key": "invalid_request_origin_ba8113"
+  },
+  {
+    "source": "Screen capture failed",
+    "key": "screen_capture_failed_8c990e"
+  },
+  {
+    "source": "Unsupported operation",
+    "key": "unsupported_operation_6643ef"
+  },
+  {
+    "source": "The speech task ended",
+    "key": "the_speech_task_ended_9f3a64"
+  },
+  {
+    "source": "Invalid capture area",
+    "key": "invalid_capture_area_d33d91"
+  },
+  {
+    "source": "Upload failed; retry",
+    "key": "upload_failed_retry_5d3b67"
+  },
+  {
+    "source": "Choose valid options",
+    "key": "choose_valid_options_8d6475"
+  },
+  {
+    "source": "Invalid request size",
+    "key": "invalid_request_size_5291b8"
+  },
+  {
+    "source": "Collaboration ended",
+    "key": "collaboration_ended_50e74e"
+  },
+  {
+    "source": "Fcboard whiteboard",
+    "key": "fcboard_whiteboard_75a48f"
+  },
+  {
+    "source": "Incomplete request",
+    "key": "incomplete_request_b40b47"
+  },
+  {
+    "source": "Start a vote first",
+    "key": "start_a_vote_first_6584f1"
+  },
+  {
+    "source": "Enter the password",
+    "key": "enter_the_password_d5b815"
+  },
+  {
+    "source": "Connection failed",
+    "key": "connection_failed_596c52"
+  },
+  {
+    "source": "Connection closed",
+    "key": "connection_closed_fdb770"
+  },
+  {
+    "source": "Invalid file ID",
+    "key": "invalid_file_id_9bca03"
+  },
+  {
+    "source": "Upload complete",
+    "key": "upload_complete_e5bc84"
+  },
+  {
+    "source": "Invalid option",
+    "key": "invalid_option_43996c"
+  },
+  {
+    "source": "Voting ended",
+    "key": "voting_ended_cc2e83"
+  }
+]

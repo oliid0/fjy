@@ -100,13 +100,16 @@ export const ShareQRCode = ({
     <div className="fc-qr-content" aria-busy={busy}>
       <label className="fc-qr-protection">
         <span>{t("fcboard.qr_password_protection")}</span>
-        <input
-          type="checkbox"
-          role="switch"
-          checked={enabled}
-          disabled={busy}
-          onChange={(event) => void update(event.target.checked, password)}
-        />
+        <span className="fc-qr-switch">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={enabled}
+            disabled={busy}
+            onChange={(event) => void update(event.target.checked, password)}
+          />
+          <span className="fc-qr-switch-track" aria-hidden="true" />
+        </span>
       </label>
       <p className="fc-qr-description">
         {t("fcboard.qr_password_protection_desc")}

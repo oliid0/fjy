@@ -1,3 +1,7 @@
+import {
+  recognitionPattern,
+  recognitionVocabulary,
+} from "./recognitionVocabulary";
 import { mathNotation } from "./mathNotation";
 
 import {
@@ -7,33 +11,35 @@ import {
   plotExpression,
 } from "./math";
 
+/** Both resource topics and spoken requests use the same visualization vocabulary. */
+export const visualizationTopic = (text: string) =>
+  recognitionPattern("intent_0").test(text);
+
+/** Explicit chart requests bypass command planning and the single-function route. */
+export const visualizationRequest = (text: string) => {
+  if (recognitionPattern("intent_1").test(text)) {
+    return null;
+  }
+  return visualizationTopic(text) &&
+    recognitionPattern("intent_2").test(text.trim())
+    ? text.trim()
+    : null;
+};
+
 /** A selected heading remains ink; an explicit question or instruction can act on the board. */
 export const selectionRequest = (text: string) =>
   /[?？]\s*$/.test(text.trim()) ||
-  /^(?:(?:请|帮我|麻烦)\s*)?(?:讲解|解释|教我|演示|画(?!布|笔|册)|绘制|生成|插入|计算|总结|概括|标注|录制|开始录制|停止录制|新建白板|切换白板|撤销|撤回|重做|删除选中|清空白板|为什么|如何|怎么)/.test(
-    text.trim(),
-  );
+  recognitionPattern("intent_3").test(text.trim());
 
 const spokenExpression = (text: string) =>
   normalizeExpression(
-    text
-      .replace(/等于/g, "=")
-      .replace(/加上?|减去?|乘以?|除以/g, (word) =>
-        word.startsWith("加")
-          ? "+"
-          : word.startsWith("减")
-          ? "-"
-          : word.startsWith("乘")
-          ? "*"
-          : "/",
+    recognitionVocabulary.spokenMath
+      .reduce(
+        (value, token) =>
+          value.replace(new RegExp(token.pattern, "gi"), token.value),
+        text,
       )
-      .replace(/的平方|平方/g, "^2")
-      .replace(/的立方|立方/g, "^3")
-      .replace(/[零一二三四五六七八九]/g, (word) =>
-        String("零一二三四五六七八九".indexOf(word)),
-      )
-      .replace(/(?:的)?(?:函数)?(?:图像|图象|曲线|曲面)[。！!？?]*$/, "")
-      .replace(/[。！!？?]+$/, "")
+      .replace(/[.!?\u3002\uFF01\uFF1F]+$/, "")
       .replace(/\s+/g, "")
       .trim(),
   );
@@ -45,7 +51,7 @@ export const localMathIntent = (
   | { action: "plot"; expression: string; surface: boolean }
   | { action: "calculate"; expression: string }
   | null => {
-  const functionMatch = text.match(/([yz])\s*(?:=|等于)\s*(.+)/i);
+  const functionMatch = text.match(recognitionPattern("intent_4"));
   try {
     if (functionMatch) {
       const expression = plotExpression(spokenExpression(functionMatch[2]));
@@ -56,7 +62,7 @@ export const localMathIntent = (
         surface: functionMatch[1].toLowerCase() === "z",
       };
     }
-    const calculation = text.match(/(?:计算|求值)(?:一下)?\s*[:：]?\s*(.+)/);
+    const calculation = text.match(recognitionPattern("intent_5"));
     if (calculation) {
       const expression = spokenExpression(calculation[1]);
       prepareCalculation(expression);

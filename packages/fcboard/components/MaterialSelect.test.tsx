@@ -85,3 +85,35 @@ it("keeps the internal value input out of label activation and mobile text entry
   expect(change).toHaveBeenCalledWith("second");
   expect(document.activeElement).not.toBe(input);
 });
+
+it("keeps a portaled choice out of the parent picker click handler across repeated changes", () => {
+  const parent = vi.fn();
+  const Example = () => {
+    const [value, setValue] = useState("local");
+    return (
+      <div onClick={parent}>
+        <label>
+          Engine
+          <MaterialSelect
+            aria-label="Engine"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          >
+            <option value="local">Local</option>
+            <option value="cloud">Cloud</option>
+          </MaterialSelect>
+        </label>
+      </div>
+    );
+  };
+  render(<Example />);
+  const trigger = screen.getByRole("combobox", { name: "Engine" });
+  for (const choice of ["Cloud", "Local", "Cloud"]) {
+    fireEvent.mouseDown(trigger);
+    fireEvent.pointerDown(screen.getByRole("option", { name: choice }));
+    fireEvent.click(screen.getByRole("option", { name: choice }));
+    expect(trigger).toHaveTextContent(choice);
+    expect(screen.queryByRole("listbox")).toBeNull();
+  }
+  expect(parent).not.toHaveBeenCalled();
+});

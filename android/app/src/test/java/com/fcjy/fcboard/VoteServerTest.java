@@ -9,6 +9,7 @@ import org.json.JSONObject;
 import org.junit.Test;
 
 public class VoteServerTest {
+    @org.junit.Before public void configurePageLanguage() throws Exception { TestPageLocalization.configure("en"); }
     private HttpURLConnection request(VoteServer server, String path, String cookie, String body) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL("http://127.0.0.1:" + server.getListeningPort() + path).openConnection();
         connection.setConnectTimeout(3000); connection.setReadTimeout(3000);

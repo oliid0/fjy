@@ -12,7 +12,7 @@ export const BoardOpen = () => {
     () =>
       classroomCommands.register(
         "board.chooseOpen",
-        "打开原版 BZD 云端 / 本地选择器；云端凭四位提取码导入实际文件，本地打开设备文件窗。",
+        "Open the native BZD cloud/local chooser; import the actual cloud file using its four-digit retrieval code, or open the device file picker.",
         () => setView("choose"),
       ),
     [],

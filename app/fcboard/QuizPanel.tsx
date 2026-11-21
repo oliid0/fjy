@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Button, CircularProgress, IconButton } from "@mui/material";
 import { t } from "@fcboard/fcboard/i18n";
 import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
 import { MaterialPanel } from "./MaterialPanel";
-import { quizDocument } from "./quiz";
+import { quizDocument, quizUpdate } from "./quiz";
 
 import type { Quiz } from "./quiz";
 
@@ -13,6 +13,7 @@ export const QuizPanel = ({
   busy,
   error,
   onClose,
+  onRetryImage,
   open = true,
 }: {
   open?: boolean;
@@ -20,8 +21,52 @@ export const QuizPanel = ({
   busy: boolean;
   error: string;
   onClose: () => void;
+  onRetryImage?: (id: string) => void;
 }) => {
-  const html = useMemo(() => (quiz ? quizDocument(quiz) : ""), [quiz]);
+  const iframe = useRef<HTMLIFrameElement>(null);
+  const documentValue = useRef({ identity: "", channel: "", html: "" });
+  const sent = useRef<Quiz | undefined>(undefined);
+  const identity = quiz?.id || quiz?.title || "";
+  if (quiz && documentValue.current.identity !== identity) {
+    const channel = crypto.randomUUID();
+    documentValue.current = {
+      identity,
+      channel,
+      html: quizDocument(quiz, channel),
+    };
+    sent.current = undefined;
+  }
+  const sync = useCallback(
+    (full = false) => {
+      if (quiz) {
+        iframe.current?.contentWindow?.postMessage(
+          {
+            type: "quiz-progress",
+            channel: documentValue.current.channel,
+            ...quizUpdate(quiz, full ? undefined : sent.current),
+          },
+          "*",
+        );
+        sent.current = quiz;
+      }
+    },
+    [quiz],
+  );
+  useEffect(() => sync(), [sync]);
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (
+        event.source === iframe.current?.contentWindow &&
+        event.data?.type === "quiz-retry-image" &&
+        event.data.channel === documentValue.current.channel &&
+        typeof event.data.id === "string"
+      ) {
+        onRetryImage?.(event.data.id);
+      }
+    };
+    window.addEventListener("message", receive);
+    return () => window.removeEventListener("message", receive);
+  }, [onRetryImage]);
   return (
     <MaterialPanel
       centered
@@ -46,14 +91,39 @@ export const QuizPanel = ({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "8px 16px",
+          gap: 12,
         }}
       >
         <strong>{t("fcboard.ai_questions")}</strong>
+        {busy && quiz && (
+          <span role="status">
+            <CircularProgress size={16} />{" "}
+            {t("fcboard.quizForm.generatingCount", {
+              ready: quiz.questions.length,
+              total: quiz.plannedCount || quiz.questions.length,
+            })}
+          </span>
+        )}
         <IconButton aria-label={t("buttons.close")} onClick={onClose}>
           {CloseIcon}
         </IconButton>
       </div>
-      {busy ? (
+      {error && (
+        <p role="alert" style={{ padding: 24 }}>
+          {error}
+        </p>
+      )}
+      {quiz ? (
+        <iframe
+          ref={iframe}
+          title={quiz.title}
+          srcDoc={documentValue.current.html}
+          onLoad={() => sync(true)}
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
+          style={{ flex: 1, width: "100%", border: 0, minHeight: 0 }}
+        />
+      ) : busy ? (
         <div
           role="status"
           style={{
@@ -68,18 +138,6 @@ export const QuizPanel = ({
           <span>{t("fcboard.quiz_generating")}</span>
           <Button onClick={onClose}>{t("buttons.cancel")}</Button>
         </div>
-      ) : error ? (
-        <p role="alert" style={{ padding: 24 }}>
-          {error}
-        </p>
-      ) : quiz ? (
-        <iframe
-          title={quiz.title}
-          srcDoc={html}
-          sandbox="allow-scripts"
-          referrerPolicy="no-referrer"
-          style={{ flex: 1, width: "100%", border: 0, minHeight: 0 }}
-        />
       ) : null}
     </MaterialPanel>
   );

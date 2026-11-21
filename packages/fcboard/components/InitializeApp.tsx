@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import type { Theme } from "@fcboard/element/types";
 
-import { defaultLang, languages, setLanguage } from "../i18n";
+import { defaultLang, isLanguageLoaded, languages, setLanguage } from "../i18n";
 
 import { LoadingMessage } from "./LoadingMessage";
 
@@ -15,7 +15,9 @@ interface Props {
 }
 
 export const InitializeApp = (props: Props) => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => !isLanguageLoaded(props.langCode),
+  );
 
   useEffect(() => {
     const updateLang = async () => {

@@ -71,6 +71,7 @@ import { factoryInkDashes, isFactoryStroke } from "./factoryInk";
 import { isFactoryBrush } from "./factoryBrush";
 import { factoryNibPath2D, factoryPath2D } from "./factoryPath";
 import { rainbowInkCoordinates, rainbowInkStops } from "./rainbowInk";
+import { nativeInkGradient } from "./nativeInkColor";
 
 import type {
   FcboardElement,
@@ -197,6 +198,20 @@ const cappedElementCanvasSize = (
   // rescale to ensure canvas area is within limits
   if (width * height * scale * scale > AREA_LIMIT) {
     scale = Math.sqrt(AREA_LIMIT / (width * height));
+  }
+
+  if (isArrowElement(element) && getBoundTextElement(element, elementsMap)) {
+    // Labelled arrows rotate a second, square canvas. A long thin arrow's
+    // first canvas can fit the area limit while this one requests gigabytes.
+    // Both backing stores must use the same scale to preserve positioning.
+    const labelledSide =
+      Math.max(elementWidth, elementHeight) * window.devicePixelRatio +
+      padding * 10;
+    scale = Math.min(
+      scale,
+      WIDTH_HEIGHT_LIMIT / labelledSide,
+      Math.sqrt(AREA_LIMIT) / labelledSide,
+    );
   }
 
   width = Math.floor(width * scale);
@@ -421,20 +436,30 @@ const drawElementOnCanvas = (
     case "freedraw": {
       // Draw directly to canvas
       context.save();
+      const native = nativeInkGradient(element);
+      const nativePaint = native
+        ? context.createLinearGradient(...native.coordinates)
+        : undefined;
+      if (nativePaint && native) {
+        native.stops.forEach(([offset, color]) =>
+          nativePaint.addColorStop(offset, color),
+        );
+      }
 
       if (
         (isFactoryStroke(element) || isFactoryBrush(element)) &&
         element.backgroundColor === "transparent"
       ) {
         context.fillStyle =
-          renderConfig.theme === THEME.DARK
+          nativePaint ||
+          (renderConfig.theme === THEME.DARK
             ? applyDarkModeFilter(element.strokeColor)
-            : element.strokeColor;
+            : element.strokeColor);
         if (isFactoryBrush(element)) {
           context.fill(factoryPath2D(element));
         } else {
           context.strokeStyle = context.fillStyle;
-          const rainbow = rainbowInkCoordinates(element);
+          const rainbow = !native && rainbowInkCoordinates(element);
           if (rainbow) {
             const gradient = context.createLinearGradient(...rainbow);
             rainbowInkStops.forEach(([offset, color]) =>
@@ -466,9 +491,10 @@ const drawElementOnCanvas = (
       for (const shape of shapes) {
         if (typeof shape === "string") {
           context.fillStyle =
-            renderConfig.theme === THEME.DARK
+            nativePaint ||
+            (renderConfig.theme === THEME.DARK
               ? applyDarkModeFilter(element.strokeColor)
-              : element.strokeColor;
+              : element.strokeColor);
           let cached = inkPathCache.get(element);
           if (!cached || cached.svg !== shape) {
             cached = { svg: shape, path: new Path2D(shape) };
@@ -476,7 +502,7 @@ const drawElementOnCanvas = (
           }
           if (isFactoryStroke(element)) {
             context.strokeStyle = context.fillStyle;
-            const rainbow = rainbowInkCoordinates(element);
+            const rainbow = !native && rainbowInkCoordinates(element);
             if (rainbow) {
               const gradient = context.createLinearGradient(...rainbow);
               for (const [offset, color] of rainbowInkStops) {

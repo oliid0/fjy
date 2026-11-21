@@ -145,18 +145,18 @@ describe("Android system speech", () => {
     );
     stop();
   });
-  it("uses the configured spoken language independently of the interface language", async () => {
+  it("follows the interface language despite an obsolete saved speech override", async () => {
     saveSettings({ ...defaults, speechLanguage: "en-US" }, false);
     const stop = await startSystemSpeech(vi.fn(), vi.fn());
     expect(native.start).toHaveBeenCalledWith(
-      expect.objectContaining({ language: "en-US" }),
+      expect.objectContaining({ language: "zh-CN" }),
     );
     stop();
   });
 });
 
 it.each(["auto", "ja-JP"])(
-  "uses transcription language %s independently of the UI",
+  "ignores obsolete transcription language %s and follows the UI",
   async (speechLanguage) => {
     saveSettings(
       {
@@ -174,9 +174,7 @@ it.each(["auto", "ja-JP"])(
     try {
       await transcribe(new Blob(["audio"], { type: "audio/webm" }));
       const form = fetcher.mock.calls[0][1]!.body as FormData;
-      expect(form.get("language")).toBe(
-        speechLanguage === "auto" ? null : "ja",
-      );
+      expect(form.get("language")).toBe("zh");
     } finally {
       fetcher.mockRestore();
     }

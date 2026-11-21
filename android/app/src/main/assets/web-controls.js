@@ -120,7 +120,7 @@
     );
   const sensitive = (node) =>
     node.type === "password" ||
-    /password|passwd|api.?key|token|secret|密码|密钥/i.test(
+    /password|passwd|api.?key|token|secret|\u5bc6\u7801|\u5bc6\u94a5/i.test(
       `${node.name || ""} ${node.id} ${node.autocomplete || ""} ${label(node)}`,
     );
   const controls = () =>

@@ -1,0 +1,66 @@
+.fc-factory-color-wheel {
+  width: 160px;
+  min-height: 212px;
+  box-sizing: border-box;
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid #00000038;
+  border-radius: 22px;
+  box-shadow: 0 4px 12px #0002;
+  .fc-color-disc {
+    width: 126px;
+    height: 126px;
+    position: relative;
+    touch-action: none;
+    border-radius: 50%;
+    background: radial-gradient(circle closest-side, #fff, #fff0),
+      conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red);
+    padding: 5px;
+    background-clip: content-box;
+    background-origin: content-box;
+    box-sizing: border-box;
+    span {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border: 1px solid #000;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+  }
+  .fc-color-shade {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    > span {
+      width: 20px;
+      height: 20px;
+      border: 1px solid #ddd;
+      border-radius: 50%;
+    }
+    input {
+      width: 94px;
+      min-width: 0;
+      height: 8px;
+      appearance: none;
+      border-radius: 5px;
+    }
+    input::-webkit-slider-thumb {
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border: 1px solid #aaa;
+      background: #fff;
+      border-radius: 50%;
+    }
+    input::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border: 1px solid #aaa;
+      background: #fff;
+      border-radius: 50%;
+    }
+  }
+}

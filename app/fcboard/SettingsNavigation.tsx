@@ -15,6 +15,7 @@ const sections = {
   home: "settings",
   background: "background",
   language: "language",
+  languagePacks: "languagePacks.title",
   pen: "pen",
   touch: "factorySettings.threshold",
   toolbar: "toolbar_settings",
@@ -22,14 +23,17 @@ const sections = {
   models: "models_and_connection",
   recognition: "handwriting_and_insertion",
   voice: "speech_and_narration",
-  teaching: "teaching_preferences",
 } as const;
 export type SettingsPage = keyof typeof sections;
 const current = createContext<SettingsPage>("home");
 export const useSettingsPage = () => useContext(current);
-const aiPages: SettingsPage[] = ["models", "recognition", "voice", "teaching"];
+const aiPages: SettingsPage[] = ["models", "recognition", "voice"];
 export const settingsParent = (page: SettingsPage): SettingsPage =>
-  aiPages.includes(page) ? "ai" : "home";
+  page === "languagePacks"
+    ? "language"
+    : aiPages.includes(page)
+    ? "ai"
+    : "home";
 export const settingsPageTitle = (page: SettingsPage): TranslationKeys =>
   page === "background"
     ? "fcboard.factorySettings.background_title"
@@ -54,8 +58,7 @@ export const SettingsNavigation = ({
     setLocal(next);
     onPageChange?.(next);
   };
-  const inAI = aiPages.includes(section);
-  const back = () => setSection(inAI ? "ai" : "home");
+  const back = () => setSection(settingsParent(section));
   const rows =
     section === "home"
       ? ["touch", "background", "language", "toolbar", "ai"]
@@ -68,7 +71,7 @@ export const SettingsNavigation = ({
         {showHeader && section !== "home" && (
           <div className="fc-settings-subheader">
             <button type="button" onClick={back} aria-label={t("fcboard.back")}>
-              ‹ {t(`fcboard.${sections[inAI ? "ai" : "home"]}`)}
+              ‹ {t(settingsPageTitle(settingsParent(section)))}
             </button>
             <h3>{t(`fcboard.${sections[section]}`)}</h3>
           </div>
@@ -87,6 +90,9 @@ export const SettingsNavigation = ({
               {rows.map((id) => (
                 <ListItemButton
                   key={id}
+                  component="button"
+                  type="button"
+                  sx={{ width: "100%", textAlign: "start" }}
                   onClick={() => setSection(id as SettingsPage)}
                 >
                   <ListItemText

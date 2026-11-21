@@ -7,6 +7,7 @@ import {
 import { factoryFlatShape } from "./factoryShapeGeometry";
 import { recognizeInkContent } from "./inkRecognition";
 import { defaults, saveSettings } from "./settings";
+import * as digitalInk from "./digitalInk";
 
 import type { InkInput, InkPoint } from "./digitalInk";
 
@@ -25,8 +26,38 @@ const dense = (points: InkPoint[]): InkInput => [
     .concat([points.at(-1)!]),
 ];
 afterEach(() => {
+  vi.restoreAllMocks();
   localStorage.clear();
   sessionStorage.clear();
+});
+it("keeps an unsupported closed contour instead of collapsing the native ARROW guess into a tiny shaft", async () => {
+  saveSettings({ ...defaults, apiKey: "" }, false);
+  vi.spyOn(digitalInk, "hasDigitalInk").mockReturnValue(true);
+  const classify = vi
+    .spyOn(digitalInk, "recognizeNativeInk")
+    .mockResolvedValue({ candidates: ["ARROW", "RECTANGLE"], engine: "mlkit" });
+  const strokes = dense([
+    [0, 0],
+    [100, 20],
+    [40, 100],
+    [30, 30],
+    [0, 0],
+  ]);
+  expect(fitInkShape(strokes)).toBeUndefined();
+  const capture = vi.fn();
+  await expect(
+    recognizeInkContent(
+      "shape",
+      capture,
+      strokes,
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow("No local shape match");
+  expect(classify).toHaveBeenCalledTimes(1);
+  expect(capture).not.toHaveBeenCalled();
+  expect(() =>
+    recognizedShapeSkeleton({ kind: "shape", shape: "arrow" }, strokes),
+  ).toThrow("Shape endpoints");
 });
 it("recognizes a sampled circle locally with no API key or screenshot", async () => {
   saveSettings({ ...defaults, apiKey: "" }, false);
@@ -97,6 +128,28 @@ it("recognizes a rectangle from separate unordered edge strokes without recogniz
       ...strokes,
     ]),
   ).toEqual(new Set([4, 1, 2, 3]));
+});
+it("fits a tilted hand-drawn square at its full size", () => {
+  const angle = (17 * Math.PI) / 180;
+  const points: InkPoint[] = [
+    [-100, -100],
+    [100, -100],
+    [100, 100],
+    [-100, 100],
+    [-100, -100],
+  ].map(([x, y]) => [
+    300 + x * Math.cos(angle) - y * Math.sin(angle),
+    300 + x * Math.sin(angle) + y * Math.cos(angle),
+  ]);
+  const result = fitInkShape(dense(points));
+  expect(result?.shape).toBe("rectangle");
+  const shape = recognizedShapeSkeleton(result!, dense(points));
+  expect(shape.type).toBe("line");
+  expect(
+    "points" in shape &&
+      Math.max(...shape.points!.map((point) => point[0])) -
+        Math.min(...shape.points!.map((point) => point[0])),
+  ).toBeGreaterThan(200);
 });
 it("measures a drawn corner arc as 90 degrees and ignores a mark elsewhere", () => {
   const polygon: InkPoint[] = [

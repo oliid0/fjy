@@ -1,0 +1,227 @@
+// BSD MultiScreen: activity_fullscreen, canvas_item_* and drawable selectors.
+.fc-classroom .fc-split-board {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  color: #010101;
+  background: #263731;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  button {
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    background: transparent;
+  }
+  .fc-split-panes {
+    position: relative;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .fc-split-resize {
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    transform: translateX(-50%);
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 9px;
+      width: 2px;
+      background: #fcfcfe;
+    }
+    &:focus-visible::after {
+      background: #0368ff;
+      width: 4px;
+    }
+    &[aria-disabled="true"] {
+      pointer-events: none;
+    }
+  }
+  .fc-split-pane {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-inline-end: 1px solid #fcfcfe;
+    &:last-child {
+      border: 0;
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  }
+  .fc-split-bottom {
+    position: absolute;
+    inset: auto 0 0;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .fc-split-penbar {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 45px;
+    max-width: 100%;
+    padding: 0;
+    border-radius: 12px;
+    background: #f3f3f3f0;
+    box-shadow: inset 0 0 0 0.333px #999;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    button {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 0 0 35px;
+      box-sizing: border-box;
+      width: 35px;
+      height: 35px;
+      margin: 6px;
+      padding: 6px;
+      border-radius: 50%;
+      cursor: pointer;
+      img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+      }
+      &[aria-pressed="true"] {
+        background: #e0e0e0;
+        box-shadow: inset 0 0 0 1px #999;
+      }
+      &:focus-visible {
+        outline: 2px solid #0368ff;
+        outline-offset: -1px;
+      }
+      &:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+    }
+  }
+  .fc-split-colors,
+  .fc-split-erasers {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+  }
+  .fc-split-erasers button {
+    padding: 3px;
+  }
+  > .fc-split-exit {
+    position: absolute;
+    z-index: 2;
+    bottom: 5px;
+    left: 0;
+    width: 35px;
+    height: 35px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #f3f3f3;
+    box-shadow: inset 0 0 0 0.333px #999;
+    color: #010101;
+    > svg {
+      width: 100%;
+      height: 100%;
+    }
+    &[aria-expanded="true"],
+    &:focus-visible {
+      background: #0368ff;
+      color: #fcfcfe;
+    }
+    &:active {
+      background: #ebebeb;
+      color: #010101;
+    }
+  }
+}
+.app .fc-classroom .fc-split-launcher {
+  box-sizing: border-box;
+  width: calc(198 * var(--fc-split-unit, 0.67px));
+  height: calc(72 * var(--fc-split-unit, 0.67px));
+  gap: calc(15 * var(--fc-split-unit, 0.67px));
+  padding: calc(12 * var(--fc-split-unit, 0.67px));
+  border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+  color: #010101;
+  > button {
+    flex: 0 0 calc(48 * var(--fc-split-unit, 0.67px));
+    width: calc(48 * var(--fc-split-unit, 0.67px));
+    height: calc(48 * var(--fc-split-unit, 0.67px));
+    padding: calc(10 * var(--fc-split-unit, 0.67px));
+    border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+    color: #010101;
+    &:focus-visible {
+      outline: 0;
+      color: #fcfcfe;
+      background: #0368ff;
+    }
+    &:active {
+      background: #ebebeb;
+    }
+  }
+}
+.app .fc-classroom .fc-split-exit-dialog {
+  position: absolute;
+  z-index: 72;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  min-height: 0;
+  padding: calc(20 * var(--fc-split-unit, 0.67px))
+    calc(30 * var(--fc-split-unit, 0.67px));
+  border: 0;
+  border-radius: calc(12 * var(--fc-split-unit, 0.67px));
+  background: #fcfcfe;
+  color: #010101;
+  > p {
+    margin: 0;
+    font-size: calc(16 * var(--fc-split-unit, 0.67px));
+  }
+  > p[role="alert"] {
+    margin-top: calc(12 * var(--fc-split-unit, 0.67px));
+    color: #c42d28;
+  }
+  footer {
+    justify-content: space-between;
+    margin-top: calc(20 * var(--fc-split-unit, 0.67px));
+    gap: calc(30 * var(--fc-split-unit, 0.67px));
+  }
+  footer button {
+    min-height: calc(24 * var(--fc-split-unit, 0.67px));
+    padding: 0;
+    color: #0368ff;
+    font-size: calc(16 * var(--fc-split-unit, 0.67px));
+    &:disabled {
+      opacity: 0.45;
+    }
+  }
+}

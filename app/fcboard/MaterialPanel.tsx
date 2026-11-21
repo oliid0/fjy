@@ -30,6 +30,7 @@ export const MaterialPanel = forwardRef<
         open={open}
         keepMounted={keepMounted}
         disablePortal
+        transitionDuration={0}
         maxWidth={false}
         onClose={onDismiss}
         aria-label={props["aria-label"]}

@@ -26,6 +26,7 @@ export interface AnimatedTrailOptions {
   stroke?: (trail: AnimatedTrail) => string;
   animateTrail?: boolean;
   centerline?: boolean;
+  factoryCircle?: boolean;
 }
 
 export class AnimatedTrail implements Trail {
@@ -49,6 +50,12 @@ export class AnimatedTrail implements Trail {
       this.trailElement.setAttribute("stroke-width", "1.5");
       this.trailElement.setAttribute("stroke-linecap", "round");
       this.trailElement.setAttribute("stroke-linejoin", "round");
+    }
+    if (this.options.factoryCircle) {
+      this.trailElement.setAttribute("stroke-width", "2");
+      this.trailElement.setAttribute("stroke-linecap", "round");
+      this.trailElement.setAttribute("stroke-linejoin", "round");
+      this.trailElement.setAttribute("stroke-dasharray", "8 16");
     }
     if (this.options.animateTrail) {
       this.trailAnimation = document.createElementNS(SVG_NS, "animate");
@@ -180,10 +187,23 @@ export class AnimatedTrail implements Trail {
         "fill",
         (this.options.fill ?? (() => "black"))(this),
       );
+      if (this.options.stroke) {
+        this.trailElement.setAttribute("stroke", this.options.stroke(this));
+      }
     }
   }
 
   private drawTrail(trail: LaserPointer, state: AppState): string {
+    if (this.options.factoryCircle) {
+      const points = trail.originalPoints.map(([x, y]) =>
+        sceneCoordsToViewportCoords({ sceneX: x, sceneY: y }, state),
+      );
+      // SelectorLine.quadTo(previous, current) follows the contact segment.
+      // SVG fills its implicit closing edge without stroking that return edge.
+      return points
+        .map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`)
+        .join(" ");
+    }
     if (this.options.centerline) {
       // An in-progress lasso has an open tip, with no artificial return line
       // to its origin and no second outline from a brush-shaped trail.

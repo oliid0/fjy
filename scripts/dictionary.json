@@ -1,0 +1,19 @@
+{
+  "source": "https://github.com/skywind3000/ECDICT",
+  "revision": "39cfb9672c0906b63569e0453c2e6abfb9ab182a",
+  "license": "MIT",
+  "files": [
+    {
+      "name": "ecdict.csv",
+      "url": "https://raw.githubusercontent.com/skywind3000/ECDICT/39cfb9672c0906b63569e0453c2e6abfb9ab182a/ecdict.csv",
+      "size": 66009548,
+      "sha256": "d1ecbdf9ee2b920afb6f430ca6b6bb9f559588cf0dff86e04bd255f9390843cc"
+    },
+    {
+      "name": "LICENSE",
+      "url": "https://raw.githubusercontent.com/skywind3000/ECDICT/39cfb9672c0906b63569e0453c2e6abfb9ab182a/LICENSE",
+      "size": 1063,
+      "sha256": "f8552dd246f61a4e064569eae6194a01c6b3d63b03bf27c6ca863593c549ed0f"
+    }
+  ]
+}

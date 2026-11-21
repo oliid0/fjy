@@ -65,8 +65,6 @@
     "wawoff2": "2.0.1",
     "which": "4.0.0"
   },
-  "bugs": "https://github.com/fcboard/fcboard/issues",
-  "repository": "https://github.com/fcboard/fcboard",
   "scripts": {
     "gen:types": "rimraf types && tsc",
     "build:esm": "rimraf dist && node ../../scripts/buildUtils.js && npm run gen:types"

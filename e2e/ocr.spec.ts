@@ -54,6 +54,12 @@ test("handwritten selection calculates with bundled OCR and no cloud request", a
     );
   }, elements);
   let cloudRequests = 0;
+  const modelRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/(ocr|local-models)\//.test(request.url())) {
+      modelRequests.push(request.url());
+    }
+  });
   await page.route("https://ark.cn-beijing.volces.com/**", async (route) => {
     cloudRequests++;
     await route.abort();
@@ -65,8 +71,10 @@ test("handwritten selection calculates with bundled OCR and no cloud request", a
   await expect(page.getByRole("toolbar", { name: "选区操作" })).toBeVisible();
   await page.waitForTimeout(2100);
   expect(cloudRequests).toBe(0);
+  expect(modelRequests).toEqual([]);
   const started = Date.now();
   await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("menuitem", { name: "问答", exact: true }).click();
   await expect
     .poll(
       () =>

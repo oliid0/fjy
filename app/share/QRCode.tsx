@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import Spinner from "@fcboard/fcboard/components/Spinner";
+import { useMemo } from "react";
+import { renderSVG } from "uqr";
+
 import { useI18n } from "@fcboard/fcboard/i18n";
 
 interface QRCodeProps {
@@ -8,43 +9,16 @@ interface QRCodeProps {
 
 export const QRCode = ({ value }: QRCodeProps) => {
   const { t } = useI18n();
-  const [svgData, setSvgData] = useState<string | null>(null);
-  const [error, setError] = useState<boolean>(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    import("./qrcode.chunk")
-      .then(({ generateQRCodeSVG }) => {
-        if (mounted) {
-          try {
-            setSvgData(generateQRCodeSVG(value));
-          } catch {
-            setError(true);
-          }
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setError(true);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
+  const svgData = useMemo(() => {
+    try {
+      return renderSVG(value);
+    } catch {
+      return null;
+    }
   }, [value]);
 
-  if (error) {
-    return null;
-  }
-
   if (!svgData) {
-    return (
-      <div className="ShareDialog__active__qrcode ShareDialog__active__qrcode--loading">
-        <Spinner />
-      </div>
-    );
+    return <span>{value}</span>;
   }
 
   return (

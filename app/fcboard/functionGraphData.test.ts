@@ -22,11 +22,11 @@ it("uses the original expression grammar, constants, base-ten log and invalid-do
     ["log(100)", 0, 2],
     ["log10(1000)", 0, 3],
     ["abs(-3)+sqrt(4)", 0, 5],
-    ["2^3^2", 0, 64],
+    ["2^3^2", 0, 512],
   ] as const) {
     expect(compileSourceFunction(expression)(x)).toBeCloseTo(result);
   }
-  expect(compileSourceFunction("1/x")(1e-8)).toBeNaN();
+  expect(compileSourceFunction("1/x")(1e-8)).toBe(1e8);
   expect(compileSourceFunction("sqrt(x)")(-1)).toBeNaN();
   expect(validSourceFunction("sqrt(x)")).toBe(true);
   for (const expression of [
@@ -48,9 +48,13 @@ it("keeps all source presets, splits invalid samples and screen excursions, and 
     color: "#0b5fff",
   }));
   const reciprocal = sampleSourceFunction(functions[2]);
-  expect(reciprocal.points).toHaveLength(1001);
-  expect(reciprocal.points[500]).toBeNull();
-  expect(sampleSourceFunction(functions[4]).points[500]).toBeNull();
+  expect(reciprocal.points.length).toBeLessThan(10000);
+  expect(reciprocal.points.filter((point) => point === null)).toHaveLength(2);
+  expect(
+    sampleSourceFunction(functions[4])
+      .points.filter((point) => point !== null)
+      .every((point) => point!.x > 0),
+  ).toBe(true);
   const data = {
     ...defaultGraphTransform,
     width: 500,
@@ -103,4 +107,20 @@ it("assigns distinct source colors and reuses a released color", () => {
   }
   expect(new Set(items.map((item) => item.color)).size).toBe(16);
   expect(nextFunctionColor(items.slice(1))).toBe(items[0].color);
+});
+
+it("enhances local parsing and resamples the visible domain after pan/zoom", () => {
+  expect(compileSourceFunction("-x^2")(2)).toBe(-4);
+  expect(compileSourceFunction("2x + \u03c0")(2)).toBeCloseTo(4 + Math.PI);
+  expect(compileSourceFunction("log(8,2)")(0)).toBe(3);
+  expect(validSourceFunction("sqrt(x-5)")).toBe(true);
+  const item = { id: 1, name: "line", expression: "x", color: "#000000" };
+  const samples = sampleSourceFunction(item, {
+    ...defaultGraphTransform,
+    x: -500,
+    width: 1000,
+    height: 1000,
+    functions: [item],
+  });
+  expect(samples.points.some((point) => point && point.x > 10)).toBe(true);
 });

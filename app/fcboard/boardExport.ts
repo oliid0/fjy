@@ -1,4 +1,4 @@
-import { newFrameElement } from "@fcboard/element";
+import { isNonDeletedElement, newFrameElement } from "@fcboard/element";
 
 import type { AppState } from "@fcboard/fcboard/types";
 
@@ -51,9 +51,11 @@ export const boardPageExportOptions = (
       1,
       maxEdge / (Math.max(size.width, size.height) * size.pixelRatio),
     );
+  const elements = board.elements.filter(isNonDeletedElement);
+  const files = board.files;
   return {
-    elements: board.elements.filter((element) => !element.isDeleted),
-    files: board.files,
+    elements,
+    files,
     appState: {
       ...board.view,
       exportBackground: true,

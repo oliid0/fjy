@@ -202,8 +202,7 @@ export const growBoardTableWriting = (
       source.type !== "freedraw" ||
       source.isDeleted ||
       source.customData?.fcInsertion ||
-      source.customData?.fcGenerated ||
-      source.customData?.fcQuestionInput
+      source.customData?.fcGenerated
     ) {
       continue;
     }
@@ -286,7 +285,7 @@ export const growDocumentTableWriting = (
       source.text ||
       source.image ||
       source.widget ||
-      source.questionInput ||
+      source.generated ||
       source.language ||
       source.lesson
     ) {

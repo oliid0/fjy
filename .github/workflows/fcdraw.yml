@@ -2,9 +2,7 @@ name: Fcboard verification and Android APK
 
 on:
   push:
-    branches: [main, codex/offline-arm-interactive-math]
-    paths-ignore: [history.md, docs/README.md]
-  pull_request:
+    branches: [main,codex/offline-arm-interactive-math]
   workflow_dispatch:
 
 # Node 22.21+ fetch otherwise ignores the runner's trusted proxy environment.

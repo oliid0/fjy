@@ -386,17 +386,19 @@ test("voice draws into the visible PPT and internal pinch updates its borderless
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("画y=a*x+1的函数图像"),
   );
-  const graph = page
-    .locator(".fc-document-ink foreignObject:has(.fc-inline-function)")
-    .last();
+  const graph = page.locator(
+    ".fc-document-ink foreignObject:has([data-native-resource-object-id])",
+  );
+  await expect(graph.locator('canvas[aria-label="y = a*x+1"]')).toBeVisible();
+  const selectionTool = page.getByRole("button", {
+    name: "圈选课件板书",
+    exact: true,
+  });
+  await expect(selectionTool).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "板书开关", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "圈选课件板书", exact: true }),
-  ).toHaveAttribute("aria-pressed", "false");
-  await zoomFunctionGraph(page, graph);
-  await expect(
-    graph.locator('.fc-inline-function[aria-label="y = a*x+1"]'),
-  ).toHaveCount(1);
+  await expect(selectionTool).toHaveAttribute("aria-pressed", "false");
+  await zoomFunctionGraph(page, graph, "img");
+  await expect(graph.getByRole("img", { name: "y = a*x+1" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("voice-ppt-function.png") });
   await page.evaluate(() =>
     Reflect.get(window, "fcTestSpeechNext")("写一个1+1=2"),

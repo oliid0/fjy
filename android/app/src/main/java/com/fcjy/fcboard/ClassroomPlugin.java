@@ -53,23 +53,28 @@ public class ClassroomPlugin extends Plugin {
                 android.content.ContentResolver resolver = getContext().getContentResolver();
                 boolean enabled = android.provider.Settings.Global.getInt(resolver,
                     android.provider.Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1;
-                String[] actions = enabled ? new String[] {
-                    android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS,
-                    android.provider.Settings.ACTION_SETTINGS
-                } : new String[] {
-                    android.provider.Settings.ACTION_SETTINGS
-                };
-                for (String action : actions) {
-                    android.content.Intent intent = android.content.Intent.parseUri(
-                        "intent:#Intent;action=" + action + ";package=com.android.settings;end", android.content.Intent.URI_INTENT_SCHEME);
-                    if (android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS.equals(action)) {
-                        // AOSP DevelopmentSettingsDashboardFragment scrolls to/highlights this preference.
-                        // Android exposes no public action for the nested WirelessDebuggingFragment.
+                String settings = "com.android.settings";
+                java.util.List<android.content.Intent> pages = new java.util.ArrayList<>();
+                if (enabled) {
+                    android.content.Intent developer = new android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).setPackage(settings);
+                    android.content.ComponentName page = developer.resolveActivity(getContext().getPackageManager());
+                    if (page != null && settings.equals(page.getPackageName()) &&
+                            (page.getClassName().endsWith("$DevelopmentSettingsDashboardActivity") ||
+                             page.getClassName().endsWith("$DevelopmentSettingsActivity") ||
+                             page.getClassName().endsWith(".DevelopmentSettings"))) {
                         android.os.Bundle args = new android.os.Bundle();
                         args.putString(":settings:fragment_args_key", "toggle_adb_wireless");
-                        intent.putExtra(":settings:show_fragment_args", args);
-                        intent.putExtra(":settings:fragment_args_key", "toggle_adb_wireless");
+                        developer.putExtra(":settings:show_fragment_args", args);
+                        developer.putExtra(":settings:fragment_args_key", "toggle_adb_wireless");
+                        pages.add(developer.setComponent(page));
                     }
+                }
+                for (String name : new String[] {"Settings$SystemDashboardActivity", "Settings$SystemManagementActivity"}) {
+                    pages.add(new android.content.Intent(android.content.Intent.ACTION_MAIN).setPackage(settings)
+                        .setClassName(settings, settings + "." + name));
+                }
+                for (android.content.Intent intent : pages) {
                     try {
                         getActivity().startActivity(intent);
                         JSObject result = new JSObject(); result.put("enabled", enabled);

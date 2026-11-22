@@ -18,7 +18,7 @@ import kotlin.math.roundToInt
 
 /** Only the display surface lives beside the WebView. Media never passes through the JS bridge. */
 class BoardReceiver(private val web: WebView, val protocol: String,
-                    private val authorization: Authorization?) : TextureView.SurfaceTextureListener, ServiceConnection {
+                    private val authorization: Authorization?, private val onStatusChanged: Runnable) : TextureView.SurfaceTextureListener, ServiceConnection {
     fun interface Authorization {
         fun update(token: String, sender: String, pin: String, accepted: Boolean)
     }
@@ -71,6 +71,7 @@ class BoardReceiver(private val web: WebView, val protocol: String,
                 height = h
                 audioOnly = audio
                 title = item
+                onStatusChanged.run()
             }
         }
     }
@@ -81,8 +82,19 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         texture.importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
         web.setBackgroundColor(Color.TRANSPARENT)
         parent.addView(texture, parent.indexOfChild(web), ViewGroup.LayoutParams(2, 2))
-        bound = context.bindService(Intent(context, ProjectionMediaService::class.java), this, Context.BIND_AUTO_CREATE)
+        bind()
         check(bound) { "Cannot bind media receiver" }
+    }
+
+    private fun bind() {
+        bound = context.bindService(Intent(context, ProjectionMediaService::class.java), this, Context.BIND_AUTO_CREATE)
+    }
+
+    private fun unbind() {
+        if (bound) {
+            bound = false
+            context.unbindService(this)
+        }
     }
 
     override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -91,10 +103,19 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         startWhenReady()
     }
     override fun onServiceDisconnected(name: ComponentName) = lost()
-    override fun onBindingDied(name: ComponentName) = lost()
-    override fun onNullBinding(name: ComponentName) = lost()
+    override fun onBindingDied(name: ComponentName) {
+        if (closed) return
+        lost()
+        unbind()
+        bind()
+    }
+    override fun onNullBinding(name: ComponentName) {
+        lost()
+        unbind()
+    }
 
     private fun lost() {
+        if (closed) return
         service = null
         started = false
         park()
@@ -102,7 +123,7 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         hasFrames = false
         revision = revisions.incrementAndGet()
         authorization?.update("", "", "", false)
-        if (bound) { bound = false; context.unbindService(this) }
+        onStatusChanged.run()
     }
 
     fun authorize(token: String, allow: Boolean) {
@@ -130,7 +151,10 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         }
     }
     override fun onSurfaceTextureUpdated(value: SurfaceTexture) {
-        if (!audioOnly) hasFrames = true
+        if (!closed && !audioOnly && !hasFrames) {
+            hasFrames = true
+            onStatusChanged.run()
+        }
     }
     override fun onSurfaceTextureDestroyed(value: SurfaceTexture): Boolean {
         if (started) {
@@ -139,6 +163,7 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         surface?.release()
         surface = null
         hasFrames = false
+        if (!closed) onStatusChanged.run()
         return true
     }
 
@@ -181,7 +206,8 @@ class BoardReceiver(private val web: WebView, val protocol: String,
         authorization?.update("", "", "", false)
         try { service?.stop(protocol, events) } catch (_: RemoteException) { }
         service = null
-        if (bound) { bound = false; context.unbindService(this) }
+        unbind()
         parent.removeView(texture)
+        onStatusChanged.run()
     }
 }

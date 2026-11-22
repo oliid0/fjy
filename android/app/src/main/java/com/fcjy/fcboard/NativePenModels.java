@@ -35,9 +35,11 @@ final class NativePenModels implements AutoCloseable {
     NativePenModels(Context context) { this.context = context; }
     Bundle infer(LocalInferenceService.Job job) throws Exception {
         if (job.input.getString("kind", "").equals("math")) {
-            String column = NativeMathLayout.column(context, job.input.getFloatArray("points"), job.input.getIntArray("lengths"), job);
-            if (column == null) { ensure("comer"); job.check(); column = math(job); }
-            Bundle result = new Bundle(); result.putString("latex", column); return result;
+            ensure("comer");
+            job.check();
+            Bundle result = new Bundle();
+            result.putStringArrayList("candidates", math(job));
+            return result;
         }
         String source = job.input.getString("source"), target = job.input.getString("target"), text = job.input.getString("text");
         ensure("Xenova/opus-mt-" + source + "-" + target); job.check();
@@ -223,7 +225,7 @@ final class NativePenModels implements AutoCloseable {
         Beam(long[] ids, double score, boolean finished) { this.ids = ids; this.score = score; this.finished = finished; }
         double rank() { return score / ids.length; }
     }
-    private String math(LocalInferenceService.Job job) throws Exception {
+    private ArrayList<String> math(LocalInferenceService.Job job) throws Exception {
         MathInkTensor ink = new MathInkTensor(job.input.getFloatArray("points"), job.input.getIntArray("lengths"));
         JSONObject special = vocab.getJSONObject("special_tokens"), words = vocab.getJSONObject("idx2word");
         int size = vocab.getInt("vocab_size"), sos = special.getInt("sos"), eos = special.getInt("eos"), pad = special.getInt("pad");
@@ -263,6 +265,7 @@ final class NativePenModels implements AutoCloseable {
                     if (beams.stream().allMatch(beam -> beam.finished)) break;
                     job.check();
                 }
+                ArrayList<String> transcriptions = new ArrayList<>();
                 for (Beam beam : beams) {
                     if (!beam.finished) continue;
                     StringBuilder latex = new StringBuilder(); int depth = 0; boolean valid = true;
@@ -272,8 +275,11 @@ final class NativePenModels implements AutoCloseable {
                         if (depth < 0) valid = false;
                         if (latex.length() > 0) latex.append(' '); latex.append(word);
                     }
-                    if (valid && depth == 0 && latex.length() > 0) return latex.toString();
+                    if (valid && depth == 0 && latex.length() > 0 && !transcriptions.contains(latex.toString())) {
+                        transcriptions.add(latex.toString());
+                    }
                 }
+                if (!transcriptions.isEmpty()) return transcriptions;
                 throw new IllegalStateException("No complete mathematical expression recognized");
             }
         }

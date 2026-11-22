@@ -51,19 +51,30 @@ export const recognizeLocalMath = async (
   if (
     !result ||
     typeof result !== "object" ||
-    !("latex" in result) ||
-    typeof result.latex !== "string" ||
-    !result.latex.trim() ||
-    result.latex.length > 1000
+    !("candidates" in result) ||
+    !Array.isArray(result.candidates)
   ) {
     throw new Error("Unreadable math ink");
   }
   // CoMER emits space-separated LaTeX tokens, including individual digits.
   // Compact only model tokens; ordinary OCR keeps its ambiguity checks.
-  return result.latex
-    .replace(/(\d)\s+(?=[\d.])/g, "$1")
-    .replace(/(\.)\s+(?=\d)/g, "$1")
-    .replace(/\s*([{}_^])\s*/g, "$1")
-    .replace(/\\(frac|sqrt)\s+(?=[{[])/g, "\\$1")
-    .replace(/\\(?:mathrm|operatorname)\{([a-z]+)\}/gi, "$1");
+  const candidates = result.candidates
+    .slice(0, 3)
+    .filter(
+      (latex): latex is string =>
+        typeof latex === "string" && !!latex.trim() && latex.length <= 1000,
+    )
+    .map((latex) =>
+      latex
+        .trim()
+        .replace(/(\d)\s+(?=[\d.])/g, "$1")
+        .replace(/(\.)\s+(?=\d)/g, "$1")
+        .replace(/\s*([{}_^])\s*/g, "$1")
+        .replace(/\\(frac|sqrt)\s+(?=[{[])/g, "\\$1")
+        .replace(/\\(?:mathrm|operatorname)\{([a-z]+)\}/gi, "$1"),
+    );
+  if (!candidates.length) {
+    throw new Error("Unreadable math ink");
+  }
+  return [...new Set(candidates)];
 };

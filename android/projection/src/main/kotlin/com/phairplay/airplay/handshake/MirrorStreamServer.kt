@@ -171,13 +171,17 @@ class MirrorStreamServer(
         }
     }
 
-    /** Bounded enqueue — if the decoder is behind, drop the oldest item to keep latency bounded. */
+    /** Keep the queued decoding prefix, especially its IDR, when codec startup lags. */
     private fun enqueue(item: Frame) {
         framesIn++
         if (!queue.offer(item)) {
-            queue.poll()
-            queue.offer(item)
-            framesDropped++
+            if (isKeyframe(item.annexB, item.config.mime == MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+                framesDropped += queue.size
+                queue.clear()
+                queue.offer(item)
+            } else {
+                framesDropped++
+            }
         }
         StreamStats.videoQueue = queue.size
         if (framesIn % 300 == 0) {
@@ -365,8 +369,7 @@ class MirrorStreamServer(
         framePtsUs += FRAME_INTERVAL_US
     }
 
-    private fun isKeyframe(annexB: ByteArray): Boolean {
-        val hevc = configured?.mime == MediaFormat.MIMETYPE_VIDEO_HEVC
+    private fun isKeyframe(annexB: ByteArray, hevc: Boolean = configured?.mime == MediaFormat.MIMETYPE_VIDEO_HEVC): Boolean {
         var i = 0
         while (i + 3 < annexB.size) {
             if (annexB[i].toInt() == 0 && annexB[i + 1].toInt() == 0 && annexB[i + 2].toInt() == 1) {

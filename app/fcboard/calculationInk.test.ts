@@ -2,6 +2,7 @@ import {
   calculationInk,
   columnInkRows,
   hasStructuredMathInk,
+  standaloneRadicand,
   preservesMathInkStructure,
 } from "./calculationInk";
 import { inkRecognitionDelay, settleInkRecognition } from "./inkRecognition";
@@ -209,4 +210,40 @@ it("recognizes a slanted final rule below a handwritten single-digit sum", () =>
   expect(columnInkRows(strokes)).toEqual([[strokes[0]], strokes.slice(1, 4)]);
   expect(calculationInk(strokes).strokes).toEqual(strokes.slice(0, 4));
   expect(preservesMathInkStructure(strokes, "1\n+1")).toBe(true);
+});
+
+it("keeps a radical index or an external factor out of standalone square root recovery", () => {
+  const radical: InkInput = [
+    [
+      [5, 28],
+      [10, 32],
+      [14, 42],
+      [22, 10],
+      [55, 10],
+    ],
+    [
+      [30, 23],
+      [35, 18],
+      [35, 42],
+    ],
+  ];
+  expect(standaloneRadicand(radical)).toEqual([radical[1]]);
+  expect(
+    standaloneRadicand([
+      [
+        [1, 3],
+        [5, 12],
+      ],
+      ...radical,
+    ]),
+  ).toBeUndefined();
+  expect(
+    standaloneRadicand([
+      ...radical,
+      [
+        [60, 20],
+        [70, 40],
+      ],
+    ]),
+  ).toBeUndefined();
 });

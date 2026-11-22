@@ -19,6 +19,8 @@ import { useI18n } from "@fcboard/fcboard/i18n";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
+import type { NativeProjectionSurface } from "@fcboard/fcboard/scene/types";
+
 import { QRCode } from "../share/QRCode";
 
 import { classroomCommands } from "./commands";
@@ -456,7 +458,7 @@ const ProjectionSession = ({
     revision: number;
     protocol: NativeProtocol;
     tile: string;
-    video: ProjectionSource;
+    video: NativeProjectionSurface;
   }>(undefined);
   const [native, setNative] = useState<NativeReceivers>();
   const disconnectCurrent = useRef<() => void>(undefined);
@@ -527,14 +529,44 @@ const ProjectionSession = ({
         setOpen(true);
       }
     };
+    const stopSender = () => {
+      const current = connection.current;
+      const source = nativeLive.current;
+      source?.video.position(null);
+      close();
+      if (current) {
+        void projection.disconnect(current.sender).catch(() => {});
+      }
+      if (source) {
+        const { protocol, revision } = source;
+        dismissed.set(protocol, revision);
+        void nativeProjection
+          .disconnect({ protocol, session, revision })
+          .catch(() => {
+            if (!disposed) {
+              setNativeError(true);
+            }
+          });
+      }
+    };
+    let latestRevision = 0;
+    let minimumRevision = 0;
     const unwatch = watchNativeProjection(
       session,
-      setNative,
+      (receivers) => {
+        latestRevision = Math.max(
+          latestRevision,
+          ...nativeProtocols.map((p) => receivers[p].revision),
+        );
+        setNative(receivers);
+      },
       (protocol, revision) =>
-        !connection.current &&
-        dismissed.get(protocol) !== revision &&
-        (!nativeLive.current || nativeLive.current.protocol === protocol),
+        revision >= minimumRevision && dismissed.get(protocol) !== revision,
       (protocol, video, revision) => {
+        if (connection.current) {
+          stopSender();
+        }
+        minimumRevision = revision;
         if (nativeLive.current) {
           nativeLive.current.video = video;
           const current = api.getSceneProjection?.();
@@ -554,9 +586,13 @@ const ProjectionSession = ({
         setError(undefined);
         setOpen(false);
       },
-      (protocol) => {
+      (protocol, replaced) => {
         if (nativeLive.current?.protocol === protocol) {
-          close();
+          if (replaced) {
+            stopSender();
+          } else {
+            close();
+          }
           if (!disposed) {
             setOpen(true);
           }
@@ -564,25 +600,6 @@ const ProjectionSession = ({
       },
       () => setNativeError(true),
     );
-    const stopSender = () => {
-      const current = connection.current;
-      const source = nativeLive.current;
-      close();
-      if (current) {
-        void projection.disconnect(current.sender).catch(() => {});
-      }
-      if (source) {
-        const { protocol, revision } = source;
-        dismissed.set(protocol, revision);
-        void nativeProjection
-          .disconnect({ protocol, session, revision })
-          .catch(() => {
-            if (!disposed) {
-              setNativeError(true);
-            }
-          });
-      }
-    };
     disconnectCurrent.current = () => {
       stopSender();
       setOpen(true);
@@ -632,9 +649,13 @@ const ProjectionSession = ({
         }
         return;
       }
-      if (connection.current || nativeLive.current) {
+      if (connection.current) {
         void projection.disconnect(event).catch(() => {});
         return;
+      }
+      minimumRevision = latestRevision + 1;
+      if (nativeLive.current) {
+        stopSender();
       }
       const video = document.createElement("video");
       video.playsInline = true;

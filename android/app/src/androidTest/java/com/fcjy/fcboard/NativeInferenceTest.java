@@ -65,10 +65,31 @@ public class NativeInferenceTest {
         try (Connection connection = new Connection()) {
             Bundle input = new Bundle(); input.putString("kind", "math"); input.putFloatArray("points", points); input.putIntArray("lengths", new int[]{2, 2, 2, 2});
             Bundle result = connection.request(input); assertFalse(result.getString("error", ""), result.containsKey("error"));
-            assertFalse(result.getString("latex", "").trim().isEmpty());
+            java.util.List<String> candidates = result.getStringArrayList("candidates");
+            assertNotNull(candidates);
+            assertTrue(candidates.size() >= 1 && candidates.size() <= 3);
+            assertFalse(candidates.get(0).trim().isEmpty());
             assertNotEquals(android.os.Process.myPid(), result.getInt("processId"));
         }
     }
+    @Test public void bundledFormulaModelReadsRaisedTwoAsPowerOfX() throws Exception {
+        // Two crossing strokes followed by a smaller, raised 2 with a baseline.
+        float[] ink = {10,30, 20,42, 35,60, 35,30, 24,43, 10,60,
+            39,18, 41,15, 45,14, 49,15, 50,18, 49,21, 40,30, 51,30};
+        Bundle input = new Bundle();
+        input.putString("kind", "math");
+        input.putFloatArray("points", ink);
+        input.putIntArray("lengths", new int[]{3, 3, 8});
+        try (Connection connection = new Connection()) {
+            Bundle result = connection.request(input);
+            assertFalse(result.getString("error", ""), result.containsKey("error"));
+            java.util.List<String> candidates = result.getStringArrayList("candidates");
+            assertNotNull(candidates);
+            assertTrue("Expected x squared in " + candidates, candidates.stream()
+                .map(value -> value.replace(" ", "")).anyMatch(value -> value.equals("x^{2}") || value.equals("x^2")));
+        }
+    }
+
     @Test public void eachRequestOwnsItsSessionsAndReleasesBothOnCompletion() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         java.lang.reflect.Method ensure = NativePenModels.class.getDeclaredMethod("ensure", String.class);

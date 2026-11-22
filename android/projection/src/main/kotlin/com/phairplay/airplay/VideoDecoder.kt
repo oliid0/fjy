@@ -466,7 +466,15 @@ class VideoDecoder(
         internal fun parseSpsResolution(sps: ByteArray): Pair<Int, Int>? {
             try {
                 if (sps.size < 4) return null
-                val reader = SpsBitReader(sps, startOffset = 1)  // skip NAL type byte (0x67)
+                val header = when {
+                    sps[0] != 0.toByte() -> 0
+                    sps[1] != 0.toByte() -> return null
+                    sps[2] == 1.toByte() -> 3
+                    sps[2] == 0.toByte() && sps[3] == 1.toByte() -> 4
+                    else -> return null
+                }
+                if (header >= sps.size || sps[header].toInt() and 31 != 7) return null
+                val reader = SpsBitReader(sps, startOffset = header + 1)
 
                 val profileIdc = reader.readBits(8)
                 reader.readBits(8)   // constraint flags + 2 reserved zeros

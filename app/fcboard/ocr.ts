@@ -2,6 +2,7 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import { chat, visualMessage } from "./ai";
 import { recognizeLocalMath } from "./localMathOcr";
+import { mathNotation, unwrapMathColumn } from "./mathNotation";
 import { currentSettings } from "./settings";
 import {
   calculationInk,
@@ -10,10 +11,25 @@ import {
   divisionSlashInk,
   hasStructuredMathInk,
   preservesMathInkStructure,
+  trailingPowerInk,
+  standaloneRadicand,
 } from "./calculationInk";
 import { hasDigitalInk, recognizeDigitalInk } from "./digitalInk";
 
 import type { InkInput } from "./digitalInk";
+
+const columnOperand = (text: string, index: number) => {
+  if (/[=＝\r\n]/.test(text)) {
+    return;
+  }
+  try {
+    const value = mathNotation(text);
+    const pattern = index
+      ? /^[+*/xX-]\s*\d+(?:\.\d+)?$/
+      : /^[+-]?\d+(?:\.\d+)?$/;
+    return pattern.test(value) ? value : undefined;
+  } catch {}
+};
 
 /** A caller action owns recognition; the two backends never read or mutate the board. */
 export const recognizeHandwriting = async (
@@ -32,10 +48,53 @@ export const recognizeHandwriting = async (
   const settings = currentSettings();
   const structured =
     kind === "math" && !!strokes?.length && hasStructuredMathInk(strokes);
-  const recognitionStrokes =
-    kind === "math" && strokes ? calculationInk(strokes).strokes : strokes;
-  const accepted = (text: string) =>
-    (!structured || preservesMathInkStructure(strokes!, text)) && accept(text);
+  const ending =
+    kind === "math" && strokes ? calculationInk(strokes) : undefined;
+  const equals = ending?.complete && ending.strokes === strokes;
+  const recognitionStrokes = equals ? strokes!.slice(0, -2) : strokes;
+  const columnRows =
+    kind === "math" && strokes ? columnInkRows(strokes) : undefined;
+  const accepted = (text: string) => {
+    if (columnRows) {
+      const rows = unwrapMathColumn(text)
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (/^[-_=─━]{2,}$/.test(rows.at(-1) || "")) {
+        rows.pop();
+      }
+      if (rows.length !== columnRows.length) {
+        return false;
+      }
+      return (
+        rows.every(
+          (row, index) =>
+            columnOperand(row, index) !== undefined &&
+            preservesMathInkStructure(columnRows[index], row),
+        ) && accept(text)
+      );
+    }
+    return (
+      (!structured || preservesMathInkStructure(strokes!, text)) && accept(text)
+    );
+  };
+  const selectCandidate = async (candidates: readonly string[]) => {
+    const valid: string[] = [];
+    for (const raw of candidates) {
+      signal.throwIfAborted();
+      const candidate = equals ? `${raw}=` : raw;
+      if (await accepted(candidate)) {
+        if (!chooseCandidate) {
+          return candidate;
+        }
+        valid.push(candidate);
+      }
+    }
+    if (valid.length && chooseCandidate) {
+      return chooseCandidate(valid);
+    }
+  };
   let raster: Promise<string> | undefined;
   const capture = () =>
     (raster ||= Promise.resolve(typeof image === "string" ? image : image()));
@@ -46,7 +105,7 @@ export const recognizeHandwriting = async (
           {
             role: "system",
             content: `Transcribe only the selected handwriting, without solving, adding or guessing. Preserve line breaks, equals signs and variables. Return an empty string when unreadable.${
-              languageHint === "en-US"
+              languageHint === "en-US" && kind === "text"
                 ? " The writing surface is for English letters and words."
                 : kind === "math"
                 ? " For a simple horizontal arithmetic expression return plain digits and + - * / =. For complex or two-dimensional mathematics return standard LaTeX, not flattened prose: use \\frac{numerator}{denominator}, braced superscripts/subscripts, \\sqrt[n]{...}, \\log_{base}, explicit \\sin/\\cos/etc., degree markers ^\\circ only if written, complete integral/sum/product bounds and differentials, and matrix environments with exact rows/columns. Identify fraction bars by operands above AND below, distinguish minus from fraction bars and variable x from multiplication. Do not add parentheses, degrees, multiplication signs, missing terms, or change a function's scope without visual evidence. Keep leading signs, decimal points, nested fractions and parentheses. Handwritten ÷ is division: preserve both dots and transcribe it as / or \\div, never as minus. Preserve complete definitions such as f(x)=1/x^2+x. For vertical arithmetic preserve operand line breaks and the final horizontal bar as ----; do not confuse it with a minus or equals sign, and never drop the written operator. Long division is divisor)dividend. Return only the exact transcription without Markdown, explanation, inferred correction or answer. If any essential symbol or scope is ambiguous return an empty string."
@@ -96,37 +155,62 @@ export const recognizeHandwriting = async (
       signal.throwIfAborted();
     }
   }
-  const columnRows =
-    kind === "math" && strokes ? columnInkRows(strokes) : undefined;
   if (columnRows) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
-      const candidates: string[][] = [];
-      for (const row of columnRows) {
-        signal.throwIfAborted();
-        candidates.push(
-          hasDigitalInk()
-            ? await recognizeDigitalInk(row, signal, "math", languageHint)
-            : [await recognizeLocalMath(row, signal)],
-        );
-      }
-      const rows = candidates.map((values, index) =>
-        values.find((value) =>
-          (index
-            ? /^[+\-−×xX*÷/]\s*\d+(?:\.\d+)?$/
-            : /^[+\-−]?\d+(?:\.\d+)?$/
-          ).test(value.trim()),
-        ),
-      );
-      if (rows.every((row) => row !== undefined)) {
-        const text = rows.join("\n");
-        if (await accepted(text)) {
-          signal.throwIfAborted();
-          return chooseCandidate ? chooseCandidate([text]) : text;
+      const rows: string[] = [];
+      for (const [index, row] of columnRows.entries()) {
+        const operand = (candidates: string[]) =>
+          candidates
+            .filter((candidate) => preservesMathInkStructure(row, candidate))
+            .map((candidate) => columnOperand(candidate, index))
+            .find(Boolean);
+        let value: string | undefined;
+        if (hasDigitalInk()) {
+          const candidates = await recognizeDigitalInk(
+            row,
+            signal,
+            "math",
+            languageHint,
+          ).catch(() => {
+            signal.throwIfAborted();
+            return [];
+          });
+          value = operand(candidates);
         }
+        if (!value) {
+          value = operand(await recognizeLocalMath(row, signal));
+        }
+        if (!value) {
+          break;
+        }
+        rows.push(value);
+      }
+      const text = rows.join("\n");
+      if (await accepted(text)) {
+        signal.throwIfAborted();
+        return chooseCandidate ? chooseCandidate([text]) : text;
       }
     } catch {
       signal.throwIfAborted();
+    }
+  }
+  let mathFailure: unknown;
+  if (kind === "math" && recognitionStrokes?.length) {
+    progress(t("fcboard.recognizing_handwriting_locally"));
+    try {
+      const candidates = await recognizeLocalMath(recognitionStrokes, signal);
+      const value = await selectCandidate(candidates);
+      signal.throwIfAborted();
+      if (value) {
+        return value;
+      }
+      mathFailure = new Error(
+        t("fcboard.no_content_recognized_select_the_area_again"),
+      );
+    } catch (error) {
+      signal.throwIfAborted();
+      mathFailure = error;
     }
   }
   if (!structured && hasDigitalInk() && recognitionStrokes?.length) {
@@ -138,21 +222,10 @@ export const recognizeHandwriting = async (
         kind,
         languageHint,
       );
-      const accepted: string[] = [];
-      for (const candidate of candidates) {
-        signal.throwIfAborted();
-        if (await accept(candidate)) {
-          accepted.push(candidate);
-          if (!chooseCandidate) {
-            break;
-          }
-        }
-      }
-      const text = accepted[0];
+      const text = await selectCandidate(candidates);
+      signal.throwIfAborted();
       if (text) {
-        const chosen = chooseCandidate ? await chooseCandidate(accepted) : text;
-        signal.throwIfAborted();
-        return chosen;
+        return text;
       }
       throw new Error(t("fcboard.no_content_recognized_select_the_area_again"));
     } catch (error) {
@@ -176,24 +249,43 @@ export const recognizeHandwriting = async (
       // failures can use the separately bundled local raster model.
     }
   }
-  let mathFailure: unknown;
-  if (kind === "math" && strokes?.length) {
-    progress(t("fcboard.recognizing_handwriting_locally"));
-    try {
-      const value = await recognizeLocalMath(
-        hasDigitalInk() ? strokes : recognitionStrokes!,
-        signal,
-      );
-      signal.throwIfAborted();
-      if (await accepted(value)) {
-        return chooseCandidate ? chooseCandidate([value]) : value;
+  if (structured && !columnRows && recognitionStrokes) {
+    const radicand = standaloneRadicand(recognitionStrokes);
+    if (radicand) {
+      try {
+        const [operand] = await recognizeLocalMath(radicand, signal);
+        if (/^(?:[xyz]|[+-]?\d+(?:\.\d+)?)$/i.test(operand)) {
+          const value = await selectCandidate([String.raw`\sqrt{${operand}}`]);
+          if (value) {
+            return value;
+          }
+        }
+      } catch {
+        signal.throwIfAborted();
       }
-      mathFailure = new Error(
-        t("fcboard.no_content_recognized_select_the_area_again"),
-      );
-    } catch (error) {
-      signal.throwIfAborted();
-      mathFailure = error;
+    }
+    const power = trailingPowerInk(recognitionStrokes);
+    if (power) {
+      try {
+        const base = (await recognizeLocalMath(power.base, signal))[0].trim();
+        const exponent = (
+          await recognizeLocalMath(power.exponent, signal)
+        )[0].trim();
+        // Only recombine an atomic base with an independently read raised operand.
+        if (
+          /^(?:(?:y|[fgh]\s*\(\s*x\s*\))\s*=\s*)?(?:[exyz]|\d+(?:\.\d+)?)$/i.test(
+            base,
+          ) &&
+          /^(?:[1-9]\d*|[xyz])$/i.test(exponent)
+        ) {
+          const text = `${base}^{${exponent}}${equals ? "=" : ""}`;
+          if (await accepted(text)) {
+            return chooseCandidate ? chooseCandidate([text]) : text;
+          }
+        }
+      } catch {
+        signal.throwIfAborted();
+      }
     }
   }
   const slashInk =
@@ -203,12 +295,10 @@ export const recognizeHandwriting = async (
       const candidates =
         hasDigitalInk() && !hasStructuredMathInk(slashInk)
           ? await recognizeDigitalInk(slashInk, signal, "math", languageHint)
-          : [await recognizeLocalMath(slashInk, signal)];
-      for (const candidate of candidates) {
-        signal.throwIfAborted();
-        if (await accepted(candidate)) {
-          return chooseCandidate ? chooseCandidate([candidate]) : candidate;
-        }
+          : await recognizeLocalMath(slashInk, signal);
+      const text = await selectCandidate(candidates);
+      if (text) {
+        return text;
       }
     } catch {
       signal.throwIfAborted();
@@ -232,7 +322,7 @@ export const recognizeHandwriting = async (
           numeric.test(dividend) &&
           numeric.test(divisor.replace(/[=＝]$/, "").trim())
         ) {
-          const text = `${dividend}/${divisor}`;
+          const text = `${dividend}/${divisor}${equals ? "=" : ""}`;
           signal.throwIfAborted();
           if (await accepted(text)) {
             return chooseCandidate ? chooseCandidate([text]) : text;

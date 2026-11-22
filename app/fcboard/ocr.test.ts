@@ -39,7 +39,7 @@ describe("explicit handwriting actions", () => {
   it("prefers structural math over a plausible flattened native answer", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["12"]);
-    backend.math.mockResolvedValue(String.raw`\frac{1}{2}`);
+    backend.math.mockResolvedValue([String.raw`\frac{1}{2}`]);
     const capture = vi.fn();
     const strokes: import("./digitalInk").InkInput = [
       [
@@ -76,7 +76,7 @@ describe("explicit handwriting actions", () => {
   });
   it("rejects a flattened math-model fraction and asks configured vision for exact LaTeX", async () => {
     backend.nativeAvailable = true;
-    backend.math.mockResolvedValue("12");
+    backend.math.mockResolvedValue(["12"]);
     backend.cloud.mockResolvedValue(String.raw`\frac{1}{2}`);
     const strokes: import("./digitalInk").InkInput = [
       [
@@ -114,7 +114,7 @@ describe("explicit handwriting actions", () => {
   it("keeps division dots out of the text recognizer's plausible minus shortcut", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["12-3"]);
-    backend.math.mockResolvedValue(String.raw`12\div3`);
+    backend.math.mockResolvedValue([String.raw`12\div3`]);
     const strokes: import("./digitalInk").InkInput = [
       [
         [10, 10],
@@ -150,7 +150,7 @@ describe("explicit handwriting actions", () => {
   });
   it("recovers a dotted division as a slash when the math model reads it as minus", async () => {
     backend.nativeAvailable = true;
-    backend.math.mockResolvedValue("12-3");
+    backend.math.mockResolvedValue(["12-3"]);
     backend.native.mockResolvedValue(["12-3", "12/3"]);
     const strokes: import("./digitalInk").InkInput = [
       [
@@ -195,7 +195,7 @@ describe("explicit handwriting actions", () => {
   });
   it("reads verified division operands separately when neither whole-expression model sees the operator", async () => {
     backend.nativeAvailable = true;
-    backend.math.mockResolvedValue("12-3");
+    backend.math.mockResolvedValue(["12-3"]);
     backend.native
       .mockResolvedValueOnce(["12-3"])
       .mockResolvedValueOnce(["12"])
@@ -240,7 +240,7 @@ describe("explicit handwriting actions", () => {
   it("keeps the full vertical column for structured math when native rows lack an explicit operator", async () => {
     backend.native.mockResolvedValue(["11"]);
     backend.nativeAvailable = true;
-    backend.math.mockResolvedValue("11\n+11\n----");
+    backend.math.mockResolvedValue(["11\n+11\n----"]);
     const strokes: import("./digitalInk").InkInput = [
       [
         [20, 10],
@@ -271,6 +271,200 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(capture).not.toHaveBeenCalled();
   });
+  it("removes only the terminal equals strokes and recovers a missing raised operand", async () => {
+    const ink: import("./digitalInk").InkInput = [
+      [
+        [10, 30],
+        [25, 70],
+      ],
+      [
+        [30, 12],
+        [40, 30],
+      ],
+      [
+        [65, 38],
+        [85, 38],
+      ],
+      [
+        [65, 45],
+        [85, 45],
+      ],
+    ];
+    backend.math
+      .mockResolvedValueOnce(["12"])
+      .mockResolvedValueOnce(["1"])
+      .mockResolvedValueOnce(["2"]);
+    const signal = new AbortController().signal;
+    expect(
+      await recognizeHandwriting(
+        vi.fn(),
+        signal,
+        vi.fn(),
+        "math",
+        undefined,
+        ink,
+      ),
+    ).toBe("1^{2}=");
+    expect(backend.math.mock.calls.map(([part]) => part)).toEqual([
+      ink.slice(0, 2),
+      [ink[0]],
+      [ink[1]],
+    ]);
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
+  it("validates successive completed formula beams before splitting the ink", async () => {
+    const ink: import("./digitalInk").InkInput = [
+      [
+        [10, 30],
+        [25, 70],
+      ],
+      [
+        [30, 12],
+        [40, 30],
+      ],
+    ];
+    backend.math.mockResolvedValue(["y=12", "y=x^{2}"]);
+    const { recognizeInkContent } = await import("./inkRecognition");
+    const result = await recognizeInkContent(
+      "function",
+      vi.fn(),
+      ink,
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({ kind: "function", text: "y=x^{2}" });
+    expect(backend.math).toHaveBeenCalledTimes(1);
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
+  it("falls back from invalid inverse-trig LaTeX to the device's handwritten candidate", async () => {
+    backend.nativeAvailable = true;
+    backend.math.mockResolvedValue([String.raw`a v \cos ( x )`]);
+    backend.native.mockResolvedValue(["arcsin(x)"]);
+    const { recognizeInkContent } = await import("./inkRecognition");
+    expect(
+      await recognizeInkContent(
+        "function",
+        vi.fn(),
+        [
+          [
+            [0, 0],
+            [10, 30],
+          ],
+        ],
+        new AbortController().signal,
+      ),
+    ).toMatchObject({ kind: "function", text: "arcsin(x)" });
+  });
+  it("uses both rows and positions the result below the rule when cloud transcription flattens the column", async () => {
+    saveSettings({ ...defaults, apiKey: "key", ocr: "cloud" }, false);
+    backend.cloud.mockResolvedValue("1+1");
+    backend.nativeAvailable = true;
+    backend.native
+      .mockResolvedValueOnce(["1"])
+      .mockResolvedValueOnce(["noise"]);
+    backend.math.mockResolvedValue(["+ 1"]);
+    const { recognizeInkContent } = await import("./inkRecognition");
+    const ink: import("./digitalInk").InkInput = [
+      [
+        [20, 10],
+        [30, 40],
+      ],
+      [
+        [20, 65],
+        [30, 95],
+      ],
+      [
+        [3, 78],
+        [16, 78],
+      ],
+      [
+        [9, 73],
+        [9, 83],
+      ],
+      [
+        [0, 105],
+        [70, 105],
+      ],
+    ];
+    expect(
+      await recognizeInkContent(
+        "calculation",
+        async () => "image",
+        ink,
+        new AbortController().signal,
+      ),
+    ).toMatchObject({
+      kind: "calculation",
+      answer: "2",
+      layout: { mode: "column", lines: 2 },
+    });
+  });
+  it("recovers a standalone square root locally when the whole model drops its roof and hook", async () => {
+    const ink: import("./digitalInk").InkInput = [
+      [
+        [5, 28],
+        [10, 32],
+        [14, 42],
+        [22, 10],
+        [55, 10],
+      ],
+      [
+        [30, 23],
+        [35, 18],
+        [35, 42],
+      ],
+    ];
+    backend.math.mockResolvedValue(["1"]);
+    saveSettings({ ...defaults, ocr: "local", apiKey: "" }, false);
+    expect(
+      await recognizeHandwriting(
+        "image",
+        new AbortController().signal,
+        vi.fn(),
+        "math",
+        undefined,
+        ink,
+      ),
+    ).toBe(String.raw`\sqrt{1}`);
+    expect(backend.math.mock.calls[1][0]).toEqual([ink[1]]);
+    expect(backend.cloud).not.toHaveBeenCalled();
+  });
+  it.each(["+2", "-2", "×2", "÷2"])(
+    "preserves vertical operand rows in cloud mode for %s",
+    async (row) => {
+      const ink: import("./digitalInk").InkInput = [
+        [
+          [20, 10],
+          [30, 40],
+        ],
+        [
+          [20, 65],
+          [30, 95],
+        ],
+        [
+          [3, 78],
+          [16, 78],
+        ],
+        [
+          [0, 105],
+          [70, 105],
+        ],
+      ];
+      saveSettings({ ...defaults, apiKey: "key", ocr: "cloud" }, false);
+      const transcription = `4\n${row}\n----`;
+      backend.cloud.mockResolvedValue(transcription);
+      expect(
+        await recognizeHandwriting(
+          "image",
+          new AbortController().signal,
+          vi.fn(),
+          "math",
+          undefined,
+          ink,
+        ),
+      ).toBe(transcription);
+      expect(backend.math).not.toHaveBeenCalled();
+    },
+  );
   it("passes the alphabet surface's English context to bundled Digital Ink without rasterizing", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["Hello"]);
@@ -349,7 +543,7 @@ describe("explicit handwriting actions", () => {
     );
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("uses real native strokes before any screenshot, raster model or cloud request", async () => {
+  it("uses the original strokes for the ranked handwriting fallback without a screenshot", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["1+1=", "illegible"]);
     const capture = vi.fn();
@@ -374,7 +568,7 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("accepts a valid later native math candidate without allocating a raster model", async () => {
+  it("accepts a later ranked handwriting candidate when formula transcription fails", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["ll+ll=", "11+11=", "11+1="]);
     const capture = vi.fn();
@@ -397,7 +591,7 @@ describe("explicit handwriting actions", () => {
     expect(result).toBe("11+11=");
     expect(choose).toHaveBeenCalledWith(["11+11="]);
     expect(capture).not.toHaveBeenCalled();
-    expect(backend.math).not.toHaveBeenCalled();
+    expect(backend.math).toHaveBeenCalledTimes(1);
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
@@ -443,10 +637,10 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("falls back to structured math when the native first candidate fails validation", async () => {
+  it("uses the valid formula without accepting another handwriting candidate", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["unreadable"]);
-    backend.math.mockResolvedValue(String.raw`\frac{1}{2}`);
+    backend.math.mockResolvedValue([String.raw`\frac{1}{2}`]);
     const capture = vi.fn();
     saveSettings({ ...defaults, apiKey: "" }, false);
     expect(
@@ -465,7 +659,7 @@ describe("explicit handwriting actions", () => {
       ),
     ).toBe(String.raw`\frac{1}{2}`);
     expect(capture).not.toHaveBeenCalled();
-    expect(backend.native).toHaveBeenCalledTimes(1);
+    expect(backend.native).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
   it("keeps the missing-language-pack flow local in automatic mode without sending a screenshot to another recognizer", async () => {

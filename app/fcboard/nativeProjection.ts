@@ -5,6 +5,8 @@ import type {
   ProjectionBounds,
 } from "@fcboard/fcboard/scene/types";
 
+import type { PluginListenerHandle } from "@capacitor/core";
+
 export const nativeProtocols = [
   "airplay",
   "miracast",
@@ -41,13 +43,17 @@ export const nativeProjection = registerPlugin<{
     protocol: NativeProtocol;
     session: string;
   }): Promise<void>;
+  addListener(
+    event: "receiverChanged",
+    listener: (event: { session: string }) => void,
+  ): Promise<PluginListenerHandle>;
   status(options: { session: string }): Promise<NativeReceivers>;
   position(
     options: ProjectionBounds & { protocol: NativeProtocol; revision: number },
   ): Promise<void>;
 }>("FcboardNativeProjection");
 
-/** Poll state only. Every decoded frame goes directly to the Android compositor. */
+/** Native state and first-frame transitions wake the board. Every decoded frame goes directly to the Android compositor. */
 export function watchNativeProjection(
   session: string,
   status: (receivers: NativeReceivers) => void,
@@ -57,7 +63,7 @@ export function watchNativeProjection(
     surface: NativeProjectionSurface,
     revision: number,
   ) => void,
-  ended: (protocol: NativeProtocol) => void,
+  ended: (protocol: NativeProtocol, replaced: boolean) => void,
   failed: () => void,
 ) {
   let active:
@@ -68,18 +74,27 @@ export function watchNativeProjection(
       }
     | undefined;
   let cancelled = false;
-  let timer: ReturnType<typeof setTimeout>;
+  let reading = false;
+  let pendingRead = false;
   let previous = "";
-  const release = () => {
+  const release = (replaced = false) => {
     if (!active) {
       return;
     }
     const { protocol, surface } = active;
     active = undefined;
     surface.position(null);
-    ended(protocol);
+    ended(protocol, replaced);
   };
   const tick = async () => {
+    if (cancelled) {
+      return;
+    }
+    if (reading) {
+      pendingRead = true;
+      return;
+    }
+    reading = true;
     try {
       const receivers = await nativeProjection.status({ session });
       if (cancelled) {
@@ -90,25 +105,22 @@ export function watchNativeProjection(
         previous = signature;
         status(receivers);
       }
-      if (
-        active &&
-        (receivers[active.protocol].revision !== active.revision ||
-          !receivers[active.protocol].hasFrames ||
-          receivers[active.protocol].audio ||
-          receivers[active.protocol].state !== "connected" ||
-          !canDisplay(active.protocol, active.revision))
-      ) {
-        release();
-      }
-      const protocol =
-        active?.protocol ||
-        nativeProtocols.find(
+      const protocol = nativeProtocols
+        .filter(
           (p) =>
             receivers[p].state === "connected" &&
             receivers[p].hasFrames &&
             !receivers[p].audio &&
             canDisplay(p, receivers[p].revision),
-        );
+        )
+        .sort((a, b) => receivers[b].revision - receivers[a].revision)[0];
+      if (
+        active &&
+        (active.protocol !== protocol ||
+          active.revision !== receivers[active.protocol].revision)
+      ) {
+        release(!!protocol && protocol !== active.protocol);
+      }
       if (!protocol) {
         return;
       }
@@ -177,15 +189,26 @@ export function watchNativeProjection(
         failed();
       }
     } finally {
-      if (!cancelled) {
-        timer = setTimeout(() => void tick(), 240);
+      reading = false;
+      if (pendingRead) {
+        pendingRead = false;
+        void tick();
       }
     }
   };
-  void tick();
+  const listener = nativeProjection.addListener("receiverChanged", (event) => {
+    if (event.session === session) {
+      void tick();
+    }
+  });
+  void listener.then(tick).catch(() => {
+    if (!cancelled) {
+      failed();
+    }
+  });
   return () => {
     cancelled = true;
-    clearTimeout(timer);
+    void listener.then((handle) => handle.remove()).catch(() => {});
     release();
   };
 }

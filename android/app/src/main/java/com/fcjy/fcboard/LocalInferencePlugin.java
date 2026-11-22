@@ -57,7 +57,8 @@ public class LocalInferencePlugin extends Plugin {
         if (result.containsKey("error")) request.call.reject(result.getString("error"), "NATIVE_INFERENCE_FAILED");
         else {
             JSObject value = new JSObject();
-            for (String key : new String[]{"latex", "language", "translation"}) {
+            if (result.containsKey("candidates")) value.put("candidates", new JSONArray(result.getStringArrayList("candidates")));
+            for (String key : new String[]{"language", "translation"}) {
                 if (result.containsKey(key)) value.put(key, result.getString(key));
             }
             request.call.resolve(value);

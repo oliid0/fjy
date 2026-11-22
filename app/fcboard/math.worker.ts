@@ -48,13 +48,27 @@ const scientific = async (expression: string) => {
     : calculateLocal(expression);
 };
 
+const evaluateLatex = async (latex: string) => {
+  const { calculateLatex } = await import("./latexCalculation");
+  try {
+    return calculateLatex(latex);
+  } catch (error) {
+    // The finite-value engine cannot represent e.g. an indefinite integral.
+    // Use the same bounded symbolic syntax as a handwritten plain-text request.
+    if (!prepareCalculation(latex).symbolic) {
+      throw error;
+    }
+    return calculateLocal(latex);
+  }
+};
+
 self.onmessage = async (
   event: MessageEvent<{ expression?: string; latex?: string }>,
 ) => {
   try {
     const answer =
       typeof event.data.latex === "string"
-        ? (await import("./latexCalculation")).calculateLatex(event.data.latex)
+        ? await evaluateLatex(event.data.latex)
         : await scientific(event.data.expression || "");
     self.postMessage({ answer });
   } catch (failure) {

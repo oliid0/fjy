@@ -16,7 +16,7 @@ vi.mock("./mathInkPreprocessing", () => ({
 afterEach(() => vi.clearAllMocks());
 it("normalizes actual model tokens and bounds distant scene coordinates before rasterization", async () => {
   vi.mocked(offlineInference).mockResolvedValue({
-    latex: String.raw`y = \frac { 1 2 } { x ^ { 2 } }`,
+    candidates: [String.raw`y = \frac { 1 2 } { x ^ { 2 } }`],
   });
   const value = await recognizeLocalMath(
     [
@@ -27,7 +27,7 @@ it("normalizes actual model tokens and bounds distant scene coordinates before r
     ],
     new AbortController().signal,
   );
-  expect(value).toBe(String.raw`y = \frac{12}{x^{2}}`);
+  expect(value).toEqual([String.raw`y = \frac{12}{x^{2}}`]);
   const strokes = vi.mocked(preprocessStrokes).mock.calls[0][0];
   expect(
     strokes

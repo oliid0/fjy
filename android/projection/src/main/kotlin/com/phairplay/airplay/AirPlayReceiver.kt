@@ -44,6 +44,7 @@ import java.net.DatagramSocket
  *   receiver.start()
  *   receiver.stop()
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AirPlayReceiver(
     private val context: Context,
     /** User-configured display name from Settings (blank = use system device name). */
@@ -111,7 +112,8 @@ class AirPlayReceiver(
 
     // AirPlay 2 mirroring: media servers and keys set during SETUP.
     @Volatile private var mirrorServer: MirrorStreamServer? = null
-    fun hasMirrorFrame(surface: Surface?) = surface != null && mirrorServer?.renderedSurface === surface
+    fun hasVideoFrame(surface: Surface?) = surface != null &&
+        (mirrorServer?.renderedSurface === surface || urlVideoPlayer?.renderedSurface === surface)
 
     @Volatile private var audioServer: AudioStreamServer? = null
     @Volatile private var urlVideoPlayer: AirPlayVideoPlayer? = null
@@ -245,7 +247,7 @@ class AirPlayReceiver(
                 npArtwork = bytes.takeIf { it.isNotEmpty() }
                 emitNowPlaying()
             },
-            onVideoPlay = { url, start -> startUrlVideo(url, start) },
+            onVideoPlay = ::startUrlVideo,
             onVideoRate = { rate -> urlVideoPlayer?.setRate(rate) },
             onVideoScrub = { pos -> urlVideoPlayer?.scrub(pos) },
             onVideoStop = { stopUrlVideo() },
@@ -430,6 +432,8 @@ class AirPlayReceiver(
      */
     private fun startMirrorStream(streamConnectionId: Long, closeControl: () -> Unit): Int {
         val aesKey = mirrorAesKey ?: run { Logger.e("mirror stream start before keys set"); return 0 }
+        urlVideoPlayer?.release()
+        urlVideoPlayer = null
         mirrorServer?.stop()
         val server = MirrorStreamServer(
             aesKey, streamConnectionId, videoSurfaceProvider, mirrorWidth, mirrorHeight, hevc,
@@ -490,6 +494,7 @@ class AirPlayReceiver(
 
     /** Stops ONLY the mirror video stream (macOS dynamic-stream TEARDOWN) — audio keeps playing. */
     private fun stopMirrorVideo() {
+        if (urlVideoPlayer != null) return
         mirrorServer?.stop()
         mirrorServer = null
         videoPlaying = false
@@ -505,19 +510,41 @@ class AirPlayReceiver(
      */
     fun refreshVideoSurface() { urlVideoPlayer?.attachSurface() }
 
-    private fun startUrlVideo(url: String, startFraction: Double) {
+    private fun startUrlVideo(url: String, startFraction: Double, seconds: Double?, fetch: ((String) -> ByteArray)?) {
+        mirrorServer?.stop()
+        mirrorServer = null
+        audioServer?.stop()
+        audioServer = null
+        urlVideoPlayer?.release()
+        videoPlaying = true
+        audioPlaying = false
+        emitNowPlaying()
         onSenderNameChanged("AirPlay")
-        emitState(ProtocolState.CONNECTED)   // shows StreamingScreen → Surface becomes available
-        val player = urlVideoPlayer ?: AirPlayVideoPlayer(
+        val player = AirPlayVideoPlayer(
+            context = context,
             surfaceProvider = videoSurfaceProvider,
-            onEnded = { stopUrlVideo() }
-        ).also { urlVideoPlayer = it }
-        player.play(url, startFraction)
-        Logger.i("AirPlay URL video started: $url (start=$startFraction)")
+            onFirstFrame = { current ->
+                if (urlVideoPlayer === current) {
+                    rtspHandler?.videoState("playing")
+                    emitState(ProtocolState.CONNECTED) { urlVideoPlayer === current }
+                }
+            },
+            onEnded = { current, failed ->
+                if (urlVideoPlayer === current) {
+                    stopUrlVideo()
+                    if (failed) emitState(ProtocolState.ERROR) { urlVideoPlayer == null && !videoPlaying }
+                }
+            }
+        )
+        urlVideoPlayer = player
+        emitState(ProtocolState.CONNECTING) { urlVideoPlayer === player && player.renderedSurface == null }
+        player.play(url, startFraction, seconds, fetch)
     }
 
     /** Stops AirPlay video URL playback (POST /stop or end-of-media) and ends the session. */
     private fun stopUrlVideo() {
+        if (urlVideoPlayer == null) return
+        rtspHandler?.videoState("stopped")
         urlVideoPlayer?.release()
         urlVideoPlayer = null
         onStreamingStopped()

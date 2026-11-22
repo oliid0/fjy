@@ -13,7 +13,9 @@ beforeEach(() => {
   native.cancel.mockResolvedValue(undefined);
 });
 it("recognizes native structured math using only original coordinates, with no tensor/raster/worker", async () => {
-  native.infer.mockResolvedValue({ latex: String.raw`\frac { 1 } { 2 }` });
+  native.infer.mockResolvedValue({
+    candidates: [String.raw`\frac { 1 } { 2 }`],
+  });
   const strokes: [number, number][][] = [
     [
       [100000, 500],
@@ -22,7 +24,7 @@ it("recognizes native structured math using only original coordinates, with no t
   ];
   await expect(
     recognizeLocalMath(strokes, new AbortController().signal),
-  ).resolves.toBe(String.raw`\frac{1}{2}`);
+  ).resolves.toEqual([String.raw`\frac{1}{2}`]);
   expect(native.infer).toHaveBeenCalledWith({
     id: expect.any(String),
     kind: "math",
@@ -31,7 +33,7 @@ it("recognizes native structured math using only original coordinates, with no t
   expect(offlineInference).not.toHaveBeenCalled();
 });
 it("cancels its own process request immediately and discards the late result", async () => {
-  let finish!: (value: { latex: string }) => void;
+  let finish!: (value: { candidates: string[] }) => void;
   native.infer.mockImplementation(
     () =>
       new Promise((resolve) => {
@@ -49,7 +51,7 @@ it("cancels its own process request immediately and discards the late result", a
   expect(native.cancel).toHaveBeenCalledWith({
     id: native.infer.mock.calls[0][0].id,
   });
-  finish({ latex: "late" });
+  finish({ candidates: ["late"] });
   await Promise.resolve();
   expect(offlineInference).not.toHaveBeenCalled();
 });
@@ -58,7 +60,7 @@ it("surfaces native failure and rejects corrupt math instead of launching a web 
   await expect(
     recognizeLocalMath([[[0, 0]]], new AbortController().signal),
   ).rejects.toThrow("process lost");
-  native.infer.mockResolvedValueOnce({ latex: "" });
+  native.infer.mockResolvedValueOnce({ candidates: [""] });
   await expect(
     recognizeLocalMath([[[0, 0]]], new AbortController().signal),
   ).rejects.toThrow("Unreadable math ink");

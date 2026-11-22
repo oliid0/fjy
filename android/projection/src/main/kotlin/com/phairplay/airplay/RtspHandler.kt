@@ -62,7 +62,7 @@ open class RtspHandler(
     /** Album artwork (JPEG/PNG bytes) from SET_PARAMETER; empty bytes = artwork cleared. */
     private val onArtwork: (ByteArray) -> Unit = {},
     /** AirPlay video URL mode: POST /play with a media URL + start fraction (0..1). */
-    private val onVideoPlay: (url: String, startFraction: Double) -> Unit = { _, _ -> },
+    private val onVideoPlay: (String, Double, Double?, ((String) -> ByteArray)?) -> Unit = { _, _, _, _ -> },
     /** AirPlay video transport: POST /rate (≤0 pause, >0 resume). */
     private val onVideoRate: (rate: Float) -> Unit = {},
     /** AirPlay video transport: POST /scrub — seek to position (seconds). */
@@ -106,12 +106,22 @@ open class RtspHandler(
     private var activeClient: Socket? = null
     @Volatile private var disconnectedClient: Socket? = null
 
+    @Volatile private var reverse: AirPlayVideoChannel? = null
+    @Volatile private var videoPeer: java.net.InetAddress? = null
+    @Volatile private var videoSession: String? = null
+
+    fun videoState(state: String) {
+        reverse?.takeIf { it.socket.inetAddress == videoPeer && it.session == videoSession }?.state(state)
+        if (state == "stopped") { videoPeer = null; videoSession = null }
+    }
+
     fun disconnectSender() {
         val socket = activeClient
         if (socket != null) {
             disconnectedClient = socket
             runCatching { socket.close() }
         }
+        if (onPlaybackInfo() != null) onVideoStop()
         stopAudioOnlyGrace(release = true)
     }
 
@@ -119,7 +129,7 @@ open class RtspHandler(
     @Volatile
     internal var running = false
 
-    private var currentCSeq: Int? = null
+    private val clients = java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
 
     @Volatile
     private var currentSession: SessionDescription? = null
@@ -186,9 +196,12 @@ open class RtspHandler(
     /** Stops the RTSP server. */
     fun stop() {
         running = false
+        reverse?.close()
+        reverse = null
+        videoPeer = null
         stopAudioOnlyGrace(release = false)
         try {
-            activeClient?.close()
+            clients.forEach { runCatching { it.close() } }
             serverSocket?.close()
         } catch (e: Exception) {
             Logger.e("Error closing RTSP sockets (non-fatal)", e)
@@ -226,16 +239,11 @@ open class RtspHandler(
                 val clientSocket = listener.accept()
                 Logger.i("New client connected: ${clientSocket.inetAddress.hostAddress}")
 
-                if (activeClient != null && !activeClient!!.isClosed) {
-                    Logger.w("Rejecting second client — already streaming")
-                    sendServiceUnavailable(clientSocket)
-                    clientSocket.close()
-                    continue
-                }
+                if (clients.size >= 6) { clientSocket.close(); continue }
+                clients.add(clientSocket)
+                if (!running || !scope.isActive) { clients.remove(clientSocket); clientSocket.close(); return }
+                scope.launch { handleClient(clientSocket) }
 
-                activeClient = clientSocket
-                if (!running || !scope.isActive) { clientSocket.close(); return }
-                handleClient(clientSocket)
             }
         } catch (e: Exception) {
             if (running) {
@@ -249,18 +257,81 @@ open class RtspHandler(
 
     private fun handleClient(socket: Socket) {
         try {
-            socket.soTimeout = 60_000
             val inputStream = socket.getInputStream()
             val outputStream = socket.getOutputStream()
-            pairingSession = PairingSession(PairingKeys.get(context))
-            fairPlay = FairPlay()
-            currentRemoteAddress = socket.inetAddress
+            val pairing by lazy { PairingSession(PairingKeys.get(context)) }
+            val fairPlayHandshake by lazy { FairPlay() }
+            socket.soTimeout = 5000
 
             while (running && !socket.isClosed) {
                 val request = requestReader.read(inputStream) ?: break
-                currentCSeq = request.headers["CSeq"]?.toIntOrNull()
+                val sequence = request.headers["CSeq"]?.toIntOrNull()
+                val path = request.uri.substringBefore("?")
+                if (request.method == "GET" && (path == "/info" || path == "/server-info")) {
+                    sendResponse(outputStream, routeGet(request), sequence)
+                    if (request.headers["Connection"].equals("close", ignoreCase = true)) return
+                    continue
+                }
+                val busy = activeClient?.inetAddress?.let { it != socket.inetAddress } == true ||
+                    videoPeer?.let { it != socket.inetAddress && onPlaybackInfo() != null } == true
+                if (busy) {
+                    sendResponse(outputStream, RtspResponse(503, "Service Unavailable", protocol = request.responseProtocol()), sequence)
+                    return
+                }
+                if (request.method == "POST" && path == "/reverse") {
+                    val id = request.headers["X-Apple-Session-ID"].orEmpty()
+                    if (!request.headers["Upgrade"].equals("PTTH/1.0", true) || id.length > 128 ||
+                        id.any { it.code !in 33..126 } || (pinAuthEnabled && !pinPaired)) {
+                        sendResponse(outputStream, RtspResponse(400, "Bad Request", protocol = request.responseProtocol()), sequence)
+                        return
+                    }
+                    val channel = AirPlayVideoChannel(socket, id)
+                    synchronized(this) {
+                        reverse?.close()
+                        sendResponse(outputStream, RtspResponse(101, "Switching Protocols",
+                            headers = mapOf("Connection" to "Upgrade", "Upgrade" to "PTTH/1.0"), protocol = "HTTP/1.1"), null)
+                        reverse = channel
+                    }
+                    try {
+                        socket.soTimeout = 0
+                        val buffer = ByteArray(2048)
+                        while (running && inputStream.read(buffer) >= 0) { /* PTTH event acknowledgements */ }
+                    } finally {
+                        synchronized(this) { if (reverse === channel) reverse = null }
+                        channel.close()
+                    }
+                    return
+                }
+                val mediaResponse = when ("${request.method} $path") {
+                    "POST /pair-setup" -> handlePairSetup(request, pairing)
+                    "POST /pair-verify" -> handlePairVerify(request, pairing)
+                    "POST /fp-setup" -> handleFpSetup(request, fairPlayHandshake)
+                    "POST /fp-setup2" -> RtspResponse(421, "Misdirected Request", protocol = request.responseProtocol())
+                    "POST /play", "POST /action", "POST /rate", "POST /scrub", "POST /stop",
+                    "GET /scrub", "GET /playback-info" -> synchronized(this) { videoControl(request, socket) }
+                    else -> null
+                }
+                if (mediaResponse != null) {
+                    sendResponse(outputStream, mediaResponse, sequence)
+                    if (request.headers["Connection"].equals("close", true)) return
+                    continue
+                }
+                if (activeClient !== socket) {
+                    synchronized(this) {
+                        if (!running || activeClient != null) {
+                            sendResponse(outputStream, RtspResponse(503, "Service Unavailable",
+                                protocol = request.responseProtocol()), sequence)
+                            return
+                        }
+                        activeClient = socket
+                    }
+                    pairingSession = pairing
+                    fairPlay = fairPlayHandshake
+                    currentRemoteAddress = socket.inetAddress
+                    socket.soTimeout = 60_000
+                }
                 val response = routeRequest(request)
-                sendResponse(outputStream, response)
+                sendResponse(outputStream, response, sequence)
                 if (response.headers["Connection"] == "close") return
                 if (request.method == "SETUP" && response.statusCode == 200) socket.soTimeout = 0
 
@@ -277,7 +348,7 @@ open class RtspHandler(
             }
 
             val session = currentSession
-            if (session != null && session.hasVideo && running) {
+            if (activeClient === socket && session != null && session.hasVideo && running) {
                 RtpInterleaved.readLoop(
                     inputStream = inputStream,
                     onVideoNalUnit = { nalUnit, ptsUs ->
@@ -293,9 +364,13 @@ open class RtspHandler(
         } finally {
             Logger.i("Client disconnected")
             runCatching { socket.close() }
-            activeClient = null
-            handleControlConnectionClosed(allowAudioGrace = socket !== disconnectedClient)
-            disconnectedClient = null
+            clients.remove(socket)
+            synchronized(this) {
+                if (activeClient === socket) {
+                    try { handleControlConnectionClosed(allowAudioGrace = socket !== disconnectedClient) }
+                    finally { disconnectedClient = null; activeClient = null }
+                }
+            }
         }
     }
 
@@ -322,6 +397,7 @@ open class RtspHandler(
         activeStreamTypes.clear()
         setupCount = 0
         when {
+            allowAudioGrace && onPlaybackInfo() != null -> Unit // URL playback outlives an HTTP request.
             audioOnlyGraceActive -> {
                 // A later /info probe connection also closed; the guard already owns teardown.
                 Logger.d("Audio-only: grace guard already active (side connection closed)")
@@ -427,69 +503,60 @@ open class RtspHandler(
     /** Routes AirPlay 2 GET requests by URI path. */
     private fun routeGet(request: RtspRequest): RtspResponse = when (request.uri.substringBefore("?")) {
         "/info"          -> handleInfo(request)
-        "/playback-info" -> handlePlaybackInfo(request)
-        "/scrub"         -> handleScrubGet(request)
         "/server-info"   -> handleServerInfo(request)
         else             -> handleUnknownInternal(request)
     }
 
     /** Routes AirPlay 2 POST requests by URI path. */
     private fun routePost(request: RtspRequest): RtspResponse = when (request.uri.substringBefore("?")) {
-        "/pair-setup"  -> handlePairSetup(request)
         "/pair-setup-pin" -> handleLegacyPairSetupPin(request)   // legacy AirPlay PIN SRP (plist)
         "/pair-pin-start" -> handlePairPinStart(request)
-        "/pair-verify" -> handlePairVerify(request)
-        "/fp-setup"    -> handleFpSetup(request)
         "/feedback"    -> handleFeedback(request)
         "/audioMode"   -> RtspResponse(200, "OK", protocol = request.responseProtocol())
-        // AirPlay video URL mode (non-mirroring): play a URL + drive transport.
-        "/play"        -> handleVideoPlay(request)
-        "/rate"        -> handleVideoRate(request)
-        "/scrub"       -> handleVideoScrubPost(request)
-        "/stop"        -> handleVideoStop(request)
         else           -> handleUnknownInternal(request)
     }
 
     // ─── AirPlay video URL mode (POST /play, /rate, /scrub, /stop; GET /playback-info, /scrub) ──
 
-    /** POST /play — a media URL to play (binary/XML plist or legacy text body). */
-    private fun handleVideoPlay(request: RtspRequest): RtspResponse {
-        val (url, start) = parsePlayBody(request)
-        if (url.isNullOrBlank()) {
-            Logger.w("POST /play with no Content-Location")
-            return RtspResponse(400, "Bad Request", protocol = request.responseProtocol())
+    private fun videoControl(request: RtspRequest, socket: Socket): RtspResponse {
+        val peer = socket.inetAddress
+        val id = request.headers["X-Apple-Session-ID"]
+        val channel = reverse?.takeIf { it.socket.inetAddress == peer && (id == null || id == it.session) }
+        val path = request.uri.substringBefore("?")
+        fun response(code: Int, reason: String) = RtspResponse(code, reason, protocol = request.responseProtocol())
+        if (pinAuthEnabled && !pinPaired) return response(470, "Connection Authorization Required")
+        if (videoPeer != null && onPlaybackInfo() != null && videoPeer != peer) return response(503, "Service Unavailable")
+        if (path != "/play" && videoSession != null && id != null && id != videoSession)
+            return response(409, "Session Changed")
+        if (path == "/action") {
+            val message = runCatching { PlistCodec.decode(request.bodyBytes) }.getOrNull()
+            return if (message != null && channel?.complete(message) == true) response(200, "OK")
+                   else response(400, "Invalid Media Response")
         }
-        // The receiver fetches the URL itself, so a hostile peer must not be able to
-        // aim it at loopback, link-local or a non-HTTP scheme. DLNA applies the same
-        // rule in ManualDlnaHttp (see MediaUriPolicy).
-        val refusal = MediaUriPolicy.check(url)
-        if (refusal != null) {
-            Logger.w("POST /play refused: $refusal")
-            return RtspResponse(400, "Bad Request", protocol = request.responseProtocol())
+        if (path != "/play") return when (path) {
+            "/rate" -> handleVideoRate(request)
+            "/stop" -> handleVideoStop(request)
+            "/scrub" -> if (request.method == "GET") handleScrubGet(request) else handleVideoScrubPost(request)
+            else -> handlePlaybackInfo(request)
         }
-        Logger.i("POST /play url=$url start=$start")
-        onVideoPlay(url, start)
-        return RtspResponse(200, "OK", protocol = request.responseProtocol())
-    }
-
-    /** Extracts the media URL + start fraction from a /play body (plist `Content-Location` or text). */
-    private fun parsePlayBody(request: RtspRequest): Pair<String?, Double> {
-        if (request.isPlistBody()) {
-            val p = runCatching { PlistCodec.decode(request.bodyBytes) }.getOrNull() ?: return null to 0.0
-            val url = p["Content-Location"] as? String
-            val start = (p["Start-Position"] as? Double) ?: 0.0
-            return url to start
+        val fields: Map<String, Any?> = if (request.isPlistBody() || request.body.trimStart().startsWith("<")) {
+            runCatching { PlistCodec.decode(request.bodyBytes) }.getOrNull() ?: return response(400, "Bad Plist")
+        } else request.body.lineSequence().filter { ':' in it }.associate {
+            it.substringBefore(':').trim() to it.substringAfter(':').trim()
         }
-        // Legacy text body: "Content-Location: <url>\r\nStart-Position: <float>\r\n"
-        var url: String? = null
-        var start = 0.0
-        request.body.lineSequence().forEach { line ->
-            when {
-                line.startsWith("Content-Location:", true) -> url = line.substringAfter(":").trim()
-                line.startsWith("Start-Position:", true) -> start = line.substringAfter(":").trim().toDoubleOrNull() ?: 0.0
-            }
-        }
-        return url to start
+        fun field(key: String) = fields.entries.firstOrNull { it.key.equals(key, true) }?.value
+        fun number(key: String) = field(key)?.toString()?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
+        val url = field("Content-Location") as? String ?: return response(400, "No Media URL")
+        val relayed = url.startsWith("mlhls://localhost/")
+        if (relayed && (channel == null || url.length > MediaUriPolicy.MAX_URI_LENGTH)) return response(400, "No Media Channel")
+        if (!relayed && MediaUriPolicy.check(url) != null) return response(400, "Invalid Media URL")
+        videoPeer = peer
+        videoSession = id ?: channel?.session
+        stopAudioOnlyGrace(release = false)
+        videoState("loading")
+        onVideoPlay(url, number("Start-Position")?.coerceIn(0.0, 1.0) ?: 0.0, number("Start-Position-Seconds"),
+            if (relayed) requireNotNull(channel)::fetch else null)
+        return response(200, "OK")
     }
 
     /** POST /rate?value=X — X=0 pause, X≥1 resume. */
@@ -497,6 +564,7 @@ open class RtspHandler(
         val rate = queryParam(request.uri, "value")?.toFloatOrNull() ?: 1f
         Logger.d("POST /rate value=$rate")
         onVideoRate(rate)
+        if (rate <= 0) videoState("paused") else if (onPlaybackInfo()?.readyToPlay == true) videoState("playing")
         return RtspResponse(200, "OK", protocol = request.responseProtocol())
     }
 
@@ -616,10 +684,10 @@ open class RtspHandler(
      * auth on, it runs the HomeKit-style SRP pair-setup (TLV8) — showing a PIN on the TV that the
      * user types on the Mac — so only someone with screen access can pair.
      */
-    private fun handlePairSetup(request: RtspRequest): RtspResponse {
+    private fun handlePairSetup(request: RtspRequest, pairing: PairingSession): RtspResponse {
         // /pair-setup is the anonymous key exchange; PIN access control runs on /pair-setup-pin.
         return try {
-            val body = pairingSession!!.pairSetup(request.bodyBytes)
+            val body = pairing.pairSetup(request.bodyBytes)
             Logger.i("pair-setup OK (returned ${body.size}-byte public key)")
             RtspResponse(200, "OK", bodyBytes = body, contentType = OCTET_STREAM, protocol = request.responseProtocol())
         } catch (e: Exception) {
@@ -633,7 +701,7 @@ open class RtspHandler(
      * PIN access control on (the PIN is a SEPARATE /pair-pin-start + /pair-setup-pin layer), so this
      * is never the HomeKit TLV8 variant.
      */
-    private fun handlePairVerify(request: RtspRequest): RtspResponse {
+    private fun handlePairVerify(request: RtspRequest, pairing: PairingSession): RtspResponse {
         // PIN access control: refuse pair-verify until the controller has PIN-paired this connection.
         // macOS responds to the rejection by starting the PIN flow (/pair-pin-start → /pair-setup-pin).
         if (pinAuthEnabled && !pinPaired) {
@@ -641,7 +709,7 @@ open class RtspHandler(
             return RtspResponse(470, "Connection Authorization Required", protocol = request.responseProtocol())
         }
         return try {
-            val body = pairingSession!!.pairVerify(request.bodyBytes)
+            val body = pairing.pairVerify(request.bodyBytes)
             Logger.i("pair-verify ${if (request.bodyBytes.firstOrNull()?.toInt() == 1) "M1" else "M2"} OK (returned ${body.size} bytes)")
             RtspResponse(200, "OK", bodyBytes = body, contentType = OCTET_STREAM, protocol = request.responseProtocol())
         } catch (e: Exception) {
@@ -715,8 +783,7 @@ open class RtspHandler(
     }
 
     /** POST /fp-setup — FairPlay: 16-byte phase 1 → 142-byte reply; 164-byte phase 2 → 32-byte reply. */
-    private fun handleFpSetup(request: RtspRequest): RtspResponse = try {
-        val fp = fairPlay!!
+    private fun handleFpSetup(request: RtspRequest, fp: FairPlay): RtspResponse = try {
         val b = request.bodyBytes
         // Diagnostics: byte 4 is the FairPlay version (0x03 mirroring/Safari, 0x02 Apple Music audio);
         // for phase 1, byte 14 is the mode (0..3). Confirms which path a given sender uses.
@@ -1100,7 +1167,7 @@ open class RtspHandler(
         )
     }
 
-    private fun sendResponse(outputStream: OutputStream, response: RtspResponse) {
+    private fun sendResponse(outputStream: OutputStream, response: RtspResponse, currentCSeq: Int?) {
         // Binary-safe: build the header block as ASCII, then write the raw body bytes.
         // Content-Length must be the BYTE length (not String.length) so binary plists,
         // FairPlay payloads, and encrypted bodies are framed correctly.
@@ -1125,16 +1192,6 @@ open class RtspHandler(
             outputStream.write(wire)
         }
         outputStream.flush()
-    }
-
-    private fun sendServiceUnavailable(socket: Socket) {
-        try {
-            val response = "RTSP/1.0 503 Service Unavailable\r\nCSeq: 0\r\n\r\n"
-            socket.outputStream.write(response.toByteArray())
-            socket.outputStream.flush()
-        } catch (e: Exception) {
-            Logger.e("Error sending 503 response", e)
-        }
     }
 
     companion object {

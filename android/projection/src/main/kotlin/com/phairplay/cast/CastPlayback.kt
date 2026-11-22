@@ -24,17 +24,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.image.ImageOutput
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import com.airplay.util.HostAddressPolicy
-import com.airplay.util.MediaUriPolicy
-import okhttp3.Dns
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.Response
-import java.io.IOException
-import java.net.InetAddress
-import java.net.NetworkInterface
-import java.net.Proxy
-import java.net.UnknownHostException
+import com.airplay.util.ProjectionMediaHttp
 
 @UnstableApi
 internal class CastPlayback(context: Context, name: String, private val state: (String) -> Unit,
@@ -47,18 +37,7 @@ internal class CastPlayback(context: Context, name: String, private val state: (
     private val server = GoogleCastReceiver(context, name, session) { ready ->
         main.post { if (!closed && player == null) state(if (ready) "waiting" else "off") }
     }
-    private val http = OkHttpClient.Builder().proxy(Proxy.NO_PROXY)
-        .followRedirects(false)
-        .addInterceptor(::requestMedia)
-        .dns(object : Dns {
-            override fun lookup(hostname: String) = Dns.SYSTEM.lookup(hostname).filter(::canReach)
-                .ifEmpty { throw UnknownHostException("Cast media host is not allowed") }
-        })
-        .addNetworkInterceptor { chain ->
-            val address = chain.connection()?.route()?.socketAddress?.address
-            if (address == null || !canReach(address)) throw IOException("Cast media address is not allowed")
-            chain.proceed(chain.request())
-        }.build()
+    private val http = ProjectionMediaHttp.create()
     private val sources = DefaultMediaSourceFactory(context).setDataSourceFactory(OkHttpDataSource.Factory(http))
     private val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
     private val app = context.applicationContext
@@ -66,6 +45,7 @@ internal class CastPlayback(context: Context, name: String, private val state: (
     private var activeId = 0
     private var output: Surface? = null
     private var image: Bitmap? = null
+    private var renderedFrame = false
     private var displayed = false
     private var closed = false
 
@@ -85,29 +65,8 @@ internal class CastPlayback(context: Context, name: String, private val state: (
 
     fun start() = server.start()
 
-    private fun canReach(address: InetAddress): Boolean =
-        !address.isLoopbackAddress && !address.isAnyLocalAddress && !address.isLinkLocalAddress &&
-            !address.isMulticastAddress && HostAddressPolicy.checkHost(address.hostAddress) == null &&
-            NetworkInterface.getByInetAddress(address) == null
-
-    private fun requestMedia(chain: Interceptor.Chain): Response {
-        var request = chain.request()
-        repeat(6) {
-            val host = request.url.host
-            if (MediaUriPolicy.check(request.url.toString()) != null ||
-                ((host.contains(':') || HostAddressPolicy.parseIpv4Literal(host) != null) &&
-                    !canReach(InetAddress.getByName(host)))) throw IOException("Cast media address is not allowed")
-            val response = chain.proceed(request)
-            if (response.code !in setOf(301, 302, 303, 307, 308)) return response
-            val next = response.use { it.header("Location")?.let(request.url::resolve) }
-                ?: throw IOException("Invalid Cast media redirect")
-            if (request.url.isHttps && !next.isHttps) throw IOException("Insecure Cast media redirect")
-            request = request.newBuilder().url(next).build()
-        }
-        throw IOException("Too many Cast media redirects")
-    }
-
     fun attach(surface: Surface?) {
+        if (surface !== output) renderedFrame = false
         output = surface
         player?.let { p ->
             val still = image
@@ -135,17 +94,19 @@ internal class CastPlayback(context: Context, name: String, private val state: (
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     if (player !== p) return
                     image = null
+                    renderedFrame = false
                 }
 
                 override fun onRenderedFirstFrame() {
                     if (player === p) {
                         image = null
-                        showVideo(p)
+                        renderedFrame = output?.isValid == true
+                        if (renderedFrame) showVideo(p)
                     }
                 }
 
                 override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    if (player === p && displayed && videoSize.width > 0 && image == null) showVideo(p)
+                    if (player === p && renderedFrame && videoSize.width > 0 && image == null) showVideo(p)
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
@@ -266,6 +227,7 @@ internal class CastPlayback(context: Context, name: String, private val state: (
     }
 
     private fun releasePlayer() {
+        renderedFrame = false
         val previous = player
         player = null
         main.removeCallbacks(clock)

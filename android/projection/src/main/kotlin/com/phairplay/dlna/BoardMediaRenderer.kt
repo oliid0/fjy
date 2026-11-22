@@ -32,7 +32,9 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
                         private val state: (String) -> Unit, private val media: (Int, Int, Boolean, String) -> Unit)
     : DlnaPlayerControl {
     private val main = Handler(Looper.getMainLooper())
-    private val network = Executors.newSingleThreadScheduledExecutor()
+    // A previous session must send SSDP byebye before its replacement advertises the same UUID.
+    private companion object { val network = Executors.newSingleThreadScheduledExecutor() }
+    private var refreshTask: java.util.concurrent.ScheduledFuture<*>? = null
     private val multicast = context.getSystemService(WifiManager::class.java)?.createMulticastLock("Fcboard-DLNA")
     private var endpoint: DlnaEndpoint? = null
     private var address: String? = null
@@ -72,7 +74,7 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
         ManualDlnaHttp.reset()
         DlnaPlayerBridge.setControl(this)
         multicast?.acquire()
-        network.scheduleWithFixedDelay(::refresh, 0, 5, TimeUnit.SECONDS)
+        refreshTask = network.scheduleWithFixedDelay(::refresh, 0, 5, TimeUnit.SECONDS)
     }
 
     fun announceAvailability() {
@@ -200,7 +202,7 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
         DlnaPlayerBridge.setControl(null)
         ManualDlnaHttp.reset()
         stopItem()
+        refreshTask?.cancel(false)
         network.execute { endpoint?.close(); endpoint = null }
-        network.shutdown()
     }
 }

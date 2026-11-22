@@ -12,6 +12,13 @@ beforeEach(() => channel.postMessage.mockClear());
 
 it.each([
   [{ expression: "sin30°" }, "1/2"],
+  [{ latex: String.raw`\sin 30^{\circ}` }, "1/2"],
+  [{ expression: "1^{2}" }, "1"],
+  [{ latex: String.raw`\sqrt{1}` }, "1"],
+  [{ expression: "1.1 + 0.9" }, "2"],
+  [{ expression: "1/2 + 1/2" }, "1"],
+  [{ latex: String.raw`\log_{2}4` }, "2"],
+  [{ latex: String.raw`\int x\,dx` }, "(1/2)*x^2 + C"],
   [{ expression: "cos90°" }, "0"],
   [{ expression: "log_3(9)" }, "2"],
   [{ expression: "2^sqrt(4)" }, "4"],

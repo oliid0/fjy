@@ -2,6 +2,9 @@ export const allowedFunctions = new Set([
   "sin",
   "cos",
   "tan",
+  "cot",
+  "sec",
+  "csc",
   "asin",
   "acos",
   "atan",
@@ -38,9 +41,6 @@ export const allowedFunctions = new Set([
  * these separate from plotting's continuous-function contract. */
 export const scientificFunctions = new Set([
   ...allowedFunctions,
-  "cot",
-  "sec",
-  "csc",
   "acot",
   "asec",
   "acsc",

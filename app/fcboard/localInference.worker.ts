@@ -35,7 +35,11 @@ self.onmessage = async (
       });
       await math.init();
       const result = await math.recognize(task, vocab, "expression");
-      self.postMessage({ id, ok: true, result: { latex: result.latex } });
+      self.postMessage({
+        id,
+        ok: true,
+        result: { candidates: [result.latex] },
+      });
     } else {
       const { env, pipeline } = await import("@huggingface/transformers");
       env.allowRemoteModels = false;

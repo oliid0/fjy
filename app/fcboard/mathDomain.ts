@@ -97,6 +97,17 @@ export const continuousMathRange = (
           : a.lo > 0
           ? interval.exp(interval.multiply(b, interval.log(a)))
           : undefined;
+      case "sec":
+      case "csc":
+      case "cot": {
+        const denominator = name === "sec" ? interval.cos(a) : interval.sin(a);
+        if (interval.zeroIn(denominator)) {
+          return undefined;
+        }
+        return name === "cot"
+          ? interval.divide(interval.cos(a), denominator)
+          : interval.multiplicativeInverse(denominator);
+      }
       case "sqrt":
         return a.lo >= 0 ? interval.sqrt(a) : undefined;
       case "cbrt":

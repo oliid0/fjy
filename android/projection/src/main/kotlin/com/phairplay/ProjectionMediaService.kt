@@ -57,7 +57,7 @@ class ProjectionMediaService : Service() {
             val size = if (air != null || wfd != null) target?.let { VideoDecoder.sizeFor(it) } else null
             val w = size?.width ?: width
             val h = size?.height ?: height
-            val mirrorFrame = air?.hasMirrorFrame(target) == true
+            val mirrorFrame = air?.hasVideoFrame(target) == true
             val next = listOf(state, name, w, h, audio, title, mirrorFrame)
             if (next != last) {
                 last = next

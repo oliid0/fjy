@@ -10,7 +10,11 @@ const engine = registerPlugin<{
     text?: string;
     source?: string;
     target?: string;
-  }): Promise<{ latex?: string; language?: string; translation?: string }>;
+  }): Promise<{
+    candidates?: string[];
+    language?: string;
+    translation?: string;
+  }>;
   cancel(options: { id: string }): Promise<void>;
 }>("FcboardLocalInference");
 

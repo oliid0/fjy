@@ -105,8 +105,10 @@ public class ProjectionNativePlugin extends Plugin {
         }
         stopEngine(protocol);
         try {
+            String session = call.getString("session", "");
             BoardReceiver next = new BoardReceiver(getBridge().getWebView(), protocol,
-                "castplus".equals(protocol) ? this::showCastPlusConsent : null);
+                "castplus".equals(protocol) ? this::showCastPlusConsent : null,
+                () -> notifyListeners("receiverChanged", new JSObject().put("session", session)));
             engines.put(protocol, next);
             next.start();
             call.resolve();
@@ -199,10 +201,11 @@ public class ProjectionNativePlugin extends Plugin {
     @PluginMethod public void disconnect(PluginCall call) {
         getActivity().runOnUiThread(() -> {
             String protocol = call.getString("protocol", "");
-            if (!owns(call, protocol) || !engines.containsKey(protocol)) { call.resolve(); return; }
+            BoardReceiver receiver = engines.get(protocol);
+            if (!owns(call, protocol) || receiver == null ||
+                    receiver.getRevision() != call.getInt("revision", -1)) { call.resolve(); return; }
             if ("airplay".equals(protocol) || "dlna".equals(protocol)) {
-                BoardReceiver receiver = engines.get(protocol);
-                if (receiver.getRevision() == call.getInt("revision", -1)) receiver.disconnectSender();
+                receiver.disconnectSender();
                 call.resolve();
             } else {
                 stopEngine(protocol);

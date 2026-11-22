@@ -43,8 +43,12 @@ const atom = (text: string, from: number, depth = 0): Atom | undefined => {
   } else if (!number && !name) {
     return;
   }
-  if (text[end] === "^") {
-    const power = atom(text, end + 1, depth + 1);
+  let operator = end;
+  while (/[ \t]/.test(text[operator] || "\n")) {
+    operator++;
+  }
+  if (text[operator] === "^") {
+    const power = atom(text, operator + 1, depth + 1);
     if (!power) {
       return;
     }
@@ -105,7 +109,7 @@ export const scientificNotation = (input: string) => {
   text = output + text.slice(cursor);
   text = replaceOperand(
     text,
-    /(^|[^A-Za-z_])(sin|cos|tan|sinh|cosh|tanh|log|ln)\s*\^\s*(\([+-]?\d+\)|[+-]?\d+)\s*/g,
+    /(^|[^A-Za-z_])(sin|cos|tan|sec|csc|cot|sinh|cosh|tanh|log|ln)\s*\^\s*(\([+-]?\d+\)|[+-]?\d+)\s*/g,
     (match, argument) => {
       const inverse =
         Number(match[3].replace(/[()]/g, "")) === -1 &&
@@ -117,13 +121,16 @@ export const scientificNotation = (input: string) => {
   );
   text = replaceOperand(
     text,
-    /(^|[^A-Za-z_])(asinh|acosh|atanh|sinh|cosh|tanh|asin|acos|atan|sin|cos|tan|sqrt|cbrt|exp|log10|log2|log(?![12]0?\()|ln)([ \t]*)(?=[+\-.\dxyz])/g,
+    /(^|[^A-Za-z_])(arcsin|arccos|arctan|asinh|acosh|atanh|sinh|cosh|tanh|asin|acos|atan|sin|cos|tan|sec|csc|cot|sqrt|cbrt|exp|log10|log2|log(?![12]0?\()|ln)([ \t]*)(?=[+\-.\dxyz])/gi,
     (match, argument) => {
       // log24 is ambiguous; log2 4 and log₂4 explicitly identify their base.
       if (/\d$/.test(match[2]) && !match[3]) {
         return match[0] + argument;
       }
-      return `${match[1]}${match[2] === "ln" ? "log" : match[2]}(${argument})`;
+      const name = match[2].toLowerCase();
+      return `${match[1]}${
+        name === "ln" ? "log" : name.replace(/^arc/, "a")
+      }(${argument})`;
     },
   );
   text = replaceOperand(

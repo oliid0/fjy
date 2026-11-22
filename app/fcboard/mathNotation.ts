@@ -1,11 +1,7 @@
 import { recognitionPattern } from "./recognitionVocabulary";
 import { scientificNotation } from "./scientificNotation";
 
-/** Unsupported or ambiguous layouts stay ink; numerical work belongs to the engine. */
-export const mathNotation = (input: string): string => {
-  if (input.length > 500) {
-    throw new Error("Math input is too long");
-  }
+export const unwrapMathColumn = (input: string) => {
   const column = input
     .trim()
     .match(
@@ -15,11 +11,20 @@ export const mathNotation = (input: string): string => {
   // explicit rows/bar are normalized; the existing operand/operator checks below
   // still reject missing signs, matrices, answers and ambiguous arrangements.
   if (column) {
-    input = column[2]
+    return column[2]
       .replace(/\\hline\b/g, "\n----\n")
       .replace(/\\\\/g, "\n")
       .replace(/&/g, "");
   }
+  return input;
+};
+
+/** Unsupported or ambiguous layouts stay ink; numerical work belongs to the engine. */
+export const mathNotation = (input: string): string => {
+  if (input.length > 500) {
+    throw new Error("Math input is too long");
+  }
+  input = unwrapMathColumn(input);
   let text = input
     .trim()
     .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10))
@@ -61,15 +66,11 @@ export const mathNotation = (input: string): string => {
     .replace(/\\div(?![A-Za-z])/g, "/")
     .replace(/\\pi\b/g, "pi")
     .replace(/\\(?:,|;|!|quad\b|qquad\b)/g, " ")
-    .replace(/\\(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|log|exp)\b/g, "$1")
+    .replace(
+      /\\(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|sec|csc|cot|log|exp)(?![A-Za-z])/g,
+      "$1",
+    )
     .replace(/\\ln\b/g, "log");
-  // A handwritten unary function need not include parentheses. Its variable's
-  // power belongs to the argument: sin x² means sin(x²), not sin(x)².
-  text = text.replace(
-    /(^|[^A-Za-z])(arcsin|arccos|arctan|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|sqrt|exp|log|ln)\s*([xyz](?:\s*\^\s*\(?[+-]?\d+(?:\.\d+)?\)?)?(?:\s*°)?)(?=$|[^A-Za-z])/gi,
-    (_, prefix: string, name: string, argument: string) =>
-      `${prefix}${name.toLowerCase()}(${argument})`,
-  );
   text = text
     .replace(
       /\\?\b(arcsin|arccos|arctan|ln)\b/g,
@@ -118,7 +119,11 @@ export const mathNotation = (input: string): string => {
       .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "(($1)/($2))")
       .replace(/\\sqrt\[(\d+)\]\{([^{}]+)\}/g, "nthRoot($2,$1)")
       .replace(/\\sqrt\{([^{}]+)\}/g, "sqrt($1)")
-      .replace(/([_^])\{([^{}]+)\}/g, "$1($2)");
+      .replace(/([_^])\{([^{}]+)\}/g, "$1($2)")
+      .replace(
+        /\b((?:sin|cos|tan|sec|cot|csc|asin|acos|atan|sinh|cosh|tanh|exp|log)(?:[_^]\([^()]+\))?)\s*\{([^{}]+)\}/g,
+        "$1($2)",
+      );
     if (text === previous) {
       break;
     }

@@ -556,7 +556,9 @@ const NativeMediaObject = ({
         bounds: bounds(),
         labels: nativeLabels(),
       });
-      if (active.current) root.current?.setAttribute("data-native-playing", "");
+      if (active.current) {
+        root.current?.setAttribute("data-native-playing", "");
+      }
       return result;
     } catch (failure) {
       active.current = false;

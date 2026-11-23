@@ -72,6 +72,9 @@ def main():
     strip_libraries(moonshine, libs / "moonshine-voice-0.1.5.aar", {
         f"jni/{abi}/libonnxruntime.so" for abi in ["arm64-v8a", "armeabi-v7a", "x86_64"]
     })
+    media = ROOT / "android/app/src/main/assets/media"
+    download(manifest["fastenhancer"], media / "fastenhancer-s-48khz.onnx")
+    download(manifest["fastenhancerLicense"], media / "fastenhancer-LICENSE")
     print("Verified full ORT runtime; Moonshine duplicates removed, x86 uses pinned Sherpa")
 
 

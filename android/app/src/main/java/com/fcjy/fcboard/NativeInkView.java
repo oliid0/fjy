@@ -160,6 +160,7 @@ final class NativeInkView extends View {
         this.appearance = appearance;
         this.thickAppearance = thick == null ? null : thick.optJSONObject("appearance");
         this.token = token; this.mode = mode; this.enabled = enabled; this.x = x; this.y = y; this.scale = scale; this.width = width; this.unit = unit; this.opacity = opacity;
+        if (overlayPreview && splitInk != null) setVisibility(enabled ? VISIBLE : INVISIBLE);
         if(enabled&&!inputReported){inputReported=true;MainActivity.startup("input.enabled");}
         this.color = Color.parseColor(color); this.dashed = dashed; this.palm = palm; this.blocked.clear(); this.blocked.addAll(blocked);
         thickThreshold = thick == null ? 0 : threshold;

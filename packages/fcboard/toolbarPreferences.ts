@@ -7,7 +7,6 @@ export const toolbarItems = {
   undo: { label: "undo", icon: "undo" },
   redo: { label: "redo", icon: "redo" },
   aerial: { label: "aerial_view", icon: "aerial" },
-  image: { label: "image", icon: "image" },
   rollcall: { label: "roll_call", icon: "rollcall" },
   sticky: { label: "sticky_notes", icon: "sticky" },
   period: { label: "periodic_table", icon: "period" },
@@ -44,13 +43,12 @@ export const NATIVE_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   "undo",
   "redo",
   "aerial",
-  "image",
+  "media",
   "table",
   "ruler",
   "signal",
   "mindmap",
   "document",
-  "media",
   "website",
   "vote",
   "timer",
@@ -82,11 +80,13 @@ export const normalizeToolbarItems = (value: unknown): ToolbarItem[] =>
   Array.isArray(value)
     ? Array.from(
         new Set(
-          value.filter(
-            (id): id is ToolbarItem =>
-              typeof id === "string" &&
-              NATIVE_TOOLBAR_ITEMS.includes(id as ToolbarItem),
-          ),
+          value
+            .map((id) => (id === "image" ? "media" : id))
+            .filter(
+              (id): id is ToolbarItem =>
+                typeof id === "string" &&
+                NATIVE_TOOLBAR_ITEMS.includes(id as ToolbarItem),
+            ),
         ),
       )
         .sort(

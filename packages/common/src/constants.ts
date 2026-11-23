@@ -7,6 +7,7 @@ export const supportsResizeObserver =
   typeof window !== "undefined" && "ResizeObserver" in window;
 
 export const APP_NAME = "Fcboard";
+export const calculatorResourceId = "builtin-calculator";
 
 // distance when creating text before it's considered `autoResize: false`
 // we're using higher threshold so that clicks that end up being drags

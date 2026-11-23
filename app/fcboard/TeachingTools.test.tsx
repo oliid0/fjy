@@ -95,8 +95,8 @@ it("opens the built-in calculator without any installed OEM app and rejects unkn
     expect(calculator.customData?.fcInteractiveResource.id).toBe(
       "builtin-calculator",
     );
-    expect(calculator.height).toBeLessThan(350);
-    expect(calculator.width).toBeLessThan(200);
+    expect(calculator.height).toBe(560);
+    expect(calculator.width).toBe(400);
     expect(calculator.customData?.fcInteractiveResource.html).toBe("");
     for (const name of ["1", "+", "1", "+"]) {
       fireEvent.click(keypad.getByRole("button", { name }));

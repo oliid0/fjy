@@ -4,6 +4,16 @@
   "size": 30241654,
   "sha1": "6c74a76bb284681c2d73288095c7320f1f7079b2",
   "sharedX86Runtime": "1.28.2",
+  "fastenhancer": {
+    "url": "https://github.com/aask1357/fastenhancer/releases/download/onnx-48khz-v1/fastenhancer_s.onnx",
+    "size": 875885,
+    "sha256": "f04ece2beed330da367264c54cedded62f65a117fbde5c005d3a88fc796d0ba3"
+  },
+  "fastenhancerLicense": {
+    "url": "https://raw.githubusercontent.com/aask1357/fastenhancer/8d2d41931b1de316f10da15583f431761bf903ad/LICENSE",
+    "size": 1070,
+    "sha256": "38164c22720cdccceb5f0dbb8f7218dcf17bac97ac536cad2e77c33dfbc45a18"
+  },
   "moonshine": {
     "url": "https://repo.maven.apache.org/maven2/ai/moonshine/moonshine-voice/0.1.5/moonshine-voice-0.1.5.aar",
     "size": 24321396,

@@ -1,9 +1,12 @@
+import { calculatorResourceId } from "@fcboard/common";
+
 import resourceRuntime from "./interactiveResourceRuntime.js?raw";
 import { validateVisualization } from "./visualizationRuntime";
 
 import type { Visualization } from "./visualizationRuntime";
 
-export const calculatorResourceId = "builtin-calculator";
+export { calculatorResourceId };
+export const mediaResourceId = "builtin-media";
 
 export const resourceLibraryNames = ["vega", "jsxgraph"] as const;
 export type ResourceLibrary = typeof resourceLibraryNames[number];
@@ -11,6 +14,7 @@ export type InteractiveResource = {
   id: string;
   title: string;
   html: string;
+  media?: { key: string; video: boolean };
   visualization?: Visualization;
   libraries?: ResourceLibrary[];
 };
@@ -110,6 +114,22 @@ export const validateInteractiveResource = (
   // Its behavior comes from the app, so an old document's HTML is discarded.
   if (resource.id === calculatorResourceId) {
     return { id: resource.id, title: resource.title.trim(), html: "" };
+  }
+  if (resource.id === mediaResourceId) {
+    const media = resource.media;
+    if (
+      !media ||
+      !/^[a-f0-9-]{36}$/i.test(media.key) ||
+      typeof media.video !== "boolean"
+    ) {
+      throw new Error("Invalid local media playlist");
+    }
+    return {
+      id: mediaResourceId,
+      html: "",
+      title: resource.title.trim(),
+      media: { key: media.key, video: media.video },
+    };
   }
   const libraries: unknown[] = [];
   if (resource.libraries !== undefined) {

@@ -812,7 +812,13 @@ export const registerCanvasCommands = (
         const position = resourcePlacement(
           viewport,
           scale,
-          resource.id === calculatorResourceId,
+          resource.id === calculatorResourceId
+            ? "calculator"
+            : resource.media
+            ? resource.media.video
+              ? "video"
+              : "audio"
+            : "lesson",
         );
         const ids = insertElements(api, [
           newIframeElement({
@@ -821,9 +827,10 @@ export const registerCanvasCommands = (
             strokeWidth: 0,
             customData: {
               fcInteractiveResource: resource,
-              ...(resource.id !== calculatorResourceId && {
-                generationData: { status: "done", html: resource.html },
-              }),
+              ...(resource.id !== calculatorResourceId &&
+                !resource.media && {
+                  generationData: { status: "done", html: resource.html },
+                }),
             },
           }),
         ]);

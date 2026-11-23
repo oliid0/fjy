@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,6 +11,7 @@ import {
 
 import {
   calculatorResourceId,
+  mediaResourceId,
   interactiveHtml,
   resourceNeedsRuntime,
 } from "../interactiveHtml";
@@ -19,7 +22,7 @@ import { CalculatorPanel } from "./CalculatorPanel";
 import { ResourceWindow } from "./ResourceWindow";
 
 import type { InteractiveResource } from "../interactiveHtml";
-import type { Ref } from "react";
+import type { ComponentType, Ref } from "react";
 import type { ResourceSurface } from "../interactiveResourceControls";
 import type { ComponentProps } from "react";
 
@@ -41,10 +44,21 @@ export type ResourceLiveUpdate = {
   message: Record<string, unknown>;
 };
 
+export const MediaRendererContext =
+  createContext<ComponentType<InteractiveResourceFrameProps> | null>(null);
+
 export const InteractiveResourceFrame = (
   props: InteractiveResourceFrameProps,
-) =>
-  props.resource.id === calculatorResourceId ? (
+) => {
+  const MediaRenderer = useContext(MediaRendererContext);
+  if (props.resource.id === mediaResourceId) {
+    return MediaRenderer && props.resource.media?.key ? (
+      <MediaRenderer {...props} />
+    ) : (
+      <span>{props.resource.title}</span>
+    );
+  }
+  return props.resource.id === calculatorResourceId ? (
     <CalculatorPanel
       target={{
         id: props.objectId,
@@ -57,6 +71,7 @@ export const InteractiveResourceFrame = (
   ) : (
     <SandboxedResourceFrame {...props} />
   );
+};
 
 const SandboxedResourceFrame = ({
   resource,

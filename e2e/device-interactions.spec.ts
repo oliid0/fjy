@@ -380,7 +380,23 @@ for (const width of [390, 1920]) {
           (await board.locator(".fc-split-bottom").first().boundingBox())!
             .height,
       )
-      .toBeCloseTo(45, 1);
+      .toBeCloseTo(width / 3 <= 145 ? 76 : 45, 1);
+    const exitBounds = (await board
+      .locator("[data-split-exit]")
+      .boundingBox())!;
+    for (const pen of await board
+      .locator(".fc-split-pane")
+      .first()
+      .locator(".fc-split-penbar button")
+      .all()) {
+      const box = (await pen.boundingBox())!;
+      expect(box.width).toBeGreaterThan(0);
+      expect(
+        box.x >= exitBounds.x + exitBounds.width ||
+          box.y + box.height <= exitBounds.y,
+      ).toBe(true);
+      await expect(pen).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    }
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),
       height: Math.max(...items.map((canvas) => canvas.height)),

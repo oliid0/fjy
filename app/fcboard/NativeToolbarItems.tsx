@@ -14,7 +14,7 @@ import { insertElements, insertionPoint, objectSelection } from "./board";
 import { TransientMessage } from "./TransientMessage";
 import { RollCall } from "./RollCall";
 
-const controls = ["image", "rollcall", "sticky", "period"] as const;
+const controls = ["rollcall", "sticky", "period"] as const;
 /** The remaining x.apk entries use the existing real scene/file/resource paths. */
 export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
   const selected = useToolbarItems();
@@ -44,9 +44,7 @@ export const NativeToolbarItems = ({ api }: { api: FcboardImperativeAPI }) => {
     setError("");
     window.dispatchEvent(new Event("fcboard:toolbox-close"));
     try {
-      if (id === "image") {
-        api.setActiveTool({ type: "image" });
-      } else if (id === "rollcall") {
+      if (id === "rollcall") {
         await classroomCommands.execute({ name: "tools.rollcall" });
       } else if (id === "period") {
         await classroomCommands.execute({

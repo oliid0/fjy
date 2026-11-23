@@ -15,6 +15,7 @@ import {
   ELEMENT_READY_TO_ERASE_OPACITY,
   FRAME_STYLE,
   DARK_THEME_FILTER,
+  calculatorResourceId,
   MIME_TYPES,
   THEME,
   distance,
@@ -409,6 +410,14 @@ const drawElementOnCanvas = (
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
 ) => {
+  // The mounted calculator paints its own rounded surface, including for saved objects.
+  if (
+    !renderConfig.isExporting &&
+    element.type === "iframe" &&
+    element.customData?.fcInteractiveResource?.id === calculatorResourceId
+  ) {
+    return;
+  }
   switch (element.type) {
     case "rectangle":
     case "iframe":

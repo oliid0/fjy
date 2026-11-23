@@ -1,5 +1,7 @@
 import { registerPlugin } from "@capacitor/core";
 
+import type { PluginListenerHandle } from "@capacitor/core";
+
 import type { PageLocalization } from "./pageLocalization";
 
 export type VoteState = {
@@ -30,13 +32,47 @@ export type MediaAction = {
     | "pause"
     | "seek"
     | "speed"
+    | "enhance"
     | "next"
     | "previous"
     | "close";
   seconds?: number;
   speed?: number;
+  level?: number;
+};
+export type MediaBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  viewport: number;
+};
+export type MediaPick = {
+  images?: { uri: string; name: string; mime: string }[];
+  key?: string;
+  title?: string;
+  video?: boolean;
+  cancelled?: boolean;
 };
 export const Media = registerPlugin<{
-  open(args: { labels: { title: string; close: string } }): Promise<unknown>;
-  action(args: MediaAction): Promise<unknown>;
+  open(args: { kind?: "image" | "playback" }): Promise<MediaPick>;
+  activate(args: {
+    key: string;
+    owner: string;
+    labels: Record<string, string>;
+    bounds: MediaBounds;
+  }): Promise<unknown>;
+  place(args: { owner: string; bounds: MediaBounds }): Promise<void>;
+  action(args: MediaAction & { owner?: string }): Promise<unknown>;
+  addListener(
+    name: "mediaWindow",
+    listener: (event: {
+      owner: string;
+      action: "close" | "release" | "move";
+      dx?: number;
+      dy?: number;
+      dw?: number;
+      dh?: number;
+    }) => void,
+  ): Promise<PluginListenerHandle>;
 }>("FcboardMedia");

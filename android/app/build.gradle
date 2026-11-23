@@ -21,6 +21,7 @@ android {
         // AndroidResources.noCompress is the public Android Gradle API.
         noCompress += ["js", "css", "svg", "json", "wasm", "onnx", "bin", "woff2"]
     }
+    externalNativeBuild { cmake { path file('src/main/cpp/CMakeLists.txt') } }
     packagingOptions {
         resources { pickFirsts += ["META-INF/LICENSE.txt", "META-INF/NOTICE.txt", "META-INF/LICENSE.md", "META-INF/NOTICE.md"] }
     }

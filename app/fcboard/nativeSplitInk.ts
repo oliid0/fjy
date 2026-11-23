@@ -15,6 +15,7 @@ export type SplitStyle = {
   width: number;
   eraser: number;
   disabled: boolean;
+  resizing?: boolean;
 };
 const input = registerPlugin<{
   configure(options: Record<string, unknown>): Promise<void>;
@@ -125,6 +126,7 @@ export const createNativeSplitInk = (
         owner,
         token,
         persistent: true,
+        overlayPreview: true,
         enabled: !settings.disabled,
         multiStroke: true,
         shortcutsEnabled: false,
@@ -145,6 +147,17 @@ export const createNativeSplitInk = (
         eraserSize: settings.eraser || 60,
         blocked,
       };
+      if (settings.resizing) {
+        // CSS stretches the existing canvas while dragging the divider. Restore
+        // a single correctly sized bitmap when the new pane bounds are committed.
+        if (signature !== "resizing") {
+          await input.configure({ ...options, enabled: false });
+          signature = "resizing";
+          canvas.style.opacity = "";
+        }
+        tokens.delete(token);
+        return;
+      }
       if (restoring) {
         await input.configure({ ...options, enabled: false });
         if (!alive || failed) {
@@ -180,7 +193,7 @@ export const createNativeSplitInk = (
       viewport = nextViewport;
       signature = nextSignature;
       installed = restoreVersion;
-      canvas.style.opacity = "0";
+      canvas.style.opacity = settings.disabled ? "" : "0";
     } catch (error) {
       fail(error);
     } finally {

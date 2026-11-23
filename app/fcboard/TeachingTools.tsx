@@ -862,7 +862,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       <Curtain />
       <SplitBoard />
       <Voting />
-      <ToolMedia />
+      <ToolMedia api={api} />
       <ToolbarExtras placement="toolbox">
         <div
           className="fc-factory-tools"

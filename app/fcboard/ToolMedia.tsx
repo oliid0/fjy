@@ -1,205 +1,210 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
+import { fileOpen } from "browser-fs-access";
+import { getDataURL, isSupportedImageFile } from "@fcboard/fcboard/data/blob";
+import { loadHTMLImageElement } from "@fcboard/element/image";
 import { t } from "@fcboard/fcboard/i18n";
+import { mediaResourceId } from "@fcboard/fcboard/interactiveHtml";
 
-import { nativeErrorMessage } from "./nativeErrorMessage";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { classroomCommands } from "./commands";
-import { FloatingToolPanel } from "./FloatingToolPanel";
+import { contentViewport } from "./board";
 import { Media } from "./builtinNative";
+import { classroomCommands } from "./commands";
+import { insertImageResult } from "./imageGeneration";
+import { pendingMediaPlayback, saveMediaFiles } from "./mediaPlaylist";
 
-import type { MediaAction } from "./builtinNative";
+import type { InkStroke } from "./documents";
 
-export const ToolMedia = () => {
-  const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<{ name: string; url: string }[]>([]);
-  const [index, setIndex] = useState(0);
-  const [error, setError] = useState("");
-  const video = useRef<HTMLVideoElement>(null);
-  const current = useRef({ items, index });
-  current.current = { items, index };
-  useEffect(
-    () => () => {
-      current.current.items.forEach((item) => URL.revokeObjectURL(item.url));
-    },
-    [],
-  );
+export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
   useEffect(() => {
-    const stops = [
-      classroomCommands.register(
-        "tools.media",
-        "Choose local audio/video files. Android uses the built-in ExoPlayer playlist, no external file browser APK. User completes system file selection.",
-        async () => {
-          if (Capacitor.isNativePlatform()) {
-            return Media.open({
-              labels: { title: t("fcboard.media"), close: t("buttons.close") },
+    const stopOpen = classroomCommands.register(
+      "tools.media",
+      "Choose local images, audio and video together. Images become selectable canvas images. Audio/video files form a playable scene object. Optional kind=image|playback filters the picker.",
+      async (args) => {
+        const kind = args.kind;
+        if (kind !== undefined && kind !== "image" && kind !== "playback") {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const signal =
+          args.signal instanceof AbortSignal
+            ? args.signal
+            : new AbortController().signal;
+        let images: File[] = [];
+        let key: string | undefined;
+        let title: string | undefined;
+        let video = false;
+        if (Capacitor.isNativePlatform()) {
+          const result = await Media.open({ kind });
+          signal.throwIfAborted();
+          if (result.cancelled) {
+            return { cancelled: true };
+          }
+          for (const item of result.images || []) {
+            const response = await fetch(Capacitor.convertFileSrc(item.uri), {
+              signal,
             });
-          }
-          setOpen(true);
-          return { open: true, selecting: true };
-        },
-      ),
-      classroomCommands.register(
-        "media.control",
-        "Read or control the actual player. args.action=read|play|pause|seek|speed|next|previous|close; seek requires seconds, speed requires 0.25..3.",
-        async (args) => {
-          if (
-            ![
-              "read",
-              "play",
-              "pause",
-              "seek",
-              "speed",
-              "next",
-              "previous",
-              "close",
-            ].includes(String(args.action))
-          ) {
-            throw new Error(t("fcboard.invalid_style_parameters"));
-          }
-          const action = args as MediaAction;
-          if (Capacitor.isNativePlatform()) {
-            return Media.action(action);
-          }
-          const node = video.current;
-          if (action.action === "close") {
-            node?.pause();
-            setOpen(false);
-            return { open: false };
-          }
-          if (!node) {
-            if (action.action === "read") {
-              return { open: false };
+            if (!response.ok) {
+              throw new Error(t("errors.imageInsertError"));
             }
-            throw new Error(t("fcboard.media_choose"));
-          }
-          if (action.action === "play") {
-            await node.play();
-          }
-          if (action.action === "pause") {
-            node.pause();
-          }
-          if (action.action === "seek") {
-            if (
-              typeof action.seconds !== "number" ||
-              !Number.isFinite(action.seconds) ||
-              action.seconds < 0 ||
-              !Number.isFinite(node.duration) ||
-              action.seconds > node.duration
-            ) {
-              throw new Error(t("fcboard.invalid_style_parameters"));
-            }
-            node.currentTime = action.seconds;
-          }
-          if (action.action === "speed") {
-            if (
-              typeof action.speed !== "number" ||
-              !Number.isFinite(action.speed) ||
-              action.speed < 0.25 ||
-              action.speed > 3
-            ) {
-              throw new Error(t("fcboard.invalid_style_parameters"));
-            }
-            node.playbackRate = action.speed;
-          }
-          if (action.action === "next" || action.action === "previous") {
-            setIndex(
-              Math.max(
-                0,
-                Math.min(
-                  current.current.items.length - 1,
-                  current.current.index + (action.action === "next" ? 1 : -1),
-                ),
-              ),
+            images.push(
+              new File([await response.blob()], item.name, { type: item.mime }),
             );
           }
+          key = result.key;
+          title = result.title;
+          video = !!result.video;
+        } else {
+          let files: File[];
+          try {
+            files = await fileOpen({
+              multiple: true,
+              mimeTypes:
+                kind === "image"
+                  ? ["image/*"]
+                  : kind === "playback"
+                  ? ["audio/*", "video/*"]
+                  : ["image/*", "audio/*", "video/*"],
+            });
+          } catch (error) {
+            if (error instanceof Error && error.name === "AbortError") {
+              return { cancelled: true };
+            }
+            throw error;
+          }
+          const isImage = (item: File) =>
+            item.type.startsWith("image/") ||
+            (!item.type &&
+              /\.(png|jpg|jpeg|webp|gif|bmp|svg|avif)$/i.test(item.name));
+          images = files.filter(isImage);
+          const playlist = files.filter((item) => !isImage(item));
+          if (playlist.length) {
+            key = crypto.randomUUID();
+            title = playlist[0].name;
+            video =
+              playlist[0].type.startsWith("video/") ||
+              (!playlist[0].type &&
+                /\.(mp4|webm|mkv|mov|avi|m4v|ogv)$/i.test(title));
+            await saveMediaFiles(key, playlist);
+          }
+        }
+        signal.throwIfAborted();
+        if (images.length) {
+          if (classroomCommands.has("document.draw")) {
+            for (const image of images) {
+              if (!isSupportedImageFile(image)) {
+                throw new Error(t("errors.imageInsertError"));
+              }
+              const dataURL = await getDataURL(image);
+              const bitmap = await loadHTMLImageElement(dataURL);
+              await insertImageResult(
+                api,
+                {
+                  dataURL,
+                  mimeType: image.type,
+                  width: bitmap.naturalWidth,
+                  height: bitmap.naturalHeight,
+                },
+                signal,
+              );
+            }
+          } else {
+            const view = contentViewport(api);
+            await api.insertImages(
+              images,
+              (view.left + view.right) / 2,
+              (view.top + view.bottom) / 2,
+            );
+          }
+        }
+        if (!key) {
+          return { images: images.length };
+        }
+        pendingMediaPlayback.add(key);
+        try {
+          const result = await classroomCommands.execute({
+            name: "canvas.resource",
+            args: {
+              signal,
+              resource: {
+                id: mediaResourceId,
+                title: (title || t("fcboard.media")).slice(0, 160),
+                html: "",
+                media: { key, video },
+              },
+            },
+          });
           return {
             open: true,
-            playing: !node.paused,
-            position: node.currentTime,
-            duration: Number.isFinite(node.duration) ? node.duration : -1,
-            index: current.current.index,
-            items: current.current.items.map((item) => item.name),
-            error: node.error?.message || "",
+            images: images.length,
+            ...(result as { ids: string[] }),
           };
-        },
-      ),
-    ];
-    return () => stops.forEach((stop) => stop());
-  }, []);
-  return open ? (
-    <FloatingToolPanel
-      title={t("fcboard.media")}
-      width={720}
-      onClose={() => {
-        video.current?.pause();
-        setOpen(false);
-      }}
-    >
-      <div className="fc-builtin-body">
-        <label>
-          {t("fcboard.media_choose")}
-          <input
-            type="file"
-            accept="audio/*,video/*"
-            multiple
-            onChange={(event) => {
-              const files = Array.from(event.target.files || []);
-              if (!files.length) {
-                return;
-              }
-              current.current.items.forEach((item) =>
-                URL.revokeObjectURL(item.url),
-              );
-              setItems(
-                files.map((file) => ({
-                  name: file.name,
-                  url: URL.createObjectURL(file),
-                })),
-              );
-              setIndex(0);
-              setError("");
-            }}
-          />
-        </label>
-        {items.length > 0 && (
-          <>
-            <select
-              aria-label={t("fcboard.media_playlist")}
-              value={index}
-              onChange={(event) => {
-                setIndex(Number(event.target.value));
-                setError("");
-              }}
-            >
-              {items.map((item, i) => (
-                <option key={item.url} value={i}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <video
-              ref={video}
-              src={items[index]?.url}
-              controls
-              playsInline
-              style={{ width: "100%", maxHeight: "60dvh", background: "#000" }}
-              onError={() =>
-                setError(
-                  video.current?.error?.message ||
-                    t("fcboard.builtin_tool_failed"),
-                )
-              }
-              onEnded={() => {
-                if (index + 1 < items.length) {
-                  setIndex(index + 1);
-                }
-              }}
-            />
-          </>
-        )}
-        {error && <p role="alert">{nativeErrorMessage(error)}</p>}
-      </div>
-    </FloatingToolPanel>
-  ) : null;
+        } catch (error) {
+          pendingMediaPlayback.delete(key);
+          throw error;
+        }
+      },
+    );
+    const stopControl = classroomCommands.register(
+      "media.control",
+      "Control the selected or latest media object, optionally by id. action=read|play|pause|seek|speed|next|previous|enhance|close. Seek uses seconds, speed uses 0.25..3 and Android enhancement uses level 0..3.",
+      (args) => {
+        if (
+          ![
+            "read",
+            "play",
+            "pause",
+            "seek",
+            "speed",
+            "next",
+            "previous",
+            "enhance",
+            "close",
+          ].includes(String(args.action))
+        ) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const doc = classroomCommands.read("document") as
+          | { ink: InkStroke[]; selection?: string[] }
+          | undefined;
+        const ids = doc
+          ? doc.ink
+              .filter((stroke) => stroke.resource?.id === mediaResourceId)
+              .map((stroke) => stroke.id)
+          : api
+              .getSceneElements()
+              .filter(
+                (el) =>
+                  !el.isDeleted &&
+                  el.customData?.fcInteractiveResource?.id === mediaResourceId,
+              )
+              .map((el) => el.id);
+        const selected = doc
+          ? doc.selection || []
+          : Object.keys(api.getAppState().selectedElementIds);
+        const target =
+          args.id === undefined
+            ? ids.find((id) => selected.includes(id)) || ids.at(-1)
+            : ids.find((id) => id === args.id);
+        if (!target) {
+          if (
+            args.id === undefined &&
+            (args.action === "read" || args.action === "close")
+          ) {
+            return { open: false };
+          }
+          throw new Error(t("fcboard.media_choose"));
+        }
+        return classroomCommands.execute({
+          name: `media.object.${target}`,
+          args,
+        });
+      },
+    );
+    return () => {
+      stopOpen();
+      stopControl();
+    };
+  }, [api]);
+  return null;
 };

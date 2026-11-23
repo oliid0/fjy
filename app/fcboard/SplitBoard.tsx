@@ -121,15 +121,18 @@ const SplitPane = ({
   model,
   index,
   background,
+  resizing,
   disabled,
 }: {
   model: Pane;
   index: number;
   background: string;
+  resizing: boolean;
   disabled: boolean;
 }) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   const active = useRef(new Map<number, Stroke>());
+  const fitCanvas = useRef<() => void>(undefined);
   const native = useRef<ReturnType<typeof createNativeSplitInk>>(undefined);
   const nativeContacts = useRef(new Map<string, Stroke>());
   const [tool, setTool] = useState(model.color);
@@ -138,12 +141,14 @@ const SplitPane = ({
     color: colors[tool],
     width: penWidth,
     eraser,
+    resizing,
     disabled,
   });
   nativeStyle.current = {
     color: colors[tool],
     width: penWidth,
     eraser,
+    resizing,
     disabled,
   };
   const redraw = useCallback(
@@ -174,6 +179,9 @@ const SplitPane = ({
     const node = canvas.current!;
     const pointers = active.current;
     const fit = () => {
+      if (nativeStyle.current.resizing) {
+        return;
+      }
       const rect = node.getBoundingClientRect();
       if (!(rect.width > 0 && rect.height > 0)) {
         return;
@@ -192,6 +200,7 @@ const SplitPane = ({
         redraw();
       }
     };
+    fitCanvas.current = fit;
     fit();
     const observer =
       typeof ResizeObserver === "undefined"
@@ -314,7 +323,12 @@ const SplitPane = ({
       eraseParts.clear();
     };
   }, [model, redraw]);
-  useEffect(() => native.current?.update(), [disabled, tool, eraser]);
+  useEffect(() => {
+    if (!resizing) {
+      fitCanvas.current?.();
+    }
+    native.current?.update();
+  }, [disabled, resizing, tool, eraser]);
   const point = (x: number, y: number, rect: DOMRect): Point => {
     return [
       Math.max(0, Math.min(1, (x - rect.left) / Math.max(1, rect.width))),
@@ -505,6 +519,7 @@ export const SplitBoard = () => {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(2);
   const [ratio, setRatio] = useState(50);
+  const [draggingDivider, setDraggingDivider] = useState(false);
   const resizing = useRef<{ pointer: number; original: number } | null>(null);
   const [background, setBackground] = useState(1);
   const [draft, setDraft] = useState<{
@@ -648,6 +663,7 @@ export const SplitBoard = () => {
   useEffect(() => {
     if (!open || count !== 2 || exiting || saving || draft) {
       resizing.current = null;
+      setDraggingDivider(false);
       return;
     }
     const move = (event: PointerEvent) => {
@@ -669,12 +685,14 @@ export const SplitBoard = () => {
       if (resizing.current?.pointer === event.pointerId) {
         move(event);
         resizing.current = null;
+        setDraggingDivider(false);
       }
     };
     const cancel = (event: PointerEvent) => {
       if (resizing.current?.pointer === event.pointerId) {
         setRatio(resizing.current.original);
         resizing.current = null;
+        setDraggingDivider(false);
       }
     };
     window.addEventListener("pointermove", move, { passive: false });
@@ -750,7 +768,8 @@ export const SplitBoard = () => {
                 index={i}
                 model={model}
                 background={backgrounds[background].color}
-                disabled={exiting || saving || !!draft}
+                resizing={draggingDivider}
+                disabled={exiting || saving || !!draft || draggingDivider}
               />
             ))}
           </div>
@@ -771,6 +790,7 @@ export const SplitBoard = () => {
                   return;
                 }
                 event.preventDefault();
+                setDraggingDivider(true);
                 resizing.current = {
                   pointer: event.pointerId,
                   original: ratio,
@@ -786,6 +806,7 @@ export const SplitBoard = () => {
                   setRatio(resizing.current.original);
                 }
                 resizing.current = null;
+                setDraggingDivider(false);
               }}
               onKeyDown={(event) => {
                 if (exiting || saving || draft) {

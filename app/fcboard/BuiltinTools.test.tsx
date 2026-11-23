@@ -11,6 +11,7 @@ import { t } from "@fcboard/fcboard/i18n";
 import { pageLocalization } from "./pageLocalization";
 
 import { render } from "./test/render";
+import { sceneAPI } from "./test/scene";
 import { ToolTimer } from "./ToolTimer";
 import { Curtain, moveCurtain } from "./Curtain";
 import { SplitBoard } from "./SplitBoard";
@@ -563,21 +564,38 @@ it("does not let a late voting poll replace a newly started session with old res
   expect(screen.getByTestId("vote-qr")).toHaveTextContent(session.urls[0]);
 });
 
-it("routes media to the internal Android picker and real player controls", async () => {
+it("inserts the native playlist from the unified picker as a scene object", async () => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
-  vi.mocked(Media.open).mockResolvedValue({ open: true });
-  vi.mocked(Media.action).mockResolvedValue({
-    open: true,
-    playing: false,
-    position: 12,
+  const key = crypto.randomUUID();
+  vi.mocked(Media.open).mockResolvedValue({
+    key,
+    title: "Local video",
+    video: true,
   });
-  render(<ToolMedia />);
-  expect(await command("tools.media")).toEqual({ open: true });
-  expect(Media.open).toHaveBeenCalledWith({
-    labels: { title: t("fcboard.media"), close: t("buttons.close") },
-  });
-  expect(
-    await command("media.control", { action: "seek", seconds: 12 }),
-  ).toMatchObject({ position: 12 });
-  expect(Media.action).toHaveBeenCalledWith({ action: "seek", seconds: 12 });
+  const insert = vi.fn(() => ({ ids: ["player"] }));
+  const stop = classroomCommands.register(
+    "canvas.resource",
+    "@internal",
+    insert,
+  );
+  try {
+    render(<ToolMedia api={sceneAPI()} />);
+    expect(await command("tools.media")).toMatchObject({
+      open: true,
+      ids: ["player"],
+    });
+    expect(Media.open).toHaveBeenCalledWith({ kind: undefined });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: {
+          id: "builtin-media",
+          title: "Local video",
+          html: "",
+          media: { key, video: true },
+        },
+      }),
+    );
+  } finally {
+    stop();
+  }
 });

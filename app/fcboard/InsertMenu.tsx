@@ -384,7 +384,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
     const stops = [
       classroomCommands.register(
         "insert.open",
-        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents use the internal viewer; media opens the built-in local audio/video player; signal uses real TV inputs.",
+        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents use the internal viewer; media opens the image and local playback picker; signal uses real TV inputs.",
         (args) =>
           open(
             args.kind,

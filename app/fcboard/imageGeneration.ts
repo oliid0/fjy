@@ -3,7 +3,11 @@ import { t } from "@fcboard/fcboard/i18n";
 
 import type { FileId } from "@fcboard/element/types";
 
-import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type {
+  BinaryFileData,
+  DataURL,
+  FcboardImperativeAPI,
+} from "@fcboard/fcboard/types";
 
 import { aiLanguagePolicy } from "./aiLocale";
 
@@ -193,7 +197,9 @@ export const insertGeneratedImage = async (
 
 export const insertImageResult = async (
   api: FcboardImperativeAPI,
-  image: GeneratedImage,
+  image: Omit<GeneratedImage, "mimeType"> & {
+    mimeType: BinaryFileData["mimeType"];
+  },
   signal: AbortSignal,
   placement: ImagePlacement = {},
 ) => {

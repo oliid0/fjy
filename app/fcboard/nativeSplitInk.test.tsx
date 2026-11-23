@@ -97,6 +97,7 @@ it("mounts independent persistent native panes and updates real export ink witho
   const [left, right] = await ready();
   expect(left).toMatchObject({
     persistent: true,
+    overlayPreview: true,
     multiStroke: true,
     color: "#000000",
   });

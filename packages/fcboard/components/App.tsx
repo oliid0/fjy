@@ -876,6 +876,7 @@ class App extends React.Component<AppProps, AppState> {
       mutateElement: this.mutateElement,
       updateLibrary: this.library.updateLibrary,
       addFiles: this.addFiles,
+      insertImages: this.insertImages,
       resetScene: this.resetScene,
       getSceneElementsIncludingDeleted: this.getSceneElementsIncludingDeleted,
       getSceneElementsMapIncludingDeleted:
@@ -1852,9 +1853,10 @@ class App extends React.Component<AppProps, AppState> {
                       resource={el.customData.fcInteractiveResource}
                       objectId={el.id}
                       surface="whiteboard"
-                      dark={isColorDark(
-                        this.state.viewBackgroundColor || "#ffffff",
-                      )}
+                      dark={
+                        this.state.theme === THEME.DARK ||
+                        isColorDark(this.state.viewBackgroundColor || "#ffffff")
+                      }
                       iframeRef={(ref) => this.cacheEmbeddableRef(el, ref)}
                       window={
                         this.props.UIOptions.unifiedToolbar
@@ -13869,7 +13871,7 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private insertImages = async (
+  public insertImages = async (
     imageFiles: File[],
     sceneX: number,
     sceneY: number,

@@ -479,9 +479,6 @@
   margin-left: 0;
   margin-right: calc(6 * var(--fc-unit));
 }
-.app .fcboard .fc-combined-toolbox [data-native-tool="image"] {
-  order: 0 !important;
-}
 .app .fcboard .fc-combined-toolbox [data-native-tool="table"] {
   order: 1 !important;
 }
@@ -498,7 +495,7 @@
   order: 5 !important;
 }
 .app .fcboard .fc-combined-toolbox [data-native-tool="media"] {
-  order: 6 !important;
+  order: 0 !important;
 }
 .app .fcboard .fc-combined-toolbox [data-native-tool="website"] {
   order: 7 !important;

@@ -1,4 +1,4 @@
-import { isColorDark } from "@fcboard/common";
+import { isColorDark, THEME } from "@fcboard/common";
 import { nativeInkGradient } from "@fcboard/element/nativeInkColor";
 
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
@@ -2144,7 +2144,13 @@ export const FilePreview = ({
         const position = resourcePlacement(
           viewport,
           scale,
-          resource.id === calculatorResourceId,
+          resource.id === calculatorResourceId
+            ? "calculator"
+            : resource.media
+            ? resource.media.video
+              ? "video"
+              : "audio"
+            : "lesson",
         );
         const element = newIframeElement({
           type: "iframe",
@@ -3869,9 +3875,10 @@ export const FilePreview = ({
                     resource={stroke.resource}
                     objectId={stroke.id}
                     surface="document"
-                    dark={isColorDark(
-                      penState.viewBackgroundColor || "#ffffff",
-                    )}
+                    dark={
+                      penState.theme === THEME.DARK ||
+                      isColorDark(penState.viewBackgroundColor || "#ffffff")
+                    }
                     window={{
                       bounds: {
                         x: stroke.points[0][0],

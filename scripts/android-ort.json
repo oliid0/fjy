@@ -1,11 +1,13 @@
 {
   "version": "1.23.2",
   "url": "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.23.2/onnxruntime-android-1.23.2.aar",
+  "fallback": "https://repo.huaweicloud.com/repository/maven/com/microsoft/onnxruntime/onnxruntime-android/1.23.2/onnxruntime-android-1.23.2.aar",
   "size": 30241654,
   "sha1": "6c74a76bb284681c2d73288095c7320f1f7079b2",
   "sharedX86Runtime": "1.28.2",
   "fastenhancer": {
     "url": "https://github.com/aask1357/fastenhancer/releases/download/onnx-48khz-v1/fastenhancer_s.onnx",
+    "fallback": "https://api.github.com/repos/aask1357/fastenhancer/releases/assets/362007288",
     "size": 875885,
     "sha256": "f04ece2beed330da367264c54cedded62f65a117fbde5c005d3a88fc796d0ba3"
   },
@@ -16,6 +18,7 @@
   },
   "moonshine": {
     "url": "https://repo.maven.apache.org/maven2/ai/moonshine/moonshine-voice/0.1.5/moonshine-voice-0.1.5.aar",
+    "fallback": "https://repo.huaweicloud.com/repository/maven/ai/moonshine/moonshine-voice/0.1.5/moonshine-voice-0.1.5.aar",
     "size": 24321396,
     "sha256": "ee2d95c21150683c743db8f3aef66281fd5408bcefc94be3ca1d2545ada1f571"
   }

@@ -3040,7 +3040,7 @@ it("uses the actual courseware circle for a word card while keeping whole-object
   }
 });
 
-it("owns a compact calculator on the visible courseware page and keeps its selection/move/close/undo out of the hidden board", async () => {
+it("fits a usable calculator on the visible courseware page and keeps its selection/move/close/undo out of the hidden board", async () => {
   const host = await setup();
   const stop = registerCanvasCommands(host.api);
   const calculator = render(<Calculator api={host.api} />);
@@ -3053,7 +3053,21 @@ it("owns a compact calculator on the visible courseware page and keeps its selec
     await act(() => classroomCommands.execute({ name: "tools.calculator" }));
     const original = read().ink[0];
     expect(original.resource?.id).toBe("builtin-calculator");
-    expect(original.resource!.height).toBeLessThan(250);
+    const { scale, viewport } = classroomCommands.read("document.layout") as {
+      scale: number;
+      viewport: { left: number; top: number; right: number; bottom: number };
+    };
+    const visibleWidth = (viewport.right - viewport.left) * scale;
+    const visibleHeight = (viewport.bottom - viewport.top) * scale;
+    const { width, height } = original.resource!;
+    expect(width * scale).toBeCloseTo(Math.min(400, visibleWidth * 0.96));
+    expect(height * scale).toBeCloseTo(Math.min(560, visibleHeight * 0.96));
+    expect(original.points[0][0] + width / 2).toBeCloseTo(
+      (viewport.left + viewport.right) / 2,
+    );
+    expect(original.points[0][1] + height / 2).toBeCloseTo(
+      (viewport.top + viewport.bottom) / 2,
+    );
     const panel = screen.getByRole("group", {
       name: t("fcboard.calculatorUi.title"),
     });

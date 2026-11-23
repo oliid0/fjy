@@ -45,13 +45,17 @@ it("places toolbar settings before AI and opens its own page", () => {
   ).toBeVisible();
 });
 
-it("preserves native defaults and adds the user-requested optional multipoint item to the original catalogue", () => {
+it("preserves native defaults and shows a single multimedia entry", () => {
   const view = render(<ToolbarSettings />);
   expect(readToolbarItems()).toEqual(DEFAULT_TOOLBAR_ITEMS);
-  expect(NATIVE_TOOLBAR_ITEMS.length + 3).toBe(26);
+  expect(
+    view.container.querySelectorAll('[data-tool-id="media"]'),
+  ).toHaveLength(1);
+  expect(view.container.querySelector('[data-tool-id="image"]')).toBeNull();
+  expect(normalizeToolbarItems(["image", "media"])).toEqual(["media"]);
   expect(view.container.querySelectorAll(".is-fixed")).toHaveLength(3);
   expect(
-    screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 26 })),
+    screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 25 })),
   ).toBeVisible();
   fireEvent.click(badge(t("fcboard.mind_map")));
   expect(readToolbarItems()).toEqual(

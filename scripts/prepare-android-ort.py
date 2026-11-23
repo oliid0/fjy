@@ -51,14 +51,27 @@ def strip_libraries(source, target, removed):
 
 
 def download(entry, cache):
-    if not cache.exists() or not verified(cache.read_bytes(), entry):
-        with urllib.request.urlopen(entry["url"], timeout=180) as response:
-            data = response.read()
+    if cache.exists():
+        data = cache.read_bytes()
+        if verified(data, entry):
+            return data
+
+    errors = []
+    for url in filter(None, (entry["url"], entry.get("fallback"))):
+        request = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                data = response.read()
+        except OSError as error:
+            errors.append(f"{url}: {error}")
+            continue
         if not verified(data, entry):
-            raise ValueError("Native artifact checksum mismatch")
+            errors.append(f"{url}: size or checksum mismatch")
+            continue
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_bytes(data)
-    return cache.read_bytes()
+        return data
+    raise RuntimeError(f"Could not download verified {cache.name}: " + "; ".join(errors))
 
 
 def main():

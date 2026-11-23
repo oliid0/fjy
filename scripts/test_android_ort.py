@@ -4,6 +4,8 @@ import io
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 from zipfile import ZipFile, ZIP_DEFLATED
 
 
@@ -54,6 +56,43 @@ class NativeRuntimePackagingTest(unittest.TestCase):
             self.assertTrue(runtime.verified(data, entry))
             self.assertFalse(runtime.verified(data + b"tampered", entry))
             self.assertFalse(runtime.verified(b"wrong artifact", entry))
+
+
+    def test_download_uses_verified_fallback_when_primary_is_rate_limited(self):
+        data = b"pinned artifact"
+        entry = {
+            "url": "https://example.com/primary",
+            "fallback": "https://example.com/fallback",
+            "size": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        }
+        rate_limit = HTTPError(entry["url"], 429, "Too Many Requests", None, None)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "runtime.aar"
+            with patch.object(runtime.urllib.request, "urlopen",
+                              side_effect=[rate_limit, io.BytesIO(data)]) as open_url:
+                self.assertEqual(runtime.download(entry, target), data)
+                self.assertEqual(target.read_bytes(), data)
+                self.assertEqual(runtime.download(entry, target), data)
+                self.assertEqual(
+                    [call.args[0].full_url for call in open_url.call_args_list],
+                    [entry["url"], entry["fallback"]],
+                )
+
+    def test_download_rejects_corrupt_responses_from_both_sources(self):
+        entry = {
+            "url": "https://example.com/primary",
+            "fallback": "https://example.com/fallback",
+            "size": 3,
+            "sha1": hashlib.sha1(b"aar").hexdigest(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "runtime.aar"
+            with patch.object(runtime.urllib.request, "urlopen",
+                              side_effect=[io.BytesIO(b"html"), io.BytesIO(b"bad")]):
+                with self.assertRaisesRegex(RuntimeError, "size or checksum mismatch"):
+                    runtime.download(entry, target)
+                self.assertFalse(target.exists())
 
 
 if __name__ == "__main__":

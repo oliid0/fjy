@@ -19,6 +19,7 @@ import android.view.SurfaceView;
 abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Callback {
     private final Object lifecycle = new Object();
     private final Rect damage = new Rect();
+    private final Rect sampleDamage = new Rect();
     private HandlerThread displayThread;
     private Handler display;
     private boolean available, scheduled, full = true;
@@ -43,9 +44,8 @@ abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Cal
 
     final void requestRender(RectF bounds) {
         synchronized (lifecycle) {
-            Rect rect = new Rect();
-            bounds.roundOut(rect);
-            if (rect.intersect(0, 0, getWidth(), getHeight())) damage.union(rect);
+            bounds.roundOut(sampleDamage);
+            if (sampleDamage.intersect(0, 0, getWidth(), getHeight())) damage.union(sampleDamage);
             schedule();
         }
     }
@@ -53,7 +53,9 @@ abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Cal
     private void schedule() {
         if (!available || scheduled || display == null || (!full && damage.isEmpty())) return;
         scheduled = true;
-        display.post(() -> Choreographer.getInstance().postFrameCallback(time -> present()));
+        // An idle Surface can start the new tip now. Do not add a whole
+        // refresh interval between an unbuffered MotionEvent and lockCanvas.
+        display.post(this::present);
     }
 
     private void present() {
@@ -91,8 +93,13 @@ abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Cal
             } finally {
                 android.os.Trace.endSection();
                 synchronized (lifecycle) {
-                    scheduled = false;
-                    if (available && (full || !damage.isEmpty())) schedule();
+                    if (available && (full || !damage.isEmpty())) {
+                        // Input arrived during this render (or the buffer was
+                        // unavailable). Coalesce the backlog into one frame.
+                        Choreographer.getInstance().postFrameCallback(time -> present());
+                    } else {
+                        scheduled = false;
+                    }
                 }
             }
         }

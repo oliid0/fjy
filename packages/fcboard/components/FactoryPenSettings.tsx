@@ -10,6 +10,7 @@ import { t, useI18n } from "../i18n";
 
 import { switchWhiteboardPen, switchWhiteboardTip } from "../whiteboardPen";
 
+import { OverflowLabel } from "./OverflowLabel";
 import { FactoryIcon } from "./FactoryIcon";
 import { FactoryColorWheel } from "./FactoryColorWheel";
 
@@ -268,7 +269,7 @@ export const FactoryPenSettings = ({
               <FactoryIcon name={nib} gradient={state.currentItemInkGradient} />
               <FactoryIcon name={body} />
             </span>
-            <span>{t(`fcboard.${label}`)}</span>
+            <OverflowLabel>{t(`fcboard.${label}`)}</OverflowLabel>
           </button>
         ))}
       </div>

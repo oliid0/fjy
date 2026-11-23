@@ -128,6 +128,7 @@ export const Classroom = registerPlugin<{
   }>;
   openFactoryInsertion(options: {
     insertion: FactoryInsertion;
+    preferOps?: boolean;
     language?: string;
   }): Promise<{ embedded: boolean }>;
   signalAction(options: {
@@ -146,20 +147,6 @@ export const Classroom = registerPlugin<{
     format?: "png" | "pdf";
   }): Promise<void>;
   exitApp(): Promise<void>;
-  getInkProfile(): Promise<{
-    hardPenWidth: number;
-    brushPenWidth: number;
-    eraserSize: number;
-    penWidthMax?: 20 | 40;
-    palmThreshold?: number;
-    thickThreshold?: number;
-    fineThreshold?: number;
-    factoryThresholds?: { palm?: number; fine?: number; thick?: number };
-    dualPen?: boolean;
-    hardNibAvailable?: boolean;
-    hardNib?: boolean;
-    touchPressure?: boolean;
-  }>;
   captureFrame(options?: {
     region?: { x: number; y: number; width: number; height: number };
   }): Promise<{ image: string }>;

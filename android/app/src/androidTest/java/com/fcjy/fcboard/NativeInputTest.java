@@ -45,6 +45,34 @@ public class NativeInputTest {
             for(JSObject event:events){assertEquals("pen",event.optString("mode"));assertNotEquals("cancel",event.optString("phase"));}
         });
     }
+    @Test public void establishedFingerKeepsItsInkAndDiagonalReachesTheLiveTip() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            List<JSObject> events=new ArrayList<>();
+            NativeInkView view=surface(events,"pen");
+            motion(view,MotionEvent.ACTION_DOWN,11,1,2,20,20);
+            motion(view,MotionEvent.ACTION_MOVE,11,1,2,70,45);
+            motion(view,MotionEvent.ACTION_MOVE,11,1,60,110,65);
+            motion(view,MotionEvent.ACTION_MOVE,11,1,65,150,85);
+            Bitmap bitmap=Bitmap.createBitmap(200,200,Bitmap.Config.ARGB_8888);
+            try {
+                view.paintCanvas(new Canvas(bitmap));
+                int softEdges = 0;
+                for (int x=20; x<=150; x++) {
+                    int y=20+(x-20)/2;
+                    assertTrue("Gap at " + x, Color.alpha(bitmap.getPixel(x,y))>0);
+                    for (int row=y-4;row<=y+4;row++) {
+                        int alpha=Color.alpha(bitmap.getPixel(x,row));
+                        if (alpha>0 && alpha<255) softEdges++;
+                    }
+                }
+                assertTrue("Diagonal coverage has fractional edge pixels",softEdges>50);
+            } finally { bitmap.recycle(); }
+            motion(view,MotionEvent.ACTION_UP,11,1,65,150,85);
+            assertEquals(2,events.size());
+            assertEquals("end",events.get(1).optString("phase"));
+            assertEquals("pen",events.get(1).optString("mode"));
+        });
+    }
     @Test public void anInitialBroadReportCanReturnToWritingWithoutLosingItsOrigin() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
@@ -237,7 +265,14 @@ public class NativeInputTest {
                 Canvas canvas=new Canvas(pixels); raster.draw(canvas,paint,tip,1);
                 for(int x:new int[]{40,250,255,256,257,275,500}) assertEquals("Single opacity including tip overlap and tile seam",110,Color.alpha(pixels.getPixel(x,60)));
                 pixels.eraseColor(Color.TRANSPARENT); tip.rewind(); tip.moveTo(250,60); tip.lineTo(250,120);
-                raster.draw(canvas,paint,tip,2); assertEquals(110,Color.alpha(pixels.getPixel(250,110)));
+                android.graphics.Path newer=new android.graphics.Path(); newer.moveTo(30,150); newer.lineTo(80,150);
+                raster.commit(newer,paint);
+                android.graphics.Path cut=new android.graphics.Path(); cut.addRect(45,45,65,75,android.graphics.Path.Direction.CW);
+                raster.erase(cut,0);
+                raster.draw(canvas,paint,tip,2);
+                assertEquals(110,Color.alpha(pixels.getPixel(250,110)));
+                assertEquals("Changes outside the moving tip are retained",110,Color.alpha(pixels.getPixel(55,150)));
+                assertEquals("Erased stable pixels are not replayed",0,Color.alpha(pixels.getPixel(55,60)));
                 pixels.eraseColor(Color.TRANSPARENT); tip.rewind(); tip.moveTo(500,60); tip.lineTo(500,100);
                 raster.draw(canvas,paint,tip,3); assertEquals("Old provisional tip is not baked into retained ink",0,Color.alpha(pixels.getPixel(250,110)));
                 assertEquals(110,Color.alpha(pixels.getPixel(500,90)));

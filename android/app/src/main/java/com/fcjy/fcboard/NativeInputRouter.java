@@ -9,9 +9,11 @@ import java.util.*;
 final class NativeInputRouter {
     private final Map<NativeInkView,RectF> surfaces;
     private final Map<NativeInputStream,Map<Integer,NativeInkView>> captured=new HashMap<>();
+    private final Set<NativeInputStream> boardGestures = new HashSet<>();
     NativeInputRouter(Map<NativeInkView,RectF> surfaces){this.surfaces=surfaces;}
-    void clear(){captured.clear();}
+    void clear(){captured.clear();boardGestures.clear();}
     void cancelDevice(int id){
+        boardGestures.removeIf(stream -> stream.device == id);
         Iterator<Map.Entry<NativeInputStream,Map<Integer,NativeInkView>>> entries=captured.entrySet().iterator();
         while(entries.hasNext()){
             Map.Entry<NativeInputStream,Map<Integer,NativeInkView>> entry=entries.next();
@@ -25,7 +27,29 @@ final class NativeInputRouter {
     boolean dispatch(MotionEvent event,java.util.function.Consumer<MotionEvent> forward){
         NativeInputStream stream=new NativeInputStream(event);
         int action=event.getActionMasked(),changed=event.getActionIndex();
+        if (boardGestures.contains(stream)) {
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) boardGestures.remove(stream);
+            return false;
+        }
         Map<Integer,NativeInkView> pointers=captured.get(stream);
+        if (action == MotionEvent.ACTION_POINTER_DOWN && pointers != null && event.getPointerCount() == 2) {
+            int first = 1 - changed;
+            NativeInkView owner = pointers.get(event.getPointerId(first));
+            RectF box = surfaces.get(owner);
+            if (box != null && box.contains(event.getX(changed), event.getY(changed))
+                    && owner.accepts(event,changed,box.left,box.top) && owner.allowsBoardGesture(event,first,changed)) {
+                // WebView never saw the provisional finger. Give the existing
+                // board pan/zoom handler a DOWN, then the true second DOWN and
+                // all subsequent two- or multi-contact events in their order.
+                owner.cancelStream(stream);
+                captured.remove(stream);
+                boardGestures.add(stream);
+                MotionEvent down = subset(event,Collections.singletonList(first));
+                down.setAction(MotionEvent.ACTION_DOWN);
+                try { forward.accept(down); } finally { down.recycle(); }
+                return false;
+            }
+        }
         if(action==MotionEvent.ACTION_DOWN&&pointers!=null){for(NativeInkView view:new HashSet<>(pointers.values()))view.cancelStream(stream);captured.remove(stream);pointers=null;}
         if(action==MotionEvent.ACTION_DOWN||action==MotionEvent.ACTION_POINTER_DOWN){
             if(pointers==null)pointers=new HashMap<>();
@@ -37,6 +61,20 @@ final class NativeInputRouter {
             }
         }
         if(pointers==null||pointers.isEmpty())return false;
+        // The common MOVE stays on one canvas. Keep its history intact without
+        // allocating pointer groups at the sampling rate of the infrared panel.
+        if (action == MotionEvent.ACTION_MOVE) {
+            NativeInkView owner = pointers.get(event.getPointerId(0));
+            RectF bounds = surfaces.get(owner);
+            if (bounds != null) {
+                int index = 1;
+                while (index < event.getPointerCount() && pointers.get(event.getPointerId(index)) == owner) index++;
+                if (index == event.getPointerCount()) {
+                    owner.handleTouchEvent(event, bounds.left, bounds.top);
+                    return true;
+                }
+            }
+        }
         Map<NativeInkView,List<Integer>> groups=new LinkedHashMap<>();
         for(int i=0;i<event.getPointerCount();i++){
             NativeInkView view=pointers.get(event.getPointerId(i));

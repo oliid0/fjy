@@ -24,14 +24,17 @@ object CastPlusSupport {
 
     internal fun create(context: Context, name: String, events: CastPlusEngine.Events): CastPlusEngine {
         check(isAvailable())
+        if (Build.VERSION.SDK_INT >= 30) loadNetworkAdapter()
         return HuaweiCastPlusEngine(context, name, events)
     }
 
     @JvmStatic fun initialize(context: Context) {
         if (!isAvailable() || Build.VERSION.SDK_INT < 30) return
         val process = android.app.Application.getProcessName()
-        if (process != "${context.packageName}:projection_media" &&
-            process != "${context.packageName}:castplus_nearby") return
+        if (process == "${context.packageName}:castplus_nearby") loadNetworkAdapter()
+    }
+
+    private fun loadNetworkAdapter() {
         try {
             System.loadLibrary("castplus_network_compat")
         } catch (error: LinkageError) {

@@ -5,6 +5,14 @@ import static org.junit.Assert.*;
 
 public class NativeBoardKeysTest {
     @Test public void matchesOnlyTheCapturedDeviceCapabilities() {
+        assertTrue(NativeBoardKeys.infrared("InfraredMultiTouch-61 Touch Device,94-50P Keyboard", 0x0483, 0xba51));
+        assertTrue(NativeBoardKeys.infrared("InfraredMultiTouch-61 Touch Device,86-60P Keyboard", 0x0483, 0xba51));
+        assertFalse(NativeBoardKeys.infrared("InfraredMultiTouch-61 Touch Device,94-50P", 0x0483, 0xba51));
+        assertTrue(NativeBoardKeys.mergedPanelKey(406, 206));
+        assertTrue(NativeBoardKeys.mergedPanelKey(407, 209));
+        assertFalse(NativeBoardKeys.mergedPanelKey(406, 209));
+        assertFalse(NativeBoardKeys.mergedPanelKey(7, 206));
+        assertTrue(NativeBoardKeys.bsd("BSD_UartTouch", 0, 0));
         assertTrue(NativeBoardKeys.bsd("BSD_TouchScreen", 0x003f, 0));
         assertFalse(NativeBoardKeys.bsd("Other keyboard", 0x003f, 0));
         assertFalse(NativeBoardKeys.bsd("BSD_TouchScreen", 0x1234, 0));
@@ -27,8 +35,8 @@ public class NativeBoardKeysTest {
     @Test public void preservesSeparateLockUnlockAndPageActions() {
         assertEquals("lock", NativeBoardKeys.vendorAction(406));
         assertEquals("unlock", NativeBoardKeys.vendorAction(407));
-        assertEquals("pages", NativeBoardKeys.vendorAction(412));
-        assertEquals("pages", NativeBoardKeys.vendorAction(413));
+        assertEquals("save", NativeBoardKeys.vendorAction(412));
+        assertEquals("share", NativeBoardKeys.vendorAction(413));
         assertNull(NativeBoardKeys.vendorAction(7));
         assertNull(NativeBoardKeys.vendorAction(414));
         NativeBoardKeys keys = new NativeBoardKeys();

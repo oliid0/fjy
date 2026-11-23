@@ -45,6 +45,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
     @Volatile private var stopped = false
     @Volatile private var connection: Socket? = null
     private var generation = 0
+    private var retryDelayMs = 3000L
     private var addressRetries = 0
     private var groupFormed = false
     private var ownsGroup = false
@@ -77,8 +78,15 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                 if (!listening) channel?.let(::listen)
                 checkGroup()
             }
-            main.postDelayed(this, 3000)
+            main.postDelayed(this, retryDelayMs)
         }
+    }
+
+    private fun deferGroupRetry() {
+        if (!readyForGroups || stopped) return
+        retryDelayMs = (retryDelayMs * 2).coerceAtMost(60_000L)
+        main.removeCallbacks(retryGroup)
+        main.postDelayed(retryGroup, retryDelayMs)
     }
 
     fun start() {
@@ -162,8 +170,8 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                 listening = false
                 if (!stopped && connection == null) {
                     Log.w("FcboardProjection", "Wi-Fi Direct listen failed: $reason")
-                    state("error")
-                    checkGroup()
+                    state(if (reason == WifiP2pManager.P2P_UNSUPPORTED) "unavailable" else "error")
+                    deferGroupRetry()
                 }
             }
         }
@@ -192,6 +200,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                     }
                     override fun onFailure(reason: Int) {
                         creatingGroup = false
+                        deferGroupRetry()
                         if (!stopped && reason != WifiP2pManager.BUSY) {
                             state(if (reason == WifiP2pManager.P2P_UNSUPPORTED) "unavailable" else "error")
                             Log.w("FcboardProjection", "Wi-Fi Direct group creation failed: $reason")
@@ -200,6 +209,7 @@ class BoardWifiDisplay(private val context: Context, private val surface: () -> 
                 })
                 return@requestConnectionInfo
             }
+            retryDelayMs = 3000L
             if (connection != null) return@requestConnectionInfo
             manager.requestGroupInfo(ch) { group ->
                 if (stopped || generation != revision || group == null || connection != null) return@requestGroupInfo

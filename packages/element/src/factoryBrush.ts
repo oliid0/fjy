@@ -216,14 +216,14 @@ export const factoryBrushSamples = (
     const previousNode = nodes[i - 1];
     const destination = mid(previousNode, nodes[i]);
     const control = i === 1 ? mid(previousNode, destination) : previousNode;
-    // Bound work for imported scenes whose coordinates exceed a physical screen.
-    const steps = Math.min(
-      4096,
-      Math.floor(
-        Math.hypot(nodes[i].x - previousNode.x, nodes[i].y - previousNode.y) /
-          unit /
-          10,
-      ) + 1,
+    // Bound the deviation from the quadratic to a quarter unit per chord.
+    const bend = Math.hypot(
+      source.x - 2 * control.x + destination.x,
+      source.y - 2 * control.y + destination.y,
+    );
+    const steps = Math.max(
+      1,
+      Math.min(4096, Math.ceil(Math.sqrt(bend / unit))),
     );
     for (let step = 1; step <= steps; step++) {
       const t = step / steps;
@@ -244,7 +244,7 @@ export const factoryBrushSamples = (
   return samples;
 };
 
-/** HBezierObject.drawLine: a filled union of horizontal 2:1 ellipses, every 2px. */
+/** HBezierObject.drawLine: overlapping 2:1 ellipses with closer spacing at narrow tips. */
 export const traceFactoryBrush = (
   element: FcboardFreeDrawElement,
   stamp: (point: BrushSample, angle: number) => void,
@@ -280,7 +280,11 @@ export const traceFactoryBrush = (
     const a = samples[i - 1];
     const b = samples[i];
     const length = Math.hypot(b.x - a.x, b.y - a.y);
-    const steps = Math.min(4096, Math.floor(length / (2 * unit)) + 1);
+    const spacing = Math.min(
+      2 * unit,
+      Math.max(unit / 4, Math.min(a.width, b.width) / 4),
+    );
+    const steps = Math.min(4096, Math.floor(length / spacing) + 1);
     for (let step = 1; step <= steps; step++) {
       const t = step / steps;
       const point = {

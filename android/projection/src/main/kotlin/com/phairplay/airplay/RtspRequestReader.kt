@@ -1,5 +1,6 @@
 package com.airplay.airplay
 
+import com.airplay.airplay.handshake.PlistCodec
 import com.airplay.util.Logger
 import java.io.InputStream
 import java.util.TreeMap
@@ -74,10 +75,11 @@ internal class RtspRequestReader(
         headers: Map<String, String>
     ): ByteArray? {
         val contentLength = headers["Content-Length"]?.toIntOrNull() ?: 0
-        val bodyLimit = if (method == "PUT" && uri.substringBefore("?") == PhotoHandler.PHOTO_PATH) {
-            maxPhotoBytes
-        } else {
-            maxMessageBytes
+        val path = uri.substringBefore("?")
+        val bodyLimit = when {
+            method == "PUT" && path == PhotoHandler.PHOTO_PATH -> maxPhotoBytes
+            method == "POST" && path == "/action" -> PlistCodec.MAX_PLIST_BYTES
+            else -> maxMessageBytes
         }
 
         if (contentLength > bodyLimit) {

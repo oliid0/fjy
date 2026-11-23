@@ -185,6 +185,9 @@ public class MediaPlugin extends Plugin {
                 controls.showError("");
                 controls.readItem();
             }
+            @Override public void onVideoSizeChanged(androidx.media3.common.VideoSize size) {
+                if (player == shown) controls.fitVideo(size);
+            }
             @Override public void onTracksChanged(Tracks tracks) {
                 if (player == shown) controls.readTracks(tracks);
             }

@@ -16,6 +16,9 @@ import java.util.function.Consumer;
 
 @CapacitorPlugin(name = "FcboardSkizzePen")
 public class SkizzePenPlugin extends Plugin {
+    private final java.util.concurrent.ExecutorService discovery = java.util.concurrent.Executors.newSingleThreadExecutor(
+        task -> new Thread(task, "usb-pen-discovery"));
+    private volatile boolean closed;
     private final Consumer<JSObject> listener = event -> notifyListeners("input", event);
     private final BroadcastReceiver attached = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -29,12 +32,21 @@ public class SkizzePenPlugin extends Plugin {
             new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
     private void start() {
-        if (!SkizzeUsb.available(getContext())) return;
+        if (closed) return;
         try { ContextCompat.startForegroundService(getContext(), new Intent(getContext(), SkizzePenService.class)); }
         catch (RuntimeException error) { SkizzePenService.failure(error.toString()); }
     }
-    @PluginMethod public void connect(PluginCall call) { getActivity().runOnUiThread(() -> { start(); call.resolve(SkizzePenService.snapshot()); }); }
+    @PluginMethod public void connect(PluginCall call) {
+        discovery.execute(() -> {
+            try {
+                if (SkizzeUsb.available(getContext())) start();
+                call.resolve(SkizzePenService.snapshot());
+            } catch (RuntimeException unavailable) { call.reject("USB pen discovery unavailable", unavailable); }
+        });
+    }
     @Override protected void handleOnDestroy() {
+        closed = true;
+        discovery.shutdownNow();
         SkizzePenService.unlisten(listener);
         getContext().unregisterReceiver(attached);
     }

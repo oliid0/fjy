@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import {
   CaptureUpdateAction,
@@ -7,7 +7,7 @@ import {
   isIframeLikeElement,
 } from "@fcboard/element";
 import { colorToHex, MIN_FONT_SIZE } from "@fcboard/common";
-import { t } from "@fcboard/fcboard/i18n";
+import { getLanguage, t } from "@fcboard/fcboard/i18n";
 import { whiteboardInkStyle } from "@fcboard/fcboard/whiteboardPen";
 import { nativeInkPalettes } from "@fcboard/element/nativeInkColor";
 import { rainbowInkStops } from "@fcboard/element/rainbowInk";
@@ -20,6 +20,7 @@ import { classroomCommands, executeBoardCommand } from "./commands";
 import { transformBoardElement } from "./canvasTransform";
 import { createNativeEraserBackend } from "./nativeEraser";
 import { createNativeSceneRenderer } from "./nativeScene";
+import { Classroom } from "./native";
 
 import "./NativeScene.scss";
 
@@ -147,6 +148,12 @@ export const NativeInkInteraction = ({
   api: FcboardImperativeAPI;
   inkProfile?: UIOptions["inkProfile"];
 }) => {
+  const currentProfile = useRef(inkProfile);
+  const refreshProfile = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    currentProfile.current = inkProfile;
+    refreshProfile.current?.();
+  }, [inkProfile]);
   useEffect(() => {
     if (Capacitor.getPlatform() !== "android" || !api.nativeInk) {
       return;
@@ -408,6 +415,7 @@ export const NativeInkInteraction = ({
       if (!state.width || !state.height) {
         return;
       }
+      const inkProfile = currentProfile.current;
       const style = whiteboardInkStyle(
         state,
         { width: 0, height: 0, pointerType: "touch" },
@@ -875,6 +883,12 @@ export const NativeInkInteraction = ({
               },
             });
             api.setActiveTool({ type: "freedraw" });
+          } else if (event.action === "ops") {
+            await Classroom.openFactoryInsertion({
+              insertion: "signal",
+              preferOps: true,
+              language: getLanguage().code,
+            });
           } else if (event.action === "lock" || event.action === "unlock") {
             api.setToast({
               message: t(
@@ -897,7 +911,8 @@ export const NativeInkInteraction = ({
             const name = (
               {
                 new: "board.new",
-                pages: "board.list",
+                save: "board.saveFile",
+                share: "board.share",
                 clear: "canvas.clear",
                 split: "tools.split",
               } as Record<string, string>
@@ -1006,6 +1021,7 @@ export const NativeInkInteraction = ({
         schedule();
       }),
     ];
+    refreshProfile.current = schedule;
     addEventListener("resize", scheduleUi);
     addEventListener("scroll", scheduleUi, true);
     addEventListener("focusin", scheduleUi);
@@ -1013,6 +1029,7 @@ export const NativeInkInteraction = ({
     schedule();
     return () => {
       active = false;
+      refreshProfile.current = undefined;
       generation++;
       document.documentElement.classList.remove(
         "fc-native-selection-transform",
@@ -1048,6 +1065,6 @@ export const NativeInkInteraction = ({
       void shortcutListener.then((handle) => handle.remove()).catch(() => {});
       void ink.remove({ owner: api.id }).catch(() => {});
     };
-  }, [api, inkProfile]);
+  }, [api]);
   return null;
 };

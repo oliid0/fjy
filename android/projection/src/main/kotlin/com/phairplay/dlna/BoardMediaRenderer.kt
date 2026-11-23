@@ -6,7 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Surface
 import androidx.media3.common.C
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Tracks
 import androidx.media3.common.MediaItem
@@ -24,6 +23,7 @@ import com.airplay.dlna.transport.DlnaEndpoint
 import com.airplay.dlna.transport.ManualDlnaHttp
 import com.airplay.util.MediaUriPolicy
 import com.airplay.util.NetworkUtils
+import com.airplay.util.ProjectionMediaHttp
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -145,14 +145,7 @@ class BoardMediaRenderer(private val context: Context, private val name: String,
                     if (player === p) playbackFailed()
                 }
             })
-            val locator = url.lowercase()
-            val path = locator.substringBefore('?')
-            val query = locator.substringAfter('?', "")
-            val item = MediaItem.Builder().setUri(url)
-            when {
-                path.endsWith(".m3u8") || ".m3u8" in query || "do=m3u8" in query -> item.setMimeType(MimeTypes.APPLICATION_M3U8)
-                path.endsWith(".mpd") || ".mpd" in query -> item.setMimeType(MimeTypes.APPLICATION_MPD)
-            }
+            val item = MediaItem.Builder().setUri(url).setMimeType(ProjectionMediaHttp.manifestMimeType(url))
             p.setMediaItem(item.build())
             p.prepare()
             p.play()

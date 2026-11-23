@@ -242,6 +242,39 @@
 .app .fcboard .fc-unified-toolbar.fc-toolbar-collapsed .fc-toolbar-visibility {
   bottom: 0;
 }
+@keyframes fc-scroll-label {
+  0%,
+  16% {
+    transform: translateX(0);
+  }
+  84%,
+  100% {
+    transform: translateX(var(--fc-label-shift));
+  }
+}
+.app :is(.fcboard, .fc-classroom) .fc-overflow-label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  > span {
+    display: block;
+    width: max-content;
+    margin-inline: auto;
+    white-space: nowrap;
+  }
+  &[data-overflows] > span {
+    animation: fc-scroll-label var(--fc-label-time) linear infinite alternate;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    overflow-x: auto;
+    scrollbar-width: none;
+    &[data-overflows] > span {
+      animation: none;
+    }
+  }
+}
 .app .fcboard .fc-unified-toolbar .fc-toolbar-cloud {
   margin-left: calc(6 * var(--fc-unit));
 }
@@ -747,12 +780,18 @@
     font-size: calc(14 * var(--fc-unit));
   }
   .fc-pen-types {
-    grid-template-columns: repeat(6, calc(44 * var(--fc-unit)));
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(calc(44 * var(--fc-unit)), 1fr)
+    );
     gap: calc(12 * var(--fc-unit));
     min-height: calc(144 * var(--fc-unit));
     margin-top: calc(8 * var(--fc-unit));
     button {
-      height: calc(66 * var(--fc-unit));
+      height: auto;
+      min-height: calc(66 * var(--fc-unit));
+      min-width: 0;
+      justify-content: flex-start;
       padding: 0;
       gap: calc(4 * var(--fc-unit));
       background: transparent;
@@ -762,7 +801,10 @@
         font: 400 calc(10 * var(--fc-unit)) / calc(18 * var(--fc-unit))
             system-ui,
           sans-serif;
+        width: 100%;
         white-space: nowrap;
+        text-align: center;
+        line-height: 1.2;
       }
       &[aria-pressed="true"] {
         background: transparent;

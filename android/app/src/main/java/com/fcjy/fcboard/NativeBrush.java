@@ -69,7 +69,8 @@ final class NativeBrush {
         target.addOval(x-rx, y-ry, x+rx, y+ry, Path.Direction.CW);
     }
     private void line(Path target, Node a, Node b) {
-        int steps = Math.min(4096, (int)Math.floor(Math.hypot(b.x-a.x,b.y-a.y)/(2*unit))+1);
+        float spacing = Math.min(2 * unit, Math.max(unit / 4, Math.min(a.width, b.width) / 4));
+        int steps = Math.min(4096, (int)Math.floor(Math.hypot(b.x-a.x,b.y-a.y)/spacing)+1);
         for (int i=1;i<=steps;i++) {
             float t=(float)i/steps;
             stamp(target, a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t, a.width+(b.width-a.width)*t);
@@ -77,7 +78,9 @@ final class NativeBrush {
     }
     private Node curve(Path target, Node from, Node before, Node last, boolean first) {
         Node end = mid(before,last), control = first ? mid(before,end) : before, cursor = from;
-        int steps=Math.min(4096,(int)Math.floor(Math.hypot(last.x-before.x,last.y-before.y)/unit/10)+1);
+        // Maximum quadratic-to-chord error for n equal intervals is bend / (4*n*n).
+        double bend = Math.hypot(from.x - 2*control.x + end.x, from.y - 2*control.y + end.y);
+        int steps = Math.max(1, Math.min(4096, (int)Math.ceil(Math.sqrt(bend / unit))));
         for(int i=1;i<=steps;i++) {
             float t=(float)i/steps,a=1-t;
             Node next=new Node(a*a*from.x+2*a*t*control.x+t*t*end.x, a*a*from.y+2*a*t*control.y+t*t*end.y,

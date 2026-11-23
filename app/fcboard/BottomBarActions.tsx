@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ToolbarExtras } from "@fcboard/fcboard";
+import { OverflowLabel } from "@fcboard/fcboard/components/OverflowLabel";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
 import { t } from "@fcboard/fcboard/i18n";
 
@@ -93,7 +94,7 @@ export const BottomBarActions = ({ api }: { api: FcboardImperativeAPI }) => {
             onClick={() => setSplit((value) => !value)}
           >
             <FactoryIcon name="split" />
-            <span>{t("fcboard.split_screen")}</span>
+            <OverflowLabel>{t("fcboard.split_screen")}</OverflowLabel>
           </button>
           <button
             type="button"
@@ -102,7 +103,7 @@ export const BottomBarActions = ({ api }: { api: FcboardImperativeAPI }) => {
             onClick={() => void invoke("network.panel", { panel: "collab" })}
           >
             <FactoryIcon name="collaboration" />
-            <span>{t("fcboard.live_collaboration")}</span>
+            <OverflowLabel>{t("fcboard.live_collaboration")}</OverflowLabel>
           </button>
         </div>
       </ToolbarExtras>

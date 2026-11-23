@@ -115,15 +115,16 @@ class MiracastVideoRenderer(private val surfaceProvider: () -> Surface?) {
         // arrived makes the decoder look like it is losing frames when it is not.
         var hasPicture = false
         var hasIdr = false
+        var configChanged = false
         forEachNal(unit) { start, end ->
             when (unit[start].toInt() and 0x1F) {
-                7 -> if (sps == null) {
-                    sps = unit.copyOfRange(start, end)
-                    Logger.i("Miracast: SPS captured (${end - start} bytes)")
-                }
-                8 -> if (pps == null) {
-                    pps = unit.copyOfRange(start, end)
-                    Logger.i("Miracast: PPS captured (${end - start} bytes)")
+                7, 8 -> {
+                    val isSps = (unit[start].toInt() and 0x1F) == 7
+                    val parameter = unit.copyOfRange(start, end)
+                    if (!parameter.contentEquals(if (isSps) sps else pps)) {
+                        if (isSps) sps = parameter else pps = parameter
+                        configChanged = true
+                    }
                 }
                 5 -> { hasPicture = true; hasIdr = true }
                 1 -> hasPicture = true
@@ -147,7 +148,11 @@ class MiracastVideoRenderer(private val surfaceProvider: () -> Surface?) {
 
         // A new Surface (background → foreground) needs a fresh decoder, otherwise the
         // picture stays black forever.
-        if (decoder == null || surface !== configuredSurface || decoder?.isHealthy == false) {
+        if (configChanged || surface !== configuredSurface || decoder?.isHealthy == false) releaseDecoder()
+        if (decoder == null) {
+            // SPS and PPS can arrive in separate units. Wait for the IDR before
+            // configuring so a rotation cannot start with the old parameter pair.
+            if (!hasIdr) return
             if (!rebuildDecoder(surface)) {
                 droppedBeforeConfig++
                 MirrorProbe.onDroppedBeforeConfig()
@@ -188,14 +193,13 @@ class MiracastVideoRenderer(private val surfaceProvider: () -> Surface?) {
         val ppsBytes = pps ?: return false
 
         releaseDecoder()
-        val (width, height) = VideoDecoder.parseSpsResolution(spsBytes) ?: (1920 to 1080)
         decoder = VideoDecoder(surface).also {
             // Only used for freeze detection; AirPlay leaves it null.
             it.onFrameRendered = {
                 lastFrameRenderedAt = SystemClock.elapsedRealtime()
                 shownFrames++
             }
-            it.initialize(spsBytes, ppsBytes, width, height)
+            it.initialize(spsBytes, ppsBytes, 1920, 1080)
         }
         configuredSurface = surface
         awaitingKeyframe = true
@@ -204,7 +208,6 @@ class MiracastVideoRenderer(private val surfaceProvider: () -> Surface?) {
         // counters read by the watchdog. Resetting them in the middle of a session would make
         // its deltas negative and, worse, make it think no picture has ever been shown — which
         // would disable the very recovery that just rebuilt the decoder.
-        Logger.i("Miracast decoder initialized: ${width}x$height")
         return true
     }
 
@@ -218,7 +221,7 @@ class MiracastVideoRenderer(private val surfaceProvider: () -> Surface?) {
             val isStartCode4 = i + 4 <= data.size && data[i].toInt() == 0 &&
                 data[i + 1].toInt() == 0 && data[i + 2].toInt() == 0 && data[i + 3].toInt() == 1
             if (isStartCode3 || isStartCode4) {
-                if (nalStart >= 0) action(nalStart, i)
+                if (nalStart in 0 until i) action(nalStart, i)
                 i += if (isStartCode4) 4 else 3
                 nalStart = i
             } else {

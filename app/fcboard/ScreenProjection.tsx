@@ -134,6 +134,44 @@ function attachProjection(api: FcboardImperativeAPI, video: ProjectionSource) {
   return element.id;
 }
 
+function resizeProjection(api: FcboardImperativeAPI, video: ProjectionSource) {
+  const current = api.getSceneProjection?.();
+  if (!current || current.video !== video) {
+    return;
+  }
+  const tile = api.getSceneElementsMapIncludingDeleted().get(current.elementId);
+  const ratio =
+    "position" in video
+      ? video.width / video.height
+      : video.videoWidth / video.videoHeight;
+  if (!tile || tile.isDeleted || !Number.isFinite(ratio) || ratio <= 0) {
+    return;
+  }
+  if (Math.abs(tile.width - tile.height * ratio) > 0.5) {
+    const state = api.getAppState();
+    const width = Math.min(
+      Math.sqrt(tile.width * tile.height * ratio),
+      state.width / state.zoom.value,
+      (state.height * ratio) / state.zoom.value,
+    );
+    const height = width / ratio;
+    api.updateScene({
+      elements: api.getSceneElementsIncludingDeleted().map((element) =>
+        element.id === tile.id
+          ? newElementWith(element, {
+              x: tile.x + (tile.width - width) / 2,
+              y: tile.y + (tile.height - height) / 2,
+              width,
+              height,
+            })
+          : element,
+      ),
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
+  }
+  api.setSceneProjection?.({ ...current, video });
+}
+
 const restoreIcon = (
   <svg
     viewBox="0 0 24 24"
@@ -569,10 +607,7 @@ const ProjectionSession = ({
         minimumRevision = revision;
         if (nativeLive.current) {
           nativeLive.current.video = video;
-          const current = api.getSceneProjection?.();
-          if (current) {
-            api.setSceneProjection?.({ ...current, video });
-          }
+          resizeProjection(api, video);
           return;
         }
         document.documentElement.classList.add("fc-native-projection");
@@ -677,9 +712,8 @@ const ProjectionSession = ({
         setStage("connecting");
         setError(undefined);
         video.onresize = () => {
-          const projection = api.getSceneProjection?.();
-          if (connection.current === active && projection?.video === video) {
-            api.setSceneProjection?.({ ...projection });
+          if (connection.current === active) {
+            resizeProjection(api, video);
           }
         };
         const stream = new MediaStream();

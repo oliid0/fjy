@@ -6,9 +6,9 @@ import android.os.Looper
 import android.view.Surface
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.ByteArrayDataSource
@@ -19,11 +19,47 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.airplay.airplay.handshake.PlistCodec
 import com.airplay.util.Logger
 import com.airplay.util.ProjectionMediaHttp
 import java.io.IOException
 
 data class PlaybackInfo(val durationSec: Double, val positionSec: Double, val rate: Double, val readyToPlay: Boolean)
+
+private val manifestHeader = "#EXTM3U".toByteArray()
+private val condensedField = Regex("""(?:[:,])([A-Z-]+)="([^"]*)"""")
+
+/** Apple sends some HLS segment addresses as a prefix plus ordered path parameters. */
+internal fun expandAirPlayPlaylist(bytes: ByteArray): ByteArray {
+    if (bytes.size < manifestHeader.size || !manifestHeader.indices.all { bytes[it] == manifestHeader[it] }) return bytes
+    val playlist = bytes.toString(Charsets.UTF_8)
+    if (!playlist.contains("#YT-EXT-CONDENSED-")) return bytes
+    var base = ""
+    var prefix = ""
+    var params = emptyList<String>()
+    val output = StringBuilder()
+    for (line in playlist.lineSequence()) {
+        if (line.startsWith("#YT-EXT-CONDENSED-URL:") || line.startsWith("#YT-EXT-CONDENSED-URI:")) {
+            val fields = condensedField.findAll(line).associate { it.groupValues[1] to it.groupValues[2] }
+            base = fields["BASE-URI"].orEmpty().trimEnd('/')
+            prefix = fields["PREFIX"].orEmpty()
+            params = fields["PARAMS"].orEmpty().split(',')
+            if (base.isEmpty() || prefix.isEmpty() || params.any { it.isBlank() }) throw IOException("Invalid condensed HLS header")
+            continue
+        }
+        if (prefix.isNotEmpty() && !line.startsWith('#') && line.startsWith(prefix)) {
+            val values = line.removePrefix(prefix).split('/', limit = params.size)
+            if (values.size != params.size) throw IOException("Invalid condensed HLS segment")
+            output.append(base)
+            for (i in params.indices) output.append('/').append(params[i]).append('/').append(values[i])
+        } else {
+            output.append(line)
+        }
+        output.append('\n')
+        if (output.length > PlistCodec.MAX_PLIST_BYTES * 8) throw IOException("Expanded HLS playlist too large")
+    }
+    return output.toString().toByteArray()
+}
 
 @UnstableApi
 private class AirPlayDataSource(private val http: DataSource, private val fetch: ((String) -> ByteArray)?) : DataSource {
@@ -38,7 +74,7 @@ private class AirPlayDataSource(private val http: DataSource, private val fetch:
             "http", "https" -> http
             "mlhls" -> {
                 val bytes = fetch?.invoke(dataSpec.uri.toString()) ?: throw IOException("No AirPlay resource channel")
-                ByteArrayDataSource(bytes).also { memory -> listeners.forEach(memory::addTransferListener) }
+                ByteArrayDataSource(expandAirPlayPlaylist(bytes)).also { memory -> listeners.forEach(memory::addTransferListener) }
             }
             else -> throw IOException("Unsupported AirPlay media address")
         }
@@ -99,7 +135,14 @@ internal class AirPlayVideoPlayer(
                         if (state == Player.STATE_ENDED) onEnded(this@AirPlayVideoPlayer, false)
                     }
                     override fun onPlayerError(error: PlaybackException) {
-                        if (!released) onEnded(this@AirPlayVideoPlayer, true)
+                        if (!released) {
+                            Logger.w("AirPlay media playback failed: ${error.errorCodeName}")
+                            onEnded(this@AirPlayVideoPlayer, true)
+                        }
+                    }
+                    override fun onTracksChanged(tracks: Tracks) {
+                        if (!released && !tracks.isEmpty) Logger.i("AirPlay media tracks: video=${tracks.containsType(C.TRACK_TYPE_VIDEO)} " +
+                            "selectedVideo=${tracks.isTypeSelected(C.TRACK_TYPE_VIDEO)} selectedAudio=${tracks.isTypeSelected(C.TRACK_TYPE_AUDIO)}")
                     }
                     override fun onVideoSizeChanged(videoSize: VideoSize) {
                         if (!released) output?.let { surface ->
@@ -114,8 +157,7 @@ internal class AirPlayVideoPlayer(
                         }
                     }
                 })
-                val item = MediaItem.Builder().setUri(url)
-                if (url.startsWith("mlhls:")) item.setMimeType(MimeTypes.APPLICATION_M3U8)
+                val item = MediaItem.Builder().setUri(url).setMimeType(ProjectionMediaHttp.manifestMimeType(url))
                 p.setMediaItem(item.build(), seconds?.let { (it * 1000).toLong() } ?: C.TIME_UNSET)
                 p.playWhenReady = true
                 p.prepare()

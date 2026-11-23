@@ -16,12 +16,13 @@ import java.io.ByteArrayOutputStream
 object InfoResponder {
 
     private const val VIDEO_URL_V1 = 1L shl 0
+    private const val VIDEO_HLS = 1L shl 4
     private const val LEGACY_PAIRING = 1L shl 27
     private const val SCREEN_MULTI_CODEC = 1L shl 42
     const val MODEL = "AppleTV3,2"
     const val SOURCE_VERSION = "220.68"
 
-    fun features(pinRequired: Boolean, hevc: Boolean): Long = 0x527FFEE6L or VIDEO_URL_V1 or
+    fun features(pinRequired: Boolean, hevc: Boolean): Long = 0x527FFEE6L or VIDEO_URL_V1 or VIDEO_HLS or
         (if (pinRequired) LEGACY_PAIRING else 0L) or (if (hevc) SCREEN_MULTI_CODEC else 0L)
 
     fun airPlayAttributes(context: Context, pinRequired: Boolean, hevc: Boolean): Map<String, String> = mapOf(

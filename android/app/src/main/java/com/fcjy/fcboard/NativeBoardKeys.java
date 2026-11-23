@@ -12,10 +12,33 @@ final class NativeBoardKeys {
     }
     private final Map<String, Press> presses = new HashMap<>();
     static boolean bsd(String name, int vendor, int product) {
-        return "BSD_TouchScreen".equals(name) && vendor == 0x003f && product == 0;
+        return product == 0 && (vendor == 0x003f && "BSD_TouchScreen".equals(name)
+            || vendor == 0 && "BSD_UartTouch".equals(name));
     }
     static boolean touchPlanet(String name, int vendor, int product) {
         return name != null && name.startsWith("TouchPlanet ETDV3") && vendor == 0x0483 && product == 0xba50;
+    }
+    static boolean infrared(String name, int vendor, int product) {
+        return vendor == 0x0483 && product == 0xba51
+            && name != null && name.startsWith("InfraredMultiTouch-61 Touch Device,") && name.endsWith(" Keyboard");
+    }
+    // InputReader can merge the UART into another touchscreen (named "qwerty"
+    // in the capture). Match the reported scan/key pair from its key layout.
+    static boolean mergedPanelKey(int key, int scan) {
+        switch (key) {
+            case 400: return scan == 198;
+            case 403: return scan == 203;
+            case 405: return scan == 205;
+            case 406: return scan == 206;
+            case 407: return scan == 209;
+            case 408: return scan == 210;
+            case 409: return scan == 214;
+            case 410: return scan == 211;
+            case 411: return scan == 216;
+            case 412: return scan == 218;
+            case 413: return scan == 219;
+            default: return false;
+        }
     }
     static String vendorAction(int key) {
         switch (key) {
@@ -31,7 +54,8 @@ final class NativeBoardKeys {
             case 409: return "previous";
             case 410: return "next";
             case 411: return "split";
-            case 412: case 413: return "pages";
+            case 412: return "save";
+            case 413: return "share";
             default: return null;
         }
     }

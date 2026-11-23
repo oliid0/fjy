@@ -7,7 +7,6 @@
         <package android:name="com.huawei.hms.kitframework" />
         <package android:name="com.huawei.dmsdpdevice" />
         <intent><action android:name="android.settings.SETTINGS" /></intent>
-        <provider android:authorities="com.bsd.systemservice.db.sourceContentProvider" />
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.settings.APPLICATION_DEVELOPMENT_SETTINGS" /></intent>
     </queries>

@@ -1,5 +1,6 @@
 package com.airplay.util
 
+import androidx.media3.common.MimeTypes
 import okhttp3.Dns
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -11,6 +12,18 @@ import java.net.Proxy
 import java.net.UnknownHostException
 
 internal object ProjectionMediaHttp {
+    fun manifestMimeType(url: String, declared: String = ""): String? {
+        val locator = url.substringBefore('#').lowercase()
+        val path = locator.substringBefore('?')
+        val query = locator.substringAfter('?', "")
+        return when {
+            declared == MimeTypes.APPLICATION_M3U8 || declared == "application/x-mpegurl" ||
+                path.startsWith("mlhls:") || path.endsWith(".m3u8") || ".m3u8" in query || "do=m3u8" in query -> MimeTypes.APPLICATION_M3U8
+            declared == MimeTypes.APPLICATION_MPD || path.endsWith(".mpd") || ".mpd" in query -> MimeTypes.APPLICATION_MPD
+            else -> null
+        }
+    }
+
     fun create(): OkHttpClient = OkHttpClient.Builder().proxy(Proxy.NO_PROXY)
         .followRedirects(false)
         .addInterceptor(::requestMedia)

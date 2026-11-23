@@ -31,7 +31,6 @@ import {
   isRunningInIframe,
   isDevEnv,
 } from "@fcboard/common";
-import polyfill from "@fcboard/fcboard/polyfill";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadFromBlob } from "@fcboard/fcboard/data/blob";
 import { t } from "@fcboard/fcboard/i18n";
@@ -138,8 +137,6 @@ import { Classroom } from "./fcboard/Classroom";
 import { useDeviceInkProfile } from "./fcboard/ink";
 
 import type { CollabAPI } from "./collab/Collab";
-
-polyfill();
 
 window.EXCALIDRAW_THROTTLE_RENDER = true;
 

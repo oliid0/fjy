@@ -2,6 +2,7 @@ import {
   act,
   cleanup,
   fireEvent,
+  render as renderComponent,
   screen,
   waitFor,
 } from "@testing-library/react";
@@ -150,6 +151,32 @@ it("reports toolbar readiness only after input configuration succeeds, once per 
   expect(backend.ready).toHaveBeenCalledTimes(1);
 });
 
+it("applies a changed display calibration without removing the active input surface", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  const view = renderComponent(<NativeInkInteraction api={api} />);
+  await waitFor(() => expect(backend.ready).toHaveBeenCalledTimes(1));
+  const removals = backend.remove.mock.calls.length;
+  view.rerender(
+    <NativeInkInteraction
+      api={api}
+      inkProfile={{
+        hardPenWidth: 4,
+        brushPenWidth: 15,
+        eraserSize: 150,
+        palmThreshold: 71,
+      }}
+    />,
+  );
+  await waitFor(() =>
+    expect(backend.configure.mock.lastCall?.[0].palm).toBe(71),
+  );
+  expect(backend.remove).toHaveBeenCalledTimes(removals);
+  expect(backend.ready).toHaveBeenCalledTimes(1);
+});
+
 it("releases startup into the visible error/fallback path when native configuration fails", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;
@@ -174,7 +201,19 @@ it("routes sideboard semantic buttons and leaves focused text input out of nativ
   window.h.state.height = 700;
   act(() => api.setActiveTool({ type: "freedraw" }));
   const create = vi.fn();
+  const save = vi.fn();
+  const share = vi.fn();
   const stop = classroomCommands.register("board.new", "@internal", create);
+  const stopSave = classroomCommands.register(
+    "board.saveFile",
+    "@internal",
+    save,
+  );
+  const stopShare = classroomCommands.register(
+    "board.share",
+    "@internal",
+    share,
+  );
   const input = document.createElement("input");
   document.body.append(input);
   try {
@@ -196,6 +235,15 @@ it("routes sideboard semantic buttons and leaves focused text input out of nativ
       );
     });
     expect(create).toHaveBeenCalledTimes(1);
+    for (const action of ["save", "share"]) {
+      await act(async () => {
+        backend.listeners.forEach((listener) =>
+          listener({ owner: api.id, action }),
+        );
+      });
+    }
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(share).toHaveBeenCalledTimes(1);
     act(() => {
       input.focus();
       fireEvent.focusIn(input);
@@ -216,6 +264,8 @@ it("routes sideboard semantic buttons and leaves focused text input out of nativ
     );
   } finally {
     input.remove();
+    stopSave();
+    stopShare();
     stop();
   }
 });

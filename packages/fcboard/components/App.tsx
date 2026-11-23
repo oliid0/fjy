@@ -1852,6 +1852,7 @@ class App extends React.Component<AppProps, AppState> {
                     <InteractiveResourceFrame
                       resource={el.customData.fcInteractiveResource}
                       objectId={el.id}
+                      selectedForMove={selectedForMove}
                       surface="whiteboard"
                       dark={
                         this.state.theme === THEME.DARK ||

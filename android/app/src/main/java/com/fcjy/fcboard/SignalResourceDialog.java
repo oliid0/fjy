@@ -33,14 +33,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Real TIF passthrough inputs; proprietary source apps remain an explicit external fallback. */
+/** Android TV Input Framework passthrough sources. */
 final class SignalResourceDialog extends Dialog {
+    private static final java.util.regex.Pattern OPS_LABEL = java.util.regex.Pattern.compile("\\b(?:OPS|Windows)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
     private final Context text;
     private final TvInputManager manager;
     private final TvView television;
     private final Spinner selector;
     private final TextView status;
     private final List<TvInputInfo> inputs = new ArrayList<>();
+    private final boolean preferOps;
     private String inputId;
     private String videoState = "closed";
     private boolean registered;
@@ -63,9 +65,9 @@ final class SignalResourceDialog extends Dialog {
 
     static List<TvInputInfo> availableInputs(Context context) {
         List<TvInputInfo> result = new ArrayList<>();
-        TvInputManager manager = (TvInputManager) context.getSystemService(Context.TV_INPUT_SERVICE);
-        if (manager == null) return result;
         try {
+            TvInputManager manager = (TvInputManager) context.getSystemService(Context.TV_INPUT_SERVICE);
+            if (manager == null) return result;
             for (TvInputInfo input : manager.getTvInputList()) {
                 if (input.isPassthroughInput() && !input.isHidden(context)) result.add(input);
             }
@@ -161,8 +163,9 @@ final class SignalResourceDialog extends Dialog {
         return result;
     }
 
-    SignalResourceDialog(Activity activity, String language) {
+    SignalResourceDialog(Activity activity, String language, boolean preferOps) {
         super(activity);
+        this.preferOps = preferOps;
         text = localized(activity, language);
         manager = (TvInputManager) activity.getSystemService(Context.TV_INPUT_SERVICE);
         setOwnerActivity(activity);
@@ -276,7 +279,9 @@ final class SignalResourceDialog extends Dialog {
         int selected = 0;
         for (int index = 0; index < inputs.size(); index++) {
             TvInputInfo input = inputs.get(index);
-            labels.add(inputLabel(text, input, index));
+            String label = inputLabel(text, input, index);
+            labels.add(label);
+            if (previous == null && preferOps && OPS_LABEL.matcher(label).find()) selected = index;
             if (input.getId().equals(previous)) selected = index;
         }
         ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_spinner_item, labels);
@@ -339,6 +344,7 @@ final class SignalResourceDialog extends Dialog {
         if (displayWidth == bounds.width() && displayHeight == bounds.height()) return;
         displayWidth = bounds.width();
         displayHeight = bounds.height();
-        getWindow().setLayout(Math.min(dp(960), (int) (displayWidth * 0.9)), Math.min(dp(640), (int) (displayHeight * 0.82)));
+        getWindow().setLayout(preferOps ? displayWidth : Math.min(dp(960), (int) (displayWidth * 0.9)),
+            preferOps ? displayHeight : Math.min(dp(640), (int) (displayHeight * 0.82)));
     }
 }

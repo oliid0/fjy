@@ -30,6 +30,7 @@ export type InteractiveResourceFrameProps = {
   resource: InteractiveResource;
   objectId: string;
   surface: ResourceSurface;
+  selectedForMove?: boolean;
   iframeRef?: Ref<HTMLIFrameElement>;
   live?: ResourceLiveUpdate;
   dark?: boolean;

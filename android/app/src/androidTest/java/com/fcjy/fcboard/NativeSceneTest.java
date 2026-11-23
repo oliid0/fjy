@@ -79,13 +79,26 @@ public class NativeSceneTest {
         });
     }
 
+    @Test public void singleLayerSnapshotSharesPixelsUntilEitherOwnerWrites() {
+        NativeScene.Tile worker = new NativeScene.Tile(0, 0);
+        NativeScene.Part ink = new NativeScene.Part(true, 0);
+        worker.parts.add(ink);
+        ink.pixels.setPixel(1, 1, Color.RED);
+        NativeScene.Tile published = worker.snapshot(0);
+        assertSame(worker.pixels(), published.pixels());
+        published.parts.get(0).writable().setPixel(1, 1, Color.TRANSPARENT);
+        assertEquals(Color.RED, worker.pixels().getPixel(1, 1));
+        ink.writable().setPixel(1, 1, Color.BLUE);
+        assertEquals(Color.TRANSPARENT, published.pixels().getPixel(1, 1));
+    }
+
     @Test public void appendingInkDoesNotRasterizeHistoryOrMutateAnInstalledFrame()throws Exception{
         NativeScene scene=new NativeScene();
         NativeScene.Frame first=scene.synchronize(update(new JSONArray().put(ink("old","a0","M20 60 L580 60","#ff0000",true,0)),true),1,0,java.util.Collections.emptyList());
         NativeScene.Frame next=scene.synchronize(update(new JSONArray().put(ink("new","a1","M20 140 L580 140","#0000ff",true,1)),false).put("eraseThrough",1),1,1,java.util.Collections.emptyList());
         assertEquals("Only the new stroke in each of three tiles",3,next.rasterizedNodes);
         for(NativeScene.Tile tile:next.tiles.values())assertEquals("Acknowledged ink shares one part",1,tile.parts.size());
-        assertEquals(0,Color.alpha(first.tiles.get(NativeScene.key(0,0)).pixels.getPixel(100,140)));
+        assertEquals(0,Color.alpha(first.tiles.get(NativeScene.key(0,0)).pixels().getPixel(100,140)));
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             NativeSceneView view=surface();view.apply(first);view.erase("pending",90,40,110,80,30,30);view.apply(next);view.cancelErase("pending");
             Bitmap output=pixels(view);try{assertEquals(128,Color.alpha(output.getPixel(100,60)));assertEquals(128,Color.alpha(output.getPixel(100,140)));}finally{output.recycle();}

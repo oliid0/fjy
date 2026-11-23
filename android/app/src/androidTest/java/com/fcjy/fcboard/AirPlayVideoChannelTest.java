@@ -18,6 +18,19 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class AirPlayVideoChannelTest {
+    @Test public void expandsCondensedVideoSegmentsAndPreservesRelativePlaylists() {
+        String header = "#EXTM3U\n";
+        String fields = ":BASE-URI=\"https://media.example/video\",PARAMS=\"sq,range\",PREFIX=\"s/\"\n";
+        for (String tag : new String[]{"URL", "URI"}) {
+            byte[] source = (header + "#YT-EXT-CONDENSED-" + tag + fields +
+                "#EXTINF:5,\ns/12/100-200\nvideo.m3u8\n#EXT-X-ENDLIST").getBytes(StandardCharsets.UTF_8);
+            String result = new String(com.airplay.airplay.AirPlayVideoPlayerKt.expandAirPlayPlaylist(source), StandardCharsets.UTF_8);
+            assertEquals(header + "#EXTINF:5,\nhttps://media.example/video/sq/12/range/100-200\nvideo.m3u8\n#EXT-X-ENDLIST\n", result);
+        }
+        byte[] media = {0, 1, 2};
+        assertSame(media, com.airplay.airplay.AirPlayVideoPlayerKt.expandAirPlayPlaylist(media));
+    }
+
     @Test public void receivesSenderPlaylistViaEventAndMatchingAction() throws Exception {
         String url = "mlhls://localhost/master.m3u8";
         byte[] playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=12000\nvideo.m3u8\n".getBytes(StandardCharsets.UTF_8);

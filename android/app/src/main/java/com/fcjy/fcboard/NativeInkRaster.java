@@ -4,7 +4,6 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.BitmapShader;
 import android.graphics.ComposeShader;
-import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.PorterDuff;
 import android.graphics.Shader;
@@ -33,11 +32,15 @@ final class NativeInkRaster {
         final int x, y;
         final Bitmap stable = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ALPHA_8);
         final Canvas canvas = new Canvas(stable);
+        final RectF painted = new RectF();
+        final RectF previewDamage = new RectF();
+        final RectF previousTip = new RectF();
         Bitmap preview, erased;
+        Canvas previewCanvas;
         Shader erasedMask, erasedColor;
         Shader stableMask, previewMask, stableColor, previewColor, pigment;
         long revision, previewRevision = -1, tipRevision = -1;
-        Tile(int x, int y) { this.x = x; this.y = y; canvas.translate(-x, -y); stableMask = coverage(stable); }
+        Tile(int x, int y) { this.x = x; this.y = y; canvas.translate(-x, -y); }
         private Shader coverage(Bitmap bitmap) {
             BitmapShader shader = new BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
             Matrix position = new Matrix(); position.setTranslate(x, y); shader.setLocalMatrix(position); return shader;
@@ -54,6 +57,7 @@ final class NativeInkRaster {
                 if (erasedColor == null) erasedColor = new ComposeShader(paint, erasedMask, PorterDuff.Mode.DST_IN);
                 return erasedColor;
             }
+            if (stableMask == null) stableMask = coverage(stable);
             if (stableColor == null) stableColor = new ComposeShader(paint, stableMask, PorterDuff.Mode.DST_IN);
             return stableColor;
         }
@@ -63,8 +67,8 @@ final class NativeInkRaster {
     private final Paint mask = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint image = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final int width, height;
-    private Shader solid;
-    private int solidColor;
+    private final RectF paintedBounds = new RectF();
+    private final RectF tileBounds = new RectF();
     NativeInkRaster(int width, int height) {
         this.width = Math.max(1, width); this.height = Math.max(1, height);
         mask.setColor(Color.WHITE);
@@ -94,7 +98,9 @@ final class NativeInkRaster {
         int left = Math.max(0, (int)Math.floor(area.left / SIZE)), top = Math.max(0, (int)Math.floor(area.top / SIZE));
         int right = Math.min((width - 1) / SIZE, (int)Math.floor(area.right / SIZE)), bottom = Math.min((height - 1) / SIZE, (int)Math.floor(area.bottom / SIZE));
         for (int row = top; row <= bottom; row++) for (int col = left; col <= right; col++) {
-            Tile tile = tile(col, row);int saved=tile.canvas.save();clip(tile.canvas,source);tile.canvas.drawPath(path, mask);tile.canvas.restoreToCount(saved);tile.revision++;
+            Tile tile = tile(col, row); tile.painted.union(area);
+            int saved=tile.canvas.save();clip(tile.canvas,source);tile.canvas.drawPath(path, mask);tile.canvas.restoreToCount(saved);tile.revision++;
+            if (tile.preview != null) tile.previewDamage.union(area);
         }
     }
     // A lifted contact never appends geometry again. The worker may read these
@@ -116,7 +122,7 @@ final class NativeInkRaster {
         for (int y=Math.max(0,(int)Math.floor(area.top/SIZE)); y<=bottom; y++) {
             for (int x=Math.max(0,(int)Math.floor(area.left/SIZE)); x<=right; x++) {
                 Tile tile = tiles.get(NativeScene.key(x,y));
-                if (tile == null) continue;
+                if (tile == null || !RectF.intersects(tile.painted, area)) continue;
                 if (tile.erased == null) tile.erased = tile.stable.copy(Bitmap.Config.ALPHA_8,true);
                 Canvas canvas = new Canvas(tile.erased);
                 canvas.translate(-tile.x,-tile.y);
@@ -138,7 +144,19 @@ final class NativeInkRaster {
     }
     void erase(Path path,int through){
         cuts.add(new Cut(path,through));RectF area=new RectF();path.computeBounds(area,true);
-        for(Tile tile:tiles.values())if(RectF.intersects(area,new RectF(tile.x,tile.y,tile.x+SIZE,tile.y+SIZE))){tile.canvas.drawPath(path,clear);tile.revision++;}
+        int lastX = Math.min((width - 1) / SIZE, (int)Math.floor(area.right / SIZE));
+        int lastY = Math.min((height - 1) / SIZE, (int)Math.floor(area.bottom / SIZE));
+        for (int y = Math.max(0, (int)Math.floor(area.top / SIZE)); y <= lastY; y++) {
+            for (int x = Math.max(0, (int)Math.floor(area.left / SIZE)); x <= lastX; x++) {
+                Tile tile = tiles.get(NativeScene.key(x, y));
+                if (tile != null) {
+                    if (RectF.intersects(tile.painted, area)) tile.canvas.drawPath(path, clear);
+                    // A provisional tip can enter this tile before the stable stroke.
+                    tile.revision++;
+                    if (tile.preview != null) tile.previewDamage.union(area);
+                }
+            }
+        }
     }
     private void clip(Canvas canvas,int source){
         // Cuts are ordered by the monotonically increasing source sample.
@@ -156,33 +174,58 @@ final class NativeInkRaster {
         int right = Math.min((width - 1) / SIZE, (int)Math.floor(area.right / SIZE)), bottom = Math.min((height - 1) / SIZE, (int)Math.floor(area.bottom / SIZE));
         if (!tip.isEmpty()) for (int row = top; row <= bottom; row++) for (int col = left; col <= right; col++) tile(col, row);
         Shader pigment = color.getShader();
-        if (pigment == null) {
-            int opaque = color.getColor() | 0xff000000;
-            if (solid == null || solidColor != opaque) { solidColor = opaque; solid = new LinearGradient(0, 0, 1, 0, opaque, opaque, Shader.TileMode.CLAMP); }
-            pigment = solid;
-        }
-        image.setColor(Color.WHITE); image.setAlpha(color.getAlpha());
+        image.setColor(pigment == null ? color.getColor() : Color.WHITE);
+        image.setAlpha(color.getAlpha());
         for (Tile tile : tiles.values()) {
             if (target.quickReject(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE, Canvas.EdgeType.AA)) continue;
             boolean live = !tip.isEmpty() && tile.x <= area.right && tile.x + SIZE >= area.left && tile.y <= area.bottom && tile.y + SIZE >= area.top;
             if (live) {
-                if (tile.preview == null) tile.preview = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ALPHA_8);
+                if (tile.preview == null) {
+                    tile.preview = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ALPHA_8);
+                    tile.previewCanvas = new Canvas(tile.preview);
+                    tile.previewCanvas.translate(-tile.x, -tile.y);
+                    tile.previewDamage.set(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE);
+                }
                 if (tile.previewRevision != tile.revision || tile.tipRevision != tipRevision) {
-                    tile.preview.eraseColor(Color.TRANSPARENT);
-                    Canvas canvas = new Canvas(tile.preview); canvas.drawBitmap(tile.stable, 0, 0, null);
-                    canvas.translate(-tile.x, -tile.y);clip(canvas,source);canvas.drawPath(tip, mask);
+                    RectF dirty = tile.previewDamage;
+                    dirty.union(tile.previousTip);
+                    dirty.union(area);
+                    Canvas canvas = tile.previewCanvas;
+                    int saved = canvas.save();
+                    canvas.clipRect((int)Math.floor(dirty.left), (int)Math.floor(dirty.top),
+                        (int)Math.ceil(dirty.right), (int)Math.ceil(dirty.bottom));
+                    canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+                    canvas.drawBitmap(tile.stable, tile.x, tile.y, null);
+                    clip(canvas, source);
+                    canvas.drawPath(tip, mask);
+                    canvas.restoreToCount(saved);
+                    dirty.setEmpty();
+                    tile.previousTip.set(area);
                     tile.previewRevision = tile.revision; tile.tipRevision = tipRevision;
                 }
             } else if (tile.preview != null) {
                 // Release a former live-tip copy; stable tiles never change again
                 // unless actual new geometry reaches them.
-                tile.preview = null; tile.previewMask = tile.previewColor = null; tile.previewRevision = tile.tipRevision = -1;
+                tile.preview = null; tile.previewCanvas = null; tile.previousTip.setEmpty(); tile.previewMask = tile.previewColor = null; tile.previewRevision = tile.tipRevision = -1;
             }
             // Canvas.drawBitmap ignores a Paint shader for this bitmap route on
             // actual Android. Compose coverage explicitly, without a full-size
             // saveLayer or re-rasterizing the stable vector prefix.
-            image.setShader(tile.color(pigment, live));
-            target.drawRect(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE, image);
+            tileBounds.set(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE);
+            paintedBounds.set(tile.painted);
+            if (live) paintedBounds.union(area);
+            if (!paintedBounds.intersect(tileBounds) || target.quickReject(paintedBounds, Canvas.EdgeType.AA)) continue;
+            int scope = target.save();
+            target.clipRect(paintedBounds);
+            if (pigment == null) {
+                image.setShader(null);
+                Bitmap coverage = live ? tile.preview : tile.erased != null ? tile.erased : tile.stable;
+                target.drawBitmap(coverage, null, tileBounds, image);
+            } else {
+                image.setShader(tile.color(pigment, live));
+                target.drawRect(paintedBounds, image);
+            }
+            target.restoreToCount(scope);
         }
     }
 }

@@ -146,9 +146,7 @@ internal class CastPlayback(context: Context, name: String, private val state: (
 
     private fun item(media: CastItem): MediaItem {
         val location = path(media)
-        val kind = when {
-            media.mime in setOf("application/x-mpegurl", "application/vnd.apple.mpegurl") || location.endsWith(".m3u8") -> MimeTypes.APPLICATION_M3U8
-            media.mime == "application/dash+xml" || location.endsWith(".mpd") -> MimeTypes.APPLICATION_MPD
+        val kind = ProjectionMediaHttp.manifestMimeType(media.url, media.mime) ?: when {
             media.mime.startsWith("image/") -> media.mime
             location.endsWith(".png") -> MimeTypes.IMAGE_PNG
             location.endsWith(".jpg") || location.endsWith(".jpeg") -> MimeTypes.IMAGE_JPEG

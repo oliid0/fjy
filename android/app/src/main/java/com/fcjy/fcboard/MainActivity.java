@@ -67,11 +67,29 @@ public class MainActivity extends BridgeActivity {
         NativeInkPlugin input = inkInput;
         return input != null && input.dispatchKey(event) || super.dispatchKeyEvent(event);
     }
+    // DecorView owns a single touch sequence. Keep its DOWN so locking the
+    // sideboard mid-drag can cancel only that device's web/widget gesture.
+    private MotionEvent windowDown;
+    private boolean windowTouch(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            if (windowDown != null) { windowDown.recycle(); windowDown = null; }
+            if (action == MotionEvent.ACTION_DOWN) windowDown = MotionEvent.obtainNoHistory(event);
+        }
+        return super.dispatchTouchEvent(event);
+    }
+    void cancelPanelWindowTouch(int device) {
+        if (windowDown == null || windowDown.getDeviceId() != device) return;
+        MotionEvent cancel = windowDown;
+        windowDown = null;
+        cancel.setAction(MotionEvent.ACTION_CANCEL);
+        try { super.dispatchTouchEvent(cancel); } finally { cancel.recycle(); }
+    }
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
         if (!startupReleased) return true;
         NativeInkPlugin input = inkInput;
-        if (input != null && input.dispatchInput(event, super::dispatchTouchEvent)) return true;
-        return super.dispatchTouchEvent(event);
+        if (input != null && input.dispatchInput(event, this::windowTouch)) return true;
+        return windowTouch(event);
     }
     private static volatile boolean foreground;
     static boolean isForeground() { return foreground; }
@@ -126,6 +144,7 @@ public class MainActivity extends BridgeActivity {
     }
     @Override public void onDestroy() {
         if (startupSplash != null) { startupSplash.remove(); startupSplash = null; }
+        if (windowDown != null) { windowDown.recycle(); windowDown = null; }
         super.onDestroy();
     }
 }

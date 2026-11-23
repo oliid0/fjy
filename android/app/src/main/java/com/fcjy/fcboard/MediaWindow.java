@@ -60,14 +60,13 @@ final class MediaWindow {
     private final Button speed;
     private final Button enhance;
     private final Button fullscreen;
-    private final Button resize;
+    private final SeekBar volume;
     private final Player player;
     private final VoiceEnhancementProcessor processor;
     private final JSObject labels;
     private final String[] levels;
     private final View board;
     private final View.OnLayoutChangeListener boardLayout = (view, l, t, r, b, oldL, oldT, oldR, oldB) -> layout();
-    private final Runnable hide = () -> setControlsVisible(false);
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             updateProgress();
@@ -80,7 +79,7 @@ final class MediaWindow {
     private boolean visual;
     private boolean expanded;
     private boolean seekDragging;
-    private boolean seekingStrength;
+    private boolean selectedOnBoard;
     private boolean controlsVisible = true;
     private boolean hasAudio = true;
     private int barsToRestore;
@@ -108,6 +107,7 @@ final class MediaWindow {
         root.setBackgroundColor(0xff151619);
         video = new PlayerView(activity);
         video.setUseController(false);
+        video.setResizeMode(androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM);
         video.setPlayer(player);
         root.addView(video, new FrameLayout.LayoutParams(-1, -1));
         bindVideoGestures();
@@ -119,7 +119,7 @@ final class MediaWindow {
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         title.setPadding(dp(12), 0, dp(8), 0);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        title.setOnTouchListener(windowDrag(false));
+        title.setOnTouchListener(windowDrag());
         header.addView(button("×", label("close", "Close"), close));
         root.addView(header, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
 
@@ -127,11 +127,16 @@ final class MediaWindow {
         controls.setBackgroundColor(0xdd222328);
         root.addView(controls, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         enhancement = column();
-        enhancement.setPadding(dp(12), dp(3), dp(12), 0);
-        controls.addView(enhancement);
+        enhancement.setPadding(dp(8), 0, dp(8), 0);
+        LinearLayout.LayoutParams panelSize = new LinearLayout.LayoutParams(dp(176), -2);
+        panelSize.gravity = Gravity.CENTER_HORIZONTAL;
+        controls.addView(enhancement, panelSize);
         enhancement.setVisibility(View.GONE);
         strength = new SeekBar(activity);
         strength.setMax(levels.length - 1);
+        android.content.res.ColorStateList accent = android.content.res.ColorStateList.valueOf(0xff60c8c0);
+        strength.setProgressTintList(accent);
+        strength.setThumbTintList(accent);
         strength.setContentDescription(label("enhance", "Voice enhancement"));
         GradientDrawable dot = new GradientDrawable();
         dot.setShape(GradientDrawable.OVAL);
@@ -139,31 +144,16 @@ final class MediaWindow {
         dot.setSize(dp(4), dp(4));
         strength.setTickMark(dot);
         enhancement.addView(strength, new LinearLayout.LayoutParams(-1, dp(36)));
-        LinearLayout ticks = row();
-        for (String level : levels) {
-            TextView name = text();
-            name.setText(level);
-            name.setGravity(Gravity.CENTER);
-            ticks.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
-        }
-        enhancement.addView(ticks);
         status = text();
         status.setGravity(Gravity.CENTER);
         enhancement.addView(status, new LinearLayout.LayoutParams(-1, -2));
         strength.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onStartTrackingTouch(SeekBar bar) {
-                seekingStrength = true;
-                root.removeCallbacks(hide);
-            }
-            @Override public void onStopTrackingTouch(SeekBar bar) {
-                seekingStrength = false;
-                scheduleHide();
-            }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {}
             @Override public void onProgressChanged(SeekBar bar, int value, boolean user) {
                 if (user) {
                     processor.setLevel(value);
                     updateEnhancement();
-                    scheduleHide();
                 }
             }
         });
@@ -181,7 +171,6 @@ final class MediaWindow {
         progress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onStartTrackingTouch(SeekBar bar) {
                 seekDragging = true;
-                root.removeCallbacks(hide);
             }
             @Override public void onProgressChanged(SeekBar bar, int value, boolean user) {
                 if (user && player.getDuration() > 0) {
@@ -193,7 +182,6 @@ final class MediaWindow {
             @Override public void onStopTrackingTouch(SeekBar bar) {
                 seekDragging = false;
                 if (player.getDuration() > 0) player.seekTo(player.getDuration() * bar.getProgress() / SEEK_STEPS);
-                scheduleHide();
             }
         });
 
@@ -210,22 +198,23 @@ final class MediaWindow {
         speed = button("1×", label("speed", "Playback speed"), this::chooseSpeed);
         enhance = button(label("enhance", "Enhance"), label("enhance", "Voice enhancement"), () -> {
             enhancement.setVisibility(enhancement.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-            scheduleHide();
         });
         fullscreen = button("⛶", label("fullscreen", "Full screen"), this::toggleFullscreen);
-        resize = button("↘", label("resize", "Resize player"), () -> {
-            int oldWidth = width;
-            int oldHeight = height;
-            width = Math.min(dp(620), board.getWidth());
-            height = Math.min(dp(370), board.getHeight());
-            layout();
-            movedWindow.accept(new JSObject().put("dw", (width - oldWidth) / cssScale)
-                .put("dh", (height - oldHeight) / cssScale));
-        });
-        resize.setOnTouchListener(windowDrag(true));
-        for (Button control : new Button[]{previous, play, next, speed, enhance, fullscreen, resize}) {
+        for (Button control : new Button[]{previous, play, next, speed, enhance, fullscreen}) {
             buttons.addView(control);
         }
+        volume = new SeekBar(activity);
+        volume.setContentDescription(label("volume", "Volume"));
+        volume.setMax(100);
+        volume.setProgress(Math.round(player.getVolume() * 100));
+        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {}
+            @Override public void onProgressChanged(SeekBar bar, int value, boolean user) {
+                if (user) player.setVolume(value / 100f);
+            }
+        });
+        buttons.addView(volume, new LinearLayout.LayoutParams(dp(96), dp(44)));
 
         error = text();
         error.setPadding(dp(12), dp(4), dp(12), dp(4));
@@ -261,7 +250,6 @@ final class MediaWindow {
 
     void close() {
         board.removeOnLayoutChangeListener(boardLayout);
-        root.removeCallbacks(hide);
         root.removeCallbacks(tick);
         video.setPlayer(null);
         dialog.setOnDismissListener(null);
@@ -275,6 +263,20 @@ final class MediaWindow {
         updateMode(item != null && Integer.valueOf(MediaMetadata.MEDIA_TYPE_VIDEO).equals(item.mediaMetadata.mediaType));
     }
 
+    void fitVideo(androidx.media3.common.VideoSize size) {
+        if (size.width <= 0 || size.height <= 0 || width <= 0 || height <= 0) return;
+        float ratio = size.width * size.pixelWidthHeightRatio / size.height;
+        int fitWidth = Math.min(width, Math.max(1, Math.round(height * ratio)));
+        int fitHeight = Math.max(1, Math.round(fitWidth / ratio));
+        if (fitWidth == width && fitHeight == height) return;
+        JSObject delta = new JSObject().put("dw", (fitWidth - width) / cssScale)
+            .put("dh", (fitHeight - height) / cssScale);
+        width = fitWidth;
+        height = fitHeight;
+        layout();
+        movedWindow.accept(delta);
+    }
+
     void readTracks(Tracks tracks) {
         hasAudio = tracks.isEmpty() || tracks.isTypeSelected(C.TRACK_TYPE_AUDIO);
         if (!tracks.isEmpty()) updateMode(tracks.isTypeSelected(C.TRACK_TYPE_VIDEO));
@@ -282,6 +284,7 @@ final class MediaWindow {
     }
 
     private void updateMode(boolean showVideo) {
+        boolean changed = visual != showVideo;
         visual = showVideo;
         if (!visual) {
             endBoost();
@@ -292,7 +295,7 @@ final class MediaWindow {
         FrameLayout.LayoutParams bounds = (FrameLayout.LayoutParams) controls.getLayoutParams();
         bounds.topMargin = visual ? 0 : dp(48);
         controls.setLayoutParams(bounds);
-        setControlsVisible(true);
+        if (changed || !visual) setControlsVisible(!visual);
         layout();
     }
 
@@ -314,6 +317,7 @@ final class MediaWindow {
         int level = processor.level();
         strength.setProgress(level);
         strength.setEnabled(hasAudio);
+        volume.setEnabled(hasAudio);
         enhance.setEnabled(hasAudio);
         if (!hasAudio) enhancement.setVisibility(View.GONE);
         VoiceEnhancementProcessor.Status state = processor.status();
@@ -334,7 +338,6 @@ final class MediaWindow {
         error.setText(message);
         error.setVisibility(message.isEmpty() ? View.GONE : View.VISIBLE);
         if (!message.isEmpty()) setControlsVisible(true);
-        else scheduleHide();
     }
 
     private void updateProgress() {
@@ -387,8 +390,6 @@ final class MediaWindow {
         for (int i = 0; i < SPEEDS.length; i++) {
             menu.getMenu().add(0, i, i, speedLabel(SPEEDS[i]));
         }
-        root.removeCallbacks(hide);
-        menu.setOnDismissListener(ignored -> scheduleHide());
         menu.setOnMenuItemClickListener(item -> {
             player.setPlaybackSpeed(SPEEDS[item.getItemId()]);
             return true;
@@ -437,26 +438,18 @@ final class MediaWindow {
     }
 
     private void setControlsVisible(boolean visible) {
-        controlsVisible = visible || !visual;
+        controlsVisible = visible || !visual || error.getVisibility() == View.VISIBLE;
         int visibility = controlsVisible ? View.VISIBLE : View.GONE;
         header.setVisibility(visibility);
         controls.setVisibility(visibility);
         if (!controlsVisible) enhancement.setVisibility(View.GONE);
-        scheduleHide();
-    }
-
-    private void scheduleHide() {
-        root.removeCallbacks(hide);
-        if (dialog.isShowing() && visual && controlsVisible && !seekDragging && !seekingStrength
-                && error.getVisibility() != View.VISIBLE) {
-            root.postDelayed(hide, enhancement.getVisibility() == View.VISIBLE ? 5500 : 3200);
-        }
     }
 
     private void toggleFullscreen() {
         expanded = !expanded;
         fullscreen.setContentDescription(expanded ? label("exitFullscreen", "Exit full screen") : label("fullscreen", "Full screen"));
-        resize.setVisibility(expanded ? View.GONE : View.VISIBLE);
+        video.setResizeMode(expanded ? androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            : androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM);
         Window window = dialog.getWindow();
         if (window != null) {
             WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(window, window.getDecorView());
@@ -479,6 +472,7 @@ final class MediaWindow {
     void place(JSObject box, int webWidth) {
         double viewport = box.optDouble("viewport", 0);
         if (viewport <= 0 || webWidth <= 0) return;
+        selectedOnBoard = box.optBoolean("selected", false);
         cssScale = (float) (webWidth / viewport);
         left = (int) Math.round(box.optDouble("x") * cssScale);
         top = (int) Math.round(box.optDouble("y") * cssScale);
@@ -506,27 +500,29 @@ final class MediaWindow {
             left = (maxWidth - width) / 2;
             top = dp(8);
         }
-        width = Math.min(Math.max(dp(232), width), maxWidth);
-        height = Math.min(Math.max(dp(168), height), maxHeight);
+        width = Math.min(Math.max(visual || selectedOnBoard ? 1 : dp(232), width), maxWidth);
+        height = Math.min(Math.max(visual || selectedOnBoard ? 1 : dp(168), height), maxHeight);
         // An audio-only object wraps its controls. The controls are its entire body.
 
         WindowManager.LayoutParams attributes = window.getAttributes();
+        // The board owns the entire drag, including its selected outline. A
+        // separate playback window must let that gesture reach the editor.
+        if (selectedOnBoard && !expanded) attributes.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        else attributes.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
         attributes.x = expanded ? 0 : left;
         attributes.y = expanded ? 0 : top;
         attributes.width = expanded ? ViewGroup.LayoutParams.MATCH_PARENT : width;
         attributes.height = expanded ? ViewGroup.LayoutParams.MATCH_PARENT
-            : visual ? height : ViewGroup.LayoutParams.WRAP_CONTENT;
+            : visual || selectedOnBoard ? height : ViewGroup.LayoutParams.WRAP_CONTENT;
         window.setAttributes(attributes);
     }
 
-    private View.OnTouchListener windowDrag(boolean sizing) {
+    private View.OnTouchListener windowDrag() {
         return new View.OnTouchListener() {
             private float x;
             private float y;
             private int startLeft;
             private int startTop;
-            private int startWidth;
-            private int startHeight;
             private boolean moved;
 
             @Override public boolean onTouch(View view, MotionEvent event) {
@@ -534,9 +530,8 @@ final class MediaWindow {
                 switch (event.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         x = event.getRawX(); y = event.getRawY();
-                        startLeft = left; startTop = top; startWidth = width; startHeight = height;
+                        startLeft = left; startTop = top;
                         moved = false;
-                        root.removeCallbacks(hide);
                         view.getParent().requestDisallowInterceptTouchEvent(true);
                         return true;
                     case MotionEvent.ACTION_MOVE:
@@ -544,26 +539,18 @@ final class MediaWindow {
                         int dy = Math.round(event.getRawY() - y);
                         moved = moved || Math.abs(dx) > dp(4) || Math.abs(dy) > dp(4);
                         if (moved) {
-                            if (sizing) {
-                                width = Math.max(dp(232), startWidth + dx);
-                                height = Math.max(dp(168), startHeight + dy);
-                            } else {
-                                left = Math.max(0, Math.min(startLeft + dx, board.getWidth() - width));
-                                top = Math.max(0, Math.min(startTop + dy, board.getHeight() - root.getHeight()));
-                            }
+                            left = Math.max(0, Math.min(startLeft + dx, board.getWidth() - width));
+                            top = Math.max(0, Math.min(startTop + dy, board.getHeight() - root.getHeight()));
                             layout();
                         }
                         return true;
                     case MotionEvent.ACTION_UP:
                         if (moved) {
                             movedWindow.accept(new JSObject().put("dx", (left - startLeft) / cssScale)
-                                .put("dy", (top - startTop) / cssScale).put("dw", (width - startWidth) / cssScale)
-                                .put("dh", (height - startHeight) / cssScale));
+                                .put("dy", (top - startTop) / cssScale));
                         } else view.performClick();
-                        scheduleHide();
                         return true;
                     case MotionEvent.ACTION_CANCEL:
-                        scheduleHide();
                         return true;
                     default: return true;
                 }
@@ -606,7 +593,6 @@ final class MediaWindow {
         button.setContentDescription(description);
         button.setOnClickListener(view -> {
             action.run();
-            scheduleHide();
         });
         return button;
     }

@@ -69,6 +69,25 @@ public class NativeInputRouterTest {
         NativeSplitInk ink=new NativeSplitInk();ink.size(600,200);Paint red=new Paint();red.setColor(Color.RED);ink.commit(new RectF(0,0,600,200),canvas->canvas.drawRect(10,50,580,70,red));
         ink.erase("erase",NativeSceneView.sweep(250,20,270,100,24,28));Paint blue=new Paint();blue.setColor(Color.BLUE);ink.commit(new RectF(240,120,280,160),canvas->canvas.drawRect(240,120,280,160,blue));ink.cancel("erase");Bitmap output=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);ink.draw(new Canvas(output));try{assertEquals(Color.RED,output.getPixel(256,60));assertEquals(Color.BLUE,output.getPixel(256,140));}finally{output.recycle();}
     }
+    @Test public void singleWriterHandsOffACompleteGestureThroughTheThirdFinger() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            List<JSObject> ink=new ArrayList<>();
+            NativeInkView view=surface(ink,0);view.setMultiStroke(false);
+            Map<NativeInkView,RectF> boxes=new HashMap<>();boxes.put(view,new RectF(0,0,600,200));
+            NativeInputRouter router=new NativeInputRouter(boxes);
+            List<Integer> window=new ArrayList<>();
+            int[] actions={0,5|(1<<8),5|(2<<8),2,6|(2<<8),6|(1<<8),1};
+            int[] counts={1,2,3,3,3,2,1};
+            for(int i=0;i<actions.length;i++) {
+                MotionEvent sample=event(actions[i],counts[i],110+i);
+                try {
+                    if (!router.dispatch(sample, e->window.add(e.getActionMasked()))) window.add(sample.getActionMasked());
+                } finally { sample.recycle(); }
+            }
+            assertEquals(java.util.Arrays.asList(0,5,5,2,6,6,1),window);
+            assertEquals(2,ink.size());assertEquals("cancel",ink.get(1).optString("phase"));
+        });
+    }
     @Test public void disconnectCancelsOnlyTheRemovedDeviceAndKeepsTheOtherWriter(){
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,0);

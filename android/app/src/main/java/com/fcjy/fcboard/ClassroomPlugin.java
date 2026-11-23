@@ -163,8 +163,13 @@ public class ClassroomPlugin extends Plugin {
     }
     private Receiver receiver;
     private SignalResourceDialog signalResource;
+    private final java.util.concurrent.ExecutorService inputDiscovery = java.util.concurrent.Executors.newSingleThreadExecutor(
+        task -> new Thread(task, "tv-input-discovery"));
     @PluginMethod
     public void getFactoryInsertions(PluginCall call) {
+        inputDiscovery.execute(() -> listInsertions(call));
+    }
+    private void listInsertions(PluginCall call) {
         try {
             JSArray available = new JSArray();
             boolean embeddedSignal = !SignalResourceDialog.availableInputs(getContext()).isEmpty();
@@ -183,7 +188,8 @@ public class ClassroomPlugin extends Plugin {
                 String insertion = call.getString("insertion");
                 if ("signal".equals(insertion) && !SignalResourceDialog.availableInputs(getContext()).isEmpty()) {
                     closeSignalResource();
-                    signalResource = new SignalResourceDialog(getActivity(), call.getString("language", java.util.Locale.getDefault().toLanguageTag()));
+                    signalResource = new SignalResourceDialog(getActivity(), call.getString("language", java.util.Locale.getDefault().toLanguageTag()),
+                        call.getBoolean("preferOps", false));
                     signalResource.show();
                     JSObject result = new JSObject(); result.put("embedded", true); call.resolve(result);
                     return;
@@ -290,85 +296,6 @@ public class ClassroomPlugin extends Plugin {
         });
     }
     private final java.util.concurrent.ExecutorService imageEncoder = java.util.concurrent.Executors.newSingleThreadExecutor();
-
-    /** The factory whiteboard uses physical pixels and the manufacturer's touch calibration. */
-    @PluginMethod
-    public void getInkProfile(PluginCall call) {
-        JSObject result = new JSObject();
-        result.put("hardPenWidth", 4);
-        result.put("brushPenWidth", 15);
-        result.put("eraserSize", 150);
-        // HDataSet.hasNib / HPenSettingWindow: nib firmware uses 2..20, otherwise 2..40.
-        int penWidthMax = 40;
-        try {
-            Object nib = Class.forName("android.os.SystemProperties")
-                .getMethod("getInt", String.class, int.class)
-                .invoke(null, "persist.sys.wb.addNib", 1);
-            if (Integer.valueOf(1).equals(nib)) penWidthMax = 20;
-            boolean nibAvailable = Integer.valueOf(1).equals(nib);
-            result.put("hardNibAvailable", nibAvailable);
-            Object nibEnabled = Class.forName("android.os.SystemProperties")
-                .getMethod("getInt", String.class, int.class)
-                .invoke(null, "persist.sys.nib.switch", 1);
-            result.put("hardNib", nibAvailable && Integer.valueOf(1).equals(nibEnabled));
-            Object dual = Class.forName("android.os.SystemProperties")
-                .getMethod("getInt", String.class, int.class)
-                .invoke(null, "persist.sys.custom.doublePen.switch", 0);
-            result.put("dualPen", Integer.valueOf(1).equals(dual));
-        } catch (ReflectiveOperationException | SecurityException unavailable) {
-            // Non-factory Android devices can prohibit access to this firmware property.
-        }
-        try {
-            Object pressure = Class.forName("android.os.SystemProperties")
-                .getMethod("getBoolean", String.class, boolean.class)
-                .invoke(null, "persist.sys.pressure.sensitivity.switch", false);
-            result.put("touchPressure", Boolean.TRUE.equals(pressure));
-        } catch (ReflectiveOperationException | SecurityException unavailable) {
-            // Keep simulated touch pressure unless the firmware explicitly enables it.
-        }
-        result.put("penWidthMax", penWidthMax);
-        try (android.database.Cursor cursor = getContext().getContentResolver().query(
-                android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
-                new String[]{"touch_threshold"}, null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("touch_threshold"));
-                if (Float.isFinite(threshold) && threshold > 0) result.put("palmThreshold", threshold * 2.0 / 3.0);
-            }
-        } catch (Exception unavailable) {
-            // Other Android devices need no vendor provider; keep the manual CSS-pixel setting.
-        }
-        // ZWhiteBoardActivity.getThickSize applies 4/5 to the stored physical contact threshold.
-        try (android.database.Cursor cursor = getContext().getContentResolver().query(
-                android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
-                new String[]{"pen_threshold"}, null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("pen_threshold"));
-                if (Float.isFinite(threshold) && threshold > 0) result.put("fineThreshold", threshold * 4.0 / 5.0);
-            }
-        } catch (Exception unavailable) { /* Calibration can be entered manually on other firmware. */ }
-        try (android.database.Cursor cursor = getContext().getContentResolver().query(
-                android.net.Uri.parse("content://com.bsd.systemservice.db.sourceContentProvider/tbl_Settings"),
-                new String[]{"thick_threshold"}, null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                float threshold = cursor.getFloat(cursor.getColumnIndexOrThrow("thick_threshold"));
-                if (Float.isFinite(threshold) && threshold > 0) result.put("thickThreshold", threshold * 4.0 / 5.0);
-            }
-        } catch (Exception unavailable) {
-            // Manual calibration and explicit fine/thick selection remain available.
-        }
-        // ThresholdPopu reset reads these exact factory properties, in physical pixels.
-        JSObject defaults = new JSObject();
-        String[][] fields = {{"palm", "persist.sys.whiteboard.threshold"}, {"fine", "persist.sys.whiteboard.pen_threshold"}, {"thick", "persist.sys.whiteboard.thick_threshold"}};
-        for (String[] field : fields) {
-            try {
-                String raw = (String)Class.forName("android.os.SystemProperties").getMethod("get", String.class, String.class).invoke(null, field[1], "");
-                float value = Float.parseFloat(raw);
-                if (Float.isFinite(value) && value > 0) defaults.put(field[0], value);
-            } catch (Exception unavailable) { /* No factory default for this contact on this device. */ }
-        }
-        result.put("factoryThresholds", defaults);
-        call.resolve(result);
-    }
 
     /** Capture only this app's visible WebView, including Office frames and transparent ink. */
     @PluginMethod
@@ -518,6 +445,7 @@ public class ClassroomPlugin extends Plugin {
         webResource = null;
         if (resource != null) getActivity().runOnUiThread(resource::dismiss);
         stopBoardShare();
+        inputDiscovery.shutdownNow();
         imageEncoder.shutdownNow();
         if (receiver != null) { receiver.stop(); receiver = null; }
     }

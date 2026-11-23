@@ -27,6 +27,16 @@ const brush = () => ({
 });
 
 describe("factory brush geometry", () => {
+  it("keeps the narrow ends of vertical strokes connected", () => {
+    const centers: number[] = [];
+    const samples = [0, 18].map((y) => ({ x: 0, y, width: 1, sourceIndex: 0 }));
+    traceFactoryBrush(brush(), (point) => centers.push(point.y), samples);
+    expect(centers.at(-1)).toBe(18);
+    for (let i = 1; i < centers.length; i++) {
+      expect(centers[i] - centers[i - 1]).toBeLessThanOrEqual(0.25);
+    }
+  });
+
   it("actually dashes selected brush stamps with stable phase across Canvas prefix caching and SVG export", () => {
     const input = {
       ...brush(),

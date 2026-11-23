@@ -27,59 +27,79 @@ public class NativeInkPlugin extends Plugin {
     private final NativeInputRouter inputRouter = new NativeInputRouter(inputBounds);
     private final Map<String, Boolean> shortcutSurfaces = new HashMap<>();
     private final NativeBoardKeys keys = new NativeBoardKeys();
-    private boolean touchLocked;
+    // true while locked, false after unlocking until a fresh DOWN starts a gesture.
+    private final int[] inputOrigin = new int[2];
+    private final android.util.SparseBooleanArray panelLocks = new android.util.SparseBooleanArray();
     private android.hardware.input.InputManager inputManager;
     private final android.hardware.input.InputManager.InputDeviceListener devices=new android.hardware.input.InputManager.InputDeviceListener(){
         @Override public void onInputDeviceAdded(int id){}
         @Override public void onInputDeviceChanged(int id){}
-        @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);}
+        @Override public void onInputDeviceRemoved(int id){inputRouter.cancelDevice(id);panelLocks.delete(id);}
     };
-    private final java.util.concurrent.ExecutorService vendor = java.util.concurrent.Executors.newSingleThreadExecutor(r -> new Thread(r, "native-board-mode"));
-    private NativeBoardMode boardMode;
-    @Override protected void handleOnStart() { vendor.execute(() -> boardMode.foreground(true)); }
-    @Override protected void handleOnStop() { vendor.execute(() -> boardMode.foreground(false)); }
     @Override public void load() {
-        boardMode = new NativeBoardMode(getContext());
         ((MainActivity)getActivity()).setInkInput(this);
         inputManager=(android.hardware.input.InputManager)getContext().getSystemService(android.content.Context.INPUT_SERVICE);
         if(inputManager!=null)inputManager.registerInputDeviceListener(devices,new android.os.Handler(android.os.Looper.getMainLooper()));
     }
     /** Route the real event before ViewGroup can cancel another device's stream. */
     boolean dispatchInput(MotionEvent event,java.util.function.Consumer<MotionEvent> forward) {
-        if (touchLocked && event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN)) return true;
+        int id = event.getDeviceId();
+        if (panelLocks.indexOfKey(id) >= 0 && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+            if (panelLocks.get(id) || event.getActionMasked() != MotionEvent.ACTION_DOWN) return true;
+            panelLocks.delete(id);
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN || event.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+            // Insets/fullscreen can move the laid-out view without changing its
+            // DOM bounds. Dispatch coordinates are relative to the window.
+            for (Map.Entry<NativeInkView, RectF> entry : inputBounds.entrySet()) {
+                NativeInkView view = entry.getKey();
+                if (!view.isLaidOut() || view.isLayoutRequested()) continue;
+                view.getLocationInWindow(inputOrigin);
+                entry.getValue().set(inputOrigin[0], inputOrigin[1],
+                    inputOrigin[0] + view.getWidth(), inputOrigin[1] + view.getHeight());
+            }
+        }
         return inputRouter.dispatch(event,forward);
     }
 
     boolean dispatchKey(KeyEvent event) {
         InputDevice device = event.getDevice();
         if (device == null) return false;
-        boolean bsd = NativeBoardKeys.bsd(device.getName(), device.getVendorId(), device.getProductId());
-        boolean hid = NativeBoardKeys.touchPlanet(device.getName(), device.getVendorId(), device.getProductId());
-        if (!bsd && !hid) return false;
-        String owner = null;
-        for (Map.Entry<String, Boolean> surface : shortcutSurfaces.entrySet()) {
-            if (surface.getValue() || touchLocked) { owner = surface.getKey(); break; }
-        }
-        if (owner == null) return false;
         int key = event.getKeyCode();
+        boolean bsd = NativeBoardKeys.bsd(device.getName(), device.getVendorId(), device.getProductId())
+            || (device.supportsSource(InputDevice.SOURCE_TOUCHSCREEN) && NativeBoardKeys.mergedPanelKey(key, event.getScanCode()));
+        boolean hid = NativeBoardKeys.touchPlanet(device.getName(), device.getVendorId(), device.getProductId());
+        boolean infrared = NativeBoardKeys.infrared(device.getName(), device.getVendorId(), device.getProductId());
+        if (!bsd && !hid && !infrared) return false;
         String action = bsd ? NativeBoardKeys.vendorAction(key) : null;
-        if (hid) {
+        if (hid || infrared) {
             if (key == KeyEvent.KEYCODE_PAGE_UP) action = "previous";
             else if (key == KeyEvent.KEYCODE_PAGE_DOWN) action = "next";
             else if (event.isCtrlPressed() && event.isAltPressed() && event.isMetaPressed()) {
-                if (key == KeyEvent.KEYCODE_B) action = "red";
-                else if (key == KeyEvent.KEYCODE_C) action = "new";
+                if (key == (infrared ? KeyEvent.KEYCODE_3 : KeyEvent.KEYCODE_B)) action = "red";
+                else if (key == (infrared ? KeyEvent.KEYCODE_4 : KeyEvent.KEYCODE_C)) action = "new";
+                else if (infrared && key == KeyEvent.KEYCODE_8) action = "save";
+                else if (infrared && key == KeyEvent.KEYCODE_9) action = "share";
+                else if (infrared && key == KeyEvent.KEYCODE_D) action = "ops";
+                // The 7 chord emits an explicit lock or unlock on BSD_UartTouch.
+                else if (infrared && key == KeyEvent.KEYCODE_7) return true;
             }
         }
         if (action == null) return false;
+        String owner = null;
+        boolean unlocking = action.equals("unlock") && panelLocks.get(event.getDeviceId());
+        for (Map.Entry<String, Boolean> surface : shortcutSurfaces.entrySet()) {
+            if (surface.getValue()) { owner = surface.getKey(); break; }
+        }
+        if (owner == null && !unlocking) return false;
         if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() != 0) return true;
         if (!keys.accept(action, bsd, event.getEventTime())) return true;
         if (action.equals("lock")) {
-            touchLocked = true;
-            for (NativeInkView view : surfaces.values()) view.cancel();
-            inputRouter.clear();
-        } else if (action.equals("unlock")) touchLocked = false;
-        notifyListeners("shortcut", new JSObject().put("owner", owner).put("action", action));
+            panelLocks.put(event.getDeviceId(), true);
+            inputRouter.cancelDevice(event.getDeviceId());
+            ((MainActivity)getActivity()).cancelPanelWindowTouch(event.getDeviceId());
+        } else if (unlocking) panelLocks.put(event.getDeviceId(), false);
+        if (owner != null) notifyListeners("shortcut", new JSObject().put("owner", owner).put("action", action));
         return true;
     }
     private void layer() {
@@ -172,14 +192,13 @@ public class NativeInkPlugin extends Plugin {
         getActivity().runOnUiThread(() -> { NativeInkView view = surfaces.get(call.getString("owner", "")); if (view != null) view.acknowledge(call.getString("id", ""),call.getString("elementId", ""),call.getBoolean("complete",false)); call.resolve(); });
     }
     @PluginMethod public void remove(PluginCall call) {
-        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); detach(view); } if (surfaces.isEmpty()) { touchLocked = false; keys.reset(); } call.resolve(); });
+        getActivity().runOnUiThread(() -> { String owner = call.getString("owner", ""); shortcutSurfaces.remove(owner); NativeInkView view = surfaces.remove(owner); if (view != null) { view.cancel(); ((MainActivity)getActivity()).removeInkSurface(owner,view); inputRouter.remove(view); inputBounds.remove(view); detach(view); } if (surfaces.isEmpty()) keys.reset(); call.resolve(); });
     }
-    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); touchLocked = false; keys.reset(); }); }
+    @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { for (NativeInkView view : surfaces.values()) view.cancel(); inputRouter.clear(); panelLocks.clear(); keys.reset(); }); }
     private static void detach(android.view.View view) {
         if (view.getParent() instanceof ViewGroup) ((ViewGroup)view.getParent()).removeView(view);
     }
     @Override protected void handleOnDestroy() {
-        vendor.execute(() -> boardMode.foreground(false)); vendor.shutdown();
         if(inputManager!=null)inputManager.unregisterInputDeviceListener(devices);
         getActivity().runOnUiThread(() -> { ((MainActivity)getActivity()).setInkInput(null); for (NativeInkView view : surfaces.values()) view.cancel(); surfaces.clear(); inputBounds.clear(); inputRouter.clear(); publisher.shutdown(); if (layer != null) { detach(layer); layer = null; } if (overlay != null) { detach(overlay); overlay = null; } });
     }

@@ -7,7 +7,7 @@ const OSS_FONTS_FALLBACK = "/";
  *
  * @returns {import("vite").PluginOption}
  */
-module.exports.woff2BrowserPlugin = () => {
+module.exports.woff2BrowserPlugin = (packaged = false) => {
   let isDev;
 
   return {
@@ -17,6 +17,15 @@ module.exports.woff2BrowserPlugin = () => {
       isDev = command === "serve";
     },
     transform(code, id) {
+      if (packaged) {
+        if (id.endsWith("app/index.html")) {
+          return code.replace(
+            "<!-- PLACEHOLDER:EXCALIDRAW_APP_FONTS -->",
+            "<script>window.EXCALIDRAW_ASSET_PATH = window.origin;</script>",
+          );
+        }
+        return;
+      }
       // using copy / replace as fonts defined in the `.css` don't have to be manually copied over (vite/rollup does this automatically),
       // but at the same time can't be easily prefixed with the `EXCALIDRAW_ASSET_PATH` only for the `app`
       if (!isDev && id.endsWith("/fcboard/fonts/fonts.css")) {

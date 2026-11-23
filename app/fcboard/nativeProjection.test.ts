@@ -52,6 +52,20 @@ it("displays the first ready native frame and hands the surface to the newer con
   await vi.waitFor(() =>
     expect(display).toHaveBeenCalledWith("airplay", expect.anything(), 3),
   );
+  const surface = display.mock.lastCall![1];
+  for (const [width, height] of [
+    [998, 2160],
+    [3840, 2160],
+    [998, 2160],
+  ]) {
+    const updates = display.mock.calls.length;
+    Object.assign(receivers.airplay, { width, height });
+    change({ session: "board" });
+    await vi.waitFor(() => expect(display).toHaveBeenCalledTimes(updates + 1));
+    expect(display.mock.lastCall![1]).toBe(surface);
+    expect(surface).toMatchObject({ width, height });
+    expect(ended).not.toHaveBeenCalled();
+  }
   Object.assign(receivers.dlna, {
     state: "connected",
     revision: 4,

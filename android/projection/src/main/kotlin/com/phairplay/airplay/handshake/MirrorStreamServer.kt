@@ -76,6 +76,11 @@ class MirrorStreamServer(
     private var lastStatMs = 0L
     // Only the decoder thread changes reference-frame state.
     private var awaitingKeyframe = true
+    // A sender can pause after an IDR and a few predicted frames. Keep that
+    // short prefix until the codec displays a frame, so EOS can drain it and
+    // a subsequent predicted frame can still use exactly the same references.
+    private val startupPictures = mutableListOf<ByteArray>()
+    private var stillFinished = false
 
     /** The OS-assigned TCP port macOS should connect to (returned in the SETUP response). */
     val dataPort: Int get() = serverSocket.localPort
@@ -287,15 +292,20 @@ class MirrorStreamServer(
                 val frame = queue.poll(50, TimeUnit.MILLISECONDS)
                 if (frame == null) {
                     decoder?.drain()
+                    if (!stillFinished && startupPictures.isNotEmpty()) {
+                        if (renderedSurface != null) startupPictures.clear()
+                        else stillFinished = decoder?.finishStill(framePtsUs) == true
+                    }
                     continue
                 }
                 if (frame.config !== configured) {
                     configured = frame.config
                     rebuildDecoder(awaitSurface())
                 }
-                if (expected != frame.sequence) awaitingKeyframe = true
+                val gap = expected != frame.sequence
+                if (gap) awaitingKeyframe = true
                 expected = frame.sequence + 1
-                decodeFrame(frame.annexB)
+                decodeFrame(frame.annexB, gap)
             }
         } catch (e: Exception) {
             if (running) {
@@ -318,6 +328,8 @@ class MirrorStreamServer(
         decoder?.release()
         decoder = null
         renderedSurface = null
+        startupPictures.clear()
+        stillFinished = false
         configuredSurface = surface
         val config = configured ?: return
         if (surface == null) return                            // backgrounded — wait for the surface to return
@@ -338,7 +350,7 @@ class MirrorStreamServer(
         StreamStats.videoRes = "${config.width}x${config.height}"
     }
 
-    private fun decodeFrame(annexB: ByteArray) {
+    private fun decodeFrame(annexB: ByteArray, sequenceGap: Boolean) {
         // Re-attach to the live Surface if it changed (the app was backgrounded and returned, so the
         // SurfaceView made a new Surface). Without this, video stays black after foregrounding.
         val liveSurface = surfaceProvider()?.takeIf { it.isValid }
@@ -346,11 +358,23 @@ class MirrorStreamServer(
             Logger.i("Mirror: surface ${if (liveSurface == null) "lost" else "changed"} — re-attaching decoder")
             rebuildDecoder(liveSurface)
         }
+        if (stillFinished) {
+            val previous = if (sequenceGap || isKeyframe(annexB)) emptyList() else startupPictures.toList()
+            rebuildDecoder(liveSurface)
+            if (previous.isNotEmpty() && decoder != null) {
+                previous.forEachIndexed { index, picture ->
+                    decoder?.decodeNalUnit(picture, framePtsUs - (previous.size - index) * FRAME_INTERVAL_US)
+                }
+                startupPictures.addAll(previous)
+                awaitingKeyframe = false
+            }
+        }
         if (decoder?.isHealthy == false) {
             if (!isKeyframe(annexB)) return
             rebuildDecoder(liveSurface)
         }
         val d = decoder ?: return
+        val first = awaitingKeyframe && renderedSurface == null
         if (awaitingKeyframe) {
             // After a dropped frame the stream is reference-broken; skip until the next IDR so we
             // don't feed the decoder predicted frames with missing references (which smear/blocky).
@@ -359,12 +383,23 @@ class MirrorStreamServer(
             Logger.i("Mirror: resynced on keyframe after a dropped frame")
         }
         if (framePtsUs == 0L) Logger.i("Mirror: first video frame fed to decoder (${annexB.size}B)")
-        val first = renderedSurface == null && isKeyframe(annexB)
-        d.decodeNalUnit(annexB, framePtsUs, firstMirrorPicture = first)
+        if (sequenceGap || renderedSurface != null) startupPictures.clear()
+        if (renderedSurface == null) {
+            val keyframe = isKeyframe(annexB)
+            if (keyframe) startupPictures.clear()
+            if (keyframe || startupPictures.isNotEmpty()) {
+                if (startupPictures.size < QUEUE_CAPACITY &&
+                    annexB.size + startupPictures.sumOf { it.size } <= VideoDecoder.MAX_ACCESS_UNIT_BYTES) {
+                    startupPictures.add(annexB)
+                } else startupPictures.clear()
+            }
+        }
+        d.decodeNalUnit(annexB, framePtsUs)
         if (first && !d.isHealthy && running) {
             rebuildDecoder(liveSurface)
             awaitingKeyframe = false
             decoder?.decodeNalUnit(annexB, framePtsUs)
+            startupPictures.add(annexB)
         }
         framePtsUs += FRAME_INTERVAL_US
     }

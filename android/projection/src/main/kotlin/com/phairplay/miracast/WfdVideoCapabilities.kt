@@ -88,8 +88,20 @@ internal fun wfdCustomVideoMode(context: Context, extended: Boolean): WfdCustomV
     return chooseWfdCustomVideoMode(width, height, height > width, extended) { w, h, fps, level ->
         decoders.any { caps ->
             runCatching {
-                caps.profileLevels.any { it.profile == CodecProfileLevel.AVCProfileHigh && it.level >= level } &&
-                    (caps.videoCapabilities?.areSizeAndRateSupported(w, h, fps.toDouble()) == true)
+                val video = caps.videoCapabilities ?: return@runCatching false
+                if (!video.areSizeAndRateSupported(w, h, fps.toDouble()) ||
+                    caps.profileLevels.none { it.profile == CodecProfileLevel.AVCProfileHigh && it.level >= level })
+                    return@runCatching false
+                // Size/rate support includes non-realtime decoding. Prefer published
+                // throughput when choosing what a phone may send to a 4K panel.
+                val points = if (Build.VERSION.SDK_INT >= 29) video.supportedPerformancePoints else null
+                if (Build.VERSION.SDK_INT >= 29 && !points.isNullOrEmpty()) {
+                    val requested = android.media.MediaCodecInfo.VideoCapabilities.PerformancePoint(w, h, fps)
+                    points.any { it.covers(requested) }
+                } else {
+                    val measured = runCatching { video.getAchievableFrameRatesFor(w, h) }.getOrNull()
+                    measured == null || measured.upper >= fps
+                }
             }.getOrDefault(false)
         }
     }

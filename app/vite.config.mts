@@ -1,5 +1,5 @@
 import path from "path";
-import { rm } from "node:fs/promises";
+import { copyFile, rm } from "node:fs/promises";
 
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
@@ -154,6 +154,11 @@ export default defineConfig(({ mode, command }) => {
         apply: "build",
         async writeBundle(options) {
           if (nativeInference && options.dir) {
+            // Retire the old APK precache on upgrades at its registered URL.
+            await copyFile(
+              path.resolve(__dirname, "../public/service-worker.js"),
+              path.join(options.dir, "sw.js"),
+            );
             await Promise.all(
               ["ocr", "local-models", "dictionary"].map((name) =>
                 rm(path.join(options.dir!, name), {
@@ -178,7 +183,7 @@ export default defineConfig(({ mode, command }) => {
         // its static in public folder
         generateRobotsTxt: false,
       }),
-      woff2BrowserPlugin(),
+      woff2BrowserPlugin(nativeInference),
       react(),
       // CI checks types/lint separately; packaging must not spawn duplicate checkers.
       command === "serve" &&
@@ -196,6 +201,7 @@ export default defineConfig(({ mode, command }) => {
       svgrPlugin(),
       ViteEjsPlugin(),
       VitePWA({
+        disable: nativeInference,
         registerType: "autoUpdate",
         devOptions: {
           /* set this flag to true to enable in Development mode */

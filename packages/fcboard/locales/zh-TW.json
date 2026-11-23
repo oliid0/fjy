@@ -1012,7 +1012,7 @@
     "media_enhance_error": "人聲增強無法使用，正在播放原音。",
     "media_enhance_android": "人聲增強可在 Android 播放器中使用。",
     "media_exit_fullscreen": "離開全螢幕",
-    "media_resize": "調整播放器大小",
+    "media_volume": "音量",
     "signal": "信號源",
     "teaching_resources": "教學資源",
     "this_insertion_type_is_unavailable": "插入類型不存在",

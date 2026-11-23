@@ -3,6 +3,8 @@ import { t } from "@fcboard/fcboard/i18n";
 import * as Sentry from "@sentry/browser";
 import React from "react";
 
+import { SENTRY_DISABLED } from "../sentry";
+
 interface TopErrorBoundaryState {
   hasError: boolean;
   sentryEventId: string;
@@ -36,15 +38,16 @@ export class TopErrorBoundary extends React.Component<
       }
     }
 
-    Sentry.withScope((scope) => {
-      scope.setExtras(errorInfo);
-      const eventId = Sentry.captureException(error);
-
-      this.setState((state) => ({
-        hasError: true,
-        sentryEventId: eventId,
-        localStorage: JSON.stringify(_localStorage),
-      }));
+    const sentryEventId = SENTRY_DISABLED
+      ? ""
+      : Sentry.withScope((scope) => {
+          scope.setExtras(errorInfo);
+          return Sentry.captureException(error);
+        });
+    this.setState({
+      hasError: true,
+      sentryEventId,
+      localStorage: JSON.stringify(_localStorage),
     });
   }
 

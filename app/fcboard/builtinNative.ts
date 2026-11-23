@@ -41,6 +41,7 @@ export type MediaAction = {
   level?: number;
 };
 export type MediaBounds = {
+  selected?: boolean;
   x: number;
   y: number;
   width: number;

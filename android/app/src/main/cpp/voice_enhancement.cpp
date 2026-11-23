@@ -21,7 +21,7 @@ constexpr int kHop = 512;
 constexpr int kRecurrentSize = 48 * 48;
 constexpr int kTensorCount = 6;
 constexpr float kPcmScale = 32768.0f;
-constexpr float kWetMix[] = {0.f, 0.30f, 0.60f, 0.90f};
+constexpr float kWetMix[] = {0.f, 0.30f, 0.60f, 1.0f};
 constexpr const char* kInputs[] = {
     "wav_in", "cache_in_0", "cache_in_1", "cache_in_2", "cache_in_3", "cache_in_4"
 };

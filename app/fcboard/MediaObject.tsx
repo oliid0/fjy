@@ -24,7 +24,7 @@ const nativeLabels = () => ({
   enhance: t("fcboard.media_enhance"),
   fullscreen: t("fcboard.fullscreen"),
   exitFullscreen: t("fcboard.media_exit_fullscreen"),
-  resize: t("fcboard.media_resize"),
+  volume: t("fcboard.media_volume"),
   off: t("fcboard.media_enhance_off"),
   low: t("fcboard.media_enhance_low"),
   medium: t("fcboard.media_enhance_medium"),
@@ -49,6 +49,7 @@ const playbackState = (node: HTMLMediaElement) => ({
   position: node.currentTime,
   duration: Number.isFinite(node.duration) ? node.duration : -1,
   speed: node.playbackRate,
+  volume: node.volume,
   error: node.error?.message || "",
 });
 const start = {
@@ -56,6 +57,7 @@ const start = {
   position: 0,
   duration: -1,
   speed: 1,
+  volume: 1,
   error: "",
 };
 
@@ -98,7 +100,6 @@ const BrowserMediaObject = ({
     undefined,
   );
   const tap = useRef<number | undefined>(undefined);
-  const hide = useRef<number | undefined>(undefined);
   const skipTap = useRef(false);
   current.current = { items, index };
   const item = items[index];
@@ -119,13 +120,7 @@ const BrowserMediaObject = ({
     }
     held.current = undefined;
   }, []);
-  const showControls = useCallback((show = true) => {
-    window.clearTimeout(hide.current);
-    setControls(show);
-    if (show && current.current.items[current.current.index]?.video) {
-      hide.current = window.setTimeout(() => setControls(false), 3200);
-    }
-  }, []);
+  const showControls = useCallback((show = true) => setControls(show), []);
   const changeTrack = useCallback(
     (target: number) => {
       const list = current.current.items;
@@ -149,7 +144,7 @@ const BrowserMediaObject = ({
           .exitFullscreen()
           .catch((failure) => setError(String(failure)));
       }
-      showControls();
+      showControls(!list[target].video);
       return target;
     },
     [endBoost, showControls],
@@ -170,7 +165,7 @@ const BrowserMediaObject = ({
         autoplay.current = pendingMediaPlayback.delete(key);
         setItems(urls);
         current.current = { items: urls, index: 0 };
-        showControls();
+        showControls(!urls[0].video);
       })
       .catch((failure) => {
         if (live) {
@@ -184,7 +179,6 @@ const BrowserMediaObject = ({
       live = false;
       urls.forEach(({ url }) => URL.revokeObjectURL(url));
       window.clearTimeout(tap.current);
-      window.clearTimeout(hide.current);
       window.clearTimeout(held.current?.timer);
       document.removeEventListener("fullscreenchange", changed);
     };
@@ -287,6 +281,7 @@ const BrowserMediaObject = ({
     <div
       ref={panel}
       className="fc-media-player fc-media-object"
+      data-video={item?.video || undefined}
       data-hide-controls={
         (!!item?.video && !controls && !error && !playback.error) || undefined
       }
@@ -316,6 +311,17 @@ const BrowserMediaObject = ({
               playsInline
               onTimeUpdate={sync}
               onDurationChange={sync}
+              onVolumeChange={sync}
+              onLoadedMetadata={({ currentTarget }) => {
+                if (!currentTarget.videoWidth || !currentTarget.videoHeight) {
+                  return;
+                }
+                const ratio =
+                  currentTarget.videoWidth / currentTarget.videoHeight;
+                const box = frame.bounds;
+                const width = Math.min(box.width, box.height * ratio);
+                frame.onCommit({ ...box, width, height: width / ratio });
+              }}
               onPlay={() => {
                 autoplay.current = true;
                 sync();
@@ -489,6 +495,21 @@ const BrowserMediaObject = ({
                       ⛶
                     </button>
                   )}
+                  <input
+                    type="range"
+                    className="fc-media-volume"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    aria-label={t("fcboard.media_volume")}
+                    value={playback.volume}
+                    onChange={(event) => {
+                      if (video.current) {
+                        video.current.volume = Number(event.target.value);
+                      }
+                      sync();
+                    }}
+                  />
                 </div>
                 {playback.error && (
                   <p role="alert">{nativeErrorMessage(playback.error)}</p>
@@ -503,6 +524,7 @@ const BrowserMediaObject = ({
 };
 
 const NativeMediaObject = ({
+  selectedForMove,
   resource,
   objectId,
   window: frame,
@@ -520,6 +542,7 @@ const NativeMediaObject = ({
       width: box.width,
       height: box.height,
       viewport: window.innerWidth,
+      selected: root.current!.dataset.selectedForMove === "true",
     };
   };
   const key = resource.media!.key;
@@ -527,14 +550,17 @@ const NativeMediaObject = ({
     setError("");
     active.current = true;
     try {
-      return await Media.activate({
+      const result = await Media.activate({
         key,
         owner: objectId,
         bounds: bounds(),
         labels: nativeLabels(),
       });
+      if (active.current) root.current?.setAttribute("data-native-playing", "");
+      return result;
     } catch (failure) {
       active.current = false;
+      root.current?.removeAttribute("data-native-playing");
       setError(nativeErrorMessage(String(failure)));
       throw failure;
     }
@@ -559,8 +585,12 @@ const NativeMediaObject = ({
       }
     };
     const schedule = () => {
-      cancelAnimationFrame(update);
-      update = requestAnimationFrame(place);
+      if (!update) {
+        update = requestAnimationFrame(() => {
+          update = 0;
+          place();
+        });
+      }
     };
     const resize = new ResizeObserver(schedule);
     resize.observe(root.current!);
@@ -572,7 +602,15 @@ const NativeMediaObject = ({
     ) {
       positions.observe(parent, {
         attributes: true,
-        attributeFilter: ["style", "class", "x", "y", "transform", "viewBox"],
+        attributeFilter: [
+          "style",
+          "class",
+          "x",
+          "y",
+          "transform",
+          "viewBox",
+          "data-selected-for-move",
+        ],
       });
     }
     window.addEventListener("scroll", schedule, true);
@@ -593,6 +631,7 @@ const NativeMediaObject = ({
         });
       } else {
         active.current = false;
+        root.current?.removeAttribute("data-native-playing");
         if (event.action === "close") {
           current?.onClose();
         }
@@ -640,7 +679,11 @@ const NativeMediaObject = ({
     };
   }, [activate, key, objectId]);
   return (
-    <div ref={root} className="fc-media-object">
+    <div
+      ref={root}
+      className="fc-media-object"
+      data-selected-for-move={selectedForMove}
+    >
       {frame && (
         <ResourceWindow
           {...frame}

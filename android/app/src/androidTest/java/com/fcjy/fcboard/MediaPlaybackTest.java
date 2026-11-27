@@ -68,7 +68,7 @@ public class MediaPlaybackTest {
         Uri uri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", audio);
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             try {
-                JSObject selected = invoke(scenario, "chosen", new JSObject(), uri);
+                JSObject selected = invoke(scenario, "chosen", new JSObject().put("fileTypes", new JSObject().put("wav", "audio/wav")), uri);
                 JSObject target = new JSObject().put("owner", "board-player").put("key", selected.getString("key"));
                 assertTrue(invoke(scenario, "activate", target, null).getBoolean("open"));
                 JSObject state = null;

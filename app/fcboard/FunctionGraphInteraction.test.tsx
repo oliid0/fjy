@@ -812,7 +812,11 @@ it("uses the ordinary border menu and preserves its actual curve style through r
     expect(regenerate).toHaveBeenLastCalledWith(
       graph().customData!.fcPlot.plot,
       graph().strokeColor,
-      { width: graph().strokeWidth, strokeStyle: "dashed" },
+      {
+        width: graph().strokeWidth,
+        strokeStyle: "dashed",
+        scale: graph().width / visualization.plotSize.width,
+      },
     );
     act(() => api.executeAction("undo"));
     await waitFor(() => expect(graph().strokeStyle).toBe("solid"));
@@ -845,7 +849,11 @@ it("uses the ordinary border menu and preserves its actual curve style through r
     expect(regenerate).toHaveBeenLastCalledWith(
       graph().customData!.fcPlot.plot,
       graph().strokeColor,
-      { width: 6, strokeStyle: "dashed" },
+      {
+        width: 6,
+        strokeStyle: "dashed",
+        scale: graph().width / visualization.plotSize.width,
+      },
     );
     expect(
       document

@@ -330,6 +330,10 @@ for (const width of [390, 1920]) {
       // Exercise the real downloadable-file fallback in browsers without a picker.
       Reflect.deleteProperty(window, "showOpenFilePicker");
       Reflect.deleteProperty(window, "showSaveFilePicker");
+      localStorage.setItem(
+        "fcboard-state",
+        JSON.stringify({ viewBackgroundColor: "#e7f2ff" }),
+      );
     });
     await page.goto("/");
     const openTool = async (name: string, count = 3) => {
@@ -350,9 +354,11 @@ for (const width of [390, 1920]) {
     await openTool("分屏");
     const panes = page.locator(".fc-split-pane canvas");
     await expect(panes).toHaveCount(3);
-    await expect(panes.first()).toHaveCSS(
+    const board = page.locator(".fc-split-board");
+    await expect(board).toHaveCSS("background-color", "rgb(231, 242, 255)");
+    await expect(board.locator(".fc-split-pane").first()).toHaveCSS(
       "background-color",
-      "rgb(38, 55, 49)",
+      "rgb(231, 242, 255)",
     );
     const first = await panes.first().boundingBox();
     await dragTouch(
@@ -369,7 +375,6 @@ for (const width of [390, 1920]) {
       );
     expect(await hasInk(0)).toBe(true);
     expect(await hasInk(1)).toBe(false);
-    const board = page.locator(".fc-split-board");
     await expect(board.locator("header")).toHaveCount(0);
     await expect(
       board.getByRole("button", { name: "关闭", exact: true }),
@@ -395,7 +400,13 @@ for (const width of [390, 1920]) {
         box.x >= exitBounds.x + exitBounds.width ||
           box.y + box.height <= exitBounds.y,
       ).toBe(true);
-      await expect(pen).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(pen).toHaveCSS("border-radius", "50%");
+      await expect(pen).toHaveCSS(
+        "background-color",
+        (await pen.getAttribute("aria-pressed")) === "true"
+          ? "rgb(224, 224, 224)"
+          : "rgba(0, 0, 0, 0)",
+      );
     }
     const size = await panes.evaluateAll((items: HTMLCanvasElement[]) => ({
       width: items.reduce((sum, canvas) => sum + canvas.width, 0),

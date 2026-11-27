@@ -523,11 +523,11 @@ public class NativeSceneTest {
                 Bitmap cursor=pixels(view);boolean visible=false;
                 for(int y=25;y<95&&!visible;y++)for(int x=65;x<135;x++)if(Color.alpha(cursor.getPixel(x,y))>0){visible=true;break;}
                 assertTrue("The actual native eraser cursor has been drawn",visible);cursor.recycle();
-                java.lang.reflect.Field full=NativeCanvasView.class.getDeclaredField("full"),damage=NativeCanvasView.class.getDeclaredField("damage");
-                full.setAccessible(true);damage.setAccessible(true);full.setBoolean(view,false);((Rect)damage.get(view)).setEmpty();
+                java.lang.reflect.Field dirty=NativeCanvasView.class.getDeclaredField("dirty");
+                dirty.setAccessible(true);dirty.setBoolean(view,false);
                 android.view.MotionEvent up=android.view.MotionEvent.obtain(100,101,android.view.MotionEvent.ACTION_UP,100,60,0);
                 try{assertTrue(input.onTouchEvent(up));}finally{up.recycle();}
-                assertTrue("Unchanged UP must schedule a frame to remove the last cursor",full.getBoolean(view)||!((Rect)damage.get(view)).isEmpty());
+                assertTrue("Unchanged UP must schedule a frame to remove the last cursor",dirty.getBoolean(view));
                 Bitmap after=pixels(view);for(int y=25;y<95;y++)for(int x=65;x<135;x++)assertEquals(0,Color.alpha(after.getPixel(x,y)));after.recycle();
                 assertEquals("No JavaScript acknowledgement was required",2,events.size());
             }catch(Exception error){throw new AssertionError(error);}

@@ -58,9 +58,11 @@ describe("Test MobileMenu", () => {
     expect(
       document.querySelector("[data-settings-page='toolbar']"),
     ).not.toBeNull();
-    expect(
-      document.querySelectorAll(".fc-toolbar-setting-tile.is-fixed"),
-    ).toHaveLength(3);
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll(".fc-toolbar-setting-tile.is-fixed"),
+      ).toHaveLength(3),
+    );
     fireEvent.click(screen.getByRole("button", { name: t("fcboard.back") }));
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.language") }),

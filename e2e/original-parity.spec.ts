@@ -7,21 +7,38 @@ for (const viewport of [
   { width: 800, height: 1280 },
   { width: 1920, height: 1080 },
 ]) {
-  test(`original file cloud chooser and extraction-code controls fit at ${viewport.width}`, async ({
+  test(`cloud file retrieval, upload and extraction-code controls fit at ${viewport.width}`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
     await page.goto("/");
-    await selectMenu(page, "打开");
-    const picker = page.getByRole("dialog", { name: "打开", exact: true });
-    await expect(
-      picker.getByRole("button", { name: "本地", exact: true }),
-    ).toBeEnabled();
+    await selectMenu(page, "云文件");
+    const picker = page.getByRole("dialog", { name: "云文件", exact: true });
+    const retrieve = picker.getByRole("button", {
+      name: "提取文件",
+      exact: true,
+    });
+    const upload = picker.getByRole("button", {
+      name: "保存到云端",
+      exact: true,
+    });
+    const endpoint = picker.locator('input[type="url"]');
+    await expect(retrieve).toBeEnabled();
+    await expect(upload).toBeDisabled();
+    await endpoint.fill("");
+    await expect(retrieve).toBeDisabled();
+    await endpoint.fill("https://board.example.test/");
+    await picker.locator('input[type="password"]').fill("test-service-key");
+    await expect(retrieve).toBeEnabled();
+    await expect(upload).toBeEnabled();
     const box = await picker.boundingBox();
-    expect(box!.width).toBeCloseTo(250, 0);
+    expect(box!.width).toBeGreaterThan(0);
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
-    await picker.getByRole("button", { name: "云端", exact: true }).click();
+    for (const control of await picker.locator("button,input").all()) {
+      await expect(control).toBeInViewport();
+    }
+    await retrieve.click();
     const code = page.getByRole("dialog", {
       name: "请输入提取码",
       exact: true,

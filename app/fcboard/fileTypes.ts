@@ -1,4 +1,4 @@
-import { IMAGE_MIME_TYPES } from "@fcboard/common/constants";
+import { IMAGE_MIME_TYPES } from "@fcboard/common/imageMimeTypes";
 
 const images: Record<string, string> = {
   ...IMAGE_MIME_TYPES,

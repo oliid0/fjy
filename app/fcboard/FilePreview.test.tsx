@@ -2735,6 +2735,7 @@ it("moves and recolors a selected courseware graph with real Canvas input and in
     expect(image).toHaveBeenLastCalledWith(before.plot!.plot, before.color, {
       width: 6,
       strokeStyle: "dashed",
+      scale: before.imageWidth! / functionDrawing.plotSize.width,
     });
     expect(read()).toMatchObject({ width: 6, strokeStyle: "dashed" });
     expect(
@@ -2762,6 +2763,7 @@ it("moves and recolors a selected courseware graph with real Canvas input and in
     expect(image).toHaveBeenCalledWith(before.plot!.plot, "#d32941", {
       width: before.width,
       strokeStyle: before.strokeStyle,
+      scale: before.imageWidth! / functionDrawing.plotSize.width,
     });
     expect(read().color).toBe("#d32941");
     await act(async () => {

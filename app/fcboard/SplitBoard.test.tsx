@@ -392,9 +392,10 @@ it("ignores obsolete exports after switching layouts and keeps a newer split ses
   expect(
     screen.getByRole("button", { name: t("fcboard.save") }),
   ).toBeDisabled();
+  await waitFor(() => expect(typeof encode).toBe("function"));
   await command({ count: 4 });
   expect(panes()).toHaveLength(4);
-  await act(async () => encode?.(new Blob(["jpeg"], { type: "image/jpeg" })));
+  await act(async () => encode!(new Blob(["jpeg"], { type: "image/jpeg" })));
   expect(save).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   expect(screen.getByRole("button", { name: t("fcboard.save") })).toBeEnabled();
@@ -415,6 +416,7 @@ it("dismisses split save progress by an outside touch and cancels late encoding 
   pointer(panes()[0], "pointerup", 1, 120);
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.save") }));
+  await waitFor(() => expect(typeof encode).toBe("function"));
   fireEvent.pointerDown(document.body);
   expect(
     screen.queryByRole("dialog", { name: t("fcboard.split_exit_prompt") }),

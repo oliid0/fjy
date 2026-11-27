@@ -2,6 +2,9 @@ import type { FcboardElement, FontFamilyValues } from "@fcboard/element/types";
 import type { AppProps, AppState } from "@fcboard/fcboard/types";
 
 import { COLOR_PALETTE } from "./colors";
+import { IMAGE_MIME_TYPES } from "./imageMimeTypes";
+
+export { IMAGE_MIME_TYPES };
 
 export const supportsResizeObserver =
   typeof window !== "undefined" && "ResizeObserver" in window;
@@ -232,18 +235,6 @@ export const CANVAS_ONLY_ACTIONS = ["selectAll"];
 
 export const DEFAULT_GRID_SIZE = 20;
 export const DEFAULT_GRID_STEP = 5;
-
-export const IMAGE_MIME_TYPES = {
-  svg: "image/svg+xml",
-  png: "image/png",
-  jpg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  bmp: "image/bmp",
-  ico: "image/x-icon",
-  avif: "image/avif",
-  jfif: "image/jfif",
-} as const;
 
 export const STRING_MIME_TYPES = {
   text: "text/plain",

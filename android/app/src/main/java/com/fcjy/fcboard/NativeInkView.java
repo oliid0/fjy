@@ -459,7 +459,9 @@ final class NativeInkView extends View {
         NativeSceneView scene=retainedScene.get();
         if (contact.mode.equals("erase") && contact.strokeErase)
             eraseSample(contact,scene,first?px:contact.lastX,first?py:contact.lastY,px,py);
-        float pad=contact.paint.getStrokeWidth()*4+12*scale;
+        // Quadratic centerlines stay inside their control points. Expand their
+        // damage by the actual maximum nib radius and the antialias fringe.
+        float pad = 2 + (contact.brush != null ? contact.brush.maximumRadius() : contact.paint.getStrokeWidth() / 2);
         float padX=contact.mode.equals("erase")?Math.max(pad,contact.major*scale/2+2):pad;
         float padY=contact.mode.equals("erase")?Math.max(pad,contact.minor*scale/2+2):pad;
         RectF damage=contact.tipDamage;
@@ -636,7 +638,7 @@ final class NativeInkView extends View {
                         contact.coverage().eraseFinished(cut.gesture,cut.path,cut.bounds);
                 }
             }
-            draw(canvas,contact);
+            if (!canvas.quickReject(contact.bounds, Canvas.EdgeType.AA)) draw(canvas,contact);
         }
         liftedCuts.clear();
         for (Contact contact : active.values()) {

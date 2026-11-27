@@ -180,7 +180,7 @@ internal class AirPlayVideoPlayer(
     fun setRate(rate: Float) { main.post { if (!released) player?.playWhenReady = rate > 0 } }
     fun scrub(seconds: Double) { main.post { if (!released && seconds.isFinite()) player?.seekTo((seconds.coerceAtLeast(0.0) * 1000).toLong()) } }
     fun info(): PlaybackInfo? = if (released) null else snapshot
-    fun release() {
+    fun release(onReleased: () -> Unit = {}) {
         released = true
         renderedSurface = null
         main.post {
@@ -190,6 +190,7 @@ internal class AirPlayVideoPlayer(
             output = null
             http.dispatcher.cancelAll()
             http.connectionPool.evictAll()
+            onReleased()
         }
     }
 }

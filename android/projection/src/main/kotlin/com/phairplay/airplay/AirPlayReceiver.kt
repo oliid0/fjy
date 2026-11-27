@@ -112,8 +112,12 @@ class AirPlayReceiver(
 
     // AirPlay 2 mirroring: media servers and keys set during SETUP.
     @Volatile private var mirrorServer: MirrorStreamServer? = null
-    fun hasVideoFrame(surface: Surface?) = surface != null &&
-        (mirrorServer?.renderedSurface === surface || urlVideoPlayer?.renderedSurface === surface)
+    fun hasVideoFrame(surface: Surface?): Boolean {
+        if (surface == null) return false
+        val player = urlVideoPlayer
+        return if (player != null) player.renderedSurface === surface
+        else mirrorServer?.renderedSurface === surface
+    }
 
     @Volatile private var audioServer: AudioStreamServer? = null
     @Volatile private var urlVideoPlayer: AirPlayVideoPlayer? = null
@@ -432,15 +436,21 @@ class AirPlayReceiver(
      */
     private fun startMirrorStream(streamConnectionId: Long, closeControl: () -> Unit): Int {
         val aesKey = mirrorAesKey ?: run { Logger.e("mirror stream start before keys set"); return 0 }
-        urlVideoPlayer?.release()
+        val player = urlVideoPlayer
         urlVideoPlayer = null
-        mirrorServer?.stop()
+        val previous = mirrorServer
+        val previousSurface = previous?.suspendForMedia()
+        previous?.stop()
         val server = MirrorStreamServer(
             aesKey, streamConnectionId, videoSurfaceProvider, mirrorWidth, mirrorHeight, hevc,
-            onFirstFrame = { current -> emitState(ProtocolState.CONNECTED) { mirrorServer === current } },
+            onFirstFrame = { current ->
+                emitState(ProtocolState.CONNECTED) { mirrorServer === current && urlVideoPlayer == null }
+            },
             onStreamFailure = { current ->
                 scope.launch(Dispatchers.Main) {
-                    if (mirrorServer === current) closeControl()
+                    if (mirrorServer === current) {
+                        if (urlVideoPlayer == null) closeControl() else stopMirrorVideo()
+                    }
                 }
             }
         )
@@ -449,7 +459,16 @@ class AirPlayReceiver(
         emitNowPlaying()
         onSenderNameChanged("AirPlay")
         emitState(ProtocolState.CONNECTING) { mirrorServer === server && !server.hasRenderedFirstFrame }
-        server.start(scope)
+        // An old URL player or mirror decoder may still own the Surface after
+        // stop was requested. Release it before starting another codec.
+        val playerReleased = kotlinx.coroutines.CompletableDeferred<Unit>()
+        if (player == null) playerReleased.complete(Unit)
+        else player.release { playerReleased.complete(Unit) }
+        scope.launch {
+            previousSurface?.await()
+            playerReleased.await()
+            if (mirrorServer === server) server.start(scope) else server.stop()
+        }
         return server.dataPort
     }
 
@@ -494,9 +513,9 @@ class AirPlayReceiver(
 
     /** Stops ONLY the mirror video stream (macOS dynamic-stream TEARDOWN) — audio keeps playing. */
     private fun stopMirrorVideo() {
-        if (urlVideoPlayer != null) return
         mirrorServer?.stop()
         mirrorServer = null
+        if (urlVideoPlayer != null) return
         videoPlaying = false
         emitNowPlaying()   // audio may still be playing → now-playing card can take over
         if (audioPlaying) emitState(ProtocolState.CONNECTED) { !videoPlaying && audioPlaying }
@@ -511,13 +530,9 @@ class AirPlayReceiver(
     fun refreshVideoSurface() { urlVideoPlayer?.attachSurface() }
 
     private fun startUrlVideo(url: String, startFraction: Double, seconds: Double?, fetch: ((String) -> ByteArray)?) {
-        mirrorServer?.stop()
-        mirrorServer = null
-        audioServer?.stop()
-        audioServer = null
+        val mirror = mirrorServer
         urlVideoPlayer?.release()
         videoPlaying = true
-        audioPlaying = false
         emitNowPlaying()
         onSenderNameChanged("AirPlay")
         val player = AirPlayVideoPlayer(
@@ -538,17 +553,26 @@ class AirPlayReceiver(
         )
         urlVideoPlayer = player
         emitState(ProtocolState.CONNECTING) { urlVideoPlayer === player && player.renderedSurface == null }
-        player.play(url, startFraction, seconds, fetch)
+        val surfaceReleased = mirror?.suspendForMedia()
+        scope.launch {
+            surfaceReleased?.await()
+            if (urlVideoPlayer === player) player.play(url, startFraction, seconds, fetch)
+        }
     }
 
-    /** Stops AirPlay video URL playback (POST /stop or end-of-media) and ends the session. */
+    /** Releases URL playback, then gives the retained mirror its Surface back. */
     private fun stopUrlVideo() {
-        if (urlVideoPlayer == null) return
+        val player = urlVideoPlayer ?: return
         rtspHandler?.videoState("stopped")
-        urlVideoPlayer?.release()
         urlVideoPlayer = null
-        onStreamingStopped()
-        Logger.i("AirPlay URL video stopped")
+        val mirror = mirrorServer
+        player.release {
+            if (urlVideoPlayer == null && mirror != null && mirrorServer === mirror) {
+                mirror.resumeMirror()
+                emitState(ProtocolState.CONNECTING) { mirrorServer === mirror && mirror.renderedSurface == null && urlVideoPlayer == null }
+            }
+        }
+        if (mirror == null) onStreamingStopped()
     }
 
     /** Clears the video NAL callback, closes the audio socket, and releases media components. */

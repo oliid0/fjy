@@ -10,6 +10,49 @@ const ink = (x: number): InkInput => [
     [x + 100, 160],
   ],
 ];
+it.each(["function", "calculation"])(
+  "keeps adjacent %s requests independent after recognition starts or fails",
+  (mode) => {
+    const requests = new InkRequests();
+    const a = { id: "a", points: ink(100)[0] };
+    const b = { id: "b", points: ink(240)[0] };
+    const c = { id: "c", points: ink(380)[0] };
+    const id = (item: typeof a) => item.id;
+    const strokes = (items: readonly typeof a[]) =>
+      items.map((item) => item.points);
+    const first = new AbortController();
+    requests.reserve(first, [a.id], [a.points], mode);
+    requests.start(first);
+    requests.revise([b.points], mode);
+    expect(first.signal.aborted).toBe(false);
+    expect(requests.source([a, b], mode, id, strokes)).toEqual([b]);
+    const second = new AbortController();
+    requests.reserve(second, [b.id], [b.points], mode);
+    requests.start(second);
+    requests.finish(first, true);
+    requests.revise([c.points], mode);
+    expect(requests.source([a, b, c], mode, id, strokes)).toEqual([c]);
+    expect(first.signal.aborted).toBe(false);
+    expect(second.signal.aborted).toBe(false);
+    expect(requests.available(a.id)).toBe(false);
+    expect(requests.busy).toBe(true);
+    requests.finish(second, false);
+    expect(requests.busy).toBe(false);
+    // Modifying/removing an expression's actual source still invalidates it.
+    requests.prune([b.id, c.id]);
+    expect(first.signal.aborted).toBe(true);
+  },
+);
+it.each(["function", "calculation"])(
+  "still combines unfinished %s glyphs before recognition starts",
+  (mode) => {
+    const requests = new InkRequests();
+    const first = new AbortController();
+    requests.reserve(first, ["a"], ink(100), mode);
+    requests.revise(ink(205), mode);
+    expect(first.signal.aborted).toBe(true);
+  },
+);
 it.each(["text", "language"])(
   "keeps detached %s strokes in one writing region and leaves a distant word independent",
   (mode) => {

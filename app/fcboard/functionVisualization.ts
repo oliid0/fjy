@@ -10,6 +10,8 @@ export const functionColors = ["#2563eb", "#f97316", "#eab308"] as const;
 export type FunctionStroke = {
   width?: number;
   strokeStyle?: "solid" | "dashed" | "dotted";
+  /** Scene size / canonical plot size, excluding viewport zoom and DPR. */
+  scale?: number;
 };
 const ticks = (from: number, to: number) => {
   const raw = (to - from) / 8;
@@ -100,14 +102,17 @@ export const drawFunctionGraph = (
   context.beginPath();
   context.rect(40, 20, width, height);
   context.clip();
+  const scale = stroke.scale && stroke.scale > 0 ? stroke.scale : 1;
   const lineWidth = Math.max(0.5, stroke.width ?? 2);
-  context.lineWidth = lineWidth;
+  // Element widths are already in scene units. The canvas transform applies
+  // the plot's fit/resize once; undo it here instead of shrinking widths twice.
+  context.lineWidth = lineWidth / scale;
   // Match the existing ordinary shape dash patterns (element/shape.ts).
   context.setLineDash(
     stroke.strokeStyle === "dashed"
-      ? [8, 8 + lineWidth]
+      ? [8 / scale, (8 + lineWidth) / scale]
       : stroke.strokeStyle === "dotted"
-      ? [1.5, 6 + lineWidth]
+      ? [1.5 / scale, (6 + lineWidth) / scale]
       : [],
   );
   context.lineCap = "round";

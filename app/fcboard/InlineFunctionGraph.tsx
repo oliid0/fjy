@@ -36,6 +36,7 @@ export const InlineFunctionGraph = ({
   color,
   strokeWidth = 2,
   strokeStyle = "solid",
+  strokeScale = 1,
   onCommit,
   onError,
   onTranslate,
@@ -51,6 +52,7 @@ export const InlineFunctionGraph = ({
   color: string;
   strokeWidth?: number;
   strokeStyle?: "solid" | "dashed" | "dotted";
+  strokeScale?: number;
   onCommit: (plot: Plot) => void;
   onError: (message: string) => void;
   onTranslate?: (change: GraphTranslation) => void;
@@ -68,6 +70,7 @@ export const InlineFunctionGraph = ({
     color,
     strokeWidth,
     strokeStyle,
+    strokeScale,
     onCommit,
     onError,
     onTranslate,
@@ -81,6 +84,7 @@ export const InlineFunctionGraph = ({
     color,
     strokeWidth,
     strokeStyle,
+    strokeScale,
     onCommit,
     onError,
     onTranslate,
@@ -156,6 +160,7 @@ export const InlineFunctionGraph = ({
         {
           width: props.current.strokeWidth,
           strokeStyle: props.current.strokeStyle,
+          scale: props.current.strokeScale,
         },
       );
       if (data.intersections.length) {
@@ -273,6 +278,7 @@ export const InlineFunctionGraph = ({
     plot,
     color,
     strokeWidth,
+    strokeScale,
     strokeStyle,
     displaySize?.width,
     displaySize?.height,

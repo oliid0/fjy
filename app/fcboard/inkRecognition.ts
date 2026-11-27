@@ -8,7 +8,7 @@ import { currentSettings } from "./settings";
 import { mathNotation } from "./mathNotation";
 import { explainLanguage, translateLanguageImage } from "./languageStudy";
 import { columnCalculation } from "./columnCalculation";
-import { calculationInk } from "./calculationInk";
+import { calculationInk, numericSumCandidate } from "./calculationInk";
 import { calculateAsync } from "./mathComputation";
 import { fitInkShape, isShapeClosed } from "./shapeRecognition";
 import { hasDigitalInk, recognizeNativeInk } from "./digitalInk";
@@ -172,7 +172,7 @@ export async function recognizeInkContent(
         : languageHint
         ? [languageHint]
         : [];
-    const text = await recognizeHandwriting(
+    const transcription = await recognizeHandwriting(
       capture,
       signal,
       () => {},
@@ -182,6 +182,7 @@ export async function recognizeInkContent(
         : async (candidate) => {
             try {
               if (mode === "calculation") {
+                candidate = numericSumCandidate(strokes, candidate);
                 const latex = /\\[A-Za-z]+/.test(candidate);
                 const parsed = latex
                   ? undefined
@@ -212,6 +213,10 @@ export async function recognizeInkContent(
       ...recognitionOptions,
     );
     signal.throwIfAborted();
+    const text =
+      mode === "calculation"
+        ? numericSumCandidate(strokes, transcription)
+        : transcription;
     if (!text.trim() || text.length > 4000) {
       throw new Error("Invalid handwriting result");
     }

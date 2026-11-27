@@ -126,7 +126,8 @@ export default defineConfig(({ mode, command }) => {
               return "fcboard-symbolic";
             }
             if (
-              id.includes("packages/fcboard/locales") &&
+              id.includes("packages/fcboard/locales/") &&
+              !(nativeInference && id.includes("/locales/data/")) &&
               id.match(/en.json|percentages.json/) === null
             ) {
               const index = id.indexOf("locales/");

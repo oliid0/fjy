@@ -127,23 +127,12 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
       }))
     : api.getSceneElements().map((item) => {
         const graph = item.customData?.fcPlot;
-        const signature = item.customData?.fcSelectionSource;
-        // Earlier board files recorded id:version pairs alongside the plot.
-        const legacy =
-          typeof signature === "string" &&
-          /^[^,:]+:\d+(?:,[^,:]+:\d+)*$/.test(signature)
-            ? signature
-                .split(",")
-                .map((pair) => pair.slice(0, pair.lastIndexOf(":")))
-            : undefined;
         return {
           id: item.id,
           locked: item.locked,
           data: graph && {
             plot: graph.plot as Plot,
-            sourceIds: (graph.sourceIds ?? legacy) as
-              | readonly string[]
-              | undefined,
+            sourceIds: graph.sourceIds as readonly string[] | undefined,
           },
         };
       });
@@ -160,12 +149,18 @@ export const functionSelection = (api: FcboardImperativeAPI) => {
     if (
       graph.locked ||
       !graph.data ||
-      !ids.every((id) => byId.has(id) && !linkedInputs.has(id))
+      ids.some((id) => byId.has(id) && linkedInputs.has(id))
     ) {
       return;
     }
     const linked = { id: graph.id, plot: graph.data.plot, sourceIds: ids };
-    groups.push(ids.map((id) => ({ ...byId.get(id)!, linked })));
+    // Any selected source stroke identifies the recognized expression. Keep
+    // its complete provenance without selecting/deleting unselected ink.
+    groups.push(
+      ids
+        .filter((id) => byId.has(id))
+        .map((id) => ({ ...byId.get(id)!, linked })),
+    );
     ids.forEach((id) => linkedInputs.add(id));
   }
   const remaining = inputs.filter((input) => !linkedInputs.has(input.id));

@@ -59,7 +59,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import { validatedPlot } from "./mathRecognition";
 import { FunctionGraphObject } from "./FunctionGraphObject";
-import { functionGraphImage } from "./functionVisualization";
+import { functionGraphImage, plotSize } from "./functionVisualization";
 
 import { TransientMessage } from "./TransientMessage";
 
@@ -1497,6 +1497,9 @@ export const FilePreview = ({
                                       : stroke.width,
                                   strokeStyle: (args.strokeStyle ??
                                     stroke.strokeStyle) as InkStroke["strokeStyle"],
+                                  scale:
+                                    (stroke.imageWidth || plotSize.width) /
+                                    plotSize.width,
                                 },
                               ),
                             }
@@ -3732,6 +3735,9 @@ export const FilePreview = ({
                     plot={stroke.plot.plot}
                     color={stroke.color}
                     strokeWidth={stroke.width}
+                    strokeScale={
+                      (stroke.imageWidth || plotSize.width) / plotSize.width
+                    }
                     strokeStyle={stroke.strokeStyle}
                     interactive={!stroke.locked && !erase}
                     allowRange={
@@ -3842,6 +3848,9 @@ export const FilePreview = ({
                                 image: functionGraphImage(plot, item.color, {
                                   width: item.width,
                                   strokeStyle: item.strokeStyle,
+                                  scale:
+                                    (item.imageWidth || plotSize.width) /
+                                    plotSize.width,
                                 }),
                                 plot: { ...item.plot, plot },
                               }

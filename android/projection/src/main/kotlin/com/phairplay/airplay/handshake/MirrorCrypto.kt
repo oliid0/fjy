@@ -1,6 +1,5 @@
 package com.airplay.airplay.handshake
 
-import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -40,20 +39,17 @@ object MirrorCrypto {
      * mirror video payload — into Annex-B (00 00 00 01 start codes) that MediaCodec expects.
      */
     fun lengthPrefixedToAnnexB(data: ByteArray): ByteArray {
-        val out = ByteArrayOutputStream(data.size + 16)
         var i = 0
         while (i + 4 <= data.size) {
             val len = ((data[i].toInt() and 0xFF) shl 24) or
                 ((data[i + 1].toInt() and 0xFF) shl 16) or
                 ((data[i + 2].toInt() and 0xFF) shl 8) or
                 (data[i + 3].toInt() and 0xFF)
-            i += 4
-            if (len <= 0 || len > data.size - i) return ByteArray(0)
-            out.write(START_CODE)
-            out.write(data, i, len)
-            i += len
+            if (len <= 0 || len > data.size - i - 4) return ByteArray(0)
+            START_CODE.copyInto(data, i)
+            i += 4 + len
         }
-        return if (i == data.size) out.toByteArray() else ByteArray(0)
+        return if (i == data.size) data else ByteArray(0)
     }
 
     val START_CODE = byteArrayOf(0, 0, 0, 1)

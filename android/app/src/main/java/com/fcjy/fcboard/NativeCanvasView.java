@@ -5,7 +5,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -14,15 +13,13 @@ import android.view.Choreographer;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-/** A standard Android display surface. Ink buffers bypass WebView/HWUI frame
- * submission; only damaged pixels are composed, on this surface's own looper. */
+/** Retained ink is submitted to an Android hardware Surface on its own looper.
+ * Input never waits for a full-screen software buffer clear/copy. */
 abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Callback {
     private final Object lifecycle = new Object();
-    private final Rect damage = new Rect();
-    private final Rect sampleDamage = new Rect();
     private HandlerThread displayThread;
     private Handler display;
-    private boolean available, scheduled, full = true;
+    private boolean available, scheduled, dirty = true;
     private boolean firstPost = true;
 
     NativeCanvasView(Context context) {
@@ -39,61 +36,65 @@ abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Cal
     protected void onFramePosted() { }
 
     final void requestRender() {
-        synchronized (lifecycle) { full = true; schedule(); }
+        synchronized (lifecycle) { dirty = true; schedule(); }
     }
 
     final void requestRender(RectF bounds) {
         synchronized (lifecycle) {
-            bounds.roundOut(sampleDamage);
-            if (sampleDamage.intersect(0, 0, getWidth(), getHeight())) damage.union(sampleDamage);
-            schedule();
+            if (bounds.left < getWidth() && bounds.top < getHeight() && bounds.right > 0 && bounds.bottom > 0) {
+                dirty = true;
+                schedule();
+            }
         }
     }
 
     private void schedule() {
-        if (!available || scheduled || display == null || (!full && damage.isEmpty())) return;
+        if (!available || scheduled || display == null || !dirty) return;
         scheduled = true;
         // An idle Surface can start the new tip now. Do not add a whole
-        // refresh interval between an unbuffered MotionEvent and lockCanvas.
+        // refresh interval between an unbuffered MotionEvent and presentation.
         display.post(this::present);
     }
 
     private void present() {
-        Rect dirty;
         synchronized (lifecycle) {
             if (!available) { scheduled = false; return; }
-            dirty = full ? new Rect(0, 0, getWidth(), getHeight()) : new Rect(damage);
-            full = false;
-            damage.setEmpty();
+            dirty = false;
         }
         Canvas canvas = null;
         android.os.Trace.beginSection("NativeInk.present");
         try {
-            // lockCanvas may expand dirty when a buffer is new. Paint the actual
-            // returned clip, never assume its old pixels already exist.
-            canvas = getHolder().lockCanvas(dirty);
+            android.os.Trace.beginSection("NativeInk.acquire");
+            try { canvas = getHolder().lockHardwareCanvas(); }
+            finally { android.os.Trace.endSection(); }
             if (canvas != null) {
+                // Hardware buffers do not preserve previous pixels. Clear and
+                // replay the retained tiles for the entire frame (API 26+).
                 canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-                paintCanvas(canvas);
-            } else synchronized(lifecycle){full=true;}
+                android.os.Trace.beginSection("NativeInk.record");
+                try { paintCanvas(canvas); }
+                finally { android.os.Trace.endSection(); }
+            } else synchronized(lifecycle){dirty=true;}
         } catch (IllegalArgumentException | IllegalStateException unavailable) {
             synchronized (lifecycle) {
                 if (available) android.util.Log.w("NativeInk", "Surface presentation unavailable", unavailable);
-                full = true;
+                dirty = true;
             }
         } finally {
             try {
                 if (canvas != null) {
-                    getHolder().unlockCanvasAndPost(canvas);
+                    android.os.Trace.beginSection("NativeInk.submit");
+                    try { getHolder().unlockCanvasAndPost(canvas); }
+                    finally { android.os.Trace.endSection(); }
                     onFramePosted();
                     if(firstPost){firstPost=false;MainActivity.startup("surface.posted");}
                 }
             } catch (IllegalArgumentException | IllegalStateException unavailable) {
-                synchronized(lifecycle){full=true;}
+                synchronized(lifecycle){dirty=true;}
             } finally {
                 android.os.Trace.endSection();
                 synchronized (lifecycle) {
-                    if (available && (full || !damage.isEmpty())) {
+                    if (available && dirty) {
                         // Input arrived during this render (or the buffer was
                         // unavailable). Coalesce the backlog into one frame.
                         Choreographer.getInstance().postFrameCallback(time -> present());
@@ -111,7 +112,7 @@ abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Cal
             displayThread.start();
             display = new Handler(displayThread.getLooper());
             available = true;
-            full = true;
+            dirty = true;
             schedule();
         }
     }
@@ -127,7 +128,7 @@ abstract class NativeCanvasView extends SurfaceView implements SurfaceHolder.Cal
             if (display != null) display.removeCallbacksAndMessages(null);
             display = null;
             scheduled = false;
-            full = true;
+            dirty = true;
         }
         // SurfaceHolder serializes destruction with a locked canvas. Joining
         // outside the state/lifecycle locks lets an in-flight frame finish.

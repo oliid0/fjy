@@ -73,6 +73,34 @@ public class NativeInputTest {
             assertEquals("pen",events.get(1).optString("mode"));
         });
     }
+    @Test public void fiveContinuousFingersKeepEveryPixelAcrossTilesHistoryAndAnotherFingerLift() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            for (boolean brush : new boolean[]{false,true}) {
+                List<JSObject> events=new ArrayList<>(); NativeInkView view=surface(events,"pen");
+                view.layout(0,0,600,200);
+                JSObject appearance=new JSObject(); appearance.put("pen",brush?"brush":"hard");
+                view.configure("five",true,0,0,1,4,1,1,"#ff0000",false,36,Collections.emptyList(),null,0,"pen",true,60,appearance);
+                int[] all={0,1,2,3,4};
+                for(int count=1;count<=5;count++) fingers(view,count==1?MotionEvent.ACTION_DOWN:MotionEvent.ACTION_POINTER_DOWN|((count-1)<<8),java.util.Arrays.copyOf(all,count),20,false);
+                Bitmap pixels=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);
+                try {
+                    for(int x=60;x<=540;x+=40){
+                        fingers(view,MotionEvent.ACTION_MOVE,all,x,true);
+                        pixels.eraseColor(Color.TRANSPARENT);view.paintCanvas(new Canvas(pixels));
+                        for(int id:all)for(int col=20;col<=x+20;col++)assertTrue("Active finger "+id+" gap at "+col+" brush="+brush,Color.alpha(pixels.getPixel(col,20+id*36))>0);
+                    }
+                    fingers(view,MotionEvent.ACTION_POINTER_UP|(2<<8),all,560,false);
+                    int[] remaining={0,1,3,4};
+                    fingers(view,MotionEvent.ACTION_MOVE,remaining,580,false);
+                    pixels.eraseColor(Color.TRANSPARENT);view.paintCanvas(new Canvas(pixels));
+                    for(int id:remaining)for(int col=20;col<=580;col++)assertTrue("Another finger's UP must preserve finger "+id+" at "+col,Color.alpha(pixels.getPixel(col,20+id*36))>0);
+                    for(int count=4;count>=1;count--)fingers(view,count==1?MotionEvent.ACTION_UP:MotionEvent.ACTION_POINTER_UP|((count-1)<<8),java.util.Arrays.copyOf(remaining,count),580,false);
+                    assertEquals(10,events.size());
+                    for(JSObject event:events){assertEquals("pen",event.optString("mode"));assertNotEquals("cancel",event.optString("phase"));}
+                } finally { pixels.recycle(); }
+            }
+        });
+    }
     @Test public void anInitialBroadReportCanReturnToWritingWithoutLosingItsOrigin() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(()->{
             List<JSObject> events=new ArrayList<>();NativeInkView view=surface(events,"pen");
@@ -295,6 +323,43 @@ public class NativeInputTest {
             } finally { pixels.recycle(); }
         });
     }
+    @Test public void clippedCoverageAndCancelledErasuresKeepTheCorrectTilePixels() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            NativeInkRaster raster=new NativeInkRaster(600,200);
+            android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);paint.setStrokeWidth(20);
+            android.graphics.Path body=new android.graphics.Path();body.moveTo(20,60);body.lineTo(580,60);
+            raster.commit(body,paint);raster.finish(new android.graphics.Path(),paint,0);
+            android.graphics.Path first=new android.graphics.Path();first.addRect(230,40,280,80,android.graphics.Path.Direction.CW);
+            android.graphics.Path second=new android.graphics.Path();second.addRect(500,40,540,80,android.graphics.Path.Direction.CW);
+            raster.eraseFinished("first",first,new android.graphics.RectF(230,40,280,80));
+            raster.eraseFinished("second",second,new android.graphics.RectF(500,40,540,80));
+            paint.setColor(Color.RED);paint.setAlpha(110);
+            Bitmap pixels=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);
+            try {
+                Canvas canvas=new Canvas(pixels);
+                for(int left=0;left<600;left+=256){
+                    int saved=canvas.save();canvas.clipRect(left,0,Math.min(600,left+256),200);
+                    raster.draw(canvas,paint,new android.graphics.Path(),1);canvas.restoreToCount(saved);
+                }
+                assertEquals(110,Color.alpha(pixels.getPixel(40,60)));
+                assertEquals(0,Color.alpha(pixels.getPixel(255,60)));
+                assertEquals(0,Color.alpha(pixels.getPixel(256,60)));
+                assertEquals(0,Color.alpha(pixels.getPixel(520,60)));
+                raster.cancelFinishedErase("first");
+                // Reuse the cancelled tile in another erase, then undo the other gesture.
+                raster.eraseFinished("third",first,new android.graphics.RectF(230,40,280,80));
+                raster.cancelFinishedErase("second");
+                pixels.eraseColor(Color.TRANSPARENT);raster.draw(canvas,paint,new android.graphics.Path(),2);
+                assertEquals(0,Color.alpha(pixels.getPixel(256,60)));
+                assertEquals(110,Color.alpha(pixels.getPixel(520,60)));
+                raster.cancelFinishedErase("third");
+                pixels.eraseColor(Color.TRANSPARENT);raster.draw(canvas,paint,new android.graphics.Path(),3);
+                assertEquals(110,Color.alpha(pixels.getPixel(255,60)));
+                assertEquals(110,Color.alpha(pixels.getPixel(256,60)));
+            } finally { pixels.recycle(); }
+        });
+    }
     @Test public void singleContactModeStillUsesNativeInkWithoutAcceptingASecondWriter() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<JSObject> events=new ArrayList<>(); NativeInkView view=surface(events,"pen"); view.setMultiStroke(false);
@@ -405,6 +470,21 @@ public class NativeInputTest {
         return view;
     }
     private static final java.util.Map<Integer,Long> downTimes=new java.util.HashMap<>();
+    private static void fingers(NativeInkView view,int action,int[] ids,float x,boolean batch) {
+        MotionEvent.PointerProperties[] properties=new MotionEvent.PointerProperties[ids.length];
+        MotionEvent.PointerCoords[] points=new MotionEvent.PointerCoords[ids.length];
+        for(int i=0;i<ids.length;i++){
+            properties[i]=new MotionEvent.PointerProperties();properties[i].id=ids[i];properties[i].toolType=MotionEvent.TOOL_TYPE_FINGER;
+            points[i]=new MotionEvent.PointerCoords();points[i].x=x;points[i].y=20+ids[i]*36;
+            points[i].pressure=.5f;points[i].touchMajor=points[i].touchMinor=2;
+        }
+        long now=SystemClock.uptimeMillis();if(action==MotionEvent.ACTION_DOWN)downTimes.put(11,now);
+        MotionEvent event=MotionEvent.obtain(downTimes.get(11),now,action,ids.length,properties,points,0,0,1,1,11,0,InputDevice.SOURCE_TOUCHSCREEN,0);
+        try {
+            if(batch){for(MotionEvent.PointerCoords point:points)point.x+=20;event.addBatch(now+1,points,0);}
+            assertTrue(view.onTouchEvent(event));
+        } finally { event.recycle(); }
+    }
     private static void touch(NativeInkView view, int action, float x, float y) {
         long now = SystemClock.uptimeMillis();
         if(action==MotionEvent.ACTION_DOWN) downTimes.put(0,now);

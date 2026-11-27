@@ -15,7 +15,7 @@ import type { FcboardElementSkeleton } from "@fcboard/element/transform";
 
 import type { FcboardElement, FileId } from "@fcboard/element/types";
 
-import type { DataURL, FcboardImperativeAPI } from "@fcboard/fcboard/types";
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { project3D, samplePlot, sampleInequality } from "./math";
 import { classroomCommands } from "./commands";
@@ -640,7 +640,6 @@ export const drawPlot = (
 ) => {
   if (!plot.surface && !plot.relation) {
     const color = functionColors[0];
-    const image = functionGraphImage(plot, color);
     return insertPlot(
       api,
       plot,
@@ -662,7 +661,7 @@ export const drawPlot = (
       sourceSignature,
       keepTool,
       sourceBounds,
-      image,
+      true,
       sourceIds,
     );
   }
@@ -828,7 +827,7 @@ const insertPlot = (
   sourceSignature?: string,
   keepTool = false,
   sourceBounds?: ContentRect,
-  image?: DataURL,
+  raster = false,
   sourceIds?: readonly string[],
 ) => {
   const documentLayout = classroomCommands.read("document.layout") as
@@ -869,13 +868,21 @@ const insertPlot = (
           id: plotId,
           ...(sourceIds?.length ? { sourceIds } : {}),
           plot,
-          ...(image ? { renderer: "canvas", layer: "floating" } : {}),
+          ...(raster ? { renderer: "canvas", layer: "floating" } : {}),
           position: fitted.center,
           origin: { x: shape.x || 0, y: shape.y || 0 },
         },
       },
     };
   });
+  const first = shapes[0];
+  const image =
+    raster && first.type === "image"
+      ? functionGraphImage(plot, first.strokeColor, {
+          width: first.strokeWidth,
+          scale: (first.width || plotSize.width) / plotSize.width,
+        })
+      : undefined;
   if (classroomCommands.has("document.plot")) {
     void classroomCommands.execute({
       name: "document.plot",
@@ -1046,7 +1053,11 @@ export const styleFunctionPlots = (
         dataURL: functionGraphImage(
           element.customData.fcPlot.plot,
           strokeColor,
-          { width: strokeWidth, strokeStyle },
+          {
+            width: strokeWidth,
+            strokeStyle,
+            scale: element.width / plotSize.width,
+          },
         ),
         mimeType: "image/png",
         created: Date.now(),
@@ -1097,6 +1108,7 @@ export const updateFunctionGraph = (
   const image = functionGraphImage(plot, graph.image.color, {
     width: graph.image.strokeWidth,
     strokeStyle: graph.image.strokeStyle,
+    scale: graph.image.width / plotSize.width,
   });
   if (classroomCommands.has("document.plot.update")) {
     void classroomCommands

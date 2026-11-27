@@ -10,6 +10,7 @@ import android.graphics.Shader;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,7 +37,7 @@ final class NativeInkRaster {
         final RectF previewDamage = new RectF();
         final RectF previousTip = new RectF();
         Bitmap preview, erased;
-        Canvas previewCanvas;
+        Canvas previewCanvas, erasedCanvas;
         Shader erasedMask, erasedColor;
         Shader stableMask, previewMask, stableColor, previewColor, pigment;
         long revision, previewRevision = -1, tipRevision = -1;
@@ -69,6 +70,7 @@ final class NativeInkRaster {
     private final int width, height;
     private final RectF paintedBounds = new RectF();
     private final RectF tileBounds = new RectF();
+    private final Rect visibleBounds = new Rect();
     NativeInkRaster(int width, int height) {
         this.width = Math.max(1, width); this.height = Math.max(1, height);
         mask.setColor(Color.WHITE);
@@ -123,10 +125,12 @@ final class NativeInkRaster {
             for (int x=Math.max(0,(int)Math.floor(area.left/SIZE)); x<=right; x++) {
                 Tile tile = tiles.get(NativeScene.key(x,y));
                 if (tile == null || !RectF.intersects(tile.painted, area)) continue;
-                if (tile.erased == null) tile.erased = tile.stable.copy(Bitmap.Config.ALPHA_8,true);
-                Canvas canvas = new Canvas(tile.erased);
-                canvas.translate(-tile.x,-tile.y);
-                canvas.drawPath(cut,clear);
+                if (tile.erased == null) {
+                    tile.erased = tile.stable.copy(Bitmap.Config.ALPHA_8,true);
+                    tile.erasedCanvas = new Canvas(tile.erased);
+                    tile.erasedCanvas.translate(-tile.x,-tile.y);
+                }
+                tile.erasedCanvas.drawPath(cut,clear);
             }
         }
     }
@@ -134,6 +138,7 @@ final class NativeInkRaster {
         if (pendingErasures.remove(gesture) == null) return;
         for (Tile tile : tiles.values()) {
             tile.erased = null;
+            tile.erasedCanvas = null;
             tile.erasedMask = tile.erasedColor = null;
         }
         RectF area = new RectF();
@@ -176,8 +181,13 @@ final class NativeInkRaster {
         Shader pigment = color.getShader();
         image.setColor(pigment == null ? color.getColor() : Color.WHITE);
         image.setAlpha(color.getAlpha());
-        for (Tile tile : tiles.values()) {
-            if (target.quickReject(tile.x, tile.y, tile.x + SIZE, tile.y + SIZE, Canvas.EdgeType.AA)) continue;
+        if (!target.getClipBounds(visibleBounds)) return;
+        int lastCol = Math.min(width - 1, visibleBounds.right - 1) / SIZE;
+        int lastRow = Math.min(height - 1, visibleBounds.bottom - 1) / SIZE;
+        for (int row = Math.max(0, visibleBounds.top) / SIZE; row <= lastRow; row++) {
+          for (int col = Math.max(0, visibleBounds.left) / SIZE; col <= lastCol; col++) {
+            Tile tile = tiles.get(NativeScene.key(col, row));
+            if (tile == null) continue;
             boolean live = !tip.isEmpty() && tile.x <= area.right && tile.x + SIZE >= area.left && tile.y <= area.bottom && tile.y + SIZE >= area.top;
             if (live) {
                 if (tile.preview == null) {
@@ -226,6 +236,7 @@ final class NativeInkRaster {
                 target.drawRect(paintedBounds, image);
             }
             target.restoreToCount(scope);
+          }
         }
     }
 }

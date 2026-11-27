@@ -28,6 +28,49 @@ public class NativeSceneTest {
         NativeSceneView view=new NativeSceneView(context);new FrameLayout(context).addView(view);view.layout(0,0,600,200);return view;
     }
     private static Bitmap pixels(NativeSceneView view){Bitmap bitmap=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);view.paintCanvas(new Canvas(bitmap));return bitmap;}
+    @Test public void hardwareSurfaceReplaysRetainedAlphaAndGradientAfterSmallDamage() throws Exception {
+        java.util.concurrent.CountDownLatch first=new java.util.concurrent.CountDownLatch(1),second=new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger phase=new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicBoolean accelerated=new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicReference<NativeCanvasView> target=new java.util.concurrent.atomic.AtomicReference<>();
+        try(androidx.test.core.app.ActivityScenario<MainActivity> scenario=androidx.test.core.app.ActivityScenario.launch(MainActivity.class)){
+            scenario.onActivity(activity->{
+                NativeInkRaster ink=new NativeInkRaster(600,200);
+                Paint color=new Paint(Paint.ANTI_ALIAS_FLAG);color.setStyle(Paint.Style.STROKE);color.setStrokeWidth(20);
+                Path line=new Path();line.moveTo(20,60);line.lineTo(580,75);ink.commit(line,color);
+                color.setAlpha(110);color.setShader(new LinearGradient(0,0,600,0,Color.RED,Color.BLUE,Shader.TileMode.CLAMP));
+                NativeCanvasView view=new NativeCanvasView(activity){
+                    private int painted;
+                    @Override protected void paintCanvas(Canvas canvas){
+                        accelerated.set(canvas.isHardwareAccelerated());painted=phase.get();
+                        ink.draw(canvas,color,new Path(),painted);
+                        Paint marker=new Paint();marker.setColor(Color.BLUE);canvas.drawRect(500,110,540,150,marker);
+                        marker.setColor(painted==0?Color.RED:Color.GREEN);canvas.drawRect(20,20,40,40,marker);
+                    }
+                    @Override protected void onFramePosted(){if(painted==0)first.countDown();else second.countDown();}
+                };
+                target.set(view);activity.addContentView(view,new android.view.ViewGroup.LayoutParams(600,200));
+            });
+            assertTrue("Initial hardware frame is posted",first.await(15,java.util.concurrent.TimeUnit.SECONDS));
+            scenario.onActivity(activity->{phase.set(1);target.get().requestRender(new RectF(20,20,40,40));});
+            assertTrue("Damaged frame is posted",second.await(10,java.util.concurrent.TimeUnit.SECONDS));
+            Bitmap output=Bitmap.createBitmap(600,200,Bitmap.Config.ARGB_8888);
+            try{
+                java.util.concurrent.CountDownLatch copied=new java.util.concurrent.CountDownLatch(1);
+                java.util.concurrent.atomic.AtomicInteger status=new java.util.concurrent.atomic.AtomicInteger(-1);
+                android.view.PixelCopy.request(target.get().getHolder().getSurface(),output,result->{status.set(result);copied.countDown();},new android.os.Handler(android.os.Looper.getMainLooper()));
+                assertTrue(copied.await(10,java.util.concurrent.TimeUnit.SECONDS));assertEquals(android.view.PixelCopy.SUCCESS,status.get());
+                assertTrue("Surface composition uses the GPU",accelerated.get());
+                assertEquals(Color.GREEN,output.getPixel(30,30));assertEquals("Whole frame is replayed after a small invalidation",Color.BLUE,output.getPixel(520,130));
+                assertEquals(110,Color.alpha(output.getPixel(40,61)),1);assertEquals(110,Color.alpha(output.getPixel(560,74)),1);
+                assertTrue(Color.red(output.getPixel(40,61))>Color.blue(output.getPixel(40,61)));
+                assertTrue(Color.blue(output.getPixel(560,74))>Color.red(output.getPixel(560,74)));
+                boolean antialiased=false;
+                for(int y=49;y<87&&!antialiased;y++)for(int x=30;x<570;x++){int alpha=Color.alpha(output.getPixel(x,y));if(alpha>0&&alpha<109){antialiased=true;break;}}
+                assertTrue("Subpixel ink edges survive hardware composition",antialiased);
+            }finally{output.recycle();}
+        }
+    }
     @Test public void brushStampsUseExactNativeEllipsesAndPreserveOpacity()throws Exception{
         JSONObject brush=ink("brush","a0","","#ff0000",true,0).put("strokeWidth",0)
             .put("brush",new JSONObject().put("angle",0).put("stamps",new JSONArray("[100,60,40,110,60,40]")));

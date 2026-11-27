@@ -1,7 +1,14 @@
 import { MaterialSelect } from "@fcboard/fcboard/components/MaterialSelect";
 import { t, useI18n } from "@fcboard/fcboard/i18n";
 import { Capacitor } from "@capacitor/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { CaptureUpdateAction, getCommonBounds } from "@fcboard/element";
 
 import type { FcboardImperativeAPI, UIOptions } from "@fcboard/fcboard/types";
@@ -46,7 +53,6 @@ import {
   objectSelection,
   updateFunctionGraph,
 } from "./board";
-import { FilePreview } from "./FilePreview";
 import { BoardSwitcher } from "./BoardSwitcher";
 import { BottomBarActions } from "./BottomBarActions";
 import { NativeInkInteraction } from "./NativeInkInteraction";
@@ -96,7 +102,6 @@ import { startRealtimeSpeech } from "./realtimeSpeech";
 import { startDuplexSpeech } from "./duplexSpeech";
 
 import { VoiceOrb } from "./VoiceOrb";
-import { RecordingPanel } from "./RecordingPanel";
 import { SummaryText } from "./SummaryText";
 import { autoSaveRecording } from "./recordingExport";
 import { RecordingWidget } from "./RecordingWidget";
@@ -120,7 +125,6 @@ import { SelectionActions } from "./SelectionActions";
 import { IntegratedSearch } from "./IntegratedSearch";
 import { LanguagePanel } from "./LanguagePanel";
 import { Spotlight } from "./Spotlight";
-import { BoardSettings } from "./BoardSettings";
 import { recognizeHandwriting } from "./ocr";
 import { trimLocalInference } from "./localInferenceQueue";
 import { boardInk, clipInk } from "./digitalInk";
@@ -144,6 +148,17 @@ import type { LocalSpeechHandle } from "./localSpeech";
 import type { Settings } from "./settings";
 import type { VoiceTurns } from "./voiceTurns";
 import type { RecordingPhase } from "./RecordingPanel";
+
+const BoardSettings = lazy(() =>
+  import("./BoardSettings").then(({ BoardSettings }) => ({
+    default: BoardSettings,
+  })),
+);
+const RecordingPanel = lazy(() =>
+  import("./RecordingPanel").then(({ RecordingPanel }) => ({
+    default: RecordingPanel,
+  })),
+);
 
 type Panel = "plot" | "record" | "files" | "settings" | "summary";
 const titles = {
@@ -305,10 +320,13 @@ export const Classroom = ({
   const [activeId, setActiveId] = useState("");
   const [urls, setUrls] = useState<string[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const [preview, setPreview] = useState<File | null>(null);
+  const [preview, setPreview] = useState<{
+    file: File;
+    View: typeof import("./FilePreview").FilePreview;
+  } | null>(null);
   const previewRef = useRef<File | null>(null);
   const recentFiles = useRef(new Map<string, File>());
-  previewRef.current = preview;
+  previewRef.current = preview?.file || null;
   const receivedIds = useRef(new Set<string>());
   const incoming = useRef<Upload[]>([]);
   const openingUpload = useRef(false);
@@ -401,7 +419,9 @@ export const Classroom = ({
       }
     });
   }, [api]);
-  const showPreview = useCallback((file: File, signal?: AbortSignal) => {
+  const showPreview = useCallback(async (file: File, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
+    const { FilePreview } = await import("./FilePreview");
     signal?.throwIfAborted();
     recentFiles.current.set(file.name, file);
     if (recentFiles.current.size > 5) {
@@ -412,7 +432,7 @@ export const Classroom = ({
     );
     classroomCommands.invalidate(signal);
     previewRef.current = file;
-    setPreview(file);
+    setPreview({ file, View: FilePreview });
     setPanel(null);
     return new Promise<void>((resolve, reject) => {
       previewReady.current = { resolve, reject };
@@ -3277,7 +3297,11 @@ Tools and controls depend on the current interface; open the relevant surface be
                   onPageChange={setSettingsPage}
                   showHeader={false}
                 >
-                  <BoardSettings api={api} device={inkProfile} />
+                  <Suspense
+                    fallback={<p role="status">{t("labels.loadingScene")}</p>}
+                  >
+                    <BoardSettings api={api} device={inkProfile} />
+                  </Suspense>
                   <SettingsSection id="language">
                     <label>
                       {t("labels.language")}
@@ -3803,56 +3827,60 @@ Tools and controls depend on the current interface; open the relevant surface be
               </>
             )}
             {panel === "record" && (
-              <RecordingPanel
-                phase={recordPhase}
-                recording={recording}
-                paused={recordingPaused}
-                elapsed={elapsed}
-                mode={mode}
-                onMode={setMode}
-                records={records}
-                activeId={activeId}
-                onSelect={setActiveId}
-                transcript={transcript.current}
-                interim={interimTranscript}
-                busy={busy}
-                controlBusy={recordControlPending}
-                onStart={() => {
-                  const source = classroomCommands.interactionSource;
-                  void run(() => startRecording(mode, source));
-                }}
-                onStop={() => {
-                  void stopRecording(classroomCommands.interactionSource).catch(
-                    recordingFailure,
-                  );
-                }}
-                onPause={() => {
-                  void toggleRecordingPause()?.catch(recordingFailure);
-                }}
-                onTranscribe={() => {
-                  void run(() => regenerateRecording(true));
-                }}
-                onSummary={() => {
-                  void run(() => regenerateRecording(false));
-                }}
-                onDelete={() => {
-                  if (active) {
-                    void persistRecords(
-                      recordsRef.current.filter(
-                        (item) => item.id !== active.id,
-                      ),
-                    );
-                    setActiveId("");
-                  }
-                }}
-                onNotes={updateRecordingNotes}
-                onRead={() => {
-                  if (active) {
-                    void run(() => narrator.current!.speak(active.summary));
-                  }
-                }}
-                onStopRead={() => narrator.current?.stop()}
-              />
+              <Suspense
+                fallback={<p role="status">{t("labels.loadingScene")}</p>}
+              >
+                <RecordingPanel
+                  phase={recordPhase}
+                  recording={recording}
+                  paused={recordingPaused}
+                  elapsed={elapsed}
+                  mode={mode}
+                  onMode={setMode}
+                  records={records}
+                  activeId={activeId}
+                  onSelect={setActiveId}
+                  transcript={transcript.current}
+                  interim={interimTranscript}
+                  busy={busy}
+                  controlBusy={recordControlPending}
+                  onStart={() => {
+                    const source = classroomCommands.interactionSource;
+                    void run(() => startRecording(mode, source));
+                  }}
+                  onStop={() => {
+                    void stopRecording(
+                      classroomCommands.interactionSource,
+                    ).catch(recordingFailure);
+                  }}
+                  onPause={() => {
+                    void toggleRecordingPause()?.catch(recordingFailure);
+                  }}
+                  onTranscribe={() => {
+                    void run(() => regenerateRecording(true));
+                  }}
+                  onSummary={() => {
+                    void run(() => regenerateRecording(false));
+                  }}
+                  onDelete={() => {
+                    if (active) {
+                      void persistRecords(
+                        recordsRef.current.filter(
+                          (item) => item.id !== active.id,
+                        ),
+                      );
+                      setActiveId("");
+                    }
+                  }}
+                  onNotes={updateRecordingNotes}
+                  onRead={() => {
+                    if (active) {
+                      void run(() => narrator.current!.speak(active.summary));
+                    }
+                  }}
+                  onStopRead={() => narrator.current?.stop()}
+                />
+              </Suspense>
             )}
             {panel === "files" && (
               <>
@@ -3969,10 +3997,10 @@ Tools and controls depend on the current interface; open the relevant surface be
         </MaterialPanel>
       )}
       {preview && (
-        <FilePreview
+        <preview.View
           api={api}
-          key={`${preview.name}-${preview.lastModified}`}
-          file={preview}
+          key={`${preview.file.name}-${preview.file.lastModified}`}
+          file={preview.file}
           onClose={(advance = true, source?: AbortSignal) => {
             previewReady.current?.reject(
               new DOMException("Document closed", "AbortError"),

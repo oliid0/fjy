@@ -15,6 +15,7 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
 import { objectSelection, updateFunctionGraph } from "./board";
 import { FunctionGraphObject } from "./FunctionGraphObject";
+import { plotSize } from "./functionVisualization";
 import { classroomCommands } from "./commands";
 import { TransientMessage } from "./TransientMessage";
 
@@ -165,6 +166,7 @@ export const FunctionGraphInteraction = ({
                 plot={element.customData!.fcPlot.plot}
                 color={element.strokeColor}
                 strokeWidth={element.strokeWidth}
+                strokeScale={element.width / plotSize.width}
                 strokeStyle={element.strokeStyle}
                 angle={element.angle}
                 displaySize={{

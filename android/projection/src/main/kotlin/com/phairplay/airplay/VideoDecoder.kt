@@ -55,6 +55,7 @@ class VideoDecoder(
     // so they are only trusted when they agree with this one.
     private var referenceWidth = 0
     private var referenceHeight = 0
+    private var firstFrameQueued = false
 
     /**
      * False once MediaCodec has thrown (entered an unrecoverable error state). The caller should
@@ -127,6 +128,7 @@ class VideoDecoder(
         }
 
         mediaCodec = startDecoder(format)
+        firstFrameQueued = false
         isInitialized = true
         Logger.i("$mime decoder initialized: ${mediaCodec?.name}")
     }
@@ -196,14 +198,19 @@ class VideoDecoder(
                 // frames) and causes a black screen until the next keyframe, so we avoid it.
                 releaseOutputBuffers(codec)
 
-                // Wait for an input buffer. Longer than before: on a modest SoC the decoder can
-                // briefly fall behind, and waiting beats dropping (which corrupts the stream).
-                //
-                // Probe note: the wait itself is a back-pressure signal. `dropInput=0` only says
-                // we never hit the 100ms ceiling; a steady 20-80ms wait means the codec is
-                // throttling us because its output stage is stuck, which is invisible otherwise.
+                // Match the reference receiver's 1s first-input / 200ms steady
+                // budget, draining output while retaining this exact picture.
                 val inputWaitStart = System.nanoTime()
-                val inputBufferIndex = codec.dequeueInputBuffer(INPUT_BUFFER_TIMEOUT_US)
+                val budget = if (firstFrameQueued) INPUT_BUFFER_TIMEOUT_US else FIRST_INPUT_TIMEOUT_US
+                val deadline = inputWaitStart + budget * 1000
+                var inputBufferIndex: Int
+                do {
+                    inputBufferIndex = codec.dequeueInputBuffer(INPUT_POLL_US)
+                    if (inputBufferIndex >= 0) break
+                    // Some codecs cannot return input until pending output is
+                    // released. A single long input wait starves that output.
+                    releaseOutputBuffers(codec)
+                } while (System.nanoTime() < deadline)
                 MirrorProbe.onInputWait(System.nanoTime() - inputWaitStart, inputBufferIndex >= 0)
 
                 if (inputBufferIndex >= 0) {
@@ -215,8 +222,8 @@ class VideoDecoder(
                         if (nalUnit.size in 1..MAX_ACCESS_UNIT_BYTES &&
                             nalUnit.size > (inputSizes[outputSurface] ?: 0)) {
                             inputSizes[outputSurface] = nalUnit.size
-                            isHealthy = false
                         }
+                        isHealthy = false
                         return@synchronized
                     }
                     inputBuffer.put(nalUnit)
@@ -230,14 +237,15 @@ class VideoDecoder(
                         presentationTimeUs,
                         0
                     )
+                    firstFrameQueued = true
                     // Start the residence clock for this frame; it stops when the frame comes
                     // back out of the codec and is handed to the Surface.
                     MirrorProbe.onFrameQueued(presentationTimeUs)
                 } else {
-                    // No input buffer available — the decoder is catching up.
-                    // Drop this NAL unit to avoid building up backlog (prefer low latency).
-                    // MirrorProbe.onInputWait already counted the timeout.
-                    Logger.v("VideoDecoder: no input buffer available, dropping NAL unit")
+                    // This picture was not accepted. Never continue a prediction
+                    // chain that now has a missing reference; callers must resync.
+                    isHealthy = false
+                    Logger.w("VideoDecoder: input stalled after draining output; resync required")
                 }
 
                 // Release any output buffers that MediaCodec has finished decoding.
@@ -251,6 +259,7 @@ class VideoDecoder(
                 MirrorProbe.onDecoderError()
             } catch (e: Exception) {
                 Logger.e("Error decoding NAL unit", e)
+                isHealthy = false
             }
             MirrorProbe.onDecodeCall(System.nanoTime() - probeStartNanos)
         }
@@ -442,10 +451,10 @@ class VideoDecoder(
         internal fun setSize(surface: Surface, width: Int, height: Int) { sizes[surface] = PictureSize(width, height) }
         internal fun sizeFor(surface: Surface): PictureSize? = sizes[surface]
 
-        // How long to wait for an input buffer before dropping (microseconds).
-        // 100ms — generous enough that the decoder rarely has to drop a NAL unit (which would
-        // corrupt the stream), while still bounding stall if the codec is truly wedged.
-        private const val INPUT_BUFFER_TIMEOUT_US = 100_000L
+        // Bound a wedged codec, draining output between short input polls.
+        private const val INPUT_BUFFER_TIMEOUT_US = 200_000L
+        private const val FIRST_INPUT_TIMEOUT_US = 1_000_000L
+        private const val INPUT_POLL_US = 10_000L
 
         @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
         private fun parseSpsResolution(sps: ByteArray): Pair<Int, Int>? {

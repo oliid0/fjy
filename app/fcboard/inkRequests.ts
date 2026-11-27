@@ -76,6 +76,15 @@ export class InkRequests {
       if (entry.mode !== mode) {
         continue;
       }
+      // Recognition closes a math expression. Later pen lifts belong to a
+      // new request, even beside a running or failed expression. Actual edits
+      // to its source are still invalidated by prune/current.
+      if (
+        (mode === "function" || mode === "calculation") &&
+        (entry.started || entry.failed)
+      ) {
+        continue;
+      }
       const group = region([...entry.ink, ...ink(fresh)], mode);
       if (
         Array.from(group).some((index) => index < entry.ink.length) &&
@@ -121,6 +130,12 @@ export class InkRequests {
   revise(ink: InkInput, mode: string) {
     for (const [request, entry] of this.entries) {
       if (entry.mode !== mode) {
+        continue;
+      }
+      if (
+        (mode === "function" || mode === "calculation") &&
+        (entry.started || entry.failed)
+      ) {
         continue;
       }
       const included = region([...entry.ink, ...ink], mode);
@@ -169,8 +184,8 @@ export class InkRequests {
       (entry) => entry.started && !entry.failed,
     );
   }
-  prune(visible: readonly string[]) {
-    const ids = new Set(visible);
+  prune(visible: readonly string[] | Set<string>) {
+    const ids = visible instanceof Set ? visible : new Set(visible);
     for (const [request, entry] of this.entries) {
       if (
         entry.ids.some((id) => !ids.has(id)) ||

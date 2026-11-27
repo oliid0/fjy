@@ -30,6 +30,10 @@ final class NativeBrush {
         this.variation = Math.max(0, Math.min(50, variation)) / 50;
         this.simulatePressure = simulatePressure;
     }
+    float maximumRadius() {
+        float pressure = simulatePressure ? 1 : 1 + .135f * variation;
+        return Math.max(unit, base * (1 + .4f * variation) * pressure) / 2;
+    }
     private static Node mid(Node a, Node b) { return new Node((a.x+b.x)/2, (a.y+b.y)/2, (a.width+b.width)/2); }
     void add(float x, float y, float pressure) {
         body.rewind(); revision++;

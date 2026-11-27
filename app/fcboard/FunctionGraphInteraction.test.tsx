@@ -396,6 +396,50 @@ it("merges two selected graph objects without re-recognizing their source", asyn
   expect(recognize).not.toHaveBeenCalled();
 });
 
+it("merges partially selected handwritten sources and preserves every original stroke", async () => {
+  const { api } = await setup();
+  const recognize = vi.spyOn(ocr, "recognizeHandwriting");
+  const sources = [100, 100, 240, 240].map((y, index) =>
+    newFreeDrawElement({
+      type: "freedraw",
+      x: 100 + (index % 2) * 35,
+      y,
+      points: [pointFrom(0, 0), pointFrom(25, 30)],
+      simulatePressure: true,
+      customData: { fcInk: { version: 2, pen: "hard", assist: "function" } },
+    }),
+  );
+  act(() => {
+    api.updateScene({ elements: sources });
+    for (const index of [0, 2]) {
+      drawPlot(
+        api,
+        { ...defaultPlot, expression: index ? "x+1" : "x-1" },
+        { x: 500, y: sources[index].y },
+        [],
+        undefined,
+        true,
+        undefined,
+        sources.slice(index, index + 2).map((source) => source.id),
+      );
+    }
+    api.updateScene({ appState: objectSelection([sources[0], sources[2]]) });
+  });
+  expect(functionSelection(api)?.groups).toHaveLength(2);
+  await act(async () => mergeFunctions(api, new AbortController().signal));
+  expect(recognize).not.toHaveBeenCalled();
+  expect(
+    api.getSceneElements().filter((item) => item.type === "freedraw"),
+  ).toEqual(sources);
+  const graphs = api
+    .getSceneElements()
+    .filter((item) => item.customData?.fcPlot);
+  expect(graphs).toHaveLength(1);
+  expect(new Set(graphs[0].customData!.fcPlot.sourceIds)).toEqual(
+    new Set(sources.map((source) => source.id)),
+  );
+});
+
 it("merges expressions only on request and labels the actual reciprocal/line intersections without extra graph UI", async () => {
   const { api } = await setup("1/x");
   const sources = convertToFcboardElements([

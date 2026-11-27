@@ -19,10 +19,11 @@ describe("display density ink calibration", () => {
     });
     const { result, unmount } = renderHook(useDeviceInkProfile);
     expect(result.current?.hardPenWidth).toBe(4 / 3);
+    expect(result.current?.palmThreshold).toBe(12);
     vi.stubGlobal("devicePixelRatio", 2);
     act(() => media[0].dispatchEvent(new Event("change")));
     expect(result.current?.hardPenWidth).toBe(2);
-    expect(result.current?.palmThreshold).toBe(36);
+    expect(result.current?.palmThreshold).toBe(18);
     expect(queries).toHaveBeenLastCalledWith("(resolution: 2dppx)");
     unmount();
     const count = queries.mock.calls.length;

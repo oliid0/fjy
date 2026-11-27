@@ -6,6 +6,7 @@ import android.view.Surface
 import com.airplay.airplay.StreamStats
 import com.airplay.airplay.VideoDecoder
 import com.airplay.util.Logger
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,9 +31,8 @@ import java.util.concurrent.TimeUnit
  *
  * Architecture: a network thread reads + decrypts packets (keeping the AES-CTR keystream strictly
  * ordered) and pushes work onto a bounded queue; a separate decoder thread consumes it. This way
- * the socket is always drained fast — if the decoder can't keep up (this SoC is modest, and the
- * audio codec competes for resources), frames are dropped from the queue instead of stalling the
- * socket, which previously caused macOS to drop the whole session.
+ * TCP applies backpressure during codec startup. Only a new independent keyframe can replace
+ * queued pictures without breaking the prediction chain.
  *
  * Reference: RPiPlay lib/raop_rtp_mirror.c (raop_rtp_mirror_thread).
  */
@@ -85,7 +85,8 @@ class MirrorStreamServer(
     /** The OS-assigned TCP port macOS should connect to (returned in the SETUP response). */
     val dataPort: Int get() = serverSocket.localPort
 
-    fun start(scope: CoroutineScope) {
+    @Synchronized fun start(scope: CoroutineScope) {
+        decoderStopped = false
         running = true
         startup = scope.launch {
             delay(STARTUP_TIMEOUT_MS)
@@ -99,6 +100,21 @@ class MirrorStreamServer(
         scope.launch(Dispatchers.IO) { runDecoder() }
     }
 
+    @Volatile private var mediaHandoff: CompletableDeferred<Unit>? = null
+    private var decoderStopped = true
+
+    @Synchronized fun suspendForMedia(): CompletableDeferred<Unit> {
+        startup?.cancel()
+        return mediaHandoff ?: CompletableDeferred<Unit>().also {
+            mediaHandoff = it
+            if (decoderStopped) it.complete(Unit)
+        }
+    }
+
+    @Synchronized fun resumeMirror() {
+        mediaHandoff = null
+    }
+
     fun stop() {
         running = false
         startup?.cancel()
@@ -108,7 +124,7 @@ class MirrorStreamServer(
         Logger.i("MirrorStreamServer stopped")
     }
 
-    // ─── Network reader thread: read + decrypt (ordered), enqueue, never block on decode ──────
+    // ─── Network reader thread: ordered decrypt and bounded TCP backpressure ──────
     private fun runReader() {
         try {
             Logger.i("MirrorStreamServer listening on data port $dataPort")
@@ -185,7 +201,9 @@ class MirrorStreamServer(
                 queue.clear()
                 queue.offer(item)
             } else {
-                framesDropped++
+                while (running && !queue.offer(item, 50, TimeUnit.MILLISECONDS)) {
+                    // Keep reading as soon as the decoder consumes the next slot.
+                }
             }
         }
         StreamStats.videoQueue = queue.size
@@ -200,8 +218,8 @@ class MirrorStreamServer(
     }
 
     private fun parseConfig(payload: ByteArray, header: ByteArray): Config? = runCatching {
-        val sizeHintWidth = Float.fromBits(leInt(header, 40)).toInt()
-        val sizeHintHeight = Float.fromBits(leInt(header, 44)).toInt()
+        val sizeHintWidth = Float.fromBits(leInt(header, 56)).toInt()
+        val sizeHintHeight = Float.fromBits(leInt(header, 60)).toInt()
         val (codedWidth, codedHeight) = if (sizeHintWidth in 64..8192 && sizeHintHeight in 64..8192) {
             sizeHintWidth to sizeHintHeight
         } else {
@@ -290,6 +308,13 @@ class MirrorStreamServer(
             var expected = 0L
             while (running) {
                 val frame = queue.poll(50, TimeUnit.MILLISECONDS)
+                val handoff = mediaHandoff
+                if (handoff != null) {
+                    if (decoder != null) rebuildDecoder(null)
+                    if (frame != null) configured = frame.config
+                    handoff.complete(Unit)
+                    continue
+                }
                 if (frame == null) {
                     decoder?.drain()
                     if (!stillFinished && startupPictures.isNotEmpty()) {
@@ -315,6 +340,10 @@ class MirrorStreamServer(
         } finally {
             decoder?.release()
             decoder = null
+            synchronized(this) {
+                decoderStopped = true
+                mediaHandoff?.complete(Unit)
+            }
         }
     }
 
@@ -425,7 +454,7 @@ class MirrorStreamServer(
     /** The streaming Surface may temporarily be unavailable during a display change. */
     private fun awaitSurface(): Surface? {
         repeat(SURFACE_WAIT_TRIES) {
-            if (!running) return null
+            if (!running || mediaHandoff != null) return null
             surfaceProvider()?.takeIf { it.isValid }?.let { return it }
             try { Thread.sleep(SURFACE_WAIT_MS) } catch (_: InterruptedException) { return null }
         }

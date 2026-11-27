@@ -13,7 +13,7 @@ const displayInkProfile = (): UIOptions["inkProfile"] => {
     hardPenWidth: 4 / scale,
     brushPenWidth: 15 / scale,
     eraserSize: 150 / scale,
-    palmThreshold: 36,
+    palmThreshold: 36 / scale,
     penWidthMax: 40,
   };
 };

@@ -834,9 +834,13 @@ it("keeps a magic sketch and sends no recognition request when its capture is un
   }
 });
 
-it.each(["function", "calculation"] as const)(
-  "keeps a later independent %s request running while an earlier region fails",
-  async (mode) => {
+it.each(
+  (["function", "calculation"] as const).flatMap((mode) =>
+    ["next row", "same row"].map((placement) => ({ mode, placement })),
+  ),
+)(
+  "keeps a later $mode request in the $placement running while an earlier region fails",
+  async ({ mode, placement }) => {
     vi.useFakeTimers();
     const { api, ink, draw } = setup(mode);
     let failFirst!: (error: Error) => void;
@@ -859,7 +863,11 @@ it.each(["function", "calculation"] as const)(
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1200);
       });
-      const second = { ...ink, id: "independent-region", y: 500 };
+      const second = {
+        ...ink,
+        id: "independent-region",
+        ...(placement === "same row" ? { x: 240 } : { y: 500 }),
+      };
       draw([ink, second]);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1200);

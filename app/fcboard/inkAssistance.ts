@@ -71,13 +71,6 @@ export const observeInkAssistance = (
     const state = api.getAppState();
     const nextLocale = getLanguage().code;
     const currentScene = api.getSceneElements();
-    const present = new Set(currentScene.map((element) => element.id));
-    requests.prune([...present]);
-    for (const id of settled) {
-      if (!present.has(id)) {
-        settled.delete(id);
-      }
-    }
     if (
       !rescan &&
       currentScene === observedScene &&
@@ -85,6 +78,15 @@ export const observeInkAssistance = (
       recognitionLocale === nextLocale
     ) {
       return;
+    }
+    if (currentScene !== observedScene || rescan) {
+      const present = new Set(currentScene.map((element) => element.id));
+      requests.prune(present);
+      for (const id of settled) {
+        if (!present.has(id)) {
+          settled.delete(id);
+        }
+      }
     }
     observedScene = currentScene;
     observedButton = state.cursorButton;

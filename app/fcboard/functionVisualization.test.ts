@@ -8,6 +8,34 @@ import {
   zoomFunctionGraph,
 } from "./functionVisualization";
 
+it("keeps fitted multi-function curves connected and scales their widths only once", () => {
+  const context = document.createElement("canvas").getContext("2d")!;
+  const curves: { width: number; dash: number[] }[] = [];
+  vi.spyOn(context, "stroke").mockImplementation(() => {
+    if (
+      functionColors.includes(
+        String(context.strokeStyle) as typeof functionColors[number],
+      )
+    ) {
+      curves.push({ width: context.lineWidth, dash: context.getLineDash() });
+    }
+  });
+  const segments = vi.spyOn(context, "lineTo");
+  drawFunctionGraph(
+    context,
+    { ...defaultPlot, expression: "x", compare: ["x^2"] },
+    functionColors[0],
+    plotSize,
+    { width: 0.5, scale: 0.25 },
+  );
+  expect(curves).toHaveLength(2);
+  expect(curves).toEqual([
+    { width: 2, dash: [] },
+    { width: 2, dash: [] },
+  ]);
+  expect(segments.mock.calls.length).toBeGreaterThan(80);
+});
+
 it("uses ordinary border width/dashes only on curves and keeps the canvas background transparent", () => {
   const context = document.createElement("canvas").getContext("2d")!;
   const strokes: { width: number; dash: number[]; color: string }[] = [];

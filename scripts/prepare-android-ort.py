@@ -10,6 +10,8 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import time
+from urllib.error import HTTPError
 import urllib.request
 from zipfile import ZipFile
 
@@ -57,20 +59,40 @@ def download(entry, cache):
             return data
 
     errors = []
-    for url in filter(None, (entry["url"], entry.get("fallback"))):
-        request = urllib.request.Request(url, headers={"Accept": "application/octet-stream"})
-        try:
-            with urllib.request.urlopen(request, timeout=180) as response:
-                data = response.read()
-        except OSError as error:
-            errors.append(f"{url}: {error}")
-            continue
-        if not verified(data, entry):
-            errors.append(f"{url}: size or checksum mismatch")
-            continue
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_bytes(data)
-        return data
+    sources = list(filter(None, (entry["url"], entry.get("fallback"))))
+    for attempt in range(3):
+        retry = []
+        for url in sources:
+            request = urllib.request.Request(url, headers={
+                "Accept": "application/octet-stream",
+                "User-Agent": "Fcboard-native-assets/1.0",
+            })
+            try:
+                with urllib.request.urlopen(request, timeout=180) as response:
+                    data = response.read()
+            except OSError as error:
+                errors.append(f"{url}: {error}")
+                if not isinstance(error, HTTPError) or error.code in (408, 429, 500, 502, 503, 504):
+                    retry.append(url)
+                if isinstance(error, HTTPError):
+                    error.close()
+                continue
+            if not verified(data, entry):
+                errors.append(f"{url}: size or checksum mismatch")
+                continue
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            pending = cache.with_suffix(cache.suffix + ".pending")
+            try:
+                pending.write_bytes(data)
+                pending.replace(cache)
+            finally:
+                pending.unlink(missing_ok=True)
+            return data
+        if not retry or attempt == 2:
+            break
+        # Try the other source before waiting on a temporarily unavailable one.
+        time.sleep(2 ** (attempt + 1))
+        sources = retry
     raise RuntimeError(f"Could not download verified {cache.name}: " + "; ".join(errors))
 
 

@@ -360,13 +360,30 @@ describe("explicit handwriting actions", () => {
       backend.math.mockResolvedValue([candidate]);
       const { recognizeInkContent } = await import("./inkRecognition");
       const strokes: import("./digitalInk").InkInput = [
-        [[0, 0], [0, 80]],
-        [[30, 40], [70, 40]],
-        [[50, 20], [50, 60]],
-        [[100, 0], [100, 80]],
+        [
+          [0, 0],
+          [0, 80],
+        ],
+        [
+          [30, 40],
+          [70, 40],
+        ],
+        [
+          [50, 20],
+          [50, 60],
+        ],
+        [
+          [100, 0],
+          [100, 80],
+        ],
       ];
       await expect(
-        recognizeInkContent("calculation", vi.fn(), strokes, new AbortController().signal),
+        recognizeInkContent(
+          "calculation",
+          vi.fn(),
+          strokes,
+          new AbortController().signal,
+        ),
       ).resolves.toMatchObject({ text: "1+1", answer: "2" });
     },
   );

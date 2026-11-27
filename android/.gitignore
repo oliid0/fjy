@@ -3,6 +3,8 @@
 # Built application files
 *.apk
 *.aar
+!app/libs/onnxruntime-android-source.aar
+!app/libs/moonshine-voice-source.aar
 *.ap_
 *.aab
 

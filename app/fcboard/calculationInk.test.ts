@@ -61,14 +61,29 @@ afterEach(() => vi.useRealTimers());
 
 it("keeps ambiguous letters when the ink does not contain two operands and a separate plus", () => {
   const sum: InkInput = [
-    [[0, 0], [0, 80]],
-    [[30, 40], [70, 40]],
-    [[50, 20], [50, 60]],
-    [[100, 0], [100, 80]],
+    [
+      [0, 0],
+      [0, 80],
+    ],
+    [
+      [30, 40],
+      [70, 40],
+    ],
+    [
+      [50, 20],
+      [50, 60],
+    ],
+    [
+      [100, 0],
+      [100, 80],
+    ],
   ];
   expect(numericSumCandidate(sum.slice(1), "I+1")).toBe("I+1");
   expect(
-    numericSumCandidate(sum.filter((_, index) => index !== 2), "I+1"),
+    numericSumCandidate(
+      sum.filter((_, index) => index !== 2),
+      "I+1",
+    ),
   ).toBe("I+1");
   expect(
     numericSumCandidate([sum[0], [...sum[1], ...sum[2]], sum[3]], "I+1"),

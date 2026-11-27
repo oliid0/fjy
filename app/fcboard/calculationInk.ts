@@ -176,8 +176,14 @@ export const numericSumCandidate = (input: InkInput, candidate: string) => {
         return "1";
       }
     };
-    const left = read(bounds.filter((box) => box.right < bar.left), match[1]);
-    const right = read(bounds.filter((box) => box.left > bar.right), match[2]);
+    const left = read(
+      bounds.filter((box) => box.right < bar.left),
+      match[1],
+    );
+    const right = read(
+      bounds.filter((box) => box.left > bar.right),
+      match[2],
+    );
     if (left && right) {
       return `${left}+${right}${match[3]}`;
     }

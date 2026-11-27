@@ -70,10 +70,8 @@ public class ClassroomPlugin extends Plugin {
                         pages.add(developer.setComponent(page));
                     }
                 }
-                for (String name : new String[] {"Settings$SystemDashboardActivity", "Settings$SystemManagementActivity"}) {
-                    pages.add(new android.content.Intent(android.content.Intent.ACTION_MAIN).setPackage(settings)
-                        .setClassName(settings, settings + "." + name));
-                }
+                pages.add(new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                    .setClassName("com.android.settings.intelligence", "com.android.settings.intelligence.search.SearchActivity"));
                 for (android.content.Intent intent : pages) {
                     try {
                         getActivity().startActivity(intent);

@@ -141,12 +141,12 @@ it("opens with exactly the pages selected in the board list and rejects stale pa
     ).toBeNull();
     fireEvent.click(
       screen.getByRole("button", {
-        name: t("fcboard.download_selected_pages"),
+        name: t("fcboard.image"),
       }),
     );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
-        [{ page: 2, blob: expect.any(Blob) }],
+        [{ page: 2, blob: expect.any(Function) }],
         "Fcboard",
         "jpg",
         expect.any(AbortSignal),
@@ -258,7 +258,7 @@ it("shares selected pages through the cloud on browsers and routes password chan
   }
 });
 
-it("uploads BZD through the original cloud/local chooser and shows its readonly extraction code only after real upload success", async () => {
+it("uploads editable BZD only through Cloud files and reveals the code only after a real upload", async () => {
   cloudConfig();
   const upload = vi
     .spyOn(cloudTransfers, "uploadCloudBzd")
@@ -266,33 +266,48 @@ it("uploads BZD through the original cloud/local chooser and shows its readonly 
     .mockResolvedValueOnce({ code: "aB12", expires: Date.now() + 86400000 });
   const close = await setup("board.saveFile");
   try {
-    fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
-    fireEvent.click(screen.getByRole("button", { name: "BZD" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.live_share.cloud") }),
-    );
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Upload unavailable",
-    );
+    await act(async () => {
+      await expect(
+        classroomCommands.execute({ name: "board.cloudSave" }),
+      ).rejects.toThrow("Upload unavailable");
+    });
     expect(
       screen.queryByLabelText(t("fcboard.cloud_transfer.code")),
     ).toBeNull();
-    expect(
-      screen.getByLabelText(t("fcboard.live_share.key_label")),
-    ).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
+    await act(async () => {
+      await classroomCommands.execute({ name: "board.cloudSave" });
+    });
     const code = await screen.findByRole("textbox", {
       name: t("fcboard.cloud_transfer.code"),
     });
     expect(code).toHaveValue("aB12");
     expect(code).toHaveAttribute("readonly");
-    expect(upload.mock.calls[1][1]).toContain("<bzd>");
     expect(upload.mock.calls[1][1]).toContain('<fcboard version="1">');
+  } finally {
+    close();
+  }
+});
+it("shows BZD/image/PDF immediately and saves BZD without a local/cloud chooser", async () => {
+  const save = vi.spyOn(boardFiles, "saveBoardFile").mockResolvedValue(true);
+  const close = await setup("board.saveFile");
+  try {
+    expect(screen.getByRole("button", { name: "BZD" })).toBeEnabled();
     expect(
-      screen.queryByRole("button", { name: t("buttons.cancel") }),
+      screen.getByRole("button", { name: t("fcboard.image") }),
+    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: t("fcboard.live_share.cloud") }),
     ).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "BZD" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.any(Array),
+        "白板 1",
+        expect.any(AbortSignal),
+        expect.any(String),
+      ),
+    );
   } finally {
     close();
   }
@@ -336,13 +351,16 @@ it("cleans up a cloud QR that finishes after its chooser closes and never shows 
   }
 });
 
-it("requires selected pages and saves PDF through the original file browser instead of the attachment chooser", async () => {
+it("requires selected pages and saves PDF through the system storage route", async () => {
   const save = vi.spyOn(boardFiles, "savePageFiles").mockResolvedValue(true);
   vi.mocked(exportToBlob).mockResolvedValue(
     new Blob(["page"], { type: "image/jpeg" }),
   );
   vi.mocked(Classroom.sharePages).mockClear().mockResolvedValue(undefined);
   const close = await setup("board.saveFile");
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.select_pages") }),
+  );
   fireEvent.click(
     screen.getByRole("button", { name: t("fcboard.select_none") }),
   );
@@ -355,7 +373,7 @@ it("requires selected pages and saves PDF through the original file browser inst
   fireEvent.click(screen.getByRole("button", { name: /^PDF$/ }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith(
-      [{ page: 1, blob: expect.any(Blob) }],
+      [{ page: 1, blob: expect.any(Function) }],
       "Fcboard",
       "pdf",
       expect.any(AbortSignal),
@@ -371,7 +389,15 @@ it("requires selected pages and saves PDF through the original file browser inst
 });
 
 it("updates full-page export dimensions when the current canvas rotates while the page chooser is open", async () => {
-  const save = vi.spyOn(boardFiles, "savePageFiles").mockResolvedValue(true);
+  const save = vi
+    .spyOn(boardFiles, "savePageFiles")
+    .mockImplementation(async (pages) => {
+      const image = pages[0].blob;
+      if (typeof image === "function") {
+        await image();
+      }
+      return true;
+    });
   vi.mocked(exportToBlob)
     .mockClear()
     .mockResolvedValue(new Blob(["page"], { type: "image/jpeg" }));
@@ -383,7 +409,6 @@ it("updates full-page export dimensions when the current canvas rotates while th
       canvasSize = { width: 390, height: 844, pixelRatio: 3 };
       classroomCommands.changed("boards");
     });
-    fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
     fireEvent.click(screen.getByRole("button", { name: /^PDF$/ }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const options = vi.mocked(exportToBlob).mock.calls.at(-1)![0];
@@ -408,9 +433,8 @@ it("keeps JPG cancellation and actual write failure distinct from a successful f
     new Blob(["page"], { type: "image/jpeg" }),
   );
   const close = await setup("board.saveFile");
-  fireEvent.click(screen.getByRole("button", { name: t("buttons.confirm") }));
   const jpg = screen.getByRole("button", {
-    name: t("fcboard.download_selected_pages"),
+    name: t("fcboard.image"),
   });
   fireEvent.click(jpg);
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));

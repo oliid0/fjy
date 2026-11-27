@@ -224,7 +224,7 @@ test("rainbow ink preserves its actual colors across erasure, undo and zoom", as
   });
 });
 
-test("the save menu confirms pages and exports the chosen saved page as an actual JPEG", async ({
+test("the save menu opens the image format directly and saves an actual JPEG", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -239,14 +239,10 @@ test("the save menu confirms pages and exports the chosen saved page as an actua
   await page.mouse.click(200, 200);
   await page.locator("textarea.fcboard-wysiwyg").fill("分享的第一页");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "新建白板", exact: true }).click();
-  await selectMenu(page, "保存至当前文件");
+  await selectMenu(page, "保存文件");
   const share = page.getByRole("dialog", { name: "分享白板", exact: true });
-  await share.getByRole("checkbox", { name: /第 2 页/ }).uncheck();
-  await share.getByRole("checkbox", { name: /第 1 页/ }).check();
-  await share.getByRole("button", { name: "确定", exact: true }).click();
   const downloaded = page.waitForEvent("download");
-  await share.getByRole("button", { name: "下载选中页面" }).click();
+  await share.getByRole("button", { name: "图片" }).click();
   const file = await downloaded;
   expect(file.suggestedFilename()).toBe("Fcboard_01.jpg");
   const data = await readFile((await file.path())!);

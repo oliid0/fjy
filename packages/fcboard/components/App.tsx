@@ -1851,6 +1851,32 @@ class App extends React.Component<AppProps, AppState> {
                   {(el.customData?.fcInteractiveResource ? (
                     <InteractiveResourceFrame
                       resource={el.customData.fcInteractiveResource}
+                      onResourceChange={(resource) => {
+                        const current = this.scene.getNonDeletedElement(el.id);
+                        if (
+                          !current ||
+                          current.type !== "iframe" ||
+                          current.customData?.fcInteractiveResource?.id !==
+                            resource.id
+                        ) {
+                          return;
+                        }
+                        this.updateScene({
+                          elements: this.scene
+                            .getElementsIncludingDeleted()
+                            .map((item) =>
+                              item.id === current.id
+                                ? newElementWith(item, {
+                                    customData: {
+                                      ...item.customData,
+                                      fcInteractiveResource: resource,
+                                    },
+                                  })
+                                : item,
+                            ),
+                          captureUpdate: CaptureUpdateAction.NEVER,
+                        });
+                      }}
                       objectId={el.id}
                       selectedForMove={selectedForMove}
                       surface="whiteboard"

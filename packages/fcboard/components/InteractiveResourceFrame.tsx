@@ -28,6 +28,7 @@ import type { ComponentProps } from "react";
 
 export type InteractiveResourceFrameProps = {
   resource: InteractiveResource;
+  onResourceChange?: (resource: InteractiveResource) => void;
   objectId: string;
   surface: ResourceSurface;
   selectedForMove?: boolean;
@@ -67,6 +68,10 @@ export const InteractiveResourceFrame = (
         html: props.resource.html,
       }}
       dark={props.dark ?? false}
+      snapshot={props.resource.calculator}
+      onStateChange={(state) =>
+        props.onResourceChange?.({ ...props.resource, calculator: state })
+      }
       window={props.window}
     />
   ) : (

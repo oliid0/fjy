@@ -3,7 +3,7 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import {
   applyCalculatorAction,
   calculatorDisplay,
-  initialCalculator,
+  restoreCalculatorState,
 } from "../calculatorInput";
 import { useI18n } from "../i18n";
 import { calculatorResourceId } from "../interactiveHtml";
@@ -87,6 +87,8 @@ const headerCount = 3;
 const keypadCount = 20;
 
 type Props = {
+  snapshot?: CalculatorState;
+  onStateChange?: (state: CalculatorState) => void;
   target: ResourceControlTarget;
   dark: boolean;
   window?: Omit<
@@ -99,6 +101,8 @@ export const CalculatorPanel = ({
   target: { id, surface, html },
   dark,
   window,
+  snapshot,
+  onStateChange,
 }: Props) => {
   const { t } = useI18n();
   const label = (key: string, values?: Record<string, string>) =>
@@ -106,8 +110,15 @@ export const CalculatorPanel = ({
   const title = label("title");
   const root = useRef<HTMLDivElement>(null);
   const version = useId();
-  const [state, setState] = useState(initialCalculator);
+  const [state, setState] = useState(() => restoreCalculatorState(snapshot));
   const latest = useRef(state);
+  useLayoutEffect(() => {
+    if (snapshot !== latest.current) {
+      const restored = restoreCalculatorState(snapshot);
+      latest.current = restored;
+      setState(restored);
+    }
+  }, [snapshot]);
 
   const keys = (current: CalculatorState): Key[] => {
     const theme = current.theme ?? (dark ? "dark" : "light");
@@ -191,6 +202,7 @@ export const CalculatorPanel = ({
     const updated = applyCalculatorAction(latest.current, action);
     latest.current = updated;
     setState(updated);
+    onStateChange?.(updated);
   };
   const operate =
     useRef<(request: ResourceControlRequest) => ResourceControlState>(

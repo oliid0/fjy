@@ -50,13 +50,29 @@ export type MediaBounds = {
 };
 export type MediaPick = {
   images?: { uri: string; name: string; mime: string }[];
+  documents?: { uri: string; name: string; mime: string }[];
   key?: string;
   title?: string;
   video?: boolean;
   cancelled?: boolean;
 };
 export const Media = registerPlugin<{
-  open(args: { kind?: "image" | "playback" }): Promise<MediaPick>;
+  files(args: {
+    key: string;
+  }): Promise<{ files: { uri: string; name: string; mime: string }[] }>;
+  storeBegin(args: {
+    key: string;
+    files: { name: string; mime: string; size: number }[];
+  }): Promise<{ id: string }>;
+  storeAppend(args: {
+    id: string;
+    index: number;
+    offset: number;
+    data: string;
+  }): Promise<void>;
+  storeFinish(args: { id: string }): Promise<void>;
+  storeClose(args: { id: string }): Promise<void>;
+  open(args: { fileTypes: Record<string, string> }): Promise<MediaPick>;
   activate(args: {
     key: string;
     owner: string;

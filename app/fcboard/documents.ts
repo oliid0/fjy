@@ -44,8 +44,6 @@ import type { InsertObject } from "./insertObjects";
 import type { Plot } from "./math";
 import type { LanguageInk } from "./languageStudy";
 
-export const DOCUMENT_ACCEPT =
-  ".ppt,.pptx,.pps,.ppsx,.pdf,.doc,.docx,.xls,.xlsx,.csv,.odt,.ods,.odp,.rtf,.txt,.png,.jpg,.jpeg,.webp,.gif";
 export type InkStroke = {
   id: string;
   locked?: boolean;

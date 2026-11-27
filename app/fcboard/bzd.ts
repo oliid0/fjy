@@ -31,6 +31,9 @@ import {
   trackOffsets,
 } from "./insertObjects";
 
+import { importMediaFiles } from "./mediaPlaylist";
+
+import type { PortableMedia } from "./mediaPlaylist";
 import type { BzdMatrix } from "./bzdBitmap";
 import type { InsertObject } from "./insertObjects";
 import type { WidgetKind } from "./widgets";
@@ -62,12 +65,19 @@ const signedColor = (color: string) => {
 };
 const hexColor = (value: number) =>
   `#${((value >>> 0) & 0xffffff).toString(16).padStart(6, "0")}`;
+const xmlAttribute = (value: string) =>
+  value.replace(
+    // eslint-disable-next-line no-control-regex -- These ranges are forbidden in XML 1.0.
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/gu,
+    "\uFFFD",
+  );
+
 const attrs = (
   node: Element,
   values: Record<string, string | number | boolean>,
 ) => {
   for (const [key, value] of Object.entries(values)) {
-    node.setAttribute(key, String(value));
+    node.setAttribute(key, xmlAttribute(String(value)));
   }
 };
 const pointsText = (points: readonly (readonly number[])[], triples = false) =>
@@ -295,11 +305,19 @@ const linkTableContents = (elements: FcboardElement[]) => {
 };
 
 /** HSaxSlideParser's real UTF-8 slide/object/lstPt schema; the extension retains AI metadata and binary files. */
-export const serializeBzd = (boards: readonly Board[]): string => {
+export const serializeBzd = (
+  boards: readonly Board[],
+  { media, activeId }: { media?: PortableMedia; activeId?: string } = {},
+): string => {
   if (!boards.length || boards.length > 100) {
     throw new Error("Choose 1–100 BZD pages");
   }
   const xml = document.implementation.createDocument(null, "bzd");
+  const activeIndex = boards.findIndex((board) => board.id === activeId);
+  if (activeIndex > 0) {
+    xml.documentElement.setAttribute("fcboardActiveIndex", String(activeIndex));
+  }
+  const packagedMedia = new Set<string>();
   let count = 0;
   for (const board of boards) {
     const slide = xml.createElement("slide");
@@ -434,7 +452,7 @@ export const serializeBzd = (boards: readonly Board[]): string => {
         ];
       }
       if (element.type === "text") {
-        object.setAttribute("text", element.originalText);
+        object.setAttribute("text", xmlAttribute(element.originalText));
         points = [[element.x, element.y]];
         if (writingObject && typeof owner.textIndex === "number") {
           object.setAttribute(
@@ -472,7 +490,25 @@ export const serializeBzd = (boards: readonly Board[]): string => {
     // The native objects above remain readable without this lossless extension.
     const extension = xml.createElement("fcboard");
     extension.setAttribute("version", "1");
-    extension.textContent = JSON.stringify({ ...board, elements });
+    const pageMedia: PortableMedia = Object.create(null);
+    for (const element of elements) {
+      const key = element.customData?.fcInteractiveResource?.media?.key;
+      if (!key || !media || packagedMedia.has(key)) {
+        continue;
+      }
+      if (!Object.hasOwn(media, key)) {
+        throw new Error("BZD media content is missing");
+      }
+      pageMedia[key] = media[key];
+      packagedMedia.add(key);
+    }
+    extension.textContent = JSON.stringify({
+      ...board,
+      elements,
+      ...(Object.keys(pageMedia).length ? { media: pageMedia } : {}),
+    }).replace(/[\uFFFE\uFFFF]/g, (char) =>
+      char === "\uFFFE" ? "\\uFFFE" : "\\uFFFF",
+    );
     slide.append(extension);
   }
   const result = `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(
@@ -535,7 +571,7 @@ export type BzdAssetLoader = (
 export const parseBzd = async (
   text: string,
   loadAsset?: BzdAssetLoader,
-): Promise<Board[]> => {
+): Promise<{ pages: Board[]; activeIndex: number }> => {
   if (
     !text.trim() ||
     text.length > MAX_FILE ||
@@ -559,13 +595,16 @@ export const parseBzd = async (
   const result: Board[] = [];
   let total = 0;
   let sceneTotal = 0;
+  const media: PortableMedia = Object.create(null);
   for (const slide of slides) {
     const extension = Array.from(slide.children).find(
       (node) =>
         node.tagName === "fcboard" && node.getAttribute("version") === "1",
     );
     if (extension) {
-      const value = JSON.parse(extension.textContent || "null") as Board;
+      const value = JSON.parse(extension.textContent || "null") as Board & {
+        media?: PortableMedia;
+      };
       if (
         !value ||
         !Array.isArray(value.elements) ||
@@ -577,6 +616,12 @@ export const parseBzd = async (
       ) {
         throw new Error("Invalid Fcboard BZD page");
       }
+      for (const [key, files] of Object.entries(value.media ?? {})) {
+        if (!Object.hasOwn(media, key)) {
+          media[key] = files;
+        }
+      }
+      delete value.media;
       result.push({
         ...value,
         id: crypto.randomUUID(),
@@ -905,5 +950,40 @@ export const parseBzd = async (
       updated: Date.now(),
     });
   }
-  return result;
+  const mediaKeys = new Map<string, string>();
+  await importMediaFiles(media, mediaKeys);
+  const pages = mediaKeys.size
+    ? result.map((board) => ({
+        ...board,
+        elements: board.elements.map((element) => {
+          const resource = element.customData?.fcInteractiveResource;
+          const key = resource?.media && mediaKeys.get(resource.media.key);
+          if (!key || !resource?.media) {
+            return element;
+          }
+          return {
+            ...element,
+            customData: {
+              ...element.customData,
+              fcInteractiveResource: {
+                ...resource,
+                media: { ...resource.media, key },
+              },
+            },
+          };
+        }),
+      }))
+    : result;
+  const activeIndex = Number(
+    xml.documentElement.getAttribute("fcboardActiveIndex"),
+  );
+  return {
+    pages,
+    activeIndex:
+      Number.isInteger(activeIndex) &&
+      activeIndex >= 0 &&
+      activeIndex < pages.length
+        ? activeIndex
+        : 0,
+  };
 };

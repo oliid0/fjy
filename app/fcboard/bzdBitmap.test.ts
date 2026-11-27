@@ -41,7 +41,8 @@ const imageCorner = (image: FcboardImageElement, u: number, v: number) => {
 
 it("uses the original matrix and actual decoded bitmap size, rather than treating photoRectSrc as board coordinates", async () => {
   const load = vi.fn<BzdAssetLoader>().mockResolvedValue(asset);
-  const [board] = await parseBzd(original("2,0,120,0,3,80,0,0,1"), load);
+  const [board] = (await parseBzd(original("2,0,120,0,3,80,0,0,1"), load))
+    .pages;
   expect(load).toHaveBeenCalledWith("/Whiteboard/picture.png", undefined);
   const image = imageOf(board);
   expect(image).toMatchObject({
@@ -74,10 +75,9 @@ it.each([
 ])(
   "preserves every source corner after rotation, reflection and homogeneous scale (%j)",
   async (...matrix) => {
-    const [board] = await parseBzd(
-      original(matrix.join(",")),
-      async () => asset,
-    );
+    const [board] = (
+      await parseBzd(original(matrix.join(",")), async () => asset)
+    ).pages;
     const image = imageOf(board);
     for (const [u, v] of [
       [0, 0],
@@ -105,7 +105,7 @@ it.each(["1,0.5,20,0,1,30,0,0,1", "1,0,20,0,1,30,0.001,0,1"])(
     const load = vi
       .fn<BzdAssetLoader>()
       .mockResolvedValue({ ...asset, bounds });
-    const [board] = await parseBzd(original(matrix), load);
+    const [board] = (await parseBzd(original(matrix), load)).pages;
     expect(load).toHaveBeenCalledWith(
       "/Whiteboard/picture.png",
       matrix.split(",").map(Number),
@@ -189,7 +189,7 @@ it("exports unit-square placement for native decode/crop normalization, and reta
     expect(m[0] * u + m[1] * v + m[2]).toBeCloseTo(x);
     expect(m[3] * u + m[4] * v + m[5]).toBeCloseTo(y);
   }
-  const [restored] = await parseBzd(xml);
+  const [restored] = (await parseBzd(xml)).pages;
   expect(imageOf(restored)).toMatchObject({
     crop: imageOf(board).crop,
     angle: imageOf(board).angle,

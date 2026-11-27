@@ -29,10 +29,16 @@ export const AppMainMenu: React.FC<AppMenuProps> = React.memo(() => {
     <MainMenu>
       <MainMenu.Item
         icon={<FactoryIcon name="open" />}
-        onSelect={() => invoke("board.chooseOpen")}
+        onSelect={() => invoke("files.pick")}
         data-testid="load-button"
       >
         {t("buttons.load")}
+      </MainMenu.Item>
+      <MainMenu.Item
+        icon={<FactoryIcon name="open" />}
+        onSelect={() => invoke("files.cloud")}
+      >
+        {t("fcboard.cloud_files")}
       </MainMenu.Item>
       <MainMenu.Item
         icon={<FactoryIcon name="save" />}

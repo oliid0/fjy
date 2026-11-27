@@ -1,7 +1,11 @@
 import { calculatorResourceId } from "@fcboard/common";
 
+import { restoreCalculatorState } from "./calculatorInput";
+
 import resourceRuntime from "./interactiveResourceRuntime.js?raw";
 import { validateVisualization } from "./visualizationRuntime";
+
+import type { CalculatorState } from "./calculatorInput";
 
 import type { Visualization } from "./visualizationRuntime";
 
@@ -15,6 +19,7 @@ export type InteractiveResource = {
   title: string;
   html: string;
   media?: { key: string; video: boolean };
+  calculator?: CalculatorState;
   visualization?: Visualization;
   libraries?: ResourceLibrary[];
 };
@@ -113,7 +118,14 @@ export const validateInteractiveResource = (
   // Saved boards already identify the built-in calculator by this id.
   // Its behavior comes from the app, so an old document's HTML is discarded.
   if (resource.id === calculatorResourceId) {
-    return { id: resource.id, title: resource.title.trim(), html: "" };
+    return {
+      id: resource.id,
+      title: resource.title.trim(),
+      html: "",
+      ...(resource.calculator !== undefined
+        ? { calculator: restoreCalculatorState(resource.calculator) }
+        : {}),
+    };
   }
   if (resource.id === mediaResourceId) {
     const media = resource.media;

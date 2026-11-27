@@ -234,7 +234,7 @@
     "export": "Save to...",
     "copyToClipboard": "Copy to clipboard",
     "copyLink": "Copy link",
-    "save": "Save to current file",
+    "save": "Save file",
     "saveAs": "Save as",
     "load": "Open",
     "getShareableLink": "Get shareable link",
@@ -1355,6 +1355,7 @@
     "questions": "Questions",
     "cancel_recognition": "Cancel recognition",
     "sharing_expired_generate_a_new_qr_code": "Sharing expired. Generate a new QR code.",
+    "select_1_to_100_pages": "Select 1 to 100 pages to save.",
     "select_1_to_20_pages": "Select 1 to 20 pages",
     "scan_to_download_the_selected_pages_expires_in_ten_minutes_or_when_this_window_closes": "Scan to download the selected pages. Expires in ten minutes or when this window closes.",
     "fcboard_whiteboard": "Fcboard whiteboard",
@@ -2399,7 +2400,11 @@
     "search_inserting": "Inserting…",
     "multi_point_switch": "Multi-touch switch",
     "geometry_tools": "Rulers and compass",
-    "resource_loading": "Loading teaching resource…"
+    "resource_loading": "Loading teaching resource…",
+    "open_one_courseware": "Select one courseware file at a time.",
+    "cloud_files": "Cloud files",
+    "retrieve_cloud_file": "Retrieve file",
+    "save_cloud_file": "Save to cloud"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "Number Compare",

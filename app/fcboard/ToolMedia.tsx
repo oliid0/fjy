@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { fileOpen } from "browser-fs-access";
-import { getDataURL, isSupportedImageFile } from "@fcboard/fcboard/data/blob";
+import {
+  getDataURL,
+  normalizeFile,
+  isSupportedImageFile,
+} from "@fcboard/fcboard/data/blob";
 import { loadHTMLImageElement } from "@fcboard/element/image";
 import { t } from "@fcboard/fcboard/i18n";
 import { mediaResourceId } from "@fcboard/fcboard/interactiveHtml";
@@ -13,137 +17,188 @@ import { Media } from "./builtinNative";
 import { classroomCommands } from "./commands";
 import { insertImageResult } from "./imageGeneration";
 import { pendingMediaPlayback, saveMediaFiles } from "./mediaPlaylist";
+import {
+  boardFileKind,
+  imageFileType,
+  mediaFileType,
+  OPEN_ACCEPT,
+  openFileTypes,
+} from "./fileTypes";
 
 import type { InkStroke } from "./documents";
 
 export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
   useEffect(() => {
-    const stopOpen = classroomCommands.register(
-      "tools.media",
-      "Choose local images, audio and video together. Images become selectable canvas images. Audio/video files form a playable scene object. Optional kind=image|playback filters the picker.",
-      async (args) => {
-        const kind = args.kind;
-        if (kind !== undefined && kind !== "image" && kind !== "playback") {
-          throw new Error(t("fcboard.invalid_style_parameters"));
+    const open = async (args: Record<string, unknown>) => {
+      const signal =
+        args.signal instanceof AbortSignal
+          ? args.signal
+          : new AbortController().signal;
+      signal.throwIfAborted();
+      let images: File[] = [];
+      let playlist: File[] = [];
+      let documents: File[] = [];
+      let key: string | undefined;
+      let title: string | undefined;
+      let video = false;
+      if (Capacitor.isNativePlatform()) {
+        const result = await Media.open({ fileTypes: openFileTypes });
+        signal.throwIfAborted();
+        if (result.cancelled) {
+          return { cancelled: true };
         }
-        const signal =
-          args.signal instanceof AbortSignal
-            ? args.signal
-            : new AbortController().signal;
-        let images: File[] = [];
-        let key: string | undefined;
-        let title: string | undefined;
-        let video = false;
-        if (Capacitor.isNativePlatform()) {
-          const result = await Media.open({ kind });
-          signal.throwIfAborted();
-          if (result.cancelled) {
+        for (const item of result.images || []) {
+          const response = await fetch(Capacitor.convertFileSrc(item.uri), {
+            signal,
+          });
+          if (!response.ok) {
+            throw new Error(t("errors.imageInsertError"));
+          }
+          images.push(
+            new File([await response.blob()], item.name, { type: item.mime }),
+          );
+        }
+        for (const item of result.documents || []) {
+          const response = await fetch(Capacitor.convertFileSrc(item.uri), {
+            signal,
+          });
+          if (!response.ok) {
+            throw new Error(t("alerts.couldNotLoadInvalidFile"));
+          }
+          const blob = await response.blob();
+          if (blob.size > 64 * 1024 * 1024) {
+            throw new Error(t("errors.unsupportedFileType"));
+          }
+          documents.push(new File([blob], item.name, { type: item.mime }));
+        }
+        key = result.key;
+        title = result.title;
+        video = !!result.video;
+      } else {
+        let files: File[];
+        try {
+          files = await fileOpen({ multiple: true, extensions: OPEN_ACCEPT });
+        } catch (error) {
+          if (error instanceof Error && error.name === "AbortError") {
             return { cancelled: true };
           }
-          for (const item of result.images || []) {
-            const response = await fetch(Capacitor.convertFileSrc(item.uri), {
-              signal,
-            });
-            if (!response.ok) {
-              throw new Error(t("errors.imageInsertError"));
-            }
-            images.push(
-              new File([await response.blob()], item.name, { type: item.mime }),
-            );
-          }
-          key = result.key;
-          title = result.title;
-          video = !!result.video;
-        } else {
-          let files: File[];
-          try {
-            files = await fileOpen({
-              multiple: true,
-              mimeTypes:
-                kind === "image"
-                  ? ["image/*"]
-                  : kind === "playback"
-                  ? ["audio/*", "video/*"]
-                  : ["image/*", "audio/*", "video/*"],
-            });
-          } catch (error) {
-            if (error instanceof Error && error.name === "AbortError") {
-              return { cancelled: true };
-            }
-            throw error;
-          }
-          const isImage = (item: File) =>
-            item.type.startsWith("image/") ||
-            (!item.type &&
-              /\.(png|jpg|jpeg|webp|gif|bmp|svg|avif)$/i.test(item.name));
-          images = files.filter(isImage);
-          const playlist = files.filter((item) => !isImage(item));
-          if (playlist.length) {
-            key = crypto.randomUUID();
-            title = playlist[0].name;
-            video =
-              playlist[0].type.startsWith("video/") ||
-              (!playlist[0].type &&
-                /\.(mp4|webm|mkv|mov|avi|m4v|ogv)$/i.test(title));
-            await saveMediaFiles(key, playlist);
-          }
-        }
-        signal.throwIfAborted();
-        if (images.length) {
-          if (classroomCommands.has("document.draw")) {
-            for (const image of images) {
-              if (!isSupportedImageFile(image)) {
-                throw new Error(t("errors.imageInsertError"));
-              }
-              const dataURL = await getDataURL(image);
-              const bitmap = await loadHTMLImageElement(dataURL);
-              await insertImageResult(
-                api,
-                {
-                  dataURL,
-                  mimeType: image.type,
-                  width: bitmap.naturalWidth,
-                  height: bitmap.naturalHeight,
-                },
-                signal,
-              );
-            }
-          } else {
-            const view = contentViewport(api);
-            await api.insertImages(
-              images,
-              (view.left + view.right) / 2,
-              (view.top + view.bottom) / 2,
-            );
-          }
-        }
-        if (!key) {
-          return { images: images.length };
-        }
-        pendingMediaPlayback.add(key);
-        try {
-          const result = await classroomCommands.execute({
-            name: "canvas.resource",
-            args: {
-              signal,
-              resource: {
-                id: mediaResourceId,
-                title: (title || t("fcboard.media")).slice(0, 160),
-                html: "",
-                media: { key, video },
-              },
-            },
-          });
-          return {
-            open: true,
-            images: images.length,
-            ...(result as { ids: string[] }),
-          };
-        } catch (error) {
-          pendingMediaPlayback.delete(key);
           throw error;
         }
-      },
+        if (files.some((file) => !boardFileKind(file))) {
+          throw new Error(t("errors.unsupportedFileType"));
+        }
+        images = files.filter((file) => boardFileKind(file) === "image");
+        documents = files.filter((file) =>
+          ["board", "document"].includes(boardFileKind(file)!),
+        );
+        playlist = files
+          .filter((file) => boardFileKind(file) === "playback")
+          .map(
+            (file) =>
+              new File([file], file.name, { type: mediaFileType(file) }),
+          );
+        if (playlist.length) {
+          key = crypto.randomUUID();
+          title = playlist[0].name;
+          video = playlist[0].type.startsWith("video/");
+        }
+      }
+      signal.throwIfAborted();
+      const courseware = documents.filter(
+        (file) => boardFileKind(file) === "document",
+      );
+      if (courseware.length > 1) {
+        throw new Error(t("fcboard.open_one_courseware"));
+      }
+      for (const file of documents) {
+        if (boardFileKind(file) === "board") {
+          await classroomCommands.execute({
+            name: "board.open",
+            args: { file, signal },
+          });
+        }
+      }
+      signal.throwIfAborted();
+      if (courseware.length) {
+        await classroomCommands.execute({
+          name: "document.share.open",
+          args: { file: courseware[0], signal },
+        });
+      }
+      signal.throwIfAborted();
+      if (images.length) {
+        const normalizedImages = await Promise.all(
+          images.map(async (file) => {
+            const type = imageFileType(file);
+            const image = await normalizeFile(
+              type === file.type ? file : new File([file], file.name, { type }),
+            );
+            if (!isSupportedImageFile(image)) {
+              throw new Error(t("errors.imageInsertError"));
+            }
+            return image;
+          }),
+        );
+        signal.throwIfAborted();
+        if (classroomCommands.has("document.draw")) {
+          for (const image of normalizedImages) {
+            const dataURL = await getDataURL(image);
+            const bitmap = await loadHTMLImageElement(dataURL);
+            await insertImageResult(
+              api,
+              {
+                dataURL,
+                mimeType: image.type,
+                width: bitmap.naturalWidth,
+                height: bitmap.naturalHeight,
+              },
+              signal,
+            );
+          }
+        } else {
+          const view = contentViewport(api);
+          await api.insertImages(
+            normalizedImages,
+            (view.left + view.right) / 2,
+            (view.top + view.bottom) / 2,
+          );
+        }
+      }
+      if (!key) {
+        return { images: images.length, documents: documents.length };
+      }
+      if (playlist.length) {
+        await saveMediaFiles(key, playlist);
+      }
+      signal.throwIfAborted();
+      pendingMediaPlayback.add(key);
+      try {
+        const result = await classroomCommands.execute({
+          name: "canvas.resource",
+          args: {
+            signal,
+            resource: {
+              id: mediaResourceId,
+              title: (title || t("fcboard.media")).slice(0, 160),
+              html: "",
+              media: { key, video },
+            },
+          },
+        });
+        return {
+          open: true,
+          images: images.length,
+          ...(result as { ids: string[] }),
+        };
+      } catch (error) {
+        pendingMediaPlayback.delete(key);
+        throw error;
+      }
+    };
+    const stopFiles = classroomCommands.register(
+      "files.pick",
+      "Open the system file picker and route BZD to the editable board importer, images to canvas, audio/video to the media object, and documents to the existing internal viewer.",
+      open,
     );
     const stopControl = classroomCommands.register(
       "media.control",
@@ -202,7 +257,7 @@ export const ToolMedia = ({ api }: { api: FcboardImperativeAPI }) => {
       },
     );
     return () => {
-      stopOpen();
+      stopFiles();
       stopControl();
     };
   }, [api]);

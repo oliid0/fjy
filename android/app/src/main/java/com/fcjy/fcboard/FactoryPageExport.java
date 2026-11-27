@@ -8,33 +8,49 @@ import org.json.JSONObject;
 
 /** ChooseFileListener SAVE_JPG / SAVE_PDF and PDFUtil's actual A4 image flow. */
 final class FactoryPageExport {
+    static final long MAX_BYTES = 64L * 1024 * 1024;
+
+    enum Kind {
+        BOARD("bzd", "application/octet-stream"),
+        IMAGE("jpg", "image/jpeg"),
+        PDF("pdf", "application/pdf");
+
+        final String extension, mime;
+
+        Kind(String extension, String mime) {
+            this.extension = extension;
+            this.mime = mime;
+        }
+
+        static Kind read(String extension) throws IOException {
+            for (Kind kind : values()) {
+                if (kind.extension.equals(extension)) return kind;
+            }
+            throw new IOException("Unsupported whiteboard file type");
+        }
+    }
+
     static final class Page {
         final int number;final long size;
         Page(int number,long size){this.number=number;this.size=size;}
     }
     static List<Page> manifest(JSArray values,long size) throws Exception {
-        if(values==null || values.length()<1 || values.length()>20)throw new IOException("Choose 1 to 20 export pages");
+        if(values==null || values.length()<1 || values.length()>100)throw new IOException("Choose 1 to 100 export pages");
         List<Page> pages=new ArrayList<>();long total=0;int previous=0;
         for(int i=0;i<values.length();i++){
             JSONObject value=values.getJSONObject(i);int number=value.getInt("page");long bytes=value.getLong("size");
             if(number<=previous || number>100 || bytes<1 || bytes>16*1024*1024 || value.getDouble("page")!=number || value.getDouble("size")!=bytes)throw new IOException("Invalid export page");
             pages.add(new Page(number,bytes));previous=number;total+=bytes;
         }
-        if(total!=size || total>FactoryFileAccess.MAX_BYTES)throw new IOException("Incomplete page export");
+        if(total!=size || total>MAX_BYTES)throw new IOException("Incomplete page export");
         return pages;
-    }
-    static List<File> targets(File target,FactoryFileAccess.Kind kind,List<Page> pages){
-        if(kind==FactoryFileAccess.Kind.PDF)return Collections.singletonList(target);
-        String name=target.getName();String base=name.substring(0,name.length()-4);List<File> files=new ArrayList<>();
-        for(Page page:pages)files.add(new File(target.getParentFile(),base+"_"+String.format(Locale.ROOT,"%02d",page.number)+".jpg"));
-        return files;
     }
     static final class Prepared {
         final File folder;final List<File> files;
         Prepared(File folder,List<File> files){this.folder=folder;this.files=files;}
         void clear(){File[] children=folder.listFiles();if(children!=null)for(File file:children)file.delete();folder.delete();}
     }
-    static Prepared prepare(File staged,File cache,FactoryFileAccess.Kind kind,List<Page> pages,String title) throws Exception {
+    static Prepared prepare(File staged,File cache,Kind kind,List<Page> pages,String title) throws Exception {
         File folder=new File(cache,"page-export-"+UUID.randomUUID());if(!folder.mkdir())throw new IOException("Cannot prepare page files");
         Prepared output=new Prepared(folder,new ArrayList<>());
         try(InputStream input=new FileInputStream(staged)){
@@ -49,7 +65,7 @@ final class FactoryPageExport {
                 output.files.add(file);
             }
             if(input.read()!=-1)throw new IOException("Unexpected page data");
-            if(kind==FactoryFileAccess.Kind.PDF){File pdf=new File(folder,"selected.pdf");writePdf(output.files,pdf,title);output.files.clear();output.files.add(pdf);}
+            if(kind==Kind.PDF){File pdf=new File(folder,"selected.pdf");writePdf(output.files,pdf,title);output.files.clear();output.files.add(pdf);}
             return output;
         }catch(Exception error){output.clear();throw error;}
     }

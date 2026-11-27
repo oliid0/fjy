@@ -437,25 +437,22 @@ export class BoardBook {
     this.restore(board.id, source);
     this.emit();
   }
-  async importPages(pages: Board[], source?: AbortSignal) {
+  async importPages(pages: Board[], activeIndex: number, source?: AbortSignal) {
     source?.throwIfAborted();
-    if (!pages.length || pages.length > 100) {
+    const active = pages[activeIndex]?.id;
+    if (!active || pages.length > 100) {
       throw new Error("Invalid board pages");
     }
     await this.flush();
     source?.throwIfAborted();
     const previous = this.value;
-    const imported = pages.map((page) => ({
-      ...page,
-      id: crypto.randomUUID(),
-    }));
     const next = {
       ...previous,
-      active: imported[0].id,
-      boards: [...previous.boards, ...imported],
+      active,
+      boards: [...previous.boards, ...pages],
     };
     await this.commitWorkspace(next, source);
-    this.restore(next.active, source);
+    this.restore(active, source);
     this.emit();
   }
   async reorder(ids: readonly string[], source?: AbortSignal) {

@@ -15,12 +15,10 @@ export const toolbarItems = {
   protractor: { label: "protractor", icon: "protractor" },
   setSquare: { label: "set_square", icon: "setSquare" },
   mindmap: { label: "mind_map", icon: "mindmap" },
-  media: { label: "media", icon: "media" },
   signal: { label: "signal", icon: "signal" },
   table: { label: "table", icon: "table" },
   fourline: { label: "four_line_grid", icon: "fourline" },
   website: { label: "website", icon: "website" },
-  document: { label: "document", icon: "document" },
   resources: { label: "subject_tools", icon: "subject" },
   split: { label: "split_screen", icon: "split" },
   vote: { label: "vote", icon: "vote" },
@@ -43,12 +41,10 @@ export const NATIVE_TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   "undo",
   "redo",
   "aerial",
-  "media",
   "table",
   "ruler",
   "signal",
   "mindmap",
-  "document",
   "website",
   "vote",
   "timer",
@@ -80,13 +76,11 @@ export const normalizeToolbarItems = (value: unknown): ToolbarItem[] =>
   Array.isArray(value)
     ? Array.from(
         new Set(
-          value
-            .map((id) => (id === "image" ? "media" : id))
-            .filter(
-              (id): id is ToolbarItem =>
-                typeof id === "string" &&
-                NATIVE_TOOLBAR_ITEMS.includes(id as ToolbarItem),
-            ),
+          value.filter(
+            (id): id is ToolbarItem =>
+              typeof id === "string" &&
+              NATIVE_TOOLBAR_ITEMS.includes(id as ToolbarItem),
+          ),
         ),
       )
         .sort(

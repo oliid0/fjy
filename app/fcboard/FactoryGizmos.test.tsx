@@ -104,7 +104,7 @@ it("keeps compact ruler controls reachable while moving, shortening and drawing 
       moved.params.stretchX,
     );
     expect(resize.querySelector("rect")).toHaveAttribute("width", "44");
-    const edge = group.querySelector("line")!;
+    const edge = group.querySelector('[data-gizmo-edge="horizontal"]')!;
     pointer(edge, "pointerdown", moved.position.x + 20, moved.position.y - 6);
     pointer(edge, "pointerup", moved.position.x + 100, moved.position.y - 6);
     await act(async () => {});
@@ -162,7 +162,7 @@ it("moves a ruler as one undo, rolls back interrupted rotation, and draws one co
     expect(readWidgets(api)[0].params.rotation).toBeCloseTo(90);
     pointer(rotate, "pointercancel", 255, 510);
     expect(readWidgets(api)[0].params.rotation).toBe(0);
-    const edge = group.querySelector("line")!;
+    const edge = group.querySelector('[data-gizmo-edge="horizontal"]')!;
     pointer(edge, "pointerdown", 270, 225);
     pointer(document.body, "pointermove", 570, 242);
     pointer(document.body, "pointerup", 570, 242);
@@ -212,7 +212,9 @@ it("keeps a scaled, rotated set-square edge in scene coordinates", async () => {
   const tools = render(<TeachingTools api={api} />);
   try {
     const square = readWidgets(api)[0];
-    const edge = tools.container.querySelector('[data-gizmo="square"] line')!;
+    const edge = tools.container.querySelector(
+      '[data-gizmo="square"] [data-gizmo-edge="horizontal"]',
+    )!;
     const start = gizmoPoint(square, 40, -5);
     const end = gizmoPoint(square, 320, 8);
     pointer(edge, "pointerdown", ...start);

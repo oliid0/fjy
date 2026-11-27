@@ -860,7 +860,7 @@ export const TeachingTools = ({ api }: { api: FcboardImperativeAPI }) => {
       <Calculator api={api} />
       <ToolTimer />
       <Curtain />
-      <SplitBoard />
+      <SplitBoard api={api} />
       <Voting />
       <ToolMedia api={api} />
       <ToolbarExtras placement="toolbox">

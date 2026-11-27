@@ -1,78 +1,63 @@
 package com.fcjy.fcboard;
 
-import android.Manifest;
-import android.os.Build;
+import android.app.Activity;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.DocumentsContract;
+import android.provider.OpenableColumns;
 import android.util.Base64;
-import com.getcapacitor.JSObject;
-import com.getcapacitor.Plugin;
-import com.getcapacitor.PluginCall;
-import com.getcapacitor.PluginMethod;
-import com.getcapacitor.PermissionState;
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.*;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.annotation.Permission;
-import com.getcapacitor.annotation.PermissionCallback;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
+import java.util.*;
+import java.util.concurrent.*;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import org.w3c.dom.*;
-import org.json.JSONObject;
+import org.w3c.dom.Document;
 
-/** Chunked BZD staging and the original in-app file browser on real storage. */
-@CapacitorPlugin(name="FcboardBoardFile",permissions={@Permission(alias="legacyStorage",strings={Manifest.permission.READ_EXTERNAL_STORAGE,Manifest.permission.WRITE_EXTERNAL_STORAGE})})
+/** Self-contained board bytes and Android's standard storage access framework. */
+@CapacitorPlugin(name="FcboardBoardFile")
 public class BoardFilePlugin extends Plugin {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
-    private File staged;
-    private String id;
-    private long expected;
-    private long received;
-    private boolean complete;
-    private boolean saving;
-    private FactoryFileAccess.Kind kind=FactoryFileAccess.Kind.BOARD;
-    private java.util.List<FactoryPageExport.Page> exportPages=java.util.Collections.emptyList();
+    private final Set<String> canceled=ConcurrentHashMap.newKeySet();
+    private File staged,opened;
+    private String id,readId,pickerOwner;
+    private long expected,received,readSize,readModified;
+    private boolean complete,saving;
+    private FactoryPageExport.Kind kind=FactoryPageExport.Kind.BOARD;
+    private List<FactoryPageExport.Page> exportPages=Collections.emptyList();
     private FactoryPageExport.Prepared pageExport;
-    private FactoryFileBrowserDialog browser;
-    private String browserOwner;
-    private final java.util.Set<String> canceledBrowsers = new java.util.LinkedHashSet<>();
-    private File opened;
-    private String readId;
-    private long readSize,readModified;
-    private final java.util.List<File> createdAssets = new java.util.ArrayList<>();
-    private static final long MAX_SIZE=64L*1024*1024;
+    private static final long MAX_SIZE=FactoryPageExport.MAX_BYTES;
     private void require(PluginCall call) throws IOException {
-        if(staged==null || !id.equals(call.getString("id"))) throw new IOException("Board file session expired");
+        if(staged==null || !Objects.equals(id,call.getString("id")))throw new IOException("Board file session expired");
     }
-    private void clear() {
-        if(staged!=null) staged.delete();
-        if(pageExport!=null)pageExport.clear();pageExport=null;exportPages=java.util.Collections.emptyList();kind=FactoryFileAccess.Kind.BOARD;
-        for(File image:createdAssets) image.delete();
-        createdAssets.clear(); staged=null;id=null;complete=false;received=0;
+    private void clear(){
+        if(staged!=null)staged.delete();
+        if(pageExport!=null)pageExport.clear();
+        staged=null;id=null;pageExport=null;complete=false;received=0;
+        exportPages=Collections.emptyList();kind=FactoryPageExport.Kind.BOARD;
     }
-    @PluginMethod public void begin(PluginCall call) { worker.execute(()->{
-        try {
-            if(saving || staged!=null) throw new IOException("A board file is being saved");
-            long size=call.getLong("size",0L);
-            if(size<1 || size>MAX_SIZE) throw new IOException("Invalid BZD file size");
-            clear();kind=FactoryFileAccess.Kind.read(call.getString("kind","bzd"));
-            if(kind!=FactoryFileAccess.Kind.BOARD)exportPages=FactoryPageExport.manifest(call.getArray("pages"),size);
-            id=UUID.randomUUID().toString();expected=size;
-            staged=File.createTempFile("board-",".bzd",getContext().getCacheDir());
+    @PluginMethod public void begin(PluginCall call){worker.execute(()->{
+        try{
+            if(saving || staged!=null)throw new IOException("A board file is being saved");
+            long size=call.getLong("size",0L);if(size<1 || size>MAX_SIZE)throw new IOException("Invalid board file size");
+            clear();kind=FactoryPageExport.Kind.read(call.getString("kind","bzd"));
+            if(kind!=FactoryPageExport.Kind.BOARD)exportPages=FactoryPageExport.manifest(call.getArray("pages"),size);
+            id=UUID.randomUUID().toString();expected=size;staged=File.createTempFile("board-",".tmp",getContext().getCacheDir());
             call.resolve(new JSObject().put("id",id));
-        }catch(Exception e){call.reject(e.getMessage(),e);}
-    }); }
-    @PluginMethod public void append(PluginCall call) { worker.execute(()->{
-        try { require(call);String data=call.getString("data","");
-            if(complete || saving || data.length()>350000 || call.getLong("offset",-1L)!=received) throw new IOException("Invalid BZD chunk");
-            byte[] bytes=Base64.decode(data,Base64.DEFAULT);
-            if(received+bytes.length>expected) throw new IOException("BZD size exceeded");
-            try(FileOutputStream output=new FileOutputStream(staged,true)){output.write(bytes);}received+=bytes.length;call.resolve();
-        }catch(Exception e){call.reject(e.getMessage(),e);}
-    }); }
+        }catch(Exception error){call.reject(error.getMessage(),error);}
+    });}
+    @PluginMethod public void append(PluginCall call){worker.execute(()->{
+        try{
+            require(call);String data=call.getString("data","");
+            if(complete || saving || data.length()>350000 || call.getLong("offset",-1L)!=received)throw new IOException("Invalid board chunk");
+            byte[] bytes=Base64.decode(data,Base64.DEFAULT);if(received+bytes.length>expected)throw new IOException("Board size exceeded");
+            try(OutputStream out=new FileOutputStream(staged,true)){out.write(bytes);}received+=bytes.length;call.resolve();
+        }catch(Exception error){call.reject(error.getMessage(),error);}
+    });}
     static Document readXml(File file) throws Exception {
         if(file.length()>MAX_SIZE) throw new IOException("BZD file is too large");
         byte[] bytes;
@@ -89,139 +74,83 @@ public class BoardFilePlugin extends Plugin {
         builder.setEntityResolver((publicId,systemId)->{throw new org.xml.sax.SAXException("External BZD entities are not supported");});
         return builder.parse(new ByteArrayInputStream(bytes));
     }
-    /** Original OBJECT_BITMAP reads a raster path; keep original SVG in the Fcboard extension. */
-    static byte[] compatibleImage(String data) throws Exception {
-        int comma=data.indexOf(',');
-        if(comma<0 || data.length()>28*1024*1024)throw new IOException("Invalid BZD image data");
-        String header=data.substring(0,comma).toLowerCase(java.util.Locale.ROOT);
-        boolean svg=header.matches("data:image/svg\\+xml(?:;charset=[^;,]+)?(?:;base64)?");
-        if(!svg && !header.matches("data:image/(png|jpeg|webp|gif);base64"))throw new IOException("Unsupported BZD image data");
-        byte[] bytes=header.endsWith(";base64")?Base64.decode(data.substring(comma+1),Base64.DEFAULT):java.net.URLDecoder.decode(data.substring(comma+1).replace("+","%2B"),"UTF-8").getBytes(StandardCharsets.UTF_8);
-        if(bytes.length<8 || bytes.length>20*1024*1024)throw new IOException("Invalid BZD image size");
-        if(!svg)return bytes;
-        String source=new String(bytes,StandardCharsets.UTF_8);
-        String upper=source.toUpperCase(java.util.Locale.ROOT);
-        if(upper.contains("<!DOCTYPE") || upper.contains("<!ENTITY"))throw new IOException("SVG entities are not supported");
-        // Verified against AndroidSVG 1.4 sources.jar and its renderToCanvas API.
-        com.caverock.androidsvg.SVG document=com.caverock.androidsvg.SVG.getFromString(source);
-        android.graphics.RectF view=document.getDocumentViewBox();
-        float width=document.getDocumentWidth(),height=document.getDocumentHeight();
-        if(!Float.isFinite(width) || width<=0)width=view!=null && view.width()>0?view.width():512;
-        if(!Float.isFinite(height) || height<=0)height=view!=null && view.height()>0?view.height():512;
-        float scale=Math.min(1f,2048f/Math.max(width,height));
-        int rasterWidth=Math.max(1,Math.round(width*scale)),rasterHeight=Math.max(1,Math.round(height*scale));
-        android.graphics.Bitmap bitmap=android.graphics.Bitmap.createBitmap(rasterWidth,rasterHeight,android.graphics.Bitmap.Config.ARGB_8888);
-        try(ByteArrayOutputStream output=new ByteArrayOutputStream()){
-            document.setDocumentWidth((float)rasterWidth);document.setDocumentHeight((float)rasterHeight);
-            document.renderToCanvas(new android.graphics.Canvas(bitmap));
-            if(!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output))throw new IOException("Cannot render BZD SVG");
-            return output.toByteArray();
-        }finally{bitmap.recycle();}
-    }
-    private File materializeImages(File assets) throws Exception {
-        Document xml=readXml(staged);
-        if(!"bzd".equals(xml.getDocumentElement().getTagName())) throw new IOException("Invalid BZD XML");
-        NodeList slides=xml.getElementsByTagName("slide");
-        for(int page=0;page<slides.getLength();page++){
-            Element slide=(Element)slides.item(page);NodeList extensions=slide.getElementsByTagName("fcboard");
-            JSONObject files=extensions.getLength()==0 ? new JSONObject():new JSONObject(extensions.item(0).getTextContent()).optJSONObject("files");
-            if(files==null) files=new JSONObject();
-            NodeList objects=slide.getElementsByTagName("object");
-            for(int index=0;index<objects.getLength();index++){
-                Element object=(Element)objects.item(index);String path=object.getAttribute("picUrl");
-                if(!path.startsWith("fcboard-asset:")) continue;
-                JSONObject file=files.optJSONObject(path.substring(14));
-                if(file==null) throw new IOException("BZD image data is missing");
-                String data=file.optString("dataURL");
-                byte[] bytes=BzdBitmap.materialize(object,compatibleImage(data));
-                if(!assets.isDirectory() && !assets.mkdirs()) throw new IOException("Cannot create board asset directory");
-                String suffix=".png";
-                File image=new File(assets,UUID.randomUUID()+suffix);
-                createdAssets.add(image);
-                try(FileOutputStream output=new FileOutputStream(image)){output.write(bytes);}
-                object.setAttribute("picUrl",image.getAbsolutePath());
-            }
-        }
-        File output=File.createTempFile("board-ready-",".bzd",getContext().getCacheDir());
-        try { TransformerFactory.newInstance().newTransformer().transform(new DOMSource(xml),new StreamResult(output));return output; }
-        catch(Exception error){output.delete();throw error;}
-    }
-    @PluginMethod public void save(PluginCall call) {worker.execute(()->{
-        try {require(call);if(saving || received!=expected) throw new IOException("BZD upload incomplete");
-            complete=true;saving=true;getActivity().runOnUiThread(()->showSave(call));
-        }catch(Exception e){call.reject(e.getMessage(),e);}
+    @PluginMethod public void save(PluginCall call){worker.execute(()->{
+        try{
+            require(call);if(saving || received!=expected)throw new IOException("Board upload incomplete");
+            complete=true;saving=true;
+            if(kind==FactoryPageExport.Kind.BOARD){if(!"bzd".equals(readXml(staged).getDocumentElement().getTagName()))throw new IOException("Invalid BZD XML");}
+            else pageExport=FactoryPageExport.prepare(staged,getContext().getCacheDir(),kind,exportPages,call.getString("name","Fcboard"));
+            getActivity().runOnUiThread(()->{
+                try{
+                    String owner=call.getString("id","");if(canceled.remove(owner)){worker.execute(()->{saving=false;clear();call.resolve(new JSObject().put("saved",false));});return;}
+                    if(pickerOwner!=null)throw new IOException("A file picker is already open");pickerOwner=owner;
+                    boolean multiple=kind==FactoryPageExport.Kind.IMAGE && exportPages.size()>1;
+                    Intent intent=multiple?new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE):new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(kind.mime).putExtra(Intent.EXTRA_TITLE,call.getString("name","Fcboard")+"."+kind.extension);
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    startActivityForResult(call,intent,"saved");
+                }catch(Exception error){if(Objects.equals(pickerOwner,call.getString("id")))pickerOwner=null;worker.execute(()->{saving=false;clear();call.reject(error.getMessage(),error);});}
+            });
+        }catch(Exception error){if(Objects.equals(id,call.getString("id"))){saving=false;clear();}call.reject(error.getMessage(),error);}
     });}
-    private boolean needsStorage(){return Build.VERSION.SDK_INT<30 && getPermissionState("legacyStorage")!=PermissionState.GRANTED;}
-    @PermissionCallback private void savePermission(PluginCall call){if(getPermissionState("legacyStorage")==PermissionState.GRANTED)showSave(call);else{worker.execute(()->{saving=false;call.reject("File access permission denied");});}}
-    @PermissionCallback private void openPermission(PluginCall call){if(getPermissionState("legacyStorage")==PermissionState.GRANTED)showOpen(call);else call.reject("File access permission denied");}
-    private void showSave(PluginCall call){
-        String owner=call.getString("id","");
-        if(canceledBrowsers.remove(owner)){worker.execute(()->{saving=false;clear();call.resolve(new JSObject().put("saved",false));});return;}
-        if(needsStorage()){requestPermissionForAlias("legacyStorage",call,"savePermission");return;}
-        if(browser!=null){worker.execute(()->{saving=false;call.reject("A file browser is already open");});return;}
-        browserOwner=owner;
-        browser=new FactoryFileBrowserDialog(getActivity(),true,call.getString("language","en"),worker,new FactoryFileBrowserDialog.Operation(){
-          @Override public boolean exists(File target){
-            if(kind==FactoryFileAccess.Kind.BOARD)return target.exists();
-            for(File file:FactoryPageExport.targets(target,kind,exportPages))if(file.exists())return true;return false;
-          }
-          @Override public void apply(File target) throws Exception {
-            if(kind!=FactoryFileAccess.Kind.BOARD){
-                if(pageExport==null){
-                    android.content.res.Configuration locale=new android.content.res.Configuration(getContext().getResources().getConfiguration());locale.setLocale(java.util.Locale.forLanguageTag(call.getString("language","en")));
-                    pageExport=FactoryPageExport.prepare(staged,getContext().getCacheDir(),kind,exportPages,getContext().createConfigurationContext(locale).getString(R.string.factory_fb_record));
-                }
-                FactoryFileAccess.copyBatchAtomic(pageExport.files,FactoryPageExport.targets(target,kind,exportPages));return;
-            }
-            File ready=null;
+    @ActivityCallback private void saved(PluginCall call,ActivityResult result){
+        pickerOwner=null;worker.execute(()->{
+            List<Uri> written=new ArrayList<>();
             try{
-                File assets=new File(target.getParentFile(),target.getName()+".assets");
-                if(!FactoryFileAccess.contains(target.getParentFile(),assets))throw new IOException("Invalid BZD asset directory");
-                ready=materializeImages(assets);
-                FactoryFileAccess.copyAtomic(ready,target);createdAssets.clear();
-            }catch(Exception error){for(File asset:createdAssets)asset.delete();createdAssets.clear();throw error;}
-            finally{if(ready!=null)ready.delete();}
-          }
-        },target->{browser=null;browserOwner=null;worker.execute(()->{
-            java.util.List<File> files=target==null?java.util.Collections.emptyList():kind==FactoryFileAccess.Kind.BOARD?java.util.Collections.singletonList(target):FactoryPageExport.targets(target,kind,exportPages);
-            com.getcapacitor.JSArray uris=new com.getcapacitor.JSArray();for(File file:files)uris.put(android.net.Uri.fromFile(file).toString());
-            saving=false;clear();call.resolve(new JSObject().put("saved",target!=null).put("uri",uris.length()==0?null:uris.optString(0)).put("uris",uris));
-        });},kind);
-        try{browser.show();}catch(Exception error){browser=null;browserOwner=null;worker.execute(()->{saving=false;call.reject(error.getMessage(),error);});}
+                if(call==null)return;String owner=call.getString("id","");
+                if(result.getResultCode()!=Activity.RESULT_OK || result.getData()==null || result.getData().getData()==null){call.resolve(new JSObject().put("saved",false));return;}
+                require(call);Uri selected=result.getData().getData();
+                boolean multiple=kind==FactoryPageExport.Kind.IMAGE && exportPages.size()>1;
+                if(!multiple)written.add(selected);
+                if(canceled.contains(owner))throw new IOException("Save canceled");
+                List<File> files=kind==FactoryPageExport.Kind.BOARD?Collections.singletonList(staged):pageExport.files;
+                Uri directory=multiple?DocumentsContract.buildDocumentUriUsingTree(selected,DocumentsContract.getTreeDocumentId(selected)):null;
+                for(int i=0;i<files.size();i++){
+                    Uri target=multiple?DocumentsContract.createDocument(getContext().getContentResolver(),directory,"image/jpeg",call.getString("name","Fcboard")+"_"+String.format(Locale.ROOT,"%02d",exportPages.get(i).number)+".jpg"):selected;
+                    if(target==null)throw new IOException("Cannot create selected file");if(multiple)written.add(target);
+                    try(InputStream input=new FileInputStream(files.get(i));OutputStream output=getContext().getContentResolver().openOutputStream(target,"wt")){
+                        if(output==null)throw new IOException("Cannot write selected file");byte[] buffer=new byte[65536];int count;
+                        while((count=input.read(buffer))!=-1){if(canceled.contains(owner))throw new IOException("Save canceled");output.write(buffer,0,count);}
+                    }
+                }
+                if(canceled.contains(owner))throw new IOException("Save canceled");
+                JSArray uris=new JSArray();for(Uri uri:written)uris.put(uri.toString());
+                call.resolve(new JSObject().put("saved",true).put("uri",uris.optString(0)).put("uris",uris));
+            }catch(Exception error){
+                for(Uri uri:written)try{DocumentsContract.deleteDocument(getContext().getContentResolver(),uri);}catch(Exception ignored){}
+                if(call!=null){if(canceled.contains(call.getString("id","")))call.resolve(new JSObject().put("saved",false));else call.reject(error.getMessage(),error);}
+            }finally{if(call!=null)canceled.remove(call.getString("id",""));saving=false;clear();}
+        });
     }
-    @PluginMethod public void choose(PluginCall call){getActivity().runOnUiThread(()->showOpen(call));}
-    private void showOpen(PluginCall call){
+    @PluginMethod public void choose(PluginCall call){getActivity().runOnUiThread(()->{
         String owner=call.getString("requestId","");
-        if(owner.isEmpty() || owner.length()>100){call.reject("Invalid file browser request");return;}
-        if(canceledBrowsers.remove(owner)){call.resolve(new JSObject().put("cancelled",true));return;}
-        if(needsStorage()){requestPermissionForAlias("legacyStorage",call,"openPermission");return;}
-        if(browser!=null){call.reject("A file browser is already open");return;}
-        final FactoryFileAccess.Kind kind;
-        try{kind=FactoryFileAccess.Kind.read(call.getString("kind","bzd"));if(kind==FactoryFileAccess.Kind.PDF)throw new IOException("PDF is a save mode");}
-        catch(Exception error){call.reject(error.getMessage(),error);return;}
-        browserOwner=owner;
-        browser=new FactoryFileBrowserDialog(getActivity(),false,call.getString("language","en"),worker,file->{
-            if(!file.isFile() || !FactoryFileAccess.accepts(file,kind) || file.length()>MAX_SIZE)throw new IOException("Selected file is too large or unavailable");
-        },file->{browser=null;browserOwner=null;worker.execute(()->{
-            if(file==null){call.resolve(new JSObject().put("cancelled",true));return;}
-            opened=file;readId=UUID.randomUUID().toString();readSize=file.length();readModified=file.lastModified();
-            String extension=file.getName().substring(file.getName().lastIndexOf('.')+1).toLowerCase(java.util.Locale.ROOT);
-            String mime=kind==FactoryFileAccess.Kind.BOARD?"application/xml":"image/"+("jpg".equals(extension)?"jpeg":extension);
-            call.resolve(new JSObject().put("id",readId).put("name",file.getName()).put("size",readSize).put("mimeType",mime));
-        });},kind);
-        try{browser.show();}catch(Exception error){browser=null;browserOwner=null;call.reject(error.getMessage(),error);}
-    }
-    @PluginMethod public void cancelBrowser(PluginCall call){getActivity().runOnUiThread(()->{
-        String owner=call.getString("id","");boolean canceled=false;
-        if(!owner.isEmpty() && owner.equals(browserOwner) && browser!=null)canceled=browser.cancelIdle();
-        else if(!owner.isEmpty()){if(canceledBrowsers.size()>=32)canceledBrowsers.clear();canceledBrowsers.add(owner);}
-        call.resolve(new JSObject().put("cancelled",canceled));
+        try{
+            if(owner.isEmpty() || owner.length()>100)throw new IOException("Invalid file request");
+            if(canceled.remove(owner)){call.resolve(new JSObject().put("cancelled",true));return;}
+            if(pickerOwner!=null)throw new IOException("A file picker is already open");pickerOwner=owner;
+            startActivityForResult(call,new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),"chosen");
+        }catch(Exception error){if(Objects.equals(pickerOwner,owner))pickerOwner=null;call.reject(error.getMessage(),error);}
     });}
+    @ActivityCallback private void chosen(PluginCall call,ActivityResult result){pickerOwner=null;worker.execute(()->{
+        File copy=null;
+        try{
+            if(call==null)return;
+            if(result.getResultCode()!=Activity.RESULT_OK || result.getData()==null || result.getData().getData()==null || canceled.remove(call.getString("requestId",""))){call.resolve(new JSObject().put("cancelled",true));return;}
+            Uri uri=result.getData().getData();String name="Image";
+            try(Cursor cursor=getContext().getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){if(cursor!=null && cursor.moveToFirst())name=cursor.getString(0);}
+            copy=File.createTempFile("board-open-",".tmp",getContext().getCacheDir());long size=0;
+            try(InputStream input=getContext().getContentResolver().openInputStream(uri);OutputStream output=new FileOutputStream(copy)){
+                if(input==null)throw new IOException("Cannot read selected file");byte[] buffer=new byte[65536];int count;
+                while((count=input.read(buffer))!=-1){size+=count;if(size>MAX_SIZE)throw new IOException("Selected file is too large");output.write(buffer,0,count);}
+            }
+            if(opened!=null)opened.delete();opened=copy;copy=null;readId=UUID.randomUUID().toString();readSize=size;readModified=opened.lastModified();
+            call.resolve(new JSObject().put("id",readId).put("name",name).put("size",size).put("mimeType",getContext().getContentResolver().getType(uri)));
+        }catch(Exception error){if(copy!=null)copy.delete();if(call!=null)call.reject(error.getMessage(),error);}
+    });}
+    @PluginMethod public void cancelBrowser(PluginCall call){String owner=call.getString("id","");if(!owner.isEmpty())canceled.add(owner);call.resolve(new JSObject().put("cancelled",false));}
     @PluginMethod public void read(PluginCall call){worker.execute(()->{
         try{
-            if(opened==null || readId==null || !readId.equals(call.getString("id")) || opened.length()!=readSize || opened.lastModified()!=readModified)throw new IOException("Board file selection expired or changed");
-            long offset=call.getLong("offset",-1L);if(offset<0 || offset>=readSize)throw new IOException("Invalid board read offset");
-            byte[] bytes=new byte[(int)Math.min(262144,readSize-offset)];
+            if(opened==null || !Objects.equals(readId,call.getString("id")) || opened.length()!=readSize || opened.lastModified()!=readModified)throw new IOException("File selection expired");
+            long offset=call.getLong("offset",-1L);if(offset<0 || offset>=readSize)throw new IOException("Invalid read offset");byte[] bytes=new byte[(int)Math.min(262144,readSize-offset)];
             try(RandomAccessFile input=new RandomAccessFile(opened,"r")){input.seek(offset);input.readFully(bytes);}
             call.resolve(new JSObject().put("data",Base64.encodeToString(bytes,Base64.NO_WRAP)).put("next",offset+bytes.length));
         }catch(Exception error){call.reject(error.getMessage(),error);}
@@ -247,6 +176,6 @@ public class BoardFilePlugin extends Plugin {
             }finally{bitmap.recycle();}
         }catch(Exception e){call.reject(e.getMessage(),e);}
     });}
-    @PluginMethod public void close(PluginCall call){worker.execute(()->{if(!saving && id!=null && id.equals(call.getString("id")))clear();if(readId!=null && readId.equals(call.getString("id"))){readId=null;opened=null;}call.resolve();});}
-    @Override protected void handleOnDestroy(){if(browser!=null)browser.dismiss();worker.execute(this::clear);worker.shutdown();}
+    @PluginMethod public void close(PluginCall call){worker.execute(()->{if(!saving && Objects.equals(id,call.getString("id")))clear();if(Objects.equals(readId,call.getString("id"))){if(opened!=null)opened.delete();opened=null;readId=null;}call.resolve();});}
+    @Override protected void handleOnDestroy(){worker.execute(()->{clear();if(opened!=null)opened.delete();});worker.shutdown();}
 }

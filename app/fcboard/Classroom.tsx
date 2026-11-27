@@ -67,7 +67,6 @@ import {
   executeBoardCommand,
 } from "./commands";
 import {
-  DOCUMENT_ACCEPT,
   documentStrokeBounds,
   documentSourceSignature,
   inkSnapshot,
@@ -317,7 +316,6 @@ export const Classroom = ({
     resolve: () => void;
     reject: (error: Error) => void;
   } | null>(null);
-  const uploadInput = useRef<HTMLInputElement>(null);
   const actionBusy = useRef(false);
   const calculationRequests = useRef(new Set<AbortController>());
   useEffect(() => {
@@ -2954,11 +2952,10 @@ Tools and controls depend on the current interface; open the relevant surface be
       ),
       classroomCommands.register(
         "files.open",
-        "Open a received document by args.id or args.name, or show the received-file list when omitted.",
+        "Open a received document by args.id or args.name, or open the system picker for all supported files when omitted.",
         async (args) => {
           if (!args.id && !args.name) {
-            setPanel("files");
-            return { panel: "files", awaitingFile: true };
+            return classroomCommands.execute({ name: "files.pick", args });
           }
           const local =
             typeof args.name === "string"
@@ -3859,24 +3856,13 @@ Tools and controls depend on the current interface; open the relevant surface be
             )}
             {panel === "files" && (
               <>
-                <input
-                  hidden
-                  ref={uploadInput}
-                  type="file"
-                  accept={DOCUMENT_ACCEPT}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      void showPreview(file).catch((failure) =>
-                        setError(errorMessage(failure)),
-                      );
-                    }
-                    event.target.value = "";
-                  }}
-                />
                 <button
                   className="fc-primary"
-                  onClick={() => uploadInput.current?.click()}
+                  onClick={() =>
+                    void run(() =>
+                      classroomCommands.execute({ name: "files.pick" }),
+                    )
+                  }
                 >
                   {t("fcboard.open_local_courseware_file")}
                 </button>

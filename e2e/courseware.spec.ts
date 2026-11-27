@@ -10,11 +10,15 @@ import type { Page } from "@playwright/test";
 
 const fixture = (name: string) =>
   path.resolve("node_modules/.fcboard-research/courseware", name);
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    Reflect.deleteProperty(window, "showOpenFilePicker");
+  });
+});
 const openFile = async (page: Page, name: string) => {
-  await selectMenu(page, "课件 / 局域网快传");
-  await page
-    .locator('.fc-panel input[type="file"]')
-    .setInputFiles(fixture(name));
+  const choose = page.waitForEvent("filechooser");
+  await selectMenu(page, "打开");
+  await (await choose).setFiles(fixture(name));
   await expect(page.getByRole("button", { name: "板书开关" })).toBeEnabled({
     timeout: 30000,
   });

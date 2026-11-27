@@ -45,17 +45,17 @@ it("places toolbar settings before AI and opens its own page", () => {
   ).toBeVisible();
 });
 
-it("preserves native defaults and shows a single multimedia entry", () => {
+it("preserves toolbar defaults and removes media/document entries after their move to Open", () => {
   const view = render(<ToolbarSettings />);
   expect(readToolbarItems()).toEqual(DEFAULT_TOOLBAR_ITEMS);
   expect(
     view.container.querySelectorAll('[data-tool-id="media"]'),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
   expect(view.container.querySelector('[data-tool-id="image"]')).toBeNull();
-  expect(normalizeToolbarItems(["image", "media"])).toEqual(["media"]);
+  expect(normalizeToolbarItems(["image", "media", "document"])).toEqual([]);
   expect(view.container.querySelectorAll(".is-fixed")).toHaveLength(3);
   expect(
-    screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 25 })),
+    screen.getByText(t("fcboard.toolbar_hint", { count: 8, max: 23 })),
   ).toBeVisible();
   fireEvent.click(badge(t("fcboard.mind_map")));
   expect(readToolbarItems()).toEqual(
@@ -87,14 +87,14 @@ it("leaves card taps and long drags inert; only the original badge changes membe
 it("enforces the original total limit of 13 and reports the original message on an add attempt", () => {
   saveToolbarItems(NATIVE_TOOLBAR_ITEMS.slice(0, 10));
   render(<ToolbarSettings />);
-  fireEvent.click(badge(t("fcboard.document")));
+  fireEvent.click(badge(t("fcboard.timer")));
   expect(readToolbarItems()).toHaveLength(10);
   expect(screen.getByRole("alert")).toHaveTextContent(
     t("fcboard.toolbar_limit"),
   );
   fireEvent.click(badge(t("fcboard.toolbox"), true));
-  fireEvent.click(badge(t("fcboard.document")));
-  expect(readToolbarItems()).toContain("document");
+  fireEvent.click(badge(t("fcboard.timer")));
+  expect(readToolbarItems()).toContain("timer");
   expect(readToolbarItems()).toHaveLength(10);
 });
 

@@ -373,6 +373,52 @@ it.each([
     expect(api.getAppState().cursorButton).toBe("up");
   },
 );
+it("keeps movable SVG geometry controls and the split screen out of main native ink", async () => {
+  await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
+  const api = window.h.app.api;
+  window.h.state.width = 1000;
+  window.h.state.height = 700;
+  act(() => api.setActiveTool({ type: "freedraw" }));
+  const layer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  layer.classList.add("fc-factory-gizmos");
+  const gizmo = document.createElementNS(layer.namespaceURI, "g");
+  gizmo.setAttribute("data-gizmo", "ruler");
+  gizmo.setAttribute("style", "visibility: visible; pointer-events: auto");
+  const bounds = vi
+    .spyOn(gizmo, "getBoundingClientRect")
+    .mockReturnValue(new DOMRect(100, 120, 320, 190));
+  layer.append(gizmo);
+  const split = document.createElement("div");
+  split.className = "fc-split-board";
+  render(<NativeInkInteraction api={api} />);
+  try {
+    document.body.append(layer);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
+        100, 120, 420, 310,
+      ]),
+    );
+    bounds.mockReturnValue(new DOMRect(400, 300, 190, 320));
+    gizmo.setAttribute("transform", "translate(400 300) rotate(90)");
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].blocked).toContainEqual([
+        400, 300, 590, 620,
+      ]),
+    );
+    document.body.append(split);
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(false),
+    );
+    split.remove();
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)?.[0].enabled).toBe(true),
+    );
+  } finally {
+    split.remove();
+    layer.remove();
+  }
+});
+
 it("keeps brush and gradient previews native with the calibrated style", async () => {
   await editor(<Fcboard UIOptions={{ unifiedToolbar: true }} />);
   const api = window.h.app.api;

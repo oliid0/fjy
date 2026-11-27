@@ -927,6 +927,7 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
               <g
                 key={widget.id}
                 data-gizmo={widget.id}
+                style={{ pointerEvents: "auto" }}
                 transform={`translate(${widget.position.x} ${widget.position.y}) rotate(${widget.params.rotation}) scale(${widget.params.size})`}
               >
                 {widget.kind === "protractor" ? (
@@ -985,16 +986,16 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
                   />
                 )}
                 {(widget.kind === "ruler" || widget.kind === "setSquare") && (
-                  <line
-                    x1={widget.kind === "ruler" ? -48 : -12}
-                    x2={width}
-                    y1={widget.kind === "ruler" ? -36 : -30}
-                    y2={widget.kind === "ruler" ? -36 : -30}
-                    stroke="transparent"
-                    strokeWidth={widget.kind === "ruler" ? 72 : 60}
+                  <rect
+                    data-gizmo-edge="horizontal"
+                    x={widget.kind === "ruler" ? -48 : -12}
+                    y={widget.kind === "ruler" ? -72 : -60}
+                    width={width + (widget.kind === "ruler" ? 48 : 12)}
+                    height={widget.kind === "ruler" ? 72 : 60}
+                    fill="transparent"
                     aria-label={t("fcboard.ruler")}
                     style={{
-                      pointerEvents: "stroke",
+                      pointerEvents: "auto",
                       cursor: "crosshair",
                       touchAction: "none",
                     }}
@@ -1002,15 +1003,15 @@ export const FactoryGizmos = ({ api }: { api: FcboardImperativeAPI }) => {
                   />
                 )}
                 {widget.kind === "setSquare" && (
-                  <line
-                    x1={-30}
-                    x2={-30}
-                    y1={0}
-                    y2={height}
-                    stroke="transparent"
-                    strokeWidth={60}
+                  <rect
+                    data-gizmo-edge="vertical"
+                    x={-60}
+                    y={0}
+                    width={60}
+                    height={height}
+                    fill="transparent"
                     style={{
-                      pointerEvents: "stroke",
+                      pointerEvents: "auto",
                       cursor: "crosshair",
                       touchAction: "none",
                     }}

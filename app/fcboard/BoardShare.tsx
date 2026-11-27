@@ -17,14 +17,14 @@ import documentIcon from "./factory-share-icons/document.svg?url";
 import imageIcon from "./factory-share-icons/jpg.svg?url";
 import pdfIcon from "./factory-share-icons/pdf.svg?url";
 
-import { saveBoardFile, savePageFiles } from "./boardFile";
+import { saveBoardFile, savePageFiles, boardFileContent } from "./boardFile";
 import { MailComposer } from "./MailComposer";
 import { ShareQRCode, useShareProtection } from "./ShareQRCode";
 import { boardPageExportOptions, boardCanvasSize } from "./boardExport";
 import { ShareServerChooser } from "./ShareServerChooser";
 import { BzdCodeDialog } from "./BzdCodeDialog";
 import { CloudPageShare, uploadCloudBzd } from "./cloudTransfers";
-import { serializeBzd } from "./bzd";
+import { loadCloudShare } from "./cloudShare";
 
 import type { CloudShareConfig } from "./cloudShare";
 import type { Board } from "./boards";
@@ -35,6 +35,7 @@ export const BoardShare = () => {
   const { langCode } = useI18n();
   const [open, setOpen] = useState(false);
   const [pages, setPages] = useState<Board[]>([]);
+  const [activePage, setActivePage] = useState("");
   const [canvasSize, setCanvasSize] = useState(boardCanvasSize);
   const [selected, setSelected] = useState<string[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
@@ -53,7 +54,8 @@ export const BoardShare = () => {
   const [mail, setMail] = useState(false);
   const [savingFile, setSavingFile] = useState(false);
   const [choosing, setChoosing] = useState(true);
-  const [transfer, setTransfer] = useState<"qr" | "bzd">();
+  const pageLimit = savingFile ? 100 : 20;
+  const [transfer, setTransfer] = useState<"qr">();
   const [code, setCode] = useState("");
   const cloud = useRef<CloudPageShare | undefined>(undefined);
   useEffect(() => {
@@ -117,7 +119,7 @@ export const BoardShare = () => {
       source?.addEventListener("abort", abortOpening, { once: true });
       setMail(email);
       setSavingFile(saveFile);
-      setChoosing(true);
+      setChoosing(!saveFile);
       setTransfer(undefined);
       setCode("");
       setOpen(true);
@@ -142,23 +144,37 @@ export const BoardShare = () => {
           return;
         }
         setPages(workspace.boards);
+        setActivePage(workspace.active);
         setCanvasSize(workspace.canvasSize ?? boardCanvasSize());
         if (
           ids !== undefined &&
           (!Array.isArray(ids) ||
             !ids.length ||
-            ids.length > 20 ||
+            ids.length > (saveFile ? 100 : 20) ||
             ids.some(
               (id) =>
                 typeof id !== "string" ||
                 !workspace.boards.some((board) => board.id === id),
             ))
         ) {
-          throw new Error(t("fcboard.select_1_to_20_pages"));
+          throw new Error(
+            t(
+              saveFile
+                ? "fcboard.select_1_to_100_pages"
+                : "fcboard.select_1_to_20_pages",
+            ),
+          );
+        }
+        if (saveFile && ids === undefined && workspace.boards.length > 100) {
+          setChoosing(true);
+          setError(t("fcboard.select_1_to_100_pages"));
+          return;
         }
         setSelected(
           ids === undefined
-            ? workspace.boards.map((board) => board.id).slice(0, 20)
+            ? workspace.boards
+                .map((board) => board.id)
+                .slice(0, saveFile ? 100 : 20)
             : [...new Set(ids as string[])],
         );
         if (ids !== undefined) {
@@ -191,7 +207,7 @@ export const BoardShare = () => {
     );
     const stopSave = classroomCommands.register(
       "board.saveFile",
-      "Choose board pages and save native BZD/JPG/PDF files.",
+      "Choose BZD/JPG/PDF and save using the system location picker.",
       (args) =>
         openPages(
           false,
@@ -211,10 +227,41 @@ export const BoardShare = () => {
           args.signal instanceof AbortSignal ? args.signal : undefined,
         ),
     );
+    const stopCloud = classroomCommands.register(
+      "board.cloudSave",
+      "Save all editable pages to the configured cloud file service and display its extraction code.",
+      async (args) => {
+        const config = (args.config ?? loadCloudShare()) as CloudShareConfig;
+        if (
+          !config ||
+          typeof config.endpoint !== "string" ||
+          typeof config.key !== "string"
+        ) {
+          throw new Error(t("fcboard.invalid_style_parameters"));
+        }
+        const signal =
+          args.signal instanceof AbortSignal ? args.signal : undefined;
+        signal?.throwIfAborted();
+        const workspace = (await classroomCommands.execute({
+          name: "board.pages",
+        })) as BoardPages;
+        const result = await uploadCloudBzd(
+          config,
+          await boardFileContent(workspace.boards, signal, workspace.active),
+          signal,
+        );
+        signal?.throwIfAborted();
+        setCode(result.code);
+        setOpen(true);
+        setTransfer(undefined);
+        return result;
+      },
+    );
     return () => {
       stopShare();
       stopMail();
       stopSave();
+      stopCloud();
     };
   }, [native]);
   useEffect(
@@ -262,10 +309,7 @@ export const BoardShare = () => {
       }
     }
   };
-  const exportEditable = async (
-    config?: CloudShareConfig,
-    signal?: AbortSignal,
-  ) => {
+  const exportEditable = async (signal?: AbortSignal) => {
     const controller = new AbortController();
     exportRequest.current?.abort();
     exportRequest.current = controller;
@@ -278,22 +322,11 @@ export const BoardShare = () => {
     setStatus("");
     try {
       const chosen = pages.filter((page) => selected.includes(page.id));
-      if (config) {
-        const result = await uploadCloudBzd(
-          config,
-          serializeBzd(chosen),
-          controller.signal,
-        );
-        if (current === generation.current && !controller.signal.aborted) {
-          setCode(result.code);
-          setTransfer(undefined);
-        }
-        return;
-      }
       const saved = await saveBoardFile(
         chosen,
         chosen[0]?.name || "Fcboard",
         controller.signal,
+        activePage,
       );
       if (saved && current === generation.current) {
         setStatus(t("fcboard.file_saved"));
@@ -329,40 +362,59 @@ export const BoardShare = () => {
     setError("");
     setStatus("");
     try {
-      if (!selected.length || selected.length > 20) {
-        throw new Error(t("fcboard.select_1_to_20_pages"));
+      if (!selected.length || selected.length > pageLimit) {
+        throw new Error(
+          t(
+            savingFile
+              ? "fcboard.select_1_to_100_pages"
+              : "fcboard.select_1_to_20_pages",
+          ),
+        );
+      }
+      const chosen = pages.flatMap((board, index) =>
+        selected.includes(board.id) ? [{ board, page: index + 1 }] : [],
+      );
+      if (method === "download" || method === "pdf") {
+        const saved = await savePageFiles(
+          chosen.map(({ board, page }) => ({
+            page,
+            blob: () =>
+              exportToBlob({
+                ...boardPageExportOptions(board, canvasSize),
+                mimeType: "image/jpeg",
+                quality: 1,
+              }),
+          })),
+          "Fcboard",
+          method === "pdf" ? "pdf" : "jpg",
+          controller.signal,
+        );
+        if (saved && current === generation.current) {
+          setStatus(t("fcboard.file_saved"));
+        }
+        return;
       }
       const images: string[] = [];
       const files: File[] = [];
-      const rasterPages: { page: number; blob: Blob }[] = [];
-      for (const board of pages.filter((page) => selected.includes(page.id))) {
-        const options = boardPageExportOptions(
-          board,
-          canvasSize,
-          method === "qr" ? 2000 : 4096,
-        );
+      for (const { board, page } of chosen) {
         const blob = await exportToBlob({
-          ...options,
-          mimeType:
-            method === "download" || method === "pdf"
-              ? "image/jpeg"
-              : "image/png",
-          ...(method === "download" || method === "pdf" ? { quality: 1 } : {}),
+          ...boardPageExportOptions(
+            board,
+            canvasSize,
+            method === "qr" ? 2000 : 4096,
+          ),
+          mimeType: "image/png",
         });
         if (current !== generation.current) {
           return;
         }
         controller.signal.throwIfAborted();
-        if (method === "qr" || (method === "mail" && native)) {
+        if (method === "qr" || native) {
           images.push(await getDataURL(blob));
-        } else if (method === "mail") {
-          files.push(
-            new File([blob], `Fcboard-${pages.indexOf(board) + 1}.png`, {
-              type: "image/png",
-            }),
-          );
         } else {
-          rasterPages.push({ page: pages.indexOf(board) + 1, blob });
+          files.push(
+            new File([blob], `Fcboard-${page}.png`, { type: "image/png" }),
+          );
         }
       }
       if (method === "qr") {
@@ -423,16 +475,6 @@ export const BoardShare = () => {
             "fcboard.choose_an_app_in_the_system_share_window_and_confirm_sending",
           ),
         );
-      } else {
-        const saved = await savePageFiles(
-          rasterPages,
-          "Fcboard",
-          method === "pdf" ? "pdf" : "jpg",
-          controller.signal,
-        );
-        if (saved && current === generation.current) {
-          setStatus(t("fcboard.file_saved"));
-        }
       }
     } catch (failure) {
       if (signal) {
@@ -463,7 +505,7 @@ export const BoardShare = () => {
   if (transfer) {
     return (
       <ShareServerChooser
-        title={transfer === "qr" ? t("fcboard.qr_share") : "BZD"}
+        title={t("fcboard.qr_share")}
         onClose={() => void close()}
         localDisabled={
           transfer === "qr" && !native
@@ -472,16 +514,8 @@ export const BoardShare = () => {
               )
             : undefined
         }
-        onLocal={(signal) =>
-          transfer === "qr"
-            ? share("qr", undefined, signal)
-            : exportEditable(undefined, signal)
-        }
-        onCloud={(config, signal) =>
-          transfer === "qr"
-            ? share("qr", config, signal)
-            : exportEditable(config, signal)
-        }
+        onLocal={(signal) => share("qr", undefined, signal)}
+        onCloud={(config, signal) => share("qr", config, signal)}
       />
     );
   }
@@ -538,7 +572,7 @@ export const BoardShare = () => {
             <button
               type="button"
               onClick={() =>
-                setSelected(pages.map((page) => page.id).slice(0, 20))
+                setSelected(pages.map((page) => page.id).slice(0, pageLimit))
               }
             >
               {t("labels.selectAll")}
@@ -554,7 +588,8 @@ export const BoardShare = () => {
                   type="checkbox"
                   disabled={
                     busy ||
-                    (!selected.includes(page.id) && selected.length >= 20)
+                    (!selected.includes(page.id) &&
+                      selected.length >= pageLimit)
                   }
                   checked={selected.includes(page.id)}
                   onChange={(event) =>
@@ -607,7 +642,7 @@ export const BoardShare = () => {
           <button
             type="button"
             disabled={busy || !selected.length}
-            onClick={() => setTransfer("bzd")}
+            onClick={() => void exportEditable()}
           >
             <img src={documentIcon} alt="" />
             <span>BZD</span>
@@ -618,18 +653,20 @@ export const BoardShare = () => {
             onClick={() => void share("download")}
           >
             <img src={imageIcon} alt="" />
-            <span>{t("fcboard.download_selected_pages")}</span>
+            <span>
+              {savingFile
+                ? t("fcboard.image")
+                : t("fcboard.download_selected_pages")}
+            </span>
           </button>
-          {native && (
-            <button
-              type="button"
-              disabled={busy || !selected.length}
-              onClick={() => void share("pdf")}
-            >
-              <img src={pdfIcon} alt="" />
-              <span>PDF</span>
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={busy || !selected.length}
+            onClick={() => void share("pdf")}
+          >
+            <img src={pdfIcon} alt="" />
+            <span>PDF</span>
+          </button>
         </div>
       )}
       {busy && <p role="status">{t("fcboard.preparing_pages")}</p>}

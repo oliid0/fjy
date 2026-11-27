@@ -6,7 +6,6 @@ import { waitFor } from "@testing-library/react";
 import type { DataURL } from "@fcboard/fcboard/types";
 
 import {
-  pickBoardFile,
   pickImageFile,
   openBoardFile,
   saveBoardFile,
@@ -54,13 +53,6 @@ const page = (): Board => ({
   },
   updated: 1,
 });
-const readText = (file: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
-    reader.readAsText(file);
-  });
 beforeEach(() => {
   Object.values(engine).forEach((mock) => mock.mockReset());
   engine.close.mockResolvedValue(undefined);
@@ -87,9 +79,7 @@ it("uses the original image mode and preserves binary bytes and MIME through nat
     next: bytes.length,
   });
   const image = await pickImageFile();
-  expect(engine.choose).toHaveBeenCalledWith(
-    expect.objectContaining({ kind: "image", language: "en" }),
-  );
+  expect(engine.choose).toHaveBeenCalledWith({ requestId: expect.any(String) });
   expect(image).toMatchObject({
     name: "课堂.png",
     type: "image/png",
@@ -217,9 +207,11 @@ it("forwards an original sheared bitmap matrix to native decoding and imports th
     height: 100,
     bounds: { x: 20, y: 30, width: 250, height: 100 },
   });
-  const [board] = await openBoardFile(
-    '<bzd><slide><object eType="OBJECT_BITMAP" picUrl="/Whiteboard/picture.png" matrix="1,0.5,20,0,1,30,0,0,1" photoRectRight="200" photoRectBottom="100"><lstPt/></object></slide></bzd>',
-  );
+  const [board] = (
+    await openBoardFile(
+      '<bzd><slide><object eType="OBJECT_BITMAP" picUrl="/Whiteboard/picture.png" matrix="1,0.5,20,0,1,30,0,0,1" photoRectRight="200" photoRectBottom="100"><lstPt/></object></slide></bzd>',
+    )
+  ).pages;
   expect(engine.readAsset).toHaveBeenCalledWith({
     path: "/Whiteboard/picture.png",
     transform: [1, 0.5, 20, 0, 1, 30, 0, 0, 1],
@@ -233,49 +225,18 @@ it("forwards an original sheared bitmap matrix to native decoding and imports th
   });
 });
 
-it("reads selected native bytes across a multibyte UTF-8 boundary into the real factory XML parser", async () => {
-  const xml =
-    '<bzd><slide name="牛顿"><object eType="OBJECT_TEXT" text="你好" width="30"><lstPt>10,20,false,</lstPt></object></slide></bzd>';
-  const bytes = new TextEncoder().encode(xml);
-  const split = bytes.findIndex((byte) => byte > 127) + 1;
-  engine.choose.mockResolvedValue({
-    id: "read-one",
-    name: "课件.bzd",
-    size: bytes.length,
-  });
-  engine.read.mockImplementation(async ({ offset }) => {
-    const end = offset === 0 ? split : bytes.length;
-    return {
-      data: btoa(String.fromCharCode(...bytes.slice(offset, end))),
-      next: end,
-    };
-  });
-  const file = await pickBoardFile();
-  expect(file?.name).toBe("课件.bzd");
-  const [board] = await openBoardFile(await readText(file!));
-  expect(board.name).toBe("牛顿");
-  expect(board.elements[0]).toMatchObject({
-    type: "text",
-    text: "你好",
-    x: 10,
-    y: 20,
-  });
-  expect(engine.read).toHaveBeenCalledTimes(2);
-  expect(engine.close).toHaveBeenCalledWith({ id: "read-one" });
-});
-
 it("keeps cancellation distinct from success and rejects broken native reads without leaking the selected file session", async () => {
   engine.choose.mockResolvedValueOnce({ cancelled: true });
-  expect(await pickBoardFile()).toBeUndefined();
+  expect(await pickImageFile()).toBeUndefined();
   expect(engine.read).not.toHaveBeenCalled();
   for (const [size, chunk] of [
     [8, { data: "", next: 0 }],
     [8, { data: "YQ==", next: 8 }],
     [64 * 1024 * 1024 + 1, undefined],
   ] as const) {
-    engine.choose.mockResolvedValue({ id: "broken", name: "bad.bzd", size });
+    engine.choose.mockResolvedValue({ id: "broken", name: "bad.png", size });
     engine.read.mockResolvedValue(chunk);
-    await expect(pickBoardFile()).rejects.toThrow();
+    await expect(pickImageFile()).rejects.toThrow();
     expect(engine.close).toHaveBeenLastCalledWith({ id: "broken" });
   }
 });
@@ -288,11 +249,11 @@ it("cancels only its own native browser request and releases a late selection af
     }),
   );
   const controller = new AbortController();
-  const selecting = pickBoardFile(controller.signal);
+  const selecting = pickImageFile(controller.signal);
   const requestId = engine.choose.mock.calls[0][0].requestId;
   controller.abort();
   expect(engine.cancelBrowser).toHaveBeenCalledWith({ id: requestId });
-  finish({ id: "late", name: "课件.bzd", size: 10 });
+  finish({ id: "late", name: "课件.png", size: 10 });
   await expect(selecting).rejects.toMatchObject({ name: "AbortError" });
   expect(engine.read).not.toHaveBeenCalled();
   expect(engine.close).toHaveBeenCalledWith({ id: "late" });
@@ -301,7 +262,7 @@ it("cancels only its own native browser request and releases a late selection af
     permission.abort();
     throw new Error("Permission denied");
   });
-  await expect(pickBoardFile(permission.signal)).rejects.toMatchObject({
+  await expect(pickImageFile(permission.signal)).rejects.toMatchObject({
     name: "AbortError",
   });
 });
@@ -344,7 +305,7 @@ it("cancels an outstanding save dialog using its own staged ID and keeps web fil
   vi.mocked(fileOpen).mockRejectedValueOnce(
     new DOMException("cancel", "AbortError"),
   );
-  expect(await pickBoardFile()).toBeUndefined();
+  expect(await pickImageFile()).toBeUndefined();
   vi.mocked(fileSave).mockRejectedValueOnce(
     new DOMException("cancel", "AbortError"),
   );

@@ -10,6 +10,8 @@ import { useApp } from "@fcboard/fcboard/components/App";
 import { t } from "@fcboard/fcboard/i18n";
 import { render as renderEditor } from "@fcboard/fcboard/tests/test-utils";
 
+import { splitSceneAPI } from "./test/scene";
+
 import { render } from "./test/render";
 import { SplitBoard } from "./SplitBoard";
 import { BottomBarActions } from "./BottomBarActions";
@@ -81,7 +83,7 @@ it("toggles the original anchored split launcher on every real toolbar tap and e
           <Fcboard UIOptions={{ unifiedToolbar: true }}>
             <Launcher />
           </Fcboard>
-          <SplitBoard />
+          <SplitBoard api={splitSceneAPI()} />
         </div>
       </div>,
     );
@@ -117,7 +119,7 @@ it("toggles the original anchored split launcher on every real toolbar tap and e
 });
 
 it("enters writing directly and resizes two panes without losing independent ink", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   expect(await command()).toMatchObject({
     open: true,
     count: 2,
@@ -154,7 +156,7 @@ it("enters writing directly and resizes two panes without losing independent ink
 });
 
 it("uses exactly the three original colored pen images and one eraser with independent working tool selection", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   const tools = panes()[0].parentElement!.querySelector(".fc-split-penbar")!;
   const buttons = within(tools as HTMLElement).getAllByRole("button");
@@ -195,7 +197,7 @@ it("uses exactly the three original colored pen images and one eraser with indep
 });
 
 it("retains each hidden pane's independent color and ink through 4/2/3/4 layout and close/reopen", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command({ count: 4 });
   fireEvent.click(
     pane(3).getByRole("button", { name: t("fcboard.split_red") }),
@@ -228,7 +230,7 @@ it("retains each hidden pane's independent color and ink through 4/2/3/4 layout 
 });
 
 it("flushes a split stroke to the actual release point and reproduces that endpoint after resize", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command({ count: 2 });
   const canvas = panes()[0];
   const context = canvas.getContext("2d")!;
@@ -244,7 +246,7 @@ it("flushes a split stroke to the actual release point and reproduces that endpo
 });
 
 it("accepts empty coalesced batches, keeps concurrent contacts independent, and ends cancelled capture without losing ink", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command({ count: 2 });
   const canvas = panes()[0];
   const context = canvas.getContext("2d")!;
@@ -267,7 +269,7 @@ it("accepts empty coalesced batches, keeps concurrent contacts independent, and 
 });
 
 it("keeps coalesced bends and dispatch tails on move and release with one layout read per packet", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   const node = panes()[0];
   const context = node.getContext("2d")!;
@@ -297,7 +299,7 @@ it("keeps coalesced bends and dispatch tails on move and release with one layout
 });
 
 it("keeps five elongated finger contacts as independent ink and erases the real palm rectangle", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   const node = panes()[0];
   const context = node.getContext("2d")!;
@@ -328,7 +330,7 @@ it("keeps five elongated finger contacts as independent ink and erases the real 
 
 it("runs without ResizeObserver, handles retired pointer capture and releases backing stores on close", async () => {
   vi.stubGlobal("ResizeObserver", undefined);
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command({ count: 2 });
   const canvas = panes()[0];
   Object.defineProperty(canvas, "setPointerCapture", {
@@ -349,7 +351,7 @@ it("runs without ResizeObserver, handles retired pointer capture and releases ba
 });
 
 it("toggles and dismisses the anchored exit prompt without changing ink or allowing writes under the prompt", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command({ count: 2 });
   const close = screen.getByRole("button", { name: t("buttons.close") });
   fireEvent.click(close);
@@ -383,7 +385,7 @@ it("ignores obsolete exports after switching layouts and keeps a newer split ses
       encode = callback;
     },
   );
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command({ count: 2 });
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   fireEvent.click(screen.getByRole("button", { name: t("fcboard.save") }));
@@ -407,7 +409,7 @@ it("dismisses split save progress by an outside touch and cancels late encoding 
       encode = callback;
     },
   );
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   pointer(panes()[0], "pointerdown", 1, 20);
   pointer(panes()[0], "pointerup", 1, 120);

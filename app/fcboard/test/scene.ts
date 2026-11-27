@@ -1,7 +1,30 @@
 import { convertToFcboardElements } from "@fcboard/fcboard";
+import { getDefaultAppState } from "@fcboard/fcboard/appState";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import type { FcboardElement } from "@fcboard/element/types";
+
+export const splitSceneAPI = (): FcboardImperativeAPI => {
+  const api = sceneAPI();
+  let state = { ...getDefaultAppState(), ...api.getAppState() };
+  const listeners = new Set<() => void>();
+  return {
+    ...api,
+    getAppState: () => state,
+    onChange: (listener) => {
+      const notify = () => listener(api.getSceneElements(), state, {});
+      listeners.add(notify);
+      return () => {
+        listeners.delete(notify);
+      };
+    },
+    updateScene: (update) => {
+      api.updateScene(update);
+      state = { ...state, ...update.appState };
+      listeners.forEach((notify) => notify());
+    },
+  };
+};
 
 export const sceneAPI = () => {
   let tool = { type: "selection", customType: null };

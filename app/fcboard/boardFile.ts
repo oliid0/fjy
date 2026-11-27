@@ -1,10 +1,10 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { fileOpen, fileSave } from "browser-fs-access";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
-import { getLanguage } from "@fcboard/fcboard/i18n";
 
 import { serializeBzd, parseBzd } from "./bzd";
 import { classroomCommands } from "./commands";
+import { exportMediaFiles } from "./mediaPlaylist";
 
 import type { Board } from "./boards";
 import type { BzdAssetLoader } from "./bzd";
@@ -18,17 +18,13 @@ const engine = registerPlugin<{
   append(options: { id: string; offset: number; data: string }): Promise<void>;
   save(options: {
     id: string;
-    language: string;
+    name: string;
   }): Promise<{ saved: boolean; uri?: string }>;
   readAsset(options: {
     path: string;
     transform?: Parameters<BzdAssetLoader>[1];
   }): ReturnType<BzdAssetLoader>;
-  choose(options: {
-    requestId: string;
-    language: string;
-    kind?: "image";
-  }): Promise<{
+  choose(options: { requestId: string }): Promise<{
     cancelled?: boolean;
     id?: string;
     name?: string;
@@ -49,40 +45,31 @@ const isAbort = (error: unknown) =>
   "name" in error &&
   error.name === "AbortError";
 
-/** FileBrowserPopu on Android; received bytes still enter the same BZD parser. */
-const pickFile = async (
-  kind: "bzd" | "image",
+/** Image-only selection for the editor's image and background controls. */
+export const pickImageFile = async (
   signal?: AbortSignal,
 ): Promise<File | undefined> => {
   signal?.throwIfAborted();
   if (!Capacitor.isNativePlatform()) {
     try {
       const file = await fileOpen({
-        extensions:
-          kind === "bzd"
-            ? [".bzd", ".bz", ".bnf"]
-            : [".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif"],
-        mimeTypes:
-          kind === "bzd"
-            ? ["application/xml", "text/xml", "application/octet-stream"]
-            : [
-                "image/jpeg",
-                "image/png",
-                "image/bmp",
-                "image/webp",
-                "image/gif",
-              ],
-        description: kind === "bzd" ? "HWhiteBoard BZD" : "Image",
+        extensions: [".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif"],
+        mimeTypes: [
+          "image/jpeg",
+          "image/png",
+          "image/bmp",
+          "image/webp",
+          "image/gif",
+        ],
+        description: "Image",
       });
       signal?.throwIfAborted();
       if (file.size > MAX_FILE) {
-        throw new Error("BZD file is too large");
+        throw new Error("Image file is too large");
       }
       return file;
     } catch (error) {
-      if (signal?.aborted) {
-        throw error;
-      }
+      signal?.throwIfAborted();
       if (isAbort(error)) {
         return undefined;
       }
@@ -98,8 +85,6 @@ const pickFile = async (
   try {
     selected = await engine.choose({
       requestId,
-      language: getLanguage().code,
-      ...(kind === "image" ? { kind } : {}),
     });
   } catch (error) {
     signal?.throwIfAborted();
@@ -113,7 +98,7 @@ const pickFile = async (
   }
   const id = selected.id;
   if (typeof id !== "string" || !id) {
-    throw new Error("Invalid board file selection");
+    throw new Error("Invalid image file selection");
   }
   let result: File;
   try {
@@ -125,7 +110,7 @@ const pickFile = async (
       selected.size < 1 ||
       selected.size > MAX_FILE
     ) {
-      throw new Error("BZD file is too large or unavailable");
+      throw new Error("Image file is too large or unavailable");
     }
     const chunks: ArrayBuffer[] = [];
     for (let offset = 0; offset < selected.size; ) {
@@ -147,7 +132,6 @@ const pickFile = async (
       offset = next;
     }
     if (
-      kind === "image" &&
       ![
         "image/jpeg",
         "image/png",
@@ -159,7 +143,7 @@ const pickFile = async (
       throw new Error("Unsupported image file");
     }
     result = new File(chunks, selected.name, {
-      type: kind === "bzd" ? "application/xml" : selected.mimeType,
+      type: selected.mimeType,
     });
   } finally {
     await engine.close({ id }).catch(() => {});
@@ -167,9 +151,6 @@ const pickFile = async (
   signal?.throwIfAborted();
   return result;
 };
-export const pickBoardFile = (signal?: AbortSignal) => pickFile("bzd", signal);
-export const pickImageFile = (signal?: AbortSignal) =>
-  pickFile("image", signal);
 /** The editor uses its existing multi-image browser picker on the web. */
 export const nativeImagePicker = Capacitor.isNativePlatform()
   ? async () => {
@@ -194,37 +175,70 @@ export const openBoardFile = (text: string) =>
       ? (path, transform) => engine.readAsset({ path, transform })
       : undefined,
   );
+export const boardFileContent = async (
+  boards: readonly Board[],
+  signal?: AbortSignal,
+  activeId?: string,
+) => {
+  const keys = boards.flatMap((board) =>
+    board.elements.flatMap((element) =>
+      !element.isDeleted &&
+      element.customData?.fcInteractiveResource?.media?.key
+        ? [element.customData.fcInteractiveResource.media.key]
+        : [],
+    ),
+  );
+  const media = await exportMediaFiles(keys, signal);
+  signal?.throwIfAborted();
+  const xml = serializeBzd(boards, { media, activeId });
+  if (new Blob([xml]).size > MAX_FILE) {
+    throw new Error("BZD file is too large");
+  }
+  return xml;
+};
 export const saveBoardFile = async (
   boards: readonly Board[],
   name: string,
   signal?: AbortSignal,
+  activeId?: string,
 ) => {
   signal?.throwIfAborted();
-  const xml = serializeBzd(boards);
-  const blob = new Blob([xml], { type: "application/xml" });
-  if (blob.size > MAX_FILE) {
-    throw new Error("BZD file is too large");
-  }
+  const content = boardFileContent(boards, signal, activeId).then(
+    (xml) => new Blob([xml], { type: "application/xml" }),
+  );
   if (!Capacitor.isNativePlatform()) {
-    try {
-      await fileSave(blob, {
-        fileName: `${name}.bzd`,
-        description: "HWhiteBoard BZD",
-        extensions: [".bzd"],
-        mimeTypes: ["application/xml"],
-      });
-      return true;
-    } catch (error) {
-      if (isAbort(error)) {
-        return false;
-      }
-      throw error;
-    }
+    return saveBrowserFile(content, name, "bzd", "application/octet-stream");
   }
-  return saveNativeFile(blob, undefined, signal);
+  return saveNativeFile(await content, name, undefined, signal);
+};
+
+const saveBrowserFile = async (
+  content: Blob | Promise<Blob>,
+  name: string,
+  extension: string,
+  mime: string,
+) => {
+  // The system picker may be dismissed before deferred content finishes.
+  if (content instanceof Promise) {
+    void content.catch(() => {});
+  }
+  try {
+    await fileSave(content, {
+      fileName: `${name}.${extension}`,
+      extensions: [`.${extension}`],
+      mimeTypes: [mime],
+    });
+    return true;
+  } catch (error) {
+    if (isAbort(error)) {
+      return false;
+    }
+    throw error;
+  }
 };
 const saveNativeFile = async (
   blob: Blob,
+  name: string,
   metadata?: { kind: "jpg" | "pdf"; pages: { page: number; size: number }[] },
   signal?: AbortSignal,
 ) => {
@@ -247,7 +261,10 @@ const saveNativeFile = async (
     };
     signal?.addEventListener("abort", cancel, { once: true });
     try {
-      const result = await engine.save({ id, language: getLanguage().code });
+      const result = await engine.save({
+        id,
+        name,
+      });
       signal?.throwIfAborted();
       return result.saved;
     } catch (error) {
@@ -261,53 +278,159 @@ const saveNativeFile = async (
   }
 };
 
-/** One original SAVE_JPG / SAVE_PDF dialog; JPG names keep original page numbers. */
+type PageImage = { page: number; blob: Blob | (() => Promise<Blob>) };
+
+/** Save selected pages through the system picker; images keep their page numbers. */
 export const savePageFiles = async (
-  pages: { page: number; blob: Blob }[],
+  pages: PageImage[],
   name: string,
   format: "jpg" | "pdf",
   signal?: AbortSignal,
 ) => {
   signal?.throwIfAborted();
+  if (!pages.length || pages.length > 100) {
+    throw new Error("Choose 1–100 pages, up to 64 MB");
+  }
   let previous = 0;
-  const metadata = pages.map(({ page, blob }) => {
+  for (const { page } of pages) {
+    if (!Number.isInteger(page) || page <= previous || page > 100) {
+      throw new Error("Invalid exported page number");
+    }
+    previous = page;
+  }
+  let total = 0;
+  const readImage = async (image: PageImage) => {
+    signal?.throwIfAborted();
+    const blob =
+      typeof image.blob === "function" ? await image.blob() : image.blob;
+    signal?.throwIfAborted();
     if (
-      !Number.isInteger(page) ||
-      page <= previous ||
-      page > 100 ||
       blob.type !== "image/jpeg" ||
       blob.size < 1 ||
       blob.size > 16 * 1024 * 1024
     ) {
       throw new Error("Invalid exported page image");
     }
-    previous = page;
-    return { page, size: blob.size };
-  });
-  const blob = new Blob(pages.map((page) => page.blob));
-  if (!pages.length || pages.length > 20 || blob.size > MAX_FILE) {
-    throw new Error("Choose 1–20 pages, up to 64 MB");
-  }
+    total += blob.size;
+    if (total > MAX_FILE) {
+      throw new Error("Choose 1–100 pages, up to 64 MB");
+    }
+    return blob;
+  };
+  const readAll = async () => {
+    const blobs: Blob[] = [];
+    for (const page of pages) {
+      blobs.push(await readImage(page));
+    }
+    return blobs;
+  };
   if (Capacitor.isNativePlatform()) {
-    return saveNativeFile(blob, { kind: format, pages: metadata }, signal);
+    const blobs = await readAll();
+    return saveNativeFile(
+      new Blob(blobs),
+      name,
+      {
+        kind: format,
+        pages: pages.map(({ page }, index) => ({
+          page,
+          size: blobs[index].size,
+        })),
+      },
+      signal,
+    );
   }
   if (format === "pdf") {
-    throw new Error("PDF file saving requires the Android whiteboard");
+    const pdf = readAll().then(async (blobs) => {
+      const { rasterPagesPdf } = await import("./pagePdf");
+      return rasterPagesPdf(blobs, signal);
+    });
+    return saveBrowserFile(pdf, name, "pdf", "application/pdf");
   }
-  try {
-    for (const { page, blob } of pages) {
-      signal?.throwIfAborted();
-      await fileSave(blob, {
-        fileName: `${name}_${String(page).padStart(2, "0")}.jpg`,
-        extensions: [".jpg"],
-        mimeTypes: ["image/jpeg"],
-      });
+  const imageName = (page: number) =>
+    `${name}_${String(page).padStart(2, "0")}`;
+  const directoryPicker = (
+    window as Window & {
+      showDirectoryPicker?: (options: {
+        mode: "readwrite";
+        id: string;
+      }) => Promise<FileSystemDirectoryHandle>;
     }
-    return true;
-  } catch (error) {
-    if (isAbort(error)) {
+  ).showDirectoryPicker;
+  if (directoryPicker && pages.length > 1) {
+    let directory: FileSystemDirectoryHandle;
+    try {
+      directory = await directoryPicker.call(window, {
+        mode: "readwrite",
+        id: "fcboard-pages",
+      });
+    } catch (error) {
+      if (isAbort(error)) {
+        return false;
+      }
+      throw error;
+    }
+    const blobs = await readAll();
+    const written: string[] = [];
+    try {
+      for (const [index, { page }] of pages.entries()) {
+        signal?.throwIfAborted();
+        const basename = imageName(page);
+        let filename = `${basename}.jpg`;
+        for (let suffix = 1; ; suffix++) {
+          try {
+            await directory.getFileHandle(filename);
+            filename = `${basename}_${suffix}.jpg`;
+          } catch (error) {
+            if (
+              error instanceof DOMException &&
+              error.name === "NotFoundError"
+            ) {
+              break;
+            }
+            if (
+              error instanceof DOMException &&
+              error.name === "TypeMismatchError"
+            ) {
+              filename = `${basename}_${suffix}.jpg`;
+              continue;
+            }
+            throw error;
+          }
+        }
+        const handle = await directory.getFileHandle(filename, {
+          create: true,
+        });
+        written.push(filename);
+        const output = await handle.createWritable();
+        try {
+          await output.write(blobs[index]);
+          signal?.throwIfAborted();
+          await output.close();
+        } catch (error) {
+          await output.abort().catch(() => {});
+          throw error;
+        }
+      }
+      return true;
+    } catch (error) {
+      await Promise.allSettled(
+        written.map((filename) => directory.removeEntry(filename)),
+      );
+      throw error;
+    }
+  }
+  for (const image of pages) {
+    const content = readImage(image);
+    if (
+      !(await saveBrowserFile(
+        typeof image.blob === "function" ? content : await content,
+        imageName(image.page),
+        "jpg",
+        "image/jpeg",
+      ))
+    ) {
       return false;
     }
-    throw error;
   }
+  return true;
 };

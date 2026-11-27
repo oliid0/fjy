@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
+import {
+  factoryBackgrounds,
+  loadBackground,
+  backgroundOpacity,
+} from "@fcboard/fcboard/whiteboardBackground";
 
 import {
   isPalmContact,
@@ -8,6 +13,14 @@ import {
 } from "@fcboard/fcboard/eraser/stroke";
 
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
+
+import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
+
+import { BackgroundSettings } from "./BackgroundSettings";
+import {
+  canvasConfigurationPatch,
+  applyCanvasConfiguration,
+} from "./canvasConfiguration";
 
 import blackPenIcon from "./assets/multiscreen/ic_black_pen.svg?url";
 import bluePenIcon from "./assets/multiscreen/ic_blue_pen.svg?url";
@@ -42,12 +55,6 @@ type Pane = {
 const colors = ["#000000", "#0000ff", "#ff0000"];
 const penWidth = 2.01;
 const penIcons = [blackPenIcon, bluePenIcon, redPenIcon];
-const backgrounds = [
-  { color: "#ffffff", label: "split_background_0" },
-  { color: "#263731", label: "split_background_1" },
-  { color: "#cfaa29", label: "split_background_3" },
-  { color: "#312e2e", label: "split_background_2" },
-] as const;
 const drawSegment = (
   canvas: HTMLCanvasElement,
   stroke: Stroke,
@@ -121,12 +128,16 @@ const SplitPane = ({
   model,
   index,
   background,
+  texture,
+  textureOpacity,
   resizing,
   disabled,
 }: {
   model: Pane;
   index: number;
   background: string;
+  texture?: string;
+  textureOpacity: number;
   resizing: boolean;
   disabled: boolean;
 }) => {
@@ -329,6 +340,18 @@ const SplitPane = ({
     }
     native.current?.update();
   }, [disabled, resizing, tool, eraser]);
+  const chooseTool = (value: number, erase: number) => {
+    model.color = value;
+    model.eraser = erase;
+    nativeStyle.current = {
+      ...nativeStyle.current,
+      color: colors[value],
+      eraser: erase,
+    };
+    setTool(value);
+    setEraser(erase);
+    native.current?.update();
+  };
   const point = (x: number, y: number, rect: DOMRect): Point => {
     return [
       Math.max(0, Math.min(1, (x - rect.left) / Math.max(1, rect.width))),
@@ -380,12 +403,25 @@ const SplitPane = ({
         }
       }}
     >
+      {texture && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            backgroundImage: `url("${texture}")`,
+            backgroundSize: "100% 100%",
+            opacity: textureOpacity,
+          }}
+        />
+      )}
       <canvas
         ref={canvas}
         tabIndex={disabled ? -1 : 0}
         aria-disabled={disabled}
         onContextMenu={(event) => event.preventDefault()}
-        style={{ background, touchAction: "none" }}
+        style={{ touchAction: "none" }}
         onPointerDown={(event) => {
           if (
             disabled ||
@@ -401,19 +437,22 @@ const SplitPane = ({
           } catch {
             // WebViews may retire a pointer before capture reaches the DOM.
           }
+          const { color, eraser: eraserSize } = nativeStyle.current;
           const erase =
-            !!eraser ||
-            isPalmContact(event, 36) ||
+            !!eraserSize ||
+            isPalmContact(event, 36 / (devicePixelRatio || 1)) ||
             (event.pointerType === "pen" &&
               (event.button === 2 ||
                 event.button === 5 ||
                 !!(event.buttons & 34)));
           const stroke: Stroke = {
-            color: colors[tool],
-            width: erase ? eraser || Math.max(60, event.width || 0) : penWidth,
+            color,
+            width: erase
+              ? eraserSize || Math.max(60, event.width || 0)
+              : penWidth,
             height: erase
-              ? eraser
-                ? eraser * 1.2
+              ? eraserSize
+                ? eraserSize * 1.2
                 : Math.max(72, event.height || 0)
               : penWidth,
             erase,
@@ -480,12 +519,14 @@ const SplitPane = ({
                   aria-label={t(`fcboard.${label}`)}
                   aria-pressed={!eraser && tool === value}
                   disabled={disabled}
-                  onClick={() => {
-                    model.color = value;
-                    model.eraser = 0;
-                    setTool(value);
-                    setEraser(0);
+                  onPointerDown={(event) => {
+                    if (event.button === 0) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      chooseTool(value, 0);
+                    }
                   }}
+                  onClick={() => chooseTool(value, 0)}
                 >
                   <img src={penIcons[value]} alt="" draggable={false} />
                 </button>
@@ -502,10 +543,14 @@ const SplitPane = ({
               aria-label={t("fcboard.split_large_eraser")}
               aria-pressed={eraser === 90}
               disabled={disabled}
-              onClick={() => {
-                model.eraser = 90;
-                setEraser(90);
+              onPointerDown={(event) => {
+                if (event.button === 0) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  chooseTool(tool, 90);
+                }
               }}
+              onClick={() => chooseTool(tool, 90)}
             >
               <img src={eraserIcon} alt="" draggable={false} />
             </button>
@@ -515,16 +560,23 @@ const SplitPane = ({
     </section>
   );
 };
-export const SplitBoard = () => {
+export const SplitBoard = ({ api }: { api: FcboardImperativeAPI }) => {
+  const [boardState, setBoardState] = useState(() => api.getAppState());
+  useEffect(() => api.onChange(() => setBoardState(api.getAppState())), [api]);
+  const background = boardState.viewBackgroundColor;
+  const pattern = boardState.whiteboardBackground;
+  const texture = pattern
+    ? pattern.pattern === 14
+      ? pattern.image
+      : factoryBackgrounds[pattern.pattern - 1]
+    : undefined;
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(2);
   const [ratio, setRatio] = useState(50);
   const [draggingDivider, setDraggingDivider] = useState(false);
   const resizing = useRef<{ pointer: number; original: number } | null>(null);
-  const [background, setBackground] = useState(1);
   const [draft, setDraft] = useState<{
     count: number;
-    background: number;
   } | null>(null);
   const [exiting, setExiting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -556,13 +608,20 @@ export const SplitBoard = () => {
       if (!context || !canvas.width || !canvas.height) {
         throw new Error(t("fcboard.the_board_is_empty"));
       }
-      context.fillStyle = backgrounds[background].color;
+      context.fillStyle = background;
       context.fillRect(0, 0, canvas.width, canvas.height);
       let x = 0;
       context.strokeStyle = "#fcfcfe";
       context.lineWidth = 2 * (window.devicePixelRatio || 1);
       context.setLineDash([]);
+      const image = await loadBackground(pattern);
+      request.signal.throwIfAborted();
       for (const pane of panes) {
+        if (image && pattern) {
+          context.globalAlpha = backgroundOpacity(pattern);
+          context.drawImage(image, x, 0, pane.width, pane.height);
+          context.globalAlpha = 1;
+        }
         context.drawImage(pane, x, 0);
         if (x) {
           context.beginPath();
@@ -609,8 +668,8 @@ export const SplitBoard = () => {
       }
     }
   };
-  const current = useRef({ open, count, background });
-  current.current = { open, count, background };
+  const current = useRef({ open, count });
+  current.current = { open, count };
   const models = useRef<Pane[]>(
     Array.from({ length: 4 }, () => ({ strokes: [], color: 0 })),
   );
@@ -618,16 +677,14 @@ export const SplitBoard = () => {
     () =>
       classroomCommands.register(
         "tools.split",
-        "Open independent 2/3/4 column writing canvases immediately. args.open=false closes; args.count=2|3|4; args.background=0..3. args.configure=true opens optional settings. Ink is retained per pane when switching layout or closing.",
+        "Open independent 2/3/4 column writing canvases immediately. args.open=false closes; args.count=2|3|4; Background always follows the main board. args.configure=true opens optional settings. Ink is retained per pane when switching layout or closing.",
         (args) => {
           if (
             (args.open !== undefined && typeof args.open !== "boolean") ||
             (args.configure !== undefined &&
               typeof args.configure !== "boolean") ||
             (args.count !== undefined &&
-              ![2, 3, 4].includes(Number(args.count))) ||
-            (args.background !== undefined &&
-              ![0, 1, 2, 3].includes(Number(args.background)))
+              ![2, 3, 4].includes(Number(args.count)))
           ) {
             throw new Error(t("fcboard.invalid_style_parameters"));
           }
@@ -635,10 +692,9 @@ export const SplitBoard = () => {
           const next = {
             open: configure ? current.current.open : args.open !== false,
             count: Number(args.count ?? current.current.count),
-            background: Number(args.background ?? current.current.background),
           };
           if (configure) {
-            setDraft({ count: next.count, background: next.background });
+            setDraft({ count: next.count });
           } else {
             saveRequest.current?.abort();
             setError("");
@@ -646,7 +702,6 @@ export const SplitBoard = () => {
             setDraft(null);
             setOpen(next.open);
             setCount(next.count);
-            setBackground(next.background);
             current.current = next;
           }
           return {
@@ -748,6 +803,7 @@ export const SplitBoard = () => {
       {open && (
         <section
           className="fc-split-board"
+          style={{ background }}
           ref={section}
           role="dialog"
           aria-label={t("fcboard.split_screen")}
@@ -767,7 +823,9 @@ export const SplitBoard = () => {
                 key={i}
                 index={i}
                 model={model}
-                background={backgrounds[background].color}
+                background={background}
+                texture={texture}
+                textureOpacity={pattern ? backgroundOpacity(pattern) : 1}
                 resizing={draggingDivider}
                 disabled={exiting || saving || !!draft || draggingDivider}
               />
@@ -914,41 +972,21 @@ export const SplitBoard = () => {
           </fieldset>
           <fieldset>
             <legend>{t("fcboard.background")}</legend>
-            <div className="fc-split-options">
-              {backgrounds.map(({ color, label }, value) => (
-                <label key={color} title={t(`fcboard.${label}`)}>
-                  <input
-                    type="radio"
-                    name="fc-split-background"
-                    aria-label={t(`fcboard.${label}`)}
-                    checked={draft.background === value}
-                    onChange={() => setDraft({ ...draft, background: value })}
-                  />
-                  <svg
-                    className="fc-split-preview"
-                    data-background={value + 1}
-                    viewBox="0 0 42 42"
-                    aria-hidden="true"
-                  >
-                    <rect
-                      x="2"
-                      y="6"
-                      width="38"
-                      height="30"
-                      fill={color}
-                      stroke="currentColor"
-                    />
-                  </svg>
-                </label>
-              ))}
-            </div>
+            <BackgroundSettings
+              state={boardState}
+              onChange={(input) =>
+                applyCanvasConfiguration(
+                  api,
+                  canvasConfigurationPatch(api, input),
+                )
+              }
+            />
           </fieldset>
           <footer>
             <button
               type="button"
               onClick={() => {
                 setCount(draft.count);
-                setBackground(draft.background);
                 setOpen(true);
                 setDraft(null);
               }}

@@ -2,10 +2,33 @@ import {
   applyCalculatorAction,
   calculatorDisplay,
   initialCalculator,
+  restoreCalculatorState,
 } from "./calculatorInput";
 import { evaluateCalculator } from "./calculatorExpression";
 
 import type { CalculatorAction } from "./calculatorInput";
+
+it("restores a calculator snapshot with its display and modes and rejects malformed state", () => {
+  let state = { ...initialCalculator };
+  for (const action of [
+    { type: "number", value: "1" },
+    { type: "operator", value: "+" },
+    { type: "number", value: "1" },
+    { type: "equals" },
+    { type: "mode" },
+    { type: "angle" },
+  ] as CalculatorAction[]) {
+    state = applyCalculatorAction(state, action);
+  }
+  const restored = restoreCalculatorState(JSON.parse(JSON.stringify(state)));
+  expect(calculatorDisplay(restored)).toBe("2");
+  expect(restored.scientific).toBe(true);
+  expect(restored.degrees).toBe(false);
+  expect(restoreCalculatorState(undefined)).toEqual(initialCalculator);
+  expect(() => restoreCalculatorState({ ...state, entry: [] })).toThrow(
+    "Invalid calculator state",
+  );
+});
 
 const operate = (...actions: (string | CalculatorAction)[]) =>
   actions.reduce(

@@ -18,10 +18,10 @@ import { useAnchoredPanel } from "./floating";
 import { classroomCommands, executeBoardCommand } from "./commands";
 
 import { BoardThumbnail } from "./BoardThumbnail";
-import { saveBoardFile, openBoardFile, pickBoardFile } from "./boardFile";
+import { saveBoardFile, openBoardFile } from "./boardFile";
 import { boardCanvasSize } from "./boardExport";
 import { PageNavigation } from "./PageNavigation";
-import { BoardOpen } from "./BoardOpen";
+import { CloudFiles } from "./CloudFiles";
 import { readCloudBzd } from "./cloudTransfers";
 import { loadCloudShare } from "./cloudShare";
 
@@ -257,13 +257,14 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
               (page) => page.id === controller.value.active,
             )?.name || "Fcboard",
             source,
+            controller.value.active,
           );
           return { saved };
         },
       ),
       classroomCommands.register(
         "board.open",
-        "Import every page from a native BZD file, preserving existing boards. args.code is a four-digit cloud retrieval code; args.endpoint is optional. Omit them to open the local file picker.",
+        "Import every page from a native BZD file, preserving existing boards. args.code is a four-digit cloud retrieval code; args.endpoint is optional. Omit them to use the shared file picker.",
         async (args) => {
           const source =
             args.signal instanceof AbortSignal
@@ -279,17 +280,18 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
               args.code,
               source,
             );
+          } else if (args.file instanceof File) {
+            xml = await args.file.text();
           } else {
-            const file = await pickBoardFile(source);
-            if (!file) {
-              return { cancelled: true };
-            }
-            xml = await file.text();
+            return classroomCommands.execute({
+              name: "files.pick",
+              args: { signal: source },
+            });
           }
-          const pages = await openBoardFile(xml);
+          const { pages, activeIndex } = await openBoardFile(xml);
           source?.throwIfAborted();
           await leavePresentation(source);
-          await controller.importPages(pages, source);
+          await controller.importPages(pages, activeIndex, source);
           return { pages: pages.length, active: controller.value.active };
         },
       ),
@@ -543,7 +545,7 @@ export const BoardSwitcher = ({ api }: { api: FcboardImperativeAPI }) => {
   return (
     <>
       <PageNavigation />
-      <BoardOpen />
+      <CloudFiles />
       <ToolbarExtras placement="navigation">
         <div className="fc-toolbar-extras fc-board-controls">
           <button

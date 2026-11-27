@@ -7,6 +7,8 @@ import {
 } from "@testing-library/react";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { splitSceneAPI } from "./test/scene";
+
 import { SplitBoard } from "./SplitBoard";
 import { createNativeSplitInk } from "./nativeSplitInk";
 import { classroomCommands } from "./commands";
@@ -92,7 +94,7 @@ afterEach(() => {
 });
 
 it("mounts independent persistent native panes and updates real export ink without snapshots for completed strokes", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   const [left, right] = await ready();
   expect(left).toMatchObject({
@@ -154,6 +156,30 @@ it("mounts independent persistent native panes and updates real export ink witho
       eraserSize: 90,
     }),
   );
+  for (const [label, color] of [
+    ["split_blue", "#0000ff"],
+    ["split_red", "#ff0000"],
+    ["split_black", "#000000"],
+  ] as const) {
+    const button = within(pane(1)).getByRole("button", {
+      name: t(`fcboard.${label}`),
+    });
+    fireEvent(
+      button,
+      Object.assign(
+        new Event("pointerdown", { bubbles: true, cancelable: true }),
+        { button: 0 },
+      ),
+    );
+    await waitFor(() =>
+      expect(backend.configure.mock.calls.at(-1)![0]).toMatchObject({
+        owner: left.owner,
+        mode: "pen",
+        color,
+      }),
+    );
+    expect(button).toHaveAttribute("aria-pressed", "true");
+  }
   expect(backend.restore).toHaveBeenCalledTimes(2);
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   await waitFor(() =>
@@ -176,7 +202,7 @@ it("mounts independent persistent native panes and updates real export ink witho
 it("keeps a visible usable export canvas when the native restore fails", async () => {
   const failure = vi.spyOn(console, "error").mockImplementation(() => {});
   backend.restore.mockRejectedValue(new Error("native raster unavailable"));
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   await waitFor(() => expect(backend.remove).toHaveBeenCalledTimes(2));
   expect(canvas(1).style.opacity).toBe("");
@@ -190,7 +216,7 @@ it("waits for contact registration and keeps both fallbacks visible when registr
     () => new Promise((_, reject) => rejects.push(reject)),
   );
   const failure = vi.spyOn(console, "error").mockImplementation(() => {});
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   expect(rejects).toHaveLength(2);
   expect(backend.configure).not.toHaveBeenCalled();
@@ -260,7 +286,7 @@ it("drains old contacts before retiring their styles and preserves a new token d
 });
 
 it("disables native input before undo restoration and ignores late callbacks after split closes", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   const [left] = await ready();
   const contact = {
@@ -304,7 +330,7 @@ it("disables native input before undo restoration and ignores late callbacks aft
 });
 
 it("replays an eraser around a concurrently completed pen and undoes that eraser as one gesture", async () => {
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command();
   const [left] = await ready();
   const pen = {

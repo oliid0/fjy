@@ -8,6 +8,8 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { t } from "@fcboard/fcboard/i18n";
 
+import { splitSceneAPI } from "./test/scene";
+
 import { pageLocalization } from "./pageLocalization";
 
 import { render } from "./test/render";
@@ -255,7 +257,7 @@ it("opens optional split settings explicitly, applies a confirmed layout/backgro
       disconnect() {}
     },
   );
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   expect(await command("tools.split", { configure: true })).toMatchObject({
     open: false,
     configuring: true,
@@ -264,20 +266,14 @@ it("opens optional split settings explicitly, applies a confirmed layout/backgro
   const title = `${t("fcboard.split_screen")} · ${t("fcboard.settings")}`;
   const settings = screen.getByRole("dialog", { name: title });
   fireEvent.click(within(settings).getByRole("radio", { name: "3" }));
-  fireEvent.click(
-    within(settings).getByRole("radio", {
-      name: t("fcboard.split_background_1"),
-    }),
-  );
   expect(document.querySelectorAll(".fc-split-pane canvas")).toHaveLength(0);
   fireEvent.click(
     within(settings).getByRole("button", { name: t("buttons.confirm") }),
   );
   expect(document.querySelectorAll(".fc-split-pane canvas")).toHaveLength(3);
   expect(
-    (document.querySelector(".fc-split-pane canvas") as HTMLElement).style
-      .background,
-  ).toBe("rgb(38, 55, 49)");
+    (document.querySelector(".fc-split-pane") as HTMLElement).style.background,
+  ).toBe("rgb(255, 255, 255)");
   await command("tools.split", { configure: true });
   const reopened = screen.getByRole("dialog", { name: title });
   fireEvent.click(within(reopened).getByRole("radio", { name: "2" }));
@@ -302,7 +298,7 @@ it("keeps independent split-pane ink through layout changes and erases only the 
       disconnect() {}
     },
   );
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command("tools.split", { count: 2 });
   const canvas = () =>
     document.querySelectorAll<HTMLCanvasElement>(".fc-split-pane canvas");
@@ -390,7 +386,7 @@ it("uses the original edge exit controls and exports all actual panes through th
     .mockResolvedValueOnce(false)
     .mockRejectedValueOnce(new Error("disk full"))
     .mockResolvedValueOnce(true);
-  render(<SplitBoard />);
+  render(<SplitBoard api={splitSceneAPI()} />);
   await command("tools.split", { count: 2 });
   const board = screen.getByRole("dialog", { name: t("fcboard.split_screen") });
   expect(board.querySelector("header")).toBeNull();
@@ -580,11 +576,16 @@ it("inserts the native playlist from the unified picker as a scene object", asyn
   );
   try {
     render(<ToolMedia api={sceneAPI()} />);
-    expect(await command("tools.media")).toMatchObject({
+    expect(await command("files.pick")).toMatchObject({
       open: true,
       ids: ["player"],
     });
-    expect(Media.open).toHaveBeenCalledWith({ kind: undefined });
+    expect(Media.open).toHaveBeenCalledWith({
+      fileTypes: expect.objectContaining({
+        mp4: "video/mp4",
+        bzd: "application/octet-stream",
+      }),
+    });
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         resource: {

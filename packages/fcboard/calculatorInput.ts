@@ -43,6 +43,40 @@ export const initialCalculator: CalculatorState = {
   theme: undefined,
 };
 
+export const restoreCalculatorState = (value: unknown): CalculatorState => {
+  if (value === undefined) {
+    return { ...initialCalculator };
+  }
+  if (!value || typeof value !== "object") {
+    throw new Error("Invalid calculator state");
+  }
+  const state = value as CalculatorState;
+  if (
+    ![state.prefix, state.entry, state.answer].every(
+      (text) => typeof text === "string" && text.length <= 4096,
+    ) ||
+    !["input", "result", "error"].includes(state.phase) ||
+    ![state.scientific, state.degrees, state.inverse].every(
+      (flag) => typeof flag === "boolean",
+    ) ||
+    (state.theme !== undefined &&
+      state.theme !== "light" &&
+      state.theme !== "dark")
+  ) {
+    throw new Error("Invalid calculator state");
+  }
+  return {
+    prefix: state.prefix,
+    entry: state.entry,
+    answer: state.answer,
+    phase: state.phase,
+    scientific: state.scientific,
+    degrees: state.degrees,
+    inverse: state.inverse,
+    theme: state.theme,
+  };
+};
+
 const binaryOperator = /[+\-*/%^]$/;
 const operand = /[\w.)!]$/;
 const signedOperand = (value: string) =>

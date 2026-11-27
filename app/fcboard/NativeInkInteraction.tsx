@@ -120,7 +120,7 @@ const nativeColor = (value: string) => {
 };
 
 const boardControls =
-  'button,input,textarea,select,[aria-modal="true"],[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.fc-editor-properties,.fc-properties-popover,.fc-factory-color-wheel,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,iframe,[data-native-resource-object-id]';
+  'button,input,textarea,select,[aria-modal="true"],[role="dialog"],[role="menu"],[role="listbox"],[contenteditable="true"],.MuiPaper-root,.MuiModal-root,.fc-editor-properties,.fc-properties-popover,.fc-factory-color-wheel,.fc-combined-toolbox,.fc-resource-window,.fc-spotlight,.fc-curtain,.fc-split-board,.fc-factory-gizmos [data-gizmo],iframe,[data-native-resource-object-id]';
 
 const surfaceStamp = (api: FcboardImperativeAPI) => {
   const state = api.getAppState();
@@ -487,6 +487,7 @@ export const NativeInkInteraction = ({
             nativeStyle(thickStyle))) &&
         !state.viewModeEnabled &&
         !state.editingTextElement &&
+        !document.querySelector(".fc-split-board") &&
         !classroomCommands.has("document.draw");
       const overlayPreview = !!api.getSceneProjection?.();
       configuredSurface = surfaceStamp(api);
@@ -536,9 +537,7 @@ export const NativeInkInteraction = ({
         uiDirty = false;
         uiBounds = [];
         uiBlocksInk = false;
-        for (const node of document.querySelectorAll<HTMLElement>(
-          boardControls,
-        )) {
+        for (const node of document.querySelectorAll<Element>(boardControls)) {
           const visibility = getComputedStyle(node);
           if (
             visibility.display === "none" ||
@@ -947,32 +946,24 @@ export const NativeInkInteraction = ({
         records.some((record) => {
           const target = record.target;
           if (
-            target instanceof SVGElement ||
+            (target instanceof SVGElement &&
+              !target.closest(".fc-factory-gizmos")) ||
             target instanceof HTMLCanvasElement
           ) {
             return false;
           }
           if (record.type === "attributes") {
             return (
-              [
-                "style",
-                "class",
-                "hidden",
-                "open",
-                "aria-hidden",
-                "aria-modal",
-              ].includes(record.attributeName || "") &&
-              target instanceof HTMLElement &&
+              target instanceof Element &&
               (!!target.closest(boardControls) ||
                 !!target.querySelector(boardControls))
             );
           }
           return (
-            (target instanceof HTMLElement &&
-              !!target.closest(boardControls)) ||
+            (target instanceof Element && !!target.closest(boardControls)) ||
             [...record.addedNodes, ...record.removedNodes].some(
               (node) =>
-                node instanceof HTMLElement &&
+                node instanceof Element &&
                 (node.matches(boardControls) ||
                   !!node.querySelector(boardControls)),
             )
@@ -983,7 +974,15 @@ export const NativeInkInteraction = ({
       }
     });
     observer.observe(document.documentElement, {
-      attributes: true,
+      attributeFilter: [
+        "style",
+        "class",
+        "hidden",
+        "open",
+        "aria-hidden",
+        "aria-modal",
+        "transform",
+      ],
       childList: true,
       subtree: true,
     });

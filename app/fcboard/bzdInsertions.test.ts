@@ -54,7 +54,7 @@ const nativeOnly = (xml: string) => {
 };
 
 it("restores real node rectangles, parents, colors and owned labels regardless of XML order, without drawing off-board text markers", async () => {
-  const [board] = await parseBzd(original());
+  const [board] = (await parseBzd(original())).pages;
   const api = sceneAPI();
   api.updateScene({ elements: board.elements });
   const map = readInsertions(api)[0];
@@ -94,7 +94,7 @@ it("restores real node rectangles, parents, colors and owned labels regardless o
 });
 
 it("preserves per-node native geometry and colored words through move, clear, add, delete and native-only save/read", async () => {
-  const [board] = await parseBzd(original());
+  const [board] = (await parseBzd(original())).pages;
   const api = sceneAPI();
   api.updateScene({ elements: board.elements });
   let map = readInsertions(api)[0];
@@ -132,7 +132,7 @@ it("preserves per-node native geometry and colored words through move, clear, ad
   const doc = new DOMParser().parseFromString(saved, "application/xml");
   expect(doc.querySelectorAll('object[eType="OBJECT_Note"]')).toHaveLength(3);
   expect(doc.querySelectorAll('object[eType="OBJECT_STROKE"]')).toHaveLength(0);
-  const [reopened] = await parseBzd(saved);
+  const [reopened] = (await parseBzd(saved)).pages;
   api.updateScene({ elements: reopened.elements });
   const actual = readInsertions(api)[0];
   expect(actual.outline).toBe(map.outline);
@@ -166,7 +166,7 @@ it("preserves per-node native geometry and colored words through move, clear, ad
 });
 
 it("keeps original word colors when recognition appends to a restored node and clears erased labels before a later rebuild", async () => {
-  const [board] = await parseBzd(original());
+  const [board] = (await parseBzd(original())).pages;
   const api = sceneAPI();
   api.updateScene({ elements: board.elements });
   const target = insertionWritingTargets(boardWritingParts(board.elements))[0];
@@ -206,16 +206,18 @@ it.each([
 ])(
   "restores an original four-line matrix %s and keeps alphabet-owned words editable",
   async (matrix, x, y, width, height) => {
-    const [board] = await parseBzd(
-      xml(
-        `<object nId="alphabet" eType="OBJECT_ALPHABET" nRGBA_R="14" nRGBA_G="212" nRGBA_B="159" nRGBA_A="255" width="2" matrix="${matrix}"><lstPt/></object>${text(
-          "word",
-          "alphabetId",
-          "alphabet",
-          "Hello",
-        )}`,
-      ),
-    );
+    const [board] = (
+      await parseBzd(
+        xml(
+          `<object nId="alphabet" eType="OBJECT_ALPHABET" nRGBA_R="14" nRGBA_G="212" nRGBA_B="159" nRGBA_A="255" width="2" matrix="${matrix}"><lstPt/></object>${text(
+            "word",
+            "alphabetId",
+            "alphabet",
+            "Hello",
+          )}`,
+        ),
+      )
+    ).pages;
     const api = sceneAPI();
     api.updateScene({ elements: board.elements });
     const paper = readInsertions(api)[0];
@@ -230,7 +232,7 @@ it.each([
     const native = nativeOnly(serializeBzd([board]));
     expect(native).toContain('eType="OBJECT_ALPHABET"');
     expect(native).toContain('alphabetId="');
-    const [restored] = await parseBzd(native);
+    const [restored] = (await parseBzd(native)).pages;
     api.updateScene({ elements: restored.elements });
     expect(readInsertions(api)[0].text).toBe("Hello");
   },
@@ -259,8 +261,8 @@ it("rejects invalid node graphs and singular alphabet transforms while keeping o
       ),
     ),
   ).rejects.toThrow("matrix");
-  const [board] = await parseBzd(
-    xml(text("orphan", "mNoteId", "missing", "hidden")),
-  );
+  const [board] = (
+    await parseBzd(xml(text("orphan", "mNoteId", "missing", "hidden")))
+  ).pages;
   expect(board.elements).toEqual([]);
 });

@@ -38,8 +38,6 @@ const names = {
   mindmap: "mind_map",
   table: "table",
   fourline: "four_line_grid",
-  document: "document",
-  media: "media",
   signal: "signal",
   resources: "teaching_resources",
 } as const;
@@ -358,22 +356,16 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
     if (kind === "fourline" || kind === "mindmap") {
       return create(kind, { signal });
     }
-    if (kind === "document" || kind === "media" || kind === "signal") {
-      if (kind === "signal") {
-        if (available.includes(kind)) {
-          return Classroom.openFactoryInsertion({
-            insertion: kind,
-            language: getLanguage().code,
-          });
-        }
-        throw new Error(
-          t("fcboard.the_signal_app_is_not_installed_on_this_display"),
-        );
+    if (kind === "signal") {
+      if (available.includes(kind)) {
+        return Classroom.openFactoryInsertion({
+          insertion: kind,
+          language: getLanguage().code,
+        });
       }
-      return classroomCommands.execute({
-        name: kind === "media" ? "tools.media" : "files.open",
-        args: { signal },
-      });
+      throw new Error(
+        t("fcboard.the_signal_app_is_not_installed_on_this_display"),
+      );
     }
     if (kind !== "website") {
       setDraft(newInsertion(kind as InsertKind));
@@ -384,7 +376,7 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
     const stops = [
       classroomCommands.register(
         "insert.open",
-        "Open an insertion: args.kind=website|mindmap|table|fourline|document|media|signal|resources. Documents use the internal viewer; media opens the image and local playback picker; signal uses real TV inputs.",
+        "Open an insertion: args.kind=website|mindmap|table|fourline|signal|resources. Use files.pick for media and documents; signal uses real TV inputs.",
         (args) =>
           open(
             args.kind,

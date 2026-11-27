@@ -31,38 +31,27 @@ public class FactoryPageExportTest {
         File file=new File(root,"staged");try(FileOutputStream out=new FileOutputStream(file)){for(byte[] bytes:images)out.write(bytes);}return file;
     }
     private void color(int expected,int actual){assertEquals(Color.red(expected),Color.red(actual),8);assertEquals(Color.green(expected),Color.green(actual),8);assertEquals(Color.blue(expected),Color.blue(actual),8);}
-    @Test public void fileModesUseTheOriginalFoldersFiltersAndSuffixes() throws Exception {
-        File root=temporary();
-        try{
-            for(String name:new String[]{"photo.JPG","scan.bmp","chart.png","notes.pdf","lesson.bzd","unrelated.txt"})Files.write(new File(root,name).toPath(),new byte[]{1});
-            assertEquals(3,FactoryFileAccess.list(root,root,FactoryFileAccess.Kind.IMAGE).size());assertEquals(1,FactoryFileAccess.list(root,root,FactoryFileAccess.Kind.PDF).size());
-            assertTrue(FactoryFileAccess.initial(FactoryFileAccess.Kind.IMAGE).getPath().endsWith("/Whiteboard/image"));assertTrue(FactoryFileAccess.initial(FactoryFileAccess.Kind.PDF).getPath().endsWith("/Whiteboard/pdf"));
-            assertEquals("课堂.jpg",FactoryFileAccess.destination(root,root,"课堂",FactoryFileAccess.Kind.IMAGE).getName());assertEquals("课堂.pdf",FactoryFileAccess.destination(root,root,"课堂.pdf",FactoryFileAccess.Kind.PDF).getName());
-        }finally{remove(root);}
-    }
-    @Test public void writesTheSelectedJpegPixelsWithOriginalPageIndicesAndPreservesTargetsOnPreparationFailure() throws Exception {
+    @Test public void preparesTheSelectedJpegPixelsWithOriginalPageIndices() throws Exception {
         File root=temporary();FactoryPageExport.Prepared prepared=null;
         try{
             byte[][] images={jpeg(Color.RED,40,20),jpeg(Color.BLUE,40,20)};
             List<FactoryPageExport.Page> pages=manifest(images,3,12);
-            prepared=FactoryPageExport.prepare(stage(root,images),root,FactoryFileAccess.Kind.IMAGE,pages,"Whiteboard Record");
-            List<File> targets=FactoryPageExport.targets(new File(root,"课堂.jpg"),FactoryFileAccess.Kind.IMAGE,pages);
-            assertEquals(Arrays.asList(new File(root,"课堂_03.jpg"),new File(root,"课堂_12.jpg")),targets);
-            Files.write(targets.get(0).toPath(),new byte[]{9});Files.write(targets.get(1).toPath(),new byte[]{8});
-            FactoryFileAccess.copyBatchAtomic(prepared.files,targets);
-            for(int i=0;i<targets.size();i++){Bitmap image=BitmapFactory.decodeFile(targets.get(i).getPath());try{color(i==0?Color.RED:Color.BLUE,image.getPixel(20,10));}finally{image.recycle();}}
-            byte[] previous=Files.readAllBytes(targets.get(0).toPath());
-            try{FactoryFileAccess.copyBatchAtomic(Arrays.asList(prepared.files.get(0),new File(root,"missing")),targets);fail("Missing source must fail");}catch(IOException expected){}
-            assertArrayEquals(previous,Files.readAllBytes(targets.get(0).toPath()));
+            prepared=FactoryPageExport.prepare(stage(root,images),root,FactoryPageExport.Kind.IMAGE,pages,"Whiteboard Record");
+            assertEquals("3.jpg",prepared.files.get(0).getName());
+            assertEquals("12.jpg",prepared.files.get(1).getName());
+            for(int i=0;i<prepared.files.size();i++){
+                Bitmap image=BitmapFactory.decodeFile(prepared.files.get(i).getPath());
+                try{color(i==0?Color.RED:Color.BLUE,image.getPixel(20,10));}finally{image.recycle();}
+            }
         }finally{if(prepared!=null)prepared.clear();remove(root);}
     }
     @Test public void actualPdfUsesA4CenteredFiveHundredPointImagesAndFlowsToTheNextPage() throws Exception {
         File root=temporary();FactoryPageExport.Prepared prepared=null;
         try{
             byte[][] images={jpeg(Color.RED,40,20),jpeg(Color.BLUE,40,20),jpeg(Color.GREEN,20,40)};
-            prepared=FactoryPageExport.prepare(stage(root,images),root,FactoryFileAccess.Kind.PDF,manifest(images,1,2,4),"白板记录");
+            prepared=FactoryPageExport.prepare(stage(root,images),root,FactoryPageExport.Kind.PDF,manifest(images,1,2,4),"白板记录");
             assertEquals(1,prepared.files.size());
-            File target=new File(root,"课堂.pdf");FactoryFileAccess.copyBatchAtomic(prepared.files,Collections.singletonList(target));
+            File target=prepared.files.get(0);
             try(ParcelFileDescriptor descriptor=ParcelFileDescriptor.open(target,ParcelFileDescriptor.MODE_READ_ONLY);PdfRenderer pdf=new PdfRenderer(descriptor)){
                 assertEquals(2,pdf.getPageCount());
                 Bitmap raster=Bitmap.createBitmap(595,842,Bitmap.Config.ARGB_8888);
@@ -81,7 +70,7 @@ public class FactoryPageExportTest {
             JSArray values=new JSArray();values.put(new JSObject().put("page",1).put("size",5));
             try{FactoryPageExport.manifest(values,6);fail("Incomplete manifest");}catch(IOException expected){}
             byte[][] images={new byte[]{1,2,3}};
-            try{FactoryPageExport.prepare(stage(root,images),root,FactoryFileAccess.Kind.IMAGE,manifest(images,1),"Whiteboard Record");fail("Invalid image");}catch(IOException expected){}
+            try{FactoryPageExport.prepare(stage(root,images),root,FactoryPageExport.Kind.IMAGE,manifest(images,1),"Whiteboard Record");fail("Invalid image");}catch(IOException expected){}
             File[] children=root.listFiles();assertNotNull(children);assertEquals(1,children.length);assertEquals("staged",children[0].getName());
         }finally{remove(root);}
     }

@@ -234,7 +234,7 @@
     "export": "保存到...",
     "copyToClipboard": "复制到剪贴板",
     "copyLink": "复制链接",
-    "save": "保存至当前文件",
+    "save": "保存文件",
     "saveAs": "保存为",
     "load": "打开",
     "getShareableLink": "获取共享链接",
@@ -1351,6 +1351,7 @@
     "questions": "问答",
     "cancel_recognition": "取消识别",
     "sharing_expired_generate_a_new_qr_code": "分享已到期，可重新生成二维码",
+    "select_1_to_100_pages": "请选择 1 至 100 页进行保存。",
     "select_1_to_20_pages": "请选择 1 至 20 页",
     "scan_to_download_the_selected_pages_expires_in_ten_minutes_or_when_this_window_closes": "扫码下载所选页面，十分钟后失效；关闭窗口即结束分享",
     "fcboard_whiteboard": "Fcboard 白板",
@@ -2395,7 +2396,11 @@
     "search_inserting": "正在插入…",
     "multi_point_switch": "多点开关",
     "geometry_tools": "尺规",
-    "resource_loading": "正在加载教学资源…"
+    "resource_loading": "正在加载教学资源…",
+    "open_one_courseware": "每次请选择一个课件文件。",
+    "cloud_files": "云文件",
+    "retrieve_cloud_file": "提取文件",
+    "save_cloud_file": "保存到云端"
   },
   "factoryResources": {
     "teach_res_math_concept_number_compare": "数量比较",

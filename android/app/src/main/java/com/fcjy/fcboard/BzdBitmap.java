@@ -2,8 +2,6 @@ package com.fcjy.fcboard;
 
 import android.graphics.*;
 import java.io.*;
-import org.json.JSONObject;
-import org.w3c.dom.Element;
 
 /** HSaxSlideParser / HBitmapObject / BitmapUtils.compressImageIfNeeded. */
 final class BzdBitmap {
@@ -25,52 +23,6 @@ final class BzdBitmap {
             if(!bitmap.compress(Bitmap.CompressFormat.PNG,100,output))throw new IOException("Cannot encode BZD bitmap");
             return output.toByteArray();
         }
-    }
-    static float[] matrix(String value) throws IOException {
-        String[] parts=value.split(",",-1);if(parts.length!=9)throw new IOException("Invalid BZD bitmap matrix");
-        float[] values=new float[9];
-        try{for(int i=0;i<9;i++){values[i]=Float.parseFloat(parts[i]);if(!Float.isFinite(values[i]) || Math.abs(values[i])>1e7)throw new IOException("Invalid BZD bitmap matrix");}}
-        catch(NumberFormatException error){throw new IOException("Invalid BZD bitmap matrix",error);}
-        return values;
-    }
-    static String values(float[] matrix){StringBuilder result=new StringBuilder();for(int i=0;i<9;i++){if(i>0)result.append(',');result.append(matrix[i]);}return result.toString();}
-    /** The XML's unit-square placement must be converted after actual decode/crop. */
-    static byte[] materialize(Element object,byte[] bytes) throws Exception {
-        Bitmap source=decode(bytes),rendered=null;
-        try{
-            // Older stages without the unit-square marker already use source pixels.
-            if(!"true".equals(object.getAttribute("fcboardNormalizedImage")))return png(source);
-            float x=0,y=0,width=source.getWidth(),height=source.getHeight();
-            if(object.hasAttribute("fcboardImageCrop")){
-                JSONObject crop=new JSONObject(object.getAttribute("fcboardImageCrop"));
-                double naturalWidth=crop.getDouble("naturalWidth"),naturalHeight=crop.getDouble("naturalHeight");
-                if(!Double.isFinite(naturalWidth+naturalHeight) || naturalWidth<=0 || naturalHeight<=0)throw new IOException("Invalid BZD image crop");
-                x=(float)(crop.getDouble("x")*source.getWidth()/naturalWidth);y=(float)(crop.getDouble("y")*source.getHeight()/naturalHeight);
-                width=(float)(crop.getDouble("width")*source.getWidth()/naturalWidth);height=(float)(crop.getDouble("height")*source.getHeight()/naturalHeight);
-                if(!Float.isFinite(x+y+width+height) || x<0 || y<0 || width<=0 || height<=0 || x+width>source.getWidth()+.01f || y+height>source.getHeight()+.01f)throw new IOException("Invalid BZD image crop");
-            }
-            int alpha=object.hasAttribute("nRGBA_A")?Integer.parseInt(object.getAttribute("nRGBA_A")):255;
-            if(alpha<0 || alpha>255)throw new IOException("Invalid BZD bitmap opacity");
-            if(object.hasAttribute("fcboardImageCrop") || alpha<255){
-                int w=Math.max(1,Math.round(width)),h=Math.max(1,Math.round(height));
-                rendered=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
-                Canvas canvas=new Canvas(rendered);canvas.scale(w/width,h/height);canvas.translate(-x,-y);
-                Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);paint.setAlpha(alpha);
-                canvas.drawBitmap(source,null,new RectF(0,0,source.getWidth(),source.getHeight()),paint);
-            }
-            Bitmap output=rendered==null?source:rendered;
-            if("true".equals(object.getAttribute("fcboardNormalizedImage"))){
-                float[] m=matrix(object.getAttribute("matrix"));
-                m[0]/=output.getWidth();m[3]/=output.getWidth();m[6]/=output.getWidth();
-                m[1]/=output.getHeight();m[4]/=output.getHeight();m[7]/=output.getHeight();
-                object.setAttribute("matrix",values(m));
-                object.setAttribute("photoRectLeft","0");object.setAttribute("photoRectTop","0");
-                object.setAttribute("photoRectRight",String.valueOf(output.getWidth()));object.setAttribute("photoRectBottom",String.valueOf(output.getHeight()));
-                // Original HBitmapObject paints without an alpha Paint; alpha is in the pixels.
-                object.setAttribute("nRGBA_A","255");object.removeAttribute("fcboardNormalizedImage");object.removeAttribute("fcboardImageCrop");
-            }
-            return png(output);
-        }finally{source.recycle();if(rendered!=null)rendered.recycle();}
     }
     static final class Warped {
         final byte[] bytes;final int width,height;final RectF bounds;

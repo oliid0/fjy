@@ -13,7 +13,7 @@ export type FactoryTool =
   | "timer"
   | "split"
   | "curtain";
-export type FactoryInsertion = "document" | "media" | "signal";
+export type FactoryInsertion = "signal";
 export type SignalSourceState = {
   open: boolean;
   embedded: boolean;

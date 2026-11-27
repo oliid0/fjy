@@ -106,7 +106,7 @@ export const createNativeSplitInk = (
       ]);
       const blocked = Array.from(
         document.querySelectorAll<HTMLElement>(
-          ".fc-split-board button,.fc-split-resize",
+          ".fc-split-penbar,.fc-split-board button,.fc-split-resize,.fc-split-settings,.fc-split-exit-dialog",
         ),
       )
         .filter((node) => node.getClientRects().length)
@@ -142,7 +142,7 @@ export const createNativeSplitInk = (
         opacity: 1,
         color: settings.color,
         dashed: false,
-        palm: 36,
+        palm: 36 / (devicePixelRatio || 1),
         palmEnabled: true,
         eraserSize: settings.eraser || 60,
         blocked,

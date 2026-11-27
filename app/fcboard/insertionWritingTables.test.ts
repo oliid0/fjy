@@ -11,6 +11,7 @@ import {
   growDocumentTableWriting,
 } from "./insertionWritingTables";
 import { shapeInk } from "./documents";
+import { classroomCommands } from "./commands";
 import { sceneAPI } from "./test/scene";
 
 const ink = (x: number, y: number, dx: number, dy: number) =>
@@ -22,6 +23,54 @@ const ink = (x: number, y: number, dx: number, dy: number) =>
     simulatePressure: true,
     customData: { fcInk: { version: 2, pen: "hard" } },
   });
+
+it("keeps the grid and other cells stationary for handwriting inside the cell, including its inner margin", async () => {
+  const api = sceneAPI();
+  await renderInsertion(
+    api,
+    insertionDefaults("table", { x: 100, y: 100 }),
+    true,
+    { exact: true },
+  );
+  const original = api.getSceneElements();
+  const writing = ink(102, 102, 116, 56);
+  const scene = growBoardTableWriting([...original, writing]);
+  for (const element of original) {
+    expect(scene.find((item) => item.id === element.id)).toBe(element);
+  }
+  api.updateScene({ elements: scene });
+  const table = readInsertions(api)[0];
+  expect(table.position).toEqual({ x: 100, y: 100 });
+  expect(table.width).toBe(360);
+  expect(table.height).toBe(180);
+  expect(
+    scene.find((item) => item.id === writing.id)?.customData?.fcInsertion
+      .inkCell,
+  ).toBe(0);
+  let document: ReturnType<typeof shapeInk>[] = [];
+  const stop = classroomCommands.register(
+    "document.insertion",
+    "@internal",
+    ({ shapes }) => {
+      document = (shapes as Parameters<typeof shapeInk>[0][]).map((shape) =>
+        shapeInk(shape, "insertion"),
+      );
+    },
+  );
+  try {
+    await renderInsertion(api, table, true, { exact: true });
+  } finally {
+    stop();
+  }
+  expect(document.length).toBeGreaterThan(0);
+  const next = growDocumentTableWriting([...document, shapeInk(writing, "")]);
+  for (const stroke of document) {
+    expect(next.find((item) => item.id === stroke.id)).toBe(stroke);
+  }
+  expect(next.find((item) => item.id === writing.id)?.insertion?.inkCell).toBe(
+    0,
+  );
+});
 
 it("grows only the contacted column and row, retains raw ink and moves later cells", async () => {
   const api = sceneAPI();

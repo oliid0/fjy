@@ -3873,6 +3873,25 @@ export const FilePreview = ({
                 >
                   <InteractiveResourceFrame
                     resource={stroke.resource}
+                    onResourceChange={(resource) => {
+                      if (pageRef.current !== page) {
+                        return;
+                      }
+                      commitInk(
+                        {
+                          ...inkRef.current,
+                          [page]: (inkRef.current[page] || []).map((item) =>
+                            item.id === stroke.id && item.resource
+                              ? {
+                                  ...item,
+                                  resource: { ...item.resource, ...resource },
+                                }
+                              : item,
+                          ),
+                        },
+                        false,
+                      );
+                    }}
                     objectId={stroke.id}
                     surface="document"
                     dark={

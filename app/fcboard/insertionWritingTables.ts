@@ -112,10 +112,22 @@ const tableGrowth = (
     }),
     { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
   );
-  const left = Math.max(0, body.x + xs[column] + 20 - bounds.left);
-  const right = Math.max(0, bounds.right + 20 - body.x - xs[column + 1]);
-  const top = Math.max(0, body.y + ys[row] + 20 - bounds.top);
-  const bottom = Math.max(0, bounds.bottom + 20 - body.y - ys[row + 1]);
+  // Keep a cell stationary while its ink fits. Add breathing room only after
+  // the writing actually crosses an edge, rather than chasing every sample.
+  const left =
+    bounds.left < body.x + xs[column]
+      ? body.x + xs[column] + 20 - bounds.left
+      : 0;
+  const right =
+    bounds.right > body.x + xs[column + 1]
+      ? bounds.right + 20 - body.x - xs[column + 1]
+      : 0;
+  const top =
+    bounds.top < body.y + ys[row] ? body.y + ys[row] + 20 - bounds.top : 0;
+  const bottom =
+    bounds.bottom > body.y + ys[row + 1]
+      ? bounds.bottom + 20 - body.y - ys[row + 1]
+      : 0;
   // Use the model's scene-coordinate range, including tables extended beyond
   // the initial size picker. The original cell growth is not viewport-limited.
   if (
@@ -142,7 +154,13 @@ const tableGrowth = (
       y: otherRow < row ? -top : otherRow > row ? bottom : 0,
     };
   };
-  return { previous: object, object: next, cell, shift };
+  return {
+    previous: object,
+    object: next,
+    cell,
+    shift,
+    resized: !!(left || right || top || bottom),
+  };
 };
 
 export const tableWritingContact = (
@@ -222,18 +240,23 @@ export const growBoardTableWriting = (
     }
     const id = growth.object.id;
     const previous = new Map(scene.map((element) => [element.id, element]));
-    const shapes = convertToFcboardElements(tableShapes(growth.object), {
-      regenerateIds: false,
-    }).map((element) => {
-      const old = previous.get(element.id);
-      return old
-        ? { ...element, index: old.index, version: old.version + 1 }
-        : element;
-    });
+    const shapes = growth.resized
+      ? convertToFcboardElements(tableShapes(growth.object), {
+          regenerateIds: false,
+        }).map((element) => {
+          const old = previous.get(element.id);
+          return old
+            ? { ...element, index: old.index, version: old.version + 1 }
+            : element;
+        })
+      : [];
     let replaced = false;
     scene = scene.flatMap((element) => {
       const owner = element.customData?.fcInsertion;
       const own = element.id === source.id;
+      if (!growth.resized && !own) {
+        return [element];
+      }
       if (owner?.id !== id && !own) {
         return [element];
       }
@@ -310,6 +333,9 @@ export const growDocumentTableWriting = (
       ...strokes.flatMap((stroke) => {
         const owner = stroke.insertion;
         const own = stroke.id === source.id;
+        if (!growth.resized && !own) {
+          return [stroke];
+        }
         if (owner?.id !== id && !own) {
           return [stroke];
         }
@@ -337,7 +363,7 @@ export const growDocumentTableWriting = (
           },
         ];
       }),
-      ...tableShapes(growth.object).map((shape) =>
+      ...(growth.resized ? tableShapes(growth.object) : []).map((shape) =>
         shapeInk(shape, "insertion"),
       ),
     ];

@@ -173,7 +173,6 @@ public class ClassroomPlugin extends Plugin {
         try {
             JSArray available = new JSArray();
             boolean embeddedSignal = !SignalResourceDialog.availableInputs(getContext()).isEmpty();
-            available.put("document"); available.put("media");
             if (embeddedSignal) available.put("signal");
             JSArray embedded = new JSArray();
             if (embeddedSignal) embedded.put("signal");

@@ -38,6 +38,55 @@ import java.util.List;
 @androidx.annotation.OptIn(markerClass = UnstableApi.class)
 @CapacitorPlugin(name = "FcboardMedia")
 public class MediaPlugin extends Plugin {
+    private final java.util.concurrent.ExecutorService filesWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final java.util.Map<String,MediaImport> imports=new java.util.HashMap<>();
+    private static final class MediaImport {
+        final String key;final java.io.File folder;final JSArray files;final long[] sizes;
+        int index;long offset;boolean installed;
+        MediaImport(String key,java.io.File folder,JSArray files,long[] sizes){this.key=key;this.folder=folder;this.files=files;this.sizes=sizes;}
+        void clear(){if(!installed){java.io.File[] children=folder.listFiles();if(children!=null)for(java.io.File file:children)file.delete();folder.delete();}}
+    }
+    @PluginMethod public void files(PluginCall call){filesWorker.execute(()->{
+        try{
+            String saved=getContext().getSharedPreferences("media-playlists",Context.MODE_PRIVATE).getString(call.getString("key",""),null);
+            if(saved==null)throw new java.io.IOException("Media content is missing");
+            call.resolve(new JSObject().put("files",new JSArray(saved)));
+        }catch(Exception error){call.reject(error.getMessage(),error);}
+    });}
+    @PluginMethod public void storeBegin(PluginCall call){filesWorker.execute(()->{
+        java.io.File folder=null;
+        try{
+            String key=call.getString("key","");JSArray files=call.getArray("files");
+            if(key.isEmpty() || key.length()>200 || files==null || files.length()<1 || files.length()>50)throw new java.io.IOException("Invalid media import");
+            long[] sizes=new long[files.length()];long total=0;
+            for(int i=0;i<files.length();i++){
+                org.json.JSONObject file=files.getJSONObject(i);long size=file.getLong("size");String mime=file.getString("mime");
+                if(size<1 || size!=file.getDouble("size") || !(mime.startsWith("audio/") || mime.startsWith("video/")) || file.getString("name").isEmpty())throw new java.io.IOException("Invalid media file");
+                total+=size;if(total>64L*1024*1024)throw new java.io.IOException("Media import exceeds 64 MB");sizes[i]=size;
+            }
+            String id=java.util.UUID.randomUUID().toString();folder=new java.io.File(getContext().getFilesDir(),"media-"+id);if(!folder.mkdir())throw new java.io.IOException("Cannot prepare media storage");
+            imports.put(id,new MediaImport(key,folder,files,sizes));call.resolve(new JSObject().put("id",id));
+        }catch(Exception error){if(folder!=null)folder.delete();call.reject(error.getMessage(),error);}
+    });}
+    @PluginMethod public void storeAppend(PluginCall call){filesWorker.execute(()->{
+        try{
+            MediaImport item=imports.get(call.getString("id"));String data=call.getString("data","");
+            if(item==null || item.installed || item.index>=item.sizes.length || call.getInt("index",-1)!=item.index || call.getLong("offset",-1L)!=item.offset || data.length()>350000)throw new java.io.IOException("Invalid media chunk");
+            byte[] bytes=android.util.Base64.decode(data,android.util.Base64.DEFAULT);
+            if(bytes.length<1 || item.offset+bytes.length>item.sizes[item.index])throw new java.io.IOException("Media size exceeded");
+            try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(item.folder,item.index+".media"),true)){out.write(bytes);}
+            item.offset+=bytes.length;if(item.offset==item.sizes[item.index]){item.index++;item.offset=0;}call.resolve();
+        }catch(Exception error){call.reject(error.getMessage(),error);}
+    });}
+    @PluginMethod public void storeFinish(PluginCall call){filesWorker.execute(()->{
+        try{
+            MediaImport item=imports.get(call.getString("id"));if(item==null || item.index!=item.sizes.length)throw new java.io.IOException("Media import incomplete");JSArray entries=new JSArray();
+            for(int i=0;i<item.files.length();i++){org.json.JSONObject source=item.files.getJSONObject(i);entries.put(new JSObject().put("uri",Uri.fromFile(new java.io.File(item.folder,i+".media")).toString()).put("name",source.getString("name")).put("mime",source.getString("mime")));}
+            if(!getContext().getSharedPreferences("media-playlists",Context.MODE_PRIVATE).edit().putString(item.key,entries.toString()).commit())throw new java.io.IOException("Cannot save media playlist");
+            item.installed=true;call.resolve();
+        }catch(Exception error){call.reject(error.getMessage(),error);}
+    });}
+    @PluginMethod public void storeClose(PluginCall call){filesWorker.execute(()->{MediaImport item=imports.remove(call.getString("id"));if(item!=null)item.clear();call.resolve();});}
     private ExoPlayer player;
     private MediaWindow window;
     private VoiceEnhancementProcessor enhancement;
@@ -49,12 +98,9 @@ public class MediaPlugin extends Plugin {
             if (choosing) { call.reject("Media picker is already open"); return; }
             try {
                 choosing = true;
-                String kind = call.getString("kind", "");
-                String[] types = "image".equals(kind) ? new String[]{"image/*"}
-                    : "playback".equals(kind) ? new String[]{"audio/*", "video/*"}
-                    : new String[]{"image/*", "audio/*", "video/*"};
-                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
-                    .putExtra(Intent.EXTRA_MIME_TYPES, types).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                    .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                 startActivityForResult(call, intent, "chosen");
             } catch (Exception error) { choosing = false; call.reject(error.getMessage(), error); }
@@ -63,49 +109,91 @@ public class MediaPlugin extends Plugin {
     @ActivityCallback private void chosen(PluginCall call, ActivityResult result) {
         choosing = false;
         if (call == null) return;
+        filesWorker.execute(() -> readSelection(call, result));
+    }
+    private void readSelection(PluginCall call, ActivityResult result) {
+        java.io.File copies = null;
+        List<java.io.File> created = new ArrayList<>();
         try {
             Intent data = result.getData();
             if (result.getResultCode() != Activity.RESULT_OK || data == null) { call.resolve(new JSObject().put("cancelled", true)); return; }
             List<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) {
-                if (data.getClipData().getItemCount() > 50) throw new IllegalArgumentException("Select at most 50 media files");
+                if (data.getClipData().getItemCount() > 50) throw new IllegalArgumentException("Select at most 50 files");
                 for (int i = 0; i < data.getClipData().getItemCount(); i++) uris.add(data.getClipData().getItemAt(i).getUri());
             } else if (data.getData() != null) uris.add(data.getData());
-            if (uris.isEmpty()) throw new IllegalArgumentException("No media selected");
+            if (uris.isEmpty()) throw new IllegalArgumentException("No files selected");
+            JSObject fileTypes = call.getObject("fileTypes");
+            if (fileTypes == null) throw new IllegalArgumentException("Missing supported file types");
+            java.util.Set<String> imageTypes = new java.util.HashSet<>();
+            for (java.util.Iterator<String> keys = fileTypes.keys(); keys.hasNext(); ) {
+                String mime = fileTypes.optString(keys.next());
+                if (mime.startsWith("image/")) imageTypes.add(mime);
+            }
             JSArray playlist = new JSArray();
             JSArray images = new JSArray();
-            JSObject selection = new JSObject().put("images", images);
+            JSArray documents = new JSArray();
+            JSObject selection = new JSObject().put("images", images).put("documents",documents);
             for (Uri uri : uris) {
-                if (!"content".equals(uri.getScheme())) throw new IllegalArgumentException("Select media from the file picker");
+                if (uri == null || !"content".equals(uri.getScheme())) throw new IllegalArgumentException("Select a file from the system picker");
 
                 String name = uri.getLastPathSegment();
                 try (Cursor cursor = getContext().getContentResolver().query(uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
                     if (cursor != null && cursor.moveToFirst()) name = cursor.getString(0);
                 }
-                String mime = getContext().getContentResolver().getType(uri);
-                if (name == null || name.trim().isEmpty()) name = "Media";
-                if (mime == null || mime.equals("application/octet-stream")) {
-                    String extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(Uri.encode(name));
-                    mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase(java.util.Locale.ROOT));
-                }
+                if (name == null || name.trim().isEmpty()) name = "File";
+                int dot = name.lastIndexOf('.');
+                String extension = dot < 0 ? "" : name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+                String mapped = fileTypes.optString(extension);
+                String mime = mapped.isEmpty() ? getContext().getContentResolver().getType(uri) : mapped;
                 JSObject entry = new JSObject().put("uri", uri.toString()).put("name", name).put("mime", mime);
-                if (mime != null && mime.startsWith("image/")) {
+                if (imageTypes.contains(mime)) {
                     images.put(entry);
-                } else {
-                    try { getContext().getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-                    catch (SecurityException ignored) { /* Some providers grant only temporary access. */ }
-                    if (playlist.length() == 0) selection.put("title", name).put("video", mime != null && mime.startsWith("video/"));
+                } else if (mime != null && (mime.startsWith("audio/") || mime.startsWith("video/"))) {
+                    if (playlist.length() == 0) selection.put("title", name).put("video", mime.startsWith("video/"));
                     playlist.put(entry);
+                } else if ("application/octet-stream".equals(mapped)) {
+                    documents.put(entry);
+                } else {
+                    throw new IllegalArgumentException("Unsupported file type: "+name);
                 }
             }
             if (playlist.length() > 0) {
                 String key = java.util.UUID.randomUUID().toString();
-                getContext().getSharedPreferences("media-playlists", Context.MODE_PRIVATE)
-                    .edit().putString(key, playlist.toString()).apply();
+                for (int i = 0; i < playlist.length(); i++) {
+                    org.json.JSONObject entry = playlist.getJSONObject(i);
+                    Uri uri = Uri.parse(entry.getString("uri"));
+                    try {
+                        getContext().getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    } catch (SecurityException temporaryGrant) {
+                        if (copies == null) {
+                            copies = new java.io.File(getContext().getFilesDir(), "media-" + key);
+                            if (!copies.mkdir()) throw new java.io.IOException("Cannot prepare media storage");
+                        }
+                        java.io.File copy = new java.io.File(copies, i + ".media");
+                        created.add(copy);
+                        try (java.io.InputStream input = getContext().getContentResolver().openInputStream(uri);
+                             java.io.OutputStream output = new java.io.FileOutputStream(copy)) {
+                            if (input == null) throw new java.io.IOException("Cannot read selected media");
+                            byte[] buffer = new byte[65536];
+                            int count;
+                            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                        }
+                        if (copy.length() == 0) throw new java.io.IOException("The selected media file is empty");
+                        entry.put("uri", Uri.fromFile(copy).toString());
+                    }
+                }
+                boolean saved = getContext().getSharedPreferences("media-playlists", Context.MODE_PRIVATE)
+                    .edit().putString(key, playlist.toString()).commit();
+                if (!saved) throw new java.io.IOException("Cannot save media playlist");
                 selection.put("key", key);
             }
             call.resolve(selection);
-        } catch (Exception error) { call.reject(error.getMessage(), error); }
+        } catch (Exception error) {
+            for (java.io.File copy : created) copy.delete();
+            if (copies != null) copies.delete();
+            call.reject(error.getMessage(), error);
+        }
     }
     @PluginMethod public void activate(PluginCall call) {
         getActivity().runOnUiThread(() -> {
@@ -269,5 +357,5 @@ public class MediaPlugin extends Plugin {
         if (previousPlayer != null) previousPlayer.release();
     }
     @Override protected void handleOnPause() { getActivity().runOnUiThread(() -> { if (player != null) player.pause(); }); }
-    @Override protected void handleOnDestroy() { getActivity().runOnUiThread(this::closePlayer); }
+    @Override protected void handleOnDestroy() { getActivity().runOnUiThread(this::closePlayer);filesWorker.execute(()->{for(MediaImport item:imports.values())item.clear();imports.clear();});filesWorker.shutdown(); }
 }

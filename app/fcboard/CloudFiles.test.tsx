@@ -1,26 +1,18 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { t } from "@fcboard/fcboard/i18n";
 
-import { BoardOpen } from "./BoardOpen";
+import { CloudFiles } from "./CloudFiles";
 import { classroomCommands } from "./commands";
 import { render } from "./test/render";
 
-it("opens local files through the chooser and keeps cloud import errors editable for retry without requiring an upload key", async () => {
+it("keeps cloud retrieval errors editable for retry without requiring an upload key", async () => {
   const open = vi.fn().mockResolvedValue({ pages: 1 });
   const stop = classroomCommands.register("board.open", "@internal", open);
-  const view = render(<BoardOpen />);
+  const view = render(<CloudFiles />);
   try {
-    await act(() => classroomCommands.execute({ name: "board.chooseOpen" }));
+    await act(() => classroomCommands.execute({ name: "files.cloud" }));
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.live_share.local") }),
-    );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(open).toHaveBeenCalledWith(
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    await act(() => classroomCommands.execute({ name: "board.chooseOpen" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.live_share.cloud") }),
+      screen.getByRole("button", { name: t("fcboard.retrieve_cloud_file") }),
     );
     const input = await screen.findByRole("textbox", {
       name: t("fcboard.cloud_transfer.code"),
@@ -60,11 +52,11 @@ it("aborts an in-progress cloud read when the code dialog closes and suppresses 
       reject = fail;
     });
   });
-  const view = render(<BoardOpen />);
+  const view = render(<CloudFiles />);
   try {
-    await act(() => classroomCommands.execute({ name: "board.chooseOpen" }));
+    await act(() => classroomCommands.execute({ name: "files.cloud" }));
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.live_share.cloud") }),
+      screen.getByRole("button", { name: t("fcboard.retrieve_cloud_file") }),
     );
     fireEvent.change(await screen.findByRole("textbox"), {
       target: { value: "Ab12" },

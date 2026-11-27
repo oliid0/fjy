@@ -136,7 +136,8 @@ it("expires static shares after ten minutes while BZD survives service restart a
   await share.end();
   await service.close();
   await start();
-  const pages = await parseBzd(await readCloudBzd(endpoint, uploaded.code));
+  const pages = (await parseBzd(await readCloudBzd(endpoint, uploaded.code)))
+    .pages;
   expect(pages).toHaveLength(2);
   expect(pages.map((page) => page.name)).toEqual(
     boards.map((page) => page.name),

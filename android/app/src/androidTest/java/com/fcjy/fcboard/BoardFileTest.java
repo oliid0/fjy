@@ -9,15 +9,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public class BoardFileTest {
- @Test public void svgAssetsBecomeTransparentFactoryPngWithoutLosingTheirAspectRatio() throws Exception {
-  String svg="<svg xmlns='http://www.w3.org/2000/svg' width='100' height='60' viewBox='0 0 100 60'><rect x='20' y='10' width='60' height='40' fill='#ff0000'/></svg>";
-  for(String data:new String[]{"data:image/svg+xml;base64,"+android.util.Base64.encodeToString(svg.getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP),"data:image/svg+xml,"+java.net.URLEncoder.encode(svg,"UTF-8").replace("+","%20")}){
-   byte[] bytes=BoardFilePlugin.compatibleImage(data);
-   android.graphics.Bitmap bitmap=android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length);
-   try{assertEquals(100,bitmap.getWidth());assertEquals(60,bitmap.getHeight());assertEquals(0,android.graphics.Color.alpha(bitmap.getPixel(0,0)));assertEquals(android.graphics.Color.RED,bitmap.getPixel(50,30));}
-   finally{bitmap.recycle();}
-  }
- }
  @Test public void androidParserReadsFactoryBzdAndRejectsExternalEntities() throws Exception {
   File file=File.createTempFile("bzd-test-",".bzd",InstrumentationRegistry.getInstrumentation().getTargetContext().getCacheDir());
   try {

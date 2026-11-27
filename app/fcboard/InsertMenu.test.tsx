@@ -41,7 +41,7 @@ afterEach(() => {
 const setup = (tool: "freedraw" | "selection" | "custom" = "freedraw") => {
   vi.spyOn(Capacitor, "isNativePlatform").mockReturnValue(true);
   vi.mocked(Classroom.getFactoryInsertions).mockResolvedValue({
-    available: ["document", "media", "signal"],
+    available: ["signal"],
   });
   const api = sceneAPI();
   api.onChange = vi.fn(() => () => {});
@@ -110,34 +110,19 @@ it("previews table dimensions until confirmation and inserts once with the chose
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
 
-it("routes documents to the internal viewer and media to the built-in player", async () => {
-  const open = vi.fn();
-  const stop = classroomCommands.register("files.open", "@internal", open);
-  const media = vi.fn();
-  const stopMedia = classroomCommands.register(
-    "tools.media",
-    "@internal",
-    media,
-  );
+it("omits document/media entries and rejects their obsolete insertion commands", async () => {
   const { view } = setup();
   try {
-    await act(async () => {
-      await classroomCommands.execute({
-        name: "insert.open",
-        args: { kind: "document" },
-      });
-      await classroomCommands.execute({
-        name: "insert.open",
-        args: { kind: "media" },
-      });
-    });
-    expect(open).toHaveBeenCalledTimes(1);
-    expect(media).toHaveBeenCalledTimes(1);
-    expect(Classroom.openFactoryInsertion).not.toHaveBeenCalled();
+    for (const kind of ["document", "media"] as const) {
+      expect(
+        screen.queryByRole("button", { name: t(`fcboard.${kind}`) }),
+      ).toBeNull();
+      await expect(
+        classroomCommands.execute({ name: "insert.open", args: { kind } }),
+      ).rejects.toThrow();
+    }
   } finally {
     view.unmount();
-    stop();
-    stopMedia();
   }
 });
 

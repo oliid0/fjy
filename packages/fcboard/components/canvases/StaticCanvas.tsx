@@ -42,13 +42,31 @@ const StaticCanvas = (props: StaticCanvasProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isComponentMounted = useRef(false);
   const nativeCanvas = useRef<HTMLCanvasElement | null>(null);
+  const emptySolid =
+    !props.visibleElements.length &&
+    !props.appState.whiteboardBackground &&
+    !(props.renderConfig.renderGrid && props.appState.gridSize) &&
+    !props.renderConfig.projection &&
+    !props.renderConfig.pendingFlowchartNodes;
 
   useLayoutEffect(() => {
     props.canvas.style.width = `${props.appState.width}px`;
     props.canvas.style.height = `${props.appState.height}px`;
-    props.canvas.width = props.appState.width * props.scale;
-    props.canvas.height = props.appState.height * props.scale;
-  }, [props.appState.height, props.appState.width, props.canvas, props.scale]);
+    props.canvas.width =
+      nativeCanvas.current || emptySolid
+        ? 1
+        : props.appState.width * props.scale;
+    props.canvas.height =
+      nativeCanvas.current || emptySolid
+        ? 1
+        : props.appState.height * props.scale;
+  }, [
+    emptySolid,
+    props.appState.height,
+    props.appState.width,
+    props.canvas,
+    props.scale,
+  ]);
 
   useLayoutEffect(() => {
     const wrapper = wrapperRef.current;
@@ -80,11 +98,19 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       if (props.nativeRenderer?.(config)) {
         renderStaticSceneThrottled.cancel();
         if (nativeCanvas.current !== canvas) {
-          canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+          // Android already owns these pixels. A transparent 4K backing store
+          // still occupies a GPU texture and is composited underneath the UI.
+          canvas.width = canvas.height = 1;
           nativeCanvas.current = canvas;
         }
       } else {
         nativeCanvas.current = null;
+        const width = emptySolid ? 1 : props.appState.width * props.scale;
+        const height = emptySolid ? 1 : props.appState.height * props.scale;
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
         renderStaticScene(
           config,
           !props.synchronous && isRenderThrottlingEnabled(),

@@ -88,6 +88,9 @@ export const isWritableElement = (
     (target.type === "text" ||
       target.type === "number" ||
       target.type === "password" ||
+      target.type === "url" ||
+      target.type === "email" ||
+      target.type === "tel" ||
       target.type === "search")) ||
   (target instanceof HTMLElement && target.closest(".cm-editor") !== null);
 

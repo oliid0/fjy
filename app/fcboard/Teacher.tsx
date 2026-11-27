@@ -1,10 +1,15 @@
 import { t, useI18n } from "@fcboard/fcboard/i18n";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
-import { QuizComposer } from "./QuizComposer";
-import { QuizPanel } from "./QuizPanel";
 import { generateQuiz } from "./quiz";
 import { generateQuizImage } from "./quizRequests";
 
@@ -13,9 +18,23 @@ import { classroomCommands } from "./commands";
 
 import type { Quiz, QuizQuestion } from "./quiz";
 
+const QuizComposer = lazy(() =>
+  import("./QuizComposer").then((module) => ({ default: module.QuizComposer })),
+);
+const QuizPanel = lazy(() =>
+  import("./QuizPanel").then((module) => ({ default: module.QuizPanel })),
+);
+
 export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
   useI18n();
-  const [asking, setAsking] = useState(false);
+  const [asking, setAskingState] = useState(false);
+  const [composerRequested, setComposerRequested] = useState(false);
+  const setAsking = useCallback((open: boolean) => {
+    if (open) {
+      setComposerRequested(true);
+    }
+    setAskingState(open);
+  }, []);
   const [questionWhole, setQuestionWhole] = useState(false);
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -223,7 +242,7 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
         setQuizOpen(false);
         setAsking(false);
       }),
-    [api, stopVisibleQuiz],
+    [api, setAsking, stopVisibleQuiz],
   );
   useEffect(() => {
     const registrations = [
@@ -342,21 +361,29 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
   });
 
   return (
-    <>
-      <QuizComposer
-        open={asking}
-        onClose={() => setAsking(false)}
-        onSubmit={(prompt, type) => {
-          setAsking(false);
-          void createQuiz(
-            prompt,
-            new AbortController().signal,
-            undefined,
-            false,
-            type,
-          ).catch(() => {});
-        }}
-      />
+    <Suspense
+      fallback={
+        <div role="status" className="fc-notice">
+          {t("fcboard.processing")}
+        </div>
+      }
+    >
+      {composerRequested && (
+        <QuizComposer
+          open={asking}
+          onClose={() => setAsking(false)}
+          onSubmit={(prompt, type) => {
+            setAsking(false);
+            void createQuiz(
+              prompt,
+              new AbortController().signal,
+              undefined,
+              false,
+              type,
+            ).catch(() => {});
+          }}
+        />
+      )}
       {(quizOpen || quiz) && (
         <QuizPanel
           open={quizOpen}
@@ -374,6 +401,6 @@ export const Teacher = ({ api }: { api: FcboardImperativeAPI }) => {
           }}
         />
       )}
-    </>
+    </Suspense>
   );
 };

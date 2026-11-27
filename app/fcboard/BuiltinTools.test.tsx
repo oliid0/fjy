@@ -249,6 +249,33 @@ it("moves curtain edges independently, clamps its center and exposes real origin
   fireEvent.click(screen.getByRole("button", { name: t("buttons.close") }));
   expect(screen.queryByLabelText(t("fcboard.curtain"))).toBeNull();
 });
+it("manually hides and shows curtain controls repeatedly, including keyboard activation and automatic hiding", async () => {
+  vi.useFakeTimers();
+  render(<Curtain />);
+  await command("tools.curtain");
+  const curtain = screen.getByLabelText(t("fcboard.curtain"));
+  for (let round = 0; round < 3; round++) {
+    const hide = screen.getByRole("button", {
+      name: t("fcboard.hide_controls"),
+    });
+    fireEvent.pointerDown(hide);
+    fireEvent.click(hide);
+    expect(curtain).toHaveAttribute("data-controls", "false");
+    const show = screen.getByRole("button", {
+      name: t("fcboard.show_controls"),
+    });
+    fireEvent.keyDown(show, { key: "Enter" });
+    fireEvent.click(show);
+    expect(curtain).toHaveAttribute("data-controls", "true");
+  }
+  fireEvent.pointerDown(curtain);
+  await act(async () => vi.advanceTimersByTime(3000));
+  expect(curtain).toHaveAttribute("data-controls", "false");
+  fireEvent.click(
+    screen.getByRole("button", { name: t("fcboard.show_controls") }),
+  );
+  expect(curtain).toHaveAttribute("data-controls", "true");
+});
 it("opens optional split settings explicitly, applies a confirmed layout/background, and leaves ink untouched on cancel", async () => {
   vi.stubGlobal(
     "ResizeObserver",

@@ -111,7 +111,7 @@ it("opens the original math resource entry and starts a fresh draw after closing
       await classroomCommands.execute({ name: "resources.use", args: { id } });
     });
   await open();
-  let dialog = screen.getByRole("dialog", {
+  let dialog = await screen.findByRole("dialog", {
     name: t("fcboard.randomNumber.title"),
   });
   fireEvent.click(

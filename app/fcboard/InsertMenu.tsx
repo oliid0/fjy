@@ -7,6 +7,7 @@ import {
   useToolbarItems,
 } from "@fcboard/fcboard/toolbarPreferences";
 import { FactoryIcon } from "@fcboard/fcboard/components/FactoryIcon";
+import { CloseIcon } from "@fcboard/fcboard/components/icons";
 
 import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 
@@ -570,14 +571,14 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
       {form && (
         <MaterialPanel
           ref={panel}
+          centered={form === "table"}
+          onDismiss={() => setForm(null)}
           className={`fc-insertion-properties fc-surface${
-            form === "table" && selected?.id !== draft.id
-              ? " fc-table-insertion"
-              : ""
+            form === "table" ? " fc-table-insertion" : ""
           }`}
           role="dialog"
           aria-label={t(`fcboard.${names[form]}`)}
-          style={style}
+          style={form === "table" ? undefined : style}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Escape") {
@@ -587,9 +588,19 @@ export const InsertMenu = ({ api }: { api: FcboardImperativeAPI }) => {
         >
           <header>
             <strong>{t(`fcboard.${names[form]}`)}</strong>
-            <button onClick={() => setForm(null)}>
-              {t("fcboard.close")}
-              {t(`fcboard.${names[form]}`)}
+            <button
+              type="button"
+              aria-label={form === "table" ? t("buttons.close") : undefined}
+              onClick={() => setForm(null)}
+            >
+              {form === "table" ? (
+                CloseIcon
+              ) : (
+                <>
+                  {t("fcboard.close")}
+                  {t(`fcboard.${names[form]}`)}
+                </>
+              )}
             </button>
           </header>
           <form

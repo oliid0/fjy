@@ -772,6 +772,9 @@ class App extends React.Component<AppProps, AppState> {
 
   /** Synchronous stroke composition after all samples, before its undo capture. */
   onInkCommitEmitter = new Emitter<[element: FcboardFreeDrawElement]>();
+  private onErasureCommitEmitter = new Emitter<
+    [before: readonly FcboardElement[]]
+  >();
   onInkProgressEmitter = new Emitter<
     [
       element: FcboardFreeDrawElement,
@@ -907,6 +910,7 @@ class App extends React.Component<AppProps, AppState> {
       onPointerDown: (cb) => this.onPointerDownEmitter.on(cb),
       onPointerUp: (cb) => this.onPointerUpEmitter.on(cb),
       onInkCommit: (cb) => this.onInkCommitEmitter.on(cb),
+      onErasureCommit: (cb) => this.onErasureCommitEmitter.on(cb),
       onInkProgress: (cb) => this.onInkProgressEmitter.on(cb),
       onScrollChange: (cb) => this.onScrollChangeEmitter.on(cb),
       onUserFollow: (cb) => this.onUserFollowEmitter.on(cb),
@@ -3413,6 +3417,7 @@ class App extends React.Component<AppProps, AppState> {
     this.onChangeEmitter.clear();
     this.onWhiteboardScaleEmitter.clear();
     this.inkFrameEmitter.clear();
+    this.onErasureCommitEmitter.clear();
     this.onInkProgressEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
     this.store.onDurableIncrementEmitter.clear();
@@ -8150,6 +8155,7 @@ class App extends React.Component<AppProps, AppState> {
       if (cancelled && changed) {
         this.scene.replaceAllElements(before);
       } else if (changed) {
+        this.onErasureCommitEmitter.trigger(before);
         this.store.scheduleCapture();
       }
       this.setState({ cursorButton: "up" });
@@ -10094,6 +10100,9 @@ class App extends React.Component<AppProps, AppState> {
       if (input.phase === "end") {
         this.nativeEraserDraft = null;
         if (current.changed) {
+          this.onErasureCommitEmitter.trigger(
+            [...current.originals.values()].flat(),
+          );
           this.store.scheduleCapture();
         }
         this.setState({ cursorButton: "up" });
@@ -10289,6 +10298,7 @@ class App extends React.Component<AppProps, AppState> {
       );
       if (next !== before) {
         this.scene.replaceAllElements(next);
+        this.onErasureCommitEmitter.trigger(before);
         this.store.scheduleCapture();
       }
     }

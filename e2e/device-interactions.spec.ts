@@ -469,6 +469,16 @@ for (const width of [390, 1920]) {
     await exit.getByRole("button", { name: "不保存", exact: true }).click();
     await openTool("幕布");
     const curtain = page.locator(".fc-curtain");
+    for (let round = 0; round < 2; round++) {
+      await curtain
+        .getByRole("button", { name: "隐藏幕布控件", exact: true })
+        .click();
+      await expect(curtain.locator(".fc-curtain-background")).toBeHidden();
+      await curtain
+        .getByRole("button", { name: "显示幕布控件", exact: true })
+        .click();
+      await expect(curtain.locator(".fc-curtain-background")).toBeVisible();
+    }
     await curtain
       .getByRole("button", { name: "切换幕布背景", exact: true })
       .click();

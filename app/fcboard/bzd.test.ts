@@ -255,10 +255,10 @@ it("restores native unequal tables as editable grids and keeps original cell ink
   const newWriting = [
     newFreeDrawElement({
       type: "freedraw",
-      x: 125,
-      y: 125,
+      x: 175,
+      y: 155,
       simulatePressure: true,
-      points: [pointFrom(0, 0), pointFrom(130, 75)],
+      points: [pointFrom(0, 0), pointFrom(80, 45)],
     }),
   ];
   const expanded = growBoardTableWriting(

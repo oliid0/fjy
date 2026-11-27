@@ -86,6 +86,8 @@ describe("APK-style whiteboard ink", () => {
       API.updateScene({ elements: background });
       act(() => h.app.setActiveTool({ type: "freedraw" }));
       const canvas = container.querySelector("canvas.interactive")!;
+      const overlay =
+        container.querySelector<HTMLCanvasElement>("canvas.new-element")!;
       pointer(canvas, "pointerdown", 100, 500, {
         pointerType: "pen",
         pressure: 0.2,
@@ -109,6 +111,7 @@ describe("APK-style whiteboard ink", () => {
       expect(active.pressures.slice(-2)).toEqual([0.4, 0.8]);
       expect(staticPaint.mock.calls.length).toBe(staticBefore);
       expect(inkPaint.mock.calls.length - liveBefore).toBe(12);
+      expect(overlay.width).toBeGreaterThan(1);
       expect(
         inkPaint.mock.lastCall?.[0].activeInkElements?.map(
           (element) => element.id,
@@ -148,7 +151,8 @@ describe("APK-style whiteboard ink", () => {
           (element) => element.id === active.id,
         ),
       ).toBe(true);
-      expect(inkPaint.mock.lastCall?.[0].activeInkElements).toEqual([]);
+      expect(overlay.width).toBe(1);
+      expect(overlay.height).toBe(1);
       expect(active.points.at(-1)).toEqual([250, 14]);
       expect(active.pressures.at(-1)).toBe(0);
       fireEvent.click(screen.getByTestId("button-undo"));

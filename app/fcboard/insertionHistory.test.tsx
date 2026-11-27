@@ -17,6 +17,7 @@ import {
   readInsertions,
 } from "./insertObjects";
 import { observeInkAssistance } from "./inkAssistance";
+import { growBoardTableWriting } from "./insertionWritingTables";
 import * as ocr from "./ocr";
 
 it.each([false, true])(
@@ -67,28 +68,28 @@ it.each([false, true])(
             ...extra,
           }),
         );
-      pointer("pointerdown", body.x + 25, body.y + 25);
-      pointer("pointermove", body.x + 200, body.y + 70);
+      pointer("pointerdown", body.x + 105, body.y + 45);
+      pointer("pointermove", body.x + 140, body.y + 65);
       if (unifiedToolbar) {
         pointer("pointerdown", 800, 400, { pointerId: 2, isPrimary: false });
         pointer("pointermove", 820, 420, { pointerId: 2, isPrimary: false });
       }
-      pointer("pointerup", body.x + 250, body.y + 115, {
+      pointer("pointerup", body.x + 160, body.y + 85, {
         getCoalescedEvents: () => [
-          { clientX: body.x + 240, clientY: body.y + 105, pressure: 0.3 },
+          { clientX: body.x + 150, clientY: body.y + 75, pressure: 0.3 },
         ],
       });
       const ink = api
         .getSceneElements()
         .find((element) => element.type === "freedraw")!;
-      expect(readInsertions(api)[0].width).toBe(510);
+      expect(readInsertions(api)[0].width).toBe(420);
       expect(
         api.getSceneElements().find((element) => element.id === ink.id)
           ?.customData?.fcInsertion.inkCell,
       ).toBe(0);
       expect(ink.type === "freedraw" && ink.points.slice(-2)).toEqual([
-        pointFrom(215, 80),
-        pointFrom(225, 90),
+        pointFrom(45, 30),
+        pointFrom(55, 40),
       ]);
       expect(ink.type === "freedraw" && ink.pressures.slice(-2)).toEqual([
         0.3, 0,
@@ -104,7 +105,7 @@ it.each([false, true])(
         expect(
           api.getSceneElements().some((element) => element.id === other.id),
         ).toBe(false);
-        expect(readInsertions(api)[0].width).toBe(510);
+        expect(readInsertions(api)[0].width).toBe(420);
       }
       Keyboard.undo();
       expect(readInsertions(api)[0].width).toBe(360);
@@ -112,10 +113,97 @@ it.each([false, true])(
         api.getSceneElements().some((element) => element.id === ink.id),
       ).toBe(false);
       Keyboard.redo();
-      expect(readInsertions(api)[0].width).toBe(510);
+      expect(readInsertions(api)[0].width).toBe(420);
       expect(
         api.getSceneElements().find((element) => element.id === ink.id),
       ).toMatchObject({ type: "freedraw", points: ink.points });
+    } finally {
+      release();
+      view.unmount();
+    }
+  },
+);
+
+it.each(["web", "native"] as const)(
+  "undoes table ink erasure and its geometry together from %s input",
+  async (input) => {
+    let api!: FcboardImperativeAPI;
+    const view = await render(
+      <Fcboard
+        handleKeyboardGlobally
+        UIOptions={{ unifiedToolbar: true }}
+        onMount={({ excalidrawAPI }) => {
+          api = excalidrawAPI;
+        }}
+      />,
+    );
+    const release = observeInkAssistance(api, vi.fn(), vi.fn());
+    try {
+      const writing = newFreeDrawElement({
+        type: "freedraw",
+        x: 210,
+        y: 150,
+        points: [pointFrom(0, 0), pointFrom(40, 20)],
+        simulatePressure: true,
+        customData: { fcInk: { version: 2, pen: "hard" } },
+      });
+      await act(async () => {
+        await renderInsertion(
+          api,
+          insertionDefaults("table", { x: 100, y: 100 }),
+          true,
+          { exact: true },
+        );
+        api.updateScene({
+          elements: growBoardTableWriting([...api.getSceneElements(), writing]),
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        });
+        api.setActiveTool({ type: "eraser" });
+      });
+      expect(readInsertions(api)[0]).toMatchObject({ width: 410, height: 210 });
+      if (input === "native") {
+        await act(async () => {
+          const contact = {
+            id: "eraser",
+            points: [[230, 160, 0]] as const,
+            width: 100,
+            height: 100,
+          };
+          await api.nativeEraserGesture!({ ...contact, phase: "start" });
+          await api.nativeEraserGesture!({ ...contact, phase: "end" });
+        });
+      } else {
+        const canvas = view.container.querySelector("canvas.interactive")!;
+        for (const type of ["pointerdown", "pointerup"]) {
+          fireEvent(
+            canvas,
+            Object.assign(
+              new Event(type, { bubbles: true, cancelable: true }),
+              {
+                clientX: 230,
+                clientY: 160,
+                pointerId: 1,
+                pointerType: "pen",
+                button: 0,
+                buttons: type === "pointerdown" ? 1 : 0,
+                width: 1,
+                height: 1,
+              },
+            ),
+          );
+        }
+      }
+      expect(readInsertions(api)[0]).toMatchObject({ width: 360, height: 180 });
+      expect(
+        api.getSceneElements().some((item) => item.id === writing.id),
+      ).toBe(false);
+      Keyboard.undo();
+      expect(readInsertions(api)[0]).toMatchObject({ width: 410, height: 210 });
+      expect(
+        api.getSceneElements().some((item) => item.id === writing.id),
+      ).toBe(true);
+      Keyboard.redo();
+      expect(readInsertions(api)[0]).toMatchObject({ width: 360, height: 180 });
     } finally {
       release();
       view.unmount();

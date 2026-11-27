@@ -296,8 +296,11 @@ export const nativeSceneNode = (
 
 const background = (config: StaticSceneRenderConfig) => {
   const canvas = document.createElement("canvas");
-  canvas.width = config.canvas.width;
-  canvas.height = config.canvas.height;
+  canvas.width = Math.max(1, Math.round(config.appState.width * config.scale));
+  canvas.height = Math.max(
+    1,
+    Math.round(config.appState.height * config.scale),
+  );
   try {
     renderStaticScene({
       ...config,

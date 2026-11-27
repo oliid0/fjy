@@ -32,6 +32,8 @@ public class DigitalInkPlugin extends Plugin {
     }, "fcboard-ink-models"));
     private final java.util.concurrent.Semaphore inference = new java.util.concurrent.Semaphore(2);
     private final Set<Request> pending = ConcurrentHashMap.newKeySet();
+    private final Set<String> verifiedLanguages = ConcurrentHashMap.newKeySet();
+    private final java.util.Map<String, Long> languageRevisions = new ConcurrentHashMap<>();
     private volatile boolean closed;
     private DigitalInkPacks packs;
     private final ModelPool<DigitalInkRecognizer> clients = new ModelPool<>(2);
@@ -42,7 +44,7 @@ public class DigitalInkPlugin extends Plugin {
         final PluginCall call;
         final String language;
         final AtomicBoolean settled = new AtomicBoolean();
-        final long deadline = android.os.SystemClock.elapsedRealtime() + 45000;
+        final long deadline = android.os.SystemClock.elapsedRealtime() + 120000;
         Request(PluginCall call, String language) {
             this.call = call; this.language = language;
         }
@@ -57,6 +59,8 @@ public class DigitalInkPlugin extends Plugin {
         return packs;
     }
     synchronized void retireLanguage(String tag) {
+        languageRevisions.merge(tag, 1L, Long::sum);
+        verifiedLanguages.remove(tag);
         clients.retire(tag);
         for (Request request : pending) {
             if (tag.equals(request.language)) fail(request, new ModelRequiredException(tag));
@@ -79,9 +83,30 @@ public class DigitalInkPlugin extends Plugin {
     @PluginMethod public void downloadPack(PluginCall call) { packs().operate(call.getString("tag", ""), false, packResult(call)); }
     @PluginMethod public void deletePack(PluginCall call) { packs().operate(call.getString("tag", ""), true, packResult(call)); }
 
+    /** Prepare only the current language's registry after the board is visible.
+     * No recognizer/session is kept alive just because the app started. */
+    @PluginMethod public void prepare(PluginCall call) {
+        worker.execute(() -> {
+            try {
+                if (closed) throw new IllegalStateException("Handwriting recognition closed");
+                android.app.ActivityManager manager = (android.app.ActivityManager) getContext().getSystemService(android.content.Context.ACTIVITY_SERVICE);
+                android.app.ActivityManager.MemoryInfo memory = new android.app.ActivityManager.MemoryInfo();
+                if (manager != null) {
+                    manager.getMemoryInfo(memory);
+                    if (memory.lowMemory) { call.resolve(); return; }
+                }
+                model(call.getString("language", "zh-Hani-CN")).addOnCompleteListener(DIRECT, task -> {
+                    if (task.isSuccessful()) call.resolve();
+                    else call.reject("Handwriting preparation failed", failure(task));
+                });
+            } catch (Exception | LinkageError error) { call.reject("Handwriting preparation failed: " + error); }
+        });
+    }
+
     private void fail(Request request, Throwable error) {
         if (!request.settled.compareAndSet(false, true)) return;
         pending.remove(request);
+        android.util.Log.w("FcboardInk", "Recognition failed for " + request.language, error);
         if (error instanceof ModelRequiredException) {
             ModelRequiredException missing = (ModelRequiredException) error;
             request.call.reject(missing.getMessage(), "HANDWRITING_MODEL_REQUIRED", missing, new JSObject().put("tag", missing.tag));
@@ -126,9 +151,18 @@ public class DigitalInkPlugin extends Plugin {
         DigitalInkRecognitionModelIdentifier identifier = DigitalInkRecognitionModelIdentifier.fromLanguageTag(language);
         if (identifier == null) throw new IllegalStateException("Unsupported handwriting model");
         DigitalInkRecognitionModel model = DigitalInkRecognitionModel.builder(identifier).build();
-        return Tasks.withTimeout(modelDownloaded(model), 20, TimeUnit.SECONDS).continueWithTask(DIRECT, status -> {
+        if (verifiedLanguages.contains(language)) return Tasks.forResult(model);
+        long revision = languageRevisions.getOrDefault(language, 0L);
+        // ML Kit 18.1 registers all 725 catalog groups on its first process use.
+        // On slow storage that exceeds 20s even with all bundled bytes present.
+        // Keep the original ink pending while this native background work completes.
+        return Tasks.withTimeout(modelDownloaded(model), 90, TimeUnit.SECONDS).continueWithTask(DIRECT, status -> {
             if (!status.isSuccessful()) throw failure(status);
             if (!Boolean.TRUE.equals(status.getResult())) throw new ModelRequiredException(language);
+            synchronized (this) {
+                if (revision != languageRevisions.getOrDefault(language, 0L)) throw new ModelRequiredException(language);
+                verifiedLanguages.add(language);
+            }
             return Tasks.forResult(model);
         });
     }

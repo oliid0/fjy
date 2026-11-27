@@ -463,28 +463,28 @@ it.each(["mindmap", "fourline"] as const)(
   },
 );
 
-it("grows visible table cells around raw handwriting and undoes the stroke and geometry together", async () => {
-  const { api, pointer, update } = await setup();
+it("grows and shrinks visible table cells with handwriting and erasure in their respective undo entries", async () => {
+  const { api, pointer, update } = await setup(undefined, { eraserSize: 180 });
   const recognize = vi.spyOn(ocr, "recognizeHandwriting");
   await act(async () => {
     await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
   });
-  pointer("pointerdown", 125, 125);
+  pointer("pointerdown", 205, 145);
   pointer("pointermove", 300, 190);
   expect(readInsertions(api)[0].columnWidths).toEqual([220, 120, 120]);
   expect(readInsertions(api)[0].rowHeights).toEqual([110, 60, 60]);
   expect(currentInk().some((stroke) => stroke.fcInk)).toBe(false);
-  pointer("pointerup", 350, 215);
+  pointer("pointerup", 310, 200);
   const source = currentInk().find(
     (stroke) => stroke.insertion?.inkCell === 0,
   )!;
   expect(source.points).toEqual([
-    [125, 125],
+    [205, 145],
     [300, 190],
-    [350, 215],
+    [310, 200],
   ]);
-  expect(readInsertions(api)[0].columnWidths).toEqual([270, 120, 120]);
-  expect(readInsertions(api)[0].rowHeights).toEqual([135, 60, 60]);
+  expect(readInsertions(api)[0].columnWidths).toEqual([230, 120, 120]);
+  expect(readInsertions(api)[0].rowHeights).toEqual([120, 60, 60]);
   expect(recognize).not.toHaveBeenCalled();
   expect(update).not.toHaveBeenCalled();
   await act(async () => {
@@ -498,7 +498,22 @@ it("grows visible table cells around raw handwriting and undoes the stroke and g
   expect(
     currentInk().find((stroke) => stroke.id === source.id)?.points,
   ).toEqual(source.points);
-  expect(readInsertions(api)[0].width).toBe(510);
+  expect(readInsertions(api)[0].width).toBe(470);
+  await act(async () => {
+    await classroomCommands.execute({
+      name: "document.tool",
+      args: { tool: "eraser" },
+    });
+  });
+  pointer("pointerdown", 255, 170);
+  pointer("pointerup", 255, 170);
+  expect(currentInk().some((stroke) => stroke.id === source.id)).toBe(false);
+  expect(readInsertions(api)[0]).toMatchObject({ width: 360, height: 180 });
+  await act(async () => {
+    await classroomCommands.execute({ name: "document.undo" });
+  });
+  expect(currentInk().some((stroke) => stroke.id === source.id)).toBe(true);
+  expect(readInsertions(api)[0]).toMatchObject({ width: 470, height: 240 });
 });
 
 it.each(["pointercancel", "lostpointercapture", "blur"])(
@@ -512,16 +527,16 @@ it.each(["pointercancel", "lostpointercapture", "blur"])(
       );
     });
     const original = currentInk();
-    pointer("pointerdown", 125, 125);
-    pointer("pointermove", 350, 215);
-    expect(readInsertions(api)[0].width).toBe(510);
+    pointer("pointerdown", 205, 145);
+    pointer("pointermove", 310, 200);
+    expect(readInsertions(api)[0].width).toBe(470);
     if (event === "blur") {
       fireEvent.blur(window);
     } else {
-      pointer(event, 350, 215);
+      pointer(event, 310, 200);
     }
     expect(currentInk()).toEqual(original);
-    pointer("pointerup", 350, 215);
+    pointer("pointerup", 310, 200);
     expect(currentInk()).toEqual(original);
     await act(async () => {
       await classroomCommands.execute({ name: "document.undo" });
@@ -538,16 +553,16 @@ it("saves committed courseware geometry during a long stroke, then saves the com
   });
   const original = currentInk();
   vi.mocked(documentTools.saveInk).mockClear();
-  pointer("pointerdown", 125, 125);
-  pointer("pointermove", 350, 215);
-  expect(readInsertions(api)[0].width).toBe(510);
+  pointer("pointerdown", 205, 145);
+  pointer("pointermove", 310, 200);
+  expect(readInsertions(api)[0].width).toBe(470);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1001);
   });
   expect(documentTools.saveInk).toHaveBeenLastCalledWith("document-key", {
     0: original,
   });
-  pointer("pointerup", 350, 215);
+  pointer("pointerup", 310, 200);
   const completed = currentInk();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1001);
@@ -566,9 +581,9 @@ it("rolls back live table growth before a growing contact becomes an object eras
     await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
   });
   const original = currentInk();
-  pointer("pointerdown", 125, 125, { pointerType: "touch" });
-  pointer("pointermove", 350, 215, { pointerType: "touch" });
-  expect(readInsertions(api)[0].width).toBe(510);
+  pointer("pointerdown", 205, 145, { pointerType: "touch" });
+  pointer("pointermove", 310, 200, { pointerType: "touch" });
+  expect(readInsertions(api)[0].width).toBe(470);
   pointer("pointermove", 130, 125, {
     pointerType: "touch",
     width: 70,
@@ -3062,8 +3077,8 @@ it("fits a usable calculator on the visible courseware page and keeps its select
     const visibleWidth = (viewport.right - viewport.left) * scale;
     const visibleHeight = (viewport.bottom - viewport.top) * scale;
     const { width, height } = original.resource!;
-    expect(width * scale).toBeCloseTo(Math.min(400, visibleWidth * 0.96));
-    expect(height * scale).toBeCloseTo(Math.min(560, visibleHeight * 0.96));
+    expect(width * scale).toBeCloseTo(Math.min(280, visibleWidth * 0.96));
+    expect(height * scale).toBeCloseTo(Math.min(392, visibleHeight * 0.96));
     expect(original.points[0][0] + width / 2).toBeCloseTo(
       (viewport.left + viewport.right) / 2,
     );

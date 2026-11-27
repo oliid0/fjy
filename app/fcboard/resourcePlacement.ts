@@ -11,11 +11,11 @@ export const resourcePlacement = (
   const availableHeight = viewport.bottom - viewport.top;
   const calculator = kind === "calculator";
   const width = Math.min(
-    (calculator ? 400 : kind === "audio" ? 540 : 720) / scale,
+    (calculator ? 280 : kind === "audio" ? 540 : 720) / scale,
     availableWidth * (calculator ? 0.96 : 0.8),
   );
   const height = Math.min(
-    (calculator ? 560 : kind === "audio" ? 236 : 460) / scale,
+    (calculator ? 392 : kind === "audio" ? 236 : 460) / scale,
     availableHeight * (calculator ? 0.96 : 0.8),
   );
   return {

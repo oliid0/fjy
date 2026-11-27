@@ -121,6 +121,7 @@ import {
 } from "./insertionWriting";
 import {
   growDocumentTableWriting,
+  shrinkDocumentErasure,
   tableWritingContact,
   tableWritingNeedsGrowth,
 } from "./insertionWritingTables";
@@ -411,6 +412,20 @@ export const FilePreview = ({
   const isSlides = /\.(pptx?|ppsx?)$/i.test(file.name);
   const isImage = /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name);
   const commitInk = useCallback((next: DocumentInk, remember = true) => {
+    if (remember) {
+      const pages = { ...next };
+      for (const [page, strokes] of Object.entries(next)) {
+        const index = Number(page);
+        const previous = inkRef.current[index];
+        if (previous && previous !== strokes) {
+          const reflowed = shrinkDocumentErasure(previous, strokes);
+          if (reflowed !== strokes) {
+            pages[index] = [...reflowed];
+          }
+        }
+      }
+      next = pages;
+    }
     if (remember) {
       for (const [page, strokes] of Object.entries(next)) {
         const index = Number(page);
@@ -3642,6 +3657,17 @@ export const FilePreview = ({
                 erasing.current &&
                 gestureBefore.current !== inkRef.current[page]
               ) {
+                const current = inkRef.current[page] || [];
+                const reflowed = shrinkDocumentErasure(
+                  gestureBefore.current,
+                  current,
+                );
+                if (reflowed !== current) {
+                  commitInk(
+                    { ...inkRef.current, [page]: [...reflowed] },
+                    false,
+                  );
+                }
                 (past.current[page] ||= []).push(gestureBefore.current);
                 future.current[page] = [];
                 refreshHistory((value) => value + 1);

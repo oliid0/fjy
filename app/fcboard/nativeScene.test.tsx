@@ -45,6 +45,9 @@ const setup = async () => {
 
 it("keeps web display until native installation then sends only the changed object version", async () => {
   const api = await setup();
+  const canvas = document.querySelector<HTMLCanvasElement>("canvas.static")!;
+  expect(canvas.width).toBe(1);
+  expect(canvas.style.width).toBe("1000px");
   const first = ink(100);
   const second = ink(300);
   const text = API.createElement({
@@ -54,6 +57,7 @@ it("keeps web display until native installation then sends only the changed obje
     y: 260,
   });
   act(() => api.updateScene({ elements: [first, second, text] }));
+  await waitFor(() => expect(canvas.width).toBe(1000 * devicePixelRatio));
   let finish!: () => void;
   native.synchronize.mockReturnValueOnce(
     new Promise<void>((resolve) => {
@@ -79,6 +83,7 @@ it("keeps web display until native installation then sends only the changed obje
     await waitFor(() =>
       expect(document.documentElement).toHaveClass("fc-native-scene"),
     );
+    await waitFor(() => expect(canvas.width).toBe(1));
     native.synchronize.mockClear();
     act(() => api.mutateElement(first, { x: 140 }));
     await waitFor(() => expect(native.synchronize).toHaveBeenCalledTimes(1));
@@ -93,6 +98,7 @@ it("keeps web display until native installation then sends only the changed obje
     act(() => controller.dispose());
   }
   expect(document.documentElement).not.toHaveClass("fc-native-scene");
+  await waitFor(() => expect(canvas.width).toBe(1000 * devicePixelRatio));
 });
 
 it("sends the actual styled brush stamps without SVG semicircle parsing", async () => {

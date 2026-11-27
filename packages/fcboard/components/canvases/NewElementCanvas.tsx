@@ -6,7 +6,10 @@ import type {
 } from "@fcboard/element/types";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
-import { renderNewElementScene } from "../../renderer/renderNewElementScene";
+import {
+  renderNewElementScene,
+  renderNewElementSceneThrottled,
+} from "../../renderer/renderNewElementScene";
 
 import type {
   RenderableElementsMap,
@@ -32,13 +35,27 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
     if (!canvasRef.current) {
       return;
     }
-    const paint = () =>
+    const paint = () => {
+      const canvas = canvasRef.current!;
+      const activeInkElements = props.getActiveInkElements?.();
+      const drawing =
+        !!props.appState.newElement || !!activeInkElements?.length;
+      const width = drawing ? props.appState.width * props.scale : 1;
+      const height = drawing ? props.appState.height * props.scale : 1;
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      if (!drawing) {
+        renderNewElementSceneThrottled.cancel();
+        return;
+      }
       renderNewElementScene(
         {
           canvas: canvasRef.current,
           scale: props.scale,
           newElement: props.appState.newElement,
-          activeInkElements: props.getActiveInkElements?.(),
+          activeInkElements,
           elementsMap: props.elementsMap,
           allElementsMap: props.allElementsMap,
           rc: props.rc,
@@ -50,6 +67,7 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
           ? false
           : isRenderThrottlingEnabled(),
       );
+    };
     paint();
     return props.onInkFrame?.(paint);
   });
@@ -61,8 +79,8 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
         width: props.appState.width,
         height: props.appState.height,
       }}
-      width={props.appState.width * props.scale}
-      height={props.appState.height * props.scale}
+      width={1}
+      height={1}
       ref={canvasRef}
     />
   );

@@ -147,7 +147,9 @@ it("inserts the edited chart through the real resource command with one undo, an
       });
     });
     fireEvent.change(
-      screen.getByRole("textbox", { name: `${t("fcboard.chart.legend")} 1` }),
+      await screen.findByRole("textbox", {
+        name: `${t("fcboard.chart.legend")} 1`,
+      }),
       { target: { value: "Physics" } },
     );
     fireEvent.click(

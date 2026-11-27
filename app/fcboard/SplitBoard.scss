@@ -79,7 +79,7 @@
   }
   @container (max-width: 220px) {
     .fc-split-pane:first-child .fc-split-bottom {
-      bottom: 42px;
+      bottom: 60px;
       padding-inline-start: 0;
     }
   }
@@ -149,6 +149,8 @@
     }
   }
   > .fc-split-exit {
+    box-sizing: border-box;
+    min-height: 0;
     position: absolute;
     z-index: 2;
     bottom: 5px;

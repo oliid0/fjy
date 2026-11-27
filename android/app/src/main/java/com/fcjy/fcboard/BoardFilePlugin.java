@@ -43,7 +43,7 @@ public class BoardFilePlugin extends Plugin {
     @PluginMethod public void begin(PluginCall call){worker.execute(()->{
         try{
             if(saving || staged!=null)throw new IOException("A board file is being saved");
-            long size=call.getLong("size",0L);if(size<1 || size>MAX_SIZE)throw new IOException("Invalid board file size");
+            long size=call.getData().optLong("size",0L);if(size<1 || size>MAX_SIZE)throw new IOException("Invalid board file size");
             clear();kind=FactoryPageExport.Kind.read(call.getString("kind","bzd"));
             if(kind!=FactoryPageExport.Kind.BOARD)exportPages=FactoryPageExport.manifest(call.getArray("pages"),size);
             id=UUID.randomUUID().toString();expected=size;staged=File.createTempFile("board-",".tmp",getContext().getCacheDir());
@@ -53,7 +53,7 @@ public class BoardFilePlugin extends Plugin {
     @PluginMethod public void append(PluginCall call){worker.execute(()->{
         try{
             require(call);String data=call.getString("data","");
-            if(complete || saving || data.length()>350000 || call.getLong("offset",-1L)!=received)throw new IOException("Invalid board chunk");
+            if(complete || saving || data.length()>350000 || call.getData().optLong("offset",-1L)!=received)throw new IOException("Invalid board chunk");
             byte[] bytes=Base64.decode(data,Base64.DEFAULT);if(received+bytes.length>expected)throw new IOException("Board size exceeded");
             try(OutputStream out=new FileOutputStream(staged,true)){out.write(bytes);}received+=bytes.length;call.resolve();
         }catch(Exception error){call.reject(error.getMessage(),error);}
@@ -150,7 +150,7 @@ public class BoardFilePlugin extends Plugin {
     @PluginMethod public void read(PluginCall call){worker.execute(()->{
         try{
             if(opened==null || !Objects.equals(readId,call.getString("id")) || opened.length()!=readSize || opened.lastModified()!=readModified)throw new IOException("File selection expired");
-            long offset=call.getLong("offset",-1L);if(offset<0 || offset>=readSize)throw new IOException("Invalid read offset");byte[] bytes=new byte[(int)Math.min(262144,readSize-offset)];
+            long offset=call.getData().optLong("offset",-1L);if(offset<0 || offset>=readSize)throw new IOException("Invalid read offset");byte[] bytes=new byte[(int)Math.min(262144,readSize-offset)];
             try(RandomAccessFile input=new RandomAccessFile(opened,"r")){input.seek(offset);input.readFully(bytes);}
             call.resolve(new JSObject().put("data",Base64.encodeToString(bytes,Base64.NO_WRAP)).put("next",offset+bytes.length));
         }catch(Exception error){call.reject(error.getMessage(),error);}

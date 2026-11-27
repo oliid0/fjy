@@ -601,7 +601,7 @@ describe("explicit handwriting actions", () => {
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
-  it("accepts a later ranked handwriting candidate when formula transcription fails", async () => {
+  it("accepts a later ranked native candidate without starting the larger formula model", async () => {
     backend.nativeAvailable = true;
     backend.native.mockResolvedValue(["ll+ll=", "11+11=", "11+1="]);
     const capture = vi.fn();
@@ -624,7 +624,7 @@ describe("explicit handwriting actions", () => {
     expect(result).toBe("11+11=");
     expect(choose).toHaveBeenCalledWith(["11+11="]);
     expect(capture).not.toHaveBeenCalled();
-    expect(backend.math).toHaveBeenCalledTimes(1);
+    expect(backend.math).not.toHaveBeenCalled();
     expect(backend.local).not.toHaveBeenCalled();
     expect(backend.cloud).not.toHaveBeenCalled();
   });
@@ -685,8 +685,16 @@ describe("explicit handwriting actions", () => {
         (text) => text === String.raw`\frac{1}{2}`,
         [
           [
-            [0, 0],
-            [20, 20],
+            [20, 10],
+            [35, 35],
+          ],
+          [
+            [10, 45],
+            [55, 45],
+          ],
+          [
+            [20, 55],
+            [35, 80],
           ],
         ],
       ),
@@ -812,3 +820,58 @@ it("recognizes a completed vertical sum by native operand rows without capturing
   expect(backend.cloud).not.toHaveBeenCalled();
   expect(accepted).toHaveBeenCalledTimes(1);
 });
+
+it.each(["calculation", "function"] as const)(
+  "keeps native %s recognition fast and independent after an invalid result",
+  async (mode) => {
+    saveSettings({ ...defaults, ocr: "local", apiKey: "" }, false);
+    backend.nativeAvailable = true;
+    const strokes: import("./digitalInk").InkInput = [
+      [
+        [20, 20],
+        [20, 100],
+      ],
+      [
+        [65, 60],
+        [105, 60],
+      ],
+      [
+        [85, 40],
+        [85, 80],
+      ],
+      [
+        [145, 20],
+        [145, 100],
+      ],
+    ];
+    const { recognizeInkContent } = await import("./inkRecognition");
+    backend.native.mockResolvedValueOnce(["unreadable"]);
+    await expect(
+      recognizeInkContent(mode, vi.fn(), strokes, new AbortController().signal),
+    ).rejects.toThrow();
+    const mathCalls = backend.math.mock.calls.length;
+    backend.native
+      .mockResolvedValueOnce([mode === "calculation" ? "1+1" : "y=x"])
+      .mockResolvedValueOnce([mode === "calculation" ? "3-1" : "y=2*x"]);
+    const results = await Promise.all(
+      [0, 1].map(() =>
+        recognizeInkContent(
+          mode,
+          vi.fn(),
+          strokes,
+          new AbortController().signal,
+        ),
+      ),
+    );
+    if (mode === "calculation") {
+      expect(results).toMatchObject([{ answer: "2" }, { answer: "2" }]);
+    } else {
+      expect(results).toMatchObject([
+        { plot: { expression: "x" } },
+        { plot: { expression: "2*x" } },
+      ]);
+    }
+    expect(backend.math).toHaveBeenCalledTimes(mathCalls);
+    expect(backend.cloud).not.toHaveBeenCalled();
+  },
+);

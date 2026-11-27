@@ -1088,6 +1088,10 @@ export interface FcboardImperativeAPI {
   onInkCommit: (
     callback: (element: FcboardFreeDrawElement) => void,
   ) => UnsubscribeCallback;
+  /** Compose erasure-dependent changes before the gesture's history entry. */
+  onErasureCommit: (
+    callback: (before: readonly FcboardElement[]) => void,
+  ) => UnsubscribeCallback;
   /** Frame-batched live composition. Settled runs after this contact's history capture. */
   onInkProgress: (
     callback: (

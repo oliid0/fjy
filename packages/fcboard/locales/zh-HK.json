@@ -909,6 +909,8 @@
     "curtain_top": "拖动上边缘",
     "curtain_bottom": "拖动下边缘",
     "curtain_move": "移动幕布",
+    "hide_controls": "隱藏幕布控制項",
+    "show_controls": "顯示幕布控制項",
     "curtain_theme": "切换幕布背景",
     "spotlight_shape": "聚光灯形状",
     "split_pane": "第 {{number}} 栏画布",

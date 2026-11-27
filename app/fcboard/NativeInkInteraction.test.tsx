@@ -28,6 +28,7 @@ import { render } from "./test/render";
 
 const backend = vi.hoisted(() => ({
   ready: vi.fn(),
+  prepare: vi.fn(),
   configure: vi.fn(),
   remove: vi.fn(),
   acknowledge: vi.fn(),
@@ -56,6 +57,7 @@ vi.mock("@capacitor/core", () => ({
 beforeEach(() => {
   localStorage.removeItem(TOOLBAR_STORAGE);
   backend.ready.mockReset().mockResolvedValue(undefined);
+  backend.prepare.mockReset().mockResolvedValue(undefined);
   backend.configure.mockReset().mockResolvedValue(undefined);
   backend.remove.mockReset().mockResolvedValue(undefined);
   backend.acknowledge.mockReset().mockResolvedValue(undefined);

@@ -177,7 +177,7 @@ it("inserts the displayed coordinate image through the real resource command wit
       });
     });
     fireEvent.click(
-      screen.getByRole("button", {
+      await screen.findByRole("button", {
         name: t("fcboard.functionGraph.quadratic"),
       }),
     );

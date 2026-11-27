@@ -48,60 +48,6 @@
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
-  .fc-curtain {
-    position: fixed;
-    z-index: 89;
-    background-size: 100% 100%;
-    touch-action: none;
-    button {
-      position: absolute;
-      width: 48px;
-      height: 48px;
-      border: 1px solid #ffffffbb;
-      border-radius: 50%;
-      background: #50505099;
-      color: #fff;
-      font-size: 24px;
-      touch-action: none;
-    }
-    .fc-curtain-left {
-      left: 0;
-      top: calc(50% - 24px);
-      cursor: ew-resize;
-    }
-    .fc-curtain-right {
-      right: 0;
-      top: calc(50% - 24px);
-      cursor: ew-resize;
-    }
-    .fc-curtain-top {
-      top: 0;
-      left: calc(50% - 24px);
-      cursor: ns-resize;
-    }
-    .fc-curtain-bottom {
-      bottom: 0;
-      left: calc(50% - 24px);
-      cursor: ns-resize;
-    }
-    .fc-curtain-move {
-      left: calc(50% - 24px);
-      top: calc(50% - 24px);
-      cursor: move;
-    }
-    .fc-curtain-actions {
-      position: absolute;
-      left: 50%;
-      bottom: 60px;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 30px;
-      button {
-        position: static;
-        font-size: 16px;
-      }
-    }
-  }
 }
 // SplitScreenPop's original dimensions and selectors.
 .fc-classroom .fc-split-settings {
@@ -413,22 +359,6 @@
 }
 .fc-classroom .fc-timer-full output {
   font: 400 clamp(40px, 12vw, 180px) / 1 monospace;
-}
-
-.fc-classroom .fc-curtain {
-  button {
-    display: grid;
-    place-items: center;
-  }
-  button svg {
-    width: 26px;
-    height: 26px;
-  }
-  &[data-controls="false"] > button,
-  &[data-controls="false"] > .fc-curtain-actions {
-    visibility: hidden;
-    pointer-events: none;
-  }
 }
 
 .fc-media-object {

@@ -115,7 +115,7 @@ it("opens through the real resource command and inserts one saved, undoable elem
         args: { id: resource.id },
       });
     });
-    fireEvent.click(screen.getByRole("button", { name: "8 O Oxygen" }));
+    fireEvent.click(await screen.findByRole("button", { name: "8 O Oxygen" }));
     fireEvent.click(
       screen.getByRole("button", { name: t("fcboard.periodic.insert") }),
     );

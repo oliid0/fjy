@@ -24,6 +24,7 @@ import { boardInk } from "./digitalInk";
 import { insertText } from "./board";
 import { languageInkSignature } from "./languageStudy";
 import { LiveTableWriting } from "./liveTableWriting";
+import { shrinkBoardErasure } from "./insertionWritingTables";
 import { chooseInsertionCandidate } from "./InsertionCandidates";
 import { renderInsertion } from "./insertObjects";
 import {
@@ -545,6 +546,13 @@ export const observeInkAssistance = (
   };
   const stop = api.onChange(() => refresh());
   const tables = new LiveTableWriting(api);
+  const erasureCommit = api.onErasureCommit?.((before) => {
+    const current = api.getSceneElementsIncludingDeleted();
+    const next = shrinkBoardErasure(before, current);
+    if (next !== current) {
+      api.updateScene({ elements: next });
+    }
+  });
   const inkProgress = api.onInkProgress?.((stroke, phase) => {
     if (phase === "start" || phase === "update") {
       writing.add(stroke.id);
@@ -682,6 +690,7 @@ export const observeInkAssistance = (
     disposed = true;
     requests.cancelAll();
     stop();
+    erasureCommit?.();
     inkCommit?.();
     inkProgress?.();
     tables.clear();

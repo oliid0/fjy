@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@fcboard/fcboard/i18n";
-import { CloseIcon } from "@fcboard/fcboard/components/icons";
+import {
+  CloseIcon,
+  eyeIcon,
+  eyeClosedIcon,
+  palette,
+} from "@fcboard/fcboard/components/icons";
 
 import { MaterialPanel } from "./MaterialPanel";
 
@@ -80,6 +85,16 @@ export const Curtain = () => {
       hideControls.current = setTimeout(() => setControls(false), 3000);
     }
   }, [settings]);
+  const revealFromEvent = (event: { target: EventTarget }) => {
+    if (
+      !(
+        event.target instanceof Element &&
+        event.target.closest(".fc-curtain-toggle")
+      )
+    ) {
+      reveal();
+    }
+  };
   useEffect(() => {
     if (open) {
       reveal();
@@ -182,8 +197,8 @@ export const Curtain = () => {
         className="fc-curtain"
         aria-label={t("fcboard.curtain")}
         data-controls={controls}
-        onPointerDownCapture={reveal}
-        onKeyDownCapture={reveal}
+        onPointerDownCapture={revealFromEvent}
+        onKeyDownCapture={revealFromEvent}
         style={{
           left: rect.left,
           top: rect.top,
@@ -255,21 +270,62 @@ export const Curtain = () => {
                 );
               }
             }}
-          ></button>
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              {edge === "move" ? (
+                <path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" />
+              ) : (
+                <path
+                  d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"
+                  transform={
+                    edge === "top" || edge === "bottom"
+                      ? "rotate(90 12 12)"
+                      : undefined
+                  }
+                />
+              )}
+            </svg>
+          </button>
         ))}
+        <button
+          type="button"
+          className="fc-curtain-toggle"
+          aria-label={t(
+            controls ? "fcboard.hide_controls" : "fcboard.show_controls",
+          )}
+          aria-pressed={controls}
+          onClick={() => {
+            clearTimeout(hideControls.current);
+            setControls((visible) => !visible);
+          }}
+        >
+          {controls ? eyeClosedIcon : eyeIcon}
+        </button>
         <div className="fc-curtain-actions">
           <button
             type="button"
             className="fc-curtain-background"
             onClick={() => setSettings(true)}
             aria-label={t("fcboard.curtain_theme")}
-          ></button>
+          >
+            {palette}
+          </button>
           <button
             type="button"
             className="fc-curtain-close"
             onClick={() => setOpen(false)}
             aria-label={t("buttons.close")}
-          ></button>
+          >
+            {CloseIcon}
+          </button>
         </div>
       </section>
       {settings && (

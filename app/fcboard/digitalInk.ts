@@ -18,6 +18,7 @@ export type InkRegion = {
   bottom: number;
 };
 export const digitalInkEngine = registerPlugin<{
+  prepare(options: { language: string }): Promise<void>;
   recognize(options: {
     strokes: InkInput;
     language: string;

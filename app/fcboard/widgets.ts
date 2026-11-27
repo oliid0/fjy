@@ -3,7 +3,7 @@ import {
   convertToFcboardElements,
 } from "@fcboard/fcboard";
 import { pointFrom } from "@fcboard/math";
-import { getCommonBounds } from "@fcboard/element";
+import { getCommonBounds, newElementWith } from "@fcboard/element";
 import { t } from "@fcboard/fcboard/i18n";
 
 import type { FcboardElementSkeleton } from "@fcboard/element/transform";
@@ -551,6 +551,43 @@ export const renderWidget = (
     : existing.some(
         (element) => element.customData?.fcWidget?.id === widget.id,
       );
+  if (!document && found && factoryGizmoKinds.has(widget.kind)) {
+    const previous = readWidgets(api).find((item) => item.id === widget.id);
+    if (
+      previous &&
+      previous.kind === widget.kind &&
+      JSON.stringify(previous.params) === JSON.stringify(widget.params)
+    ) {
+      const dx = widget.position.x - previous.position.x;
+      const dy = widget.position.y - previous.position.y;
+      const moved = existing.map((element) => {
+        if (element.customData?.fcWidget?.id !== widget.id) {
+          return element;
+        }
+        const x = element.x + dx;
+        const y = element.y + dy;
+        return newElementWith(element, {
+          x,
+          y,
+          customData: {
+            ...element.customData,
+            fcWidget: { ...widget, origin: { x, y } },
+          },
+        });
+      });
+      api.updateScene({
+        elements: moved,
+        captureUpdate: transaction.preview
+          ? CaptureUpdateAction.EVENTUALLY
+          : remember
+          ? CaptureUpdateAction.IMMEDIATELY
+          : CaptureUpdateAction.NEVER,
+      });
+      return moved.filter(
+        (element) => element.customData?.fcWidget?.id === widget.id,
+      );
+    }
+  }
   if (isSolid && !transaction.exact) {
     const layout = document
       ? (classroomCommands.read("document.layout") as
@@ -692,11 +729,18 @@ export const renderWidget = (
     transaction.onDocumentCommit?.(commit);
     return elements;
   }
+  const firstExisting = existing.find(
+    (element) => element.customData?.fcWidget?.id === widget.id,
+  );
   api.updateScene({
-    elements: [
-      ...existing.filter((el) => el.customData?.fcWidget?.id !== widget.id),
-      ...elements,
-    ],
+    elements: found
+      ? existing.flatMap((element) => {
+          if (element.customData?.fcWidget?.id !== widget.id) {
+            return [element];
+          }
+          return element === firstExisting ? elements : [];
+        })
+      : [...existing, ...elements],
     captureUpdate: transaction.preview
       ? CaptureUpdateAction.EVENTUALLY
       : remember

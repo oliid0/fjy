@@ -1,7 +1,7 @@
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import { t, useI18n, getLanguage } from "@fcboard/fcboard/i18n";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { getDataURL } from "@fcboard/fcboard/data/blob";
 import { factoryResources as sourceResourceNames } from "@fcboard/fcboard/locales/zh-CN.json";
@@ -19,11 +19,6 @@ import type { FcboardImperativeAPI } from "@fcboard/fcboard/types";
 import { TransientMessage } from "./TransientMessage";
 
 import { MaterialPanel } from "./MaterialPanel";
-import { PeriodicTable } from "./PeriodicTable";
-import { ScoreBoard } from "./ScoreBoard";
-import { ChartEditor } from "./ChartEditor";
-import { RandomNumber } from "./RandomNumber";
-import { FactoryFunctionGraph } from "./FactoryFunctionGraph";
 import { functionGraphSvg, isFunctionGraphData } from "./functionGraphData";
 import { chartSvg, isChartData } from "./chartData";
 import { periodicElementSvg, periodicElements } from "./periodicTableData";
@@ -52,6 +47,26 @@ import {
 
 import type { GeneratedResource } from "./generatedResources";
 import type { InkStroke } from "./documents";
+
+const PeriodicTable = lazy(() =>
+  import("./PeriodicTable").then((module) => ({
+    default: module.PeriodicTable,
+  })),
+);
+const ScoreBoard = lazy(() =>
+  import("./ScoreBoard").then((module) => ({ default: module.ScoreBoard })),
+);
+const ChartEditor = lazy(() =>
+  import("./ChartEditor").then((module) => ({ default: module.ChartEditor })),
+);
+const RandomNumber = lazy(() =>
+  import("./RandomNumber").then((module) => ({ default: module.RandomNumber })),
+);
+const FactoryFunctionGraph = lazy(() =>
+  import("./FactoryFunctionGraph").then((module) => ({
+    default: module.FactoryFunctionGraph,
+  })),
+);
 
 export type TeachingResource = {
   id: string;
@@ -879,7 +894,13 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
     </button>
   );
   return (
-    <>
+    <Suspense
+      fallback={
+        <div role="status" className="fc-notice">
+          {t("fcboard.processing")}
+        </div>
+      }
+    >
       {random && <RandomNumber onClose={() => setRandom(false)} />}
       {resourceTool?.kind === "function-graph" && (
         <FactoryFunctionGraph
@@ -1276,6 +1297,6 @@ export const TeachingResources = ({ api }: { api: FcboardImperativeAPI }) => {
         </MaterialPanel>
       )}
       {scoreboard && <ScoreBoard onClose={() => setScoreboard(false)} />}
-    </>
+    </Suspense>
   );
 };

@@ -195,24 +195,6 @@ export const recognizeHandwriting = async (
       signal.throwIfAborted();
     }
   }
-  let mathFailure: unknown;
-  if (kind === "math" && recognitionStrokes?.length) {
-    progress(t("fcboard.recognizing_handwriting_locally"));
-    try {
-      const candidates = await recognizeLocalMath(recognitionStrokes, signal);
-      const value = await selectCandidate(candidates);
-      signal.throwIfAborted();
-      if (value) {
-        return value;
-      }
-      mathFailure = new Error(
-        t("fcboard.no_content_recognized_select_the_area_again"),
-      );
-    } catch (error) {
-      signal.throwIfAborted();
-      mathFailure = error;
-    }
-  }
   if (!structured && hasDigitalInk() && recognitionStrokes?.length) {
     progress(t("fcboard.recognizing_handwriting_locally"));
     try {
@@ -247,6 +229,25 @@ export const recognizeHandwriting = async (
       }
       // A missing explicitly selected text pack is actionable; other native
       // failures can use the separately bundled local raster model.
+    }
+  }
+
+  let mathFailure: unknown;
+  if (kind === "math" && recognitionStrokes?.length) {
+    progress(t("fcboard.recognizing_handwriting_locally"));
+    try {
+      const candidates = await recognizeLocalMath(recognitionStrokes, signal);
+      const value = await selectCandidate(candidates);
+      signal.throwIfAborted();
+      if (value) {
+        return value;
+      }
+      mathFailure = new Error(
+        t("fcboard.no_content_recognized_select_the_area_again"),
+      );
+    } catch (error) {
+      signal.throwIfAborted();
+      mathFailure = error;
     }
   }
   if (structured && !columnRows && recognitionStrokes) {

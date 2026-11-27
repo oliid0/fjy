@@ -50,6 +50,8 @@ export type InsertObject = {
   opacity?: number;
   columnWidths?: number[];
   rowHeights?: number[];
+  baseColumnWidths?: number[];
+  baseRowHeights?: number[];
   /** HAlphabetObject's fixed 80/50/4 physical-pixel metrics in scene units. */
   alphabetScale?: number;
   alphabetBaseWidth?: number;
@@ -282,6 +284,8 @@ export const configureInsertion = (
     for (const [key, count] of [
       ["columnWidths", next.columns],
       ["rowHeights", next.rows],
+      ["baseColumnWidths", next.columns],
+      ["baseRowHeights", next.rows],
     ] as const) {
       const sizes = args[key] ?? next[key];
       if (sizes !== undefined) {
@@ -298,7 +302,9 @@ export const configureInsertion = (
           { length: count },
           (_, index) =>
             sizes[index] ||
-            (key === "columnWidths" ? next.width / count : next.height / count),
+            (["columnWidths", "baseColumnWidths"].includes(key)
+              ? next.width / count
+              : next.height / count),
         );
       }
     }

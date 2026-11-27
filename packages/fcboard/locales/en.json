@@ -1224,6 +1224,8 @@
     "curtain_top": "Drag top edge",
     "curtain_bottom": "Drag bottom edge",
     "curtain_move": "Move curtain",
+    "hide_controls": "Hide curtain controls",
+    "show_controls": "Show curtain controls",
     "curtain_theme": "Change curtain background",
     "spotlight_shape": "Spotlight shape",
     "split_pane": "Writing pane {{number}}",

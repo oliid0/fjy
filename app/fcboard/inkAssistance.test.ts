@@ -32,9 +32,9 @@ it("grows a table cell around its raw handwriting without invoking recognition",
   const { api, ink, draw } = setup();
   const source = newFreeDrawElement({
     type: "freedraw",
-    x: 125,
-    y: 125,
-    points: [pointFrom(0, 0), pointFrom(225, 90)],
+    x: 205,
+    y: 145,
+    points: [pointFrom(0, 0), pointFrom(105, 55)],
     strokeColor: ink.strokeColor,
     simulatePressure: true,
   });
@@ -50,8 +50,8 @@ it("grows a table cell around its raw handwriting without invoking recognition",
       y: source.y,
       points: source.points,
     });
-    expect(readInsertions(api)[0].columnWidths).toEqual([270, 120, 120]);
-    expect(readInsertions(api)[0].rowHeights).toEqual([135, 60, 60]);
+    expect(readInsertions(api)[0].columnWidths).toEqual([230, 120, 120]);
+    expect(readInsertions(api)[0].rowHeights).toEqual([120, 60, 60]);
     expect(recognize).not.toHaveBeenCalled();
     expect(api.updateScene).toHaveBeenCalledTimes(1);
   } finally {

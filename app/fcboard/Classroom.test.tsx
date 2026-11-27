@@ -254,7 +254,9 @@ describe("selection-driven classroom controls", () => {
         });
       });
       expect(
-        screen.getByRole("dialog", { name: t("fcboard.quizForm.title") }),
+        await screen.findByRole("dialog", {
+          name: t("fcboard.quizForm.title"),
+        }),
       ).toBeVisible();
       expect(read).not.toHaveBeenCalled();
       expect(recognize).not.toHaveBeenCalled();
@@ -463,7 +465,9 @@ describe("selection-driven classroom controls", () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+      await screen.findByRole("button", {
+        name: t("fcboard.quizForm.generate"),
+      }),
     );
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
     act(() => classroomCommands.invalidate());
@@ -1491,7 +1495,7 @@ describe("selection-driven classroom controls", () => {
           expect(draw).not.toHaveBeenCalled();
           expect(visibleInk).toHaveLength(0);
           fireEvent.change(
-            screen.getByRole("textbox", {
+            await screen.findByRole("textbox", {
               name: t("fcboard.quizForm.supplement"),
             }),
             { target: { value: "根据当前课件出1道题" } },
@@ -2079,7 +2083,9 @@ describe("selection-driven classroom controls", () => {
       await classroomCommands.execute({ name: "assistant.open" });
     });
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+      await screen.findByRole("button", {
+        name: t("fcboard.quizForm.generate"),
+      }),
     );
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1));
     await act(async () => {

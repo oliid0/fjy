@@ -21,6 +21,7 @@ import { transformBoardElement } from "./canvasTransform";
 import { createNativeEraserBackend } from "./nativeEraser";
 import { createNativeSceneRenderer } from "./nativeScene";
 import { Classroom } from "./native";
+import { currentTextInkLanguage, digitalInkEngine } from "./digitalInk";
 
 import "./NativeScene.scss";
 
@@ -171,6 +172,7 @@ export const NativeInkInteraction = ({
     let uiBlocksInk = false;
     let inputReady = false;
     let startupReport: boolean | undefined;
+    let prepareTimer: ReturnType<typeof setTimeout> | undefined;
     const reportStartup = (fallback = false) => {
       if (
         !active ||
@@ -182,12 +184,26 @@ export const NativeInkInteraction = ({
         return;
       }
       startupReport = fallback;
-      void ink.ready({ owner: api.id, fallback }).catch((error) => {
-        if (startupReport === fallback) {
-          startupReport = undefined;
-        }
-        console.error("[startup-ready]", error);
-      });
+      void ink
+        .ready({ owner: api.id, fallback })
+        .then(() => {
+          if (!active || prepareTimer !== undefined) {
+            return;
+          }
+          prepareTimer = setTimeout(() => {
+            if (active && !document.hidden) {
+              void digitalInkEngine
+                .prepare({ language: currentTextInkLanguage() })
+                .catch((error) => console.warn("[handwriting-prepare]", error));
+            }
+          }, 1500);
+        })
+        .catch((error) => {
+          if (startupReport === fallback) {
+            startupReport = undefined;
+          }
+          console.error("[startup-ready]", error);
+        });
     };
     const contacts = new Map<
       string,
@@ -1027,6 +1043,7 @@ export const NativeInkInteraction = ({
     addEventListener("focusout", scheduleUi);
     schedule();
     return () => {
+      clearTimeout(prepareTimer);
       active = false;
       refreshProfile.current = undefined;
       generation++;

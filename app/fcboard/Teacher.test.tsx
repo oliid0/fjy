@@ -71,7 +71,9 @@ it("submits builder controls through the shared generation/cards flow without cr
       await classroomCommands.execute({ name: "assistant.open" });
     });
     fireEvent.change(
-      screen.getByRole("combobox", { name: t("fcboard.quizForm.grade") }),
+      await screen.findByRole("combobox", {
+        name: t("fcboard.quizForm.grade"),
+      }),
       { target: { value: "5" } },
     );
     fireEvent.change(
@@ -86,7 +88,9 @@ it("submits builder controls through the shared generation/cards flow without cr
       { target: { value: "分数加减法" } },
     );
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+      await screen.findByRole("button", {
+        name: t("fcboard.quizForm.generate"),
+      }),
     );
     await waitFor(() => expect(view.getByTitle("Builder quiz")).toBeVisible());
     expect(generate).toHaveBeenCalledWith(
@@ -120,10 +124,12 @@ it("cancels pending builder inference from the visible loading panel and ignores
       await classroomCommands.execute({ name: "assistant.open" });
     });
     fireEvent.click(
-      screen.getByRole("button", { name: t("fcboard.quizForm.generate") }),
+      await screen.findByRole("button", {
+        name: t("fcboard.quizForm.generate"),
+      }),
     );
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
-    const result = screen.getByRole("dialog", {
+    const result = await screen.findByRole("dialog", {
       name: t("fcboard.quizForm.results"),
     });
     expect(within(result).getByRole("status")).toBeVisible();
@@ -150,7 +156,9 @@ it("shows a real generation error and preserves the editable request for retry",
       await classroomCommands.execute({ name: "assistant.open" });
     });
     fireEvent.change(
-      screen.getByRole("textbox", { name: t("fcboard.quizForm.supplement") }),
+      await screen.findByRole("textbox", {
+        name: t("fcboard.quizForm.supplement"),
+      }),
       { target: { value: "Retry these requirements" } },
     );
     fireEvent.click(
@@ -242,7 +250,7 @@ it("lets the voice agent generate a real quiz, inspect its answers, and reopen t
         args: { index: 0 },
       }),
     ).toMatchObject(quiz.questions[0]);
-    const frame = view.getByTitle(quiz.title);
+    const frame = await view.findByTitle(quiz.title);
     await act(async () => {
       await classroomCommands.execute({ name: "quiz.open" });
     });

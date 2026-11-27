@@ -2,7 +2,7 @@ import { isTransparent, mapFind, reduceToCommonValue } from "@fcboard/common";
 import { vi } from "vitest";
 
 // Import directly to avoid the @fcboard/common throttleRAF mock from tests/setup.ts.
-import { throttleRAF } from "./utils";
+import { isWritableElement, throttleRAF } from "./utils";
 
 type RafCallback = FrameRequestCallback;
 
@@ -165,3 +165,14 @@ describe("@fcboard/common/utils", () => {
     });
   });
 });
+
+it.each(["url", "email", "tel", "text", "password"])(
+  "keeps select-all/delete inside a %s input",
+  (type) => {
+    const input = document.createElement("input");
+    input.type = type;
+    expect(isWritableElement(input)).toBe(true);
+    input.type = "checkbox";
+    expect(isWritableElement(input)).toBe(false);
+  },
+);

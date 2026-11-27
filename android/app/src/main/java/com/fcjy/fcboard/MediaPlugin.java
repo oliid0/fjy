@@ -71,7 +71,7 @@ public class MediaPlugin extends Plugin {
     @PluginMethod public void storeAppend(PluginCall call){filesWorker.execute(()->{
         try{
             MediaImport item=imports.get(call.getString("id"));String data=call.getString("data","");
-            if(item==null || item.installed || item.index>=item.sizes.length || call.getInt("index",-1)!=item.index || call.getLong("offset",-1L)!=item.offset || data.length()>350000)throw new java.io.IOException("Invalid media chunk");
+            if(item==null || item.installed || item.index>=item.sizes.length || call.getInt("index",-1)!=item.index || call.getData().optLong("offset",-1L)!=item.offset || data.length()>350000)throw new java.io.IOException("Invalid media chunk");
             byte[] bytes=android.util.Base64.decode(data,android.util.Base64.DEFAULT);
             if(bytes.length<1 || item.offset+bytes.length>item.sizes[item.index])throw new java.io.IOException("Media size exceeded");
             try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(item.folder,item.index+".media"),true)){out.write(bytes);}

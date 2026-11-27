@@ -9,6 +9,8 @@ import {
 import {
   growBoardTableWriting,
   growDocumentTableWriting,
+  shrinkBoardErasure,
+  shrinkDocumentErasure,
 } from "./insertionWritingTables";
 import { shapeInk } from "./documents";
 import { classroomCommands } from "./commands";
@@ -77,23 +79,23 @@ it("grows only the contacted column and row, retains raw ink and moves later cel
   await renderInsertion(api, insertionDefaults("table", { x: 100, y: 100 }));
   const neighbor = ink(245, 185, 20, 10);
   let scene = growBoardTableWriting([...api.getSceneElements(), neighbor]);
-  const writing = ink(125, 125, 225, 90);
+  const writing = ink(210, 150, 40, 20);
   scene = growBoardTableWriting([...scene, writing]);
   const kept = scene.find((element) => element.id === writing.id)!;
   expect(kept.type).toBe("freedraw");
   expect(getCommonBounds([kept])).toEqual(getCommonBounds([writing]));
   const shifted = scene.find((element) => element.id === neighbor.id)!;
-  expect(shifted.x).toBe(395);
-  expect(shifted.y).toBe(260);
+  expect(shifted.x).toBe(295);
+  expect(shifted.y).toBe(215);
   expect(kept.customData?.fcInsertion.inkCell).toBe(0);
   expect(shifted.customData?.fcInsertion.inkCell).toBe(4);
   expect(kept.groupIds).toEqual(shifted.groupIds);
   api.updateScene({ elements: scene });
   const table = readInsertions(api)[0];
-  expect(table.columnWidths).toEqual([270, 120, 120]);
-  expect(table.rowHeights).toEqual([135, 60, 60]);
-  expect(table.width).toBe(510);
-  expect(table.height).toBe(255);
+  expect(table.columnWidths).toEqual([170, 120, 120]);
+  expect(table.rowHeights).toEqual([90, 60, 60]);
+  expect(table.width).toBe(410);
+  expect(table.height).toBe(210);
   await renderInsertion(api, JSON.parse(JSON.stringify(table)));
   expect(
     api.getSceneElements().some((element) => element.id === writing.id),
@@ -114,18 +116,18 @@ it("grows upwards and leftwards without moving the contacted cell's handwriting"
     ...api.getSceneElements(),
     preceding,
   ]);
-  const writing = ink(245, 185, -165, -115);
+  const writing = ink(245, 185, -55, -40);
   const scene = growBoardTableWriting([...attached, writing]);
   const moved = scene.find((element) => element.id === preceding.id)!;
-  expect(moved.x).toBe(-35);
-  expect(moved.y).toBe(15);
+  expect(moved.x).toBe(75);
+  expect(moved.y).toBe(90);
   expect(
     getCommonBounds([scene.find((element) => element.id === writing.id)!]),
   ).toEqual(getCommonBounds([writing]));
   api.updateScene({ elements: scene });
-  expect(readInsertions(api)[0].position).toEqual({ x: -60, y: -10 });
-  expect(readInsertions(api)[0].columnWidths).toEqual([120, 280, 120]);
-  expect(readInsertions(api)[0].rowHeights).toEqual([60, 170, 60]);
+  expect(readInsertions(api)[0].position).toEqual({ x: 50, y: 65 });
+  expect(readInsertions(api)[0].columnWidths).toEqual([120, 170, 120]);
+  expect(readInsertions(api)[0].rowHeights).toEqual([60, 95, 60]);
 });
 
 it("uses the same cell expansion and raw trajectories on the document layer", async () => {
@@ -143,18 +145,18 @@ it("uses the same cell expansion and raw trajectories on the document layer", as
   );
   const neighbor = shapeInk(ink(245, 185, 20, 10), "");
   const attached = growDocumentTableWriting([...strokes, neighbor]);
-  const writing = shapeInk(ink(125, 125, 225, 90), "");
+  const writing = shapeInk(ink(210, 150, 40, 20), "");
   const next = growDocumentTableWriting([...attached, writing]);
   expect(next.find((stroke) => stroke.id === writing.id)?.points).toEqual(
     writing.points,
   );
   expect(next.find((stroke) => stroke.id === neighbor.id)?.points).toEqual([
-    [395, 260],
-    [415, 270],
+    [295, 215],
+    [315, 225],
   ]);
   expect(
     next.find((stroke) => stroke.id === writing.id)?.insertion?.columnWidths,
-  ).toEqual([270, 120, 120]);
+  ).toEqual([170, 120, 120]);
   expect(next.some((stroke) => stroke.text)).toBe(false);
   expect(growDocumentTableWriting(next)).toBe(next);
 });
@@ -189,7 +191,7 @@ it("expands a document table containing a long completed trajectory without trea
     { length: 150000 },
     (_, index): [number, number] => [245 + (index % 20), 185 + (index % 10)],
   );
-  const writing = shapeInk(ink(125, 125, 225, 90), "");
+  const writing = shapeInk(ink(210, 150, 40, 20), "");
   const next = growDocumentTableWriting(
     [
       ...attached.filter((stroke) => stroke.id !== neighbor.id),
@@ -200,9 +202,72 @@ it("expands a document table containing a long completed trajectory without trea
   );
   const moved = next.find((stroke) => stroke.id === neighbor.id)!;
   expect(moved.points).toHaveLength(150000);
-  expect(moved.points.at(-1)).toEqual([414, 269]);
-  expect(moved.insertion?.columnWidths).toEqual([270, 120, 120]);
+  expect(moved.points.at(-1)).toEqual([314, 224]);
+  expect(moved.insertion?.columnWidths).toEqual([170, 120, 120]);
   expect(next.find((stroke) => stroke.id === writing.id)?.points).toEqual(
     writing.points,
   );
+});
+
+it("leaves a continuous stroke crossing several rows/columns and the entire grid unchanged", async () => {
+  const api = sceneAPI();
+  await renderInsertion(
+    api,
+    insertionDefaults("table", { x: 100, y: 100 }),
+    true,
+    { exact: true },
+  );
+  const original = api.getSceneElements();
+  const writing = ink(125, 125, 225, 90);
+  const scene = [...original, writing];
+  expect(growBoardTableWriting(scene)).toBe(scene);
+  expect(writing.customData?.fcInsertion).toBeUndefined();
+});
+it("shrinks to remaining cell contents after erasure and restores empty tracks to their original sizes", async () => {
+  const api = sceneAPI();
+  await renderInsertion(
+    api,
+    insertionDefaults("table", { x: 100, y: 100 }),
+    true,
+    { exact: true },
+  );
+  const retained = ink(125, 125, 20, 15);
+  const large = ink(210, 150, 40, 20);
+  const expanded = growBoardTableWriting([
+    ...api.getSceneElements(),
+    retained,
+    large,
+  ]);
+  const tableId = expanded.find((e) => e.customData?.fcInsertion)?.customData!
+    .fcInsertion.id as string;
+  const erased = expanded.filter((e) => e.id !== large.id);
+  const contracted = shrinkBoardErasure(expanded, erased);
+  api.updateScene({ elements: contracted });
+  expect(readInsertions(api)[0]).toMatchObject({
+    width: 360,
+    height: 180,
+    columnWidths: [120, 120, 120],
+    rowHeights: [60, 60, 60],
+  });
+  expect(contracted.some((e) => e.id === retained.id)).toBe(true);
+  const empty = shrinkBoardErasure(
+    expanded,
+    expanded.filter((e) => e.id !== large.id && e.id !== retained.id),
+  );
+  api.updateScene({ elements: empty });
+  expect(readInsertions(api)[0]).toMatchObject({ width: 360, height: 180 });
+  const before = expanded.flatMap((e) =>
+    e.type === "rectangle" ||
+    e.type === "line" ||
+    e.type === "text" ||
+    e.type === "freedraw"
+      ? [shapeInk(e, "insertion")]
+      : [],
+  );
+  const after = before.filter((s) => s.id !== large.id);
+  const result = shrinkDocumentErasure(before, after);
+  expect(
+    result.find((s) => s.insertion?.id === tableId)?.insertion,
+  ).toMatchObject({ width: 360, height: 180 });
+  expect(result.some((s) => s.id === retained.id)).toBe(true);
 });

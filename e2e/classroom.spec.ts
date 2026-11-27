@@ -278,25 +278,21 @@ for (const viewport of [
     const table = page.getByRole("dialog", { name: "表格", exact: true });
     await expect(table.locator(".fc-table-picker-grid")).toBeVisible();
     const tableBounds = (await table.boundingBox())!;
-    const insertBounds = (await toolbar
-      .getByRole("button", { name: "工具箱", exact: true })
-      .boundingBox())!;
-    expect(tableBounds.y).toBeGreaterThanOrEqual(0);
-    expect(tableBounds.y + tableBounds.height).toBeLessThanOrEqual(
-      bounds.y + 4,
-    );
+    expect(tableBounds.width).toBeCloseTo(Math.min(320, viewport.width - 24));
     expect(
-      Math.abs(
-        tableBounds.x +
-          tableBounds.width / 2 -
-          insertBounds.x -
-          insertBounds.width / 2,
-      ),
-    ).toBeLessThanOrEqual(tableBounds.width / 2 + 12);
+      Math.abs(tableBounds.x + tableBounds.width / 2 - viewport.width / 2),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(tableBounds.y + tableBounds.height / 2 - viewport.height / 2),
+    ).toBeLessThanOrEqual(1);
+    const closeTable = table.getByRole("button", { name: "关闭", exact: true });
+    await expect(closeTable.locator("svg")).toBeVisible();
+    await expect(closeTable).toHaveText("");
     await page.screenshot({
       path: testInfo.outputPath(`table-picker-${viewport.width}.png`),
     });
-    await table.press("Escape");
+    await closeTable.click();
+    await expect(table).toBeHidden();
     await toolbar.getByRole("button", { name: "工具箱", exact: true }).click();
     const tools = page.getByRole("dialog", { name: "工具箱", exact: true });
     await expect(tools.getByText("更多工具", { exact: true })).toHaveCount(0);
